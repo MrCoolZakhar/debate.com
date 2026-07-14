@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   X, Check, Sparkles, ChevronDown, ChevronUp, Award, Globe2, ArrowRight, GripVertical,
-  MousePointerClick, Plus, Info, Layers, Gavel, UserRound, Users,
+  MousePointerClick, Plus, Info, Layers, Gavel, UserRound, Users, Trash2, Repeat, MoreVertical,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -23,6 +24,7 @@ import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
 import Portal from '@/components/Portal';
+import { useToast, ToastHost } from '@/components/Toast';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,8 +66,61 @@ interface AllocationRow {
   country_name: string;
   allocation_sent: boolean;
   application_id: string | null;
-  profiles: { display_name: string; avatar_url: string | null } | null;
-  applications: { invited_name: string | null } | null;
+  // profiles/applications carry the extra fields the click-into list view and
+  // its reused delegate detail need (delegation, level, DOB, preferences).
+  // They stay optional so the optimistic temp row (applyLocalAllocation) can
+  // omit them; the silent refetch fills them in.
+  profiles: {
+    id?: string;
+    display_name: string;
+    email?: string | null;
+    nationality?: string | null;
+    date_of_birth?: string | null;
+    mun_experience_level?: string | null;
+    avatar_url: string | null;
+  } | null;
+  applications: {
+    invited_name: string | null;
+    experience_level?: string | null;
+    role?: string | null;
+    is_head_delegate?: boolean;
+    society_id?: string | null;
+    payment_status?: string | null;
+    attending?: boolean;
+    invited_email?: string | null;
+    societies?: { name: string } | null;
+    application_preferences?: AppPref[];
+  } | null;
+}
+
+// Rebuild an AcceptedApp shape from an allocation row so the existing
+// DelegateDetail / scoring paths can be reused for an already-assigned
+// delegate (the click-into overview list).
+function allocationToApp(a: AllocationRow): AcceptedApp {
+  return {
+    id: a.application_id ?? a.id,
+    role: a.applications?.role ?? 'delegate',
+    experience_level: a.applications?.experience_level ?? null,
+    is_head_delegate: a.applications?.is_head_delegate ?? false,
+    society_id: a.applications?.society_id ?? null,
+    payment_status: a.applications?.payment_status ?? null,
+    attending: a.applications?.attending ?? true,
+    invited_email: a.applications?.invited_email ?? null,
+    invited_name: a.applications?.invited_name ?? null,
+    profiles: a.profiles
+      ? {
+          id: a.profiles.id ?? a.user_id ?? '',
+          display_name: a.profiles.display_name,
+          email: a.profiles.email ?? '',
+          nationality: a.profiles.nationality ?? null,
+          date_of_birth: a.profiles.date_of_birth ?? null,
+          mun_experience_level: a.profiles.mun_experience_level ?? null,
+          avatar_url: a.profiles.avatar_url,
+        }
+      : null,
+    societies: a.applications?.societies ?? null,
+    application_preferences: a.applications?.application_preferences ?? [],
+  };
 }
 
 // Importance tiers. Mapping: green = LOW importance to the committee,
@@ -142,11 +197,32 @@ interface UserHistory {
 //                +25 more if the slot is the exact country they asked for in that preference
 //   experience:  15 - 6 * |experience level - committee difficulty|  (floor 0)
 //   fullness:    12 * (1 - filled/total) , nudges suggestions toward emptier committees
+//   importance:  +18 / +10 / +4 / 0 for an open high / medium / low / standard
+//                seat, so the algorithm fills seats — and the committees that
+//                still hold them — in order of importance.
 
 const LEVELS = ['beginner', 'intermediate', 'advanced', 'expert'];
 function levelIdx(s: string | null | undefined): number {
   const i = LEVELS.indexOf((s ?? '').toLowerCase());
   return i === -1 ? 1 : i;
+}
+
+// Importance-weighted need: an open high/medium-importance seat is a higher
+// priority to fill than a standard one, so a committee still missing its
+// high/medium seats scores higher as a target than one only missing standard
+// seats. Mirrors the TIER_RANK urgency order (high > medium > low > standard).
+const IMPORTANCE_NEED_WEIGHT: Record<ImportanceTier, number> = { high: 18, medium: 10, low: 4, standard: 0 };
+
+// Committee difficulty ordering for the default board sort (ascending): the
+// gentlest committees first, hardest last. Mirrors the canonical DIFF_ORDER in
+// the committees page; 'general-assembly' committees are entry level, so they
+// sort alongside beginner.
+const DIFFICULTY_RANK: Record<string, number> = {
+  beginner: 0, 'general-assembly': 0, 'general assembly': 0,
+  intermediate: 1, advanced: 2, expert: 3,
+};
+function difficultyRank(d: string | null | undefined): number {
+  return DIFFICULTY_RANK[(d ?? '').toLowerCase()] ?? 1;
 }
 
 interface ScoreResult {
@@ -178,6 +254,12 @@ function scoreSlot(app: AcceptedApp, committee: CommitteeData, slot: SlotRow, fi
   const fullness = Math.round(12 * (1 - filled / Math.max(total, 1)));
   base.score += fullness;
   if (total > 0 && filled / total < 0.34 && fullness > 0) base.reasons.push('NEEDS DELEGATES');
+  // Importance-weighted need signal: filling a higher-importance open seat
+  // matters more, so it lifts the fit score and the algorithm works through
+  // the priority seats — and the committees still holding them — first.
+  base.score += IMPORTANCE_NEED_WEIGHT[slot.importance];
+  if (slot.importance === 'high') base.reasons.push('HIGH PRIORITY');
+  else if (slot.importance === 'medium') base.reasons.push('PRIORITY SEAT');
   return base;
 }
 
@@ -242,6 +324,129 @@ export function PersonAvatar({ name, url, size = 28 }: { name: string; url: stri
       title={name || undefined}
     >
       <UserRound size={Math.round(size * 0.56)} strokeWidth={2} style={{ color: NEU.gold }} />
+    </span>
+  );
+}
+
+// ── CountryFlag ────────────────────────────────────────────────────────────────
+// Every country flag on the assignment page. A country seat renders its twemoji
+// flag; a character/custom seat (JCC judges, cabinet posts, press) stores the
+// role NAME in country_code — never a 2-letter ISO code — so we detect that and
+// render a neutral globe glyph instead of building a broken flag URL. A genuine
+// load failure (network, retired code) ALSO falls back to the globe, so a broken
+// <img> never surfaces anywhere.
+function isIsoCode(code: string | null | undefined): boolean {
+  return /^[A-Za-z]{2}$/.test((code ?? '').trim());
+}
+function CountryFlag({
+  code, w, h, radius = 2, shadow, dim, style, alt, title,
+}: {
+  code: string | null | undefined;
+  w: number; h: number; radius?: number;
+  shadow?: string; dim?: number;
+  style?: React.CSSProperties; alt?: string; title?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const clean = (code ?? '').trim();
+  const label = alt ?? title ?? '';
+  if (!isIsoCode(clean) || failed) {
+    return (
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        aria-label={label || 'No country'}
+        title={title}
+        style={{
+          width: w, height: h, borderRadius: radius,
+          backgroundColor: NEU.base, color: NEU.muted,
+          boxShadow: shadow, opacity: dim, ...style,
+        }}
+      >
+        <Globe2 size={Math.round(Math.min(w, h) * 0.72)} strokeWidth={2} />
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={getFlagUrl(clean)}
+      alt={label}
+      title={title}
+      draggable={false}
+      onError={() => setFailed(true)}
+      className="flex-shrink-0"
+      style={{ width: w, height: h, borderRadius: radius, objectFit: 'cover', boxShadow: shadow, opacity: dim, ...style }}
+    />
+  );
+}
+
+// ── Level + age + committee-name helpers ────────────────────────────────────────
+// A delegate with no recorded MUN level is treated as the lowest tier
+// ('beginner') everywhere — rail cards, detail and overview — never blank.
+function effectiveLevel(app: { experience_level?: string | null; profiles?: { mun_experience_level?: string | null } | null } | null | undefined): string {
+  return app?.experience_level ?? app?.profiles?.mun_experience_level ?? 'beginner';
+}
+
+// Age is derived from a date of birth sourced robustly: the application row
+// first (if it ever carries one), then the linked profile. Shows whenever a DOB
+// exists anywhere.
+function ageOf(app: { date_of_birth?: string | null; profiles?: { date_of_birth?: string | null } | null } | null | undefined): number | null {
+  const dob = app?.date_of_birth ?? app?.profiles?.date_of_birth ?? null;
+  return ageAt(dob);
+}
+
+// Committee naming rule: a long full name collapses to an ACRONYM as the big
+// primary label, with the full name shown small beneath. Prefer an explicit
+// abbreviation; otherwise auto-derive initials from a >4-word name (dropping
+// connective stop-words). The subtitle is the full name, shown only when it
+// actually differs from the big label.
+const ACRONYM_STOP = new Set(['and', 'of', 'the', 'for', 'a', 'an', 'on', 'in', 'to', 'de', 'du', 'des', 'la', 'le']);
+function autoAcronym(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(w => !ACRONYM_STOP.has(w.toLowerCase()))
+    .map(w => (/[A-Za-z0-9]/.test(w[0]) ? w[0].toUpperCase() : ''))
+    .join('');
+}
+function committeeLabels(c: { name: string; abbreviation: string | null }): { big: string; full: string | null } {
+  const name = (c.name ?? '').trim();
+  const ab = (c.abbreviation ?? '').trim();
+  const words = name.split(/\s+/).filter(Boolean);
+  let big = ab;
+  if (!big && words.length > 4) big = autoAcronym(name);
+  if (!big) big = name;
+  const full = big.toLowerCase() !== name.toLowerCase() ? name : null;
+  return { big, full };
+}
+
+// ── CommitteeDifficultyBadge ────────────────────────────────────────────────────
+// The committee's difficulty, as the account rank insignia on a tinted disc plus
+// the level word. Sized generously so every tier — the expert crowned star
+// especially — reads clearly in the panel header.
+function CommitteeDifficultyBadge({ level, disc = 34, glyph = 22, showWord = true }: { level: string; disc?: number; glyph?: number; showWord?: boolean }) {
+  const key = (level ?? '').toLowerCase();
+  const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 flex-shrink-0"
+      aria-label={`Difficulty: ${level}`}
+      title={`Difficulty: ${level}`}
+    >
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{
+          width: disc, height: disc, borderRadius: 9999,
+          background: `linear-gradient(150deg, ${accent}26, ${accent}14)`,
+          border: `1px solid ${accent}55`, boxShadow: NEU.outSm,
+        }}
+      >
+        <LevelInsignia level={level} size={glyph} />
+      </span>
+      {showWord && (
+        <span style={{ fontSize: 9.5, fontWeight: 800, color: accent, fontFamily: MONO, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          {key || 'beginner'}
+        </span>
+      )}
     </span>
   );
 }
@@ -353,8 +558,9 @@ function PointsInfo() {
           {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
           {row('Experience fit  up to +15', 'Full 15 when their level matches the committee difficulty, minus 6 for each level of gap, floored at 0.')}
           {row('Committee fill  up to +12', 'Emptier committees score higher (12 x share still open), nudging suggestions to where seats are needed.')}
+          {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
           <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4, paddingTop: 2, borderTop: `1px solid ${NEU.base}` }}>
-            Country importance sorts the open seats inside a committee, but does not change this score.
+            Seat importance also sorts the open seats inside a committee, most urgent first.
           </span>
         </span>
       )}
@@ -482,8 +688,9 @@ function TierBadge({ tier, onCycle }: { tier: ImportanceTier; onCycle?: () => vo
 // A delegate's MUN level as the account chevron insignia (on its tinted disc)
 // plus the level word, for the unassigned rail. Nothing renders without a level.
 function LevelTag({ level }: { level: string | null | undefined }) {
-  if (!level) return null;
-  const accent = LEVEL_ACCENT[level.toLowerCase()] ?? '#9A8A78';
+  // No recorded level → treat as the lowest tier ('beginner'), never blank.
+  const lvl = level && level.trim() ? level : 'beginner';
+  const accent = LEVEL_ACCENT[lvl.toLowerCase()] ?? '#9A8A78';
   return (
     <span
       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full flex-shrink-0"
@@ -493,10 +700,10 @@ function LevelTag({ level }: { level: string | null | undefined }) {
         className="inline-flex items-center justify-center flex-shrink-0"
         style={{ width: 16, height: 16, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
       >
-        <LevelInsignia level={level} size={11} />
+        <LevelInsignia level={lvl} size={11} />
       </span>
       <span style={{ fontSize: 10, fontWeight: 800, color: accent, fontFamily: MONO, letterSpacing: '0.04em' }}>
-        {level.toUpperCase()}
+        {lvl.toUpperCase()}
       </span>
     </span>
   );
@@ -578,7 +785,8 @@ function ModalError({ msg }: { msg: string }) {
 function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHistory | undefined }) {
   const nationality = app.profiles?.nationality ?? null;
   const natCountry = nationality ? getCountryByName(nationality) : undefined;
-  const exp = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
+  const exp = effectiveLevel(app);
+  const age = ageOf(app);
 
   const stat = (label: string, value: React.ReactNode) => (
     <NeuInset small className="flex-1 min-w-0 px-2.5 py-2">
@@ -592,12 +800,13 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
       {/* Nationality row */}
       <div className="flex items-center gap-2 mb-2.5">
         {natCountry ? (
-          <img src={getFlagUrl(natCountry.code)} style={{ width: 22, height: 15, borderRadius: 2, objectFit: 'cover', boxShadow: '0 1px 3px rgba(27,56,40,0.2)' }} alt={nationality ?? ''} />
+          <CountryFlag code={natCountry.code} w={22} h={15} radius={2} shadow="0 1px 3px rgba(27,56,40,0.2)" alt={nationality ?? ''} />
         ) : (
           <Globe2 size={14} style={{ color: '#9A8A78' }} />
         )}
         <span className="flex-shrink-0" style={{ fontSize: 12, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
           {nationality ?? 'Nationality not set'}
+          {age != null && <span style={{ color: NEU.muted, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}> · {age}</span>}
         </span>
         <span className="truncate min-w-0" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, marginLeft: 'auto' }}>
           {app.profiles?.email}
@@ -606,7 +815,7 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
 
       {/* Stats */}
       <div className="flex gap-2 mb-2.5">
-        {stat('EXPERIENCE', exp ? (
+        {stat('EXPERIENCE', (
           <span className="inline-flex items-center gap-1.5">
             <span
               className="inline-flex items-center justify-center flex-shrink-0"
@@ -620,7 +829,7 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
             </span>
             {exp.toUpperCase()}
           </span>
-        ) : 'N/A')}
+        ))}
         {stat('CONFERENCES', history?.conferences ?? 0)}
         {stat('AWARDS', history?.awards ?? 0)}
       </div>
@@ -650,7 +859,7 @@ function DelegateDetail({ app, history }: { app: AcceptedApp; history: UserHisto
               .map(p => (
                 <div key={p.preference_order} className="flex items-center gap-2 min-w-0">
                   <PrefRankBadge order={p.preference_order} />
-                  <img src={getFlagUrl(p.country_code)} style={{ width: 18, height: 13, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={p.country_name} />
+                  <CountryFlag code={p.country_code} w={18} h={13} radius={2} alt={p.country_name} />
                   <span className="truncate flex-1 min-w-0" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT }}>
                     {p.conference_committees?.name ?? 'Unknown'} · {p.country_name}
                   </span>
@@ -715,8 +924,8 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
               <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={28} />
               <span>{app.profiles?.display_name ?? app.invited_name}</span>
               <ArrowRight size={14} style={{ color: NEU.muted }} />
-              <LogoDisc bare src={committee.logo_url} size={26} fallbackText={committee.abbreviation ?? committee.name} alt={committee.name} />
-              <span>{committee.abbreviation ?? committee.name}</span>
+              <LogoDisc bare src={committee.logo_url} size={30} fallbackText={committeeLabels(committee).big} alt={committee.name} />
+              <span>{committeeLabels(committee).big}</span>
             </h2>
           </div>
           <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: NEU.muted }}><X size={18} /></button>
@@ -737,7 +946,7 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
               const busy = busySlotId === slot.id;
               return (
                 <NeuInset key={slot.id} small className="flex items-center gap-3 px-3 py-2.5">
-                  <img src={getFlagUrl(slot.country_code)} style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover', flexShrink: 0, boxShadow: FLAG_SHADOW }} alt={slot.country_name} />
+                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
@@ -849,12 +1058,14 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
         </div>
 
         <div className="flex items-center gap-2.5 mb-4">
-          <LogoDisc bare src={committee.logo_url} size={34} fallbackText={committee.abbreviation ?? committee.name} alt={committee.name} />
+          <LogoDisc bare src={committee.logo_url} size={40} fallbackText={committeeLabels(committee).big} alt={committee.name} />
           <div className="min-w-0">
-            <p style={{ fontSize: 15, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em' }}>
-              {committee.abbreviation ?? committee.name}
+            <p style={{ fontSize: 18, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em' }}>
+              {committeeLabels(committee).big}
             </p>
-            <p className="truncate" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT }}>{committee.name}</p>
+            {committeeLabels(committee).full && (
+              <p className="truncate" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT }}>{committeeLabels(committee).full}</p>
+            )}
           </div>
         </div>
 
@@ -866,7 +1077,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
               <PersonAvatar name={preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name ?? 'Unknown'} url={preSelectedApp.profiles?.avatar_url ?? null} size={34} />
               <div className="min-w-0">
                 <p className="font-semibold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name}</p>
-                <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{preSelectedApp.role} · {preSelectedApp.experience_level ?? 'n/a'}</p>
+                <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{preSelectedApp.role} · {effectiveLevel(preSelectedApp)}</p>
               </div>
             </NeuInset>
           ) : (
@@ -889,7 +1100,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
                     <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={30} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{app.profiles?.display_name ?? app.invited_name}</p>
-                      <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{app.role} · {app.experience_level ?? 'n/a'}</p>
+                      <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{app.role} · {effectiveLevel(app)}</p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {idx === 0 && score >= 20 && (
@@ -934,7 +1145,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
           <p className="mb-2" style={{ color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontSize: 10, fontWeight: 700 }}>COUNTRY</p>
           {preSelectedSlot ? (
             <NeuInset small className="flex items-center gap-3 p-3">
-              <img src={getFlagUrl(preSelectedSlot.country_code)} style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover' }} alt={preSelectedSlot.country_name} />
+              <CountryFlag code={preSelectedSlot.country_code} w={24} h={17} radius={3} alt={preSelectedSlot.country_name} />
               <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{preSelectedSlot.country_name}</p>
               <div style={{ marginLeft: 'auto' }}><TierBadge tier={preSelectedSlot.importance} /></div>
             </NeuInset>
@@ -951,7 +1162,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedApp, o
                     style={{ backgroundColor: selected ? NEU.surface : 'transparent', boxShadow: selected ? NEU.outSm : 'none' }}
                     onClick={() => setSelectedSlot(slot)}
                   >
-                    <img src={getFlagUrl(slot.country_code)} style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover' }} alt={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={20} h={14} radius={2} alt={slot.country_name} />
                     <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
                     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <TierBadge tier={slot.importance} />
@@ -1062,12 +1273,15 @@ function CountrySlotGrid({
       {slots.map(slot => {
         const alloc = allocByCode.get(slot.country_code) ?? null;
         const flag = (
-          <img
-            src={getFlagUrl(slot.country_code)}
+          <CountryFlag
+            code={slot.country_code}
+            w={flagSize}
+            h={flagSize}
+            radius={9999}
+            shadow={FLAG_SHADOW}
+            dim={alloc ? undefined : 0.42}
             alt={slot.country_name}
             title={slot.country_name}
-            draggable={false}
-            style={{ width: flagSize, height: flagSize, borderRadius: 9999, objectFit: 'cover', flexShrink: 0, boxShadow: FLAG_SHADOW, opacity: alloc ? 1 : 0.42 }}
           />
         );
         if (alloc) {
@@ -1131,6 +1345,7 @@ function CommitteeBoardPanel({
   const openTierCounts: Record<ImportanceTier, number> = { high: 0, medium: 0, low: 0, standard: 0 };
   for (const s of openSlots) openTierCounts[s.importance] += 1;
   const primed = dragging || selectable;
+  const labels = committeeLabels(committee);
 
   return (
     <div
@@ -1173,20 +1388,21 @@ function CommitteeBoardPanel({
         style={{ cursor: 'pointer' }}
         title="Open committee overview"
       >
-        <LogoDisc bare src={committee.logo_url} size={46} fallbackText={committee.abbreviation ?? committee.name} alt={committee.name} />
+        <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
         <div className="min-w-0 flex-1">
-          <p className="truncate" style={{ fontSize: 19, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
-            {committee.abbreviation ?? committee.name}
+          <p className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+            {labels.big}
           </p>
-          <p className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{committee.name}</p>
+          {labels.full && (
+            <p className="truncate" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
+          )}
         </div>
         <span className="flex-shrink-0" style={{ fontSize: 15, fontWeight: 900, color: NEU.ink, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
           {filled}<span style={{ color: NEU.muted, fontWeight: 600 }}>/{total}</span>
         </span>
-        {/* Committee difficulty as the account chevron insignia — glyph only. */}
-        <span className="flex-shrink-0 inline-flex" style={{ lineHeight: 0 }} aria-label={`Difficulty: ${committee.difficulty}`} title={`Difficulty: ${committee.difficulty}`}>
-          <LevelInsignia level={committee.difficulty} size={20} />
-        </span>
+        {/* Committee difficulty — rank insignia on a tinted disc + word, sized
+            for legibility (the expert crowned star especially). */}
+        <CommitteeDifficultyBadge level={committee.difficulty} disc={34} glyph={22} showWord={false} />
       </div>
 
       {/* Fill bar */}
@@ -1235,7 +1451,7 @@ function CommitteeBoardPanel({
             .sort((a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name))
             .map(slot => (
               <NeuInset key={slot.id} small className="flex items-center gap-2 px-2.5 py-1.5">
-                <img src={getFlagUrl(slot.country_code)} style={{ width: 18, height: 13, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={slot.country_name} />
+                <CountryFlag code={slot.country_code} w={18} h={13} radius={2} alt={slot.country_name} />
                 <span className="truncate flex-1" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</span>
                 <TierBadge tier={slot.importance} onCycle={() => onCycleTier(slot)} />
                 <button
@@ -1253,38 +1469,132 @@ function CommitteeBoardPanel({
   );
 }
 
-// ── CommitteeOverviewModal ────────────────────────────────────────────────────
-// Click-into overview of a single committee: the whole roster as an alphabetical
-// grid of circular country flags — allocated flags carry their delegate's name
-// (with inline deallocate), empty flags are clickable to assign. An open-seat
-// importance summary (dash indicator + count) sits above it.
+// ── RowMenu ─────────────────────────────────────────────────────────────────
+// A portaled, edge-flipped action dropdown for one overview list row. Rendered
+// in a Portal at fixed viewport coords computed from the trigger and flipped
+// above / against the right edge so the modal's own overflow never clips it.
+function RowMenu({ items }: { items: { label: string; icon: React.ReactNode; danger?: boolean; onClick: () => void }[] }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const MENU_W = 188;
+  const menuH = items.length * 40 + 12;
 
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = r.right - MENU_W;
+    if (left + MENU_W > vw - 10) left = vw - 10 - MENU_W;
+    if (left < 10) left = 10;
+    const below = r.bottom + 6;
+    const flipUp = below + menuH > vh - 10 && r.top - menuH - 6 > 10;
+    setPos({ top: flipUp ? r.top - menuH - 6 : below, left });
+  }, [menuH]);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const handler = () => place();
+    window.addEventListener('scroll', handler, true);
+    window.addEventListener('resize', handler);
+    return () => {
+      window.removeEventListener('scroll', handler, true);
+      window.removeEventListener('resize', handler);
+    };
+  }, [open, place]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+        title="Allocation options"
+        aria-label="Allocation options"
+        className="focus:outline-none inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 28, height: 28, borderRadius: 9999, backgroundColor: NEU.surface, boxShadow: open ? NEU.outSmHover : NEU.outSm, color: NEU.muted }}
+      >
+        <MoreVertical size={15} />
+      </button>
+      {open && pos && createPortal(
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 60 }} onClick={e => { e.stopPropagation(); setOpen(false); }} />
+          <div
+            className="fixed"
+            style={{
+              top: pos.top, left: pos.left, width: MENU_W, zIndex: 61,
+              backgroundColor: NEU.surface, borderRadius: 14, padding: 6,
+              boxShadow: `${NEU.out}, 0 14px 34px rgba(27,56,40,0.22)`,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {items.map((it, i) => (
+              <button
+                key={i}
+                onClick={() => { setOpen(false); it.onClick(); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg focus:outline-none"
+                style={{ fontSize: 12.5, fontWeight: 700, fontFamily: OUTFIT, color: it.danger ? '#8B2020' : NEU.ink, background: 'transparent' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = NEU.base; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {it.icon}
+                {it.label}
+              </button>
+            ))}
+          </div>
+        </>,
+        document.getElementById('fit-root') ?? document.body,
+      )}
+    </>
+  );
+}
+
+// ── CommitteeOverviewModal ────────────────────────────────────────────────────
+// Click-into overview of a single committee: the whole roster as a simple
+// alphabetical LIST — one row per seat with the country flag, the delegate's
+// photo, name (+ age), their delegation and their level, plus a per-row
+// allocation dropdown (deallocate / change). Clicking an allocated row expands
+// that delegate's full application detail (reusing DelegateDetail). Empty seats
+// read as open and assign on click.
 function CommitteeOverviewModal({
-  committee, onClose, onRemoveAllocation, onAssignSlot,
+  committee, history, onClose, onRemoveAllocation, onAssignSlot, onChangeAllocation,
 }: {
   committee: CommitteeData;
+  history: Record<string, UserHistory>;
   onClose: () => void;
   onRemoveAllocation: (a: AllocationRow) => void;
   onAssignSlot: (slot: SlotRow) => void;
+  onChangeAllocation: (a: AllocationRow, slot: SlotRow) => void;
 }) {
+  const [expandedSeatId, setExpandedSeatId] = useState<string | null>(null);
   const filled = committee.conference_allocations.length;
   const total = committee.total_slots;
-  const allocatedCodes = new Set(committee.conference_allocations.map(a => a.country_code));
-  const openSlots = committee.committee_country_slots.filter(s => !allocatedCodes.has(s.country_code));
+  const labels = committeeLabels(committee);
+  const allocByCode = new Map(committee.conference_allocations.map(a => [a.country_code, a]));
+  const openSlots = committee.committee_country_slots.filter(s => !allocByCode.has(s.country_code));
   const openTierCounts: Record<ImportanceTier, number> = { high: 0, medium: 0, low: 0, standard: 0 };
   for (const s of openSlots) openTierCounts[s.importance] += 1;
+  // Always alphabetical by country/character name.
+  const slots = [...committee.committee_country_slots].sort((a, b) => a.country_name.localeCompare(b.country_name));
 
   return (
     <ModalOverlay onClose={onClose}>
-      <NeuModalCard width={560}>
+      <NeuModalCard width={620}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <LogoDisc bare src={committee.logo_url} size={48} fallbackText={committee.abbreviation ?? committee.name} alt={committee.name} />
+            <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
             <div className="min-w-0">
-              <h2 className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
-                {committee.abbreviation ?? committee.name}
-              </h2>
-              <p className="truncate" style={{ fontSize: 12, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{committee.name}</p>
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="truncate" style={{ fontSize: 24, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+                  {labels.big}
+                </h2>
+                <CommitteeDifficultyBadge level={committee.difficulty} disc={30} glyph={20} />
+              </div>
+              {labels.full && (
+                <p className="truncate" style={{ fontSize: 12, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: NEU.muted }}><X size={18} /></button>
@@ -1313,18 +1623,96 @@ function CommitteeOverviewModal({
           )}
         </div>
 
-        {/* Roster overview: alphabetical circular flags. Allocated flags carry
-            the delegate's name + deallocate; empty flags assign on click. */}
         <p style={{ fontSize: 10, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 700, marginBottom: 8 }}>
           ALLOCATION OVERVIEW
         </p>
-        <CountrySlotGrid
-          committee={committee}
-          flagSize={30}
-          maxHeight={340}
-          onRemoveAllocation={onRemoveAllocation}
-          onAssignSlot={slot => { onAssignSlot(slot); onClose(); }}
-        />
+
+        <div className="flex flex-col gap-1.5" style={{ maxHeight: 420, overflowY: 'auto' }}>
+          {slots.map(slot => {
+            const alloc = allocByCode.get(slot.country_code) ?? null;
+
+            if (!alloc) {
+              // Open seat — clicking assigns.
+              return (
+                <button
+                  key={slot.id}
+                  onClick={() => { onAssignSlot(slot); onClose(); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 focus:outline-none text-left"
+                  style={{ backgroundColor: NEU.base, borderRadius: 14, boxShadow: NEU.inSm }}
+                >
+                  <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} />
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
+                    <p style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em', marginTop: 1 }}>OPEN SEAT</p>
+                  </div>
+                  <TierBadge tier={slot.importance} />
+                  <span className="inline-flex items-center gap-1 flex-shrink-0" style={{ fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontFamily: MONO, letterSpacing: '0.04em' }}>
+                    <Plus size={12} strokeWidth={2.6} /> ASSIGN
+                  </span>
+                </button>
+              );
+            }
+
+            const app = allocationToApp(alloc);
+            const name = alloc.profiles?.display_name ?? alloc.applications?.invited_name ?? 'Assigned';
+            const age = ageOf(app);
+            const userHistory = alloc.user_id ? history[alloc.user_id] : undefined;
+            const expanded = expandedSeatId === slot.id;
+            const removable = !alloc.id.startsWith('temp-');
+
+            return (
+              <div
+                key={slot.id}
+                className="flex flex-col"
+                style={{ backgroundColor: NEU.surface, borderRadius: 14, boxShadow: expanded ? NEU.outSmHover : NEU.outSm }}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setExpandedSeatId(expanded ? null : slot.id)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedSeatId(expanded ? null : slot.id); } }}
+                  className="flex items-center gap-3 px-3 py-2.5 focus:outline-none"
+                  style={{ cursor: 'pointer' }}
+                  title="Open application detail"
+                >
+                  <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} />
+                  <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={30} />
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate" style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
+                      {name}
+                      {age != null && <span style={{ fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>, {age}</span>}
+                    </p>
+                    <p className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{slot.country_name}</p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+                    <DelegationChip app={app} />
+                    <LevelTag level={effectiveLevel(app)} />
+                  </div>
+                  <RowMenu
+                    items={[
+                      { label: 'Change seat', icon: <Repeat size={14} />, onClick: () => onChangeAllocation(alloc, slot) },
+                      ...(removable ? [{ label: 'Deallocate', icon: <Trash2 size={14} />, danger: true, onClick: () => onRemoveAllocation(alloc) }] : []),
+                    ]}
+                  />
+                  {expanded ? <ChevronUp size={15} style={{ color: NEU.muted, flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: NEU.muted, flexShrink: 0 }} />}
+                </div>
+                {/* Compact delegation/level row for narrow widths */}
+                <div className="sm:hidden flex items-center gap-1.5 flex-wrap px-3 pb-2.5">
+                  <DelegationChip app={app} />
+                  <LevelTag level={effectiveLevel(app)} />
+                </div>
+                {expanded && (
+                  <div className="px-3 pb-3">
+                    <DelegateDetail app={app} history={userHistory} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {slots.length === 0 && (
+            <p className="text-xs py-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No country slots in this committee.</p>
+          )}
+        </div>
       </NeuModalCard>
     </ModalOverlay>
   );
@@ -1368,13 +1756,13 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
       <NeuModalCard width={400}>
         <div className="flex items-start justify-between gap-3 mb-5">
           <div className="flex items-center gap-2.5 min-w-0">
-            <LogoDisc bare src={committee.logo_url} size={34} fallbackText={committee.abbreviation ?? committee.name} alt={committee.name} />
+            <LogoDisc bare src={committee.logo_url} size={34} fallbackText={committeeLabels(committee).big} alt={committee.name} />
             <div className="min-w-0">
               <p style={{ margin: 0, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: NEU.deepGold }}>
                 INVITE CHAIR
               </p>
               <p className="font-bold text-[15px] mt-0.5 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                {committee.abbreviation ?? committee.name}
+                {committeeLabels(committee).big}
               </p>
             </div>
           </div>
@@ -1436,6 +1824,7 @@ function ChairBoardPanel({
   const dais = committee.display_chairs ?? [];
   const chairIds = committee.chair_user_ids ?? [];
   const idAligned = chairIds.length === dais.length;
+  const labels = committeeLabels(committee);
 
   return (
     <div
@@ -1469,12 +1858,14 @@ function ChairBoardPanel({
     >
       {/* Header: big free-floating logo + strong acronym */}
       <div className="flex items-center gap-3">
-        <LogoDisc bare src={committee.logo_url} size={46} fallbackText={committee.abbreviation ?? committee.name} alt={committee.name} />
+        <LogoDisc bare src={committee.logo_url} size={54} fallbackText={labels.big} alt={committee.name} />
         <div className="min-w-0 flex-1">
-          <p className="truncate" style={{ fontSize: 19, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
-            {committee.abbreviation ?? committee.name}
+          <p className="truncate" style={{ fontSize: 22, fontWeight: 900, color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.01em', lineHeight: 1.05 }}>
+            {labels.big}
           </p>
-          <p className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{committee.name}</p>
+          {labels.full && (
+            <p className="truncate" style={{ fontSize: 11.5, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{labels.full}</p>
+          )}
         </div>
         <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 13, fontWeight: 900, color: NEU.ink, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
           <Gavel size={13} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
@@ -1591,14 +1982,18 @@ export default function AssignmentPage() {
   const [sendingAll, setSendingAll] = useState(false);
   const [sendingAllocationEmails, setSendingAllocationEmails] = useState(false);
   const [quickAssigning, setQuickAssigning] = useState<string | null>(null); // suggestion key in flight
-  const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  // Which suggestion card is expanded to show the delegate's full detail.
+  const [expandedSuggestionKey, setExpandedSuggestionKey] = useState<string | null>(null);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
+  const toast = useToast();
 
-  function showFlash(kind: 'ok' | 'err', msg: string) {
-    setFlash({ kind, msg });
-    setTimeout(() => setFlash(f => (f?.msg === msg ? null : f)), 4500);
-  }
+  // Organizer action feedback now lands as a floating toast (does not shift
+  // page layout). Same (kind, msg) signature the whole page — and the
+  // Delegations/Independents views — already call.
+  const showFlash = useCallback((kind: 'ok' | 'err', msg: string) => {
+    toast(kind, msg);
+  }, [toast]);
 
   // Monotonic sequence for loads, a slow older response never overwrites a
   // newer one (silent background refetches can race with each other and with
@@ -1635,7 +2030,15 @@ export default function AssignmentPage() {
         .select(`
           id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs,
           committee_country_slots (id, country_code, country_name, delegation_size, importance),
-          conference_allocations (id, user_id, country_code, country_name, allocation_sent, application_id, profiles (display_name, avatar_url), applications:application_id (invited_name))
+          conference_allocations (
+            id, user_id, country_code, country_name, allocation_sent, application_id,
+            profiles (id, display_name, email, nationality, date_of_birth, mun_experience_level, avatar_url),
+            applications:application_id (
+              invited_name, experience_level, role, is_head_delegate, society_id, payment_status, attending, invited_email,
+              societies (name),
+              application_preferences (preference_order, country_code, country_name, conference_committee_id, conference_committees (name))
+            )
+          )
         `)
         .eq('conference_id', conference.id)
         .order('name', { ascending: true }),
@@ -2113,7 +2516,22 @@ export default function AssignmentPage() {
     handleAssignChair(chairApp, committee);
   }
 
+  // Board panels default to difficulty ascending: the gentlest committees
+  // (beginner / general assembly) first, hardest (expert) last, name as the
+  // tiebreak. Used only for display order; lookups by id read `committees`.
+  const sortedCommittees = useMemo(
+    () => [...committees].sort(
+      (a, b) => difficultyRank(a.difficulty) - difficultyRank(b.difficulty) || a.name.localeCompare(b.name)
+    ),
+    [committees],
+  );
+
   // ── Suggestions (global, across all committees) ─────────────────────────────
+  // Every accepted, attending applicant is a candidate — INCLUDING those with
+  // no committee preferences (common in real data). A preference-less delegate
+  // simply scores 0 on the preference terms; their suggestion is then driven
+  // by committee fill-need, the seat-importance signal and their experience /
+  // difficulty skill match, so they are never skipped here.
   const suggestions = useMemo<Suggestion[]>(() => {
     const candidates: Suggestion[] = [];
     for (const app of accepted) {
@@ -2258,20 +2676,6 @@ export default function AssignmentPage() {
         })}
       </NeuInset>
 
-      {/* Flash banner */}
-      {flash && (
-        <NeuInset
-          className="px-4 py-2.5 mb-5 text-sm"
-          style={{
-            color: flash.kind === 'ok' ? NEU.green : '#8B2020',
-            fontFamily: OUTFIT,
-            fontWeight: 700,
-          }}
-        >
-          {flash.msg}
-        </NeuInset>
-      )}
-
       {loading && (
         <div className="flex justify-center py-16">
           <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
@@ -2318,32 +2722,54 @@ export default function AssignmentPage() {
                 {suggestions.map(sug => {
                   const key = `${sug.app.id}-${sug.slot.id}`;
                   const busy = quickAssigning === key;
+                  const expanded = expandedSuggestionKey === key;
+                  const sugHistory = sug.app.profiles ? history[sug.app.profiles.id] : undefined;
+                  const toggle = () => setExpandedSuggestionKey(prev => (prev === key ? null : key));
                   return (
-                    <NeuInset key={key} small className="flex items-center gap-3 px-3 py-2.5">
-                      <PersonAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                            {sug.app.profiles?.display_name ?? sug.app.invited_name}
-                          </p>
-                          <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
-                          <img src={getFlagUrl(sug.slot.country_code)} style={{ width: 19, height: 13, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={sug.slot.country_name} />
-                          <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{sug.slot.country_name}</p>
+                    <NeuInset key={key} small className="px-3 py-2.5">
+                      <div className="flex items-center gap-3">
+                        {/* Clicking the delegate opens their full application
+                            detail (same info as the rail card), so the
+                            organizer can vet a pick before assigning. */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={toggle}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+                          className="flex items-center gap-3 flex-1 min-w-0 focus:outline-none"
+                          style={{ cursor: 'pointer' }}
+                          title={expanded ? 'Hide applicant detail' : 'View applicant detail'}
+                        >
+                          <PersonAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                                {sug.app.profiles?.display_name ?? sug.app.invited_name}
+                              </p>
+                              <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
+                              <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} />
+                              <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{sug.slot.country_name}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
+                                <LogoDisc bare src={sug.committee.logo_url} size={20} fallbackText={committeeLabels(sug.committee).big} alt="" />
+                                {committeeLabels(sug.committee).big}
+                              </span>
+                              {sug.reasons.slice(0, 2).map(r => <ReasonChip key={r} reason={r} />)}
+                              <span style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+                                {sug.score}
+                              </span>
+                            </div>
+                          </div>
+                          {expanded
+                            ? <ChevronUp size={14} style={{ color: NEU.muted, flexShrink: 0 }} />
+                            : <ChevronDown size={14} style={{ color: NEU.muted, flexShrink: 0 }} />}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
-                            <LogoDisc bare src={sug.committee.logo_url} size={20} fallbackText={sug.committee.abbreviation ?? sug.committee.name} alt="" />
-                            {sug.committee.abbreviation ?? sug.committee.name}
-                          </span>
-                          {sug.reasons.slice(0, 2).map(r => <ReasonChip key={r} reason={r} />)}
-                          <span style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
-                            {sug.score}
-                          </span>
-                        </div>
+                        <NeuButton onClick={() => quickAssign(sug)} disabled={busy} style={{ padding: '8px 16px', fontSize: 11 }}>
+                          {busy ? '...' : 'ASSIGN'}
+                        </NeuButton>
                       </div>
-                      <NeuButton onClick={() => quickAssign(sug)} disabled={busy} style={{ padding: '8px 16px', fontSize: 11 }}>
-                        {busy ? '...' : 'ASSIGN'}
-                      </NeuButton>
+                      {expanded && <DelegateDetail app={sug.app} history={sugHistory} />}
                     </NeuInset>
                   );
                 })}
@@ -2392,8 +2818,8 @@ export default function AssignmentPage() {
                       const nationality = app.profiles?.nationality ?? null;
                       const natCountry = nationality ? getCountryByName(nationality) : undefined;
                       const displayName = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
-                      const level = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
-                      const age = ageAt(app.profiles?.date_of_birth);
+                      const level = effectiveLevel(app);
+                      const age = ageOf(app);
                       const roleLabel = app.role === 'head-delegate' ? 'Head Delegate' : 'Delegate';
                       const firstPref = [...(app.application_preferences ?? [])]
                         .sort((a, b) => a.preference_order - b.preference_order)[0];
@@ -2427,12 +2853,15 @@ export default function AssignmentPage() {
                             <div style={{ position: 'relative', flexShrink: 0 }}>
                               <PersonAvatar name={displayName} url={app.profiles?.avatar_url ?? null} size={48} />
                               {natCountry && (
-                                <img
-                                  src={getFlagUrl(natCountry.code)}
+                                <CountryFlag
+                                  code={natCountry.code}
+                                  w={20}
+                                  h={20}
+                                  radius={9999}
+                                  shadow={FLAG_SHADOW}
                                   alt={nationality ?? ''}
                                   title={nationality ?? ''}
-                                  draggable={false}
-                                  style={{ position: 'absolute', right: -3, bottom: -3, width: 20, height: 20, borderRadius: 9999, objectFit: 'cover', boxShadow: FLAG_SHADOW, border: `2px solid ${NEU.surface}` }}
+                                  style={{ position: 'absolute', right: -3, bottom: -3, border: `2px solid ${NEU.surface}` }}
                                 />
                               )}
                             </div>
@@ -2469,7 +2898,7 @@ export default function AssignmentPage() {
                           {firstPref && (
                             <div className="flex items-center gap-1.5 mt-2">
                               <PrefRankBadge order={1} size={16} />
-                              <img src={getFlagUrl(firstPref.country_code)} style={{ width: 17, height: 12, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} alt={firstPref.country_name} />
+                              <CountryFlag code={firstPref.country_code} w={17} h={12} radius={2} alt={firstPref.country_name} />
                               <span className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT }}>
                                 {firstPref.conference_committees?.name ?? 'Unknown'} · {firstPref.country_name}
                               </span>
@@ -2487,7 +2916,7 @@ export default function AssignmentPage() {
               {/* Board, every committee visible at once */}
               <div className="flex-1 min-w-0 w-full">
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                  {committees.map(c => (
+                  {sortedCommittees.map(c => (
                     <CommitteeBoardPanel
                       key={c.id}
                       committee={c}
@@ -2578,7 +3007,7 @@ export default function AssignmentPage() {
               {/* Board, every committee visible at once */}
               <div className="flex-1 min-w-0 w-full">
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                  {committees.map(c => (
+                  {sortedCommittees.map(c => (
                     <ChairBoardPanel
                       key={c.id}
                       committee={c}
@@ -2689,17 +3118,29 @@ export default function AssignmentPage() {
         />
       )}
 
-      {/* Click-into committee overview + inline deallocate */}
+      {/* Click-into committee overview — list view with per-row detail + actions */}
       {overviewCommittee && (
         <CommitteeOverviewModal
           committee={overviewCommittee}
+          history={history}
           onClose={() => setOverviewCommitteeId(null)}
           onRemoveAllocation={handleRemoveAllocation}
           onAssignSlot={slot => setAssignModal({ committeeId: overviewCommittee.id, preSlot: slot })}
+          onChangeAllocation={(alloc, slot) => {
+            // "Change" frees the seat (optimistic, synchronous state update) and
+            // immediately opens the assign flow for that now-open slot so the
+            // organizer can pick a replacement.
+            handleRemoveAllocation(alloc);
+            setOverviewCommitteeId(null);
+            setAssignModal({ committeeId: overviewCommittee.id, preSlot: slot });
+          }}
         />
       )}
 
       {confirmModal}
+
+      {/* Floating action-feedback toasts (fixed overlay, never shifts layout) */}
+      <ToastHost />
     </div>
   );
 }

@@ -486,24 +486,10 @@ export default function ImportPage() {
   const isLanding = phase === 'upload' || phase === 'parsing';
 
   return (
-    <div className="px-6 md:px-10 py-8">
-      <div className="mx-auto" style={{ maxWidth: isLanding ? 640 : 1080 }}>
-      {/* Header */}
-      {isLanding ? (
-        <div className="flex flex-col items-center text-center mb-8">
-          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={UploadIcon} size={64} style={{ marginBottom: 18 }} />
-          <p className="text-xs mb-2" style={{ color: NEU.muted, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.14em' }}>
-            {conference.acronym} / IMPORT
-          </p>
-          <h1 className="font-black text-3xl" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>Import your roster</h1>
-          <p className="mt-3" style={{ color: '#6B5F52', fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.65, maxWidth: 500 }}>
-            Bring your whole roster into Gavelling in one step. Upload a CSV or spreadsheet and we create an application for every
-            participant, match them to their delegation, and place them on a committee and country whenever you name one. Everyone is
-            matched by email, so when a participant signs up later with that same address their spot attaches to them automatically.
-            Nothing is emailed on import; you send Gavelling invites yourself, when you are ready.
-          </p>
-        </div>
-      ) : (
+    <div className="px-6 md:px-10 py-6 md:py-8">
+      <div className="mx-auto" style={{ maxWidth: isLanding ? 960 : 1080 }}>
+      {/* Header (non-landing only; the landing header lives in the left column) */}
+      {!isLanding && (
         <div className="flex items-center justify-between mb-6">
           <div>
             <p className="text-xs mb-1" style={{ color: NEU.muted, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.12em' }}>
@@ -575,99 +561,113 @@ export default function ImportPage() {
 
       {/* ── UPLOAD / PARSING ─────────────────────────────────────────────── */}
       {isLanding && (
-        <div className="flex flex-col gap-6">
-          {/* Step 1 — template */}
-          <NeuCard style={{ padding: 24 }}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5 min-w-0">
-                <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={FileSpreadsheet} iconColor={NEU.forest} size={42} />
-                <div className="min-w-0">
-                  <p className="font-bold text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Step 1 &middot; Download the template</p>
-                  <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Fill it in with your participants, then upload it below.</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          {/* LEFT — what this does + reassurances */}
+          <div className="flex flex-col">
+            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={UploadIcon} size={56} style={{ marginBottom: 16 }} />
+            <p className="text-xs mb-2" style={{ color: NEU.muted, fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.14em' }}>
+              {conference.acronym} / IMPORT
+            </p>
+            <h1 className="font-black text-3xl" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>Import your roster</h1>
+            <p className="mt-3" style={{ color: '#6B5F52', fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.65 }}>
+              Bring your whole roster into Gavelling in one step. Upload a CSV or spreadsheet and we create an application for every
+              participant, match them to their delegation, and place them on a committee and country whenever you name one.
+            </p>
+            <div className="flex flex-col gap-3 mt-6">
+              <div className="flex items-center gap-3">
+                <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Link2} size={34} />
+                <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                  Participants are matched by email and attach automatically when they sign up.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={MailX} size={34} />
+                <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                  No one is emailed automatically. You send Gavelling invites when you are ready.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT — the two upload steps */}
+          <div className="flex flex-col gap-4">
+            {/* Step 1 — template */}
+            <NeuCard style={{ padding: 20 }}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={FileSpreadsheet} iconColor={NEU.forest} size={40} />
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Step 1 &middot; Download the template</p>
+                    <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Fill it in with your participants, then upload it.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="inline-flex items-center gap-1.5 rounded-lg py-2 px-3.5 text-xs font-bold focus:outline-none flex-shrink-0"
+                  style={{ border: '1px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT }}
+                >
+                  <Download size={13} />
+                  CSV
+                </button>
+              </div>
+              <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                <p className="text-xs font-bold mb-2" style={{ color: '#6B5F52', fontFamily: OUTFIT, letterSpacing: '0.1em' }}>COLUMNS</p>
+                <div className="flex flex-col gap-1" style={{ fontSize: 12, color: '#4A4238', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                  <p><strong style={{ color: NEU.ink }}>email, name</strong>: required.</p>
+                  <p><strong style={{ color: NEU.ink }}>role</strong>: delegate, head delegate, faculty advisor, or observer. Chairs use the invite flow in Committees.</p>
+                  <p><strong style={{ color: NEU.ink }}>delegation</strong>: society or school name. Blank means independent.</p>
+                  <p><strong style={{ color: NEU.ink }}>payment</strong>: paid, unpaid, or waived. Defaults to unpaid.</p>
+                  <p><strong style={{ color: NEU.ink }}>committee</strong>: an existing committee&apos;s name or abbreviation.</p>
+                  <p><strong style={{ color: NEU.ink }}>country</strong>: a name from the committee&apos;s roster, a country (France) or, for crisis committees, a character (Fidel Castro).</p>
                 </div>
               </div>
-              <button
-                onClick={handleDownloadTemplate}
-                className="inline-flex items-center gap-1.5 rounded-lg py-2 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
-                style={{ border: '1px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT }}
+            </NeuCard>
+
+            {/* Step 2 — upload */}
+            <NeuCard style={{ padding: 20 }}>
+              <div className="flex items-center gap-3 mb-3.5">
+                <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} size={40} />
+                <div>
+                  <p className="font-bold text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Step 2 &middot; Upload your file</p>
+                  <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>We validate every row before anything is created.</p>
+                </div>
+              </div>
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-2.5 cursor-pointer"
+                style={{
+                  padding: '30px 24px',
+                  borderRadius: 16,
+                  border: `1.5px dashed ${dragOver ? NEU.forest : 'rgba(27,56,40,0.22)'}`,
+                  backgroundColor: NEU.base,
+                  boxShadow: NEU.inSm,
+                  transition: 'border-color 200ms cubic-bezier(0.22,1,0.36,1)',
+                }}
               >
-                <Download size={13} />
-                DOWNLOAD CSV
-              </button>
-            </div>
-            <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-              <p className="text-xs font-bold mb-2.5" style={{ color: '#6B5F52', fontFamily: OUTFIT, letterSpacing: '0.1em' }}>COLUMNS</p>
-              <div className="flex flex-col gap-1.5" style={{ fontSize: 12.5, color: '#4A4238', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                <p><strong style={{ color: NEU.ink }}>email, name</strong>: required.</p>
-                <p><strong style={{ color: NEU.ink }}>role</strong>: one of delegate, head delegate, faculty advisor, observer. Chairs aren&apos;t importable. Use the chair invite flow in Committees.</p>
-                <p><strong style={{ color: NEU.ink }}>delegation</strong>: society or school name. Blank means independent.</p>
-                <p><strong style={{ color: NEU.ink }}>payment</strong>: paid, unpaid, or waived. Defaults to unpaid.</p>
-                <p><strong style={{ color: NEU.ink }}>committee</strong>: an existing committee&apos;s name or abbreviation.</p>
-                <p><strong style={{ color: NEU.ink }}>country</strong>: a name from the committee&apos;s roster, a country (France) or, for crisis committees, a character (Fidel Castro).</p>
+                <input ref={fileInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFileInputChange} />
+                {phase === 'parsing' ? (
+                  <>
+                    <Loader2 size={28} className="animate-spin" style={{ color: NEU.forest }} />
+                    <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Reading {fileName}…</p>
+                  </>
+                ) : (
+                  <>
+                    <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={UploadIcon} size={44} />
+                    <p className="text-sm font-semibold mt-1 text-center" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Drop a .csv or .xlsx file here, or click to browse</p>
+                    <p className="text-xs text-center" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Nothing is written until you confirm the import.</p>
+                  </>
+                )}
               </div>
-            </div>
-          </NeuCard>
-
-          {/* Step 2 — upload */}
-          <NeuCard style={{ padding: 24 }}>
-            <div className="flex items-center gap-3.5 mb-4">
-              <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} size={42} />
-              <div>
-                <p className="font-bold text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Step 2 &middot; Upload your file</p>
-                <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>We validate every row before anything is created.</p>
-              </div>
-            </div>
-            <div
-              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center justify-center gap-3 cursor-pointer"
-              style={{
-                padding: '44px 24px',
-                borderRadius: 16,
-                border: `1.5px dashed ${dragOver ? NEU.forest : 'rgba(27,56,40,0.22)'}`,
-                backgroundColor: NEU.base,
-                boxShadow: NEU.inSm,
-                transition: 'border-color 200ms cubic-bezier(0.22,1,0.36,1)',
-              }}
-            >
-              <input ref={fileInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFileInputChange} />
-              {phase === 'parsing' ? (
-                <>
-                  <Loader2 size={30} className="animate-spin" style={{ color: NEU.forest }} />
-                  <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Reading {fileName}…</p>
-                </>
-              ) : (
-                <>
-                  <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={UploadIcon} size={48} />
-                  <p className="text-sm font-semibold mt-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Drop a .csv or .xlsx file here, or click to browse</p>
-                  <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Nothing is written until you confirm the import.</p>
-                </>
+              {fileError && (
+                <div className="flex items-center gap-2 mt-3 rounded-xl px-4 py-2.5" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
+                  <AlertTriangle size={14} style={{ color: '#8B2020', flexShrink: 0 }} />
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{fileError}</p>
+                </div>
               )}
-            </div>
-            {fileError && (
-              <div className="flex items-center gap-2 mt-3 rounded-xl px-4 py-2.5" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)' }}>
-                <AlertTriangle size={14} style={{ color: '#8B2020', flexShrink: 0 }} />
-                <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{fileError}</p>
-              </div>
-            )}
-          </NeuCard>
-
-          {/* What happens next — reassuring footnotes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex items-center gap-3">
-              <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Link2} size={34} />
-              <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-                Participants are matched by email and attach automatically when they sign up.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={MailX} size={34} />
-              <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-                No one is emailed automatically. You send Gavelling invites when you are ready.
-              </p>
-            </div>
+            </NeuCard>
           </div>
         </div>
       )}

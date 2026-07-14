@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
-  MessageSquareText, Plus, RotateCcw, Search, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
+  MessageSquareText, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   Users, Wallet, X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -18,7 +18,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
-import { getCountryByName } from '@/lib/countries';
+import { getCountryByName, getFlagUrl, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
 import {
@@ -27,7 +27,7 @@ import {
 import {
   poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar,
 } from '@/app/manage/[slug]/assignment/delegationShared';
-import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -103,7 +103,51 @@ interface QuickCommittee {
 // is imported from delegationShared.tsx, the canonical location (F: fillFreeSpots
 // consolidation). This page no longer keeps its own copy.
 
+// One row of the previewed applicant's MUN CV (mun_cv_entries), fetched on demand
+// when the review modal opens. Mirrors the fields the /account/cv page reads.
+interface PreviewCvEntry {
+  id: string;
+  entry_type: string;
+  conference_name: string;
+  committee: string | null;
+  allocation: string | null;
+  awards: string[] | null;
+  award: string | null;
+  logo_url: string | null;
+  event_date: string | null;
+  description: string | null;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Real ISO 3166-1 alpha-2 codes, so a committee "country" that is actually a
+// crisis/JCC character name (country_code stores the character, e.g. "Indira
+// Gandhi") is never mistaken for a flag and never renders a broken flag image.
+const REAL_COUNTRY_CODES = new Set(UN_COUNTRIES.map(c => c.code));
+
+/** The genuine ISO code for a name/code pair, or null when it does not resolve
+ *  to a real country (crisis characters, custom seats, blanks). */
+function resolveRealCountryCode(name: string | null | undefined, code?: string | null): string | null {
+  if (code && REAL_COUNTRY_CODES.has(code.toUpperCase())) return code.toUpperCase();
+  if (name) {
+    const c = getCountryByName(name);
+    if (c) return c.code;
+  }
+  return null;
+}
+
+/** Whole-years age for a row: profiles.date_of_birth first, then any DOB the
+ *  applicant typed into a date-style / "date of birth" custom answer (#12). */
+function ageForApp(app: Application, questions: CustomQuestion[]): number | null {
+  const fromProfile = ageAt(app.profiles?.date_of_birth);
+  if (fromProfile !== null) return fromProfile;
+  const answers = app.custom_answers ?? {};
+  const dobQ = questions.find(q =>
+    q.type === 'date' && /\b(birth|dob|born)\b/i.test(q.label)
+  ) ?? questions.find(q => /date of birth|birth date|\bdob\b/i.test(q.label));
+  const raw = dobQ ? (answers[dobQ.id] ?? '').trim() : '';
+  return raw ? ageAt(raw) : null;
+}
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -205,33 +249,6 @@ function RolePill({ role, size = 'md' }: { role: string; size?: 'sm' | 'md' }) {
   );
 }
 
-/** Payment pill. Paid/waived read as resolved (filled); unpaid stays a calm
- *  pressed-in chip so "still owed" is visually the quiet default. */
-function PaymentPill({ status }: { status: string | null }) {
-  if (status === 'paid') {
-    return (
-      <span className="inline-flex items-center gap-1.5" style={{ padding: '5px 12px', borderRadius: 999, background: 'linear-gradient(135deg, #3D7A52, #2A5A3C)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', boxShadow: '0 3px 8px #3D7A5255, ' + NEU.outSm, whiteSpace: 'nowrap' }}>
-        <CircleCheck size={14} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
-        PAID
-      </span>
-    );
-  }
-  if (status === 'waived') {
-    return (
-      <span className="inline-flex items-center gap-1.5" style={{ padding: '5px 12px', borderRadius: 999, background: 'linear-gradient(135deg, #C79A52, #A8763C)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', boxShadow: '0 3px 8px #C79A5255, ' + NEU.outSm, whiteSpace: 'nowrap' }}>
-        <HandCoins size={14} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
-        WAIVED
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5" style={{ padding: '5px 12px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, color: '#9A6B2F', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
-      <Clock size={13} strokeWidth={2.6} style={{ color: '#9A6B2F' }} />
-      UNPAID
-    </span>
-  );
-}
-
 /** Experience level rendered exactly like the delegate profile (LevelInsignia
  *  on a tinted disc + capitalised tier), followed by the count of conferences
  *  on their MUN CV in parentheses, e.g. "Expert (9)". */
@@ -289,18 +306,18 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
   );
 }
 
-/** Unified payment control (F: merge mark-paid vs waive). One button opens a
- *  small menu exposing the two underlying actions (Mark as paid → payment_status
- *  'paid', Waive fee → 'waived') plus the matching undo, so both states are still
- *  reachable and the Paid/Unpaid/Waived filter keeps working, only the affordance
- *  is unified. Self-contained open/click-outside state. */
+/** Payment control. One button opens a small menu: "Mark paid manually", a
+ *  "Remind to pay" that re-sends the pay-now email (#8), and the matching undo.
+ *  The button itself turns GREEN once paid (#9) so no separate PAID badge is
+ *  needed. "Remove waiver" stays reachable for any legacy waived rows. Portaled +
+ *  edge-flipped so the clipping row card never cuts the menu off. */
 function PaymentMenu({
-  app, disabled, onMarkPaid, onWaive, onMarkUnpaid, onUndoWaive, align = 'left',
+  app, disabled, onMarkPaid, onRemind, onMarkUnpaid, onUndoWaive, align = 'left',
 }: {
   app: Application;
   disabled?: boolean;
   onMarkPaid: () => void;
-  onWaive: () => void;
+  onRemind: () => void;
   onMarkUnpaid: () => void;
   onUndoWaive: () => void;
   align?: 'left' | 'right';
@@ -371,11 +388,17 @@ function PaymentMenu({
         style={{
           padding: '7px 13px', borderRadius: 999,
           fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-          color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none',
+          // Paid → green filled (no separate PAID badge, #9). Else calm cream.
+          color: paid ? '#FFFFFF' : NEU.ink,
+          background: paid ? 'linear-gradient(135deg, #3D7A52, #2A5A3C)' : NEU.surface,
+          boxShadow: paid ? '0 3px 8px #3D7A5255, ' + NEU.outSm : NEU.outSm,
+          border: 'none',
           cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
         }}
       >
-        <Wallet size={13} strokeWidth={2.5} style={{ color: NEU.deepGold }} />
+        {paid
+          ? <CircleCheck size={13} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
+          : <Wallet size={13} strokeWidth={2.5} style={{ color: NEU.deepGold }} />}
         {label.toUpperCase()}
         <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
       </button>
@@ -383,12 +406,12 @@ function PaymentMenu({
         <Portal>
           <div
             ref={menuRef}
-            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: 184, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: 196, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
           >
             <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-            {!paid && item(CircleCheck, 'Mark as paid', onMarkPaid)}
+            {!paid && !waived && item(CircleCheck, 'Mark paid manually', onMarkPaid)}
+            {!paid && !waived && item(Send, 'Remind to pay', onRemind)}
             {paid && item(RotateCcw, 'Mark as unpaid', onMarkUnpaid, 'danger')}
-            {!paid && !waived && item(HandCoins, 'Waive fee', onWaive)}
             {waived && item(RotateCcw, 'Remove waiver', onUndoWaive, 'danger')}
           </div>
         </Portal>
@@ -632,6 +655,18 @@ function committeeFull(c: { name: string; abbreviation: string | null } | null |
   return c.name;
 }
 
+/** Committee naming rule (#6): a long committee name collapses to its ACRONYM
+ *  as the big primary label with the full name in small letters beneath, e.g.
+ *  "Disarmament and International Security Committee" → "DISEC" + full name.
+ *  Short names (or ones with no distinct abbreviation) stay as-is, name only. */
+function committeeDisplay(c: { name: string; abbreviation: string | null } | null | undefined): { primary: string; secondary: string | null } {
+  if (!c) return { primary: '—', secondary: null };
+  const hasAbbr = !!c.abbreviation && c.abbreviation.toUpperCase() !== c.name.toUpperCase();
+  const isLong = c.name.length > 16 || c.name.trim().split(/\s+/).length >= 3;
+  if (hasAbbr && isLong) return { primary: c.abbreviation!, secondary: c.name };
+  return { primary: c.name, secondary: null };
+}
+
 /** Short relative-ish timestamp for the "Checked in …" line. */
 function formatDateTime(d: string) {
   return new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -651,14 +686,28 @@ function committeeAbbr(c: { name: string; abbreviation: string | null } | null |
   return mono || c.name.slice(0, 4).toUpperCase();
 }
 
-/** Country rendered as a flag with the name kept as a tooltip. Falls back to
- *  plain text when no ISO code can be resolved from the name. */
+/** Country rendered as a flag with the name kept as a tooltip. When the seat is
+ *  not a real country (crisis/JCC character, custom seat) it renders a person
+ *  glyph in a soft disc instead of a broken flag image, so allocations NEVER
+ *  show a broken picture (#7). */
 function CountryFlag({ name, code, size = 14 }: { name: string | null | undefined; code?: string | null; size?: number }) {
-  const resolved = code || (name ? getCountryByName(name)?.code : undefined);
-  if (!resolved) return name ? <span>{name}</span> : null;
+  const resolved = resolveRealCountryCode(name, code);
+  if (resolved) {
+    return (
+      <span title={name ?? resolved} className="inline-flex items-center" style={{ lineHeight: 0 }}>
+        <FlagImg code={resolved} size={size} />
+      </span>
+    );
+  }
+  if (!name) return null;
+  // Character / custom seat: a user glyph on a tinted disc, never a broken flag.
   return (
-    <span title={name ?? resolved} className="inline-flex items-center" style={{ lineHeight: 0 }}>
-      <FlagImg code={resolved} size={size} />
+    <span
+      title={name}
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{ width: size, height: size, borderRadius: 9999, background: 'linear-gradient(150deg, rgba(27,56,40,0.14), rgba(27,56,40,0.07))', border: '1px solid rgba(27,56,40,0.18)' }}
+    >
+      <User size={Math.round(size * 0.62)} strokeWidth={2.4} style={{ color: NEU.forest }} />
     </span>
   );
 }
@@ -679,6 +728,16 @@ const ROLE_OPTIONS = [
   { label: 'Faculty Advisors', value: 'faculty-advisor' },
   { label: 'Observers', value: 'observer' },
 ];
+
+// Chairs are hidden by default (#2): every participant role EXCEPT chair. Used
+// to seed the participants filter and to detect the "default scope" for the
+// Total stat tile.
+const DEFAULT_ROLES = ['delegate', 'head-delegate', 'faculty-advisor', 'observer'];
+
+/** Set equality for the small filter sets. */
+function sameSet(a: Set<string>, b: string[]): boolean {
+  return a.size === b.length && b.every(v => a.has(v));
+}
 
 const PAYMENT_OPTIONS = [
   { label: 'Paid', value: 'paid' },
@@ -868,7 +927,7 @@ function FilterPanel({
             </div>
             {activeCount > 0 && (
               <button
-                onClick={() => setFilters({ status: new Set(), role: new Set(), payment: new Set(), aid: new Set(), dateFrom: '', dateTo: '' })}
+                onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), aid: new Set(), dateFrom: '', dateTo: '' })}
                 className="focus:outline-none"
                 style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
               >
@@ -940,8 +999,11 @@ export default function ApplicationsPage() {
   const { session } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  // Chairs are hidden by default (#2): the fresh participants filter carries
+  // every non-chair role, so the row list and stat scope both exclude chairs
+  // until the organiser turns Chairs on.
   const [filters, setFilters] = useState<FilterState>({
-    status: new Set(), role: new Set(), payment: new Set(), aid: new Set(), dateFrom: '', dateTo: '',
+    status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), aid: new Set(), dateFrom: '', dateTo: '',
   });
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
@@ -951,6 +1013,11 @@ export default function ApplicationsPage() {
   // rows (the same source profiles.mun_experience_level is derived from).
   const [cvCounts, setCvCounts] = useState<Record<string, number>>({});
   const [actionError, setActionError] = useState('');
+  // Transient green confirmation (e.g. "Payment reminder sent"), auto-clears.
+  const [flashMsg, setFlashMsg] = useState('');
+  // Previewed applicant's MUN CV, fetched on demand when the review modal opens.
+  const [previewCv, setPreviewCv] = useState<PreviewCvEntry[] | null>(null);
+  const [previewCvLoading, setPreviewCvLoading] = useState(false);
   // App ids with a write in flight, double-click guard for row actions.
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   // Multi-select for bulk actions. Ids are pruned to what's visible whenever
@@ -1034,6 +1101,41 @@ export default function ApplicationsPage() {
   }, [conference, session?.access_token]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
+
+  // Auto-clear the green confirmation flash.
+  useEffect(() => {
+    if (!flashMsg) return;
+    const t = setTimeout(() => setFlashMsg(''), 4000);
+    return () => clearTimeout(t);
+  }, [flashMsg]);
+
+  // Fetch the previewed applicant's MUN CV on demand (#13). Cleared + refetched
+  // whenever the review target changes; skipped for unregistered rows.
+  useEffect(() => {
+    const app = applications.find(a => a.id === reviewId);
+    const uid = app?.user_id;
+    if (!reviewId || !uid || !session) { setPreviewCv(null); return; }
+    let cancelled = false;
+    setPreviewCv(null);
+    setPreviewCvLoading(true);
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { data } = await supabase
+        .from('mun_cv_entries')
+        .select('id, entry_type, conference_name, committee, allocation, awards, award, logo_url, event_date, description')
+        .eq('user_id', uid);
+      if (cancelled) return;
+      const rows = ((data ?? []) as PreviewCvEntry[]).slice().sort((a, b) => {
+        const da = a.event_date ?? '';
+        const db = b.event_date ?? '';
+        return db.localeCompare(da);
+      });
+      setPreviewCv(rows);
+      setPreviewCvLoading(false);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewId, session?.access_token]);
 
   // ── Quick-allocate committee load (#7) ──────────────────────────────────────
   // Lazy, once: fetched the first time an organiser opens a Plus popover. Pulls
@@ -1508,29 +1610,24 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(app.id, false));
   }
 
-  function handleWaive(app: Application) {
+  // Re-send the pay-now email as a reminder (#8). payment_available IS the
+  // "you can pay now" email, so re-queuing it reads to the applicant as a
+  // reminder. Optimistic feedback via the green flash; no row state changes.
+  function handleRemindPay(app: Application) {
     if (!session || !conference || busyIds.has(app.id)) return;
-    const prevRow = applications.find(a => a.id === app.id) ?? app;
-
+    const name = app.profiles?.display_name ?? app.invited_name ?? 'the applicant';
     setActionError('');
     markBusy(app.id, true);
-    applyRow(app.id, { payment_status: 'waived' });
+    setFlashMsg(`Payment reminder sent to ${name}.`);
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ payment_status: 'waived' }).eq('id', app.id);
-      if (error) throw error;
-
-      try {
-        const result = await queueEventEmail(supabase, conference.id, 'fee_waived', [app.id]);
-        notifyIfNeeded(result, pushDraftNotice);
-      } catch {
-        setActionError('Waived, but the waiver email could not be queued.');
-      }
+      const result = await queueEventEmail(supabase, conference.id, 'payment_available', [app.id]);
+      notifyIfNeeded(result, pushDraftNotice);
     })()
       .catch(() => {
-        restoreRow(prevRow);
-        setActionError('Could not waive the fee. The change was reverted. Please try again.');
+        setFlashMsg('');
+        setActionError('Could not send the payment reminder. Please try again.');
       })
       .finally(() => markBusy(app.id, false));
   }
@@ -1745,7 +1842,8 @@ export default function ApplicationsPage() {
 
   const activeFilterCount =
     (filters.status.size > 0 ? 1 : 0) +
-    (filters.role.size > 0 ? 1 : 0) +
+    // The default participants set (chairs hidden) is not a "changed" filter.
+    (!sameSet(filters.role, DEFAULT_ROLES) ? 1 : 0) +
     (filters.payment.size > 0 ? 1 : 0) +
     (filters.aid.size > 0 ? 1 : 0) +
     (filters.dateFrom || filters.dateTo ? 1 : 0);
@@ -1773,22 +1871,46 @@ export default function ApplicationsPage() {
     : selectedApps.every(a => a.status === 'accepted' || a.status === 'assigned') ? 'checkin'
     : null;
 
+  // Stat tiles count over the SAME population the list shows by role/date/aid
+  // (so hiding chairs lowers Total sensibly, #2/#10) but ignore the status /
+  // payment dimensions — those are exactly what the tiles let you click into.
+  const statScope = applications.filter(a => {
+    if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
+    if (filters.aid.size > 0 && !filters.aid.has(a.aid_status)) return false;
+    if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
+    if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
+    return true;
+  });
   const stats = {
-    total: applications.length,
-    accepted: applications.filter(a => a.status === 'accepted').length,
-    assigned: applications.filter(a => a.status === 'assigned').length,
-    checkedIn: applications.filter(a => a.status === 'checked-in').length,
-    paid: applications.filter(a => a.payment_status === 'paid').length,
+    total: statScope.length,
+    accepted: statScope.filter(a => a.status === 'accepted').length,
+    assigned: statScope.filter(a => a.status === 'assigned').length,
+    checkedIn: statScope.filter(a => a.status === 'checked-in').length,
+    paid: statScope.filter(a => a.payment_status === 'paid').length,
+    // Unpaid excludes chairs (always free, never owe a fee).
+    unpaid: statScope.filter(a => a.role !== 'chair' && (a.payment_status == null || a.payment_status === 'unpaid')).length,
   };
 
-  // Order (#3): Total, Accepted, Assigned, Paid, Checked in — Checked in last on
-  // the right. Submitted tile removed (#2).
-  const statItems: { label: string; value: number; emoji: string; icon: typeof Inbox; gradient: [string, string] }[] = [
-    { label: 'Total',      value: stats.total,     emoji: 'Card index',            icon: Users,          gradient: NEU_GRADIENTS.forest },
-    { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',     icon: Check,          gradient: NEU_GRADIENTS.green },
-    { label: 'Assigned',   value: stats.assigned,  emoji: 'Round pushpin',         icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold },
-    { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',             icon: CircleCheck,    gradient: NEU_GRADIENTS.green },
-    { label: 'Checked in', value: stats.checkedIn, emoji: 'Person raising hand',   icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage },
+  // Clickable stat-tile filters (#10). Status tiles clear payment and vice
+  // versa; clicking the active tile again clears it. Total resets to default.
+  const statusTileActive = (v: string) => filters.status.size === 1 && filters.status.has(v) && filters.payment.size === 0;
+  const paymentTileActive = (v: string) => filters.payment.size === 1 && filters.payment.has(v) && filters.status.size === 0;
+  const totalTileActive =
+    filters.status.size === 0 && filters.payment.size === 0 && filters.aid.size === 0 &&
+    !filters.dateFrom && !filters.dateTo && sameSet(filters.role, DEFAULT_ROLES);
+  const clearToDefault = () => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), aid: new Set(), dateFrom: '', dateTo: '' });
+  const toggleStatusTile = (v: string) => setFilters(f => ({ ...f, payment: new Set(), status: (f.status.size === 1 && f.status.has(v)) ? new Set() : new Set([v]) }));
+  const togglePaymentTile = (v: string) => setFilters(f => ({ ...f, status: new Set(), payment: (f.payment.size === 1 && f.payment.has(v)) ? new Set() : new Set([v]) }));
+
+  // Order (#10): Total, Accepted, Assigned, Paid, Unpaid, Checked in — Checked
+  // in rightmost. Every tile applies its matching filter on click.
+  const statItems: { label: string; value: number; emoji: string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
+    { label: 'Total',      value: stats.total,     emoji: 'Card index',          icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
+    { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',   icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusTileActive('accepted'),   onClick: () => toggleStatusTile('accepted') },
+    { label: 'Assigned',   value: stats.assigned,  emoji: 'Round pushpin',       icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusTileActive('assigned'),   onClick: () => toggleStatusTile('assigned') },
+    { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',           icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
+    { label: 'Unpaid',     value: stats.unpaid,    emoji: 'Hourglass not done',  icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
+    { label: 'Checked in', value: stats.checkedIn, emoji: 'Person raising hand', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
   ];
 
   return (
@@ -1839,11 +1961,17 @@ export default function ApplicationsPage() {
           {actionError}
         </p>
       )}
+      {flashMsg && (
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold mb-3" style={{ color: '#2A5A3C', fontFamily: OUTFIT }}>
+          <CircleCheck size={13} strokeWidth={2.6} />
+          {flashMsg}
+        </p>
+      )}
 
-      {/* Stat tiles — modest default size (#1), five tiles (#2/#3) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      {/* Stat tiles — compact, six clickable filters (#10). */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {statItems.map(s => (
-          <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact />
+          <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
         ))}
       </div>
 
@@ -1898,10 +2026,13 @@ export default function ApplicationsPage() {
             const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
             const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
 
-            const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? null;
+            // No recorded level → treat as the lowest tier "beginner" (#11).
+            const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
             const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
-            const age = ageAt(app.profiles?.date_of_birth);
+            const rowQuestions = roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? [];
+            const age = ageForApp(app, rowQuestions);
             const nationality = app.profiles?.nationality ?? null;
+            const natCode = resolveRealCountryCode(nationality);
             const selected = selectedIds.has(app.id);
 
             const pledgeLine = app.pledge_type === 'delegation'
@@ -1937,10 +2068,24 @@ export default function ApplicationsPage() {
                   {/* LEFT · select + identity + facts */}
                   <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1.1 1 320px', minWidth: 0 }}>
                     <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
-                    <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={52} />
+                    {/* Bigger avatar (#3) with the applicant's nationality flag
+                        tucked into its bottom-right, slightly overlapping (#4). */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={62} />
+                      {natCode && (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={getFlagUrl(natCode)}
+                          alt={nationality ?? ''}
+                          title={nationality ?? ''}
+                          draggable={false}
+                          style={{ position: 'absolute', right: -3, bottom: -3, width: 24, height: 24, borderRadius: 9999, objectFit: 'cover', boxShadow: '0 1px 3px rgba(27,56,40,0.25)', border: `2px solid ${NEU.surface}` }}
+                        />
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em' }}>{name}</p>
+                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 19.5, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em' }}>{name}</p>
                         {!app.user_id && <NotRegisteredChip />}
                         {app.is_head_delegate && (
                           <span className="inline-flex items-center gap-1" style={chip('rgba(27,56,40,0.1)', NEU.forest, 'rgba(27,56,40,0.2)')}>
@@ -1983,23 +2128,12 @@ export default function ApplicationsPage() {
                       )}
                     </div>
 
-                    {/* Identity stack: MUN level, then the ROLE directly beneath
-                        it (#6). Chairs also get the 3D gavel emblem beside their
-                        role pill as the chair marker (#4). */}
+                    {/* Identity stack: ROLE on top, MUN level beneath it (#5).
+                        The chair gavel now lives inside the CHAIR pill itself
+                        (#1), so no separate emblem sits here. */}
                     <div className="flex flex-col items-center gap-2 flex-shrink-0">
-                      {expLabel && <LevelBadge level={expLabel} count={confCount} />}
-                      <span className="inline-flex items-center gap-1.5">
-                        {app.role === 'chair' && (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src="/gavel-3d.webp"
-                            alt=""
-                            aria-hidden="true"
-                            style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 2px 4px rgba(27,56,40,0.25))' }}
-                          />
-                        )}
-                        <RolePill role={app.role} size="sm" />
-                      </span>
+                      <RolePill role={app.role} size="sm" />
+                      <LevelBadge level={expLabel} count={confCount} />
                     </div>
                   </div>
 
@@ -2009,13 +2143,22 @@ export default function ApplicationsPage() {
                     className="p-4 lg:p-5 flex flex-col justify-center gap-3 border-t lg:border-t-0 lg:border-l"
                     style={{ flex: '1 1 260px', minWidth: 0, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
-                    {hasAllocation ? (
+                    {hasAllocation ? (() => {
+                      // Naming rule (#6): long committee name → big ACRONYM with
+                      // the full name small beneath it.
+                      const disp = committeeDisplay(app.assigned_committee);
+                      return (
                       <div className="flex items-center gap-4 min-w-0">
                         <LogoDisc src={app.assigned_committee!.logo_url} size={92} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
                         <div className="min-w-0">
-                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em' }}>
-                            {committeeFull(app.assigned_committee)}
+                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.05 }}>
+                            {disp.primary}
                           </p>
+                          {disp.secondary && (
+                            <p className="truncate" title={disp.secondary} style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.muted, marginTop: 2 }}>
+                              {disp.secondary}
+                            </p>
+                          )}
                           {app.assigned_country_name && (
                             <span className="inline-flex items-center gap-3 mt-2" style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 800, color: NEU.ink }}>
                               <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={40} />
@@ -2024,7 +2167,8 @@ export default function ApplicationsPage() {
                           )}
                         </div>
                       </div>
-                    ) : isDelegate && prefs.length > 0 ? (
+                      );
+                    })() : isDelegate && prefs.length > 0 ? (
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-center gap-2">
                           <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>Preferences</p>
@@ -2096,7 +2240,6 @@ export default function ApplicationsPage() {
                           AID DENIED
                         </span>
                       )}
-                      {!isChair && <PaymentPill status={app.payment_status} />}
                     </div>
 
                     {app.status === 'checked-in' && app.checked_in_at && (
@@ -2142,6 +2285,8 @@ export default function ApplicationsPage() {
                     {/* Check-in stacked ABOVE a wider Preview button */}
                     <div className="flex flex-col items-stretch gap-1.5" style={{ minWidth: 176, width: '100%' }}>
                       {canCheckIn && (
+                        /* Cream / neutral until checked in — it turns green only
+                           once they have actually checked in (#9). */
                         <button
                           onClick={() => handleCheckIn(app)}
                           disabled={rowBusy}
@@ -2149,13 +2294,13 @@ export default function ApplicationsPage() {
                           style={{
                             padding: '8px 14px', borderRadius: 999,
                             fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-                            color: '#FFFFFF',
-                            background: `linear-gradient(135deg, ${NEU_GRADIENTS.sage[0]}, ${NEU_GRADIENTS.sage[1]})`,
-                            boxShadow: `0 3px 8px ${NEU_GRADIENTS.sage[0]}44, ${NEU.outSm}`,
+                            color: NEU.ink,
+                            backgroundColor: NEU.surface,
+                            boxShadow: NEU.outSm,
                             border: 'none', cursor: 'pointer', ...busyStyle,
                           }}
                         >
-                          <UserRoundCheck size={13} strokeWidth={2.6} />
+                          <UserRoundCheck size={13} strokeWidth={2.6} style={{ color: NEU.green }} />
                           CHECK IN
                         </button>
                       )}
@@ -2181,7 +2326,7 @@ export default function ApplicationsPage() {
                             disabled={rowBusy}
                             align="right"
                             onMarkPaid={() => handleMarkPaid(app)}
-                            onWaive={() => handleWaive(app)}
+                            onRemind={() => handleRemindPay(app)}
                             onMarkUnpaid={() => handleMarkUnpaid(app)}
                             onUndoWaive={() => handleUndoWaive(app)}
                           />
@@ -2298,20 +2443,6 @@ export default function ApplicationsPage() {
                 Mark paid
               </button>
             )}
-            {bulkPayable.length > 0 && (
-              <button
-                onClick={() => runBulk(bulkPayable, { title: `Waive the fee for ${bulkPayable.length}?`, body: 'Each selected unpaid applicant will have their fee waived.', confirmLabel: 'Waive all' }, a => handleWaive(a))}
-                className="inline-flex items-center gap-1.5 focus:outline-none"
-                style={{
-                  padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.ink,
-                  backgroundColor: NEU.surface, boxShadow: NEU.outSm,
-                }}
-              >
-                <HandCoins size={14} strokeWidth={2.5} style={{ color: NEU.deepGold }} />
-                Waive
-              </button>
-            )}
             {bulkRejectable.length > 0 && (
               <button
                 onClick={() => runBulk(bulkRejectable, { title: `Reject ${bulkRejectable.length} application${bulkRejectable.length === 1 ? '' : 's'}?`, body: 'This rejects the selected applications. You can reinstate them later if needed.', confirmLabel: 'Reject all', danger: true }, a => handleReject(a.id))}
@@ -2352,7 +2483,8 @@ export default function ApplicationsPage() {
         const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
         const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
         const isRejecting = rejectingId === app.id;
-        const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? null;
+        // No recorded level → treat as "beginner" (#11).
+        const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
         const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
         const questions = roleConfig?.custom_questions ?? [];
@@ -2372,7 +2504,7 @@ export default function ApplicationsPage() {
             app={app}
             disabled={rowBusy}
             onMarkPaid={() => handleMarkPaid(app)}
-            onWaive={() => handleWaive(app)}
+            onRemind={() => handleRemindPay(app)}
             onMarkUnpaid={() => handleMarkUnpaid(app)}
             onUndoWaive={() => handleUndoWaive(app)}
           />
@@ -2522,7 +2654,7 @@ export default function ApplicationsPage() {
                         AID DENIED
                       </span>
                     )}
-                    {expLabel && <LevelChip level={expLabel} count={confCount} />}
+                    <LevelChip level={expLabel} count={confCount} />
                   </div>
                 </div>
                 <button
@@ -2676,6 +2808,54 @@ export default function ApplicationsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Previous MUN experience (#13) — their MUN CV as a compact list:
+                  conference logo, name, committee/allocation, role, and any award
+                  artwork. Fetched on demand from mun_cv_entries. */}
+              {app.user_id && (
+                <div className="pt-4 mt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
+                  <p className="flex items-center gap-2 text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
+                    <Trophy size={12} />
+                    PREVIOUS MUN EXPERIENCE
+                  </p>
+                  {previewCvLoading ? (
+                    <div className="flex justify-center py-4">
+                      <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    </div>
+                  ) : previewCv && previewCv.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      {previewCv.map(e => {
+                        const roleTxt = e.entry_type === 'chair' ? 'Chair'
+                          : e.entry_type === 'secretariat' ? 'Secretariat'
+                          : e.entry_type === 'other' ? 'Other' : 'Delegate';
+                        const where = [e.committee, e.allocation].map(s => (s ?? '').trim()).filter(Boolean).join('  ·  ');
+                        const awardsList = (e.awards && e.awards.length > 0)
+                          ? e.awards
+                          : (e.award && e.award !== 'None' ? [e.award] : []);
+                        return (
+                          <div key={e.id} className="flex items-center gap-3" style={{ padding: '8px 10px', borderRadius: 12, backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(221,212,192,0.7)' }}>
+                            <LogoDisc src={e.logo_url} size={38} fallbackText={monogramFor(e.conference_name)} alt={e.conference_name} />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 13, color: '#1C1410' }}>{e.conference_name}</p>
+                              {where && <p className="truncate" style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11.5, color: '#9A8A78' }}>{where}</p>}
+                            </div>
+                            <span className="flex-shrink-0" style={{ fontFamily: "'Outfit', sans-serif", fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#6E5F4E', backgroundColor: 'rgba(154,138,120,0.14)', border: '1px solid rgba(154,138,120,0.32)', borderRadius: 999, padding: '3px 9px' }}>{roleTxt}</span>
+                            {awardsList.length > 0 && (
+                              <span className="inline-flex items-center gap-1 flex-shrink-0">
+                                {awardsList.map(a => <AwardArtwork key={a} name={a} size={22} />)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs italic" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      No MUN experience recorded yet.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               {actionError && (

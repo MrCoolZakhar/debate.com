@@ -456,3 +456,9 @@
 - Small informational affordances (an "i" or "?" badge, a hint icon, a "what is this" explainer) must reveal their content on **hover** (`onMouseEnter` / `onMouseLeave` with a small close delay so the pointer can travel into the panel), never on click.
 - Keep them keyboard and focus accessible (reveal on focus too), and prefer a native `title` for the simplest one-line hints.
 - Click-to-toggle is reserved for menus and actions — not for read-only explanations.
+
+### RULE: Long committee names show the ACRONYM, with the full name small beneath
+- When a committee's name is long (multi-word / spelled-out), display its **acronym** as the primary, larger label, and put the full spelled-out name in **smaller letters directly beneath it** as a secondary line. Example: "Disarmament and International Security Committee" renders as **DISEC** with "Disarmament and International Security Committee" small underneath.
+- Use the shared `committeeDisplayName(fullName, acronym?)` helper in `src/lib/presetNames.ts` to derive the acronym (it collapses long names to an acronym). Prefer an explicit `abbreviation` when the committee has one.
+- If the acronym has no meaningful expansion (or the name is already short), just show the name once — no redundant second line.
+- Applies everywhere committees render: applications, assignment, committee cards, rosters, overviews.

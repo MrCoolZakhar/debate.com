@@ -304,6 +304,8 @@ export function NeuStatTile({
   spark,
   delta,
   href,
+  onClick,
+  active = false,
   compact = false,
   prominent = false,
   style,
@@ -318,6 +320,11 @@ export function NeuStatTile({
   delta?: string;
   /** Links the whole tile to its manage section. */
   href?: string;
+  /** Makes the tile an in-page control (e.g. a click-to-filter stat tile).
+   *  Ignored when `href` is set. */
+  onClick?: () => void;
+  /** Gold-ringed "this filter is applied" state for an onClick tile. */
+  active?: boolean;
   /** Tighter paddings + smaller number, for single-viewport grids. */
   compact?: boolean;
   /** Larger disc + heading-style label, to headline a section. */
@@ -329,12 +336,16 @@ export function NeuStatTile({
   return (
     <NeuCard
       href={href}
+      hover={!href && !!onClick}
+      onClick={!href ? onClick : undefined}
       style={{
         padding: prominent ? '18px 20px' : compact ? '12px 14px' : '15px 17px',
         minWidth: 0,
         // Fill the tile-row height cleanly: disc anchored top, value+label
         // sink to the bottom, no floating void when the row is tall.
         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        // Gold ring + pressed-in seat when this tile's filter is applied.
+        ...(active ? { boxShadow: `0 0 0 2px ${NEU.deepGold}, ${NEU.in}`, backgroundColor: NEU.base } : null),
         ...style,
       }}
     >
