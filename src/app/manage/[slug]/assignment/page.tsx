@@ -180,6 +180,7 @@ interface PendingChairInvite {
   committee_id: string;
   email: string;
   token: string;
+  invited_name: string | null;
   profiles: { display_name: string } | null;
 }
 
@@ -331,9 +332,10 @@ export function PersonAvatar({ name, url, size = 28 }: { name: string; url: stri
 // Every country flag on the assignment page. A country seat renders its twemoji
 // flag; a character/custom seat (JCC judges, cabinet posts, press) stores the
 // role NAME in country_code — never a 2-letter ISO code — so we detect that and
-// render a neutral globe glyph instead of building a broken flag URL. A genuine
-// load failure (network, retired code) ALSO falls back to the globe, so a broken
-// <img> never surfaces anywhere.
+// render a neutral USER placeholder (a person silhouette in a disc, matching the
+// applications page) instead of building a broken flag URL — a character seat is
+// a person, not a country. A genuine load failure (network, retired code) ALSO
+// falls back to it, so a broken <img> never surfaces anywhere.
 function isIsoCode(code: string | null | undefined): boolean {
   return /^[A-Za-z]{2}$/.test((code ?? '').trim());
 }
@@ -352,15 +354,16 @@ function CountryFlag({
     return (
       <span
         className="inline-flex items-center justify-center flex-shrink-0"
-        aria-label={label || 'No country'}
+        aria-label={label || 'Character'}
         title={title}
         style={{
           width: w, height: h, borderRadius: radius,
-          backgroundColor: NEU.base, color: NEU.muted,
-          boxShadow: shadow, opacity: dim, ...style,
+          backgroundColor: NEU.surface, color: NEU.forest,
+          boxShadow: [shadow, 'inset 0 0 0 1px rgba(27,56,40,0.14)'].filter(Boolean).join(', '),
+          opacity: dim, ...style,
         }}
       >
-        <Globe2 size={Math.round(Math.min(w, h) * 0.72)} strokeWidth={2} />
+        <UserRound size={Math.round(Math.min(w, h) * 0.6)} strokeWidth={2} />
       </span>
     );
   }
@@ -1714,13 +1717,15 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
   onInvited: (name: string) => void;
 }) {
   const { session } = useAuth();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState('');
 
   async function handleInvite() {
     const em = email.trim();
-    if (!em || !session) return;
+    const nm = name.trim();
+    if (!em || !nm || !session) return;
     setInviting(true);
     setError('');
     const supabase = getAuthedClient(session.access_token);
@@ -1729,6 +1734,7 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
       committeeId: committee.id,
       committeeName: committee.name,
       email: em,
+      name: nm,
     });
     setInviting(false);
     if (!result.ok) {
@@ -1757,25 +1763,39 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
         </div>
 
         <p className="text-xs mb-3" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.45 }}>
-          They must already have a Gavelling account. They&apos;ll get an email to accept before joining this dais.
+          No Gavelling account needed. They&apos;ll get an email invite and show as pending until they join through the link, where they can sign up. Their name updates to match how they sign up.
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
           <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInvite(); } }}
-            placeholder="chair@example.com"
+            placeholder="Full name"
             autoFocus
             style={{
-              flex: 1, border: 'none', borderRadius: 999, padding: '10px 14px',
+              border: 'none', borderRadius: 999, padding: '10px 14px',
               fontSize: 13, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, outline: 'none',
               fontFamily: OUTFIT,
             }}
           />
-          <NeuButton onClick={handleInvite} disabled={inviting || !email.trim()} style={{ padding: '10px 18px', fontSize: 11 }}>
-            {inviting ? 'INVITING…' : 'INVITE'}
-          </NeuButton>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInvite(); } }}
+              placeholder="chair@example.com"
+              style={{
+                flex: 1, border: 'none', borderRadius: 999, padding: '10px 14px',
+                fontSize: 13, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, outline: 'none',
+                fontFamily: OUTFIT,
+              }}
+            />
+            <NeuButton onClick={handleInvite} disabled={inviting || !email.trim() || !name.trim()} style={{ padding: '10px 18px', fontSize: 11 }}>
+              {inviting ? 'INVITING…' : 'INVITE'}
+            </NeuButton>
+          </div>
         </div>
         {error && <div className="mt-2"><ModalError msg={error} /></div>}
       </NeuModalCard>
@@ -1908,7 +1928,7 @@ function ChairBoardPanel({
                   INVITED
                 </span>
                 <span className="truncate flex-1" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT }}>
-                  {inv.profiles?.display_name ?? inv.email}
+                  {inv.profiles?.display_name ?? inv.invited_name ?? inv.email}
                 </span>
                 <button
                   onClick={e => { e.stopPropagation(); onRevokeInvite(inv); }}
@@ -2040,7 +2060,7 @@ export default function AssignmentPage() {
         .in('status', ['accepted', 'assigned']),
       supabase
         .from('conference_chair_invites')
-        .select('id, committee_id, email, token, profiles (display_name)')
+        .select('id, committee_id, email, token, invited_name, profiles (display_name)')
         .eq('conference_id', conference.id)
         .eq('status', 'pending'),
     ]);
@@ -2906,89 +2926,27 @@ export default function AssignmentPage() {
               unassigned rail on the left, drag/click-to-select committee
               cards on the right. No suggestions strip (no preference data). */}
           {mode === 'chairs' && (
-            <div className="flex flex-col xl:flex-row gap-6 items-start">
-              {/* Left rail, unassigned chair applicants */}
-              <div className="w-full xl:w-[320px] flex-shrink-0">
-                <RailHeader count={unassignedChairs.length} />
-
-                {/* Search */}
-                <RailSearch value={search} onChange={setSearch} />
-
-                {unassignedChairs.length === 0 ? (
-                  <p className="text-sm py-6 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-                    {chairApps.length === 0 ? 'No accepted chair applicants yet.' : 'No applicants match your search.'}
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {unassignedChairs.map(ca => {
-                      const selected = selectedChairAppId === ca.id;
-                      const beingDragged = dragChairAppId === ca.id;
-                      return (
-                        <div
-                          key={ca.id}
-                          draggable
-                          onDragStart={e => {
-                            e.dataTransfer.setData('text/plain', ca.id);
-                            e.dataTransfer.effectAllowed = 'move';
-                            setDragChairAppId(ca.id);
-                          }}
-                          onDragEnd={() => { setDragChairAppId(null); setChairDropTargetId(null); }}
-                          onClick={() => setSelectedChairAppId(prev => (prev === ca.id ? null : ca.id))}
-                          className="p-3"
-                          style={{
-                            backgroundColor: NEU.surface,
-                            borderRadius: 18,
-                            boxShadow: selected ? `0 0 0 1.5px ${NEU.forest}, ${NEU.out}` : NEU.outSm,
-                            opacity: beingDragged ? 0.45 : 1,
-                            cursor: 'grab',
-                            transition: `box-shadow 200ms cubic-bezier(0.22,1,0.36,1)`,
-                          }}
-                          onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
-                          onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
-                        >
-                          <div className="flex items-start gap-2">
-                            <GripVertical size={13} style={{ color: NEU.muted, flexShrink: 0, marginTop: 6, opacity: 0.5 }} />
-                            <PersonAvatar name={ca.profiles?.display_name ?? 'Unknown'} url={ca.profiles?.avatar_url ?? null} size={34} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <p className="font-semibold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                                  {ca.profiles?.display_name ?? 'Unknown'}
-                                </p>
-                                {selected && <Check size={13} style={{ color: NEU.green, flexShrink: 0 }} />}
-                              </div>
-                              <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-                                chair · {ca.experience_level ?? 'n/a'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Board, every committee visible at once */}
-              <div className="flex-1 min-w-0 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                  {sortedCommittees.map(c => (
-                    <ChairBoardPanel
-                      key={c.id}
-                      committee={c}
-                      invites={invitesByCommittee.get(c.id) ?? []}
-                      dragging={dragChairAppId !== null}
-                      isDropTarget={chairDropTargetId === c.id}
-                      selectable={selectedChairAppId !== null}
-                      onDragOverPanel={() => setChairDropTargetId(c.id)}
-                      onDragLeavePanel={() => setChairDropTargetId(prev => (prev === c.id ? null : prev))}
-                      onDropPanel={chairAppId => handleChairDropOnCommittee(c.id, chairAppId)}
-                      onClickPanel={() => handleChairClickOnCommittee(c)}
-                      onRemoveChair={(userId, name) => handleRemoveChair(userId, c, name)}
-                      onRevokeInvite={invite => handleRevokeInvite(invite, c)}
-                      onInvite={() => setInviteModalCommitteeId(c.id)}
-                    />
-                  ))}
-                </div>
+            <div className="w-full">
+              {/* No unassigned-chairs rail: chairs are invited per committee by
+                  name + email. The board shows every committee at once. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                {sortedCommittees.map(c => (
+                  <ChairBoardPanel
+                    key={c.id}
+                    committee={c}
+                    invites={invitesByCommittee.get(c.id) ?? []}
+                    dragging={dragChairAppId !== null}
+                    isDropTarget={chairDropTargetId === c.id}
+                    selectable={selectedChairAppId !== null}
+                    onDragOverPanel={() => setChairDropTargetId(c.id)}
+                    onDragLeavePanel={() => setChairDropTargetId(prev => (prev === c.id ? null : prev))}
+                    onDropPanel={chairAppId => handleChairDropOnCommittee(c.id, chairAppId)}
+                    onClickPanel={() => handleChairClickOnCommittee(c)}
+                    onRemoveChair={(userId, name) => handleRemoveChair(userId, c, name)}
+                    onRevokeInvite={invite => handleRevokeInvite(invite, c)}
+                    onInvite={() => setInviteModalCommitteeId(c.id)}
+                  />
+                ))}
               </div>
             </div>
           )}

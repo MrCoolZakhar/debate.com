@@ -11,6 +11,9 @@ export interface SendChairInviteArgs {
   committeeId: string;
   committeeName: string;
   email: string;
+  /** Full name for the invitee. Used when they have no account yet; once they
+   *  join, their own profile name takes over. */
+  name?: string;
 }
 
 export interface SendChairInviteResult {
@@ -36,6 +39,7 @@ export async function sendChairInvite(
   const { data, error } = await supabase.rpc('create_chair_invite', {
     p_committee_id: args.committeeId,
     p_email: args.email.trim(),
+    p_name: args.name?.trim() || null,
   });
   if (error) return { ok: false, error: error.message || 'Could not invite that chair.' };
 
