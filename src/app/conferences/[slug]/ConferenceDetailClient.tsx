@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -236,6 +236,31 @@ function MinAgeChip({ minAge }: { minAge: number }) {
       {minAge}+
     </span>
   );
+}
+
+/** Big gold role glyph shown beside each role in the APPLY NOW picker.
+ *  Delegate = a plain user; chair = a user holding a gavel (user + gavel
+ *  badge); head-delegate = a group; observer = an eye; faculty advisor = a
+ *  graduation cap. Purely decorative, in the conference gold. */
+function RoleApplyGlyph({ role, size = 30 }: { role: string; size?: number }) {
+  const GOLD = '#EED98A';
+  if (role === 'chair') {
+    return (
+      <span className="relative inline-flex flex-shrink-0" style={{ width: size, height: size }} aria-hidden>
+        <UserRound size={size} strokeWidth={2.1} style={{ color: GOLD }} />
+        <Gavel
+          size={Math.round(size * 0.56)}
+          strokeWidth={2.4}
+          style={{ color: GOLD, position: 'absolute', right: -5, bottom: -4, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))' }}
+        />
+      </span>
+    );
+  }
+  const Icon = role === 'head-delegate' ? Users
+    : role === 'observer' ? Eye
+    : role === 'faculty-advisor' ? GraduationCap
+    : UserRound; // delegate
+  return <Icon size={size} strokeWidth={2.1} style={{ color: GOLD, flexShrink: 0 }} aria-hidden />;
 }
 
 function StarRow({ rating, size = 13 }: { rating: number; size?: number }) {
@@ -876,7 +901,7 @@ export default function ConferenceDetailClient() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8', overflowX: 'clip' }}>
       {/* Grain */}
       <div
         className="pointer-events-none fixed inset-0 z-0"
@@ -1736,15 +1761,18 @@ export default function ConferenceDetailClient() {
                                   onMouseEnter={(e) => { if (open) { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(238,217,138,0.16)'; el.style.borderColor = 'rgba(238,217,138,0.45)'; } }}
                                   onMouseLeave={(e) => { if (open) { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(238,217,138,0.08)'; el.style.borderColor = 'rgba(238,217,138,0.22)'; } }}
                                 >
-                                  <span className="min-w-0">
-                                    <span className="block text-[13px] font-bold text-white truncate" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                                      {roleLabel(r.role)}
-                                    </span>
-                                    <span
-                                      className="block mt-0.5"
-                                      style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? '#EED98A' : 'rgba(237,231,216,0.55)' }}
-                                    >
-                                      {open ? fee : reason}
+                                  <span className="flex items-center gap-3 min-w-0">
+                                    <RoleApplyGlyph role={r.role} size={30} />
+                                    <span className="min-w-0">
+                                      <span className="block text-[13px] font-bold text-white truncate" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                                        {roleLabel(r.role)}
+                                      </span>
+                                      <span
+                                        className="block mt-0.5"
+                                        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? '#EED98A' : 'rgba(237,231,216,0.55)' }}
+                                      >
+                                        {open ? fee : reason}
+                                      </span>
                                     </span>
                                   </span>
                                   {open && <ArrowRight size={15} strokeWidth={2.2} style={{ color: '#EED98A', flexShrink: 0 }} />}
@@ -1945,7 +1973,20 @@ export default function ConferenceDetailClient() {
                 const rosterCommittee = expandedRoster ? committees.find(x => x.id === expandedRoster) : null;
 
                 return (
-                  <div className="mb-6">
+                  <div
+                    className="mb-6"
+                    style={{
+                      // Full-bleed: break out of the centered 1200px column so the
+                      // committee slider spans the entire viewport width and many
+                      // more committees are visible at once.
+                      width: '100vw',
+                      marginLeft: 'calc(50% - 50vw)',
+                      marginRight: 'calc(50% - 50vw)',
+                      paddingLeft: 'clamp(20px, 4vw, 56px)',
+                      paddingRight: 'clamp(20px, 4vw, 56px)',
+                      boxSizing: 'border-box',
+                    }}
+                  >
                     {/* Sort bar */}
                     {committees.length > 1 && (
                       <div
