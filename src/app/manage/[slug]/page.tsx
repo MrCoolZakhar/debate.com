@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
   TrendingUp, Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
+  Activity, UserRoundCheck, MapPin, RotateCcw,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -669,6 +670,94 @@ interface DashData {
   enabledEmailCount: number;
 }
 
+// ── Recent activity feed ───────────────────────────────────────────────────
+// The dashboard above shows the STATE of the conference (how many accepted,
+// paid, allocated). This bottom strip shows its MOMENTUM: a live "what just
+// happened" timeline built from the timestamps that already exist on
+// applications (submitted / paid / checked-in / resubmitted) and allocations.
+
+type ActivityKind = 'application' | 'payment' | 'checkin' | 'resubmit' | 'allocation';
+
+interface ActivityEvent {
+  key: string;
+  ts: number;
+  kind: ActivityKind;
+  name: string;
+  detail?: string;
+}
+
+const ACTIVITY_META: Record<ActivityKind, { icon: typeof Inbox; gradient: [string, string]; verb: string }> = {
+  application: { icon: Inbox,          gradient: NEU_GRADIENTS.forest, verb: 'applied' },
+  payment:     { icon: Wallet,         gradient: NEU_GRADIENTS.green,  verb: 'paid' },
+  checkin:     { icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   verb: 'checked in' },
+  resubmit:    { icon: RotateCcw,      gradient: NEU_GRADIENTS.amber,  verb: 'resubmitted' },
+  allocation:  { icon: MapPin,         gradient: NEU_GRADIENTS.gold,   verb: 'allocated' },
+};
+
+/** Compact relative time: "just now", "5m", "3h", "2d", "3w". */
+function timeAgo(ts: number, now: number): string {
+  const s = Math.max(0, Math.round((now - ts) / 1000));
+  if (s < 45) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return `${Math.round(d / 7)}w ago`;
+}
+
+function roleWord(role: string): string {
+  const map: Record<string, string> = {
+    delegate: 'Delegate', 'head-delegate': 'Head delegate', chair: 'Chair',
+    'faculty-advisor': 'Faculty advisor', observer: 'Observer',
+  };
+  return map[role] ?? 'Delegate';
+}
+
+function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
+  const meta = ACTIVITY_META[ev.kind];
+  const label =
+    ev.kind === 'application' ? <>New {ev.detail ?? 'delegate'} application from <b style={{ color: NEU.ink }}>{ev.name}</b></>
+    : ev.kind === 'payment'   ? <>Payment received{ev.detail ? ` — ${ev.detail}` : ''} from <b style={{ color: NEU.ink }}>{ev.name}</b></>
+    : ev.kind === 'checkin'   ? <><b style={{ color: NEU.ink }}>{ev.name}</b> checked in</>
+    : ev.kind === 'resubmit'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> edited and resubmitted their application</>
+    :                           <><b style={{ color: NEU.ink }}>{ev.name}</b> allocated{ev.detail ? ` to ${ev.detail}` : ''}</>;
+  return (
+    <div className="flex items-center gap-3">
+      <NeuIconDisc gradient={meta.gradient} icon={meta.icon} size={30} />
+      <p className="flex-1 min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+        {label}
+      </p>
+      <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+        {timeAgo(ev.ts, now)}
+      </span>
+    </div>
+  );
+}
+
+function RecentActivity({ events, now }: { events: ActivityEvent[]; now: number }) {
+  return (
+    <NeuCard className="flex flex-col" style={{ padding: '15px 18px 16px', gap: 12 }}>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Activity size={15} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
+        <h2 style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: NEU.deepGold }}>
+          Recent activity
+        </h2>
+      </div>
+      {events.length === 0 ? (
+        <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+          Activity will appear here as delegates apply, pay, get allocated, and check in.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {events.map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
+        </div>
+      )}
+    </NeuCard>
+  );
+}
+
 // ── Dashboard home, single-viewport neumorphic grid, no scroll ────────────
 
 export default function DashboardPage() {
@@ -679,6 +768,15 @@ export default function DashboardPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [dash, setDash] = useState<DashData | null>(null);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  // `now` starts at 0 (same on server + client, no hydration mismatch) and is
+  // set on mount, then ticked every minute so relative times stay fresh.
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   // Success toast for a redirect from /invites/organizer/[token] after
   // accepting, read via window.location rather than useSearchParams so this
   // stays a plain client-side effect (matches the pattern used for the
@@ -732,6 +830,57 @@ export default function DashboardPage() {
         enabledEmailCount: emailRes.count ?? 0,
       });
     })();
+  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recent-activity feed: recent applications + allocations, expanded into
+  // per-timestamp events (submitted / paid / checked-in / resubmitted /
+  // allocated), merged newest-first.
+  useEffect(() => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const confId = conference.id;
+    const currency = conference.fee_currency;
+    let cancelled = false;
+    (async () => {
+      const [appsRes, allocRes] = await Promise.all([
+        supabase
+          .from('applications')
+          .select('id, role, submitted_at, paid_at, paid_amount, amount_paid, checked_in_at, resubmitted_at, invited_name, profiles(display_name)')
+          .eq('conference_id', confId)
+          .order('submitted_at', { ascending: false })
+          .limit(25),
+        supabase
+          .from('conference_allocations')
+          .select('id, created_at, country_name, conference_committees:conference_committee_id(name, abbreviation), profiles:user_id(display_name), societies:society_id(name)')
+          .eq('conference_id', confId)
+          .order('created_at', { ascending: false })
+          .limit(15),
+      ]);
+      if (cancelled) return;
+      const evs: ActivityEvent[] = [];
+      type ActApp = { id: string; role: string; submitted_at: string | null; paid_at: string | null; paid_amount: number | null; amount_paid: number | null; checked_in_at: string | null; resubmitted_at: string | null; invited_name: string | null; profiles: { display_name: string } | null };
+      for (const a of (appsRes.data ?? []) as unknown as ActApp[]) {
+        const name = a.profiles?.display_name ?? a.invited_name ?? 'Someone';
+        if (a.submitted_at) evs.push({ key: `sub-${a.id}`, ts: new Date(a.submitted_at).getTime(), kind: 'application', name, detail: roleWord(a.role).toLowerCase() });
+        if (a.paid_at) {
+          const amt = a.paid_amount ?? a.amount_paid;
+          evs.push({ key: `pay-${a.id}`, ts: new Date(a.paid_at).getTime(), kind: 'payment', name, detail: amt != null ? formatFee(Number(amt), currency) : undefined });
+        }
+        if (a.checked_in_at) evs.push({ key: `chk-${a.id}`, ts: new Date(a.checked_in_at).getTime(), kind: 'checkin', name });
+        if (a.resubmitted_at) evs.push({ key: `res-${a.id}`, ts: new Date(a.resubmitted_at).getTime(), kind: 'resubmit', name });
+      }
+      type ActAlloc = { id: string; created_at: string | null; country_name: string | null; conference_committees: { name: string; abbreviation: string | null } | null; profiles: { display_name: string } | null; societies: { name: string } | null };
+      for (const al of (allocRes.data ?? []) as unknown as ActAlloc[]) {
+        if (!al.created_at) continue;
+        const who = al.profiles?.display_name ?? al.societies?.name ?? 'A delegation';
+        const committee = al.conference_committees?.abbreviation ?? al.conference_committees?.name;
+        const detail = [al.country_name, committee].filter(Boolean).join(' · ') || undefined;
+        evs.push({ key: `alloc-${al.id}`, ts: new Date(al.created_at).getTime(), kind: 'allocation', name: who, detail });
+      }
+      evs.sort((x, y) => y.ts - x.ts);
+      setActivity(evs.slice(0, 8));
+    })();
+    return () => { cancelled = true; };
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Loading skeleton, mirrors the fixed one-viewport grid ───────────────
@@ -1070,6 +1219,11 @@ export default function DashboardPage() {
         </NeuCard>
 
         </div>
+      </div>
+
+      {/* Recent activity, full-width momentum feed below the one-viewport grid */}
+      <div style={{ marginTop: 14, flexShrink: 0 }}>
+        <RecentActivity events={activity} now={now} />
       </div>
 
       {showPublishModal && (
