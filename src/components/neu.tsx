@@ -305,6 +305,7 @@ export function NeuStatTile({
   delta,
   href,
   compact = false,
+  prominent = false,
   style,
 }: {
   icon?: LucideIcon;
@@ -319,13 +320,17 @@ export function NeuStatTile({
   href?: string;
   /** Tighter paddings + smaller number, for single-viewport grids. */
   compact?: boolean;
+  /** Larger disc + heading-style label, to headline a section. */
+  prominent?: boolean;
   style?: React.CSSProperties;
 }) {
+  const discSize = prominent ? 54 : compact ? 34 : 42;
+  const valueSize = prominent ? 34 : compact ? 22 : 29;
   return (
     <NeuCard
       href={href}
       style={{
-        padding: compact ? '12px 14px' : '15px 17px',
+        padding: prominent ? '18px 20px' : compact ? '12px 14px' : '15px 17px',
         minWidth: 0,
         // Fill the tile-row height cleanly: disc anchored top, value+label
         // sink to the bottom, no floating void when the row is tall.
@@ -334,20 +339,25 @@ export function NeuStatTile({
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <NeuIconDisc gradient={gradient} icon={icon} emoji={emoji} size={compact ? 34 : 42} />
+        <NeuIconDisc gradient={gradient} icon={icon} emoji={emoji} size={discSize} />
         {spark && spark.length > 1 && <Sparkline data={spark} color={gradient[1]} />}
       </div>
-      <div style={{ marginTop: compact ? 8 : 12 }}>
+      <div style={{ marginTop: prominent ? 14 : compact ? 8 : 12 }}>
         <p
           style={{
-            fontFamily: OUTFIT, fontWeight: 900, fontSize: compact ? 22 : 29, lineHeight: 1,
+            fontFamily: OUTFIT, fontWeight: 900, fontSize: valueSize, lineHeight: 1,
             color: NEU.ink, fontVariantNumeric: 'tabular-nums',
           }}
         >
           {value}
         </p>
-        <p className="flex items-baseline gap-1.5" style={{ marginTop: compact ? 3 : 5 }}>
-          <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: compact ? 10.5 : 11, fontWeight: 600, color: NEU.muted }}>{label}</span>
+        <p className="flex items-baseline gap-1.5" style={{ marginTop: prominent ? 6 : compact ? 3 : 5 }}>
+          <span
+            className="truncate"
+            style={prominent
+              ? { fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', color: NEU.ink }
+              : { fontFamily: OUTFIT, fontSize: compact ? 10.5 : 11, fontWeight: 600, color: NEU.muted }}
+          >{label}</span>
           {delta && (
             <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, color: NEU.green, fontVariantNumeric: 'tabular-nums' }}>
               {delta}

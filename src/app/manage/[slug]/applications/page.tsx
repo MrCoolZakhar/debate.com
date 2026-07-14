@@ -243,6 +243,37 @@ function LevelChip({ level, count }: { level: string; count?: number }) {
   );
 }
 
+/** Experience as a stacked circular badge for the row's top-right corner: a big
+ *  level insignia in a tinted disc, the tier name beneath it, and the conference
+ *  count as a caption. Mirrors the delegate-profile insignia at a larger size. */
+function LevelBadge({ level, count }: { level: string; count?: number }) {
+  const key = (level ?? '').toLowerCase();
+  const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
+  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unranked';
+  return (
+    <div
+      className="flex flex-col items-center flex-shrink-0"
+      style={{ width: 66, gap: 4 }}
+      title={count !== undefined ? `${count} conference${count === 1 ? '' : 's'} on their MUN CV` : label}
+    >
+      <span
+        className="inline-flex items-center justify-center"
+        style={{ width: 48, height: 48, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}2E, ${accent}17)`, border: `1.5px solid ${accent}66`, boxShadow: NEU.outSm }}
+      >
+        <LevelInsignia level={key} size={30} />
+      </span>
+      <span className="text-center leading-tight" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.05em', textTransform: 'uppercase', color: NEU.ink }}>
+        {label}
+      </span>
+      {count !== undefined && (
+        <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+          {count} conf{count === 1 ? '' : 's'}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Unified payment control (F: merge mark-paid vs waive). One button opens a
  *  small menu exposing the two underlying actions (Mark as paid → payment_status
  *  'paid', Waive fee → 'waived') plus the matching undo, so both states are still
@@ -260,13 +291,40 @@ function PaymentMenu({
   align?: 'left' | 'right';
 }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // The row card sets overflow:hidden to clip its rounded corners, which would
+  // clip an in-card absolute menu. Render the menu in a Portal at fixed
+  // viewport coordinates computed from the trigger so it can never be clipped.
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const menuW = 184;
+    const left = align === 'right' ? r.right - menuW : r.left;
+    setPos({ top: r.bottom + 6, left: Math.max(8, left) });
+  }, [align]);
+
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
 
   const paid = app.payment_status === 'paid';
   const waived = app.payment_status === 'waived';
@@ -289,8 +347,9 @@ function PaymentMenu({
   };
 
   return (
-    <div className="relative" ref={wrapRef} style={{ display: 'inline-block' }}>
+    <div style={{ display: 'inline-block' }}>
       <button
+        ref={btnRef}
         onClick={() => setOpen(o => !o)}
         disabled={disabled}
         className="inline-flex items-center gap-1.5 focus:outline-none"
@@ -305,17 +364,19 @@ function PaymentMenu({
         {label.toUpperCase()}
         <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
       </button>
-      {open && (
-        <div
-          className="absolute z-50"
-          style={{ top: 'calc(100% + 6px)', ...(align === 'right' ? { right: 0 } : { left: 0 }), minWidth: 172, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
-        >
-          <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-          {!paid && item(CircleCheck, 'Mark as paid', onMarkPaid)}
-          {paid && item(RotateCcw, 'Mark as unpaid', onMarkUnpaid, 'danger')}
-          {!paid && !waived && item(HandCoins, 'Waive fee', onWaive)}
-          {waived && item(RotateCcw, 'Remove waiver', onUndoWaive, 'danger')}
-        </div>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: 184, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            {!paid && item(CircleCheck, 'Mark as paid', onMarkPaid)}
+            {paid && item(RotateCcw, 'Mark as unpaid', onMarkUnpaid, 'danger')}
+            {!paid && !waived && item(HandCoins, 'Waive fee', onWaive)}
+            {waived && item(RotateCcw, 'Remove waiver', onUndoWaive, 'danger')}
+          </div>
+        </Portal>
       )}
     </div>
   );
@@ -1440,7 +1501,7 @@ export default function ApplicationsPage() {
       {/* Stat tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-6">
         {statItems.map(s => (
-          <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact />
+          <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} prominent />
         ))}
       </div>
 
@@ -1546,6 +1607,13 @@ export default function ApplicationsPage() {
                       </div>
                       {email && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
 
+                      {app.societies?.name && (
+                        <p className="flex items-center gap-1.5 truncate" style={{ marginTop: 5, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink }} title={app.societies.name}>
+                          <Building2 size={15} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+                          <span className="truncate">{app.societies.name}</span>
+                        </p>
+                      )}
+
                       <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 mt-2.5">
                         {age !== null && (
                           <span className="inline-flex items-center gap-1.5" style={factStyle}>
@@ -1559,24 +1627,19 @@ export default function ApplicationsPage() {
                             <span className="truncate" style={{ maxWidth: 140 }}>{nationality}</span>
                           </span>
                         )}
-                        {app.societies?.name && (
-                          <span className="inline-flex items-center gap-1.5" style={factStyle} title={app.societies.name}>
-                            <Building2 size={13} strokeWidth={2.2} style={{ color: NEU.muted }} />
-                            <span className="truncate" style={{ maxWidth: 160 }}>{app.societies.name}</span>
-                          </span>
-                        )}
                       </div>
 
-                      <div className="flex flex-wrap gap-2 mt-2.5 items-center">
-                        {expLabel && <LevelChip level={expLabel} count={confCount} />}
-                        {pledgeLine && (
+                      {pledgeLine && (
+                        <div className="flex flex-wrap gap-2 mt-2.5 items-center">
                           <span className="inline-flex items-center gap-1.5" style={{ ...chip('rgba(27,56,40,0.06)', NEU.forest, 'rgba(27,56,40,0.14)'), fontSize: 10.5, fontVariantNumeric: 'tabular-nums' }}>
                             <HandCoins size={11} strokeWidth={2.5} />
                             {pledgeLine}{app.pledge_confirmed_at ? ' · received' : ''}
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
+
+                    {expLabel && <LevelBadge level={expLabel} count={confCount} />}
                   </div>
 
                   {/* MIDDLE · role + allocation / preferences */}
@@ -1587,15 +1650,15 @@ export default function ApplicationsPage() {
                     <div className="self-start"><RolePill role={app.role} /></div>
 
                     {hasAllocation ? (
-                      <div className="flex items-center gap-3 min-w-0">
-                        <LogoDisc src={app.assigned_committee!.logo_url} size={52} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
+                      <div className="flex items-center gap-4 min-w-0">
+                        <LogoDisc src={app.assigned_committee!.logo_url} size={76} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
                         <div className="min-w-0">
-                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: NEU.ink }}>
+                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: NEU.ink, letterSpacing: '-0.01em' }}>
                             {committeeFull(app.assigned_committee)}
                           </p>
                           {app.assigned_country_name && (
-                            <span className="inline-flex items-center gap-2 mt-1" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink }}>
-                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={22} />
+                            <span className="inline-flex items-center gap-2.5 mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 700, color: NEU.ink }}>
+                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={34} />
                               {app.assigned_country_name}
                             </span>
                           )}
@@ -1789,11 +1852,12 @@ export default function ApplicationsPage() {
                   </div>
                 </div>
 
-                {/* Submitted date, bottom-right corner (subtle) */}
+                {/* Submitted date, bottom-left corner (subtle) — kept clear of the
+                    action buttons that occupy the row's bottom-right. */}
                 {app.submitted_at && (
                   <span
                     className="hidden lg:inline-flex items-center gap-1"
-                    style={{ position: 'absolute', bottom: 8, right: 14, fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums', opacity: 0.8, pointerEvents: 'none' }}
+                    style={{ position: 'absolute', bottom: 8, left: 20, fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums', opacity: 0.8, pointerEvents: 'none' }}
                   >
                     <CalendarDays size={11} strokeWidth={2.2} />
                     {formatDate(app.submitted_at)}
