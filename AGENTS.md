@@ -434,3 +434,25 @@
 8. **Never pass currentSpeaker to caucus RollCallPanel** — caucusRollCallCommittee sets it to null
 9. **Never await DB writes for UI updates** — always fire-and-forget, optimistic first
 10. **Never call removePendingMotionInDB with a temp ID** — wait for real UUID via pendingIds tracking
+11. **Never use a native `<input type="date">` (or any other old/native date picker)** — see UI RULES
+
+---
+
+## UI RULES
+
+### RULE: Always use the shared DatePicker for dates
+- The native `<input type="date">` (and any other old or native date picker) must **NEVER** be used anywhere in the app.
+- **EVERY** date input must use the shared friendly picker `@/components/DatePicker`.
+- It takes `value` (ISO `'YYYY-MM-DD'`), `onChange(iso)`, and optional `min` / `max` / `placeholder`, and matches the forest/ivory neumorphic system.
+
+### RULE: Popovers, dropdowns and tooltips must NEVER be clipped
+- Any floating layer (menu, dropdown, typeahead list, calendar, tooltip, hover card) must **NEVER** be visually cut off by an ancestor's `overflow` (a rounded `overflow:hidden` card, or a scrollable `overflow-y:auto` panel / modal) or run off the edge of the viewport.
+- Render the layer through `@/components/Portal` at **fixed** viewport coordinates computed from the trigger's `getBoundingClientRect()`. Reposition it on `scroll` (capture phase) and `resize`, and close on outside click while accounting for the portaled node.
+- Near the right or bottom edge, **flip**: clamp `left` so it stays on screen, and open upward when there is not enough room below.
+- Reference implementation: the applications `PaymentMenu` (`src/app/manage/[slug]/applications/page.tsx`). The shared `DatePicker` and `ConferenceRosterPicker` typeaheads follow the same pattern.
+- **NEVER** un-clip a popover by loosening a shared card's `overflow` — always fix it at the popover.
+
+### RULE: Informational "i" / hint popups open on HOVER, not click
+- Small informational affordances (an "i" or "?" badge, a hint icon, a "what is this" explainer) must reveal their content on **hover** (`onMouseEnter` / `onMouseLeave` with a small close delay so the pointer can travel into the panel), never on click.
+- Keep them keyboard and focus accessible (reveal on focus too), and prefer a native `title` for the simplest one-line hints.
+- Click-to-toggle is reserved for menus and actions — not for read-only explanations.

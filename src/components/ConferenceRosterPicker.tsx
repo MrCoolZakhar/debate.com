@@ -11,8 +11,9 @@
 //     country bundles, no flags, no country matching.
 // Reuses shared logic (findCountryFlexible, UN_COUNTRIES) rather than copying.
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Globe, Users, PenLine, Megaphone } from 'lucide-react';
+import Portal from '@/components/Portal';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible } from '@/lib/countries';
 import {
   UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS,
@@ -186,6 +187,42 @@ const inputStyle: React.CSSProperties = {
   fontFamily: "'Outfit', sans-serif",
 };
 
+// Anchors a typeahead dropdown at fixed viewport coordinates so it is never
+// clipped by an ancestor's overflow — this editor lives inside the committee
+// editor modal, a scrollable `overflow-y:auto` panel that would otherwise clip
+// an in-flow `absolute` dropdown. Matches the anchor's width, opens below it,
+// and flips above when short on room near the viewport bottom. Returns null
+// until the anchor has been measured.
+function useAnchoredDropdown<T extends HTMLElement>(
+  open: boolean,
+  anchorRef: React.RefObject<T | null>,
+  estHeight = 300,
+) {
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const place = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const margin = 8;
+    let top = r.bottom + 4;
+    if (top + estHeight > window.innerHeight - margin && r.top - 4 - estHeight > margin) {
+      top = r.top - 4 - estHeight;
+    }
+    setPos({ top: Math.max(margin, top), left: r.left, width: r.width });
+  }, [anchorRef, estHeight]);
+  useEffect(() => {
+    if (!open) { setPos(null); return; }
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
+  return pos;
+}
+
 // ── Committee-name input with preset dropdown ─────────────────────────────────
 export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect }: {
   value: string;
@@ -202,6 +239,8 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect }
       })
     : [];
   const topMatch = matches[0] ?? null;
+  const menuOpen = open && matches.length > 0;
+  const pos = useAnchoredDropdown(menuOpen, inputRef, 280);
 
   return (
     <div className="relative">
@@ -219,8 +258,9 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect }
         placeholder="e.g. Human Rights Council or UNHRC"
         style={inputStyle}
       />
-      {open && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-30" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 32px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.08)', maxHeight: 280, overflowY: 'auto' }}>
+      {menuOpen && pos && (
+        <Portal>
+        <div className="rounded-xl overflow-hidden" style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 32px rgba(27,56,40,0.14), 0 2px 8px rgba(27,56,40,0.08)', maxHeight: 280, overflowY: 'auto' }}>
           {matches.slice(0, 8).map((p, i) => (
             <button
               key={p.name}
@@ -242,6 +282,7 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect }
             </button>
           ))}
         </div>
+        </Portal>
       )}
     </div>
   );
@@ -270,6 +311,10 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
   const available = isCharacter
     ? []
     : UN_COUNTRIES.filter((c) => !nameSet.has(c.name.toLowerCase()) && c.name.toLowerCase().includes(search.toLowerCase()));
+
+  const searchAnchorRef = useRef<HTMLDivElement>(null);
+  const searchMenuOpen = !!(search.trim() && (available.length > 0 || !nameSet.has(search.trim().toLowerCase())));
+  const searchPos = useAnchoredDropdown(searchMenuOpen, searchAnchorRef, 300);
 
   const add = (name: string) => {
     const trimmed = name.trim();
@@ -371,7 +416,7 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
         <div>
           <label style={labelStyle}>{isCharacter ? 'Add Character' : 'Search & Add'}</label>
           <div className="relative">
-            <div className="flex items-center rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+            <div ref={searchAnchorRef} className="flex items-center rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
               <input
                 type="text"
                 value={search}
@@ -392,8 +437,9 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
                 <span className="text-xs px-2 shrink-0" style={{ color: '#9A8A78' }}>↵ {isCharacter ? search.trim() : available[0]?.name ?? search.trim()}</span>
               )}
             </div>
-            {search.trim() && (available.length > 0 || (search.trim() && !nameSet.has(search.trim().toLowerCase()))) && (
-              <div className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 24px rgba(27,56,40,0.12)' }}>
+            {searchMenuOpen && searchPos && (
+              <Portal>
+              <div className="rounded-xl overflow-hidden" style={{ position: 'fixed', top: searchPos.top, left: searchPos.left, width: searchPos.width, zIndex: 9999, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 24px rgba(27,56,40,0.12)' }}>
                 {available.slice(0, 5).map((c, i) => (
                   <button
                     key={c.code}
@@ -421,6 +467,7 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
                   </button>
                 )}
               </div>
+              </Portal>
             )}
           </div>
         </div>

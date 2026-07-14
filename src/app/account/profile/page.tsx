@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, ArrowRight, Camera } from 'lucide-react';
+import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
-import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, OUTFIT, MONO } from '../accountUi';
+import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, LevelInsignia, OUTFIT } from '../accountUi';
+import { NEU, NeuIconDisc, NEU_GRADIENTS } from '@/components/neu';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { DatePicker } from '@/components/DatePicker';
+import Portal from '@/components/Portal';
 
 interface ReviewableConference {
   id: string;
@@ -40,6 +42,15 @@ const inputStyle: React.CSSProperties = {
   fontFamily: OUTFIT,
 };
 
+// Folds the forest/ivory neumorphic surface into the existing GlassCard usages:
+// opaque parchment surface + soft extruded dual-shadow (no hard border), so the
+// profile reads like the rest of the neu dashboard.
+const NEU_CARD_STYLE: React.CSSProperties = {
+  backgroundColor: NEU.surface,
+  border: 'none',
+  boxShadow: NEU.out,
+};
+
 export default function ProfilePage() {
   const { user, session, profile, signOut, loading: authLoading } = useAuth();
 
@@ -64,9 +75,29 @@ export default function ProfilePage() {
   const [avatarError, setAvatarError]     = useState('');
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Nationality autocomplete
+  // Nationality autocomplete — the menu is rendered through a Portal at fixed
+  // viewport coordinates so no card boundary can clip it.
   const [natOpen, setNatOpen] = useState(false);
   const natWrapRef = useRef<HTMLDivElement | null>(null);
+  const natInputRef = useRef<HTMLInputElement | null>(null);
+  const natMenuRef = useRef<HTMLDivElement | null>(null);
+  const [natPos, setNatPos] = useState<{ top: number; left: number; width: number; up: boolean } | null>(null);
+
+  const placeNat = useCallback(() => {
+    const el = natInputRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vh = window.innerHeight;
+    const menuH = 232; // matches maxHeight + a little padding
+    const below = vh - r.bottom;
+    const up = below < menuH + 12 && r.top > below; // flip up only when tight below and roomier above
+    setNatPos({
+      top: up ? r.top - 6 : r.bottom + 6,
+      left: r.left,
+      width: r.width,
+      up,
+    });
+  }, []);
 
   // Review prompts — conferences the user attended but hasn't reviewed
   const [reviewable, setReviewable]         = useState<ReviewableConference[]>([]);
@@ -128,16 +159,30 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, session?.access_token]);
 
-  // Close the nationality autocomplete on outside click
+  // Close the nationality autocomplete on outside click (the menu lives in a
+  // Portal, so check both the wrapper and the menu), and keep it anchored to
+  // the input while scrolling / resizing.
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
-      if (natWrapRef.current && !natWrapRef.current.contains(e.target as Node)) {
-        setNatOpen(false);
-      }
+      const t = e.target as Node;
+      if (natWrapRef.current?.contains(t) || natMenuRef.current?.contains(t)) return;
+      setNatOpen(false);
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
+
+  useEffect(() => {
+    if (!natOpen) return;
+    placeNat();
+    const onReflow = () => placeNat();
+    window.addEventListener('resize', onReflow);
+    window.addEventListener('scroll', onReflow, true);
+    return () => {
+      window.removeEventListener('resize', onReflow);
+      window.removeEventListener('scroll', onReflow, true);
+    };
+  }, [natOpen, placeNat]);
 
   async function loadReviewable(supabase: ReturnType<typeof getAuthedClient>) {
     if (!user) return;
@@ -348,23 +393,47 @@ export default function ProfilePage() {
   }
 
   const displayAvatar = avatarUrl ?? profile?.avatar_url ?? null;
+  const headerAge = (() => {
+    const a = ageAt(dateOfBirth);
+    return a !== null && a >= 0 && a <= 120 ? a : null;
+  })();
 
   return (
     <div
-      className="rounded-[24px] p-5 md:p-8"
+      className="relative rounded-[24px] p-5 md:p-7"
       style={{
-        background: 'linear-gradient(158deg, rgba(255,253,248,0.92) 0%, rgba(250,248,243,0.86) 42%, rgba(237,231,216,0.72) 100%)',
-        border: '1.5px solid #C8BEA8',
-        boxShadow: '0 1px 2px rgba(27,56,40,0.06), 0 18px 46px rgba(27,56,40,0.1)',
+        backgroundColor: NEU.surface,
+        borderRadius: 24,
+        boxShadow: '-6px -6px 16px rgba(255,255,255,0.8), 8px 8px 24px rgba(27,56,40,0.14)',
       }}
     >
-      <div className="pb-5 mb-7" style={{ borderBottom: '2px solid rgba(182,135,31,0.35)' }}>
-        <Eyebrow className="mb-2">My Profile</Eyebrow>
+      {/* Decorative bleed — a low-opacity globe drifting off the top-right of the
+          page panel for depth. Negative z keeps it under the opaque cards; the
+          small offset keeps it from ever forcing a horizontal scrollbar. */}
+      <Globe2
+        aria-hidden
+        size={150}
+        strokeWidth={1}
+        className="pointer-events-none absolute"
+        style={{ top: '-38px', right: '-16px', color: 'rgba(27,56,40,0.055)', zIndex: -1 }}
+      />
+
+      <div className="relative pb-5 mb-7" style={{ borderBottom: '2px solid rgba(182,135,31,0.35)', zIndex: 1 }}>
+        <Eyebrow className="mb-2" size="lg">My Profile</Eyebrow>
         <h1
-          className="font-black text-[26px] mb-1"
+          className="font-black text-[26px] md:text-[30px] mb-1 flex items-baseline gap-2 flex-wrap"
           style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
         >
-          {displayName || 'Your Profile'}
+          <span>{displayName || 'Your Profile'}</span>
+          {headerAge !== null && (
+            <span
+              className="inline-flex items-center gap-1"
+              style={{ fontFamily: OUTFIT, fontSize: '20px', fontWeight: 700, color: '#B6871F', letterSpacing: '0', fontVariantNumeric: 'tabular-nums' }}
+            >
+              <Cake size={17} strokeWidth={2.2} style={{ color: '#B6871F', transform: 'translateY(1px)' }} />
+              ({headerAge})
+            </span>
+          )}
         </h1>
         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
           Manage your Gavelling account details.
@@ -374,8 +443,8 @@ export default function ProfilePage() {
       {/* Big level banner — the visual centrepiece */}
       <Link
         href="/account/cv"
-        className="block mb-7 rounded-[20px] focus:outline-none"
-        style={{ textDecoration: 'none' }}
+        className="relative block mb-7 rounded-[20px] focus:outline-none"
+        style={{ textDecoration: 'none', zIndex: 1 }}
       >
         <div
           className="relative overflow-hidden rounded-[20px] px-6 py-6 md:px-8 md:py-7 transition-transform"
@@ -390,27 +459,52 @@ export default function ProfilePage() {
             className="pointer-events-none absolute"
             style={{ top: '-60px', right: '-40px', width: '220px', height: '220px', borderRadius: '9999px', background: 'radial-gradient(circle, rgba(238,217,138,0.30), transparent 70%)' }}
           />
+          {/* decorative insignia ghost bleeding off the bottom-right, low opacity */}
+          <Sparkles
+            aria-hidden
+            size={130}
+            strokeWidth={1}
+            className="pointer-events-none absolute"
+            style={{ bottom: '-34px', right: '-18px', color: 'rgba(238,217,138,0.10)' }}
+          />
           <div className="relative flex items-center justify-between gap-4 flex-wrap">
-            <div>
+            <div className="flex items-center gap-4">
+              {/* MUN rank insignia — the same tiered glyph used across the app */}
               <span
-                className="inline-flex items-center gap-2"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                className="inline-flex items-center justify-center flex-shrink-0"
+                style={{
+                  width: '58px', height: '58px', borderRadius: '9999px',
+                  background: 'radial-gradient(circle at 34% 30%, rgba(250,248,243,0.20), rgba(238,217,138,0.12) 55%, rgba(27,56,40,0.25))',
+                  border: '1.5px solid rgba(238,217,138,0.55)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px rgba(27,56,40,0.35)',
+                }}
               >
-                <p style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.26em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
-                  Your MUN Rank
-                </p>
-                <ExperienceInfo tone="gold" align="left" currentLevel={exp.level} />
+                <LevelInsignia level={exp.level} size={34} />
               </span>
-              <p
-                className="font-black"
-                style={{ fontFamily: OUTFIT, fontSize: '38px', lineHeight: 1.05, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}
-              >
-                {exp.label}
-              </p>
+              <div>
+                <span
+                  className="inline-flex items-center gap-2"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                >
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: '10.5px', letterSpacing: '0.18em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
+                    Your MUN Rank
+                  </p>
+                  <ExperienceInfo tone="gold" align="left" currentLevel={exp.level} />
+                </span>
+                <p
+                  className="font-black"
+                  style={{ fontFamily: OUTFIT, fontSize: '38px', lineHeight: 1.05, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}
+                >
+                  {exp.label}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div
+              className="inline-flex items-center gap-2 rounded-full"
+              style={{ padding: '6px 12px', backgroundColor: 'rgba(250,248,243,0.10)', border: '1px solid rgba(238,217,138,0.28)' }}
+            >
               <TrendingUp size={16} strokeWidth={2.4} style={{ color: '#EED98A' }} />
-              <span style={{ fontFamily: MONO, fontSize: '11px', color: 'rgba(250,248,243,0.85)' }}>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '12px', color: 'rgba(250,248,243,0.92)', fontVariantNumeric: 'tabular-nums' }}>
                 {cvCount ?? 0} conference{(cvCount ?? 0) === 1 ? '' : 's'}
               </span>
             </div>
@@ -564,11 +658,23 @@ export default function ProfilePage() {
       )}
 
       {/* Card 1 — Basic Info */}
-      <GlassCard className="mb-6">
-        <Eyebrow className="mb-5">Basic Information</Eyebrow>
+      <GlassCard className="relative mb-6" style={NEU_CARD_STYLE}>
+        {/* decorative bleed off the left edge */}
+        <User
+          aria-hidden
+          size={118}
+          strokeWidth={1}
+          className="pointer-events-none absolute"
+          style={{ bottom: '-26px', left: '-30px', color: 'rgba(27,56,40,0.045)', zIndex: 0 }}
+        />
 
-        {/* Avatar */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="relative flex items-center gap-2.5 mb-6" style={{ zIndex: 1 }}>
+          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={User} size={30} />
+          <Eyebrow size="lg">Basic Information</Eyebrow>
+        </div>
+
+        {/* Avatar — roughly double the previous size, upload affordance intact */}
+        <div className="relative flex items-center gap-5 mb-7" style={{ zIndex: 1 }}>
           <div className="relative flex-shrink-0">
             {displayAvatar ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -576,19 +682,34 @@ export default function ProfilePage() {
                 src={displayAvatar}
                 alt="Profile"
                 className="rounded-full object-cover"
-                style={{ width: '72px', height: '72px', border: '2px solid #D8CDB6' }}
+                style={{ width: '144px', height: '144px', border: '3px solid #FAF8F3', boxShadow: NEU.out }}
               />
             ) : (
               <div
-                className="rounded-full flex items-center justify-center font-black text-2xl"
-                style={{ width: '72px', height: '72px', backgroundColor: 'rgba(27,56,40,0.1)', border: '2px solid #D8CDB6', color: '#1B3828', fontFamily: OUTFIT }}
+                className="rounded-full flex items-center justify-center font-black"
+                style={{ width: '144px', height: '144px', fontSize: '52px', background: 'linear-gradient(150deg, rgba(27,56,40,0.14), rgba(27,56,40,0.08))', border: '3px solid #FAF8F3', color: '#1B3828', fontFamily: OUTFIT, boxShadow: NEU.out }}
               >
                 {(displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()}
               </div>
             )}
+            {/* Camera affordance — click anywhere on the avatar to change it */}
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={avatarUploading}
+              aria-label={displayAvatar ? 'Change photo' : 'Upload photo'}
+              className="absolute flex items-center justify-center focus:outline-none"
+              style={{
+                right: '4px', bottom: '4px', width: '40px', height: '40px', borderRadius: '9999px',
+                background: 'linear-gradient(150deg, #24492F, #1B3828)', border: '3px solid #F0EBDD',
+                color: '#EED98A', cursor: avatarUploading ? 'default' : 'pointer',
+                boxShadow: '0 4px 10px rgba(27,56,40,0.35)',
+              }}
+            >
+              <Camera size={17} strokeWidth={2.3} />
+            </button>
             {avatarUploading && (
               <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(27,56,40,0.45)' }}>
-                <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
+                <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
               </div>
             )}
           </div>
@@ -596,13 +717,13 @@ export default function ProfilePage() {
             <button
               onClick={() => avatarInputRef.current?.click()}
               disabled={avatarUploading}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold focus:outline-none"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer' }}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold focus:outline-none"
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, border: 'none', cursor: avatarUploading ? 'default' : 'pointer', boxShadow: NEU.outSm }}
             >
               <Camera size={14} strokeWidth={2.2} />
               {displayAvatar ? 'Change photo' : 'Upload photo'}
             </button>
-            <p className="text-[11px] mt-1.5" style={{ color: avatarError ? '#8B2020' : '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="text-[11px] mt-2" style={{ color: avatarError ? '#8B2020' : '#9A8A78', fontFamily: OUTFIT }}>
               {avatarError || 'JPG or PNG, up to 5MB.'}
             </p>
             <input
@@ -615,13 +736,14 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="relative space-y-5" style={{ zIndex: 1 }}>
           {/* Display Name */}
           <div>
             <label
-              className="block text-[13px] font-semibold mb-1.5"
+              className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
               style={{ color: '#1C1410', fontFamily: OUTFIT }}
             >
+              <User size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
               Display Name
             </label>
             <input
@@ -638,9 +760,10 @@ export default function ProfilePage() {
           {/* Email (read-only) */}
           <div>
             <label
-              className="block text-[13px] font-semibold mb-1.5"
+              className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
               style={{ color: '#1C1410', fontFamily: OUTFIT }}
             >
+              <Mail size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
               Email
             </label>
             <input
@@ -663,16 +786,18 @@ export default function ProfilePage() {
 
           {/* Nationality + Date of Birth — one row, two columns */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Nationality — autocomplete with flag */}
+            {/* Nationality — autocomplete with flag. The menu is portalled so no
+                card boundary can clip it, and it flips above near the bottom edge. */}
             <div ref={natWrapRef} className="relative">
               <label
-                className="block text-[13px] font-semibold mb-1.5"
+                className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
                 style={{ color: '#1C1410', fontFamily: OUTFIT }}
               >
+                <MapPin size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
                 Nationality
               </label>
               <div className="relative">
-                {natFlag && (
+                {natFlag ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={natFlag}
@@ -680,8 +805,16 @@ export default function ProfilePage() {
                     className="absolute pointer-events-none"
                     style={{ left: '14px', top: '50%', transform: 'translateY(-50%)', width: '22px', height: '15px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
                   />
+                ) : (
+                  <Globe2
+                    size={17}
+                    strokeWidth={2}
+                    className="absolute pointer-events-none"
+                    style={{ left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#9A8A78' }}
+                  />
                 )}
                 <input
+                  ref={natInputRef}
                   type="text"
                   value={nationality}
                   placeholder="Start typing a country..."
@@ -689,42 +822,51 @@ export default function ProfilePage() {
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setNatOpen(true); }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
                   className="w-full rounded-xl py-3 text-sm focus:outline-none"
-                  style={{ ...inputStyle, paddingLeft: natFlag ? '46px' : '16px', paddingRight: '16px' }}
+                  style={{ ...inputStyle, paddingLeft: '44px', paddingRight: '16px' }}
                 />
               </div>
-              {natOpen && natMatches.length > 0 && (
-                <div
-                  className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-y-auto"
-                  style={{
-                    maxHeight: '224px',
-                    backgroundColor: 'rgba(250,248,243,0.97)',
-                    backdropFilter: 'blur(16px)',
-                    WebkitBackdropFilter: 'blur(16px)',
-                    border: '1px solid #DDD4C0',
-                    boxShadow: '0 16px 40px rgba(27,56,40,0.14)',
-                  }}
-                >
-                  {natMatches.slice(0, 40).map((c) => (
-                    <button
-                      key={c.code}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => { setNationality(c.name); setNatOpen(false); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
-                      style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getFlagUrl(c.code)}
-                        alt=""
-                        style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
-                      />
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
+              {natOpen && natMatches.length > 0 && natPos && (
+                <Portal>
+                  <div
+                    ref={natMenuRef}
+                    className="rounded-xl overflow-y-auto"
+                    style={{
+                      position: 'fixed',
+                      top: natPos.top,
+                      left: natPos.left,
+                      width: natPos.width,
+                      transform: natPos.up ? 'translateY(-100%)' : 'none',
+                      zIndex: 9999,
+                      maxHeight: '224px',
+                      backgroundColor: 'rgba(250,248,243,0.98)',
+                      backdropFilter: 'blur(16px)',
+                      WebkitBackdropFilter: 'blur(16px)',
+                      border: '1px solid #DDD4C0',
+                      boxShadow: '0 16px 40px rgba(27,56,40,0.16)',
+                    }}
+                  >
+                    {natMatches.slice(0, 40).map((c) => (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { setNationality(c.name); setNatOpen(false); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
+                        style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={getFlagUrl(c.code)}
+                          alt=""
+                          style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
+                        />
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </Portal>
               )}
             </div>
 
@@ -732,17 +874,17 @@ export default function ProfilePage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label
-                  className="block text-[13px] font-semibold"
+                  className="flex items-center gap-1.5 text-[13px] font-semibold"
                   style={{ color: '#1C1410', fontFamily: OUTFIT }}
                 >
+                  <Cake size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
                   Date of Birth
                 </label>
-                {(() => {
-                  const age = ageAt(dateOfBirth);
-                  return age !== null && age >= 0 && age <= 120 ? (
-                    <Pill tone="gold" size="sm">Age {age}</Pill>
-                  ) : null;
-                })()}
+                {headerAge !== null && (
+                  <Pill tone="gold" size="sm" icon={<Cake size={11} strokeWidth={2.4} />}>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>Age {headerAge}</span>
+                  </Pill>
+                )}
               </div>
               <DatePicker
                 value={dateOfBirth}
@@ -764,11 +906,11 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="mt-7 flex items-center gap-4">
+        <div className="relative mt-7 flex items-center gap-4" style={{ zIndex: 1 }}>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
+            className="rounded-full py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
             style={{
               backgroundColor: saving ? '#DDD4C0' : '#1B3828',
               color: saving ? '#9A8A78' : '#EED98A',
@@ -776,6 +918,7 @@ export default function ProfilePage() {
               letterSpacing: '0.08em',
               border: 'none',
               cursor: saving ? 'default' : 'pointer',
+              boxShadow: saving ? 'none' : NEU.outSm,
             }}
             onMouseEnter={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { if (!saving) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -791,13 +934,24 @@ export default function ProfilePage() {
       </GlassCard>
 
       {/* Card 2 — Notification Preferences */}
-      <GlassCard className="mb-6">
-        <Eyebrow className="mb-1.5">Notification Preferences</Eyebrow>
-        <p className="text-[13px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+      <GlassCard className="relative mb-6" style={NEU_CARD_STYLE}>
+        {/* decorative bleed off the right edge */}
+        <Bell
+          aria-hidden
+          size={112}
+          strokeWidth={1}
+          className="pointer-events-none absolute"
+          style={{ top: '-24px', right: '-14px', color: 'rgba(27,56,40,0.045)', zIndex: 0 }}
+        />
+        <div className="relative flex items-center gap-2.5 mb-1.5" style={{ zIndex: 1 }}>
+          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Bell} size={30} />
+          <Eyebrow size="lg">Notification Preferences</Eyebrow>
+        </div>
+        <p className="relative text-[13px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT, zIndex: 1 }}>
           Control which emails Gavelling sends you.
         </p>
 
-        <div>
+        <div className="relative" style={{ zIndex: 1 }}>
           {NOTIFICATION_ROWS.map((row, i) => (
             <div
               key={row.field}
@@ -845,12 +999,20 @@ export default function ProfilePage() {
       </GlassCard>
 
       {/* Card 3 — Account */}
-      <GlassCard style={{ border: '1.5px solid rgba(139,32,32,0.3)' }}>
-        <Eyebrow className="mb-4" color="#8B2020">Account</Eyebrow>
+      <GlassCard style={{ ...NEU_CARD_STYLE, boxShadow: `${NEU.out}, inset 0 0 0 1.5px rgba(139,32,32,0.22)` }}>
+        <div className="flex items-center gap-2.5 mb-4">
+          <span
+            className="inline-flex items-center justify-center flex-shrink-0"
+            style={{ width: 30, height: 30, borderRadius: 10, background: 'linear-gradient(135deg, rgba(139,32,32,0.16), rgba(139,32,32,0.08))', border: '1px solid rgba(139,32,32,0.3)' }}
+          >
+            <ShieldAlert size={16} strokeWidth={2.2} style={{ color: '#8B2020' }} />
+          </span>
+          <Eyebrow size="lg" color="#8B2020">Account</Eyebrow>
+        </div>
         <div className="flex gap-3">
           <button
             onClick={handleSignOut}
-            className="flex-1 rounded-xl py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
+            className="flex-1 rounded-full py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
             style={{
               border: '1px solid rgba(139,32,32,0.3)',
               color: '#8B2020',
@@ -866,7 +1028,7 @@ export default function ProfilePage() {
           </button>
           <button
             onClick={openDeleteAccount}
-            className="flex-1 rounded-xl py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
+            className="flex-1 rounded-full py-2.5 font-semibold text-[13px] focus:outline-none transition-colors"
             style={{
               border: '1px solid #8B2020',
               color: '#FFFFFF',
@@ -874,6 +1036,7 @@ export default function ProfilePage() {
               fontFamily: OUTFIT,
               letterSpacing: '0.06em',
               cursor: 'pointer',
+              boxShadow: NEU.outSm,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#701919'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}

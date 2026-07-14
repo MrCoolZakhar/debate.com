@@ -1,13 +1,14 @@
 'use client';
 
-import { Suspense, useState, useEffect, useMemo, useCallback } from 'react';
+import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Compass, Check, X, Mail, Plus } from 'lucide-react';
+import { Compass, Check, X, Mail, Plus, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
 import { Eyebrow, OUTFIT, MONO } from '@/app/account/accountUi';
+import { NEU, NEU_GRADIENTS, EASE, NeuIconDisc } from '@/components/neu';
 import {
   PersonalConferenceCard, ConferenceCardSkeleton, startOfToday,
   ROLE_TONE, ORGANISER_LABEL,
@@ -83,34 +84,104 @@ function isPublicConf(conf: CardConference): boolean {
 const first = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 
-// ── Filter pill (segmented control) ─────────────────────────────────────────
+// ── NeuSegmented, pressed-in track + gliding forest-glass thumb ──────────────
+// The signature control of this page: an inset ivory well (NEU.base + NEU.inSm)
+// with a soft, gently-transparent forest gradient thumb that slides under the
+// active segment. The thumb is measured off the live button geometry, so the
+// slider works with variable-width labels and re-settles on resize / font load.
 
-function SegmentedControl<T extends string>({ options, value, onChange }: {
+function NeuSegmented<T extends string>({ options, value, onChange, size = 'md' }: {
   options: { key: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  size?: 'sm' | 'md';
 }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+
+  const measure = useCallback(() => {
+    const track = trackRef.current;
+    const btn = btnRefs.current[value];
+    if (!track || !btn) return;
+    const t = track.getBoundingClientRect();
+    const b = btn.getBoundingClientRect();
+    setThumb({ left: b.left - t.left + track.scrollLeft, width: b.width });
+  }, [value]);
+
+  useEffect(() => {
+    measure();
+    const raf = requestAnimationFrame(measure);
+    window.addEventListener('resize', measure);
+    // Fonts can settle after first paint and shift label widths.
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      (document as Document & { fonts: { ready: Promise<unknown> } }).fonts.ready.then(measure).catch(() => {});
+    }
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure); };
+  }, [measure, options.length]);
+
+  const pad = 5;
+  const isSm = size === 'sm';
+
   return (
-    <div className="inline-flex rounded-xl p-1" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+    <div
+      ref={trackRef}
+      className="relative inline-flex"
+      style={{
+        padding: pad,
+        borderRadius: 999,
+        backgroundColor: NEU.base,
+        boxShadow: NEU.inSm,
+      }}
+    >
+      {/* Gliding forest-glass thumb */}
+      {thumb && (
+        <span
+          aria-hidden
+          className="absolute pointer-events-none"
+          style={{
+            top: pad,
+            bottom: pad,
+            left: thumb.left,
+            width: thumb.width,
+            borderRadius: 999,
+            // Soft glass sheen layered over a gently-transparent forest gradient,
+            // so the pressed track subtly reads through the thumb.
+            background:
+              'linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0) 46%), ' +
+              'linear-gradient(145deg, rgba(31,63,45,0.96) 0%, rgba(42,90,60,0.93) 58%, rgba(61,122,82,0.92) 100%)',
+            boxShadow:
+              '0 5px 13px rgba(27,56,40,0.34), 0 1px 2px rgba(27,56,40,0.30), ' +
+              'inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -2px 4px rgba(27,56,40,0.34)',
+            transition: `left 420ms ${EASE}, width 420ms ${EASE}`,
+          }}
+        />
+      )}
       {options.map((opt) => {
         const active = value === opt.key;
         return (
           <button
             key={opt.key}
+            ref={(el) => { btnRefs.current[opt.key] = el; }}
             onClick={() => onChange(opt.key)}
-            className="focus:outline-none transition-colors"
+            className="relative focus:outline-none flex-shrink-0"
             style={{
-              padding: '7px 16px',
-              borderRadius: 8,
-              fontSize: 11,
+              zIndex: 1,
+              padding: isSm ? '7px 15px' : '9px 18px',
+              borderRadius: 999,
+              fontSize: isSm ? 10.5 : 11.5,
               fontFamily: MONO,
-              fontWeight: 700,
-              letterSpacing: '0.06em',
+              fontWeight: 800,
+              letterSpacing: '0.08em',
               border: 'none',
-              backgroundColor: active ? '#1B3828' : 'transparent',
-              color: active ? '#EED98A' : '#9A8A78',
+              backgroundColor: 'transparent',
+              color: active ? NEU.gold : NEU.muted,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: `color 300ms ${EASE}`,
             }}
+            onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = NEU.forest; }}
+            onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = NEU.muted; }}
           >
             {opt.label}
           </button>
@@ -120,72 +191,198 @@ function SegmentedControl<T extends string>({ options, value, onChange }: {
   );
 }
 
+// ── Shared neu controls (local) ──────────────────────────────────────────────
+
+/** Gradient pill link — NeuButton in anchor form for CTAs that navigate. */
+function NeuAnchorCta({ href, icon: Icon, children, gradient = NEU_GRADIENTS.forest, textColor = NEU.gold }: {
+  href: string;
+  icon?: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+  children: React.ReactNode;
+  gradient?: readonly [string, string];
+  textColor?: string;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Link
+      href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="inline-flex items-center justify-center gap-2 focus:outline-none"
+      style={{
+        padding: '11px 22px',
+        borderRadius: 999,
+        background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
+        color: textColor,
+        fontFamily: OUTFIT,
+        fontSize: 12.5,
+        fontWeight: 800,
+        letterSpacing: '0.05em',
+        textDecoration: 'none',
+        boxShadow: hovered ? `0 6px 16px ${gradient[0]}66, ${NEU.outSmHover}` : `0 4px 10px ${gradient[0]}4D, ${NEU.outSm}`,
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
+      }}
+    >
+      {Icon && <Icon size={15} strokeWidth={2.4} />}
+      {children}
+    </Link>
+  );
+}
+
+/** Extruded ivory pill button — soft neu chip for secondary actions. */
+function NeuGhostButton({ onClick, children, disabled = false, style }: {
+  onClick?: () => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+  style?: React.CSSProperties;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
+      style={{
+        padding: '10px 20px',
+        borderRadius: 999,
+        border: 'none',
+        backgroundColor: NEU.surface,
+        color: disabled ? NEU.muted : NEU.ink,
+        fontFamily: OUTFIT,
+        fontSize: 12.5,
+        fontWeight: 800,
+        letterSpacing: '0.05em',
+        cursor: disabled ? 'default' : 'pointer',
+        boxShadow: disabled ? NEU.inSm : hovered ? NEU.outSmHover : NEU.outSm,
+        transform: hovered && !disabled ? 'translateY(-1px)' : 'translateY(0)',
+        transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 // ── Empty states ─────────────────────────────────────────────────────────────
+
+/** Pressed-in ivory well framing a centred empty state. */
+function EmptyWell({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="text-center px-6 py-16"
+      style={{ borderRadius: 24, backgroundColor: NEU.base, boxShadow: NEU.in }}
+    >
+      {children}
+    </div>
+  );
+}
 
 function NoneAtAllCard({ tab }: { tab: TabKey }) {
   const cfg = EXPLORE_CONFIG[tab];
   return (
-    <div
-      className="rounded-[22px] text-center px-6 py-14"
-      style={{
-        backgroundColor: 'rgba(250,248,243,0.82)',
-        backdropFilter: 'blur(14px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
-        border: '1.5px dashed #C8BEA8',
-      }}
-    >
-      <span
-        className="inline-flex items-center justify-center rounded-2xl mb-4"
-        style={{ width: '52px', height: '52px', backgroundColor: 'rgba(27,56,40,0.08)', border: '1px solid rgba(27,56,40,0.16)' }}
-      >
-        <Compass size={22} strokeWidth={1.9} style={{ color: '#1B3828' }} />
-      </span>
-      <p className="text-lg font-bold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+    <EmptyWell>
+      <div className="flex justify-center mb-5">
+        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Compass} size={56} />
+      </div>
+      <p className="text-lg font-bold mb-1.5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
         Nothing here yet
       </p>
-      <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+      <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
         Once this role appears on a conference, it&apos;ll show up right here.
       </p>
-      <Link
-        href={cfg.href}
-        className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
-        style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
-        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#2A5A3C'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#1B3828'; }}
-      >
-        <Compass size={15} strokeWidth={2.2} />
-        {cfg.label}
-      </Link>
-    </div>
+      <NeuAnchorCta href={cfg.href} icon={Compass}>{cfg.label}</NeuAnchorCta>
+    </EmptyWell>
   );
 }
 
 function NoMatchesCard({ onClear }: { onClear: () => void }) {
   return (
-    <div
-      className="rounded-[22px] text-center px-6 py-14"
-      style={{
-        backgroundColor: 'rgba(250,248,243,0.82)',
-        backdropFilter: 'blur(14px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
-        border: '1.5px dashed #C8BEA8',
-      }}
-    >
-      <p className="text-lg font-bold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+    <EmptyWell>
+      <p className="text-lg font-bold mb-1.5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
         No conferences match these filters
       </p>
-      <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+      <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
         Try a different timeframe or continent.
       </p>
-      <button
-        onClick={onClear}
-        className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
-        style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.04em' }}
-        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-      >
-        CLEAR FILTERS
-      </button>
+      <NeuGhostButton onClick={onClear}>CLEAR FILTERS</NeuGhostButton>
+    </EmptyWell>
+  );
+}
+
+/** Small pressed-in count chip for section headers. */
+function CountChip({ n, muted = false }: { n: number; muted?: boolean }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center"
+      style={{
+        minWidth: 20, height: 20, padding: '0 6px', borderRadius: 999,
+        backgroundColor: NEU.base, boxShadow: NEU.inSm,
+        fontFamily: MONO, fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
+        color: muted ? NEU.muted : NEU.deepGold, fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {n}
+    </span>
+  );
+}
+
+// ── Invite card shell (shared by chair + organizer invites) ────────────────
+
+function InviteCardShell({ title, subtitle, responding, onDecline, onAccept }: {
+  title: string;
+  subtitle: string;
+  responding: 'accept' | 'decline' | null;
+  onDecline: () => void;
+  onAccept: () => void;
+}) {
+  const busy = responding !== null;
+  return (
+    <div
+      className="flex items-center gap-3.5 px-4 py-3.5"
+      style={{ borderRadius: 18, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+    >
+      <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Mail} iconColor={NEU.forest} size={40} />
+      <div className="min-w-0 flex-1">
+        <p className="font-bold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          {title}
+        </p>
+        <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+          {subtitle}
+        </p>
+      </div>
+      <div className="flex gap-2 flex-shrink-0">
+        <button
+          onClick={onDecline}
+          disabled={busy}
+          className="focus:outline-none inline-flex items-center gap-1.5"
+          style={{
+            padding: '7px 13px', borderRadius: 999, border: 'none',
+            backgroundColor: NEU.surface, boxShadow: busy ? NEU.inSm : NEU.outSm,
+            color: busy ? NEU.muted : NEU.ink, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
+            letterSpacing: '0.04em', cursor: busy ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <X size={12} strokeWidth={2.6} /> {responding === 'decline' ? '...' : 'DECLINE'}
+        </button>
+        <button
+          onClick={onAccept}
+          disabled={busy}
+          className="focus:outline-none inline-flex items-center gap-1.5"
+          style={{
+            padding: '7px 14px', borderRadius: 999, border: 'none',
+            background: busy ? NEU.base : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+            boxShadow: busy ? NEU.inSm : `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}`,
+            color: busy ? NEU.muted : NEU.gold, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
+            letterSpacing: '0.04em', cursor: busy ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <Check size={12} strokeWidth={2.6} /> {responding === 'accept' ? '...' : 'ACCEPT'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -202,43 +399,13 @@ function ChairInviteCard({ invite, onRespond }: { invite: ChairInvite; onRespond
   }
 
   return (
-    <div
-      className="flex items-center gap-3 rounded-2xl px-4 py-3"
-      style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(182,135,31,0.35)' }}
-    >
-      <span
-        className="flex items-center justify-center flex-shrink-0"
-        style={{ width: 38, height: 38, borderRadius: '9999px', backgroundColor: 'rgba(182,135,31,0.16)', border: '1px solid rgba(182,135,31,0.35)' }}
-      >
-        <Mail size={16} style={{ color: '#B6871F' }} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-          Chair {invite.committeeName}
-        </p>
-        <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          {invite.conferenceName} · {invite.acronym}
-        </p>
-      </div>
-      <div className="flex gap-2 flex-shrink-0">
-        <button
-          onClick={() => handle(false)}
-          disabled={responding !== null}
-          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none flex items-center gap-1.5"
-          style={{ border: '1px solid #DDD4C0', color: responding ? '#C8BEA8' : '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: responding ? 'not-allowed' : 'pointer' }}
-        >
-          <X size={12} /> {responding === 'decline' ? '...' : 'DECLINE'}
-        </button>
-        <button
-          onClick={() => handle(true)}
-          disabled={responding !== null}
-          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none flex items-center gap-1.5"
-          style={{ backgroundColor: responding ? '#DDD4C0' : '#1B3828', color: responding ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT, cursor: responding ? 'not-allowed' : 'pointer' }}
-        >
-          <Check size={12} /> {responding === 'accept' ? '...' : 'ACCEPT'}
-        </button>
-      </div>
-    </div>
+    <InviteCardShell
+      title={`Chair ${invite.committeeName}`}
+      subtitle={`${invite.conferenceName} · ${invite.acronym}`}
+      responding={responding}
+      onDecline={() => handle(false)}
+      onAccept={() => handle(true)}
+    />
   );
 }
 
@@ -248,7 +415,7 @@ function ChairInvitesSection({ invites, onRespond }: { invites: ChairInvite[]; o
     <div className="mb-8">
       <div className="flex items-center gap-2.5 mb-3">
         <Eyebrow>Conference Invites</Eyebrow>
-        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#B6871F' }}>{invites.length}</span>
+        <CountChip n={invites.length} />
       </div>
       <div className="flex flex-col gap-2.5">
         {invites.map(inv => (
@@ -271,43 +438,13 @@ function OrganizerInviteCard({ invite, onRespond }: { invite: OrganizerInvite; o
   }
 
   return (
-    <div
-      className="flex items-center gap-3 rounded-2xl px-4 py-3"
-      style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(182,135,31,0.35)' }}
-    >
-      <span
-        className="flex items-center justify-center flex-shrink-0"
-        style={{ width: 38, height: 38, borderRadius: '9999px', backgroundColor: 'rgba(182,135,31,0.16)', border: '1px solid rgba(182,135,31,0.35)' }}
-      >
-        <Mail size={16} style={{ color: '#B6871F' }} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-          Join the organizing team
-        </p>
-        <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          {invite.conferenceName} · {invite.acronym}
-        </p>
-      </div>
-      <div className="flex gap-2 flex-shrink-0">
-        <button
-          onClick={() => handle(false)}
-          disabled={responding !== null}
-          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none flex items-center gap-1.5"
-          style={{ border: '1px solid #DDD4C0', color: responding ? '#C8BEA8' : '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: responding ? 'not-allowed' : 'pointer' }}
-        >
-          <X size={12} /> {responding === 'decline' ? '...' : 'DECLINE'}
-        </button>
-        <button
-          onClick={() => handle(true)}
-          disabled={responding !== null}
-          className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none flex items-center gap-1.5"
-          style={{ backgroundColor: responding ? '#DDD4C0' : '#1B3828', color: responding ? '#9A8A78' : '#EED98A', border: 'none', fontFamily: OUTFIT, cursor: responding ? 'not-allowed' : 'pointer' }}
-        >
-          <Check size={12} /> {responding === 'accept' ? '...' : 'ACCEPT'}
-        </button>
-      </div>
-    </div>
+    <InviteCardShell
+      title="Join the organizing team"
+      subtitle={`${invite.conferenceName} · ${invite.acronym}`}
+      responding={responding}
+      onDecline={() => handle(false)}
+      onAccept={() => handle(true)}
+    />
   );
 }
 
@@ -317,7 +454,7 @@ function OrganizerInvitesSection({ invites, onRespond }: { invites: OrganizerInv
     <div className="mb-8">
       <div className="flex items-center gap-2.5 mb-3">
         <Eyebrow>Team Invites</Eyebrow>
-        <span style={{ fontFamily: MONO, fontSize: '10px', color: '#B6871F' }}>{invites.length}</span>
+        <CountChip n={invites.length} />
       </div>
       <div className="flex flex-col gap-2.5">
         {invites.map(inv => (
@@ -631,8 +768,8 @@ function MyConferencesInner() {
 
   if (authLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
+        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
       </div>
     );
   }
@@ -644,7 +781,7 @@ function MyConferencesInner() {
   const organizerDrafts = isOrganizerTab ? filtered.filter((e) => !isPublicConf(e.conference)) : [];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
       <div
         className="pointer-events-none fixed inset-0 z-[1]"
         style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }}
@@ -655,86 +792,74 @@ function MyConferencesInner() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <Eyebrow className="mb-2">Every Role, One Place</Eyebrow>
-            <h1 className="font-black text-[26px] mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>
+            <h1 className="font-black text-[26px] mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>
               My Conferences
             </h1>
-            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
               Every conference you&apos;re part of, sorted by the role you hold there.
             </p>
           </div>
-          <Link
-            href="/conferences/new"
-            className="flex-shrink-0 inline-flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-[12.5px] uppercase transition-colors mt-1"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            <Plus size={15} strokeWidth={2.5} />
-            Organise a conference
-          </Link>
+          <div className="flex-shrink-0 mt-1">
+            <NeuAnchorCta href="/conferences/new" icon={Plus}>Organise a conference</NeuAnchorCta>
+          </div>
         </div>
 
         {acceptedToast && (
           <div
-            className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 mb-5"
-            style={{ backgroundColor: 'rgba(61,122,82,0.10)', border: '1px solid rgba(61,122,82,0.35)' }}
+            className="flex items-center gap-2.5 px-4 py-3 mb-5"
+            style={{ borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
           >
-            <Check size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
-            <p className="text-sm" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 600 }}>
+            <NeuIconDisc gradient={NEU_GRADIENTS.green} icon={Check} size={30} />
+            <p className="text-sm" style={{ color: NEU.forest, fontFamily: OUTFIT, fontWeight: 700 }}>
               Invite accepted. You&apos;re now chairing this committee.
             </p>
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="mb-5 overflow-x-auto">
-          <div className="inline-flex rounded-xl p-1" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
-            {TABS.map((t) => {
-              const active = activeTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setActiveTab(t.key)}
-                  className="focus:outline-none transition-colors flex-shrink-0"
-                  style={{
-                    padding: '8px 18px',
-                    borderRadius: 8,
-                    fontSize: 11,
-                    fontFamily: MONO,
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    border: 'none',
-                    backgroundColor: active ? '#1B3828' : 'transparent',
-                    color: active ? '#EED98A' : '#9A8A78',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
+        {/* Role slider */}
+        <div className="mb-5 overflow-x-auto pb-1 -mx-6 px-6 sm:mx-0 sm:px-0">
+          <NeuSegmented options={TABS} value={activeTab} onChange={setActiveTab} />
         </div>
 
-        {/* Filters */}
+        {/* Secondary filters */}
         <div className="flex flex-wrap items-center gap-3 mb-8">
-          <SegmentedControl
-            options={[{ key: 'upcoming', label: 'UPCOMING' }, { key: 'past', label: 'PAST' }]}
+          <NeuSegmented
+            options={[{ key: 'upcoming' as const, label: 'UPCOMING' }, { key: 'past' as const, label: 'PAST' }]}
             value={timeframe}
             onChange={setTimeframe}
+            size="sm"
           />
-          <select
-            value={continent}
-            onChange={(e) => setContinent(e.target.value as 'all' | Continent)}
-            className="rounded-xl px-3 py-2 text-sm focus:outline-none"
-            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
-          >
-            <option value="all">All continents</option>
-            {availableContinents.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          <div className="relative inline-flex items-center">
+            <select
+              value={continent}
+              onChange={(e) => setContinent(e.target.value as 'all' | Continent)}
+              className="focus:outline-none appearance-none"
+              style={{
+                padding: '9px 34px 9px 15px',
+                borderRadius: 999,
+                border: 'none',
+                backgroundColor: NEU.base,
+                boxShadow: NEU.inSm,
+                color: NEU.ink,
+                fontFamily: OUTFIT,
+                fontSize: 12.5,
+                fontWeight: 700,
+                letterSpacing: '0.01em',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="all">All continents</option>
+              {availableContinents.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <ChevronDown
+              size={15}
+              strokeWidth={2.4}
+              className="pointer-events-none absolute"
+              style={{ right: 13, color: NEU.muted }}
+            />
+          </div>
         </div>
 
         {activeTab === 'chair' && <ChairInvitesSection invites={chairInvites} onRespond={handleRespondInvite} />}
@@ -756,10 +881,10 @@ function MyConferencesInner() {
             <section className="mb-10">
               <div className="flex items-center gap-2.5 mb-4">
                 <Eyebrow>Public</Eyebrow>
-                <span style={{ fontFamily: MONO, fontSize: '10px', color: '#B6871F' }}>{organizerPublic.length}</span>
+                <CountChip n={organizerPublic.length} />
               </div>
               {organizerPublic.length === 0 ? (
-                <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No published conferences match these filters.</p>
+                <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No published conferences match these filters.</p>
               ) : (
                 <CardGrid entries={organizerPublic} tab="organizer" muted={timeframe === 'past'} />
               )}
@@ -767,14 +892,14 @@ function MyConferencesInner() {
 
             <section>
               <div className="flex items-center gap-2.5 mb-2">
-                <Eyebrow color="#9A8A78">Drafts</Eyebrow>
-                <span style={{ fontFamily: MONO, fontSize: '10px', color: '#9A8A78' }}>{organizerDrafts.length}</span>
+                <Eyebrow color={NEU.muted}>Drafts</Eyebrow>
+                <CountChip n={organizerDrafts.length} muted />
               </div>
-              <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              <p className="text-xs mb-4" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                 Drafts are not listed publicly until you publish them.
               </p>
               {organizerDrafts.length === 0 ? (
-                <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No drafts match these filters.</p>
+                <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No drafts match these filters.</p>
               ) : (
                 <CardGrid entries={organizerDrafts} tab="organizer" muted={timeframe === 'past'} />
               )}
@@ -794,8 +919,8 @@ export default function MyConferencesClient() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
+          <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
         </div>
       }
     >

@@ -6,8 +6,13 @@
 // Conference logos are arbitrary user uploads (transparent PNGs, odd crops,
 // dark seals). Rendered raw they look bad on cards, so every logo sits inside
 // a clean circular backdrop: a near-white disc (#FDFCF9, reads as white on
-// both ivory and forest surfaces) with a soft forest shadow, and the artwork
-// contained inside a 12% inner margin so it NEVER touches the rim.
+// both ivory and forest surfaces) with a soft forest shadow, only a hairline
+// rim, and the artwork contained inside a ~7% inner margin so it barely chips.
+//
+// `bare` renders the logo free-floating instead: no disc, no border, no chip,
+// just the contained artwork on a transparent background (still with the
+// monogram fallback for a missing/failed src). Consumed by surfaces that want
+// the raw mark, e.g. the assignment page.
 //
 // When there is no logo (or the image fails to load) the disc falls back to
 // the house monogram language: forest gradient disc + gold initials.
@@ -23,17 +28,24 @@ export function LogoDisc({
   fallbackText,
   className,
   style,
+  bare = false,
 }: {
   /** Logo URL. Null/undefined (or a load error) renders the monogram fallback. */
   src?: string | null;
   alt?: string;
-  /** Disc diameter in px. The artwork gets a 12% inner margin of this. */
+  /** Disc diameter in px. The artwork gets a ~7% inner margin of this. */
   size: number;
   /** Monogram initials for the fallback disc (e.g. acronym.slice(0, 3)). */
   fallbackText?: string;
   className?: string;
   /** Merged last, positioning overrides (margins, z-index…) welcome. */
   style?: CSSProperties;
+  /**
+   * Render the logo free-floating: no disc backdrop, no border, no shadow chip,
+   * just the contained artwork on a transparent background. The monogram
+   * fallback still renders (for a missing/failed src) but without a heavy rim.
+   */
+  bare?: boolean;
 }) {
   // Track failures per-URL so a src change retries the image.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
@@ -48,7 +60,7 @@ export function LogoDisc({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
+    boxShadow: bare ? 'none' : '0 4px 12px rgba(27,56,40,0.15)',
   };
 
   if (showImage) {
@@ -57,10 +69,11 @@ export function LogoDisc({
         className={className}
         style={{
           ...base,
-          backgroundColor: '#FDFCF9',
-          border: '0.5px solid rgba(221,212,192,0.8)',
-          // 12% of the diameter, the artwork never reaches the rim.
-          padding: `${Math.round(size * 0.12)}px`,
+          // bare: transparent, no rim, no inner padding, the raw mark floats.
+          backgroundColor: bare ? 'transparent' : '#FDFCF9',
+          border: bare ? 'none' : '0.5px solid rgba(221,212,192,0.5)',
+          // ~7% of the diameter so the logo barely chips (none when bare).
+          padding: bare ? 0 : `${Math.round(size * 0.07)}px`,
           ...style,
         }}
       >
@@ -84,7 +97,7 @@ export function LogoDisc({
       style={{
         ...base,
         background: 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
-        border: '1px solid rgba(238,217,138,0.35)',
+        border: bare ? 'none' : '1px solid rgba(238,217,138,0.35)',
         ...style,
       }}
     >

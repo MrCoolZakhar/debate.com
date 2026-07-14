@@ -18,38 +18,18 @@ export const OUTFIT = "'Outfit', sans-serif";
 
 // ── Brand marks ────────────────────────────────────────────────────────────
 
-/** Card header: gavel mark + GAVELLING / CONFERENCES lockup. */
+/** Card header: the real GAVELLING CONFERENCES logo lockup (same mark the
+ *  footer and SiteNav use), on the ivory glass card. */
 export function ConferencesWordmark() {
   return (
-    <Link href="/" className="flex flex-col items-center gap-2" style={{ textDecoration: 'none' }}>
+    <Link href="/" className="flex flex-col items-center" style={{ textDecoration: 'none' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/gavel-mark.png" alt="" aria-hidden className="h-12 w-12 object-contain" />
-      <span className="flex flex-col items-center leading-none">
-        <span
-          style={{
-            fontFamily: OUTFIT,
-            fontWeight: 900,
-            fontSize: '21px',
-            letterSpacing: '0.04em',
-            color: '#1B3828',
-          }}
-        >
-          GAVELLING
-        </span>
-        <span
-          style={{
-            fontFamily: OUTFIT,
-            fontWeight: 700,
-            fontSize: '10px',
-            letterSpacing: '0.34em',
-            color: '#B6871F',
-            marginTop: '5px',
-            textIndent: '0.34em', // visually recentres the tracked-out text
-          }}
-        >
-          CONFERENCES
-        </span>
-      </span>
+      <img
+        src="/Conferences.png"
+        alt="Gavelling Conferences"
+        style={{ height: 46, width: 'auto', objectFit: 'contain' }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
     </Link>
   );
 }

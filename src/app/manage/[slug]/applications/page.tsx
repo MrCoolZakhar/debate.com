@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, CircleCheck, Clock,
+  ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
-  MessageSquareText, RotateCcw, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
+  MessageSquareText, Plus, RotateCcw, Search, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
   Users, Wallet, X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -15,6 +15,7 @@ import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/email
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
+import { DatePicker } from '@/components/DatePicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
 import { getCountryByName } from '@/lib/countries';
@@ -82,6 +83,20 @@ interface Application {
   aid_requested: boolean;
   aid_statement: string | null;
   aid_status: 'none' | 'pending' | 'approved' | 'denied';
+}
+
+// Lightweight committee shape for the inline quick-allocate picker (#7). Loaded
+// lazily the first time an organiser opens the Plus popover on an unassigned
+// delegate. `slots` are the committee's country seats; `takenCodes` are the
+// country_codes already allocated, so open seats = slots minus takenCodes.
+interface QuickCommittee {
+  id: string;
+  name: string;
+  abbreviation: string | null;
+  logo_url: string | null;
+  topics: string[] | null;
+  slots: { country_code: string; country_name: string }[];
+  takenCodes: string[];
 }
 
 // Pool accounting (poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN)
@@ -382,6 +397,208 @@ function PaymentMenu({
   );
 }
 
+/** Inline quick-allocate (#7). A small neumorphic Plus beside "Not yet
+ *  assigned" opens a portaled, edge-flipped two-step picker (committee, then an
+ *  open country) that allocates this specific delegate without leaving the page,
+ *  reusing the same conference_allocations write the assignment board uses. The
+ *  popover is portaled + clamped/flipped so the clipping row card never cuts it
+ *  off (mirrors PaymentMenu's portal pattern). */
+function QuickAllocate({
+  committees, loading, onOpen, onAllocate,
+}: {
+  committees: QuickCommittee[] | null;
+  loading: boolean;
+  onOpen: () => void;
+  onAllocate: (committee: QuickCommittee, slot: { country_code: string; country_name: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<QuickCommittee | null>(null);
+  const [query, setQuery] = useState('');
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const MENU_W = 300;
+  const MENU_H = 380;
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const flip = spaceBelow < MENU_H + 16 && r.top > spaceBelow;
+    let left = r.left;
+    if (left + MENU_W > window.innerWidth - 8) left = window.innerWidth - MENU_W - 8;
+    left = Math.max(8, left);
+    const top = flip ? Math.max(8, r.top - MENU_H - 6) : r.bottom + 6;
+    setPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
+
+  // Measure + position on click (the button rect is available immediately),
+  // so the effect never calls setState synchronously on open.
+  const toggle = () => {
+    if (open) { setOpen(false); return; }
+    onOpen();
+    setPicked(null);
+    setQuery('');
+    place();
+    setOpen(true);
+  };
+
+  const q = query.trim().toLowerCase();
+  const listed = (committees ?? []).filter(c =>
+    !q || c.name.toLowerCase().includes(q) || (c.abbreviation ?? '').toLowerCase().includes(q)
+  );
+  const openSeats = (c: QuickCommittee) => c.slots.filter(s => !c.takenCodes.includes(s.country_code));
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        title="Allocate to a committee"
+        aria-label="Allocate to a committee"
+        className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+        style={{
+          width: 28, height: 28, borderRadius: 999,
+          color: NEU.forest, backgroundColor: NEU.surface,
+          boxShadow: open ? NEU.inSm : NEU.outSm, border: 'none', cursor: 'pointer',
+          transition: `box-shadow 160ms ${EASE_LOCAL}`,
+        }}
+      >
+        <Plus size={15} strokeWidth={2.8} style={{ color: NEU.deepGold, transform: open ? 'rotate(45deg)' : 'none', transition: `transform 200ms ${EASE_LOCAL}` }} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: MENU_W, maxHeight: MENU_H, display: 'flex', flexDirection: 'column', backgroundColor: NEU.surface, borderRadius: 16, boxShadow: NEU.out, padding: 10, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-2.5 px-0.5">
+              {picked ? (
+                <button
+                  onClick={() => setPicked(null)}
+                  className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+                  style={{ width: 24, height: 24, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', cursor: 'pointer', color: NEU.ink }}
+                  aria-label="Back to committees"
+                >
+                  <ChevronLeft size={14} strokeWidth={2.6} />
+                </button>
+              ) : (
+                <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={BadgeCheck} size={24} />
+              )}
+              <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink }}>
+                {picked ? committeeFull(picked) : 'Allocate to committee'}
+              </p>
+            </div>
+
+            {/* Committee search (only when there are enough to warrant it) */}
+            {!picked && (committees?.length ?? 0) > 6 && (
+              <div className="flex items-center gap-2 mb-2" style={{ padding: '6px 10px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                <Search size={13} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search committees..."
+                  className="flex-1 outline-none"
+                  style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT, fontSize: 12 }}
+                />
+              </div>
+            )}
+
+            <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+              {loading && !committees ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+                </div>
+              ) : !picked ? (
+                listed.length === 0 ? (
+                  <p className="text-center py-5" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted }}>
+                    {(committees?.length ?? 0) === 0 ? 'No committees set up yet.' : 'No committees match.'}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {listed.map(c => {
+                      const seats = openSeats(c).length;
+                      const full = seats === 0;
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => { if (!full) setPicked(c); }}
+                          disabled={full}
+                          className="inline-flex items-center gap-2.5 w-full focus:outline-none text-left"
+                          style={{ padding: '7px 8px', borderRadius: 11, background: 'transparent', border: 'none', cursor: full ? 'default' : 'pointer', opacity: full ? 0.5 : 1 }}
+                          onMouseEnter={e => { if (!full) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          <LogoDisc src={c.logo_url} size={30} fallbackText={committeeAbbr(c)} alt={c.name} />
+                          <span className="flex-1 min-w-0">
+                            <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{c.name}</span>
+                            <span className="block" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: full ? NEU.muted : NEU.green, fontVariantNumeric: 'tabular-nums' }}>
+                              {full ? 'Full' : `${seats} open seat${seats === 1 ? '' : 's'}`}
+                            </span>
+                          </span>
+                          {!full && <ChevronDown size={13} strokeWidth={2.6} style={{ color: NEU.muted, transform: 'rotate(-90deg)', flexShrink: 0 }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                (() => {
+                  const seats = openSeats(picked);
+                  if (seats.length === 0) {
+                    return <p className="text-center py-5" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted }}>No open countries in this committee.</p>;
+                  }
+                  return (
+                    <div className="flex flex-col gap-1">
+                      {[...seats].sort((a, b) => a.country_name.localeCompare(b.country_name)).map(s => (
+                        <button
+                          key={s.country_code}
+                          onClick={() => { onAllocate(picked, s); setOpen(false); }}
+                          className="inline-flex items-center gap-2.5 w-full focus:outline-none text-left"
+                          style={{ padding: '7px 9px', borderRadius: 11, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          <CountryFlag name={s.country_name} code={s.country_code} size={20} />
+                          <span className="flex-1 min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{s.country_name}</span>
+                          <Plus size={13} strokeWidth={2.6} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
 /** Neumorphic select checkbox, used per-row and for select-all. Pressed-in
  *  when unchecked, forest-filled with a white tick when checked. */
 function SelectBox({ checked, indeterminate, onClick, title }: { checked: boolean; indeterminate?: boolean; onClick: () => void; title?: string }) {
@@ -534,10 +751,26 @@ function CheckChip({ label, checked, onClick }: { label: string; checked: boolea
 
 const EASE_LOCAL = 'cubic-bezier(0.22,1,0.36,1)';
 
+/** Emphasised group heading for the filter popover: a small leading lucide icon
+ *  plus a slightly larger, bolder, inked label so each section reads as a proper
+ *  heading rather than a faint caption. */
+function FilterHeading({ icon, children }: { icon: LucideGlyph; children: React.ReactNode }) {
+  const Icon = icon;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon size={13} strokeWidth={2.6} style={{ color: NEU.deepGold }} />
+      <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 900, letterSpacing: '0.09em', color: NEU.ink, textTransform: 'uppercase' }}>
+        {children}
+      </span>
+    </span>
+  );
+}
+
 function FilterGroup({
-  title, options, selected, onToggle, onAll, onNone,
+  title, icon, options, selected, onToggle, onAll, onNone,
 }: {
   title: string;
+  icon: LucideGlyph;
   options: { label: string; value: string }[];
   selected: Set<string>;
   onToggle: (v: string) => void;
@@ -547,9 +780,7 @@ function FilterGroup({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.muted, textTransform: 'uppercase' }}>
-          {title}
-        </p>
+        <FilterHeading icon={icon}>{title}</FilterHeading>
         <div className="flex items-center gap-2">
           <button onClick={onAll} className="focus:outline-none" style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', color: NEU.forest, background: 'none', border: 'none', cursor: 'pointer' }}>ALL</button>
           <span style={{ color: NEU.muted, opacity: 0.5 }}>·</span>
@@ -579,13 +810,6 @@ function FilterPanel({
   const show = open || pinned;
   const clearTimer = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
   const scheduleClose = () => { clearTimer(); closeTimer.current = setTimeout(() => setOpen(false), 160); };
-
-  const dateInputStyle: React.CSSProperties = {
-    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.ink,
-    backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 10,
-    border: 'none', padding: '7px 10px', outline: 'none', width: '100%',
-    fontVariantNumeric: 'tabular-nums',
-  };
 
   return (
     <div
@@ -655,37 +879,51 @@ function FilterPanel({
 
           <div className="flex flex-col gap-4">
             <FilterGroup
-              title="Status" options={STATUS_OPTIONS} selected={filters.status}
+              title="Status" icon={BadgeCheck} options={STATUS_OPTIONS} selected={filters.status}
               onToggle={v => setFilters(f => ({ ...f, status: toggleIn(f.status, v) }))}
               onAll={() => setFilters(f => ({ ...f, status: new Set(STATUS_OPTIONS.map(o => o.value)) }))}
               onNone={() => setFilters(f => ({ ...f, status: new Set() }))}
             />
             <FilterGroup
-              title="Participants" options={ROLE_OPTIONS} selected={filters.role}
+              title="Participants" icon={Users} options={ROLE_OPTIONS} selected={filters.role}
               onToggle={v => setFilters(f => ({ ...f, role: toggleIn(f.role, v) }))}
               onAll={() => setFilters(f => ({ ...f, role: new Set(ROLE_OPTIONS.map(o => o.value)) }))}
               onNone={() => setFilters(f => ({ ...f, role: new Set() }))}
             />
             <FilterGroup
-              title="Payment" options={PAYMENT_OPTIONS} selected={filters.payment}
+              title="Payment" icon={Wallet} options={PAYMENT_OPTIONS} selected={filters.payment}
               onToggle={v => setFilters(f => ({ ...f, payment: toggleIn(f.payment, v) }))}
               onAll={() => setFilters(f => ({ ...f, payment: new Set(PAYMENT_OPTIONS.map(o => o.value)) }))}
               onNone={() => setFilters(f => ({ ...f, payment: new Set() }))}
             />
             <FilterGroup
-              title="Aid" options={AID_OPTIONS} selected={filters.aid}
+              title="Aid" icon={HeartHandshake} options={AID_OPTIONS} selected={filters.aid}
               onToggle={v => setFilters(f => ({ ...f, aid: toggleIn(f.aid, v) }))}
               onAll={() => setFilters(f => ({ ...f, aid: new Set(AID_OPTIONS.map(o => o.value)) }))}
               onNone={() => setFilters(f => ({ ...f, aid: new Set() }))}
             />
             <div>
-              <p className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.muted, textTransform: 'uppercase' }}>
-                Submitted between
-              </p>
+              <div className="mb-2">
+                <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
+              </div>
               <div className="flex items-center gap-2">
-                <input type="date" value={filters.dateFrom} max={filters.dateTo || undefined} onChange={e => setFilters(f => ({ ...f, dateFrom: e.target.value }))} style={dateInputStyle} />
+                <div style={{ flex: 1 }}>
+                  <DatePicker
+                    value={filters.dateFrom}
+                    max={filters.dateTo || undefined}
+                    onChange={iso => setFilters(f => ({ ...f, dateFrom: iso }))}
+                    placeholder="From"
+                  />
+                </div>
                 <ArrowRight size={13} style={{ color: NEU.muted, flexShrink: 0 }} />
-                <input type="date" value={filters.dateTo} min={filters.dateFrom || undefined} onChange={e => setFilters(f => ({ ...f, dateTo: e.target.value }))} style={dateInputStyle} />
+                <div style={{ flex: 1 }}>
+                  <DatePicker
+                    value={filters.dateTo}
+                    min={filters.dateFrom || undefined}
+                    onChange={iso => setFilters(f => ({ ...f, dateTo: iso }))}
+                    placeholder="To"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -722,6 +960,11 @@ export default function ApplicationsPage() {
   const { confirm, modal: confirmModal } = useConfirmModal();
   // Stale-response guard for background refetches.
   const loadSeq = useRef(0);
+  // Committees for the inline quick-allocate picker (#7), loaded lazily the
+  // first time a Plus popover opens. null = not yet fetched.
+  const [allocCommittees, setAllocCommittees] = useState<QuickCommittee[] | null>(null);
+  const [allocLoading, setAllocLoading] = useState(false);
+  const allocLoadedRef = useRef(false);
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -791,6 +1034,98 @@ export default function ApplicationsPage() {
   }, [conference, session?.access_token]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
+
+  // ── Quick-allocate committee load (#7) ──────────────────────────────────────
+  // Lazy, once: fetched the first time an organiser opens a Plus popover. Pulls
+  // each committee's country seats plus the country_codes already allocated, so
+  // the picker only ever offers genuinely open seats.
+  const loadAllocCommittees = useCallback(async () => {
+    if (!conference || !session || allocLoadedRef.current) return;
+    allocLoadedRef.current = true;
+    setAllocLoading(true);
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('conference_committees')
+      .select(`
+        id, name, abbreviation, logo_url, topics,
+        committee_country_slots (country_code, country_name),
+        conference_allocations (country_code)
+      `)
+      .eq('conference_id', conference.id)
+      .order('name', { ascending: true });
+    const mapped: QuickCommittee[] = ((data ?? []) as unknown as {
+      id: string; name: string; abbreviation: string | null; logo_url: string | null; topics: string[] | null;
+      committee_country_slots: { country_code: string; country_name: string }[] | null;
+      conference_allocations: { country_code: string }[] | null;
+    }[]).map(c => ({
+      id: c.id,
+      name: c.name,
+      abbreviation: c.abbreviation,
+      logo_url: c.logo_url,
+      topics: c.topics,
+      slots: c.committee_country_slots ?? [],
+      takenCodes: (c.conference_allocations ?? []).map(a => a.country_code),
+    }));
+    setAllocCommittees(mapped);
+    setAllocLoading(false);
+  }, [conference, session?.access_token]);
+
+  // Optimistic inline allocation: flip the row to 'assigned' with the chosen
+  // committee/country immediately, mark that seat taken locally so a second
+  // allocation this session can't reuse it, then write to
+  // conference_allocations + applications. Exact rollback on any failure.
+  function handleQuickAllocate(app: Application, committee: QuickCommittee, slot: { country_code: string; country_name: string }) {
+    if (!session || !conference || busyIds.has(app.id)) return;
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+    if (!app.user_id) {
+      setActionError('This applicant has not registered yet. Allocate them from the assignment board once they sign up.');
+      return;
+    }
+
+    setActionError('');
+    markBusy(app.id, true);
+    applyRow(app.id, {
+      status: 'assigned',
+      assigned_committee_id: committee.id,
+      assigned_country_code: slot.country_code,
+      assigned_country_name: slot.country_name,
+      assigned_committee: { name: committee.name, abbreviation: committee.abbreviation, topics: committee.topics, logo_url: committee.logo_url },
+    });
+    // Reserve the seat locally so it drops out of any picker opened next.
+    setAllocCommittees(prev => prev
+      ? prev.map(c => (c.id === committee.id ? { ...c, takenCodes: [...c.takenCodes, slot.country_code] } : c))
+      : prev);
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      // Single write path mirrors the assignment board's insertAllocation.
+      const { error: insErr } = await supabase.from('conference_allocations').insert({
+        conference_id: conference.id,
+        conference_committee_id: committee.id,
+        user_id: app.user_id,
+        country_code: slot.country_code,
+        country_name: slot.country_name,
+        application_id: app.id,
+        allocation_sent: false,
+      });
+      if (insErr) throw insErr;
+      const { error } = await supabase.from('applications').update({
+        status: 'assigned',
+        assigned_committee_id: committee.id,
+        assigned_country_code: slot.country_code,
+        assigned_country_name: slot.country_name,
+      }).eq('id', app.id);
+      if (error) throw error;
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setAllocCommittees(prev => prev
+          ? prev.map(c => (c.id === committee.id ? { ...c, takenCodes: c.takenCodes.filter(code => code !== slot.country_code) } : c))
+          : prev);
+        setActionError('Could not allocate this delegate. The change was reverted. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
+  }
 
   // ── Optimistic row helpers ──────────────────────────────────────────────────
   // Patch one application in place (the UI updates instantly), and restore the
@@ -1420,8 +1755,10 @@ export default function ApplicationsPage() {
   // change can never cause a hidden row to be swept up in a bulk action.
   const selectedApps = filtered.filter(a => selectedIds.has(a.id));
   const allVisibleSelected = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
+  // Chairs are always free, so bulk mark-paid / waive skip them entirely (#5).
   const payEligible = (a: Application) =>
-    (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
+    a.role !== 'chair'
+    && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
     && a.payment_status !== 'paid' && a.payment_status !== 'waived';
   const bulkAcceptable = selectedApps.filter(a => a.status === 'submitted');
   const bulkRejectable = selectedApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
@@ -1438,31 +1775,36 @@ export default function ApplicationsPage() {
 
   const stats = {
     total: applications.length,
-    submitted: applications.filter(a => a.status === 'submitted').length,
     accepted: applications.filter(a => a.status === 'accepted').length,
     assigned: applications.filter(a => a.status === 'assigned').length,
     checkedIn: applications.filter(a => a.status === 'checked-in').length,
     paid: applications.filter(a => a.payment_status === 'paid').length,
   };
 
+  // Order (#3): Total, Accepted, Assigned, Paid, Checked in — Checked in last on
+  // the right. Submitted tile removed (#2).
   const statItems: { label: string; value: number; emoji: string; icon: typeof Inbox; gradient: [string, string] }[] = [
     { label: 'Total',      value: stats.total,     emoji: 'Card index',            icon: Users,          gradient: NEU_GRADIENTS.forest },
-    { label: 'Submitted',  value: stats.submitted, emoji: 'Inbox tray',            icon: Inbox,          gradient: NEU_GRADIENTS.amber },
     { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',     icon: Check,          gradient: NEU_GRADIENTS.green },
     { label: 'Assigned',   value: stats.assigned,  emoji: 'Round pushpin',         icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold },
-    { label: 'Checked in', value: stats.checkedIn, emoji: 'Person raising hand',   icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage },
     { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',             icon: CircleCheck,    gradient: NEU_GRADIENTS.green },
+    { label: 'Checked in', value: stats.checkedIn, emoji: 'Person raising hand',   icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage },
   ];
 
   return (
     <div className="px-6 md:px-10 py-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
-        <div>
-          <p className="mb-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
-            {conference.acronym} · Applications
-          </p>
-          <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>Applications</h1>
+        <div className="flex items-center gap-3.5">
+          {/* Gavel emblem moved off the header (#4) — it now marks chair rows.
+              A neutral applications icon disc anchors the title instead. */}
+          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Card index" size={46} />
+          <div>
+            <p className="mb-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
+              {conference.acronym} · Applications
+            </p>
+            <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>Applications</h1>
+          </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
           <FilterPanel filters={filters} setFilters={setFilters} activeCount={activeFilterCount} />
@@ -1498,10 +1840,10 @@ export default function ApplicationsPage() {
         </p>
       )}
 
-      {/* Stat tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 mb-6">
+      {/* Stat tiles — modest default size (#1), five tiles (#2/#3) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {statItems.map(s => (
-          <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} prominent />
+          <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact />
         ))}
       </div>
 
@@ -1570,7 +1912,9 @@ export default function ApplicationsPage() {
             const hasAllocation = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in');
             const canCheckIn = app.status === 'accepted' || app.status === 'assigned';
             const isSubmitted = app.status === 'submitted';
-            const showPayControl = app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in';
+            // Chairs are always free — never any payment affordance (#5).
+            const isChair = app.role === 'chair';
+            const showPayControl = !isChair && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
 
             const factStyle: React.CSSProperties = {
               fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.muted,
@@ -1639,26 +1983,42 @@ export default function ApplicationsPage() {
                       )}
                     </div>
 
-                    {expLabel && <LevelBadge level={expLabel} count={confCount} />}
+                    {/* Identity stack: MUN level, then the ROLE directly beneath
+                        it (#6). Chairs also get the 3D gavel emblem beside their
+                        role pill as the chair marker (#4). */}
+                    <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                      {expLabel && <LevelBadge level={expLabel} count={confCount} />}
+                      <span className="inline-flex items-center gap-1.5">
+                        {app.role === 'chair' && (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src="/gavel-3d.webp"
+                            alt=""
+                            aria-hidden="true"
+                            style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 2px 4px rgba(27,56,40,0.25))' }}
+                          />
+                        )}
+                        <RolePill role={app.role} size="sm" />
+                      </span>
+                    </div>
                   </div>
 
-                  {/* MIDDLE · role + allocation / preferences */}
+                  {/* MIDDLE · allocation / preferences — the focal point of the
+                      row now the role has moved to the identity column (#6). */}
                   <div
                     className="p-4 lg:p-5 flex flex-col justify-center gap-3 border-t lg:border-t-0 lg:border-l"
                     style={{ flex: '1 1 260px', minWidth: 0, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
-                    <div className="self-start"><RolePill role={app.role} /></div>
-
                     {hasAllocation ? (
                       <div className="flex items-center gap-4 min-w-0">
-                        <LogoDisc src={app.assigned_committee!.logo_url} size={76} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
+                        <LogoDisc src={app.assigned_committee!.logo_url} size={92} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
                         <div className="min-w-0">
-                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 800, color: NEU.ink, letterSpacing: '-0.01em' }}>
+                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em' }}>
                             {committeeFull(app.assigned_committee)}
                           </p>
                           {app.assigned_country_name && (
-                            <span className="inline-flex items-center gap-2.5 mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 700, color: NEU.ink }}>
-                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={34} />
+                            <span className="inline-flex items-center gap-3 mt-2" style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 800, color: NEU.ink }}>
+                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={40} />
                               {app.assigned_country_name}
                             </span>
                           )}
@@ -1666,7 +2026,10 @@ export default function ApplicationsPage() {
                       </div>
                     ) : isDelegate && prefs.length > 0 ? (
                       <div className="flex flex-col gap-1.5">
-                        <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>Preferences</p>
+                        <div className="flex items-center gap-2">
+                          <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>Preferences</p>
+                          <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                        </div>
                         <div className="flex flex-wrap gap-1.5">
                           {prefs.slice(0, 3).map(p => (
                             <span
@@ -1682,10 +2045,13 @@ export default function ApplicationsPage() {
                           ))}
                         </div>
                       </div>
-                    ) : (
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.muted }}>
-                        {isDelegate ? 'Not yet assigned' : '—'}
+                    ) : isDelegate ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.muted }}>Not yet assigned</span>
+                        <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
                       </span>
+                    ) : (
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.muted }}>—</span>
                     )}
 
                     {app.status === 'rejected' && app.organizer_note && (
@@ -1730,7 +2096,7 @@ export default function ApplicationsPage() {
                           AID DENIED
                         </span>
                       )}
-                      <PaymentPill status={app.payment_status} />
+                      {!isChair && <PaymentPill status={app.payment_status} />}
                     </div>
 
                     {app.status === 'checked-in' && app.checked_in_at && (
@@ -1996,7 +2362,9 @@ export default function ApplicationsPage() {
         const rowBusy = busyIds.has(app.id);
         const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
 
-        const showPaymentControls = app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in';
+        // Chairs are always free — no payment control in the review modal (#5).
+        const showPaymentControls = app.role !== 'chair'
+          && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
         // Unified payment control (F: merge mark-paid vs waive). One menu, both
         // underlying states still reachable.
         const paymentControls = showPaymentControls ? (

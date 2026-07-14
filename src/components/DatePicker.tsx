@@ -5,8 +5,9 @@
 // picking a date never means fighting a native OS date control. Forest/ivory
 // neumorphic styling. Value in/out is an ISO date string (YYYY-MM-DD).
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import Portal from '@/components/Portal';
 
 const OUTFIT = "'Outfit', sans-serif";
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -49,18 +50,52 @@ export function DatePicker({
   const minDate = useMemo(() => parseISO(min), [min]);
   const maxDate = useMemo(() => parseISO(max), [max]);
   const [view, setView] = useState<Date>(() => selected ?? parseISO(initialView) ?? new Date());
-  const rootRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => { if (selected) setView(selected); }, [selected]);
 
+  // The calendar is rendered through a Portal at fixed viewport coordinates so
+  // it can never be clipped by an ancestor's overflow (e.g. a scrollable filter
+  // popover or an overflow-hidden card) or run off the viewport. Opens below the
+  // trigger, flips above when there is not enough room, and clamps horizontally
+  // so it always stays on screen.
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const margin = 8;
+    const width = 300;
+    const height = menuRef.current?.offsetHeight ?? 372;
+    let left = r.left;
+    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width;
+    left = Math.max(margin, left);
+    let top = r.bottom + 8;
+    if (top + height > window.innerHeight - margin && r.top - 8 - height > margin) {
+      top = r.top - 8 - height;
+    }
+    top = Math.max(margin, top);
+    setPos({ top, left });
+  }, []);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setPos(null); return; }
+    place();
     function onDown(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     }
     document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
 
   const grid = useMemo(() => {
     const first = new Date(view.getFullYear(), view.getMonth(), 1);
@@ -81,8 +116,9 @@ export function DatePicker({
   }
 
   return (
-    <div ref={rootRef} style={{ position: 'relative', width: '100%' }}>
+    <div style={{ position: 'relative', width: '100%' }}>
       <button
+        ref={btnRef}
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
@@ -98,10 +134,13 @@ export function DatePicker({
         <span>{selected ? fmt(selected) : placeholder}</span>
       </button>
 
-      {open && (
+      {open && pos && (
+        <Portal>
         <div
-          className="absolute z-50 mt-2 rounded-2xl p-3"
+          ref={menuRef}
+          className="rounded-2xl p-3"
           style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
             width: 300, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0',
             boxShadow: '0 20px 48px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)',
           }}
@@ -157,6 +196,7 @@ export function DatePicker({
             })}
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

@@ -4,9 +4,10 @@
 // Design language: ivory bg, glass cream cards, parchment borders, tiny gold
 // Outfit eyebrows, Outfit for UI text, lucide icons only.
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Medal, Award, Info, X } from 'lucide-react';
 import { EXPERIENCE_BANDS } from '@/lib/munExperience';
+import Portal from '@/components/Portal';
 
 export const OUTFIT = "'Outfit', sans-serif";
 // No monospace on the conferences side — MONO is an Outfit alias kept only so
@@ -226,18 +227,61 @@ export function ExperienceInfo({
   currentLevel?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLSpanElement | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; placement: 'below' | 'above' } | null>(null);
+
+  const POP_W = 288;
+  const POP_H = 348; // estimate for edge-flip; popover is a fixed ladder
+
+  // The rank banner and its ancestors set overflow:hidden, which clips an
+  // in-flow absolute popover. Render it in a Portal at fixed viewport coords
+  // computed from the trigger, flipping near the right/bottom edges so it is
+  // NEVER cut off. (Mirrors the applications page PaymentMenu.)
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = align === 'right' ? r.right - POP_W : r.left;
+    if (left + POP_W > vw - 10) left = vw - 10 - POP_W;
+    if (left < 10) left = 10;
+    const below = r.bottom + 8;
+    const flipUp = below + POP_H > vh - 10 && r.top - POP_H - 8 > 10;
+    setPos({
+      top: flipUp ? r.top - POP_H - 8 : below,
+      left,
+      placement: flipUp ? 'above' : 'below',
+    });
+  }, [align]);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+  }, []);
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setOpen(false), 140);
+  }, [cancelClose]);
+
+  const show = useCallback(() => { cancelClose(); place(); setOpen(true); }, [cancelClose, place]);
 
   useEffect(() => {
     if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    }
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false); }
-    document.addEventListener('mousedown', onDoc);
+    const onReflow = () => place();
     document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
-  }, [open]);
+    window.addEventListener('resize', onReflow);
+    window.addEventListener('scroll', onReflow, true);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onReflow);
+      window.removeEventListener('scroll', onReflow, true);
+    };
+  }, [open, place]);
+
+  useEffect(() => () => cancelClose(), [cancelClose]);
 
   const onGold = tone === 'gold';
   const btnColor = onGold ? '#EED98A' : '#B6871F';
@@ -245,92 +289,108 @@ export function ExperienceInfo({
   const btnBg = onGold ? 'rgba(238,217,138,0.14)' : 'rgba(182,135,31,0.1)';
 
   return (
-    <span ref={wrapRef} className="relative inline-flex">
+    <span
+      className="relative inline-flex"
+      onMouseEnter={show}
+      onMouseLeave={scheduleClose}
+    >
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : show())}
+        onFocus={show}
+        onBlur={scheduleClose}
         aria-label="How experience levels work"
         aria-expanded={open}
         className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none transition-colors"
         style={{
           width: '20px', height: '20px', borderRadius: '9999px',
           border: `1px solid ${btnBorder}`, backgroundColor: btnBg,
-          color: btnColor, cursor: 'pointer',
+          color: btnColor, cursor: 'help',
         }}
       >
         <Info size={12} strokeWidth={2.4} />
       </button>
 
-      {open && (
-        <div
-          role="dialog"
-          className="absolute z-40 mt-2 rounded-2xl p-4"
-          style={{
-            top: '100%',
-            [align]: 0,
-            width: '288px',
-            backgroundColor: 'rgba(250,248,243,0.98)',
-            backdropFilter: 'blur(14px)',
-            WebkitBackdropFilter: 'blur(14px)',
-            border: '1px solid #DDD4C0',
-            boxShadow: '0 18px 46px rgba(27,56,40,0.18)',
-          }}
-        >
-          <div className="flex items-start justify-between gap-2 mb-2.5">
-            <p className="font-bold text-[13px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-              How experience levels work
-            </p>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close"
-              className="flex items-center justify-center flex-shrink-0 focus:outline-none"
-              style={{ width: '20px', height: '20px', borderRadius: '9999px', border: 'none', background: 'none', color: '#9A8A78', cursor: 'pointer' }}
-            >
-              <X size={13} strokeWidth={2.4} />
-            </button>
-          </div>
-          <div className="flex flex-col gap-1">
-            {EXPERIENCE_BANDS.map((band, i) => {
-              const accent = LEVEL_ACCENT[band.level];
-              const isCurrent = (currentLevel ?? '').toLowerCase() === band.level;
-              return (
-                <div
-                  key={band.level}
-                  className="flex items-center gap-2.5"
-                  style={{
-                    // Very faint tier-tinted wash so the ladder reads as an
-                    // escalation; the user's current tier is a touch stronger.
-                    padding: '5px 8px',
-                    borderRadius: '10px',
-                    backgroundColor: isCurrent ? `${accent}24` : `${accent}12`, // ~0.14 / ~0.07
-                    border: isCurrent ? `1px solid ${accent}55` : '1px solid transparent',
-                  }}
-                >
-                  <span
-                    className="inline-flex items-center justify-center flex-shrink-0"
+      {open && pos && (
+        <Portal>
+          <div
+            ref={popRef}
+            role="dialog"
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+            className="rounded-2xl p-4"
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              zIndex: 9999,
+              width: `${POP_W}px`,
+              backgroundColor: 'rgba(250,248,243,0.98)',
+              backdropFilter: 'blur(14px)',
+              WebkitBackdropFilter: 'blur(14px)',
+              border: '1px solid #DDD4C0',
+              boxShadow: '0 18px 46px rgba(27,56,40,0.18)',
+              animation: `accFade 150ms cubic-bezier(0.22,1,0.36,1)`,
+            }}
+          >
+            <style>{`@keyframes accFade{from{opacity:0;transform:translateY(${pos.placement === 'above' ? '6px' : '-6px'})}to{opacity:1;transform:translateY(0)}}`}</style>
+            <div className="flex items-start justify-between gap-2 mb-2.5">
+              <p className="font-bold text-[13px]" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
+                How experience levels work
+              </p>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+                className="flex items-center justify-center flex-shrink-0 focus:outline-none"
+                style={{ width: '20px', height: '20px', borderRadius: '9999px', border: 'none', background: 'none', color: '#9A8A78', cursor: 'pointer' }}
+              >
+                <X size={13} strokeWidth={2.4} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-1">
+              {EXPERIENCE_BANDS.map((band, i) => {
+                const accent = LEVEL_ACCENT[band.level];
+                const isCurrent = (currentLevel ?? '').toLowerCase() === band.level;
+                return (
+                  <div
+                    key={band.level}
+                    className="flex items-center gap-2.5"
                     style={{
-                      width: '22px', height: '22px', borderRadius: '9999px',
-                      background: `linear-gradient(150deg, ${accent}22, ${accent}12)`,
-                      border: `1px solid ${accent}55`,
+                      // Very faint tier-tinted wash so the ladder reads as an
+                      // escalation; the user's current tier is a touch stronger.
+                      padding: '5px 8px',
+                      borderRadius: '10px',
+                      backgroundColor: isCurrent ? `${accent}24` : `${accent}12`, // ~0.14 / ~0.07
+                      border: isCurrent ? `1px solid ${accent}55` : '1px solid transparent',
                     }}
                   >
-                    <LevelInsignia level={band.level} size={14} />
-                  </span>
-                  <span className="flex-1" style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: isCurrent ? 700 : 600, color: '#1C1410' }}>
-                    {band.label}
-                  </span>
-                  <span style={{ fontFamily: OUTFIT, fontSize: '11px', fontWeight: 600, color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
-                    {bandRange(i)}
-                  </span>
-                </div>
-              );
-            })}
+                    <span
+                      className="inline-flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: '22px', height: '22px', borderRadius: '9999px',
+                        background: `linear-gradient(150deg, ${accent}22, ${accent}12)`,
+                        border: `1px solid ${accent}55`,
+                      }}
+                    >
+                      <LevelInsignia level={band.level} size={14} />
+                    </span>
+                    <span className="flex-1" style={{ fontFamily: OUTFIT, fontSize: '13px', fontWeight: isCurrent ? 700 : 600, color: '#1C1410' }}>
+                      {band.label}
+                    </span>
+                    <span style={{ fontFamily: OUTFIT, fontSize: '11px', fontWeight: 600, color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
+                      {bandRange(i)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11.5px] mt-3 pt-2.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0, borderTop: '1px solid rgba(221,212,192,0.6)', lineHeight: 1.55 }}>
+              Your level is derived from the number of conferences on your MUN CV.
+            </p>
           </div>
-          <p className="text-[11.5px] mt-3 pt-2.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0, borderTop: '1px solid rgba(221,212,192,0.6)', lineHeight: 1.55 }}>
-            Your level is derived from the number of conferences on your MUN CV.
-          </p>
-        </div>
+        </Portal>
       )}
     </span>
   );
@@ -338,19 +398,23 @@ export function ExperienceInfo({
 
 // ── Eyebrow ────────────────────────────────────────────────────────────────
 
-export function Eyebrow({ children, color = '#B6871F', className = '' }: {
+export function Eyebrow({ children, color = '#B6871F', className = '', size = 'sm' }: {
   children: React.ReactNode;
   color?: string;
   className?: string;
+  /** 'sm' keeps the original tiny eyebrow; 'md'/'lg' make a section heading more prominent. */
+  size?: 'sm' | 'md' | 'lg';
 }) {
+  const fontSize = size === 'lg' ? '11.5px' : size === 'md' ? '10.5px' : '9px';
+  const letterSpacing = size === 'lg' ? '0.16em' : '0.14em';
   return (
     <p
       className={className}
       style={{
         fontFamily: OUTFIT,
-        fontWeight: 700,
-        fontSize: '9px',
-        letterSpacing: '0.14em',
+        fontWeight: size === 'sm' ? 700 : 800,
+        fontSize,
+        letterSpacing,
         color,
         margin: 0,
         textTransform: 'uppercase',

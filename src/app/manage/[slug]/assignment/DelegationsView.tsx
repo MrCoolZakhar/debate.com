@@ -12,9 +12,12 @@ import {
   OUTFIT, MONO, POOL_MEMBER_SELECT, POOL_SPOTS_COLUMN,
   poolForRole, fillFreeSpots, fetchSearchPool, fetchAdvisorPool, performSwap, markApplicationPaid,
   markNotAttending, undoNotAttending, removeFromDelegation, pledgeSatisfied, eligibleTransferRecipients,
-  SectionLabel, MemberAvatar, DraggableChip, WaivedChip, NotAttendingChip, PaidSlotChip, OpenSlot, SwapConfirmModal, ModalOverlay, pledgeText,
+  SectionLabel, DraggableChip, WaivedChip, NotAttendingChip, PaidSlotChip, OpenSlot, SwapConfirmModal, ModalOverlay, pledgeText,
   type PoolMember, type SearchApp,
 } from '@/app/manage/[slug]/assignment/delegationShared';
+import { PersonAvatar } from '@/app/manage/[slug]/assignment/page';
+import { NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc } from '@/components/neu';
+import { Users } from 'lucide-react';
 
 function isHeadDelegate(m: PoolMember): boolean {
   return m.is_head_delegate || m.role === 'head-delegate';
@@ -40,70 +43,61 @@ function DelegationCard({ society, members, hasUnseenSwap, isEmpty, onClick, onD
   const pledgePending = members.some(m => !!m.pledge_type && !pledgeSatisfied(m));
 
   return (
-    <div
-      className="relative text-left rounded-2xl p-5 transition-colors"
-      style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
-    >
+    <NeuCard hover onClick={onClick} className="relative" style={{ padding: 20, cursor: 'pointer' }}>
       {isEmpty && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           title="Delete this empty delegation"
           aria-label="Delete this empty delegation"
-          className="absolute focus:outline-none rounded-lg"
-          style={{ top: 12, right: 12, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8B2020' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          className="absolute focus:outline-none rounded-full"
+          style={{ top: 12, right: 12, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8B2020', backgroundColor: NEU.surface, boxShadow: NEU.outSm, zIndex: 1 }}
         >
-          <Trash2 size={14} />
+          <Trash2 size={13} />
         </button>
       )}
-      <button
-        onClick={onClick}
-        className="text-left w-full focus:outline-none"
-      >
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="flex items-center gap-1.5 min-w-0">
-            {hasUnseenSwap && (
-              <span
-                title="New allocation swap activity"
-                className="flex-shrink-0"
-                style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: '#B6871F' }}
-              />
-            )}
-            <p className="font-black text-base truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, maxWidth: isEmpty ? '85%' : undefined }}>{society.name}</p>
+      <div className="flex items-center gap-3 mb-3.5">
+        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} size={38} />
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          {hasUnseenSwap && (
+            <span
+              title="New allocation swap activity"
+              className="flex-shrink-0"
+              style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: NEU.deepGold }}
+            />
+          )}
+          <p className="font-black text-base truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: isEmpty ? '80%' : undefined }}>{society.name}</p>
+        </div>
+        {pledgePending && (
+          <span
+            className="flex-shrink-0 px-2.5 py-0.5 rounded-full"
+            style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: '#9A6B2F', fontFamily: OUTFIT }}
+          >
+            PLEDGE PENDING
+          </span>
+        )}
+        {isEmpty && !pledgePending && (
+          <span
+            className="flex-shrink-0 px-2.5 py-0.5 rounded-full"
+            style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.muted, fontFamily: OUTFIT, marginRight: isEmpty ? 30 : undefined }}
+          >
+            EMPTY
+          </span>
+        )}
+      </div>
+      <NeuInset small className="flex flex-col gap-1.5 px-3.5 py-3">
+        {([
+          ['Advisors', advisorCount],
+          ['Head Delegates', headDelCount],
+          ['Total Delegates', totalDelegates],
+          ['Paid Spots', society.spots_purchased],
+        ] as [string, number][]).map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between">
+            <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{label}</span>
+            <span className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
           </div>
-          {pledgePending && (
-            <span
-              className="flex-shrink-0 px-2 py-0.5 rounded-full"
-              style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: '1px solid rgba(184,132,74,0.4)', fontFamily: OUTFIT }}
-            >
-              PLEDGE PENDING
-            </span>
-          )}
-          {isEmpty && !pledgePending && (
-            <span
-              className="flex-shrink-0 px-2 py-0.5 rounded-full"
-              style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)', fontFamily: OUTFIT }}
-            >
-              EMPTY
-            </span>
-          )}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {[
-            ['Advisors', advisorCount],
-            ['Head Delegates', headDelCount],
-            ['Total Delegates', totalDelegates],
-            ['Paid Spots', society.spots_purchased],
-          ].map(([label, value]) => (
-            <div key={label as string} className="flex items-center justify-between">
-              <span className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{label}</span>
-              <span className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{value}</span>
-            </div>
-          ))}
-        </div>
-      </button>
-    </div>
+        ))}
+      </NeuInset>
+    </NeuCard>
   );
 }
 
@@ -126,51 +120,45 @@ function AdvisorTransferModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="rounded-2xl p-6"
-        style={{ width: 'min(92vw, 440px)', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(27,56,40,0.25)' }}
+        className="p-6"
+        style={{ width: 'min(92vw, 440px)', backgroundColor: NEU.surface, borderRadius: 24, maxHeight: '80vh', overflowY: 'auto', boxShadow: `${NEU.out}, 0 24px 60px rgba(27,56,40,0.28)` }}
       >
-        <h3 className="font-black text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Transfer spot</h3>
-        <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        <h3 className="font-black text-base mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Transfer spot</h3>
+        <p className="text-xs mb-4" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
           Pick another accepted faculty advisor to receive {advisor.profiles?.display_name ?? advisor.invited_name ?? 'this advisor'}&apos;s paid spot.
         </p>
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search advisors..."
-          autoFocus
-          className="w-full rounded-xl px-3 py-2 text-sm outline-none mb-3"
-          style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
-        />
+        <NeuInset className="mb-3 px-3.5 py-2.5" style={{ borderRadius: 999 }}>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search advisors..."
+            autoFocus
+            className="w-full text-sm outline-none"
+            style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT }}
+          />
+        </NeuInset>
         <div className="flex flex-col gap-1.5" style={{ maxHeight: 260, overflowY: 'auto' }}>
           {eligible.length === 0 ? (
-            <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No unpaid delegates to receive this spot.</p>
+            <p className="text-xs py-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No unpaid delegates to receive this spot.</p>
           ) : results.length === 0 ? (
-            <p className="text-xs py-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No matches.</p>
+            <p className="text-xs py-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No matches.</p>
           ) : results.map(a => (
-            <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}>
+            <NeuInset key={a.id} small className="flex items-center justify-between gap-2 px-3 py-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                <MemberAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
+                <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
-                  <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                  <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
+                  <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
                 </div>
               </div>
-              <button
-                onClick={() => onPick(a)}
-                className="flex-shrink-0 rounded-lg py-1 px-3 text-xs font-bold focus:outline-none transition-colors"
-                style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: OUTFIT }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                TRANSFER
-              </button>
-            </div>
+              <NeuButton onClick={() => onPick(a)} style={{ padding: '7px 14px', fontSize: 10.5 }}>TRANSFER</NeuButton>
+            </NeuInset>
           ))}
         </div>
         <button
           onClick={onClose}
-          className="w-full mt-4 rounded-xl py-2 font-bold text-sm focus:outline-none transition-colors"
-          style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+          className="w-full mt-4 rounded-full py-2.5 font-bold text-sm focus:outline-none"
+          style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
         >
           CANCEL
         </button>
@@ -769,7 +757,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+        <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
       </div>
     );
   }
@@ -780,12 +768,12 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     return (
       <div>
         <DraftNoticeList notices={draftNotices} conferenceSlug={conference.slug} onDismiss={dismissDraftNotice} onTurnOn={handleTurnOnDefault} />
-        <p className="text-xs font-semibold tracking-widest mb-1" style={{ color: '#9A8A78', fontFamily: MONO }}>DELEGATIONS</p>
-        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        <p className="text-xs font-bold tracking-widest mb-1" style={{ color: NEU.deepGold, fontFamily: MONO }}>DELEGATIONS</p>
+        <p className="text-sm mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
           Groups brought by a faculty advisor or head delegate. Click a delegation to manage its members, payments and spots.
         </p>
         {societies.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No delegations yet.</p>
+          <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No delegations yet.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {societies.map(s => (
@@ -844,14 +832,16 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => { setExpandedId(null); setSelectedMemberId(null); setSearchQuery(''); }}
-          className="flex items-center gap-1 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none transition-colors flex-shrink-0"
-          style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          className="flex items-center gap-1 rounded-full py-2 px-4 text-xs font-bold focus:outline-none flex-shrink-0"
+          style={{ border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
         >
           <ChevronLeft size={14} /> BACK
         </button>
-        <h2 className="font-black text-xl truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{society.name}</h2>
+        {/* Multi-person glyph marks this as a delegation. */}
+        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users} size={34} />
+        <h2 className="font-black text-xl truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{society.name}</h2>
       </div>
 
       {/* Advisors (F18) */}
@@ -886,7 +876,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                   className="flex items-center gap-2 rounded-xl px-3 py-2 mb-1.5"
                   style={{ backgroundColor: paid ? '#1B3828' : '#FAF8F3', border: `1.5px solid ${paid ? '#1B3828' : '#DDD4C0'}` }}
                 >
-                  <MemberAvatar name={name} url={a.profiles?.avatar_url ?? null} />
+                  <PersonAvatar name={name} url={a.profiles?.avatar_url ?? null} />
                   <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ fontFamily: OUTFIT, color: paid ? '#EED98A' : '#1C1410' }}>
                     {name}
                   </span>
@@ -970,7 +960,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                   className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-1.5"
                   style={{ backgroundColor: '#1B3828', border: '1.5px solid #1B3828' }}
                 >
-                  <MemberAvatar name={name} url={m.profiles?.avatar_url ?? null} />
+                  <PersonAvatar name={name} url={m.profiles?.avatar_url ?? null} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: '#EED98A', fontFamily: OUTFIT }}>{name}</p>
                     {m.assigned_committee_id && (
@@ -1005,34 +995,30 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
       {/* Pledges */}
       {pledgingMembers.length > 0 && (
-        <div className="mb-6 rounded-2xl p-4" style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.25)' }}>
+        <NeuCard className="mb-6" style={{ padding: 16 }}>
           <SectionLabel>PLEDGES</SectionLabel>
-          <div className="flex flex-col gap-2 mt-2">
+          <div className="flex flex-col gap-2 mt-2.5">
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <MemberAvatar name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={26} />
-                  <p className="text-sm min-w-0 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  <PersonAvatar name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={26} />
+                  <p className="text-sm min-w-0 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                     <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
                   </p>
                 </div>
                 {pledgeSatisfied(m) ? (
-                  <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 11, fontWeight: 700, color: '#3D7A52', fontFamily: MONO }}>
+                  <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 11, fontWeight: 800, color: NEU.green, fontFamily: MONO }}>
                     <Check size={13} /> COVERED
                   </span>
                 ) : (
-                  <button
-                    onClick={() => handleMarkPledgeReceived(m, society.id)}
-                    className="flex-shrink-0 rounded-lg py-1 px-3 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: OUTFIT }}
-                  >
+                  <NeuButton onClick={() => handleMarkPledgeReceived(m, society.id)} gradient={NEU_GRADIENTS.green} style={{ padding: '7px 14px', fontSize: 10.5 }}>
                     MARK RECEIVED
-                  </button>
+                  </NeuButton>
                 )}
               </div>
             ))}
           </div>
-        </div>
+        </NeuCard>
       )}
 
       {/* Two-column body, delegate pool only */}
@@ -1040,36 +1026,28 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
         {/* LEFT */}
         <div>
           <SectionLabel>ADD DELEGATE</SectionLabel>
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2 mt-2 mb-2" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+          <NeuInset className="flex items-center gap-2 px-3.5 py-2.5 mt-2 mb-2" style={{ borderRadius: 999 }}>
             <input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search all applicants..."
               className="flex-1 text-sm outline-none"
-              style={{ backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT }}
+              style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT }}
             />
-          </div>
+          </NeuInset>
           {searchResults.length > 0 && (
             <div className="flex flex-col gap-1.5 mb-4">
               {searchResults.map(a => (
-                <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3', border: '1px solid #F0EDE6' }}>
+                <NeuInset key={a.id} small className="flex items-center justify-between gap-2 px-3 py-2">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <MemberAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
+                    <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
+                      <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
+                      <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleAddToDelegation(a, society)}
-                    className="flex-shrink-0 rounded-lg py-1 px-3 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: OUTFIT }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                  >
-                    ADD
-                  </button>
-                </div>
+                  <NeuButton onClick={() => handleAddToDelegation(a, society)} style={{ padding: '7px 16px', fontSize: 10.5 }}>ADD</NeuButton>
+                </NeuInset>
               ))}
             </div>
           )}

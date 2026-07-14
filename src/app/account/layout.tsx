@@ -3,16 +3,20 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { User, ScrollText, CalendarDays, Trophy, CalendarCheck, ArrowRight, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import SiteNav from '@/components/SiteNav';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
-const NAV_LINKS = [
-  { label: 'MY PROFILE', href: '/account/profile' },
-  { label: 'MUN CV', href: '/account/cv' },
-  { label: 'CONFERENCE CALENDAR', href: '/account/calendar' },
-  { label: 'GAVELLING POINTS', href: '/account/points' },
+type NavLink = { label: string; href: string; Icon: LucideIcon; highlight?: boolean };
+
+const NAV_LINKS: NavLink[] = [
+  { label: 'MY PROFILE', href: '/account/profile', Icon: User },
+  { label: 'MY CONFERENCES', href: '/my-conferences', Icon: CalendarCheck, highlight: true },
+  { label: 'MUN CV', href: '/account/cv', Icon: ScrollText },
+  { label: 'CONFERENCE CALENDAR', href: '/account/calendar', Icon: CalendarDays },
+  { label: 'GAVELLING POINTS', href: '/account/points', Icon: Trophy },
 ];
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
@@ -74,14 +78,15 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           >
             {NAV_LINKS.map((link) => {
               const active = pathname === link.href;
+              const accent = link.highlight ? '#B6871F' : '#1B3828';
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="flex-shrink-0 py-2 px-3 text-xs font-bold focus:outline-none"
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 py-2 px-3 text-xs font-bold focus:outline-none"
                   style={{
-                    color: active ? '#1B3828' : '#9A8A78',
-                    borderBottom: active ? '2px solid #1B3828' : '2px solid transparent',
+                    color: active ? accent : link.highlight ? '#B6871F' : '#9A8A78',
+                    borderBottom: active ? `2px solid ${accent}` : '2px solid transparent',
                     textDecoration: 'none',
                     letterSpacing: '0.05em',
                     fontFamily: "'Outfit', sans-serif",
@@ -89,6 +94,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                     transition: 'color 150ms ease',
                   }}
                 >
+                  <link.Icon size={13} strokeWidth={2.4} />
                   {link.label}
                 </Link>
               );
@@ -178,14 +184,49 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                   ACCOUNT
                 </p>
 
-                <nav className="flex flex-col gap-0.5">
+                <nav className="flex flex-col gap-1">
                   {NAV_LINKS.map((link) => {
                     const active = pathname === link.href;
+
+                    // MY CONFERENCES is a key destination — it gets a warmer,
+                    // always-on gold treatment so it stands out from the rest.
+                    if (link.highlight) {
+                      const activeBg = 'linear-gradient(135deg, rgba(238,217,138,0.34), rgba(182,135,31,0.16))';
+                      const idleBg = 'linear-gradient(135deg, rgba(238,217,138,0.20), rgba(182,135,31,0.08))';
+                      return (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className="group flex items-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm font-bold focus:outline-none"
+                          style={{
+                            border: '1px solid rgba(182,135,31,0.45)',
+                            background: active ? activeBg : idleBg,
+                            color: '#7A5A20',
+                            textDecoration: 'none',
+                            fontFamily: "'Outfit', sans-serif",
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55)',
+                            transition: 'background 150ms ease, box-shadow 150ms ease',
+                          }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = activeBg; }}
+                          onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = idleBg; }}
+                        >
+                          <span
+                            className="inline-flex items-center justify-center flex-shrink-0"
+                            style={{ width: 24, height: 24, borderRadius: 8, background: 'linear-gradient(150deg, #EED98A, #B6871F)', boxShadow: '0 2px 6px rgba(182,135,31,0.4)' }}
+                          >
+                            <link.Icon size={13} strokeWidth={2.6} style={{ color: '#FAF8F3' }} />
+                          </span>
+                          <span className="flex-1">{link.label}</span>
+                          <ArrowRight size={14} strokeWidth={2.6} style={{ color: '#B6871F' }} />
+                        </Link>
+                      );
+                    }
+
                     return (
                       <Link
                         key={link.href}
                         href={link.href}
-                        className="block w-full py-2 px-3 rounded-xl text-sm font-semibold focus:outline-none"
+                        className="flex items-center gap-2.5 w-full py-2 px-3 rounded-xl text-sm font-semibold focus:outline-none"
                         style={{
                           borderLeft: active ? '3px solid #1B3828' : '3px solid transparent',
                           backgroundColor: active ? 'rgba(27,56,40,0.08)' : 'transparent',
@@ -207,6 +248,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                           }
                         }}
                       >
+                        <link.Icon size={15} strokeWidth={2.2} style={{ color: active ? '#1B3828' : '#9A8A78', flexShrink: 0 }} />
                         {link.label}
                       </Link>
                     );

@@ -7,7 +7,6 @@ import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe } from 'lucide-react';
 import ProfileDropdown from '@/components/ProfileDropdown';
-import { BrandConferences } from '@/components/Brand';
 
 const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/' },
@@ -54,9 +53,9 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
 
-  // Conferences-area pages get the "GAVELLING CONFERENCES" brand (gavel mark +
-  // live text via <BrandConferences />) instead of the baked "SESSIONS APP"
-  // logo PNG. Sessions pages keep the existing PNG exactly.
+  // Conferences-area pages get the real "GAVELLING CONFERENCES" logo lockup
+  // (/Conferences.png, the same mark the footer uses) instead of the baked
+  // "SESSIONS APP" logo PNG. Sessions pages keep the existing PNG exactly.
   const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/my-conferences', '/invites'];
   const inConferencesArea =
     !logoOverride && CONFERENCES_PREFIXES.some(p => pathname?.startsWith(p));
@@ -148,7 +147,17 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
         {/* Logo */}
         <Link href="/" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
           {inConferencesArea ? (
-            <BrandConferences tone={overlay ? 'dark' : 'light'} size={36} shadow={overlay} />
+            <img
+              src="/Conferences.png"
+              alt="Gavelling Conferences"
+              style={{
+                height: 36,
+                width: 'auto',
+                objectFit: 'contain',
+                filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined,
+              }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
           ) : (
             <img
               src={logoSrc}
