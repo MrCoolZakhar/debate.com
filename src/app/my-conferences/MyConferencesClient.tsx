@@ -20,7 +20,7 @@ const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type TabKey = 'delegate' | 'chair' | 'advisor' | 'observer' | 'organizer';
+type TabKey = 'all' | 'delegate' | 'chair' | 'advisor' | 'organizer';
 
 interface TabEntry {
   conference: CardConference;
@@ -28,14 +28,14 @@ interface TabEntry {
 }
 
 interface LoadedData {
+  all: TabEntry[];
   delegate: TabEntry[];
   chair: TabEntry[];
   advisor: TabEntry[];
-  observer: TabEntry[];
   organizer: TabEntry[];
 }
 
-const EMPTY_DATA: LoadedData = { delegate: [], chair: [], advisor: [], observer: [], organizer: [] };
+const EMPTY_DATA: LoadedData = { all: [], delegate: [], chair: [], advisor: [], organizer: [] };
 
 interface ChairInvite {
   id: string;
@@ -54,17 +54,17 @@ interface OrganizerInvite {
 }
 
 const TABS: { key: TabKey; label: string }[] = [
+  { key: 'all', label: 'ALL' },
   { key: 'delegate', label: 'DELEGATE' },
   { key: 'chair', label: 'CHAIR' },
   { key: 'advisor', label: 'ADVISOR' },
-  { key: 'observer', label: 'OBSERVER' },
   { key: 'organizer', label: 'ORGANIZER' },
 ];
 
 const EXPLORE_CONFIG: Record<TabKey, { label: string; href: string }> = {
+  all:       { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
   delegate:  { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
   advisor:   { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
-  observer:  { label: 'EXPLORE CONFERENCES', href: '/conferences/explore' },
   chair:     { label: 'EXPLORE CHAIRING OPPORTUNITIES', href: '/conferences/roles' },
   organizer: { label: 'LIST YOUR CONFERENCE', href: '/conferences/new' },
 };
@@ -469,7 +469,7 @@ function OrganizerInvitesSection({ invites, onRespond }: { invites: OrganizerInv
 
 function CardGrid({ entries, tab, muted }: { entries: TabEntry[]; tab: TabKey; muted: boolean }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(272px, 1fr))' }}>
       {entries.map((e) => (
         <PersonalConferenceCard
           key={e.conference.id}
@@ -485,7 +485,7 @@ function CardGrid({ entries, tab, muted }: { entries: TabEntry[]; tab: TabKey; m
 
 // ── Inner (needs Suspense for useSearchParams) ──────────────────────────────
 
-function MyConferencesInner() {
+function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -500,20 +500,21 @@ function MyConferencesInner() {
   const [acceptedToast, setAcceptedToast] = useState(false);
 
   const tabParam = searchParams.get('tab');
-  const activeTab: TabKey = (['delegate', 'chair', 'advisor', 'observer', 'organizer'] as const).includes(tabParam as TabKey)
+  const activeTab: TabKey = (['all', 'delegate', 'chair', 'advisor', 'organizer'] as const).includes(tabParam as TabKey)
     ? (tabParam as TabKey)
-    : 'delegate';
+    : 'all';
 
   // ── Auth gate — mirrors /account's layout gate, but preserves query params
   // (?tab=...) on the return trip since this page isn't nested under /account.
+  // Skipped when embedded: the /account layout already gates auth there.
   useEffect(() => {
-    if (authLoading) return;
+    if (embedded || authLoading) return;
     if (!user) {
       const qs = searchParams.toString();
       const next = qs ? `${pathname}?${qs}` : pathname;
       router.replace(`/auth/signin?next=${encodeURIComponent(next)}`);
     }
-  }, [authLoading, user, router, pathname, searchParams]);
+  }, [embedded, authLoading, user, router, pathname, searchParams]);
 
   function setActiveTab(tab: TabKey) {
     const params = new URLSearchParams(searchParams.toString());
@@ -701,11 +702,13 @@ function MyConferencesInner() {
         advisorMap.set(conf.id, { conference: conf, tag: { key: 'faculty-advisor', label: 'Faculty Advisor', tone: ROLE_TONE.advisor } });
       }
     }
-    const observerMap = new Map<string, TabEntry>();
+    // Observers are folded into the Delegate list — they don't get their own
+    // tab. A conference the user already delegates at keeps its delegate tag;
+    // observer-only conferences join the delegate list with an Observer badge.
     for (const row of (observerRes.data ?? []) as { conferences: CardConference | CardConference[] | null }[]) {
       const conf = first(row.conferences);
-      if (conf && !observerMap.has(conf.id)) {
-        observerMap.set(conf.id, { conference: conf, tag: { key: 'observer', label: 'Observer', tone: ROLE_TONE.observer } });
+      if (conf && !delegateMap.has(conf.id)) {
+        delegateMap.set(conf.id, { conference: conf, tag: { key: 'observer', label: 'Observer', tone: ROLE_TONE.observer } });
       }
     }
 
@@ -721,11 +724,21 @@ function MyConferencesInner() {
       }
     }
 
+    // "All" — every conference the user is part of across roles, deduped by
+    // conference id. When a conference appears under several roles, the most
+    // significant role tag wins (organiser → chair → advisor → delegate).
+    const allMap = new Map<string, TabEntry>();
+    for (const map of [organizerMap, chairMap, advisorMap, delegateMap]) {
+      for (const [id, entry] of map) {
+        if (!allMap.has(id)) allMap.set(id, entry);
+      }
+    }
+
     setData({
+      all: Array.from(allMap.values()),
       delegate: Array.from(delegateMap.values()),
       chair: Array.from(chairMap.values()),
       advisor: Array.from(advisorMap.values()),
-      observer: Array.from(observerMap.values()),
       organizer: Array.from(organizerMap.values()),
     });
     setLoading(false);
@@ -768,7 +781,10 @@ function MyConferencesInner() {
 
   if (authLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
+      <div
+        className={`flex items-center justify-center ${embedded ? 'py-24' : 'min-h-screen'}`}
+        style={embedded ? undefined : { backgroundColor: NEU.base }}
+      >
         <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
       </div>
     );
@@ -780,15 +796,11 @@ function MyConferencesInner() {
   const organizerPublic = isOrganizerTab ? filtered.filter((e) => isPublicConf(e.conference)) : [];
   const organizerDrafts = isOrganizerTab ? filtered.filter((e) => !isPublicConf(e.conference)) : [];
 
-  return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
-      <div
-        className="pointer-events-none fixed inset-0 z-[1]"
-        style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }}
-      />
-      <SiteNav hideLanguage />
-
-      <div className="relative z-10 flex-1 px-6 py-10" style={{ maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
+  const body = (
+    <div
+      className={embedded ? 'w-full' : 'relative z-10 flex-1 px-6 py-10'}
+      style={embedded ? undefined : { maxWidth: '1000px', margin: '0 auto', width: '100%' }}
+    >
         <div className="flex items-start justify-between gap-4">
           <div>
             <Eyebrow className="mb-2">Every Role, One Place</Eyebrow>
@@ -866,7 +878,7 @@ function MyConferencesInner() {
         {activeTab === 'organizer' && <OrganizerInvitesSection invites={organizerInvites} onRespond={handleRespondOrganizerInvite} />}
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(272px, 1fr))' }}>
             <ConferenceCardSkeleton />
             <ConferenceCardSkeleton />
             <ConferenceCardSkeleton />
@@ -908,23 +920,38 @@ function MyConferencesInner() {
         ) : (
           <CardGrid entries={filtered} tab={activeTab} muted={timeframe === 'past'} />
         )}
-      </div>
+    </div>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
+      <div
+        className="pointer-events-none fixed inset-0 z-[1]"
+        style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }}
+      />
+      <SiteNav hideLanguage />
+      {body}
     </div>
   );
 }
 
 // ── Default export with Suspense ────────────────────────────────────────────
 
-export default function MyConferencesClient() {
+export default function MyConferencesClient({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
+        <div
+          className={`flex items-center justify-center ${embedded ? 'py-24' : 'min-h-screen'}`}
+          style={embedded ? undefined : { backgroundColor: NEU.base }}
+        >
           <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
         </div>
       }
     >
-      <MyConferencesInner />
+      <MyConferencesInner embedded={embedded} />
     </Suspense>
   );
 }

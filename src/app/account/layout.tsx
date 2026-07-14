@@ -13,11 +13,14 @@ type NavLink = { label: string; href: string; Icon: LucideIcon; highlight?: bool
 
 const NAV_LINKS: NavLink[] = [
   { label: 'MY PROFILE', href: '/account/profile', Icon: User },
-  { label: 'MY CONFERENCES', href: '/my-conferences', Icon: CalendarCheck, highlight: true },
   { label: 'MUN CV', href: '/account/cv', Icon: ScrollText },
   { label: 'CONFERENCE CALENDAR', href: '/account/calendar', Icon: CalendarDays },
   { label: 'GAVELLING POINTS', href: '/account/points', Icon: Trophy },
 ];
+
+// My Conferences is a headline destination — it lives in its own gold-accented
+// floating block below the nav list and sign-out, not as another nav row.
+const CONFERENCES_HREF = '/account/conferences';
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -99,16 +102,37 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                 </Link>
               );
             })}
+            {(() => {
+              const confActive = pathname.startsWith('/account/conferences');
+              return (
+                <Link
+                  href={CONFERENCES_HREF}
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 py-2 px-3 text-xs font-bold focus:outline-none"
+                  style={{
+                    color: '#B6871F',
+                    borderBottom: confActive ? '2px solid #B6871F' : '2px solid transparent',
+                    textDecoration: 'none',
+                    letterSpacing: '0.05em',
+                    fontFamily: "'Outfit', sans-serif",
+                    whiteSpace: 'nowrap',
+                    transition: 'color 150ms ease',
+                  }}
+                >
+                  <CalendarCheck size={13} strokeWidth={2.4} />
+                  MY CONFERENCES
+                </Link>
+              );
+            })()}
           </div>
 
           {/* Desktop: sidebar + content */}
           <div className="hidden md:flex gap-8 items-start">
             {/* Sidebar */}
             <div style={{ width: '220px', flexShrink: 0 }}>
+              <div className="sticky flex flex-col gap-3" style={{ top: '88px' }}>
               <div
-                className="rounded-[22px] p-5 sticky"
+                className="rounded-[22px] p-5"
                 style={{
-                  top: '88px',
                   background: 'linear-gradient(180deg, rgba(252,250,246,0.95) 0%, rgba(245,241,232,0.9) 100%)',
                   backdropFilter: 'blur(16px) saturate(1.5)',
                   WebkitBackdropFilter: 'blur(16px) saturate(1.5)',
@@ -273,6 +297,61 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                 >
                   SIGN OUT
                 </button>
+              </div>
+
+              {/* Floating "My Conferences" block — its own gold-accented card,
+                  set apart from the nav list and sign-out above it. */}
+              {(() => {
+                const confActive = pathname.startsWith('/account/conferences');
+                const activeBg = 'linear-gradient(135deg, rgba(238,217,138,0.42), rgba(182,135,31,0.20))';
+                const idleBg = 'linear-gradient(135deg, rgba(238,217,138,0.22), rgba(182,135,31,0.10))';
+                return (
+                  <Link
+                    href="/account/conferences"
+                    className="group flex items-center gap-2.5 focus:outline-none"
+                    style={{
+                      padding: '13px 14px',
+                      borderRadius: 18,
+                      border: '1px solid rgba(182,135,31,0.5)',
+                      background: confActive ? activeBg : idleBg,
+                      boxShadow: confActive
+                        ? '0 6px 18px rgba(182,135,31,0.26), inset 0 1px 0 rgba(255,255,255,0.6)'
+                        : '0 4px 14px rgba(182,135,31,0.16), inset 0 1px 0 rgba(255,255,255,0.55)',
+                      textDecoration: 'none',
+                      transition: 'background 160ms ease, box-shadow 160ms ease, transform 160ms ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
+                      if (!confActive) (e.currentTarget as HTMLElement).style.background = activeBg;
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                      if (!confActive) (e.currentTarget as HTMLElement).style.background = idleBg;
+                    }}
+                  >
+                    <span
+                      className="inline-flex items-center justify-center flex-shrink-0"
+                      style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #EED98A, #B6871F)', boxShadow: '0 3px 9px rgba(182,135,31,0.42)' }}
+                    >
+                      <CalendarCheck size={17} strokeWidth={2.5} style={{ color: '#FAF8F3' }} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '8px', letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase' }}>
+                        YOUR HUB
+                      </span>
+                      <span className="block" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '13.5px', color: '#7A5A20', letterSpacing: '0.01em' }}>
+                        My Conferences
+                      </span>
+                    </span>
+                    <ArrowRight
+                      size={15}
+                      strokeWidth={2.6}
+                      className="transition-transform group-hover:translate-x-0.5"
+                      style={{ color: '#B6871F', flexShrink: 0 }}
+                    />
+                  </Link>
+                );
+              })()}
               </div>
             </div>
 

@@ -127,7 +127,6 @@ function allocationToApp(a: AllocationRow): AcceptedApp {
 // yellow/gold = MEDIUM, red = HIGH. 'standard' = unrated (neutral). This
 // matches the setup editor's canonical mapping (ConferenceRosterPicker.tsx).
 type ImportanceTier = 'standard' | 'high' | 'medium' | 'low';
-const TIER_CYCLE: ImportanceTier[] = ['standard', 'low', 'medium', 'high'];
 // Urgency order for the drop popup: high > medium > low > standard
 const TIER_RANK: Record<ImportanceTier, number> = { high: 0, medium: 1, low: 2, standard: 3 };
 // `dashes` + `color` both encode the tier, exactly mirroring the committee-setup
@@ -511,58 +510,93 @@ function ReasonChip({ reason }: { reason: string }) {
 // copy mirrors the real scoring in scorePrefAndExp + scoreSlot exactly.
 function PointsInfo() {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLSpanElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const WIDTH = 300;
+
+  // The suggestions surface clips an in-flow absolute tooltip, so render it in a
+  // Portal at fixed viewport coords computed from the trigger, clamped to the
+  // viewport and flipped above when there is not enough room below.
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const vw = window.innerWidth;
+    let left = r.left + r.width / 2 - WIDTH / 2;
+    if (left + WIDTH > vw - 10) left = vw - 10 - WIDTH;
+    if (left < 10) left = 10;
+    const flipUp = r.bottom + 8 + 260 > window.innerHeight - 10 && r.top - 8 - 260 > 10;
+    setPos({ top: flipUp ? r.top - 8 : r.bottom + 8, left });
+  }, []);
+
+  const show = () => { if (closeTimer.current) clearTimeout(closeTimer.current); setOpen(true); };
+  const scheduleHide = () => { closeTimer.current = setTimeout(() => setOpen(false), 140); };
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const handler = () => place();
+    window.addEventListener('scroll', handler, true);
+    window.addEventListener('resize', handler);
+    return () => {
+      window.removeEventListener('scroll', handler, true);
+      window.removeEventListener('resize', handler);
+    };
+  }, [open, place]);
+
   const row = (head: string, body: string) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
       <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: NEU.forest }}>{head}</span>
       <span style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, lineHeight: 1.4 }}>{body}</span>
     </div>
   );
+
   return (
     <span
-      className="relative inline-flex"
-      style={{ lineHeight: 0 }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      ref={btnRef}
+      className="inline-flex items-center justify-center"
+      style={{
+        width: 18, height: 18, borderRadius: 999,
+        backgroundColor: NEU.surface, boxShadow: open ? NEU.outSmHover : NEU.outSm,
+        color: NEU.deepGold, cursor: 'help',
+        transition: `box-shadow 200ms cubic-bezier(0.22,1,0.36,1)`,
+      }}
+      tabIndex={0}
+      onMouseEnter={show}
+      onMouseLeave={scheduleHide}
+      onFocus={show}
+      onBlur={() => setOpen(false)}
+      aria-label="How suggestion scores are calculated"
     >
-      <span
-        className="inline-flex items-center justify-center"
-        style={{
-          width: 18, height: 18, borderRadius: 999,
-          backgroundColor: NEU.surface, boxShadow: open ? NEU.outSmHover : NEU.outSm,
-          color: NEU.deepGold, cursor: 'help',
-          transition: `box-shadow 200ms ${'cubic-bezier(0.22,1,0.36,1)'}`,
-        }}
-        tabIndex={0}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        aria-label="How suggestion scores are calculated"
-      >
-        <Info size={11} strokeWidth={2.6} />
-      </span>
-      {open && (
-        <span
-          role="tooltip"
-          className="absolute z-40"
-          style={{
-            top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
-            width: 300, padding: 14, borderRadius: 16,
-            backgroundColor: NEU.surface, boxShadow: `${NEU.out}, 0 14px 34px rgba(27,56,40,0.16)`,
-            display: 'flex', flexDirection: 'column', gap: 9,
-            textAlign: 'left', cursor: 'default',
-          }}
-        >
-          <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.deepGold }}>
-            HOW THE FIT SCORE IS BUILT
+      <Info size={11} strokeWidth={2.6} />
+      {open && pos && (
+        <Portal>
+          <span
+            role="tooltip"
+            onMouseEnter={show}
+            onMouseLeave={scheduleHide}
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+              width: WIDTH, padding: 14, borderRadius: 16,
+              backgroundColor: NEU.surface, boxShadow: `${NEU.out}, 0 14px 34px rgba(27,56,40,0.16)`,
+              display: 'flex', flexDirection: 'column', gap: 9,
+              textAlign: 'left', cursor: 'default',
+            }}
+          >
+            <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: NEU.deepGold }}>
+              HOW THE FIT SCORE IS BUILT
+            </span>
+            {row('Committee preference  +50 / +30 / +15', 'Their 1st choice committee scores 50, 2nd choice 30, 3rd choice 15.')}
+            {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
+            {row('Experience fit  up to +15', 'Full 15 when their level matches the committee difficulty, minus 6 for each level of gap, floored at 0.')}
+            {row('Committee fill  up to +12', 'Emptier committees score higher (12 x share still open), nudging suggestions to where seats are needed.')}
+            {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
+            <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4, paddingTop: 2, borderTop: `1px solid ${NEU.base}` }}>
+              Seat importance also orders the seats inside a committee overview, most urgent first.
+            </span>
           </span>
-          {row('Committee preference  +50 / +30 / +15', 'Their 1st choice committee scores 50, 2nd choice 30, 3rd choice 15.')}
-          {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
-          {row('Experience fit  up to +15', 'Full 15 when their level matches the committee difficulty, minus 6 for each level of gap, floored at 0.')}
-          {row('Committee fill  up to +12', 'Emptier committees score higher (12 x share still open), nudging suggestions to where seats are needed.')}
-          {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
-          <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4, paddingTop: 2, borderTop: `1px solid ${NEU.base}` }}>
-            Seat importance also sorts the open seats inside a committee, most urgent first.
-          </span>
-        </span>
+        </Portal>
       )}
     </span>
   );
@@ -1223,8 +1257,6 @@ interface CommitteeBoardPanelProps {
   onDropPanel: (appId: string) => void;
   onClickPanel: () => void;
   onRemoveAllocation: (a: AllocationRow) => void;
-  onCycleTier: (slot: SlotRow) => void;
-  onAssignSlot: (slot: SlotRow) => void;
   onOpenOverview: () => void;
 }
 
@@ -1249,11 +1281,12 @@ function OpenTierChip({ tier, count, onClick }: { tier: ImportanceTier; count: n
 
 // ── CountrySlotGrid ─────────────────────────────────────────────────────────────
 // The at-a-glance committee overview: every country slot as a circular flag,
-// ALWAYS alphabetical by country, never any country-name text. An allocated
-// country shows its delegate's name beside the flag; an unallocated one shows
-// just the (dimmed) flag. Filled vs open therefore reads instantly. Optional
-// callbacks make the modal copy interactive (click an empty flag to assign,
-// hover an allocated one to deallocate); the panel copy passes none (display).
+// never any country-name text. Ordered by IMPORTANCE tier first (high before
+// medium before low before standard), then alphabetically within a tier. An
+// allocated country shows its delegate's name beside the flag; an unallocated
+// one shows just the (dimmed) flag. Filled vs open therefore reads instantly.
+// Optional callbacks make the modal copy interactive (click an empty flag to
+// assign, hover an allocated one to deallocate); the panel copy passes none.
 function CountrySlotGrid({
   committee, flagSize = 28, maxHeight, onAssignSlot, onRemoveAllocation,
 }: {
@@ -1264,7 +1297,9 @@ function CountrySlotGrid({
   onRemoveAllocation?: (a: AllocationRow) => void;
 }) {
   const allocByCode = new Map(committee.conference_allocations.map(a => [a.country_code, a]));
-  const slots = [...committee.committee_country_slots].sort((a, b) => a.country_name.localeCompare(b.country_name));
+  const slots = [...committee.committee_country_slots].sort(
+    (a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name)
+  );
   if (slots.length === 0) {
     return <p className="text-xs py-1" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No country slots in this committee.</p>;
   }
@@ -1334,16 +1369,10 @@ function CountrySlotGrid({
 function CommitteeBoardPanel({
   committee, dragging, isDropTarget, selectable,
   onDragOverPanel, onDragLeavePanel, onDropPanel, onClickPanel,
-  onRemoveAllocation, onCycleTier, onAssignSlot, onOpenOverview,
+  onRemoveAllocation, onOpenOverview,
 }: CommitteeBoardPanelProps) {
-  const [showSlots, setShowSlots] = useState(false);
-
   const filled = committee.conference_allocations.length;
   const total = committee.total_slots;
-  const allocatedCodes = new Set(committee.conference_allocations.map(a => a.country_code));
-  const openSlots = committee.committee_country_slots.filter(s => !allocatedCodes.has(s.country_code));
-  const openTierCounts: Record<ImportanceTier, number> = { high: 0, medium: 0, low: 0, standard: 0 };
-  for (const s of openSlots) openTierCounts[s.importance] += 1;
   const primed = dragging || selectable;
   const labels = committeeLabels(committee);
 
@@ -1362,7 +1391,7 @@ function CommitteeBoardPanel({
         e.preventDefault();
         onDropPanel(e.dataTransfer.getData('text/plain'));
       }}
-      onClick={() => { if (selectable) onClickPanel(); }}
+      onClick={() => { if (selectable) onClickPanel(); else onOpenOverview(); }}
       className="p-4 flex flex-col"
       style={{
         backgroundColor: NEU.surface,
@@ -1374,16 +1403,17 @@ function CommitteeBoardPanel({
           : NEU.out,
         transform: isDropTarget ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 220ms cubic-bezier(0.22,1,0.36,1), transform 220ms cubic-bezier(0.22,1,0.36,1)`,
-        cursor: selectable ? 'pointer' : 'default',
+        cursor: 'pointer',
       }}
     >
       {/* Header: big free-floating logo + strong acronym + fill count. Clicking
-          it opens the committee overview (who is allocated where). */}
+          anywhere on the panel opens the committee overview (or assigns the
+          selected delegate when one is picked). */}
       <div
         role="button"
         tabIndex={0}
-        onClick={e => { e.stopPropagation(); onOpenOverview(); }}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenOverview(); } }}
+        onClick={e => { e.stopPropagation(); if (selectable) onClickPanel(); else onOpenOverview(); }}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (selectable) onClickPanel(); else onOpenOverview(); } }}
         className="flex items-center gap-3 focus:outline-none"
         style={{ cursor: 'pointer' }}
         title="Open committee overview"
@@ -1410,61 +1440,15 @@ function CommitteeBoardPanel({
         <NeuProgress value={filled} max={total} height={7} gradient={filled >= total ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest} />
       </div>
 
-      {/* Tier-driven open-seat summary (from committee_country_slots.importance) */}
-      <div className="flex flex-wrap items-center gap-1.5 mt-3">
-        {openSlots.length === 0 ? (
-          <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 800, color: NEU.green, fontFamily: MONO, letterSpacing: '0.06em' }}>
-            <Check size={12} strokeWidth={3} /> FULLY ALLOCATED
-          </span>
-        ) : (
-          (['high', 'medium', 'low', 'standard'] as ImportanceTier[]).map(t =>
-            openTierCounts[t] === 0 ? null : (
-              <OpenTierChip key={t} tier={t} count={openTierCounts[t]} onClick={onOpenOverview} />
-            )
-          )
-        )}
-      </div>
-
       {/* At-a-glance allocation overview: every country slot as a circular flag,
-          alphabetical, allocated flags carry their delegate's name (+ deallocate). */}
+          ordered by importance then alphabetical; allocated flags carry their
+          delegate's name (with deallocate). Click the panel to open the full
+          committee overview. */}
       <div className="mt-3.5">
         <p style={{ fontSize: 10, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 700, marginBottom: 7 }}>ALLOCATION OVERVIEW</p>
         <CountrySlotGrid committee={committee} flagSize={24} maxHeight={210} onRemoveAllocation={onRemoveAllocation} />
       </div>
 
-      {/* Open seats toggle */}
-      {openSlots.length > 0 && (
-        <button
-          onClick={e => { e.stopPropagation(); setShowSlots(v => !v); }}
-          className="mt-3 flex items-center gap-1 focus:outline-none self-start"
-          style={{ fontSize: 10, fontWeight: 800, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontVariantNumeric: 'tabular-nums' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
-        >
-          {showSlots ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          OPEN SEATS ({openSlots.length})
-        </button>
-      )}
-      {showSlots && openSlots.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1.5" style={{ maxHeight: 210, overflowY: 'auto' }}>
-          {[...openSlots]
-            .sort((a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name))
-            .map(slot => (
-              <NeuInset key={slot.id} small className="flex items-center gap-2 px-2.5 py-1.5">
-                <CountryFlag code={slot.country_code} w={18} h={13} radius={2} alt={slot.country_name} />
-                <span className="truncate flex-1" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</span>
-                <TierBadge tier={slot.importance} onCycle={() => onCycleTier(slot)} />
-                <button
-                  onClick={e => { e.stopPropagation(); onAssignSlot(slot); }}
-                  className="rounded-full py-1 px-2.5 focus:outline-none flex-shrink-0"
-                  style={{ fontSize: 10, fontWeight: 800, backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest, border: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer' }}
-                >
-                  ASSIGN
-                </button>
-              </NeuInset>
-            ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1577,7 +1561,10 @@ function CommitteeOverviewModal({
   const openTierCounts: Record<ImportanceTier, number> = { high: 0, medium: 0, low: 0, standard: 0 };
   for (const s of openSlots) openTierCounts[s.importance] += 1;
   // Always alphabetical by country/character name.
-  const slots = [...committee.committee_country_slots].sort((a, b) => a.country_name.localeCompare(b.country_name));
+  // Ordered by importance tier first (high first), then alphabetical within tier.
+  const slots = [...committee.committee_country_slots].sort(
+    (a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name)
+  );
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -2118,27 +2105,6 @@ export default function AssignmentPage() {
     if (mode === 'delegates' || mode === 'chairs') loadData({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
-
-  // ── Importance tier cycling (optimistic + fire-and-forget DB write) ────────
-  function handleCycleTier(slot: SlotRow) {
-    if (!session) return;
-    const next = TIER_CYCLE[(TIER_CYCLE.indexOf(slot.importance) + 1) % TIER_CYCLE.length];
-    setCommittees(prev => prev.map(c => ({
-      ...c,
-      committee_country_slots: c.committee_country_slots.map(s => s.id === slot.id ? { ...s, importance: next } : s),
-    })));
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('committee_country_slots').update({ importance: next }).eq('id', slot.id).then(({ error }) => {
-      if (error) {
-        // Roll back on failure
-        setCommittees(prev => prev.map(c => ({
-          ...c,
-          committee_country_slots: c.committee_country_slots.map(s => s.id === slot.id ? { ...s, importance: slot.importance } : s),
-        })));
-        showFlash('err', 'Could not save importance tier.');
-      }
-    });
-  }
 
   // ── Optimistic allocation commit ────────────────────────────────────────────
   // Applies exactly the change the user made, the allocation appears in the
@@ -2928,8 +2894,6 @@ export default function AssignmentPage() {
                       onDropPanel={appId => handleDropOnCommittee(c.id, appId)}
                       onClickPanel={() => { if (selectedAppId) openDropModal(c.id, selectedAppId); }}
                       onRemoveAllocation={handleRemoveAllocation}
-                      onCycleTier={handleCycleTier}
-                      onAssignSlot={slot => setAssignModal({ committeeId: c.id, preSlot: slot })}
                       onOpenOverview={() => setOverviewCommitteeId(c.id)}
                     />
                   ))}

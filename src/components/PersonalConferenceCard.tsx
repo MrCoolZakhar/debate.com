@@ -1,14 +1,21 @@
 'use client';
 
-// Shared "a conference I'm personally connected to" card, banner/logo strip,
-// countdown chip, date + location, role badge(s). Used by /account/calendar
-// (which merges every role a user holds into one card) and /my-conferences
-// (one card per tab, one role badge each).
+// Shared "a conference I'm personally connected to" card: acronym-forward name,
+// floating logo, countdown chip, date + location, role badge(s). Used by
+// /account/calendar (which merges every role a user holds into one card),
+// /my-conferences and /account/conferences (one card per tab, one role each).
+//
+// Redesigned to match the organiser-side neumorphism (see components/neu.tsx):
+// a soft extruded ivory NeuCard surface, denser padding so more cards fit per
+// view, the acronym as the primary label with the full name as a small line
+// above it.
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { CalendarClock, MapPin, ArrowUpRight, Sparkles } from 'lucide-react';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
-import { Pill, type PillTone, OUTFIT, MONO } from '@/app/account/accountUi';
+import { Pill, type PillTone, OUTFIT } from '@/app/account/accountUi';
+import { NEU, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -89,6 +96,28 @@ export function countdown(start: string, end: string): { label: string; tone: Pi
   return { label: months <= 1 ? 'In ~1 month' : `In ~${months} months`, tone: 'neutral' };
 }
 
+// ── Acronym-forward name ─────────────────────────────────────────────────────
+// Primary label = the acronym; if the acronym does not already carry the
+// 4-digit year, the trailing year parsed from the full name is appended
+// (so "Harvard World Model United Nations 2027" / "WorldMUN" → "WorldMUN 2027").
+// Secondary = the full spelled-out name, shown small above the primary. With no
+// acronym, the full name is the sole (primary) label.
+
+export function acronymForward(
+  fullName: string,
+  acronym: string | null | undefined,
+): { primary: string; secondary: string | null } {
+  const acr = (acronym ?? '').trim();
+  if (!acr) return { primary: fullName, secondary: null };
+  let primary = acr;
+  if (!/\b(?:19|20)\d{2}\b/.test(acr)) {
+    const years = fullName.match(/\b(?:19|20)\d{2}\b/g);
+    const year = years?.[years.length - 1];
+    if (year) primary = `${acr} ${year}`;
+  }
+  return { primary, secondary: fullName };
+}
+
 // ── Role tag chip ────────────────────────────────────────────────────────────
 
 export function RoleTagChip({ tag }: { tag: RoleTag }) {
@@ -114,6 +143,36 @@ export function RoleTagChip({ tag }: { tag: RoleTag }) {
   );
 }
 
+// ── Countdown chip (pressed-in neu well) ─────────────────────────────────────
+
+const CD_TEXT: Record<string, string> = {
+  gold: '#7A5A20', amber: '#8A5A2C', sky: '#365A72', neutral: '#6E5F4E',
+};
+
+function CountdownChip({ label, tone }: { label: string; tone: PillTone }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 flex-shrink-0"
+      style={{
+        padding: '4px 10px',
+        borderRadius: 999,
+        backgroundColor: NEU.base,
+        boxShadow: NEU.inSm,
+        color: CD_TEXT[tone] ?? CD_TEXT.neutral,
+        fontFamily: OUTFIT,
+        fontSize: '10.5px',
+        fontWeight: 800,
+        letterSpacing: '0.02em',
+        whiteSpace: 'nowrap',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      <CalendarClock size={11} strokeWidth={2.4} />
+      {label}
+    </span>
+  );
+}
+
 // ── Conference card ──────────────────────────────────────────────────────────
 
 export function PersonalConferenceCard({
@@ -128,171 +187,123 @@ export function PersonalConferenceCard({
   /** Past conferences render slightly muted. */
   muted?: boolean;
 }) {
+  const [hovered, setHovered] = useState(false);
   const conf = conference;
   const country = conf.country ? getCountryByName(conf.country) : null;
   const flag = country ? getFlagUrl(country.code) : null;
   const cd = countdown(conf.start_date, conf.end_date);
   const place = [conf.city, conf.country].filter(Boolean).join(', ');
+  const { primary, secondary } = acronymForward(conf.full_name, conf.acronym);
 
   return (
     <div
-      className="group relative rounded-[22px] overflow-hidden transition-all"
+      className="group relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        backgroundColor: 'rgba(250,248,243,0.86)',
-        backdropFilter: 'blur(14px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
-        border: '1.5px solid #D8CDB6',
-        boxShadow: '0 1px 3px rgba(27,56,40,0.07), 0 12px 32px rgba(27,56,40,0.08)',
+        backgroundColor: NEU.surface,
+        borderRadius: 20,
+        padding: '15px 16px 16px',
+        boxShadow: hovered ? NEU.outHover : NEU.out,
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
         opacity: muted ? 0.82 : 1,
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(27,56,40,0.34)';
-        e.currentTarget.style.boxShadow = '0 2px 6px rgba(27,56,40,0.08), 0 20px 48px rgba(27,56,40,0.11)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = '#D8CDB6';
-        e.currentTarget.style.boxShadow = '0 1px 3px rgba(27,56,40,0.07), 0 12px 32px rgba(27,56,40,0.08)';
-        e.currentTarget.style.transform = 'translateY(0)';
-      }}
     >
-      {/* Soft header strip, banner if present, otherwise a warm forest wash */}
-      <div
-        className="relative"
-        style={{
-          height: '76px',
-          background: conf.banner_url
-            ? undefined
-            : 'linear-gradient(135deg, #1B3828 0%, #24492F 60%, #2A5A3C 100%)',
-        }}
-      >
-        {conf.banner_url && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={conf.banner_url}
-            alt=""
-            className="absolute inset-0 w-full h-full"
-            style={{ objectFit: 'cover' }}
-          />
-        )}
-        {/* gentle fade into the card body so the free-floating logo reads cleanly */}
-        <div
-          className="absolute inset-x-0 bottom-0"
-          style={{ height: '46px', background: 'linear-gradient(to bottom, transparent, rgba(250,248,243,0.86))' }}
+      {/* Header: floating logo + acronym-forward name + countdown */}
+      <div className="flex items-start gap-3">
+        <LogoDisc
+          src={conf.logo_url}
+          alt={conf.acronym || conf.full_name}
+          size={46}
+          fallbackText={(conf.acronym || conf.full_name)?.slice(0, 3)}
         />
-        {/* Countdown chip floats top-right on the strip */}
-        {cd && (
-          <div className="absolute" style={{ top: '12px', right: '14px' }}>
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full"
-              style={{
-                padding: '4px 10px',
-                backgroundColor: 'rgba(250,248,243,0.92)',
-                border: '1px solid rgba(221,212,192,0.9)',
-                boxShadow: '0 2px 8px rgba(27,56,40,0.14)',
-                color: cd.tone === 'gold' ? '#7A5A20' : cd.tone === 'amber' ? '#8A5A2C' : cd.tone === 'sky' ? '#365A72' : '#6E5F4E',
-                fontFamily: OUTFIT,
-                fontSize: '11px',
-                fontWeight: 700,
-              }}
-            >
-              <CalendarClock size={12} strokeWidth={2.2} />
-              {cd.label}
-            </span>
-          </div>
-        )}
-      </div>
 
-      {/* Free-floating logo overlapping the strip */}
-      <div className="px-5" style={{ marginTop: '-30px' }}>
-        <div className="flex items-end gap-3.5">
-          <div className="relative flex-shrink-0">
-            <LogoDisc
-              src={conf.logo_url}
-              alt={conf.acronym}
-              size={58}
-              fallbackText={conf.acronym?.slice(0, 3)}
-              style={{ boxShadow: '0 8px 18px rgba(27,56,40,0.16)' }}
-            />
-          </div>
-          <div className="min-w-0 pb-1">
-            <p className="text-xs" style={{ color: '#B6871F', fontFamily: MONO, letterSpacing: '0.12em', margin: 0 }}>
-              {conf.acronym}
+        <div className="min-w-0 flex-1">
+          {secondary && (
+            <p
+              className="truncate"
+              style={{ color: NEU.muted, fontFamily: OUTFIT, fontSize: '10.5px', fontWeight: 600, letterSpacing: '0.01em', margin: 0, lineHeight: 1.35 }}
+            >
+              {secondary}
             </p>
-          </div>
+          )}
+          <Link
+            href={href}
+            className="inline-flex items-start gap-1 focus:outline-none"
+            style={{ textDecoration: 'none', maxWidth: '100%' }}
+          >
+            <span
+              className="font-black leading-tight transition-colors"
+              style={{ color: hovered ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: '17px', letterSpacing: '-0.01em' }}
+            >
+              {primary}
+              <ArrowUpRight
+                size={14}
+                strokeWidth={2.6}
+                className="inline ml-0.5 mb-0.5 transition-opacity"
+                style={{ color: NEU.deepGold, opacity: hovered ? 1 : 0 }}
+              />
+            </span>
+          </Link>
         </div>
+
+        {cd && <CountdownChip label={cd.label} tone={cd.tone} />}
       </div>
 
-      {/* Body */}
-      <div className="px-5 pt-3 pb-5">
-        <Link
-          href={href}
-          className="inline-flex items-start gap-1.5 focus:outline-none"
-          style={{ textDecoration: 'none' }}
-        >
-          <span
-            className="font-bold text-[15px] leading-snug transition-colors"
-            style={{ color: '#1C1410', fontFamily: OUTFIT }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#1B3828'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = '#1C1410'; }}
-          >
-            {conf.full_name}
-            <ArrowUpRight size={14} strokeWidth={2.4} className="inline ml-0.5 mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: '#B6871F' }} />
+      {/* Meta: date range + location */}
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 mt-3">
+        <span className="inline-flex items-center gap-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+          <CalendarClock size={12} strokeWidth={2.2} style={{ color: NEU.deepGold }} />
+          {formatDateRange(conf.start_date, conf.end_date)}
+        </span>
+        {place && (
+          <span className="inline-flex items-center gap-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 600 }}>
+            {flag ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={flag} alt="" style={{ width: '16px', height: '11px', objectFit: 'cover', borderRadius: '2px', boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }} />
+            ) : (
+              <MapPin size={12} strokeWidth={2.2} style={{ color: NEU.muted }} />
+            )}
+            {place}
           </span>
-        </Link>
-
-        {/* Meta row: date range + location */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2">
-          <span className="inline-flex items-center gap-1.5" style={{ color: '#9A8A78', fontFamily: MONO, fontSize: '11px' }}>
-            <CalendarClock size={12} strokeWidth={2} style={{ color: '#B6871F' }} />
-            {formatDateRange(conf.start_date, conf.end_date)}
-          </span>
-          {place && (
-            <span className="inline-flex items-center gap-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontSize: '12px' }}>
-              {flag ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={flag} alt="" style={{ width: '16px', height: '11px', objectFit: 'cover', borderRadius: '2px', boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }} />
-              ) : (
-                <MapPin size={12} strokeWidth={2} style={{ color: '#9A8A78' }} />
-              )}
-              {place}
-            </span>
-          )}
-        </div>
-
-        {/* Role tags, every role the user holds here */}
-        <div className="flex flex-wrap gap-1.5 mt-3.5">
-          {roles.map((tag) => (
-            <RoleTagChip key={tag.key} tag={tag} />
-          ))}
-        </div>
-
-        {/* Organiser affordance */}
-        {manageHref && (
-          <div className="mt-4 pt-3.5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-            <Link
-              href={manageHref}
-              className="inline-flex items-center gap-1.5 rounded-lg focus:outline-none transition-colors"
-              style={{
-                padding: '6px 12px',
-                backgroundColor: 'rgba(27,56,40,0.08)',
-                border: '1px solid rgba(27,56,40,0.2)',
-                color: '#1B3828',
-                fontFamily: OUTFIT,
-                fontSize: '12px',
-                fontWeight: 700,
-                textDecoration: 'none',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.14)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(27,56,40,0.08)'; }}
-            >
-              <Sparkles size={13} strokeWidth={2.2} />
-              Manage conference
-              <ArrowUpRight size={13} strokeWidth={2.4} />
-            </Link>
-          </div>
         )}
       </div>
+
+      {/* Role tags, every role the user holds here */}
+      <div className="flex flex-wrap gap-1.5 mt-3">
+        {roles.map((tag) => (
+          <RoleTagChip key={tag.key} tag={tag} />
+        ))}
+      </div>
+
+      {/* Organiser affordance */}
+      {manageHref && (
+        <div className="mt-3.5 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+          <Link
+            href={manageHref}
+            className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+            style={{
+              padding: '6px 13px',
+              borderRadius: 999,
+              backgroundColor: NEU.surface,
+              boxShadow: NEU.outSm,
+              color: NEU.forest,
+              fontFamily: OUTFIT,
+              fontSize: '12px',
+              fontWeight: 800,
+              letterSpacing: '0.03em',
+              textDecoration: 'none',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+          >
+            <Sparkles size={13} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
+            Manage conference
+            <ArrowUpRight size={13} strokeWidth={2.6} />
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -302,18 +313,19 @@ export function PersonalConferenceCard({
 export function ConferenceCardSkeleton() {
   return (
     <div
-      className="rounded-[22px] overflow-hidden"
-      style={{ backgroundColor: 'rgba(250,248,243,0.7)', border: '1.5px solid rgba(216,205,182,0.8)' }}
+      style={{ backgroundColor: NEU.surface, borderRadius: 20, padding: '15px 16px 16px', boxShadow: NEU.out }}
     >
-      <div style={{ height: '76px', background: 'linear-gradient(135deg, rgba(27,56,40,0.14), rgba(42,90,60,0.1))' }} />
-      <div className="px-5 pb-5" style={{ marginTop: '-30px' }}>
-        <div className="rounded-full shimmer" style={{ width: '58px', height: '58px' }} />
-        <div className="rounded-md shimmer mt-4" style={{ height: '15px', width: '70%' }} />
-        <div className="rounded-md shimmer mt-2.5" style={{ height: '11px', width: '45%' }} />
-        <div className="flex gap-2 mt-4">
-          <div className="rounded-md shimmer" style={{ height: '22px', width: '78px' }} />
-          <div className="rounded-md shimmer" style={{ height: '22px', width: '96px' }} />
+      <div className="flex items-start gap-3">
+        <div className="rounded-full shimmer flex-shrink-0" style={{ width: '46px', height: '46px' }} />
+        <div className="flex-1 min-w-0">
+          <div className="rounded-md shimmer" style={{ height: '10px', width: '60%' }} />
+          <div className="rounded-md shimmer mt-2" style={{ height: '16px', width: '45%' }} />
         </div>
+      </div>
+      <div className="rounded-md shimmer mt-4" style={{ height: '11px', width: '70%' }} />
+      <div className="flex gap-2 mt-3.5">
+        <div className="rounded-md shimmer" style={{ height: '20px', width: '78px' }} />
+        <div className="rounded-md shimmer" style={{ height: '20px', width: '96px' }} />
       </div>
       <style jsx>{`
         .shimmer {
