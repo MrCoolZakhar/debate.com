@@ -44,7 +44,7 @@ const AMBASSADORS = [
   { name: 'Farhan Arbab',            country: 'Bangladesh',     initials: 'FA', photo: '/ambassador-photos/farhan_ambassador.png', photoPosition: 'center 33%' },
   { name: 'Anushka Arora',           country: 'India',          initials: 'AA', photo: '/ambassador-photos/anushka_ambassador.png', photoPosition: 'center 38%' },
   { name: 'Ridhi Sareen',            country: 'India',          initials: 'RS', photo: '/ambassador-photos/ridhi_ambassador.png', photoPosition: 'center 22%' },
-  { name: 'Myesha',                  country: 'Thailand',       initials: 'MY', photo: '/ambassador-photos/myesha_ambassador.png', photoPosition: 'center 40%' },
+  { name: 'Myesha Soni',             country: 'Thailand',       initials: 'MS', photo: '/ambassador-photos/myesha_ambassador.png', photoPosition: 'center 40%' },
   { name: 'Reem Ghazal',             country: 'France',         initials: 'RG', photo: '/ambassador-photos/reem_ambassador.png', photoPosition: 'center 30%' },
   // Africa
   { name: 'Lealem Tayework',         country: 'Ethiopia',       initials: 'LT', photo: '/ambassador-photos/lealem_ambassador.png', photoPosition: 'center 22%' },
