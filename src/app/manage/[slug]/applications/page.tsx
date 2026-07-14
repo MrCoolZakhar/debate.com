@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  ArrowRight, BadgeCheck, Building2, Cake, CalendarDays, Check, CircleCheck, Clock,
+  ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
   MessageSquareText, RotateCcw, SlidersHorizontal, Trash2, Undo2, User, UserRoundCheck,
-  Users, X,
+  Users, Wallet, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -26,6 +26,7 @@ import {
 import {
   poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar,
 } from '@/app/manage/[slug]/assignment/delegationShared';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -122,15 +123,224 @@ function NotRegisteredChip() {
   );
 }
 
-function StatusIcon({ status, size = 10 }: { status: string; size?: number }) {
-  const Icon = status === 'submitted' ? Inbox
-    : status === 'accepted' ? Check
-    : status === 'assigned' ? BadgeCheck
-    : status === 'checked-in' ? UserRoundCheck
-    : status === 'rejected' ? X
-    : status === 'withdrawn' ? LogOut
-    : Clock;
-  return <Icon size={size} strokeWidth={2.5} />;
+type LucideGlyph = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+
+/** Large, solid-fill status pill, forest/ivory palette. White glyph + label on
+ *  a saturated two-stop gradient with a soft neumorphic seat. The four
+ *  checkmark-family states get deliberately distinct glyphs so they read apart
+ *  at this larger size (accept = plain tick, assigned = badge tick, checked-in =
+ *  person tick). */
+const STATUS_PILL: Record<string, { grad: [string, string]; label: string; icon: LucideGlyph }> = {
+  submitted:    { grad: ['#C79A52', '#B8844A'], label: 'Submitted',  icon: Inbox },
+  accepted:     { grad: ['#3D7A52', '#2A5A3C'], label: 'Accepted',   icon: Check },
+  assigned:     { grad: ['#C79A2E', '#9A7418'], label: 'Assigned',   icon: BadgeCheck },
+  'checked-in': { grad: ['#2F7A5C', '#1F6E52'], label: 'Checked In', icon: UserRoundCheck },
+  rejected:     { grad: ['#9A3030', '#7A1F1F'], label: 'Rejected',   icon: Ban },
+  withdrawn:    { grad: ['#8A7E6E', '#6B5F52'], label: 'Withdrawn',  icon: LogOut },
+};
+
+function StatusPill({ status, size = 'md' }: { status: string; size?: 'sm' | 'md' }) {
+  const t = STATUS_PILL[status] ?? { grad: ['#9A8A78', '#6B5F52'] as [string, string], label: status.replace('-', ' '), icon: Clock };
+  const Icon = t.icon;
+  const iconSize = size === 'sm' ? 12 : 14;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5"
+      style={{
+        padding: size === 'sm' ? '4px 10px' : '5px 12px',
+        borderRadius: 999,
+        background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[1]})`,
+        color: '#FFFFFF',
+        fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
+        boxShadow: `0 3px 8px ${t.grad[0]}55, ${NEU.outSm}`,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <Icon size={iconSize} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
+      {t.label.toUpperCase()}
+    </span>
+  );
+}
+
+/** Role pill, same upgraded fill treatment. Chairs get the gold accent (forest
+ *  glyph on a gold gradient for contrast); delegates read forest, staff slate. */
+function RolePill({ role, size = 'md' }: { role: string; size?: 'sm' | 'md' }) {
+  const spec = role === 'chair'
+    ? { grad: ['#EED98A', '#C79A2E'] as [string, string], ink: '#3A2A08' }
+    : role === 'delegate' || role === 'head-delegate'
+    ? { grad: ['#3D7A52', '#2A5A3C'] as [string, string], ink: '#FFFFFF' }
+    : { grad: ['#5A6E9E', '#45568A'] as [string, string], ink: '#FFFFFF' };
+  const iconSize = size === 'sm' ? 12 : 13;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5"
+      style={{
+        padding: size === 'sm' ? '4px 10px' : '5px 12px',
+        borderRadius: 999,
+        background: `linear-gradient(135deg, ${spec.grad[0]}, ${spec.grad[1]})`,
+        color: spec.ink,
+        fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
+        boxShadow: `0 3px 8px ${spec.grad[0]}55, ${NEU.outSm}`,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <RoleIcon role={role} size={iconSize} />
+      {roleLabel(role).toUpperCase()}
+    </span>
+  );
+}
+
+/** Payment pill. Paid/waived read as resolved (filled); unpaid stays a calm
+ *  pressed-in chip so "still owed" is visually the quiet default. */
+function PaymentPill({ status }: { status: string | null }) {
+  if (status === 'paid') {
+    return (
+      <span className="inline-flex items-center gap-1.5" style={{ padding: '5px 12px', borderRadius: 999, background: 'linear-gradient(135deg, #3D7A52, #2A5A3C)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', boxShadow: '0 3px 8px #3D7A5255, ' + NEU.outSm, whiteSpace: 'nowrap' }}>
+        <CircleCheck size={14} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
+        PAID
+      </span>
+    );
+  }
+  if (status === 'waived') {
+    return (
+      <span className="inline-flex items-center gap-1.5" style={{ padding: '5px 12px', borderRadius: 999, background: 'linear-gradient(135deg, #C79A52, #A8763C)', color: '#FFFFFF', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', boxShadow: '0 3px 8px #C79A5255, ' + NEU.outSm, whiteSpace: 'nowrap' }}>
+        <HandCoins size={14} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
+        WAIVED
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5" style={{ padding: '5px 12px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, color: '#9A6B2F', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+      <Clock size={13} strokeWidth={2.6} style={{ color: '#9A6B2F' }} />
+      UNPAID
+    </span>
+  );
+}
+
+/** Experience level rendered exactly like the delegate profile (LevelInsignia
+ *  on a tinted disc + capitalised tier), followed by the count of conferences
+ *  on their MUN CV in parentheses, e.g. "Expert (9)". */
+function LevelChip({ level, count }: { level: string; count?: number }) {
+  const key = (level ?? '').toLowerCase();
+  const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
+  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unranked';
+  return (
+    <span
+      className="inline-flex items-center"
+      title={count !== undefined ? `${count} conference${count === 1 ? '' : 's'} on their MUN CV` : undefined}
+      style={{ gap: 6, padding: '4px 12px 4px 5px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+    >
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{ width: 22, height: 22, borderRadius: 9999, background: `linear-gradient(150deg, ${accent}26, ${accent}14)`, border: `1px solid ${accent}55` }}
+      >
+        <LevelInsignia level={key} size={15} />
+      </span>
+      <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums' }}>
+        {label}{count !== undefined ? ` (${count})` : ''}
+      </span>
+    </span>
+  );
+}
+
+/** Unified payment control (F: merge mark-paid vs waive). One button opens a
+ *  small menu exposing the two underlying actions (Mark as paid → payment_status
+ *  'paid', Waive fee → 'waived') plus the matching undo, so both states are still
+ *  reachable and the Paid/Unpaid/Waived filter keeps working, only the affordance
+ *  is unified. Self-contained open/click-outside state. */
+function PaymentMenu({
+  app, disabled, onMarkPaid, onWaive, onMarkUnpaid, onUndoWaive, align = 'left',
+}: {
+  app: Application;
+  disabled?: boolean;
+  onMarkPaid: () => void;
+  onWaive: () => void;
+  onMarkUnpaid: () => void;
+  onUndoWaive: () => void;
+  align?: 'left' | 'right';
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const paid = app.payment_status === 'paid';
+  const waived = app.payment_status === 'waived';
+  const label = paid ? 'Paid' : waived ? 'Waived' : 'Payment';
+
+  const item = (icon: LucideGlyph, text: string, onClick: () => void, tone: 'ink' | 'danger' = 'ink') => {
+    const Icon = icon;
+    return (
+      <button
+        onClick={() => { setOpen(false); onClick(); }}
+        className="inline-flex items-center gap-2 w-full focus:outline-none"
+        style={{ padding: '9px 12px', borderRadius: 10, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: tone === 'danger' ? '#8B2020' : NEU.ink }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+      >
+        <Icon size={14} strokeWidth={2.4} style={{ color: tone === 'danger' ? '#8B2020' : NEU.deepGold }} />
+        {text}
+      </button>
+    );
+  };
+
+  return (
+    <div className="relative" ref={wrapRef} style={{ display: 'inline-block' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        disabled={disabled}
+        className="inline-flex items-center gap-1.5 focus:outline-none"
+        style={{
+          padding: '7px 13px', borderRadius: 999,
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+          color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none',
+          cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        <Wallet size={13} strokeWidth={2.5} style={{ color: NEU.deepGold }} />
+        {label.toUpperCase()}
+        <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
+      </button>
+      {open && (
+        <div
+          className="absolute z-50"
+          style={{ top: 'calc(100% + 6px)', ...(align === 'right' ? { right: 0 } : { left: 0 }), minWidth: 172, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+        >
+          <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+          {!paid && item(CircleCheck, 'Mark as paid', onMarkPaid)}
+          {paid && item(RotateCcw, 'Mark as unpaid', onMarkUnpaid, 'danger')}
+          {!paid && !waived && item(HandCoins, 'Waive fee', onWaive)}
+          {waived && item(RotateCcw, 'Remove waiver', onUndoWaive, 'danger')}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Neumorphic select checkbox, used per-row and for select-all. Pressed-in
+ *  when unchecked, forest-filled with a white tick when checked. */
+function SelectBox({ checked, indeterminate, onClick, title }: { checked: boolean; indeterminate?: boolean; onClick: () => void; title?: string }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={title}
+      aria-pressed={checked}
+      className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+      style={{
+        width: 20, height: 20, borderRadius: 7,
+        background: checked || indeterminate ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.base,
+        boxShadow: checked || indeterminate ? `0 2px 5px ${NEU_GRADIENTS.forest[0]}55` : NEU.inSm,
+        border: 'none', cursor: 'pointer', transition: `box-shadow 160ms ${EASE_LOCAL}`,
+      }}
+    >
+      {checked && <Check size={13} strokeWidth={3.5} style={{ color: '#FFFFFF' }} />}
+      {!checked && indeterminate && <span style={{ width: 9, height: 2.5, borderRadius: 2, background: '#FFFFFF' }} />}
+    </button>
+  );
 }
 
 /** Full committee label, "Full Name - ACRONYM" when an abbreviation is set and
@@ -142,21 +352,6 @@ function committeeFull(c: { name: string; abbreviation: string | null } | null |
     return `${c.name} - ${c.abbreviation}`;
   }
   return c.name;
-}
-
-/** Forest/ivory tone triplet for each status pill. checked-in gets its own
- *  distinct teal so a filled committee reads apart from a plain assignment. */
-const STATUS_TONES: Record<string, { bg: string; color: string; border: string }> = {
-  submitted:    { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: 'rgba(184,132,74,0.42)' },
-  accepted:     { bg: 'rgba(61,122,82,0.17)',  color: '#2A5A3C', border: 'rgba(61,122,82,0.45)' },
-  assigned:     { bg: 'rgba(238,217,138,0.35)', color: '#7A5A10', border: 'rgba(182,135,31,0.45)' },
-  'checked-in': { bg: 'rgba(31,110,82,0.16)',  color: '#1F6E52', border: 'rgba(31,110,82,0.45)' },
-  rejected:     { bg: 'rgba(139,32,32,0.12)',  color: '#8B2020', border: 'rgba(139,32,32,0.35)' },
-  withdrawn:    { bg: 'rgba(154,138,120,0.14)', color: '#6B5F52', border: 'rgba(154,138,120,0.38)' },
-};
-
-function statusTone(status: string) {
-  return STATUS_TONES[status] ?? { bg: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: 'rgba(154,138,120,0.35)' };
 }
 
 /** Short relative-ish timestamp for the "Checked in …" line. */
@@ -372,7 +567,9 @@ function FilterPanel({
         <div
           className="absolute z-40"
           style={{
-            top: 'calc(100% + 10px)', left: 0, width: 340,
+            top: 'calc(100% + 10px)', right: 0, left: 'auto',
+            width: 'min(340px, calc(100vw - 40px))',
+            maxHeight: 'calc(100vh - 150px)', overflowY: 'auto',
             backgroundColor: NEU.surface, borderRadius: 20, boxShadow: NEU.out,
             padding: 18,
             animation: `neuFadeIn 200ms ${EASE_LOCAL}`,
@@ -457,6 +654,9 @@ export default function ApplicationsPage() {
   const [actionError, setActionError] = useState('');
   // App ids with a write in flight, double-click guard for row actions.
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  // Multi-select for bulk actions. Ids are pruned to what's visible whenever
+  // the filtered list changes, so a hidden row is never silently acted on.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
   // Stale-response guard for background refetches.
@@ -1070,6 +1270,31 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(app.id, false));
   }
 
+  // ── Multi-select + bulk actions ───────────────────────────────────────────
+  function toggleSelected(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() { setSelectedIds(new Set()); }
+
+  // Bulk actions loop the single-row optimistic handlers, so every row keeps
+  // its own optimistic patch + rollback + busy guard. We confirm once up front
+  // (count spelled out) then fan out over the eligible rows only.
+  async function runBulk(
+    apps: Application[],
+    opts: { title: string; body: string; confirmLabel: string; danger?: boolean },
+    run: (app: Application) => void,
+  ) {
+    if (apps.length === 0) return;
+    const { confirmed } = await confirm(opts);
+    if (!confirmed) return;
+    apps.forEach(run);
+    clearSelection();
+  }
+
   function handleExportCSV() {
     const headers = ['Name', 'Email', 'Age', 'Nationality', 'Role', 'Status', 'Payment', 'Experience', 'Society', 'Head Delegate', 'Submitted', 'Checked In', 'Assigned Committee', 'Assigned Country'];
     const rows = applications.map(a => [
@@ -1116,7 +1341,11 @@ export default function ApplicationsPage() {
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
     if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
     return true;
-  });
+  })
+    // Default order = latest applications first. The DB fetch already orders by
+    // submitted_at desc; this keeps that guarantee after any optimistic in-place
+    // patching so the visible default always matches "newest first".
+    .sort((a, b) => (b.submitted_at ?? '').localeCompare(a.submitted_at ?? ''));
 
   const activeFilterCount =
     (filters.status.size > 0 ? 1 : 0) +
@@ -1124,6 +1353,27 @@ export default function ApplicationsPage() {
     (filters.payment.size > 0 ? 1 : 0) +
     (filters.aid.size > 0 ? 1 : 0) +
     (filters.dateFrom || filters.dateTo ? 1 : 0);
+
+  // ── Selection-derived values for the bulk-action bar ──────────────────────
+  // Act only on rows that are both selected AND currently visible, so a filter
+  // change can never cause a hidden row to be swept up in a bulk action.
+  const selectedApps = filtered.filter(a => selectedIds.has(a.id));
+  const allVisibleSelected = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
+  const payEligible = (a: Application) =>
+    (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
+    && a.payment_status !== 'paid' && a.payment_status !== 'waived';
+  const bulkAcceptable = selectedApps.filter(a => a.status === 'submitted');
+  const bulkRejectable = selectedApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
+  const bulkCheckInable = selectedApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
+  const bulkPayable = selectedApps.filter(payEligible);
+  // Suggested action from the selection composition. Starts pulsing the moment a
+  // selection is made, nudging the organiser toward the obvious next step.
+  const suggestion: 'accept' | 'pay' | 'checkin' | null =
+    selectedApps.length === 0 ? null
+    : selectedApps.every(a => a.status === 'submitted') ? 'accept'
+    : selectedApps.every(a => (a.status === 'accepted' || a.status === 'assigned') && payEligible(a)) ? 'pay'
+    : selectedApps.every(a => a.status === 'accepted' || a.status === 'assigned') ? 'checkin'
+    : null;
 
   const stats = {
     total: applications.length,
@@ -1216,28 +1466,40 @@ export default function ApplicationsPage() {
         </NeuCard>
       )}
 
+      {/* Select-all bar */}
+      {!loading && filtered.length > 0 && (
+        <div className="flex items-center gap-2.5 mb-3 px-1">
+          <SelectBox
+            checked={allVisibleSelected}
+            indeterminate={!allVisibleSelected && selectedApps.length > 0}
+            title={allVisibleSelected ? 'Deselect all' : 'Select all'}
+            onClick={() => setSelectedIds(prev => {
+              const next = new Set(prev);
+              if (allVisibleSelected) filtered.forEach(a => next.delete(a.id));
+              else filtered.forEach(a => next.add(a.id));
+              return next;
+            })}
+          />
+          <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+            {selectedApps.length > 0 ? `${selectedApps.length} selected` : `Select all (${filtered.length})`}
+          </span>
+        </div>
+      )}
+
       {/* Application list */}
       {!loading && filtered.length > 0 && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" style={{ paddingBottom: selectedApps.length > 0 ? 96 : 0 }}>
           {filtered.map(app => {
             const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
             const email = app.profiles?.email ?? app.invited_email ?? '';
             const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
             const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
 
-            const roleTone = app.role === 'delegate' || app.role === 'head-delegate'
-              ? { bg: 'rgba(42,90,60,0.14)',   color: '#2A5A3C', border: 'rgba(42,90,60,0.38)' }
-              : app.role === 'chair'
-              ? { bg: 'rgba(182,135,31,0.16)', color: '#8A6614', border: 'rgba(182,135,31,0.42)' }
-              : { bg: 'rgba(90,110,160,0.13)', color: '#4A5A85', border: 'rgba(90,110,160,0.35)' };
-
-            const sc = statusTone(app.status);
-            const paid = app.payment_status === 'paid';
-            const waived = app.payment_status === 'waived';
-            const expLabel = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
+            const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? null;
             const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
             const age = ageAt(app.profiles?.date_of_birth);
             const nationality = app.profiles?.nationality ?? null;
+            const selected = selectedIds.has(app.id);
 
             const pledgeLine = app.pledge_type === 'delegation'
               ? `Pledged ${app.spots_pledged ?? 0} delegation spots`
@@ -1246,27 +1508,34 @@ export default function ApplicationsPage() {
             const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
             const hasAllocation = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in');
             const canCheckIn = app.status === 'accepted' || app.status === 'assigned';
+            const isSubmitted = app.status === 'submitted';
+            const showPayControl = app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in';
 
             const factStyle: React.CSSProperties = {
-              fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.muted,
+              fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.muted,
               fontVariantNumeric: 'tabular-nums',
             };
             const chip = (bg: string, color: string, border: string): React.CSSProperties => ({
-              fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.08em',
+              fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.08em',
               padding: '3px 9px', borderRadius: 999, backgroundColor: bg, color, border: `1px solid ${border}`,
               whiteSpace: 'nowrap',
             });
 
             return (
-              <NeuCard key={app.id} hover style={{ padding: 0, overflow: 'hidden' }}>
+              <NeuCard
+                key={app.id}
+                hover
+                style={{ padding: 0, overflow: 'hidden', position: 'relative', outline: selected ? `2px solid ${NEU.forest}` : 'none', outlineOffset: -2 }}
+              >
                 <div className="flex flex-col lg:flex-row lg:items-stretch">
 
-                  {/* LEFT · identity + facts */}
-                  <div className="flex items-start gap-3.5 p-4 lg:p-5" style={{ flex: '1.1 1 300px', minWidth: 0 }}>
-                    <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={50} />
+                  {/* LEFT · select + identity + facts */}
+                  <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1.1 1 320px', minWidth: 0 }}>
+                    <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
+                    <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={52} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: NEU.ink, maxWidth: '100%' }}>{name}</p>
+                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em' }}>{name}</p>
                         {!app.user_id && <NotRegisteredChip />}
                         {app.is_head_delegate && (
                           <span className="inline-flex items-center gap-1" style={chip('rgba(27,56,40,0.1)', NEU.forest, 'rgba(27,56,40,0.2)')}>
@@ -1275,108 +1544,89 @@ export default function ApplicationsPage() {
                           </span>
                         )}
                       </div>
-                      {email && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, marginTop: 1 }}>{email}</p>}
+                      {email && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
 
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                      <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 mt-2.5">
                         {age !== null && (
-                          <span className="inline-flex items-center gap-1" style={factStyle}>
-                            <Cake size={12} strokeWidth={2.2} style={{ color: NEU.deepGold }} />
+                          <span className="inline-flex items-center gap-1.5" style={factStyle}>
+                            <Cake size={13} strokeWidth={2.2} style={{ color: NEU.deepGold }} />
                             {age} yrs old
                           </span>
                         )}
                         {nationality && (
-                          <span className="inline-flex items-center gap-1" style={factStyle} title={nationality}>
-                            <CountryFlag name={nationality} size={13} />
-                            <span className="truncate" style={{ maxWidth: 120 }}>{nationality}</span>
-                          </span>
-                        )}
-                        {app.submitted_at && (
-                          <span className="inline-flex items-center gap-1" style={factStyle}>
-                            <CalendarDays size={12} strokeWidth={2.2} style={{ color: NEU.muted }} />
-                            {formatDate(app.submitted_at)}
+                          <span className="inline-flex items-center gap-1.5" style={factStyle} title={nationality}>
+                            <CountryFlag name={nationality} size={15} />
+                            <span className="truncate" style={{ maxWidth: 140 }}>{nationality}</span>
                           </span>
                         )}
                         {app.societies?.name && (
-                          <span className="inline-flex items-center gap-1" style={factStyle} title={app.societies.name}>
-                            <Building2 size={12} strokeWidth={2.2} style={{ color: NEU.muted }} />
-                            <span className="truncate" style={{ maxWidth: 150 }}>{app.societies.name}</span>
+                          <span className="inline-flex items-center gap-1.5" style={factStyle} title={app.societies.name}>
+                            <Building2 size={13} strokeWidth={2.2} style={{ color: NEU.muted }} />
+                            <span className="truncate" style={{ maxWidth: 160 }}>{app.societies.name}</span>
                           </span>
                         )}
                       </div>
 
-                      {(expLabel || pledgeLine) && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {expLabel && (
-                            <span
-                              className="inline-flex items-center gap-1"
-                              title={confCount !== undefined ? `${confCount} conference${confCount === 1 ? '' : 's'} on their MUN CV` : undefined}
-                              style={{ ...chip('rgba(238,217,138,0.28)', '#7A5A10', 'rgba(182,135,31,0.35)'), textTransform: 'capitalize', fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              <GraduationCap size={10} strokeWidth={2.5} />
-                              {expLabel}{confCount !== undefined ? ` · ${confCount}` : ''}
-                            </span>
-                          )}
-                          {pledgeLine && (
-                            <span className="inline-flex items-center gap-1" style={{ ...chip('rgba(27,56,40,0.06)', NEU.forest, 'rgba(27,56,40,0.14)'), fontVariantNumeric: 'tabular-nums' }}>
-                              <HandCoins size={10} strokeWidth={2.5} />
-                              {pledgeLine}{app.pledge_confirmed_at ? ' · received' : ''}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-2 mt-2.5 items-center">
+                        {expLabel && <LevelChip level={expLabel} count={confCount} />}
+                        {pledgeLine && (
+                          <span className="inline-flex items-center gap-1.5" style={{ ...chip('rgba(27,56,40,0.06)', NEU.forest, 'rgba(27,56,40,0.14)'), fontSize: 10.5, fontVariantNumeric: 'tabular-nums' }}>
+                            <HandCoins size={11} strokeWidth={2.5} />
+                            {pledgeLine}{app.pledge_confirmed_at ? ' · received' : ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* MIDDLE · role + allocation / preferences */}
                   <div
-                    className="p-4 lg:p-5 flex flex-col justify-center gap-2.5 border-t lg:border-t-0 lg:border-l"
+                    className="p-4 lg:p-5 flex flex-col justify-center gap-3 border-t lg:border-t-0 lg:border-l"
                     style={{ flex: '1 1 260px', minWidth: 0, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
-                    <span className="inline-flex items-center gap-1 self-start" style={chip(roleTone.bg, roleTone.color, roleTone.border)}>
-                      <RoleIcon role={app.role} />
-                      {roleLabel(app.role).toUpperCase()}
-                    </span>
+                    <div className="self-start"><RolePill role={app.role} /></div>
+
                     {hasAllocation ? (
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <LogoDisc src={app.assigned_committee!.logo_url} size={32} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
+                      <div className="flex items-center gap-3 min-w-0">
+                        <LogoDisc src={app.assigned_committee!.logo_url} size={52} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
                         <div className="min-w-0">
-                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>
+                          <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: NEU.ink }}>
                             {committeeFull(app.assigned_committee)}
                           </p>
                           {app.assigned_country_name && (
-                            <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted }}>
-                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={14} />
+                            <span className="inline-flex items-center gap-2 mt-1" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink }}>
+                              <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={22} />
                               {app.assigned_country_name}
                             </span>
                           )}
                         </div>
                       </div>
                     ) : isDelegate && prefs.length > 0 ? (
-                      <div className="flex flex-col gap-1">
-                        <p style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>Preferences</p>
+                      <div className="flex flex-col gap-1.5">
+                        <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>Preferences</p>
                         <div className="flex flex-wrap gap-1.5">
                           {prefs.slice(0, 3).map(p => (
                             <span
                               key={p.preference_order}
                               className="inline-flex items-center gap-1.5"
                               title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}
-                              style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '3px 9px', fontVariantNumeric: 'tabular-nums' }}
+                              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
                             >
                               <span style={{ color: NEU.muted }}>{p.preference_order}.</span>
                               {committeeAbbr(p.conference_committees)}
-                              <CountryFlag name={p.country_name} code={p.country_code} size={13} />
+                              <CountryFlag name={p.country_name} code={p.country_code} size={15} />
                             </span>
                           ))}
                         </div>
                       </div>
                     ) : (
-                      <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontStyle: 'italic', color: NEU.muted }}>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.muted }}>
                         {isDelegate ? 'Not yet assigned' : '—'}
                       </span>
                     )}
 
                     {app.status === 'rejected' && app.organizer_note && (
-                      <span className="truncate" title={app.organizer_note} style={{ fontFamily: OUTFIT, fontSize: 11, fontStyle: 'italic', color: NEU.muted }}>
+                      <span className="truncate" title={app.organizer_note} style={{ fontFamily: OUTFIT, fontSize: 12, fontStyle: 'italic', color: NEU.muted }}>
                         &ldquo;{app.organizer_note}&rdquo;
                       </span>
                     )}
@@ -1385,13 +1635,10 @@ export default function ApplicationsPage() {
                   {/* RIGHT · status/payment + actions */}
                   <div
                     className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l"
-                    style={{ flex: '0 0 auto', borderColor: 'rgba(221,212,192,0.6)' }}
+                    style={{ flex: '0 0 auto', minWidth: 200, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
                     <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
-                      <span className="inline-flex items-center gap-1" style={chip(sc.bg, sc.color, sc.border)}>
-                        <StatusIcon status={app.status} />
-                        {app.status.replace('-', ' ').toUpperCase()}
-                      </span>
+                      <StatusPill status={app.status} />
                       {app.resubmitted_at && (
                         <span
                           className="inline-flex items-center gap-1"
@@ -1420,39 +1667,58 @@ export default function ApplicationsPage() {
                           AID DENIED
                         </span>
                       )}
-                      {waived ? (
-                        <span className="inline-flex items-center gap-1" style={chip('rgba(184,132,74,0.16)', '#9A6B2F', 'rgba(184,132,74,0.42)')}>
-                          <HandCoins size={10} strokeWidth={2.5} />
-                          WAIVED
-                        </span>
-                      ) : paid ? (
-                        <span className="inline-flex items-center gap-1" style={chip('rgba(61,122,82,0.17)', '#2A5A3C', 'rgba(61,122,82,0.45)')}>
-                          <CircleCheck size={10} strokeWidth={2.5} />
-                          PAID
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1" style={chip('rgba(184,132,74,0.12)', '#9A6B2F', 'rgba(184,132,74,0.3)')}>
-                          <Clock size={10} strokeWidth={2.5} />
-                          UNPAID
-                        </span>
-                      )}
+                      <PaymentPill status={app.payment_status} />
                     </div>
 
                     {app.status === 'checked-in' && app.checked_in_at && (
-                      <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: '#1F6E52', fontVariantNumeric: 'tabular-nums' }}>
-                        <UserRoundCheck size={11} strokeWidth={2.5} />
+                      <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#1F6E52', fontVariantNumeric: 'tabular-nums' }}>
+                        <UserRoundCheck size={12} strokeWidth={2.5} />
                         Checked in {formatDateTime(app.checked_in_at)}
                       </span>
                     )}
 
-                    <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
-                      {canCheckIn && (
+                    {/* Inline accept / reject for submitted applicants */}
+                    {isSubmitted && (
+                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
                         <button
-                          onClick={() => handleCheckIn(app)}
+                          onClick={() => handleAccept(app.id)}
                           disabled={rowBusy}
                           className="inline-flex items-center gap-1.5 focus:outline-none"
                           style={{
                             padding: '7px 14px', borderRadius: 999,
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                            color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                            boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}44, ${NEU.outSm}`, border: 'none', cursor: 'pointer', ...busyStyle,
+                          }}
+                        >
+                          <Check size={13} strokeWidth={2.8} />
+                          ACCEPT
+                        </button>
+                        <button
+                          onClick={() => openRejectConfirm(app)}
+                          disabled={rowBusy}
+                          className="inline-flex items-center gap-1.5 focus:outline-none"
+                          style={{
+                            padding: '7px 13px', borderRadius: 999,
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                            color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.09)', border: '1px solid rgba(139,32,32,0.22)', cursor: 'pointer', ...busyStyle,
+                          }}
+                        >
+                          <Ban size={12} strokeWidth={2.6} />
+                          REJECT
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Check-in stacked ABOVE a wider Preview button */}
+                    <div className="flex flex-col items-stretch gap-1.5" style={{ minWidth: 176, width: '100%' }}>
+                      {canCheckIn && (
+                        <button
+                          onClick={() => handleCheckIn(app)}
+                          disabled={rowBusy}
+                          className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
+                          style={{
+                            padding: '8px 14px', borderRadius: 999,
                             fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
                             color: '#FFFFFF',
                             background: `linear-gradient(135deg, ${NEU_GRADIENTS.sage[0]}, ${NEU_GRADIENTS.sage[1]})`,
@@ -1468,50 +1734,181 @@ export default function ApplicationsPage() {
                         <button
                           onClick={() => handleUndoCheckIn(app)}
                           disabled={rowBusy}
-                          className="inline-flex items-center gap-1.5 focus:outline-none"
+                          className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
                           style={{
-                            padding: '7px 13px', borderRadius: 999,
+                            padding: '8px 14px', borderRadius: 999,
                             fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
                             color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer', ...busyStyle,
                           }}
                         >
                           <Undo2 size={12} strokeWidth={2.5} />
-                          UNDO
+                          UNDO CHECK-IN
                         </button>
                       )}
-                      <button
-                        onClick={() => setReviewId(app.id)}
-                        className="inline-flex items-center gap-1.5 focus:outline-none"
-                        style={{
-                          padding: '7px 14px', borderRadius: 999,
-                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-                          color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer',
-                        }}
-                      >
-                        <Eye size={13} strokeWidth={2.5} />
-                        REVIEW
-                      </button>
-                      {!app.user_id && (
+                      <div className="flex items-center gap-1.5">
+                        {showPayControl && (
+                          <PaymentMenu
+                            app={app}
+                            disabled={rowBusy}
+                            align="right"
+                            onMarkPaid={() => handleMarkPaid(app)}
+                            onWaive={() => handleWaive(app)}
+                            onMarkUnpaid={() => handleMarkUnpaid(app)}
+                            onUndoWaive={() => handleUndoWaive(app)}
+                          />
+                        )}
                         <button
-                          onClick={() => openDeleteRowConfirm(app)}
-                          disabled={rowBusy}
-                          title="Delete this unregistered applicant's row"
-                          className="inline-flex items-center justify-center focus:outline-none"
+                          onClick={() => setReviewId(app.id)}
+                          className="inline-flex items-center justify-center gap-1.5 focus:outline-none flex-1"
                           style={{
-                            width: 32, height: 32, borderRadius: 999,
-                            color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)',
-                            cursor: rowBusy ? 'default' : 'pointer', ...busyStyle,
+                            padding: '8px 22px', borderRadius: 999,
+                            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.04em',
+                            color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer',
                           }}
                         >
-                          <Trash2 size={13} />
+                          <Eye size={14} strokeWidth={2.5} />
+                          PREVIEW
                         </button>
-                      )}
+                        {!app.user_id && (
+                          <button
+                            onClick={() => openDeleteRowConfirm(app)}
+                            disabled={rowBusy}
+                            title="Delete this unregistered applicant's row"
+                            className="inline-flex items-center justify-center focus:outline-none flex-shrink-0"
+                            style={{
+                              width: 34, height: 34, borderRadius: 999,
+                              color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)',
+                              cursor: rowBusy ? 'default' : 'pointer', ...busyStyle,
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Submitted date, bottom-right corner (subtle) */}
+                {app.submitted_at && (
+                  <span
+                    className="hidden lg:inline-flex items-center gap-1"
+                    style={{ position: 'absolute', bottom: 8, right: 14, fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums', opacity: 0.8, pointerEvents: 'none' }}
+                  >
+                    <CalendarDays size={11} strokeWidth={2.2} />
+                    {formatDate(app.submitted_at)}
+                  </span>
+                )}
               </NeuCard>
             );
           })}
+        </div>
+      )}
+
+      {/* Sticky bulk-action bar */}
+      {!loading && selectedApps.length > 0 && (
+        <div className="fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: 20, pointerEvents: 'none' }}>
+          <style>{`@keyframes bulkPulse { 0%,100% { transform: scale(1); box-shadow: 0 4px 10px rgba(27,56,40,0.35); } 50% { transform: scale(1.06); box-shadow: 0 8px 20px rgba(27,56,40,0.5); } }`}</style>
+          <div
+            className="flex items-center gap-2 flex-wrap justify-center"
+            style={{ pointerEvents: 'auto', maxWidth: '100%', padding: '10px 14px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.out }}
+          >
+            <span className="inline-flex items-center gap-2 pl-1 pr-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+              <span className="inline-flex items-center justify-center" style={{ minWidth: 22, height: 22, padding: '0 6px', borderRadius: 999, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, color: '#FFFFFF', fontSize: 11, fontWeight: 900 }}>
+                {selectedApps.length}
+              </span>
+              selected
+            </span>
+            <span style={{ width: 1, height: 22, background: 'rgba(154,138,120,0.3)' }} />
+
+            {bulkAcceptable.length > 0 && (
+              <button
+                onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
+                  background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                  boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+                  animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
+                }}
+              >
+                <Check size={14} strokeWidth={2.8} />
+                Accept {bulkAcceptable.length}
+              </button>
+            )}
+            {bulkCheckInable.length > 0 && (
+              <button
+                onClick={() => runBulk(bulkCheckInable, { title: `Check in ${bulkCheckInable.length} attendee${bulkCheckInable.length === 1 ? '' : 's'}?`, body: 'They will be marked as physically present on-site.', confirmLabel: 'Check in all' }, a => handleCheckIn(a))}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
+                  background: `linear-gradient(135deg, ${NEU_GRADIENTS.sage[0]}, ${NEU_GRADIENTS.sage[1]})`,
+                  boxShadow: `0 3px 8px ${NEU_GRADIENTS.sage[0]}55, ${NEU.outSm}`,
+                  animation: suggestion === 'checkin' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
+                }}
+              >
+                <UserRoundCheck size={14} strokeWidth={2.7} />
+                Check in {bulkCheckInable.length}
+              </button>
+            )}
+            {bulkPayable.length > 0 && (
+              <button
+                onClick={() => runBulk(bulkPayable, { title: `Mark ${bulkPayable.length} as paid?`, body: 'Each will be marked paid (self-funded); delegation spot accounting runs per applicant.', confirmLabel: 'Mark all paid' }, a => handleMarkPaid(a))}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.ink,
+                  backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+                  animation: suggestion === 'pay' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
+                }}
+              >
+                <CircleCheck size={14} strokeWidth={2.6} style={{ color: NEU.green }} />
+                Mark paid
+              </button>
+            )}
+            {bulkPayable.length > 0 && (
+              <button
+                onClick={() => runBulk(bulkPayable, { title: `Waive the fee for ${bulkPayable.length}?`, body: 'Each selected unpaid applicant will have their fee waived.', confirmLabel: 'Waive all' }, a => handleWaive(a))}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.ink,
+                  backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+                }}
+              >
+                <HandCoins size={14} strokeWidth={2.5} style={{ color: NEU.deepGold }} />
+                Waive
+              </button>
+            )}
+            {bulkRejectable.length > 0 && (
+              <button
+                onClick={() => runBulk(bulkRejectable, { title: `Reject ${bulkRejectable.length} application${bulkRejectable.length === 1 ? '' : 's'}?`, body: 'This rejects the selected applications. You can reinstate them later if needed.', confirmLabel: 'Reject all', danger: true }, a => handleReject(a.id))}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em',
+                  color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.09)', border: '1px solid rgba(139,32,32,0.22)',
+                }}
+              >
+                <Ban size={13} strokeWidth={2.6} />
+                Reject {bulkRejectable.length}
+              </button>
+            )}
+            <button
+              onClick={clearSelection}
+              className="inline-flex items-center gap-1.5 focus:outline-none"
+              style={{
+                padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.muted,
+                backgroundColor: 'transparent',
+              }}
+            >
+              <X size={13} strokeWidth={2.6} />
+              Clear
+            </button>
+          </div>
         </div>
       )}
 
@@ -1525,9 +1922,7 @@ export default function ApplicationsPage() {
         const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
         const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
         const isRejecting = rejectingId === app.id;
-        const paid = app.payment_status === 'paid';
-        const waived = app.payment_status === 'waived';
-        const expLabel = app.experience_level ?? app.profiles?.mun_experience_level ?? null;
+        const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? null;
         const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
         const questions = roleConfig?.custom_questions ?? [];
@@ -1538,56 +1933,17 @@ export default function ApplicationsPage() {
         const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
 
         const showPaymentControls = app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in';
+        // Unified payment control (F: merge mark-paid vs waive). One menu, both
+        // underlying states still reachable.
         const paymentControls = showPaymentControls ? (
-          <>
-            {!paid ? (
-              <button
-                onClick={() => handleMarkPaid(app)}
-                disabled={rowBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
-              >
-                <CircleCheck size={13} />
-                MARK PAID
-              </button>
-            ) : (
-              <button
-                onClick={() => handleMarkUnpaid(app)}
-                disabled={rowBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                style={{ backgroundColor: 'rgba(184,132,74,0.12)', color: '#B8844A', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
-              >
-                <RotateCcw size={13} />
-                MARK UNPAID
-              </button>
-            )}
-            {app.payment_status === 'unpaid' && (
-              <button
-                onClick={() => handleWaive(app)}
-                disabled={rowBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                <HandCoins size={13} />
-                WAIVE
-              </button>
-            )}
-            {waived && (
-              <button
-                onClick={() => handleUndoWaive(app)}
-                disabled={rowBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                <RotateCcw size={13} />
-                UNDO WAIVE
-              </button>
-            )}
-          </>
+          <PaymentMenu
+            app={app}
+            disabled={rowBusy}
+            onMarkPaid={() => handleMarkPaid(app)}
+            onWaive={() => handleWaive(app)}
+            onMarkUnpaid={() => handleMarkUnpaid(app)}
+            onUndoWaive={() => handleUndoWaive(app)}
+          />
         ) : null;
 
         const rejectControls = isRejecting ? (
@@ -1704,14 +2060,8 @@ export default function ApplicationsPage() {
                   <p className="text-xs truncate mb-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{email}</p>
                   <div className="flex flex-wrap items-center gap-2">
                     {!app.user_id && <NotRegisteredChip />}
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(27,56,40,0.08)', color: '#1B3828', border: '1px solid rgba(27,56,40,0.18)' }}>
-                      <RoleIcon role={app.role} />
-                      {roleLabel(app.role).toUpperCase()}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold" style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: statusTone(app.status).bg, color: statusTone(app.status).color, border: `1px solid ${statusTone(app.status).border}` }}>
-                      <StatusIcon status={app.status} />
-                      {app.status.replace('-', ' ').toUpperCase()}
-                    </span>
+                    <RolePill role={app.role} size="sm" />
+                    <StatusPill status={app.status} size="sm" />
                     {app.resubmitted_at && (
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
@@ -1740,16 +2090,7 @@ export default function ApplicationsPage() {
                         AID DENIED
                       </span>
                     )}
-                    {expLabel && (
-                      <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
-                        title={confCount !== undefined ? `${confCount} conference${confCount === 1 ? '' : 's'} on their MUN CV` : undefined}
-                        style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(238,217,138,0.28)', color: '#7A5A10', border: '1px solid rgba(182,135,31,0.35)', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        <GraduationCap size={10} strokeWidth={2.5} />
-                        {expLabel}{confCount !== undefined ? ` (${confCount})` : ''}
-                      </span>
-                    )}
+                    {expLabel && <LevelChip level={expLabel} count={confCount} />}
                   </div>
                 </div>
                 <button

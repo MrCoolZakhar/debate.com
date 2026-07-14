@@ -649,7 +649,7 @@ function MyConferencesInner() {
         className="pointer-events-none fixed inset-0 z-[1]"
         style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }}
       />
-      <SiteNav />
+      <SiteNav hideLanguage />
 
       <div className="relative z-10 flex-1 px-6 py-10" style={{ maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
         <div className="flex items-start justify-between gap-4">

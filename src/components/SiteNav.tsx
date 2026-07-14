@@ -24,9 +24,14 @@ interface SiteNavProps {
    * Ink-colored controls switch to light-on-dark treatment.
    */
   overlay?: boolean;
+  /**
+   * Hide the language (globe) toggle. Used on conference-side surfaces that
+   * are not translated yet, so the toggle would offer no working choices.
+   */
+  hideLanguage?: boolean;
 }
 
-export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps = {}) {
+export default function SiteNav({ logoOverride, overlay = false, hideLanguage = false }: SiteNavProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
@@ -163,6 +168,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
         <div className="hidden md:flex items-center gap-3">
 
           {/* Language toggle */}
+          {!hideLanguage && (
           <div className="relative" ref={langMenuRef}>
             <div className="relative" suppressHydrationWarning>
               <span
@@ -226,6 +232,7 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
               </div>
             )}
           </div>
+          )}
 
           {/* Auth section */}
           {user ? (
@@ -353,28 +360,32 @@ export default function SiteNav({ logoOverride, overlay = false }: SiteNavProps 
             );
           })}
 
-          <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
+          {!hideLanguage && (
+            <>
+              <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
 
-          {/* Mobile language toggle */}
-          <div className="flex gap-2 px-2 pb-1">
-            {(['en', 'es', 'fr', 'ar'] as const).map((lang) => (
-              <button
-                key={lang}
-                onClick={() => setLanguage(lang)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold focus:outline-none transition-all"
-                style={{
-                  backgroundColor: language === lang ? '#1B3828' : 'rgba(27,56,40,0.07)',
-                  color: language === lang ? '#EED98A' : '#1B3828',
-                  border: language === lang ? 'none' : '1px solid rgba(27,56,40,0.18)',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.06em',
-                  cursor: 'pointer',
-                }}
-              >
-                {lang === 'en' ? `EN: ${t('settings_english')}` : lang === 'es' ? `ES: ${t('settings_spanish')}` : lang === 'fr' ? `FR: ${t('settings_french')}` : 'AR: العربية'}
-              </button>
-            ))}
-          </div>
+              {/* Mobile language toggle */}
+              <div className="flex gap-2 px-2 pb-1">
+                {(['en', 'es', 'fr', 'ar'] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    onClick={() => setLanguage(lang)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold focus:outline-none transition-all"
+                    style={{
+                      backgroundColor: language === lang ? '#1B3828' : 'rgba(27,56,40,0.07)',
+                      color: language === lang ? '#EED98A' : '#1B3828',
+                      border: language === lang ? 'none' : '1px solid rgba(27,56,40,0.18)',
+                      fontFamily: "'Outfit', sans-serif",
+                      letterSpacing: '0.06em',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {lang === 'en' ? `EN: ${t('settings_english')}` : lang === 'es' ? `ES: ${t('settings_spanish')}` : lang === 'fr' ? `FR: ${t('settings_french')}` : 'AR: العربية'}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <div style={{ height: '1px', backgroundColor: '#DDD4C0', margin: '8px 0' }} />
 

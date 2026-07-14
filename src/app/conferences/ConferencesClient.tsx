@@ -569,7 +569,7 @@ export default function ConferencesClient() {
       />
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        <SiteNav />
+        <SiteNav hideLanguage />
 
         <FeaturedSection />
         <OrganiserSection />

@@ -617,6 +617,9 @@ export default function ConferencesExploreClient() {
   // A ?continent= URL param wins over the geo default.
   const [region, setRegion] = useState<string>(() => searchParams.get('continent') ?? '');
   const [regionTouched, setRegionTouched] = useState<boolean>(() => !!searchParams.get('continent'));
+  // Set when geo defaults us into a whole-directory "around you" view because
+  // the visitor's own country has too few conferences to lead with.
+  const [aroundYouDefault, setAroundYouDefault] = useState(false);
   function changeRegion(r: string) {
     setRegion(r);
     setRegionTouched(true);
@@ -701,15 +704,24 @@ export default function ConferencesExploreClient() {
     return () => { cancelled = true; };
   }, []);
 
-  // Default the region to the visitor's country once, when geo resolved and
-  // the visitor hasn't touched the control. Zero local conferences shows the
-  // country empty state with its "explore all" reset. Geo failure → ALL.
+  // Default view once, when geo resolved and the visitor hasn't touched the
+  // control. If the visitor's country already has at least 4 conferences we
+  // lead with "Conferences in {country}". Otherwise we fall back to an "around
+  // you" view of the whole directory so the grid is never empty on first load,
+  // rather than a discouraging country empty state. Geo failure → ALL.
   const geoDefaultApplied = useRef(false);
   useEffect(() => {
     if (geoDefaultApplied.current || regionTouched || loading || !userCountry) return;
     geoDefaultApplied.current = true;
-    setRegion('country');
-  }, [userCountry, loading, regionTouched]);
+    const localCount = conferences.filter(
+      c => c.country.toLowerCase() === userCountry.toLowerCase()
+    ).length;
+    if (localCount >= 4) {
+      setRegion('country');
+    } else {
+      setAroundYouDefault(true);
+    }
+  }, [userCountry, loading, regionTouched, conferences]);
 
   // Conference ids the signed-in viewer already applied to, cards show
   // APPLIED instead of the APPLY pill. Conference ids the viewer is already
@@ -746,6 +758,9 @@ export default function ConferencesExploreClient() {
     memberIds.has(c.id) || (!!user && c.organizer_id === user.id);
 
   const countryMode = region === 'country' && !!userCountry;
+  // Whole-directory fallback we auto-selected on first load, shown under the
+  // "Conferences around you" heading. Clears the moment the visitor picks a region.
+  const aroundYouMode = aroundYouDefault && region === '' && !regionTouched;
 
   const filtered = useMemo(() => conferences.filter(c => {
     if (searchQuery) {
@@ -827,7 +842,7 @@ export default function ConferencesExploreClient() {
       />
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        <SiteNav />
+        <SiteNav hideLanguage />
 
         {/* ── Editorial header ─────────────────────────────────────── */}
         <header className="px-6 md:px-14 pt-8 pb-8">
@@ -997,12 +1012,16 @@ export default function ConferencesExploreClient() {
           {!loading && displayed.length > 0 && (
             <div className="flex items-center gap-4 mb-7">
               <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                {countryMode ? (
+                {aroundYouMode ? (
+                  <>
+                    <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
+                    CONFERENCES AROUND YOU
+                  </>
+                ) : countryMode ? (
                   <>
                     {userCode && <FlagImg code={userCode} size={17} />}
-                    NEAR YOU: {displayed.length < sorted.length
-                      ? `${displayed.length} OF ${sorted.length}`
-                      : displayed.length} IN {userCountry!.toUpperCase()}
+                    CONFERENCES IN {userCountry!.toUpperCase()}
+                    {displayed.length < sorted.length ? ` · ${displayed.length} OF ${sorted.length}` : ''}
                   </>
                 ) : (
                   <>

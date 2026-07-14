@@ -30,7 +30,13 @@ export default function FitToScreen({
       const contentH = fitContent && content ? content.offsetHeight : BASE_H;
       const baseH = Math.max(BASE_H, contentH);
       const scale = window.innerHeight / baseH;
+      // A degenerate viewport (0×0 — e.g. a prerendering or backgrounded tab)
+      // makes scale 0, which turns width into 0 / 0 = NaN (and any non-zero
+      // innerWidth into Infinity). Skip the update in that case and keep the
+      // last good dims so no invalid width ever reaches the DOM.
+      if (!Number.isFinite(scale) || scale <= 0) return;
       const width = window.innerWidth / scale;
+      if (!Number.isFinite(width)) return;
       setDims((prev) =>
         prev.scale === scale && prev.width === width ? prev : { scale, width },
       );

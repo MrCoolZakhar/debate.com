@@ -534,7 +534,7 @@ export default function NewConferencePage() {
       />
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        <SiteNav />
+        <SiteNav hideLanguage />
 
         <main className="flex-1 flex justify-center px-5 py-10">
           <div className="w-full">
