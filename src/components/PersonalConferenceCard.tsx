@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CalendarClock, MapPin, ArrowUpRight, Sparkles } from 'lucide-react';
+import { CalendarClock, MapPin, ArrowUpRight, Sparkles, Users } from 'lucide-react';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Pill, type PillTone, OUTFIT } from '@/app/account/accountUi';
 import { NEU, EASE } from '@/components/neu';
@@ -176,7 +176,7 @@ function CountdownChip({ label, tone }: { label: string; tone: PillTone }) {
 // ── Conference card ──────────────────────────────────────────────────────────
 
 export function PersonalConferenceCard({
-  conference, roles, href, manageHref, muted = false,
+  conference, roles, href, manageHref, manageDelegationHref, muted = false,
 }: {
   conference: CardConference;
   roles: RoleTag[];
@@ -184,6 +184,9 @@ export function PersonalConferenceCard({
   href: string;
   /** Optional extra "Manage conference" affordance at the bottom of the card. */
   manageHref?: string;
+  /** Optional "Manage delegation" affordance for delegation leaders (head
+   *  delegate / faculty advisor) — links to the delegation seat portal. */
+  manageDelegationHref?: string;
   /** Past conferences render slightly muted. */
   muted?: boolean;
 }) {
@@ -300,6 +303,34 @@ export function PersonalConferenceCard({
           >
             <Sparkles size={13} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
             Manage conference
+            <ArrowUpRight size={13} strokeWidth={2.6} />
+          </Link>
+        </div>
+      )}
+
+      {/* Delegation-leader affordance (head delegate / faculty advisor) */}
+      {manageDelegationHref && (
+        <div className="mt-3.5 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+          <Link
+            href={manageDelegationHref}
+            className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+            style={{
+              padding: '6px 13px',
+              borderRadius: 999,
+              background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
+              boxShadow: `0 3px 8px ${NEU.deepGold}44, ${NEU.outSm}`,
+              color: NEU.forest,
+              fontFamily: OUTFIT,
+              fontSize: '12px',
+              fontWeight: 800,
+              letterSpacing: '0.03em',
+              textDecoration: 'none',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 5px 12px ${NEU.deepGold}66, ${NEU.outSmHover}`; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `0 3px 8px ${NEU.deepGold}44, ${NEU.outSm}`; }}
+          >
+            <Users size={13} strokeWidth={2.6} style={{ color: NEU.forest }} />
+            Manage delegation
             <ArrowUpRight size={13} strokeWidth={2.6} />
           </Link>
         </div>

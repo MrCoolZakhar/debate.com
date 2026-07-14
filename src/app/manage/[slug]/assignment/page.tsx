@@ -66,6 +66,11 @@ interface AllocationRow {
   country_name: string;
   allocation_sent: boolean;
   application_id: string | null;
+  // A DELEGATION (block) seat: society_id set, user_id + application_id null.
+  // The seat is owned by the delegation until it hands it to one of its
+  // delegates. `delegation` carries the society name for display.
+  society_id?: string | null;
+  delegation?: { name: string } | null;
   // profiles/applications carry the extra fields the click-into list view and
   // its reused delegate detail need (delegation, level, DOB, preferences).
   // They stay optional so the optimistic temp row (applyLocalAllocation) can
@@ -163,6 +168,13 @@ interface CommitteeData {
   display_chairs: DisplayChair[] | null;
   committee_country_slots: SlotRow[];
   conference_allocations: AllocationRow[];
+}
+
+// A delegation (society) as a draggable allocation SOURCE in the left rail.
+interface DelegationSource {
+  id: string;
+  name: string;
+  memberCount: number;
 }
 
 interface ChairApp {
@@ -324,6 +336,26 @@ export function PersonAvatar({ name, url, size = 28 }: { name: string; url: stri
       title={name || undefined}
     >
       <UserRound size={Math.round(size * 0.56)} strokeWidth={2} style={{ color: NEU.gold }} />
+    </span>
+  );
+}
+
+// A delegation-owned seat's avatar: a multi-person (Users) glyph on the forest
+// disc, standing in for the individual PersonAvatar to signal "owned by the
+// delegation, not yet handed to a delegate".
+function DelegationAvatar({ size = 30 }: { size?: number }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full flex-shrink-0"
+      style={{
+        width: size, height: size,
+        background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+        boxShadow: NEU.outSm,
+      }}
+      aria-label="Delegation seat"
+      title="Owned by the delegation"
+    >
+      <Users size={Math.round(size * 0.54)} strokeWidth={2} style={{ color: NEU.gold }} />
     </span>
   );
 }
@@ -627,16 +659,52 @@ function RailHeader({ count }: { count: number }) {
 }
 
 /** Pressed-in search field for the board rails. */
-function RailSearch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function RailSearch({ value, onChange, placeholder = 'Search applicants...' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <NeuInset className="flex items-center gap-2 px-3.5 py-2.5 mb-3" style={{ borderRadius: 999 }}>
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
-        placeholder="Search applicants..."
+        placeholder={placeholder}
         className="flex-1 text-sm outline-none"
         style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT }}
       />
+    </NeuInset>
+  );
+}
+
+/** Segmented toggle for the delegates-board rail: drag individual DELEGATES or
+ *  whole DELEGATIONS (societies) onto a committee. */
+function RailSourceToggle({ value, onChange }: { value: 'delegates' | 'delegations'; onChange: (v: 'delegates' | 'delegations') => void }) {
+  return (
+    <NeuInset className="inline-flex p-1 mb-3 w-full" style={{ borderRadius: 999, gap: 4 }}>
+      {(['delegates', 'delegations'] as const).map(v => {
+        const active = value === v;
+        return (
+          <button
+            key={v}
+            onClick={() => onChange(v)}
+            className="focus:outline-none inline-flex items-center justify-center gap-1.5 flex-1"
+            style={{
+              padding: '6px 12px',
+              borderRadius: 999,
+              fontSize: 10,
+              fontFamily: MONO,
+              fontWeight: 800,
+              letterSpacing: '0.06em',
+              border: 'none',
+              background: active ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
+              boxShadow: active ? `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : 'none',
+              color: active ? NEU.gold : NEU.muted,
+              cursor: 'pointer',
+              transition: 'color 200ms, box-shadow 200ms',
+            }}
+          >
+            {v === 'delegates' ? <UserRound size={12} strokeWidth={2.4} /> : <Users size={12} strokeWidth={2.4} />}
+            {v === 'delegates' ? 'DELEGATES' : 'DELEGATIONS'}
+          </button>
+        );
+      })}
     </NeuInset>
   );
 }
@@ -682,6 +750,38 @@ async function insertAllocation(
     assigned_country_name: slot.country_name,
   }).eq('id', app.id);
 
+  return null;
+}
+
+// Write path for a DELEGATION (block) seat: the same country_code slot is handed
+// to a society, not a delegate. user_id / application_id stay null (no delegate
+// yet), so NO application status is touched. Friendly duplicate errors.
+// Returns an error message, or null on success.
+async function insertSocietyAllocation(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  committee: CommitteeData,
+  society: DelegationSource,
+  slot: SlotRow,
+): Promise<string | null> {
+  const { error: insertErr } = await supabase.from('conference_allocations').insert({
+    conference_id: conferenceId,
+    conference_committee_id: committee.id,
+    country_code: slot.country_code,
+    country_name: slot.country_name,
+    society_id: society.id,
+    user_id: null,
+    application_id: null,
+    allocation_sent: false,
+  });
+  if (insertErr) {
+    if (insertErr.code === '23505') {
+      return insertErr.message.includes('country_code')
+        ? 'This country is already allocated in this committee.'
+        : 'This allocation already exists.';
+    }
+    return insertErr.message;
+  }
   return null;
 }
 
@@ -1013,6 +1113,100 @@ function DropAllocateModal({ committee, app, onClose, onAssigned }: DropAllocate
   );
 }
 
+// ── SocietyDropAllocateModal ──────────────────────────────────────────────────
+// Opens when a DELEGATION chip is dropped on (or click-targeted at) a committee.
+// Lists that committee's OPEN slots by importance tier only (no delegate to
+// score against yet). Allocating hands the country slot to the delegation.
+
+interface SocietyDropAllocateModalProps {
+  committee: CommitteeData;
+  society: DelegationSource;
+  onClose: () => void;
+  onAssigned: (slot: SlotRow, msg: string) => void;
+}
+
+function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: SocietyDropAllocateModalProps) {
+  const { session } = useAuth();
+  const { conference } = useManage();
+  const [busySlotId, setBusySlotId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  const allocatedCodes = new Set(committee.conference_allocations.map(a => a.country_code));
+  const rows = committee.committee_country_slots
+    .filter(s => !allocatedCodes.has(s.country_code))
+    .sort((a, b) => TIER_RANK[a.importance] - TIER_RANK[b.importance] || a.country_name.localeCompare(b.country_name));
+
+  async function handleAllocate(slot: SlotRow) {
+    if (!session) return;
+    if (!conference) { setError('Conference not loaded. Please refresh.'); return; }
+    setBusySlotId(slot.id);
+    setError('');
+    const supabase = getAuthedClient(session.access_token);
+    const err = await insertSocietyAllocation(supabase, conference.id, committee, society, slot);
+    setBusySlotId(null);
+    if (err) { setError(err); return; }
+    onAssigned(slot, `${slot.country_name} allocated to ${society.name} in ${committee.abbreviation ?? committee.name}.`);
+    onClose();
+  }
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <NeuModalCard width={560}>
+        <div className="flex items-start justify-between mb-1">
+          <div className="min-w-0">
+            <p style={{ fontSize: 9, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.14em', fontWeight: 700, marginBottom: 6 }}>
+              ALLOCATE TO DELEGATION
+            </p>
+            <h2 className="font-black text-base flex items-center gap-2 flex-wrap" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+              <DelegationAvatar size={28} />
+              <span>{society.name}</span>
+              <ArrowRight size={14} style={{ color: NEU.muted }} />
+              <LogoDisc bare src={committee.logo_url} size={30} fallbackText={committeeLabels(committee).big} alt={committee.name} />
+              <span>{committeeLabels(committee).big}</span>
+            </h2>
+          </div>
+          <button onClick={onClose} className="focus:outline-none flex-shrink-0 mt-1" style={{ color: NEU.muted }}><X size={18} /></button>
+        </div>
+        <p className="text-xs mb-4" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+          The delegation owns the seat until it hands it to one of its delegates. Open seats, most urgent first.
+        </p>
+
+        {error && <ModalError msg={error} />}
+
+        {rows.length === 0 ? (
+          <p className="text-sm py-6 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+            All seats in this committee are filled.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {rows.map(slot => {
+              const busy = busySlotId === slot.id;
+              return (
+                <NeuInset key={slot.id} small className="flex items-center gap-3 px-3 py-2.5">
+                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
+                      <TierBadge tier={slot.importance} />
+                    </div>
+                  </div>
+                  <NeuButton
+                    onClick={() => handleAllocate(slot)}
+                    disabled={busySlotId !== null}
+                    style={{ padding: '8px 16px', fontSize: 11 }}
+                  >
+                    {busy ? '...' : 'ALLOCATE'}
+                  </NeuButton>
+                </NeuInset>
+              );
+            })}
+          </div>
+        )}
+      </NeuModalCard>
+    </ModalOverlay>
+  );
+}
+
 // ── AssignModal ───────────────────────────────────────────────────────────────
 // Kept for the slot-first path: pick a specific open country, then choose the
 // applicant (with fit scores). Reached from a panel's expanded slot list.
@@ -1323,7 +1517,13 @@ function CountrySlotGrid({
           />
         );
         if (alloc) {
-          const name = alloc.profiles?.display_name ?? alloc.applications?.invited_name ?? 'Assigned';
+          // A delegation-owned seat (society_id, no delegate yet) shows the
+          // delegation name with a multi-person glyph; a delegate seat shows
+          // the delegate's name as before.
+          const isSociety = !!alloc.society_id && !alloc.user_id;
+          const name = isSociety
+            ? (alloc.delegation?.name ?? 'Delegation')
+            : (alloc.profiles?.display_name ?? alloc.applications?.invited_name ?? 'Assigned');
           const removable = !!onRemoveAllocation && !alloc.id.startsWith('temp-');
           return (
             <span
@@ -1332,6 +1532,7 @@ function CountrySlotGrid({
               style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, padding: 2, paddingRight: removable ? 4 : 9 }}
             >
               {flag}
+              {isSociety && <Users size={12} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
               <span className="truncate" style={{ fontSize: 12, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT, maxWidth: 120 }}>
                 {name}
               </span>
@@ -1640,6 +1841,41 @@ function CommitteeOverviewModal({
                     <Plus size={12} strokeWidth={2.6} /> ASSIGN
                   </span>
                 </button>
+              );
+            }
+
+            // A delegation-owned seat has no delegate to expand into; it reads
+            // as "held by the delegation, not yet distributed" with a Users
+            // glyph and a Deallocate action.
+            const isSociety = !!alloc.society_id && !alloc.user_id;
+            if (isSociety) {
+              const removableSoc = !alloc.id.startsWith('temp-');
+              return (
+                <div
+                  key={slot.id}
+                  className="flex items-center gap-3 px-3 py-2.5"
+                  style={{ backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.outSm }}
+                >
+                  <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} />
+                  <DelegationAvatar size={30} />
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate" style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
+                      {alloc.delegation?.name ?? 'Delegation'}
+                    </p>
+                    <p className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT, marginTop: 1 }}>{slot.country_name}</p>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1 flex-shrink-0"
+                    style={{ padding: '3px 9px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, fontSize: 9.5, fontWeight: 800, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.08em' }}
+                  >
+                    <Users size={11} strokeWidth={2.4} /> DELEGATION
+                  </span>
+                  {removableSoc && (
+                    <RowMenu
+                      items={[{ label: 'Deallocate', icon: <Trash2 size={14} />, danger: true, onClick: () => onRemoveAllocation(alloc) }]}
+                    />
+                  )}
+                </div>
               );
             }
 
@@ -1969,6 +2205,7 @@ export default function AssignmentPage() {
   const [committees, setCommittees] = useState<CommitteeData[]>([]);
   const [chairApps, setChairApps] = useState<ChairApp[]>([]);
   const [chairInvites, setChairInvites] = useState<PendingChairInvite[]>([]);
+  const [societies, setSocieties] = useState<DelegationSource[]>([]);
   const [history, setHistory] = useState<Record<string, UserHistory>>({});
   const [mode, setMode] = useState<'delegates' | 'chairs' | 'delegations' | 'independents'>('delegates');
   const [loading, setLoading] = useState(true);
@@ -1979,6 +2216,11 @@ export default function AssignmentPage() {
   const [dragAppId, setDragAppId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dropModal, setDropModal] = useState<{ committeeId: string; appId: string } | null>(null);
+  // Left-rail source in delegates mode: individual DELEGATES or whole DELEGATIONS
+  // (societies) dragged onto a committee to own a block seat.
+  const [railSource, setRailSource] = useState<'delegates' | 'delegations'>('delegates');
+  const [dragSocietyId, setDragSocietyId] = useState<string | null>(null);
+  const [societyDropModal, setSocietyDropModal] = useState<{ committeeId: string; societyId: string } | null>(null);
   const [assignModal, setAssignModal] = useState<{ committeeId: string; preSlot?: SlotRow } | null>(null);
   const [overviewCommitteeId, setOverviewCommitteeId] = useState<string | null>(null);
   // Chairs board interactions
@@ -2016,7 +2258,7 @@ export default function AssignmentPage() {
     if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const [appRes, commRes, chairRes, inviteRes] = await Promise.all([
+    const [appRes, commRes, chairRes, inviteRes, socRes, socAppsRes] = await Promise.all([
       supabase
         .from('applications')
         .select(`
@@ -2038,8 +2280,9 @@ export default function AssignmentPage() {
           id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs,
           committee_country_slots (id, country_code, country_name, delegation_size, importance),
           conference_allocations (
-            id, user_id, country_code, country_name, allocation_sent, application_id,
+            id, user_id, country_code, country_name, allocation_sent, application_id, society_id,
             profiles (id, display_name, email, nationality, date_of_birth, mun_experience_level, avatar_url),
+            delegation:society_id (name),
             applications:application_id (
               invited_name, experience_level, role, is_head_delegate, society_id, payment_status, attending, invited_email,
               societies (name),
@@ -2063,6 +2306,18 @@ export default function AssignmentPage() {
         .select('id, committee_id, email, token, invited_name, profiles (display_name)')
         .eq('conference_id', conference.id)
         .eq('status', 'pending'),
+      // Delegations (societies) that can OWN a block seat, plus every
+      // application's society_id so we can show each delegation's member count.
+      supabase
+        .from('societies')
+        .select('id, name')
+        .eq('conference_id', conference.id)
+        .order('name', { ascending: true }),
+      supabase
+        .from('applications')
+        .select('society_id')
+        .eq('conference_id', conference.id)
+        .not('society_id', 'is', null),
     ]);
 
     if (seq !== loadSeq.current) return; // stale response, a newer load superseded this one
@@ -2070,10 +2325,19 @@ export default function AssignmentPage() {
     const apps = ((appRes.data ?? []) as unknown as AcceptedApp[]).filter(a => a.attending !== false);
     const comms = (commRes.data ?? []) as unknown as CommitteeData[];
 
+    const socCounts = new Map<string, number>();
+    for (const row of (socAppsRes.data ?? []) as { society_id: string }[]) {
+      socCounts.set(row.society_id, (socCounts.get(row.society_id) ?? 0) + 1);
+    }
+    const socs = ((socRes.data ?? []) as { id: string; name: string }[]).map(s => ({
+      id: s.id, name: s.name, memberCount: socCounts.get(s.id) ?? 0,
+    }));
+
     setAccepted(apps);
     setCommittees(comms);
     setChairApps((chairRes.data ?? []) as unknown as ChairApp[]);
     setChairInvites((inviteRes.data ?? []) as unknown as PendingChairInvite[]);
+    setSocieties(socs);
     setLoading(false);
 
     // Enrich with MUN history (CV entries + platform awards), non-blocking
@@ -2145,6 +2409,28 @@ export default function AssignmentPage() {
       c.id === committee.id ? { ...c, conference_allocations: [...c.conference_allocations, row] } : c
     ));
     setAccepted(prev => prev.filter(a => a.id !== app.id));
+    return row;
+  }
+
+  // Optimistic commit for a DELEGATION (block) seat: the society row appears in
+  // the committee panel with a temp id. Unlike a delegate, the society STAYS in
+  // the rail (it can own seats across many committees), so nothing is removed.
+  function applyLocalSocietyAllocation(committee: CommitteeData, society: DelegationSource, slot: SlotRow): AllocationRow {
+    const row: AllocationRow = {
+      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      user_id: null,
+      country_code: slot.country_code,
+      country_name: slot.country_name,
+      allocation_sent: false,
+      application_id: null,
+      society_id: society.id,
+      delegation: { name: society.name },
+      profiles: null,
+      applications: null,
+    };
+    setCommittees(prev => prev.map(c =>
+      c.id === committee.id ? { ...c, conference_allocations: [...c.conference_allocations, row] } : c
+    ));
     return row;
   }
 
@@ -2553,6 +2839,8 @@ export default function AssignmentPage() {
   const selectedApp = accepted.find(a => a.id === selectedAppId) ?? null;
   const dropModalCommittee = dropModal ? committees.find(c => c.id === dropModal.committeeId) ?? null : null;
   const dropModalApp = dropModal ? accepted.find(a => a.id === dropModal.appId) ?? null : null;
+  const societyDropModalCommittee = societyDropModal ? committees.find(c => c.id === societyDropModal.committeeId) ?? null : null;
+  const societyDropModalSociety = societyDropModal ? societies.find(s => s.id === societyDropModal.societyId) ?? null : null;
   const assignModalCommittee = assignModal ? committees.find(c => c.id === assignModal.committeeId) ?? null : null;
   const overviewCommittee = overviewCommitteeId ? committees.find(c => c.id === overviewCommitteeId) ?? null : null;
 
@@ -2563,18 +2851,33 @@ export default function AssignmentPage() {
     setDropModal({ committeeId, appId });
   }
 
-  function handleDropOnCommittee(committeeId: string, droppedAppId: string) {
-    const appId = droppedAppId || dragAppId;
+  function openSocietyDropModal(committeeId: string, societyId: string) {
+    if (!societies.some(s => s.id === societyId)) return;
+    setSocietyDropModal({ committeeId, societyId });
+  }
+
+  // One drop handler for both rail sources. A society drag encodes its payload
+  // as `society:<id>` (delegates drop their bare app id), so the target is
+  // routed to the right allocation flow.
+  function handleDropOnCommittee(committeeId: string, dropped: string) {
+    const payload = dropped || (dragSocietyId ? `society:${dragSocietyId}` : dragAppId) || '';
     setDragAppId(null);
+    setDragSocietyId(null);
     setDropTargetId(null);
-    if (!appId) return;
-    openDropModal(committeeId, appId);
+    if (!payload) return;
+    if (payload.startsWith('society:')) { openSocietyDropModal(committeeId, payload.slice(8)); return; }
+    openDropModal(committeeId, payload);
   }
 
   // Left rail: search, alphabetical
   const filteredApps = [...accepted]
     .filter(app => (app.profiles?.display_name ?? app.invited_name ?? '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (a.profiles?.display_name ?? a.invited_name ?? '').localeCompare(b.profiles?.display_name ?? b.invited_name ?? ''));
+
+  // Delegations rail source: every society, searchable by name.
+  const filteredSocieties = [...societies]
+    .filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Chairs mode, unassigned pool is anyone not currently on any committee's
   // dais (chair_user_ids), mirroring how the delegates pool is everyone not
@@ -2783,14 +3086,70 @@ export default function AssignmentPage() {
 
           {mode === 'delegates' && (
             <div className="flex flex-col xl:flex-row gap-6 items-start">
-              {/* Left rail, unassigned applicants */}
+              {/* Left rail, unassigned applicants (or delegations to block-allocate) */}
               <div className="w-full xl:w-[320px] flex-shrink-0">
-                <RailHeader count={filteredApps.length} />
+                {/* Source toggle: drag individual delegates, or whole delegations. */}
+                <RailSourceToggle
+                  value={railSource}
+                  onChange={v => { setRailSource(v); if (v === 'delegations') setSelectedAppId(null); }}
+                />
+
+                <RailHeader count={railSource === 'delegates' ? filteredApps.length : filteredSocieties.length} />
 
                 {/* Search */}
-                <RailSearch value={search} onChange={setSearch} />
+                <RailSearch
+                  value={search}
+                  onChange={setSearch}
+                  placeholder={railSource === 'delegates' ? 'Search applicants...' : 'Search delegations...'}
+                />
 
-                {filteredApps.length === 0 ? (
+                {railSource === 'delegations' ? (
+                  filteredSocieties.length === 0 ? (
+                    <p className="text-sm py-6 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                      {societies.length === 0 ? 'No delegations yet.' : 'No delegations match your search.'}
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {filteredSocieties.map(soc => {
+                        const beingDragged = dragSocietyId === soc.id;
+                        return (
+                          <div
+                            key={soc.id}
+                            draggable
+                            onDragStart={e => {
+                              e.dataTransfer.setData('text/plain', `society:${soc.id}`);
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDragSocietyId(soc.id);
+                            }}
+                            onDragEnd={() => { setDragSocietyId(null); setDropTargetId(null); }}
+                            className="p-3 flex items-center gap-2.5"
+                            style={{
+                              backgroundColor: NEU.surface,
+                              borderRadius: 18,
+                              boxShadow: NEU.outSm,
+                              opacity: beingDragged ? 0.45 : 1,
+                              cursor: 'grab',
+                              transition: 'box-shadow 200ms cubic-bezier(0.22,1,0.36,1)',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+                          >
+                            <GripVertical size={13} style={{ color: NEU.muted, flexShrink: 0, opacity: 0.5 }} />
+                            <DelegationAvatar size={40} />
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate" style={{ fontSize: 15, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
+                                {soc.name}
+                              </p>
+                              <p className="flex items-center gap-1 mt-0.5" style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
+                                <Users size={11} strokeWidth={2.2} /> {soc.memberCount} {soc.memberCount === 1 ? 'MEMBER' : 'MEMBERS'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : filteredApps.length === 0 ? (
                   <p className="text-sm py-6 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                     {accepted.length === 0 ? 'No accepted applicants yet.' : 'No applicants match your search.'}
                   </p>
@@ -2906,7 +3265,7 @@ export default function AssignmentPage() {
                     <CommitteeBoardPanel
                       key={c.id}
                       committee={c}
-                      dragging={dragAppId !== null}
+                      dragging={dragAppId !== null || dragSocietyId !== null}
                       isDropTarget={dropTargetId === c.id}
                       selectable={selectedAppId !== null}
                       onDragOverPanel={() => setDropTargetId(c.id)}
@@ -3010,6 +3369,22 @@ export default function AssignmentPage() {
             applyLocalAllocation(dropModalCommittee, dropModalApp, slot);
             showFlash('ok', msg);
             setSelectedAppId(null);
+            loadData({ silent: true });
+          }}
+        />
+      )}
+
+      {/* Delegation drop popup: open slots for a block seat handed to a society */}
+      {societyDropModal && societyDropModalCommittee && societyDropModalSociety && (
+        <SocietyDropAllocateModal
+          committee={societyDropModalCommittee}
+          society={societyDropModalSociety}
+          onClose={() => setSocietyDropModal(null)}
+          onAssigned={(slot, msg) => {
+            // Insert already succeeded inside the modal; commit the society row
+            // locally and swap in the real row id with a silent refetch.
+            applyLocalSocietyAllocation(societyDropModalCommittee, societyDropModalSociety, slot);
+            showFlash('ok', msg);
             loadData({ silent: true });
           }}
         />
