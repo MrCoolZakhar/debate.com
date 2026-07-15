@@ -310,11 +310,11 @@ export default function VariantStagefront({
             flexDirection: 'column',
           }}
         >
-          {/* Backdrop, sized to the hero zone exactly. A fixed theatre-hall
+          {/* Backdrop, sized to the hero zone exactly. A fixed podium-speaker
               image (not a live conference banner, which used to pull whichever
               conference happened to sort first and looked random). */}
           <div className="absolute inset-0 z-0" aria-hidden="true" style={{ overflow: 'hidden' }}>
-            <img src="/onboarding/hall-01.jpg" alt="" className="w-full h-full object-cover" />
+            <img src="/landing/podium-speaker.jpg" alt="" className="w-full h-full object-cover" style={{ objectPosition: 'center 32%' }} />
             {/* Darkening + a short fade to cream at the very bottom of the hero */}
             <div
               className="absolute inset-0"
