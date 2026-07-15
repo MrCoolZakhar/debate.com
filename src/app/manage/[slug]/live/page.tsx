@@ -3,25 +3,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
-  RefreshCw, Copy, Check, Gavel, Users, Mic, MicOff,
-  FileText, ScrollText, FileCheck, Trophy, Radio, PauseCircle, Flag,
+  RefreshCw, Copy, Check, Gavel, Users, Mic, FileText, ScrollText,
+  FileCheck, Trophy, Radio, PauseCircle, Flag, MessageSquareText, Timer,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { FlagImg } from '@/components/FlagImg';
+import { LogoDisc } from '@/components/LogoDisc';
+import {
+  NeuCard, NeuInset, NeuIconDisc, Emoji3D,
+  NEU, NEU_GRADIENTS, type NeuGradient, OUTFIT, EASE,
+} from '@/components/neu';
 import {
   type LiveCommittee, type CaucusJson, cardStatus, PHASE_LABELS, fmtClock, flagCodeFor,
   RecapModal, AwardsModal,
 } from './LiveModals';
 
-const OUTFIT = "'Outfit', sans-serif";
-
-// Grain texture, same feTurbulence data-URI as conferences/ConferenceCard.tsx
-const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
-
-const EASE = 'cubic-bezier(0.22,1,0.36,1)';
+type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
 // ── Small shared bits ───────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ function Eyebrow({ children, style }: { children: React.ReactNode; style?: React
   return (
     <p
       className="text-[11px] font-bold uppercase"
-      style={{ color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.08em', ...style }}
+      style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em', ...style }}
     >
       {children}
     </p>
@@ -38,6 +38,7 @@ function Eyebrow({ children, style }: { children: React.ReactNode; style?: React
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
+  const [hovered, setHovered] = useState(false);
   return (
     <button
       onClick={(e) => {
@@ -46,13 +47,18 @@ function CopyButton({ value }: { value: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1600);
       }}
-      className="inline-flex items-center justify-center rounded-lg focus:outline-none transition-colors flex-shrink-0"
-      style={{ width: 28, height: 28, border: '1px solid #DDD4C0', backgroundColor: 'transparent', color: copied ? '#2A5A3C' : '#6B5F52' }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="inline-flex items-center justify-center rounded-xl focus:outline-none flex-shrink-0"
+      style={{
+        width: 32, height: 32, border: 'none', backgroundColor: NEU.surface,
+        color: copied ? NEU.green : NEU.forest,
+        boxShadow: hovered ? NEU.outSmHover : NEU.outSm,
+        transition: `box-shadow 200ms ${EASE}`, cursor: 'pointer',
+      }}
       title="Copy to clipboard"
     >
-      {copied ? <Check size={13} /> : <Copy size={13} />}
+      {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
   );
 }
@@ -61,12 +67,20 @@ function FlagDot({ country }: { country: string }) {
   return (
     <span
       className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
-      style={{ width: 22, height: 22, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', marginLeft: -6 }}
+      style={{ width: 24, height: 24, backgroundColor: NEU.surface, boxShadow: NEU.outSm, marginLeft: -6 }}
       title={country}
     >
-      <FlagImg code={flagCodeFor(country)} size={14} />
+      <FlagImg code={flagCodeFor(country)} size={15} />
     </span>
   );
+}
+
+/** Acronym-forward committee identity, shared by both cards. */
+function committeeIdentity(conf: LiveCommittee['conf']): { title: string; subtitle: string | null; mono: string } {
+  const acr = conf.abbreviation?.trim() || null;
+  const full = conf.name;
+  const title = acr ?? full;
+  return { title, subtitle: acr && acr !== full ? full : null, mono: (acr ?? full).slice(0, 3) };
 }
 
 // ── Not-started card ────────────────────────────────────────────────────────
@@ -79,82 +93,79 @@ function NotStartedCard({
   committeesHref: string;
 }) {
   const session = data.session;
+  const id = committeeIdentity(data.conf);
 
   return (
-    <div
-      className="rounded-[20px] p-5 flex flex-col relative"
-      style={{
-        backgroundColor: '#FAF8F3',
-        border: '1px solid #DDD4C0',
-        boxShadow: '0 1px 3px rgba(27,56,40,0.05)',
-      }}
-    >
+    <NeuCard style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
       {/* Greyed-out committee identity */}
-      <div style={{ opacity: 0.55, filter: 'saturate(0.7)' }}>
-        <div className="flex items-center justify-between gap-3 mb-1">
-          <h3 className="font-extrabold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.1 }}>
-            {data.conf.abbreviation ?? data.conf.name}
-          </h3>
-          <span
-            className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase flex-shrink-0"
-            style={{ backgroundColor: 'rgba(28,20,16,0.06)', color: '#6B5F52', border: '1px solid rgba(28,20,16,0.14)', fontFamily: OUTFIT, letterSpacing: '0.08em' }}
-          >
-            Not started
-          </span>
+      <div className="flex items-center justify-between gap-3" style={{ opacity: 0.6, filter: 'saturate(0.7)' }}>
+        <div className="flex items-center gap-3 min-w-0">
+          <LogoDisc src={data.conf.logoUrl} size={44} fallbackText={id.mono} alt={id.title} style={{ filter: 'grayscale(0.4)' }} />
+          <div className="min-w-0">
+            <h3 className="font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.1 }}>
+              {id.title}
+            </h3>
+            {id.subtitle && (
+              <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{id.subtitle}</p>
+            )}
+          </div>
         </div>
-        <p className="text-sm truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{data.conf.name}</p>
+        <span
+          className="text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase flex-shrink-0"
+          style={{ backgroundColor: NEU.base, color: NEU.muted, boxShadow: NEU.inSm, fontFamily: OUTFIT, letterSpacing: '0.08em' }}
+        >
+          Not started
+        </span>
       </div>
 
-      {/* Centered overlay, session code, ready to share */}
-      <div
-        className="rounded-2xl px-5 py-7 my-4 flex flex-col items-center text-center"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 8px 24px rgba(27,56,40,0.1)' }}
-      >
+      {/* Centered well: session code, ready to share */}
+      <NeuInset className="flex flex-col items-center text-center" style={{ padding: '26px 20px', margin: '18px 0', borderRadius: 18 }}>
+        <Emoji3D name="Hourglass not done" size={34} fallback={Timer} fallbackColor={NEU.muted} style={{ opacity: 0.9 }} />
         {session ? (
           <>
-            <Eyebrow style={{ letterSpacing: '0.12em' }}>Session not in progress yet</Eyebrow>
+            <Eyebrow style={{ letterSpacing: '0.12em', marginTop: 10 }}>Session not in progress yet</Eyebrow>
             <div className="flex items-center gap-2.5 mt-3">
-              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: '#1C1410', letterSpacing: '0.14em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: NEU.ink, letterSpacing: '0.14em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
                 {session.code}
               </span>
               <CopyButton value={session.code} />
             </div>
-            <p className="text-[11px] mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            <p className="text-[11px] mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
               Session code: share with your chairs
             </p>
           </>
         ) : (
           <>
-            <Eyebrow style={{ letterSpacing: '0.12em' }}>Session not in progress yet</Eyebrow>
-            <p className="text-sm font-bold mt-3" style={{ color: '#1C1410', fontFamily: OUTFIT }}>No session code yet</p>
+            <Eyebrow style={{ letterSpacing: '0.12em', marginTop: 10 }}>Session not in progress yet</Eyebrow>
+            <p className="text-sm font-bold mt-3" style={{ color: NEU.ink, fontFamily: OUTFIT }}>No session code yet</p>
             <Link
               href={committeesHref}
               className="text-sm font-bold inline-block mt-1 transition-colors"
-              style={{ color: '#1B3828', fontFamily: OUTFIT, textDecoration: 'none' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#2A5A3C'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+              style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.green; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
             >
               Generate it in Committees →
             </Link>
           </>
         )}
-      </div>
+      </NeuInset>
 
       {/* Chair assignment line (greyed) */}
-      <div style={{ opacity: 0.55 }}>
-        <p className="text-xs flex items-center gap-1.5" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
+      <div style={{ opacity: 0.6 }}>
+        <p className="text-xs flex items-center gap-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
           <Gavel size={12} style={{ flexShrink: 0 }} />
           <span style={{ fontVariantNumeric: 'tabular-nums' }}>
             {data.conf.chairUserIds.length} chair{data.conf.chairUserIds.length === 1 ? '' : 's'} assigned
           </span>
         </p>
         {session && session.chairNames.length > 0 && (
-          <p className="text-xs mt-1 truncate" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
+          <p className="text-xs mt-1 truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
             Joined: {session.chairNames.join(', ')}
           </p>
         )}
       </div>
-    </div>
+    </NeuCard>
   );
 }
 
@@ -173,6 +184,17 @@ function currentMotionLabel(phase: string, caucus: CaucusJson | null): { label: 
   return { label: PHASE_LABELS[phase] ?? phase, detail: null, remaining: null };
 }
 
+/** 3D glyph for the current motion, so the card reads at a glance. */
+function motionVisual(phase: string, caucus: CaucusJson | null): { emoji: string; fallback: LucideIcon; gradient: NeuGradient } {
+  if (caucus && (caucus.active ?? true)) {
+    if (caucus.type === 'unmoderated') return { emoji: 'Hourglass not done', fallback: Timer, gradient: NEU_GRADIENTS.amber };
+    return { emoji: 'Speaking head', fallback: Mic, gradient: NEU_GRADIENTS.sage };
+  }
+  if (phase === 'voting') return { emoji: 'Ballot box with ballot', fallback: Gavel, gradient: NEU_GRADIENTS.gold };
+  if (phase === 'speakers-list') return { emoji: 'Speech balloon', fallback: MessageSquareText, gradient: NEU_GRADIENTS.forest };
+  return { emoji: 'Speech balloon', fallback: Gavel, gradient: NEU_GRADIENTS.forest };
+}
+
 function LiveCard({
   data,
   onOpenRecap,
@@ -182,13 +204,15 @@ function LiveCard({
   onOpenRecap: (data: LiveCommittee) => void;
   onOpenAwards: (data: LiveCommittee) => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const status = cardStatus(data);
   const session = data.session!;
   const caucusActive = !!session.caucus && (session.caucus.active ?? true);
   const motion = currentMotionLabel(session.phase, session.caucus);
+  const mv = motionVisual(session.phase, session.caucus);
+  const id = committeeIdentity(data.conf);
 
   const speaker = data.currentSpeaker;
+  const speaking = !!speaker?.startedAt;
   const present = data.delegates.filter((d) => d.status !== 'absent').length;
 
   const wps = data.documents.filter((d) => d.type === 'working-paper');
@@ -205,122 +229,148 @@ function LiveCard({
   const overflow = upNext.length - shownFlags.length;
 
   const chipStyle: React.CSSProperties = {
-    backgroundColor: 'rgba(27,56,40,0.05)',
-    border: '1px solid rgba(221,212,192,0.7)',
-    color: '#6B5F52',
+    backgroundColor: NEU.surface,
+    boxShadow: NEU.outSm,
+    color: NEU.ink,
     fontFamily: OUTFIT,
     fontVariantNumeric: 'tabular-nums',
   };
 
   return (
-    <div
-      className="rounded-[20px] p-5 flex flex-col cursor-pointer"
-      onClick={() => onOpenRecap(data)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        backgroundColor: '#FAF8F3',
-        border: '1px solid #DDD4C0',
-        boxShadow: hovered
-          ? '0 20px 48px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)'
-          : '0 1px 3px rgba(27,56,40,0.05)',
-        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
-        transition: `transform 260ms ${EASE}, box-shadow 260ms ${EASE}`,
-      }}
-    >
+    <NeuCard hover onClick={() => onOpenRecap(data)} style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
       {/* Status eyebrow */}
       {status === 'live' && (
-        <div className="flex items-center gap-2 mb-2">
-          <span className="rounded-full animate-pulse flex-shrink-0" style={{ width: 8, height: 8, backgroundColor: '#3D7A52' }} />
-          <span className="text-[11px] font-bold uppercase" style={{ color: '#1B3828', fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="rounded-full animate-pulse flex-shrink-0" style={{ width: 8, height: 8, backgroundColor: NEU.green, boxShadow: `0 0 0 3px ${NEU.green}22` }} />
+          <span className="text-[11px] font-extrabold uppercase" style={{ color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.09em' }}>
             In session
           </span>
         </div>
       )}
       {status === 'suspended' && (
         <div
-          className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2"
-          style={{ backgroundColor: 'rgba(238,217,138,0.25)', border: '1px solid rgba(182,135,31,0.45)' }}
+          className="inline-flex items-center gap-2 mb-3 rounded-full px-3 py-1.5 self-start"
+          style={{ backgroundColor: 'rgba(184,132,74,0.14)', boxShadow: NEU.outSm }}
         >
-          <PauseCircle size={14} style={{ color: '#B6871F', flexShrink: 0 }} />
-          <span className="text-[11px] font-extrabold uppercase" style={{ color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
+          <Emoji3D name="Pause button" size={15} fallback={PauseCircle} fallbackColor={NEU.amber} />
+          <span className="text-[11px] font-extrabold uppercase" style={{ color: '#8A5A2E', fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
             Suspended
           </span>
         </div>
       )}
       {status === 'ended' && (
         <div
-          className="flex items-center gap-2 mb-3 rounded-xl px-3 py-2"
-          style={{ backgroundColor: 'rgba(28,20,16,0.05)', border: '1px solid rgba(28,20,16,0.14)' }}
+          className="inline-flex items-center gap-2 mb-3 rounded-full px-3 py-1.5 self-start"
+          style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}
         >
-          <Flag size={14} style={{ color: '#6B5F52', flexShrink: 0 }} />
-          <span className="text-[11px] font-extrabold uppercase" style={{ color: '#6B5F52', fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
+          <Emoji3D name="Chequered flag" size={15} fallback={Flag} fallbackColor={NEU.muted} />
+          <span className="text-[11px] font-extrabold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
             Adjourned
           </span>
         </div>
       )}
 
-      {/* Header */}
+      {/* Header: committee logo + acronym-forward identity + chairs */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-extrabold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.1 }}>
-            {data.conf.abbreviation ?? data.conf.name}
-          </h3>
-          <p className="text-sm truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{data.conf.name}</p>
+        <div className="flex items-center gap-3 min-w-0">
+          <LogoDisc src={data.conf.logoUrl} size={46} fallbackText={id.mono} alt={id.title} />
+          <div className="min-w-0">
+            <h3 className="font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.05 }}>
+              {id.title}
+            </h3>
+            {id.subtitle && (
+              <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{id.subtitle}</p>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0" style={{ maxWidth: '45%' }}>
-          <Gavel size={13} style={{ color: '#9A8A78', flexShrink: 0 }} />
-          <span className="text-xs truncate" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
+        <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0" style={{ maxWidth: '42%' }}>
+          <Gavel size={13} style={{ color: NEU.muted, flexShrink: 0 }} />
+          <span className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
             {session.chairNames.length > 0 ? session.chairNames.join(', ') : 'No chairs joined'}
           </span>
         </div>
       </div>
 
       {/* Current motion */}
-      <div
-        className="rounded-xl px-3.5 py-2.5 mt-4"
-        style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(221,212,192,0.7)' }}
-      >
-        <Eyebrow style={{ fontSize: 10 }}>Current motion</Eyebrow>
-        <div className="flex items-baseline justify-between gap-3 mt-0.5">
-          <p className="text-sm font-bold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{motion.label}</p>
-          {motion.remaining !== null && (
-            <span className="text-sm font-black flex-shrink-0" style={{ color: '#1B3828', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-              {fmtClock(motion.remaining)}
-            </span>
-          )}
-        </div>
-        {motion.detail && (
-          <p className="text-xs truncate mt-0.5" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>{motion.detail}</p>
-        )}
-      </div>
-
-      {/* Current speaker */}
-      <div className="flex items-center gap-2 mt-3.5" style={{ minHeight: 26 }}>
-        {speaker?.country ? (
-          <>
-            <FlagImg code={flagCodeFor(speaker.country)} size={24} />
-            <span className="text-sm font-bold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{speaker.country}</span>
-            {speaker.startedAt ? (
-              <Mic size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
-            ) : (
-              <span className="inline-flex items-center gap-1 text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                <MicOff size={13} /> paused
+      <NeuInset className="flex items-center gap-3" style={{ padding: '11px 13px', marginTop: 16, borderRadius: 14 }}>
+        <NeuIconDisc gradient={mv.gradient} emoji={mv.emoji} icon={mv.fallback} size={36} />
+        <div className="min-w-0 flex-1">
+          <Eyebrow style={{ fontSize: 10 }}>Current motion</Eyebrow>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{motion.label}</p>
+            {motion.remaining !== null && (
+              <span className="text-sm font-black flex-shrink-0" style={{ color: NEU.forest, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                {fmtClock(motion.remaining)}
               </span>
             )}
-          </>
+          </div>
+          {motion.detail && (
+            <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{motion.detail}</p>
+          )}
+        </div>
+      </NeuInset>
+
+      {/* Current speaker — the focal point, deliberately large */}
+      <div className="mt-4">
+        <Eyebrow style={{ fontSize: 10, marginBottom: 6 }}>On the floor</Eyebrow>
+        {speaker?.country ? (
+          <div
+            className="flex items-center gap-3.5 rounded-2xl"
+            style={{
+              padding: '12px 14px',
+              backgroundColor: NEU.surface,
+              boxShadow: speaking ? `0 0 0 1.5px ${NEU.green}55, ${NEU.outSm}` : NEU.outSm,
+            }}
+          >
+            <span
+              className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
+              style={{ width: 52, height: 52, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
+            >
+              <FlagImg code={flagCodeFor(speaker.country)} size={34} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 20, lineHeight: 1.1 }}>
+                {speaker.country}
+              </p>
+              <div className="flex items-center gap-1.5 mt-1">
+                {speaking ? (
+                  <>
+                    <span className="rounded-full animate-pulse flex-shrink-0" style={{ width: 7, height: 7, backgroundColor: NEU.green }} />
+                    <span className="text-xs font-bold uppercase" style={{ color: NEU.green, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                      Speaking now
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                    Paused
+                  </span>
+                )}
+              </div>
+            </div>
+            <Emoji3D
+              name="Studio microphone"
+              size={34}
+              fallback={Mic}
+              fallbackColor={speaking ? NEU.green : NEU.muted}
+              style={speaking ? undefined : { opacity: 0.5, filter: 'grayscale(0.6) drop-shadow(0 2px 4px rgba(27,56,40,0.30))' }}
+            />
+          </div>
         ) : (
-          <span className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No speaker on the floor</span>
+          <NeuInset className="flex items-center gap-2.5" style={{ padding: '14px 16px', borderRadius: 16 }}>
+            <Mic size={16} style={{ color: NEU.muted, flexShrink: 0 }} />
+            <span className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No speaker on the floor</span>
+          </NeuInset>
         )}
       </div>
 
       {/* Voting procedure banner */}
       {votingDr && (
         <div
-          className="rounded-xl px-3.5 py-2.5 mt-3"
-          style={{ backgroundColor: 'rgba(238,217,138,0.25)', border: '1px solid rgba(182,135,31,0.45)' }}
+          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 mt-3"
+          style={{ backgroundColor: 'rgba(238,217,138,0.22)', boxShadow: NEU.outSm }}
         >
-          <p className="text-xs font-extrabold uppercase" style={{ color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+          <Emoji3D name="Ballot box with ballot" size={16} fallback={Gavel} fallbackColor={NEU.deepGold} />
+          <p className="text-xs font-extrabold uppercase" style={{ color: NEU.deepGold, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
             Voting procedure: {votingDr.docCode || 'draft resolution'} on the floor
           </p>
         </div>
@@ -328,25 +378,25 @@ function LiveCard({
 
       {/* Doc + delegate chips */}
       <div className="flex flex-wrap gap-2 mt-3.5">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full" style={chipStyle}>
-          <FileText size={12} />
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full" style={chipStyle}>
+          <FileText size={12} style={{ color: NEU.forest }} />
           WPs {wpsPresented}/{wps.length}
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full" style={chipStyle}>
-          <ScrollText size={12} />
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full" style={chipStyle}>
+          <ScrollText size={12} style={{ color: NEU.forest }} />
           DRs {drsPresented}/{drs.length}
         </span>
         {passedCount > 0 && (
           <span
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full"
-            style={{ ...chipStyle, color: '#2A5A3C', backgroundColor: 'rgba(61,122,82,0.1)', border: '1px solid rgba(61,122,82,0.3)' }}
+            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
+            style={{ ...chipStyle, color: NEU.green }}
           >
             <FileCheck size={12} />
             {passedCount} passed
           </span>
         )}
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full" style={chipStyle}>
-          <Users size={12} />
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full" style={chipStyle}>
+          <Users size={12} style={{ color: NEU.forest }} />
           {present}/{data.delegates.length} present
         </span>
       </div>
@@ -354,21 +404,21 @@ function LiveCard({
       {/* Up next, flowing speakers strip */}
       <div className="mt-4">
         <Eyebrow style={{ fontSize: 10 }}>Up next</Eyebrow>
-        <div className="flex items-center mt-1.5" style={{ paddingLeft: 6, minHeight: 22 }}>
+        <div className="flex items-center mt-1.5" style={{ paddingLeft: 6, minHeight: 24 }}>
           {shownFlags.length > 0 ? (
             <>
               {shownFlags.map((country, i) => <FlagDot key={`${country}-${i}`} country={country} />)}
               {overflow > 0 && (
                 <span
                   className="flex items-center justify-center rounded-full text-[9px] font-extrabold flex-shrink-0"
-                  style={{ width: 22, height: 22, marginLeft: -6, backgroundColor: '#1B3828', color: '#EED98A', border: '1px solid #DDD4C0', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
+                  style={{ width: 24, height: 24, marginLeft: -6, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, color: NEU.gold, boxShadow: NEU.outSm, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
                 >
                   +{overflow}
                 </span>
               )}
             </>
           ) : (
-            <span className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Queue empty</span>
+            <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Queue empty</span>
           )}
         </div>
       </div>
@@ -378,14 +428,14 @@ function LiveCard({
       <button
         onClick={(e) => { e.stopPropagation(); onOpenAwards(data); }}
         className="flex items-center gap-2 mt-4 pt-3 w-full text-left focus:outline-none transition-colors"
-        style={{ borderTop: '1px solid rgba(221,212,192,0.55)', color: '#9A8A78', fontFamily: OUTFIT, backgroundColor: 'transparent' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+        style={{ borderTop: '1px solid rgba(27,56,40,0.1)', color: NEU.muted, fontFamily: OUTFIT, backgroundColor: 'transparent', cursor: 'pointer' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
       >
         <Trophy size={13} style={{ flexShrink: 0 }} />
         <span className="text-xs font-semibold">Awards: not allocated</span>
       </button>
-    </div>
+    </NeuCard>
   );
 }
 
@@ -401,6 +451,7 @@ export default function LiveStatusPage() {
   const [, setTick] = useState(0);
   const [recapFor, setRecapFor] = useState<string | null>(null);
   const [awardsFor, setAwardsFor] = useState<string | null>(null);
+  const [refreshHover, setRefreshHover] = useState(false);
   const loadingRef = useRef(false);
 
   const loadAll = useCallback(async () => {
@@ -412,7 +463,7 @@ export default function LiveStatusPage() {
       const authed = getAuthedClient(authSession.access_token);
       const { data: confCommittees } = await authed
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids')
+        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids')
         .eq('conference_id', conference.id)
         .order('name', { ascending: true });
 
@@ -491,6 +542,7 @@ export default function LiveStatusPage() {
             id: c.id as string,
             name: c.name as string,
             abbreviation: (c.abbreviation as string | null) ?? null,
+            logoUrl: (c.logo_url as string | null) ?? null,
             topics: (c.topics as string[] | null) ?? null,
             totalSlots: (c.total_slots as number) ?? 0,
             sessionId: sid,
@@ -575,28 +627,34 @@ export default function LiveStatusPage() {
   const secondsAgo = lastRefreshed ? Math.max(0, Math.floor((Date.now() - lastRefreshed) / 1000)) : null;
 
   return (
-    <div className="px-6 md:px-10 py-8 max-w-6xl">
+    <div className="px-6 md:px-10 py-8 max-w-6xl" style={{ fontFamily: OUTFIT }}>
       {/* Header */}
       <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
         <div>
           <Eyebrow>Live status</Eyebrow>
-          <h1 className="font-black" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 28, lineHeight: 1.1, marginTop: 2 }}>
+          <h1 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 28, lineHeight: 1.1, marginTop: 2 }}>
             Committee floor
           </h1>
         </div>
         <div className="flex items-center gap-3">
           {secondsAgo !== null && (
-            <span className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+            <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
               Refreshed {secondsAgo}s ago
             </span>
           )}
           <button
             onClick={loadAll}
             disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-xl py-2 px-4 text-xs font-bold uppercase transition-colors focus:outline-none"
-            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', opacity: refreshing ? 0.6 : 1 }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+            onMouseEnter={() => setRefreshHover(true)}
+            onMouseLeave={() => setRefreshHover(false)}
+            className="inline-flex items-center gap-2 rounded-full py-2.5 px-4 text-xs font-bold uppercase focus:outline-none"
+            style={{
+              border: 'none', color: NEU.forest, backgroundColor: NEU.surface,
+              fontFamily: OUTFIT, letterSpacing: '0.06em',
+              boxShadow: refreshHover && !refreshing ? NEU.outSmHover : NEU.outSm,
+              opacity: refreshing ? 0.6 : 1, cursor: refreshing ? 'default' : 'pointer',
+              transition: `box-shadow 200ms ${EASE}`,
+            }}
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             Refresh
@@ -604,67 +662,51 @@ export default function LiveStatusPage() {
         </div>
       </div>
 
-      {/* Summary hero strip */}
-      <div
-        className="mb-7 rounded-[22px] overflow-hidden relative"
-        style={{
-          background: 'linear-gradient(135deg, #16301F 0%, #1B3828 46%, #2A5A3C 100%)',
-          border: '2px solid rgba(238,217,138,0.22)',
-          boxShadow: '0 4px 14px rgba(27,56,40,0.2), 0 24px 60px rgba(27,56,40,0.24)',
-        }}
-      >
-        <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.07 }} />
-        <div
-          className="pointer-events-none absolute"
-          style={{ top: -120, right: -80, width: 380, height: 380, borderRadius: '9999px', background: 'radial-gradient(circle, rgba(238,217,138,0.22), transparent 66%)' }}
-        />
-        <div className="relative px-6 md:px-8 py-6 flex items-center gap-8 flex-wrap">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center justify-center flex-shrink-0" style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(238,217,138,0.14)', border: '1px solid rgba(238,217,138,0.3)' }}>
-              <Radio size={20} style={{ color: '#EED98A' }} />
-            </span>
-            <div>
-              <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', color: 'rgba(238,217,138,0.78)' }}>
-                {conference?.acronym ?? '…'} · FLOOR OVERVIEW
-              </p>
-              <p className="font-black" style={{ color: '#F7F3E9', fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15 }}>
-                {liveCount > 0 ? 'Committees are in session' : 'All quiet on the floor'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-8 flex-wrap">
-            {[
-              { value: rows?.length ?? 0, label: 'COMMITTEES' },
-              { value: liveCount, label: 'IN SESSION' },
-              { value: chairsJoined, label: 'CHAIRS JOINED' },
-            ].map((s) => (
-              <div key={s.label}>
-                <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: '#F7F3E9', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.14em', color: 'rgba(238,217,138,0.78)', marginTop: 4 }}>{s.label}</p>
-              </div>
-            ))}
+      {/* Summary strip — floor overview + live counts */}
+      <NeuCard className="mb-7 flex items-center justify-between gap-6 flex-wrap" style={{ padding: '18px 22px' }}>
+        <div className="flex items-center gap-3.5 min-w-0">
+          <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Satellite antenna" icon={Radio} size={52} />
+          <div className="min-w-0">
+            <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', color: NEU.deepGold }}>
+              {conference?.acronym ?? '…'} · FLOOR OVERVIEW
+            </p>
+            <p className="font-black truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15, marginTop: 1 }}>
+              {liveCount > 0 ? 'Committees are in session' : 'All quiet on the floor'}
+            </p>
           </div>
         </div>
-      </div>
+        <div className="flex items-center gap-7 flex-wrap">
+          {[
+            { value: rows?.length ?? 0, label: 'COMMITTEES', color: NEU.ink },
+            { value: liveCount, label: 'IN SESSION', color: liveCount > 0 ? NEU.green : NEU.ink },
+            { value: chairsJoined, label: 'CHAIRS JOINED', color: NEU.ink },
+          ].map((s) => (
+            <div key={s.label}>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 27, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
+              <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.13em', color: NEU.muted, marginTop: 5 }}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </NeuCard>
 
       {/* Grid */}
       {rows === null ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="rounded-[20px] animate-pulse" style={{ height: 300, backgroundColor: 'rgba(250,248,243,0.7)', border: '1px solid #DDD4C0' }} />
+            <div key={i} className="rounded-[22px] animate-pulse" style={{ height: 320, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-2xl p-10 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-          <p className="text-sm font-bold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>No committees yet</p>
+        <NeuCard style={{ padding: 40, textAlign: 'center' }}>
+          <p className="text-sm font-bold mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>No committees yet</p>
           <Link
             href={conference ? `/manage/${conference.slug}/committees` : '#'}
             className="text-sm font-bold transition-colors"
-            style={{ color: '#1B3828', fontFamily: OUTFIT, textDecoration: 'none' }}
+            style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
           >
             Create them in Committees →
           </Link>
-        </div>
+        </NeuCard>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {rows.map((r) => {
