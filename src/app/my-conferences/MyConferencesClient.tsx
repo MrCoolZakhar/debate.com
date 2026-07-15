@@ -494,7 +494,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, profile, loading: authLoading } = useAuth();
 
   const [data, setData] = useState<LoadedData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
@@ -577,12 +577,21 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   const loadOrganizerInvites = useCallback(async () => {
     if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
-    const { data: rows } = await supabase
-      .from('conference_organizer_invites')
-      .select('id, token, conferences (full_name, acronym, slug)')
-      .eq('invited_user_id', user.id)
-      .eq('status', 'pending');
-    const invites = ((rows ?? []) as unknown as {
+    const select = 'id, token, conferences (full_name, acronym, slug)';
+    // Two queries, not one .or(): invited_user_id-keyed invites (the normal
+    // case) plus email-keyed invites (invited_user_id null) for someone who
+    // just created their account with the invited address — matches RLS's
+    // "Invitee reads own organizer invites" policy exactly, and avoids having
+    // to escape an email into a single or() filter string.
+    const email = profile?.email ?? user.email ?? null;
+    const [byUser, byEmail] = await Promise.all([
+      supabase.from('conference_organizer_invites').select(select).eq('invited_user_id', user.id).eq('status', 'pending'),
+      email
+        ? supabase.from('conference_organizer_invites').select(select).is('invited_user_id', null).eq('email', email.toLowerCase()).eq('status', 'pending')
+        : Promise.resolve({ data: [] }),
+    ]);
+    const rows = [...(byUser.data ?? []), ...(byEmail.data ?? [])];
+    const invites = (rows as unknown as {
       id: string; token: string;
       conferences: { full_name: string; acronym: string; slug: string } | { full_name: string; acronym: string; slug: string }[] | null;
     }[]).map(r => {
@@ -595,7 +604,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
       };
     });
     setOrganizerInvites(invites);
-  }, [user, session]);
+  }, [user, session, profile?.email]);
 
   async function handleRespondOrganizerInvite(invite: OrganizerInvite, accept: boolean) {
     if (!session) return;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
 import { ageAt } from '@/lib/age';
@@ -55,6 +55,13 @@ type Phase = 'form' | 'awaiting' | 'verified';
 
 function SignUpInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Where a verified/OAuth signup lands, e.g. an invite gate wants the visitor
+  // back on its own token page rather than the default onboarding funnel.
+  // Only relative paths are allowed (must start with a single "/") to prevent
+  // open-redirect, same guard as /auth/signin's next handling.
+  const rawNext = searchParams.get('next');
+  const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/auth/onboarding';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [dob, setDob] = useState(''); // ISO 'YYYY-MM-DD' from the DatePicker
@@ -115,11 +122,11 @@ function SignUpInner() {
     setContinuing(true);
     const { data } = await supabase.auth.getSession();
     if (data.session) {
-      router.push('/auth/onboarding');
+      router.push(next);
     } else {
       // Verified but the session didn't stick to this tab — send them to sign
       // in rather than a dead end.
-      router.push('/auth/signin?next=/auth/onboarding&verified=1');
+      router.push(`/auth/signin?next=${encodeURIComponent(next)}&verified=1`);
     }
   }
 
@@ -138,7 +145,7 @@ function SignUpInner() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/auth/onboarding`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
   }
@@ -176,7 +183,7 @@ function SignUpInner() {
       password,
       options: {
         data: { full_name: name, date_of_birth: dateOfBirth },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/auth/onboarding`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
     if (error) {
@@ -186,11 +193,11 @@ function SignUpInner() {
     }
 
     // Instant entry: when email confirmation is DISABLED, signUp returns a
-    // live session — go straight to onboarding. With confirmation ON (the
-    // normal path) there is no session, so the awaiting-verification screen
-    // is the primary outcome.
+    // live session — go straight to onboarding (or wherever `next` points).
+    // With confirmation ON (the normal path) there is no session, so the
+    // awaiting-verification screen is the primary outcome.
     if (data.session) {
-      router.push('/auth/onboarding');
+      router.push(next);
       return;
     }
     setLoading(false);

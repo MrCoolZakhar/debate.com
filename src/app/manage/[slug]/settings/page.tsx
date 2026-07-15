@@ -370,7 +370,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { conference, refreshConferenceQuiet } = useManage();
-  const { user, session } = useAuth();
+  const { user, session, profile } = useAuth();
   // Deep-links from the dashboard checklist pass ?tab= to land on the right
   // sub-tab (e.g. "Set up your conference page" → conference). Falls back to
   // applications for any missing/unknown value.
@@ -805,7 +805,11 @@ export default function SettingsPage() {
       setInviteError('Your session has expired, please refresh and sign in again.');
       return;
     }
-    const res = await sendOrganizerInvite(supabase, { conferenceId: conference.id, email: inviteEmail.trim() });
+    const res = await sendOrganizerInvite(supabase, {
+      conferenceId: conference.id,
+      email: inviteEmail.trim(),
+      inviterName: profile?.display_name || 'A Gavelling organizer',
+    });
     setInviting(false);
     if (!res.ok) {
       setInviteError(res.error ?? "Couldn't send that invite. Please try again.");
@@ -2856,7 +2860,12 @@ export default function SettingsPage() {
             They&apos;ll get an email with an invite link. It works whether or not they already have a Gavelling account, and they&apos;ll join the team once they accept.
           </p>
           {inviteError && (
-            <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>{inviteError}</p>
+            <p
+              className="text-xs mt-2 rounded-lg px-3 py-2"
+              style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)', fontFamily: "'Outfit', sans-serif" }}
+            >
+              {inviteError}
+            </p>
           )}
           {inviteNotice && (
             <p className="text-xs mt-2" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{inviteNotice}</p>

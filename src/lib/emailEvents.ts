@@ -489,14 +489,22 @@ export interface QueueOrganizerInviteEmailArgs {
   conferenceId: string;
   token: string;
   invitedEmail: string;
-  invitedName: string;
+  /** null when the invitee has no Gavelling account yet — there is no name to greet them by. */
+  invitedName: string | null;
+  /** Whether the invited email already belongs to a Gavelling account. false
+   *  swaps in create-account copy (no {{delegate_name}} to greet with, and a
+   *  CTA that reads "create an account" rather than "accept"). */
+  accountExists: boolean;
+  /** Display name of the organizer who sent the invite, used only in the
+   *  no-account copy since there's no invitee name to personalize with. */
+  inviterName: string;
 }
 
 export async function queueOrganizerInviteEmail(
   supabase: ReturnType<typeof getAuthedClient>,
   args: QueueOrganizerInviteEmailArgs
 ): Promise<void> {
-  const { conferenceId, token, invitedEmail, invitedName } = args;
+  const { conferenceId, token, invitedEmail, invitedName, accountExists, inviterName } = args;
 
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
@@ -531,7 +539,23 @@ export async function queueOrganizerInviteEmail(
 
   const useTemplate = !!template && template.enabled;
   const fallback = getDefaultEventEmail('organizer_invite');
-  const blocks: EmailBlock[] = useTemplate ? normalizeBlocks(template!.body_blocks, template!.body) : (fallback?.blocks ?? []);
+
+  // No account yet: there's no invitee name to greet ({{delegate_name}}
+  // would resolve to an unresolved-token marker), so the fallback swaps in
+  // fixed create-account copy naming the inviter and the conference acronym
+  // instead. A conference's own customized template (useTemplate) is left
+  // alone either way — same as the existing-account path, it's on the
+  // organizer to know their template greets an invitee by name.
+  const noAccountBlocks: EmailBlock[] = [
+    { type: 'paragraph', content: `${inviterName} invited you to join the organizing team of ${renderConf.acronym || renderConf.full_name} on Gavelling. Create your free account with this email address to accept.` },
+    { type: 'button', label: 'CREATE ACCOUNT AND ACCEPT', destination: 'organizer_invite_accept' },
+  ];
+
+  const blocks: EmailBlock[] = useTemplate
+    ? normalizeBlocks(template!.body_blocks, template!.body)
+    : accountExists
+      ? (fallback?.blocks ?? [])
+      : noAccountBlocks;
   const subjectSource = useTemplate ? template!.subject : (fallback?.subject ?? '');
   const flatBody = flattenBlocksToPlainText(blocks, renderConf, { organizerInviteToken: token });
 

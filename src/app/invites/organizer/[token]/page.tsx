@@ -1,17 +1,18 @@
 'use client';
 
 // Organizer (secretariat) invite acceptance page — mirrors /invites/chair.
-// Auth-gated: signed-out visitors bounce to sign-in and land back here with
-// the token intact since it lives in the path. Loads the invite via the
-// SECURITY DEFINER get_organizer_invite RPC (token is the sole credential)
-// and resolves it with respond_organizer_invite, which inserts the
-// conference_organizers row with default (empty) permissions and returns the
-// slug so we can land straight on /manage/[slug].
+// Auth-gated: signed-out visitors get a choice (sign in or create account),
+// both of which land back here with the token intact since it lives in the
+// path, including through email confirmation via /auth/callback's next=.
+// Loads the invite via the SECURITY DEFINER get_organizer_invite RPC (token
+// is the sole credential) and resolves it with respond_organizer_invite,
+// which inserts the conference_organizers row with default (empty)
+// permissions and returns the slug so we can land straight on /manage/[slug].
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Check, X, Users2 } from 'lucide-react';
+import { Check, X, Users2, LogIn, UserPlus, LogOut } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
@@ -46,20 +47,26 @@ export default function OrganizerInvitePage() {
   const pathname = usePathname();
   const params = useParams<{ token: string }>();
   const token = params.token;
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading, signOut } = useAuth();
 
   const [invite, setInvite] = useState<InviteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [responding, setResponding] = useState<'accept' | 'decline' | null>(null);
   const [error, setError] = useState('');
+  const [switchingAccount, setSwitchingAccount] = useState(false);
 
-  // ── Auth gate — preserves the token by redirecting back to this exact path.
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      router.replace(`/auth/signin?next=${encodeURIComponent(pathname)}`);
-    }
-  }, [authLoading, user, router, pathname]);
+  // Signed out visitors are never auto-redirected — the gate below offers a
+  // choice (sign in vs. create account) and both paths preserve this exact
+  // token URL through /auth/callback so the invite is right there afterward.
+
+  async function handleSwitchAccount() {
+    if (switchingAccount) return;
+    setSwitchingAccount(true);
+    await signOut();
+    // No explicit navigation needed: user becomes null and the signed-out
+    // gate below renders in its place, still on this same token URL.
+    setSwitchingAccount(false);
+  }
 
   const load = useCallback(async () => {
     if (!session || !token) return;
@@ -95,7 +102,66 @@ export default function OrganizerInvitePage() {
     }
   }
 
-  if (authLoading || !user || loading) return <Spinner />;
+  if (authLoading) return <Spinner />;
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+        <SiteNav />
+        <div className="relative z-10 flex-1 px-6 py-14 flex items-start justify-center">
+          <div
+            className="w-full rounded-[24px] px-8 py-10"
+            style={{
+              maxWidth: 460,
+              backgroundColor: 'rgba(250,248,243,0.9)',
+              backdropFilter: 'blur(14px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
+              border: '1px solid #DDD4C0',
+              boxShadow: '0 20px 50px rgba(27,56,40,0.12)',
+            }}
+          >
+            <span
+              className="flex items-center justify-center mb-5"
+              style={{
+                width: 52, height: 52, borderRadius: '9999px',
+                background: 'linear-gradient(150deg, rgba(27,56,40,0.14), rgba(27,56,40,0.05))',
+                border: '1.5px solid rgba(27,56,40,0.2)',
+              }}
+            >
+              <Users2 size={22} style={{ color: '#1B3828' }} />
+            </span>
+
+            <Eyebrow>Organizer Invite</Eyebrow>
+            <h1 className="font-black text-xl mt-2 mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              Sign in to view this invite
+            </h1>
+            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.55 }}>
+              Sign in or create a free Gavelling account with the email address this invite was sent to, and you&apos;ll land right back here to accept it.
+            </p>
+
+            <div className="flex gap-3">
+              <Link
+                href={`/auth/signin?next=${encodeURIComponent(pathname)}`}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none flex items-center justify-center gap-2 transition-colors"
+                style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, textDecoration: 'none' }}
+              >
+                <LogIn size={14} /> SIGN IN
+              </Link>
+              <Link
+                href={`/auth/signup?next=${encodeURIComponent(pathname)}`}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none flex items-center justify-center gap-2 transition-colors"
+                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, textDecoration: 'none' }}
+              >
+                <UserPlus size={14} /> CREATE ACCOUNT
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) return <Spinner />;
 
   const failed = !invite || !invite.ok;
   const resolvedCopy = invite?.status && invite.status !== 'pending' ? STATUS_COPY[invite.status] : null;
@@ -172,9 +238,20 @@ export default function OrganizerInvitePage() {
               </p>
 
               {error && (
-                <p className="text-xs mb-4 rounded-lg px-3 py-2" style={{ color: '#8B2020', fontFamily: OUTFIT, backgroundColor: 'rgba(139,32,32,0.07)', border: '1px solid rgba(139,32,32,0.25)' }}>
-                  {error}
-                </p>
+                <div className="mb-4">
+                  <p className="text-xs rounded-lg px-3 py-2" style={{ color: '#8B2020', fontFamily: OUTFIT, backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)' }}>
+                    {error}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSwitchAccount}
+                    disabled={switchingAccount}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold focus:outline-none"
+                    style={{ color: switchingAccount ? '#C8BEA8' : '#8B2020', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: switchingAccount ? 'not-allowed' : 'pointer', letterSpacing: '0.04em' }}
+                  >
+                    <LogOut size={12} /> {switchingAccount ? 'SIGNING OUT…' : 'SIGN OUT AND SWITCH ACCOUNT'}
+                  </button>
+                </div>
               )}
 
               <div className="flex gap-3">

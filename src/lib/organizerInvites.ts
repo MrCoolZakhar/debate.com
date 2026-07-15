@@ -20,6 +20,9 @@ export interface OrganizerInviteRow {
 export interface SendOrganizerInviteArgs {
   conferenceId: string;
   email: string;
+  /** Display name of the organizer sending the invite, used in the
+   *  create-account email copy when the invitee has no account yet. */
+  inviterName: string;
 }
 
 export interface SendOrganizerInviteResult {
@@ -27,8 +30,8 @@ export interface SendOrganizerInviteResult {
   error?: string;
   inviteId?: string;
   invitedEmail?: string;
-  invitedName?: string;
-  hasAccount?: boolean;
+  invitedName?: string | null;
+  accountExists?: boolean;
   existing?: boolean;
 }
 
@@ -39,8 +42,8 @@ interface CreateOrganizerInviteRpcResult {
   invite_id?: string;
   token?: string;
   invited_email?: string;
-  invited_name?: string;
-  has_account?: boolean;
+  invited_name?: string | null;
+  account_exists?: boolean;
 }
 
 /** Create (or reuse) a pending organizer invite and queue the invite email. */
@@ -61,15 +64,17 @@ export async function sendOrganizerInvite(
     conferenceId: args.conferenceId,
     token: result.token!,
     invitedEmail: result.invited_email!,
-    invitedName: result.invited_name!,
+    invitedName: result.invited_name ?? null,
+    accountExists: result.account_exists ?? true,
+    inviterName: args.inviterName,
   });
 
   return {
     ok: true,
     inviteId: result.invite_id,
     invitedEmail: result.invited_email,
-    invitedName: result.invited_name,
-    hasAccount: result.has_account,
+    invitedName: result.invited_name ?? null,
+    accountExists: result.account_exists,
     existing: result.existing,
   };
 }
