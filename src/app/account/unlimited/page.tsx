@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Crown, Infinity as InfinityIcon, Check, Ticket, Loader2 } from 'lucide-react';
+import { Sparkles, Ticket, Crown, Infinity as InfinityIcon, Check, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { extractFunctionErrorMessage, unlimitedPricing } from '@/lib/payments';
 import { formatFee } from '@/lib/finance';
-import { Eyebrow, GlassCard, OUTFIT } from '../accountUi';
-import { NEU, NeuInset } from '@/components/neu';
+import { Eyebrow, GlassCard } from '../accountUi';
+import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuPill, NeuIconDisc, NeuInset } from '@/components/neu';
 
 interface Subscription {
   plan: string;
@@ -24,6 +24,67 @@ function planLabel(sub: Subscription): string {
   if (sub.plan === 'unlimited_monthly') return 'Monthly plan';
   return sub.current_period_end ? `Yearly pass, valid until ${formatExpiry(sub.current_period_end)}` : 'Yearly pass';
 }
+
+/** Monthly button: "$5 A MONTH". Annual button: "$3.75 A MONTH · BILLED
+ *  ANNUALLY ($45)", the annual total divided evenly across 12 months, both
+ *  derived from unlimitedPricing(code) so the copy always matches whatever
+ *  the server actually charges. */
+function monthlyLabel(price: { monthly: number; currency: string }): string {
+  return `${formatFee(price.monthly, price.currency)} A MONTH`;
+}
+function annualLabel(price: { yearly: number; currency: string }): string {
+  const perMonth = Math.round((price.yearly / 12) * 100) / 100;
+  return `${formatFee(perMonth, price.currency)} A MONTH · BILLED ANNUALLY (${formatFee(price.yearly, price.currency)})`;
+}
+
+interface PlanFeature {
+  text: string;
+  comingSoon?: boolean;
+}
+
+/** A single feature row: small check badge + text + optional COMING SOON tag. */
+function PlanFeatureRow({ feature, accent }: { feature: PlanFeature; accent: 'forest' | 'gold' }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <NeuIconDisc
+        gradient={accent === 'gold' ? NEU_GRADIENTS.gold : NEU_GRADIENTS.sage}
+        icon={Check}
+        size={20}
+        style={{ marginTop: 1 }}
+      />
+      <span className="flex-1 flex flex-wrap items-center gap-1.5">
+        <span className="text-[13px]" style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: 600, lineHeight: 1.5 }}>
+          {feature.text}
+        </span>
+        {feature.comingSoon && (
+          <span
+            style={{
+              fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.08em',
+              color: NEU.muted, backgroundColor: NEU.base, boxShadow: NEU.inSm,
+              padding: '2.5px 7px', borderRadius: 999, whiteSpace: 'nowrap',
+            }}
+          >
+            COMING SOON
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+const FREE_FEATURES: PlanFeature[] = [
+  { text: 'Apply to any conference' },
+  { text: 'Committee sessions, documents and placards' },
+  { text: 'Delegation tools and Q&A with organizers' },
+  { text: 'Standard service fee at checkout' },
+];
+
+const UNLIMITED_FEATURES: PlanFeature[] = [
+  { text: '0 percent Gavelling platform fee as a conference attendee' },
+  { text: 'Your MUN historical statistics', comingSoon: true },
+  { text: 'Unlimited email builder use as a conference organizer', comingSoon: true },
+  { text: 'Premium job board opportunities', comingSoon: true },
+];
 
 export default function UnlimitedPage() {
   const { user, session, profile, loading: authLoading } = useAuth();
@@ -229,98 +290,109 @@ export default function UnlimitedPage() {
       <Eyebrow className="mb-2">Unlimited</Eyebrow>
       <h1
         className="font-black text-[26px] mb-1"
-        style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
+        style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
       >
         Gavelling Unlimited
       </h1>
-      <p className="text-sm mb-8" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 560 }}>
+      <p className="text-sm mb-8" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 560 }}>
         Skip the 5 percent Gavelling platform fee on your own registration fees, at every conference. Card processing still applies.
       </p>
 
-      {/* Personal plan */}
-      <Eyebrow className="mb-3">Your Plan</Eyebrow>
-      <GlassCard className="!p-5 mb-3">
-        {confirming ? (
-          <div className="flex items-center gap-3">
-            <span
-              className="flex items-center justify-center rounded-full flex-shrink-0"
-              style={{ width: 40, height: 40, backgroundColor: 'rgba(182,135,31,0.16)', border: '1.5px solid rgba(182,135,31,0.38)' }}
-            >
-              <Loader2 size={18} strokeWidth={2.2} className="animate-spin" style={{ color: NEU.deepGold }} />
-            </span>
-            <div>
-              <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                Confirming your Unlimited purchase…
-              </p>
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>This usually takes a few seconds.</p>
-            </div>
-          </div>
-        ) : active ? (
-          <div className="flex items-center gap-3">
-            <span
-              className="flex items-center justify-center rounded-full flex-shrink-0"
-              style={{ width: 40, height: 40, backgroundColor: 'rgba(61,122,82,0.14)', border: '1.5px solid rgba(61,122,82,0.4)' }}
-            >
-              <Check size={18} strokeWidth={2.6} style={{ color: '#2A5A3C' }} />
-            </span>
-            <div>
-              <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                Gavelling Unlimited active
-                <span style={{ color: '#9A8A78', fontWeight: 700 }}> · {planLabel(subscription!)}</span>
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                Your registrations skip the 5 percent Gavelling platform fee at every conference.
-              </p>
-            </div>
-          </div>
-        ) : confirmTimedOut ? (
-          <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-            Payment received. Unlimited will activate here within a minute.
+      {/* Free vs Unlimited comparison */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-3 items-stretch">
+        {/* FREE card, quieter */}
+        <NeuCard style={{ padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
+          <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Ticket} size={44} />
+          <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            Free
+          </h2>
+          <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+            Everything you need to take part.
           </p>
-        ) : (
-          <>
-            <p className="font-bold text-sm mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Go Unlimited</p>
-            <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-              One personal plan, applies to every conference you register for.
-            </p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => startCheckout('monthly')}
-                disabled={busy !== null}
-                className="rounded-full px-3.5 py-1.5 text-xs font-extrabold focus:outline-none"
-                style={{
-                  border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
-                  background: busy !== null ? 'rgba(27,56,40,0.14)' : NEU.forest,
-                  color: busy !== null ? NEU.muted : NEU.gold,
-                  cursor: busy !== null ? 'default' : 'pointer',
-                }}
-              >
-                {busy === 'monthly' ? 'STARTING CHECKOUT…' : `GO UNLIMITED · ${formatFee(price.monthly, price.currency)}/MONTH`}
-              </button>
-              <button
-                onClick={() => startCheckout('yearly')}
-                disabled={busy !== null}
-                className="rounded-full px-3.5 py-1.5 text-xs font-extrabold focus:outline-none"
-                style={{
-                  fontFamily: OUTFIT, letterSpacing: '0.05em',
-                  border: busy !== null ? '1px solid rgba(154,138,120,0.3)' : '1px solid rgba(27,56,40,0.35)',
-                  background: 'transparent',
-                  color: busy !== null ? NEU.muted : NEU.forest,
-                  cursor: busy !== null ? 'default' : 'pointer',
-                }}
-              >
-                {busy === 'yearly' ? 'STARTING CHECKOUT…' : `PAY YEARLY · ${formatFee(price.yearly, price.currency)}`}
-              </button>
-            </div>
-            {purchaseError && (
-              <p className="mt-2.5 text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                {purchaseError}
+
+          <div className="flex flex-col gap-3.5 flex-1">
+            {FREE_FEATURES.map(f => <PlanFeatureRow key={f.text} feature={f} accent="forest" />)}
+          </div>
+
+          <div className="mt-6">
+            {!active && <NeuPill>CURRENT PLAN</NeuPill>}
+          </div>
+        </NeuCard>
+
+        {/* UNLIMITED card, hero treatment, gold accent */}
+        <NeuCard
+          style={{
+            padding: '26px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: `0 0 0 2px rgba(182,135,31,0.5), ${NEU.out}`,
+          }}
+        >
+          <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Sparkles} size={44} />
+          <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            Gavelling Unlimited
+          </h2>
+          <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+            For people who live this.
+          </p>
+
+          <div className="flex flex-col gap-3.5 flex-1">
+            {UNLIMITED_FEATURES.map(f => <PlanFeatureRow key={f.text} feature={f} accent="gold" />)}
+          </div>
+
+          <div className="mt-6">
+            {confirming ? (
+              <div className="flex items-center gap-3">
+                <Loader2 size={18} strokeWidth={2.2} className="animate-spin" style={{ color: NEU.deepGold }} />
+                <div>
+                  <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                    Confirming your purchase…
+                  </p>
+                  <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>This usually takes a few seconds.</p>
+                </div>
+              </div>
+            ) : active ? (
+              <div className="flex flex-col gap-2 items-start">
+                <NeuPill active gradient={NEU_GRADIENTS.green}>
+                  <Check size={11} strokeWidth={2.6} /> ACTIVE
+                </NeuPill>
+                <p className="text-xs font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                  {planLabel(subscription!)}
+                </p>
+              </div>
+            ) : confirmTimedOut ? (
+              <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                Payment received. Unlimited will activate here within a minute.
               </p>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                <NeuButton
+                  gradient={NEU_GRADIENTS.gold}
+                  disabled={busy !== null}
+                  onClick={() => startCheckout('monthly')}
+                  style={{ width: '100%' }}
+                >
+                  {busy === 'monthly' ? 'STARTING CHECKOUT…' : monthlyLabel(price)}
+                </NeuButton>
+                <NeuButton
+                  gradient={NEU_GRADIENTS.forest}
+                  disabled={busy !== null}
+                  onClick={() => startCheckout('yearly')}
+                  style={{ width: '100%', background: busy !== null ? undefined : 'transparent', border: `1.5px solid ${busy !== null ? 'rgba(154,138,120,0.3)' : 'rgba(27,56,40,0.35)'}`, color: busy !== null ? NEU.muted : NEU.forest }}
+                >
+                  {busy === 'yearly' ? 'STARTING CHECKOUT…' : annualLabel(price)}
+                </NeuButton>
+                {purchaseError && (
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                    {purchaseError}
+                  </p>
+                )}
+              </div>
             )}
-          </>
-        )}
-      </GlassCard>
-      <p className="text-xs mb-10" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+          </div>
+        </NeuCard>
+      </div>
+      <p className="text-xs mb-10" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
         Applies to your own registration fees. Delegation spot purchases keep the standard service fee.
       </p>
 
@@ -354,7 +426,7 @@ export default function UnlimitedPage() {
             </span>
           )}
         </div>
-        <p className="text-xs mb-3" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.65 }}>
+        <p className="text-xs mb-3" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.65 }}>
           Have a Gavelling code? Redeem it here. Subscription codes are single-use per account.
         </p>
         <NeuInset small className="p-2">
@@ -368,7 +440,7 @@ export default function UnlimitedPage() {
               aria-label="Voucher code"
               className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-sm focus:outline-none"
               style={{
-                border: 'none', backgroundColor: 'transparent', color: '#1C1410',
+                border: 'none', backgroundColor: 'transparent', color: NEU.ink,
                 fontFamily: OUTFIT, letterSpacing: '0.08em', textTransform: 'uppercase',
               }}
             />
@@ -403,12 +475,12 @@ export default function UnlimitedPage() {
         className="flex items-center gap-3 rounded-2xl px-4 py-3"
         style={{ backgroundColor: 'rgba(237,231,216,0.5)', border: '1px solid rgba(221,212,192,0.7)' }}
       >
-        <Sparkles size={16} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
+        <Sparkles size={16} strokeWidth={2} style={{ color: NEU.muted, flexShrink: 0 }} />
         <div>
-          <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Gavelling Points: {balance}
           </p>
-          <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
             Rewards are coming soon.
           </p>
         </div>

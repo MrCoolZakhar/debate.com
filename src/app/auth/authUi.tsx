@@ -50,41 +50,52 @@ export function AuthLayout({
 }) {
   return (
     <div
-      className="min-h-screen w-full lg:grid relative"
+      className="min-h-dvh w-full flex flex-col lg:grid relative"
       style={{ backgroundColor: '#EDE7D8', gridTemplateColumns: '46% 54%' }}
     >
       <BrandPanel eyebrow={eyebrow} headline={headline} sub={sub} />
 
-      <div className="relative flex items-center justify-center px-5 py-10 md:px-8 lg:py-12 min-h-screen lg:min-h-0" style={{ overflowX: 'clip' }}>
-        {/* Decorative bleed — faded forest glyphs drifting off the edges,
-            behind the z-10 glass card. */}
-        <DecorativeBleed
-          items={[
-            { Icon: Globe2, size: 170, top: '-42px', left: '-40px', opacity: 0.05 },
-            { Icon: Sparkles, size: 120, bottom: '-30px', right: '-24px', opacity: 0.045 },
-            { Icon: Star, size: 90, top: '18%', right: '6%', opacity: 0.04, rotate: 12 },
-          ]}
-        />
-        {/* Grain texture */}
-        <div
-          className="pointer-events-none absolute inset-0 z-0"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
-            backgroundRepeat: 'repeat',
-            backgroundSize: '300px 300px',
-            mixBlendMode: 'multiply',
-            opacity: 0.18,
-          }}
-        />
-        {/* Soft gold radial glow behind the card */}
-        <div
-          className="pointer-events-none absolute z-0"
-          style={{
-            width: '520px', height: '520px', borderRadius: '9999px',
-            background: 'radial-gradient(circle, rgba(238,217,138,0.30) 0%, rgba(238,217,138,0) 68%)',
-            filter: 'blur(8px)',
-          }}
-        />
+      <div className="relative flex items-center justify-center px-5 py-10 md:px-8 lg:py-12 flex-1" style={{ overflowX: 'clip' }}>
+        {/* Decorative-only layer: bleed icons, grain and the glow all sit in
+            their own inset-0, overflow-clipped box. Clipping lives HERE, not
+            on the flex-1 content wrapper, because the Sparkles bleed item
+            below intentionally pokes past its box (bottom: -30px) — left
+            unclipped that adds real scrollable page height even when the
+            card fits. The real card content is a sibling outside this box so
+            it keeps its natural ability to overflow and scroll on short
+            viewports (mobile keyboard open, small laptops). */}
+        <div className="absolute inset-0 pointer-events-none" style={{ overflow: 'clip' }}>
+          {/* Decorative bleed — faded forest glyphs drifting off the edges,
+              behind the z-10 glass card. */}
+          <DecorativeBleed
+            items={[
+              { Icon: Globe2, size: 170, top: '-42px', left: '-40px', opacity: 0.05 },
+              { Icon: Sparkles, size: 120, bottom: '-30px', right: '-24px', opacity: 0.045 },
+              { Icon: Star, size: 90, top: '18%', right: '6%', opacity: 0.04, rotate: 12 },
+            ]}
+          />
+          {/* Grain texture */}
+          <div
+            className="pointer-events-none absolute inset-0 z-0"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'repeat',
+              backgroundSize: '300px 300px',
+              mixBlendMode: 'multiply',
+              opacity: 0.18,
+            }}
+          />
+          {/* Soft gold radial glow behind the card, centered on the box */}
+          <div
+            className="pointer-events-none absolute z-0"
+            style={{
+              top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: '520px', height: '520px', borderRadius: '9999px',
+              background: 'radial-gradient(circle, rgba(238,217,138,0.30) 0%, rgba(238,217,138,0) 68%)',
+              filter: 'blur(8px)',
+            }}
+          />
+        </div>
 
         <div className="relative z-10 w-full max-w-md">
           <Link
@@ -123,7 +134,7 @@ export function AuthLayout({
 function BrandPanel({ eyebrow, headline, sub }: { eyebrow: string; headline: string; sub: string }) {
   return (
     <div
-      className="relative overflow-hidden h-[190px] sm:h-[230px] lg:h-auto lg:min-h-screen"
+      className="relative overflow-hidden h-[190px] sm:h-[230px] lg:h-auto lg:min-h-dvh flex-shrink-0"
       style={{ backgroundColor: '#14241B' }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}

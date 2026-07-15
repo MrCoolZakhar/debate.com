@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createAuthClient } from '@/lib/supabase-auth';
 import {
   AuthLayout,
@@ -13,7 +12,6 @@ import {
   PasswordField,
   PrimaryButton,
   PrimaryLinkButton,
-  Toast,
 } from '../authUi';
 
 /**
@@ -23,7 +21,6 @@ import {
  * the code exchange. We just take a new password via updateUser.
  */
 export default function ResetPasswordPage() {
-  const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
@@ -69,7 +66,6 @@ export default function ResetPasswordPage() {
       return;
     }
     setDone(true);
-    setTimeout(() => router.push('/'), 1800);
   }
 
   return (
@@ -79,12 +75,17 @@ export default function ResetPasswordPage() {
       sub="Pick something strong, then you're straight back into your conferences."
     >
       {done ? (
-        <>
-          <NoticeScreen icon={<CheckMark size={26} />} title="Password updated">
-            You&apos;re signed in. Taking you home…
-          </NoticeScreen>
-          <Toast message="Password updated — you're signed in" />
-        </>
+        <NoticeScreen
+          icon={<CheckMark size={26} />}
+          title="Password updated"
+          action={
+            <div style={{ marginTop: 24 }}>
+              <PrimaryLinkButton href="/">CONTINUE TO GAVELLING</PrimaryLinkButton>
+            </div>
+          }
+        >
+          You&apos;re signed in and ready to go.
+        </NoticeScreen>
       ) : hasSession === null ? (
         // Still establishing (or failing to establish) the recovery session.
         // Show a neutral checking state rather than flashing the form for a
