@@ -8,7 +8,7 @@ import { Brand } from '@/components/Brand';
 // KILL SWITCH, set to false at public launch to disable the demo gate
 // entirely (no gate is ever rendered, no storage is read).
 // ─────────────────────────────────────────────────────────────────────────────
-const DEMO_GATE_ENABLED = true;
+const DEMO_GATE_ENABLED = false;
 
 // Only the conferences + accounts layer is gated. The live committee-session
 // product (/, /join, /create, /chair, /delegate, /advisor, /voting, …) must
