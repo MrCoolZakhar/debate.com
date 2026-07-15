@@ -19,21 +19,21 @@
  * Applications page.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowRight, BadgePercent, CircleCheck, Clock, CreditCard, Eye, Gavel,
-  GraduationCap, HandCoins, History, Hourglass, LayoutGrid, PiggyBank,
-  Receipt, TrendingUp, TriangleAlert, User, Users, Wallet,
+  GraduationCap, HandCoins, History, Hourglass, LayoutGrid, Loader2, PiggyBank,
+  Receipt, Sparkles, TrendingUp, TriangleAlert, User, Users, Wallet,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { extractFunctionErrorMessage } from '@/lib/payments';
+import { extractFunctionErrorMessage, SUPPORTED_PAYOUT_COUNTRIES, unlimitedPricing } from '@/lib/payments';
 import { roundMoney, formatFee, currencySymbol, CURRENCY_CODES } from '@/lib/finance';
 import { FlagImg } from '@/components/FlagImg';
-import { getCountryByName } from '@/lib/countries';
+import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import {
   NEU, NEU_GRADIENTS, OUTFIT,
   NeuCard, NeuInset, NeuStatTile, NeuProgress, NeuPill, NeuButton, NeuIconDisc,
@@ -185,6 +185,34 @@ type PipelineFilter = (typeof PIPELINE_FILTERS)[number]['value'];
 
 type ConnectStatus = 'none' | 'pending' | 'complete';
 
+interface SubscriptionRow {
+  plan: string;
+  status: string;
+  current_period_end: string | null;
+}
+
+// Neumorphic input well, pressed-in, transparent field inside (mirrors VouchersSection's inputStyle).
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '9px 12px',
+  borderRadius: 12,
+  border: 'none',
+  outline: 'none',
+  backgroundColor: NEU.base,
+  boxShadow: NEU.inSm,
+  color: NEU.ink,
+  fontFamily: OUTFIT,
+  fontSize: 13,
+  fontWeight: 600,
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em',
+  color: NEU.muted, textTransform: 'uppercase', display: 'block', marginBottom: 6,
+};
+
+const MAX_PAYMENT_NOTE_LENGTH = 500;
+
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function FinancialsPage() {
@@ -235,7 +263,7 @@ export default function FinancialsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conference?.id, session?.access_token]);
 
-  async function startConnectOnboarding() {
+  async function startConnectOnboarding(overrideCountryCode?: string) {
     if (!conference || connectBusy) return;
     setConnectBusy('start');
     setConnectError('');
@@ -245,7 +273,7 @@ export default function FinancialsPage() {
       setConnectError('Your session has expired, please refresh and sign in again.');
       return;
     }
-    const countryCode = getCountryByName(conference.country)?.code;
+    const countryCode = overrideCountryCode || getCountryByName(conference.country)?.code;
     const { data, error } = await supabase.functions.invoke('connect-onboard', {
       body: {
         conferenceId: conference.id,
@@ -292,6 +320,151 @@ export default function FinancialsPage() {
     }
     setConnectStatus(result.status);
     refreshConferenceQuiet();
+  }
+
+  // Country override reveal, for organisers whose conference.country resolves
+  // to an unsupported payout country but whose own bank account is actually
+  // in a supported one (e.g. a conference address in India, payout bank in
+  // the UK).
+  const [showCountryOverride, setShowCountryOverride] = useState(false);
+  const [overrideCountry, setOverrideCountry] = useState('');
+  const supportedCountryOptions = useMemo(
+    () => UN_COUNTRIES.filter(c => SUPPORTED_PAYOUT_COUNTRIES.has(c.code)).sort((a, b) => a.name.localeCompare(b.name)),
+    []
+  );
+
+  // ── Own payment page (manual-payments fallback) ─────────────────────────
+  const [paymentUrl, setPaymentUrl] = useState('');
+  const [paymentNote, setPaymentNote] = useState('');
+  const [paymentUrlError, setPaymentUrlError] = useState('');
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentSaveError, setPaymentSaveError] = useState('');
+
+  useEffect(() => {
+    if (!conference) return;
+    setPaymentUrl(conference.external_payment_url ?? '');
+    setPaymentNote(conference.external_payment_note ?? '');
+  }, [conference?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function savePaymentPage() {
+    if (!conference || paymentSaving) return;
+    const trimmedUrl = paymentUrl.trim();
+    if (trimmedUrl && !trimmedUrl.startsWith('https://')) {
+      setPaymentUrlError('The link must start with https://');
+      return;
+    }
+    setPaymentUrlError('');
+    setPaymentSaveError('');
+    setPaymentSaving(true);
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setPaymentSaving(false);
+      setPaymentSaveError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase
+      .from('conferences')
+      .update({
+        external_payment_url: trimmedUrl || null,
+        external_payment_note: paymentNote.trim() || null,
+      })
+      .eq('id', conference.id)
+      .select('id');
+    setPaymentSaving(false);
+    if (error || !data || data.length === 0) {
+      setPaymentSaveError('Could not save your payment page. Please try again.');
+      return;
+    }
+    refreshConferenceQuiet();
+  }
+
+  // ── Gavelling Unlimited (subscriptions + create-subscription-checkout) ──
+  const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
+  const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
+  const [unlimitedBusy, setUnlimitedBusy] = useState<'monthly' | 'yearly' | null>(null);
+  const [unlimitedError, setUnlimitedError] = useState('');
+  const [unlimitedConfirming, setUnlimitedConfirming] = useState(false);
+  const [unlimitedTimedOut, setUnlimitedTimedOut] = useState(false);
+
+  // Active/trialing AND not expired (current_period_end null = monthly,
+  // still recurring; set = yearly one-time pass, valid until that date).
+  const fetchSubscription = useCallback(async (): Promise<boolean> => {
+    if (!conference || !session) return false;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('plan, status, current_period_end')
+      .eq('conference_id', conference.id)
+      .in('status', ['active', 'trialing'])
+      .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
+      .limit(1)
+      .maybeSingle();
+    const row = (data as SubscriptionRow | null) ?? null;
+    setSubscription(row);
+    setSubscriptionLoaded(true);
+    return !!row;
+  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { fetchSubscription(); }, [fetchSubscription]);
+
+  // ?unlimited=success|cancelled, the redirect back from Stripe's hosted
+  // checkout for the Unlimited purchase. Success polls for the webhook-written
+  // subscriptions row (every 2s, up to 12s); cancelled just strips the param.
+  useEffect(() => {
+    if (!conference || !session) return;
+    const unlimitedParam = new URLSearchParams(window.location.search).get('unlimited');
+    if (unlimitedParam !== 'success' && unlimitedParam !== 'cancelled') return;
+    let cancelled = false;
+    if (unlimitedParam === 'success') {
+      setUnlimitedConfirming(true);
+      let attempts = 0;
+      const tick = async () => {
+        attempts++;
+        const found = await fetchSubscription();
+        if (cancelled) return;
+        if (found) {
+          setUnlimitedConfirming(false);
+          return;
+        }
+        if (attempts >= 6) {
+          setUnlimitedConfirming(false);
+          setUnlimitedTimedOut(true);
+          return;
+        }
+        setTimeout(tick, 2000);
+      };
+      tick();
+    }
+    router.replace(`/manage/${conference.slug}/financials`);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conference?.id, session?.access_token]);
+
+  async function startUnlimitedCheckout(plan: 'monthly' | 'yearly') {
+    if (!conference || unlimitedBusy) return;
+    setUnlimitedBusy(plan);
+    setUnlimitedError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setUnlimitedBusy(null);
+      setUnlimitedError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('create-subscription-checkout', {
+      body: { conferenceId: conference.id, plan },
+    });
+    if (error) {
+      setUnlimitedBusy(null);
+      setUnlimitedError(await extractFunctionErrorMessage(error));
+      return;
+    }
+    const result = data as { ok?: boolean; url?: string; error?: string } | null;
+    if (!result?.ok || !result.url) {
+      setUnlimitedBusy(null);
+      setUnlimitedError(result?.error || 'Could not start checkout. Please try again.');
+      return;
+    }
+    window.location.assign(result.url);
   }
 
   useEffect(() => {
@@ -365,6 +538,15 @@ export default function FinancialsPage() {
   const loading = rows === null;
   const stripeConnected = connectStatus === 'complete';
   const expectedDelegates = conference.expected_delegates || 0;
+
+  // Country-aware payouts: unresolvable countries are treated as supported
+  // (we can't confidently say otherwise), so the existing flow never regresses.
+  const conferenceCountryCode = getCountryByName(conference.country)?.code;
+  const countrySupported = !conferenceCountryCode || SUPPORTED_PAYOUT_COUNTRIES.has(conferenceCountryCode);
+  const unsupportedNone = connectStatus === 'none' && !countrySupported;
+
+  // Gavelling Unlimited pricing, display only — the server is authoritative.
+  const unlimitedPrice = unlimitedPricing(conference.country);
 
   // ── Display-currency conversion (approximate, display-only) ─────────────
   // Switcher only renders when the conference currency has a known FX rate.
@@ -481,89 +663,327 @@ export default function FinancialsPage() {
         {tab === 'overview' && (<>
 
         {/* Payouts card, the single Stripe Connect integration seam (payments.ts + connect-onboard) */}
-        {connectStatus === 'complete' ? (
-          <div
-            className="flex items-center gap-3 rounded-[20px] px-5 py-4 mb-6"
-            style={{ backgroundColor: 'rgba(61,122,82,0.1)', border: '1.5px solid rgba(61,122,82,0.32)' }}
-          >
-            <span
-              className="flex items-center justify-center rounded-full flex-shrink-0"
-              style={{ width: 40, height: 40, backgroundColor: 'rgba(61,122,82,0.18)', border: '1.5px solid rgba(61,122,82,0.42)' }}
+        <div className="mb-6">
+          {connectStatus === 'complete' ? (
+            <div
+              className="flex items-center gap-3 rounded-[20px] px-5 py-4"
+              style={{ backgroundColor: 'rgba(61,122,82,0.1)', border: '1.5px solid rgba(61,122,82,0.32)' }}
             >
-              <CircleCheck size={19} strokeWidth={2.2} style={{ color: NEU.green }} />
-            </span>
-            <div>
-              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, lineHeight: 1.3 }}>
-                Stripe connected
-              </p>
-              <p style={mutedCaption}>
-                Delegate payments go directly to your Stripe account.
-              </p>
+              <span
+                className="flex items-center justify-center rounded-full flex-shrink-0"
+                style={{ width: 40, height: 40, backgroundColor: 'rgba(61,122,82,0.18)', border: '1.5px solid rgba(61,122,82,0.42)' }}
+              >
+                <CircleCheck size={19} strokeWidth={2.2} style={{ color: NEU.green }} />
+              </span>
+              <div>
+                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, lineHeight: 1.3 }}>
+                  Stripe connected
+                </p>
+                <p style={mutedCaption}>
+                  Delegate payments go directly to your Stripe account.
+                </p>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div
-            className="flex items-center gap-4 flex-wrap rounded-[20px] px-5 py-4 mb-6"
-            style={{
-              background: 'linear-gradient(150deg, #16301F 0%, #1B3828 52%, #2A5A3C 100%)',
-              boxShadow: '0 2px 8px rgba(27,56,40,0.14), 0 16px 40px rgba(27,56,40,0.22)',
-            }}
-          >
-            <span
-              className="flex items-center justify-center rounded-full flex-shrink-0"
+          ) : (
+            <div
+              className="flex items-center gap-4 flex-wrap rounded-[20px] px-5 py-4"
               style={{
-                width: 44, height: 44,
-                background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.34) 0%, rgba(27,56,40,0) 74%)',
-                border: '1.5px solid rgba(238,217,138,0.5)',
+                background: 'linear-gradient(150deg, #16301F 0%, #1B3828 52%, #2A5A3C 100%)',
+                boxShadow: '0 2px 8px rgba(27,56,40,0.14), 0 16px 40px rgba(27,56,40,0.22)',
               }}
             >
-              <Wallet size={20} strokeWidth={2} style={{ color: NEU.gold }} />
-            </span>
-            <div className="flex-1 min-w-[220px]">
-              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#FAF8F3', lineHeight: 1.3 }}>
-                {connectStatus === 'pending' ? 'Finish your Stripe onboarding' : 'Connect Stripe to receive payments directly'}
+              <span
+                className="flex items-center justify-center rounded-full flex-shrink-0"
+                style={{
+                  width: 44, height: 44,
+                  background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.34) 0%, rgba(27,56,40,0) 74%)',
+                  border: '1.5px solid rgba(238,217,138,0.5)',
+                }}
+              >
+                <Wallet size={20} strokeWidth={2} style={{ color: NEU.gold }} />
+              </span>
+              <div className="flex-1 min-w-[220px]">
+                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#FAF8F3', lineHeight: 1.3 }}>
+                  {connectStatus === 'pending'
+                    ? 'Finish your Stripe onboarding'
+                    : unsupportedNone
+                      ? `Stripe payouts are not available in ${conference.country} yet`
+                      : 'Connect Stripe to receive payments directly'}
+                </p>
+                <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
+                  {connectStatus === 'pending'
+                    ? 'Stripe still needs a few details before payouts can start.'
+                    : unsupportedNone
+                      ? 'Manual payments are fully supported. You can also add your own payment page below so participants know exactly how to pay you.'
+                      : 'Delegate payments go straight to your own Stripe account. Gavelling never holds your money.'}
+                </p>
+
+                {unsupportedNone && (
+                  <div className="mt-3">
+                    {!showCountryOverride ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowCountryOverride(true)}
+                        className="focus:outline-none"
+                        style={{
+                          border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
+                          fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, letterSpacing: '0.02em',
+                          color: 'rgba(250,248,243,0.75)', textDecoration: 'underline', textUnderlineOffset: 3,
+                        }}
+                      >
+                        My payout bank is in a supported country
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <select
+                          value={overrideCountry}
+                          onChange={e => setOverrideCountry(e.target.value)}
+                          style={{
+                            padding: '9px 12px', borderRadius: 12, border: 'none', outline: 'none',
+                            backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink,
+                            fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', minWidth: 200,
+                          }}
+                        >
+                          <option value="">Select a country…</option>
+                          {supportedCountryOptions.map(c => (
+                            <option key={c.code} value={c.code}>{c.name}</option>
+                          ))}
+                        </select>
+                        <NeuButton
+                          icon={CreditCard}
+                          gradient={NEU_GRADIENTS.gold}
+                          disabled={!overrideCountry || connectBusy !== null}
+                          onClick={() => startConnectOnboarding(overrideCountry)}
+                        >
+                          {connectBusy === 'start' ? 'CONNECTING…' : 'CONNECT STRIPE'}
+                        </NeuButton>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {connectError && (
+                  <p className="flex items-start gap-1.5 mt-2" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#F5A9A9', lineHeight: 1.5 }}>
+                    <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
+                    {connectError}
+                  </p>
+                )}
+              </div>
+              {!unsupportedNone && (
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {connectStatus === 'pending' && (
+                    <button
+                      type="button"
+                      onClick={checkConnectStatus}
+                      disabled={connectBusy !== null}
+                      className="focus:outline-none"
+                      style={{
+                        border: 'none', background: 'transparent',
+                        cursor: connectBusy !== null ? 'default' : 'pointer',
+                        fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                        color: 'rgba(250,248,243,0.7)',
+                        textDecoration: connectBusy !== null ? 'none' : 'underline', textUnderlineOffset: 3,
+                      }}
+                    >
+                      {connectBusy === 'status' ? 'CHECKING…' : 'CHECK STATUS'}
+                    </button>
+                  )}
+                  <NeuButton
+                    icon={CreditCard}
+                    gradient={NEU_GRADIENTS.gold}
+                    disabled={connectBusy !== null}
+                    onClick={() => startConnectOnboarding()}
+                  >
+                    {connectBusy === 'start' ? 'CONNECTING…' : connectStatus === 'pending' ? 'FINISH ONBOARDING' : 'CONNECT STRIPE'}
+                  </NeuButton>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Own payment page, manual-payments fallback while Stripe isn't connected */}
+          {connectStatus !== 'complete' && (
+            <NeuCard style={{ marginTop: 12, padding: '18px 20px' }}>
+              <p style={{ ...fieldLabelStyle, color: NEU.deepGold, marginBottom: 4 }}>Your own payment page</p>
+              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                Optional. Point participants to your own payment method while Stripe is not connected.
               </p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
-                {connectStatus === 'pending'
-                  ? 'Stripe still needs a few details before payouts can start.'
-                  : 'Delegate payments go straight to your own Stripe account. Gavelling never holds your money.'}
-              </p>
-              {connectError && (
-                <p className="flex items-start gap-1.5 mt-2" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#F5A9A9', lineHeight: 1.5 }}>
-                  <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
-                  {connectError}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="external-payment-url" style={fieldLabelStyle}>Payment page link</label>
+                  <input
+                    id="external-payment-url"
+                    type="url"
+                    value={paymentUrl}
+                    onChange={e => { setPaymentUrl(e.target.value); if (paymentUrlError) setPaymentUrlError(''); }}
+                    placeholder="https://..."
+                    style={inputStyle}
+                  />
+                  {paymentUrlError && (
+                    <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020' }}>
+                      {paymentUrlError}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+                    <label htmlFor="external-payment-note" style={{ ...fieldLabelStyle, marginBottom: 0 }}>
+                      Payment instructions · optional
+                    </label>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                      {paymentNote.length}/{MAX_PAYMENT_NOTE_LENGTH}
+                    </span>
+                  </div>
+                  <textarea
+                    id="external-payment-note"
+                    rows={2}
+                    maxLength={MAX_PAYMENT_NOTE_LENGTH}
+                    value={paymentNote}
+                    onChange={e => setPaymentNote(e.target.value.slice(0, MAX_PAYMENT_NOTE_LENGTH))}
+                    placeholder="UPI: yourconference@okaxis. Send your payment screenshot to treasurer@yourmun.org"
+                    style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+                  />
+                </div>
+              </div>
+
+              {paymentSaveError && (
+                <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020' }}>
+                  {paymentSaveError}
                 </p>
               )}
+
+              <div className="flex items-center justify-between gap-3 flex-wrap mt-4">
+                <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.5, maxWidth: 420 }}>
+                  Participants will see this on their payment panel until you connect Stripe.
+                </p>
+                <NeuButton
+                  gradient={NEU_GRADIENTS.forest}
+                  disabled={paymentSaving}
+                  onClick={savePaymentPage}
+                >
+                  {paymentSaving ? 'SAVING…' : 'SAVE'}
+                </NeuButton>
+              </div>
+            </NeuCard>
+          )}
+        </div>
+
+        {/* Gavelling Unlimited card, delegate-side platform-fee waiver purchase
+            (subscriptions table + create-subscription-checkout edge function) */}
+        <div className="mb-6">
+          {unlimitedConfirming ? (
+            <div
+              className="flex items-center gap-3 rounded-[20px] px-5 py-4"
+              style={{ backgroundColor: 'rgba(182,135,31,0.08)', border: '1.5px solid rgba(182,135,31,0.3)' }}
+            >
+              <span
+                className="flex items-center justify-center rounded-full flex-shrink-0"
+                style={{ width: 40, height: 40, backgroundColor: 'rgba(182,135,31,0.16)', border: '1.5px solid rgba(182,135,31,0.38)' }}
+              >
+                <Loader2 size={18} strokeWidth={2.2} className="animate-spin" style={{ color: NEU.deepGold }} />
+              </span>
+              <div>
+                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, lineHeight: 1.3 }}>
+                  Confirming your Unlimited purchase…
+                </p>
+                <p style={mutedCaption}>This usually takes a few seconds.</p>
+              </div>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              {connectStatus === 'pending' && (
-                <button
-                  type="button"
-                  onClick={checkConnectStatus}
-                  disabled={connectBusy !== null}
-                  className="focus:outline-none"
+          ) : subscriptionLoaded && subscription ? (
+            <div
+              className="flex items-center gap-3 rounded-[20px] px-5 py-4"
+              style={{ backgroundColor: 'rgba(182,135,31,0.1)', border: '1.5px solid rgba(182,135,31,0.32)' }}
+            >
+              <span
+                className="flex items-center justify-center rounded-full flex-shrink-0"
+                style={{ width: 40, height: 40, backgroundColor: 'rgba(182,135,31,0.18)', border: '1.5px solid rgba(182,135,31,0.42)' }}
+              >
+                <Sparkles size={19} strokeWidth={2.2} style={{ color: NEU.deepGold }} />
+              </span>
+              <div>
+                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, lineHeight: 1.3 }}>
+                  Gavelling Unlimited active
+                  <span style={{ color: NEU.muted, fontWeight: 700 }}>
+                    {' · '}
+                    {subscription.plan === 'unlimited_monthly'
+                      ? 'Monthly plan'
+                      : subscription.current_period_end
+                        ? `Yearly pass, valid until ${formatRowDate(subscription.current_period_end)}`
+                        : 'Yearly pass'}
+                  </span>
+                </p>
+                <p style={mutedCaption}>
+                  Delegates at {conference.acronym} pay no Gavelling platform fee on their own registrations.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="rounded-[20px] px-5 py-4"
+              style={{
+                background: 'linear-gradient(150deg, #16301F 0%, #1B3828 52%, #2A5A3C 100%)',
+                boxShadow: '0 2px 8px rgba(27,56,40,0.14), 0 16px 40px rgba(27,56,40,0.22)',
+              }}
+            >
+              <div className="flex items-start gap-4 flex-wrap">
+                <span
+                  className="flex items-center justify-center rounded-full flex-shrink-0"
                   style={{
-                    border: 'none', background: 'transparent',
-                    cursor: connectBusy !== null ? 'default' : 'pointer',
-                    fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-                    color: 'rgba(250,248,243,0.7)',
-                    textDecoration: connectBusy !== null ? 'none' : 'underline', textUnderlineOffset: 3,
+                    width: 44, height: 44,
+                    background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.34) 0%, rgba(27,56,40,0) 74%)',
+                    border: '1.5px solid rgba(238,217,138,0.5)',
                   }}
                 >
-                  {connectBusy === 'status' ? 'CHECKING…' : 'CHECK STATUS'}
-                </button>
-              )}
-              <NeuButton
-                icon={CreditCard}
-                gradient={NEU_GRADIENTS.gold}
-                disabled={connectBusy !== null}
-                onClick={startConnectOnboarding}
-              >
-                {connectBusy === 'start' ? 'CONNECTING…' : connectStatus === 'pending' ? 'FINISH ONBOARDING' : 'CONNECT STRIPE'}
-              </NeuButton>
+                  <Sparkles size={20} strokeWidth={2} style={{ color: NEU.gold }} />
+                </span>
+                <div className="flex-1 min-w-[220px]">
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#FAF8F3', lineHeight: 1.3 }}>
+                    Gavelling Unlimited
+                  </p>
+                  <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5, maxWidth: 480 }}>
+                    Your delegates skip the 5 percent Gavelling platform fee on their own registrations. Card processing still applies.
+                  </p>
+
+                  {unlimitedTimedOut && (
+                    <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11, color: 'rgba(250,248,243,0.75)', lineHeight: 1.5 }}>
+                      Payment received. Unlimited will activate here within a minute.
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2 flex-wrap mt-3">
+                    <NeuButton
+                      icon={Sparkles}
+                      gradient={NEU_GRADIENTS.gold}
+                      disabled={unlimitedBusy !== null}
+                      onClick={() => startUnlimitedCheckout('monthly')}
+                    >
+                      {unlimitedBusy === 'monthly' ? 'STARTING CHECKOUT…' : `GO UNLIMITED · ${formatFee(unlimitedPrice.monthly, unlimitedPrice.currency)}/MONTH`}
+                    </NeuButton>
+                    <NeuButton
+                      gradient={NEU_GRADIENTS.sage}
+                      disabled={unlimitedBusy !== null}
+                      onClick={() => startUnlimitedCheckout('yearly')}
+                    >
+                      {unlimitedBusy === 'yearly' ? 'STARTING CHECKOUT…' : `PAY YEARLY · ${formatFee(unlimitedPrice.yearly, unlimitedPrice.currency)}`}
+                    </NeuButton>
+                  </div>
+
+                  <p className="mt-2.5" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: 'rgba(250,248,243,0.55)', lineHeight: 1.5, maxWidth: 480 }}>
+                    Applies to each delegate&apos;s own registration fee. Delegation spot purchases keep the standard service fee.
+                  </p>
+
+                  {unlimitedError && (
+                    <p className="flex items-start gap-1.5 mt-2" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#F5A9A9', lineHeight: 1.5 }}>
+                      <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
+                      {unlimitedError}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* ── 2 · Revenue overview ── */}
         {loading ? (

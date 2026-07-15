@@ -35,10 +35,13 @@ export interface PledgeInvoicingCardProps {
   contactEmail: string | null;
   /** True once the conference's Stripe Connect onboarding is complete. */
   paymentsEnabled: boolean;
+  /** Organizer-provided payment page, shown as a fallback when paymentsEnabled is false. */
+  externalPaymentUrl: string | null;
+  externalPaymentNote: string | null;
 }
 
 export default function PledgeInvoicingCard({
-  applicationId, conferenceId, amountPaid, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, delegateFeeCurrency, contactEmail, paymentsEnabled,
+  applicationId, conferenceId, amountPaid, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, delegateFeeCurrency, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote,
 }: PledgeInvoicingCardProps) {
   const { session } = useAuth();
   const [invoices, setInvoices] = useState<PledgeSpotInvoice[]>([]);
@@ -141,7 +144,38 @@ export default function PledgeInvoicingCard({
             </div>
           ))}
 
-          {!fullyCovered && remaining > 0 && !paymentsEnabled && (
+          {!fullyCovered && remaining > 0 && !paymentsEnabled && externalPaymentUrl && (
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}
+            >
+              <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: '0 0 4px 0' }}>
+                {remaining} delegation spot{remaining === 1 ? '' : 's'} remaining
+              </p>
+              <p className="text-xs mb-3" style={{ color: '#B8844A', fontFamily: OUTFIT, fontWeight: 600 }}>
+                pending — {formatFee(perSpot, currency)} each
+              </p>
+              <a
+                href={externalPaymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-bold focus:outline-none"
+                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.05em', border: 'none', textDecoration: 'none' }}
+              >
+                <CreditCard size={12} /> PAY VIA THE ORGANIZING TEAM&apos;S PAYMENT PAGE
+              </a>
+              {externalPaymentNote && (
+                <p className="text-xs mt-2" style={{ color: '#6E5F4E', fontFamily: OUTFIT, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                  {externalPaymentNote}
+                </p>
+              )}
+              <p className="text-[11px] mt-2" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                After you pay, the organizing team will confirm your payment here.
+              </p>
+            </div>
+          )}
+
+          {!fullyCovered && remaining > 0 && !paymentsEnabled && !externalPaymentUrl && (
             <p
               className="text-[13px] rounded-xl px-4 py-3"
               style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}

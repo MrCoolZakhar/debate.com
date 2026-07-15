@@ -93,6 +93,8 @@ interface Conference {
   allocation_swap_mode: string;
   display_secretariat: SecretariatMember[] | null;
   connect_onboarding_status: string;
+  external_payment_url: string | null;
+  external_payment_note: string | null;
 }
 
 interface SecretariatMember {
@@ -535,7 +537,7 @@ export default function ConferenceDetailClient() {
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
         contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
-        connect_onboarding_status
+        connect_onboarding_status, external_payment_url, external_payment_note
       `)
       .eq('slug', slug)
       .single();
@@ -552,7 +554,7 @@ export default function ConferenceDetailClient() {
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
             contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
-            connect_onboarding_status
+            connect_onboarding_status, external_payment_url, external_payment_note
           `)
           .eq('slug', slug)
           .single();
@@ -1556,6 +1558,8 @@ export default function ConferenceDetailClient() {
                   committees={committees}
                   allocationSwapMode={conference.allocation_swap_mode}
                   paymentsEnabled={conference.connect_onboarding_status === 'complete'}
+                  externalPaymentUrl={conference.external_payment_url}
+                  externalPaymentNote={conference.external_payment_note}
                 />
                 </>
               )}

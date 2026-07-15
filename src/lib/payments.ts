@@ -10,6 +10,7 @@
 
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { formatFee } from '@/lib/finance';
+import { getCountryByName } from '@/lib/countries';
 
 // ── Provider seam ──────────────────────────────────────────────────────────
 
@@ -24,6 +25,46 @@ export const ACTIVE_PROVIDER: PaymentProvider = 'stripe';
  * without touching ACTIVE_PROVIDER globally.
  */
 export const MANUAL_MODE_CONFERENCE_IDS = new Set<string>([]);
+
+/**
+ * ISO-2 codes of countries whose bank accounts Stripe Connect can pay out to
+ * from our UK platform (self-serve cross-border payouts: UK, US, Canada,
+ * Switzerland, plus the EEA). Conferences based elsewhere (India, Pakistan,
+ * LATAM, etc.) stay on manual payments. Update this list when Stripe expands
+ * cross-border payout coverage for UK platforms.
+ */
+export const SUPPORTED_PAYOUT_COUNTRIES = new Set<string>([
+  'GB', 'US', 'CA', 'CH',
+  // EEA
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR',
+  'HU', 'IS', 'IE', 'IT', 'LV', 'LI', 'LT', 'LU', 'MT', 'NL', 'NO', 'PL',
+  'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
+]);
+
+/** ISO-2 codes charged Gavelling Unlimited's region A price (EU/EEA +
+ *  Switzerland, UK, US, Middle East). Everyone else pays region B. Mirrors
+ *  the create-subscription-checkout edge function, which is the pricing
+ *  authority — this list is DISPLAY ONLY. */
+export const UNLIMITED_REGION_A = new Set<string>([
+  // EU 27
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR',
+  'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK',
+  'SI', 'ES', 'SE',
+  // Rest of EEA + Switzerland, UK, US
+  'NO', 'IS', 'LI', 'CH', 'GB', 'US',
+  // Middle East
+  'AE', 'SA', 'QA', 'KW', 'BH', 'OM', 'IL', 'JO', 'LB', 'IQ', 'TR', 'EG',
+]);
+
+/** Gavelling Unlimited pricing for display purposes only — the server
+ *  (create-subscription-checkout) recomputes and enforces the real price by
+ *  conference country. Keep in sync with that function. */
+export function unlimitedPricing(countryName: string | null): { monthly: number; yearly: number; currency: string } {
+  const code = countryName ? getCountryByName(countryName)?.code : undefined;
+  return code && UNLIMITED_REGION_A.has(code)
+    ? { monthly: 5, yearly: 45, currency: 'USD' }
+    : { monthly: 2.5, yearly: 25, currency: 'USD' };
+}
 
 /** Whether checkout for this conference goes through live Stripe. Organizer
  *  pages use this to gate their manual mark-paid/unpaid/received controls.

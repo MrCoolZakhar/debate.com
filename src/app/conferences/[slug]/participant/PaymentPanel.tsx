@@ -48,10 +48,13 @@ export interface PaymentPanelProps {
   aidStatus?: 'none' | 'pending' | 'approved' | 'denied';
   /** True once the conference's Stripe Connect onboarding is complete. */
   paymentsEnabled: boolean;
+  /** Organizer-provided payment page, shown as a fallback when paymentsEnabled is false. */
+  externalPaymentUrl: string | null;
+  externalPaymentNote: string | null;
 }
 
 export default function PaymentPanel({
-  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus, paymentsEnabled,
+  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus, paymentsEnabled, externalPaymentUrl, externalPaymentNote,
 }: PaymentPanelProps) {
   const { session } = useAuth();
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: feeAmount, fee_phases: feePhases });
@@ -82,6 +85,7 @@ export default function PaymentPanel({
       .select('id')
       .eq('conference_id', conferenceId)
       .in('status', ['active', 'trialing'])
+      .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
       .limit(1)
       .then(({ data }) => { if (!cancelled) setHasActiveUnlimited(!!data && data.length > 0); });
     return () => { cancelled = true; };
@@ -184,6 +188,32 @@ export default function PaymentPanel({
         <p className="text-[13px]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           There&apos;s no fee for this role, nothing to pay.
         </p>
+      ) : owesSomething && !paymentsEnabled && externalPaymentUrl ? (
+        <>
+          <a
+            href={externalPaymentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm transition-colors focus:outline-none"
+            style={{
+              backgroundColor: '#1B3828', color: '#EED98A',
+              fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', textDecoration: 'none',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            <CreditCard size={15} />
+            PAY VIA THE ORGANIZING TEAM&apos;S PAYMENT PAGE
+          </a>
+          {externalPaymentNote && (
+            <p className="text-[12.5px] mt-3" style={{ color: '#6E5F4E', fontFamily: OUTFIT, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {externalPaymentNote}
+            </p>
+          )}
+          <p className="text-[11px] mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+            After you pay, the organizing team will confirm your payment here.
+          </p>
+        </>
       ) : owesSomething && !paymentsEnabled ? (
         <p
           className="text-[13px] rounded-xl px-4 py-3"

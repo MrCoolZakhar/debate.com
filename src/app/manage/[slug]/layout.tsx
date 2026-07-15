@@ -43,6 +43,8 @@ export interface Conference {
   website_url: string | null;
   stripe_account_id: string | null;
   connect_onboarding_status: string;
+  external_payment_url: string | null;
+  external_payment_note: string | null;
   predecessor_conference_id: string | null;
   predecessor_approved: boolean;
   min_age: number | null;
@@ -77,7 +79,8 @@ const CONFERENCE_COLUMNS = [
   'format', 'expected_delegates', 'fee_amount', 'fee_currency',
   'contact_email', 'student_level', 'description',
   'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
-  'stripe_account_id', 'connect_onboarding_status', 'organizer_id',
+  'stripe_account_id', 'connect_onboarding_status',
+  'external_payment_url', 'external_payment_note', 'organizer_id',
   'predecessor_conference_id', 'predecessor_approved', 'min_age',
   'allocation_swap_mode', 'email_theme',
 ].join(', ');

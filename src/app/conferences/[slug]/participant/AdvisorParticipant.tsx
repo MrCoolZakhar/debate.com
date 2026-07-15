@@ -9,13 +9,15 @@ import PledgeInvoicingCard from './PledgeInvoicingCard';
 import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantApplication, ParticipantRoleConfig } from './types';
 
-export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled }: {
+export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote }: {
   conferenceId: string;
   application: ParticipantApplication;
   allocationSwapMode: string;
   roleConfigs: ParticipantRoleConfig[];
   contactEmail: string | null;
   paymentsEnabled: boolean;
+  externalPaymentUrl: string | null;
+  externalPaymentNote: string | null;
 }) {
   if (!application.society_id) {
     return (
@@ -47,6 +49,8 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
         delegateFeeCurrency={delegateConfig?.fee_currency ?? null}
         contactEmail={contactEmail}
         paymentsEnabled={paymentsEnabled}
+        externalPaymentUrl={externalPaymentUrl}
+        externalPaymentNote={externalPaymentNote}
       />
     </div>
   );
