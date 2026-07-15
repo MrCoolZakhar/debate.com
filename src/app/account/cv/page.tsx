@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, User, Gavel, Briefcase, Sparkles, MessageSquareText, ScrollText, Award } from 'lucide-react';
+import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, User, UserRound, Gavel, Hammer, Briefcase, ClipboardList, Sparkles, MessageSquareText, ScrollText, Award } from 'lucide-react';
 import DecorativeBleed from '@/components/DecorativeBleed';
+import { Emoji3D, NEU } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonClient } from '@/lib/supabase';
@@ -43,23 +44,53 @@ interface CVEntry {
 const ENTRY_TYPES: {
   key: EntryType;
   label: string;
-  Icon: typeof Gavel;
+  Icon: typeof Gavel;   // lucide fallback for the 3D emoji
+  emoji: string;        // Fluent 3D emoji asset name (job-board icon language)
+  bleedIcon: typeof Gavel; // faded, blended background silhouette (behind card)
+  bleedRotate: number;  // slight tilt so the bleed reads as texture
   accent: string;     // icon / accent colour
   border: string;     // card border tint
-  discBg: string;     // corner disc — fully opaque tier fill (like landing gavel discs)
-  discGlyph: string;  // glyph colour on the disc
-  chipBg: string;     // solid role chip fill
+  discBg: string;     // corner disc — soft tinted seat for the 3D emoji
+  discGlyph: string;  // fallback glyph colour on the disc
+  chipInk: string;    // readable role-chip text on the soft neu pill
+  chipBg: string;     // solid role chip fill (legacy, retained for reference)
   chipText: string;   // role chip text colour
   chipBorder: string; // role chip border
 }[] = [
-  { key: 'delegate',    label: 'Delegate',    Icon: User,      accent: '#2A5A3C', border: '#C8BEA8',               discBg: 'linear-gradient(145deg, #2F6242 0%, #1B3828 100%)',              discGlyph: '#EED98A', chipBg: '#1B3828', chipText: '#EED98A', chipBorder: 'rgba(238,217,138,0.4)' },
-  { key: 'chair',       label: 'Chair',       Icon: Gavel,     accent: '#B6871F', border: 'rgba(182,135,31,0.6)',  discBg: 'linear-gradient(145deg, #F3E3A1 0%, #EED98A 45%, #C99A2A 100%)', discGlyph: '#4A3410', chipBg: '#EED98A', chipText: '#5A4210', chipBorder: 'rgba(182,135,31,0.55)' },
-  { key: 'secretariat', label: 'Secretariat', Icon: Briefcase, accent: '#8A6BA0', border: 'rgba(108,74,120,0.55)', discBg: 'linear-gradient(145deg, #9E7FB4 0%, #6C4A78 100%)',              discGlyph: '#FAF8F3', chipBg: '#8A6BA0', chipText: '#FAF8F3', chipBorder: 'rgba(108,74,120,0.55)' },
-  { key: 'other',       label: 'Other',       Icon: Sparkles,  accent: '#6E5F4E', border: 'rgba(154,138,120,0.55)', discBg: 'linear-gradient(145deg, #A89880 0%, #7C6C58 100%)',             discGlyph: '#FAF8F3', chipBg: '#DDD4C0', chipText: '#5C5140', chipBorder: 'rgba(154,138,120,0.5)' },
+  { key: 'delegate',    label: 'Delegate',    Icon: User,      emoji: 'Person raising hand', bleedIcon: UserRound,      bleedRotate: -6, accent: '#2A5A3C', border: '#C8BEA8',               discBg: 'linear-gradient(145deg, #2F6242 0%, #1B3828 100%)',              discGlyph: '#EED98A', chipInk: '#245234', chipBg: '#1B3828', chipText: '#EED98A', chipBorder: 'rgba(238,217,138,0.4)' },
+  { key: 'chair',       label: 'Chair',       Icon: Gavel,     emoji: 'Hammer',              bleedIcon: Hammer,         bleedRotate: -10, accent: '#B6871F', border: 'rgba(182,135,31,0.6)',  discBg: 'linear-gradient(145deg, #F3E3A1 0%, #EED98A 45%, #C99A2A 100%)', discGlyph: '#4A3410', chipInk: '#7A5A20', chipBg: '#EED98A', chipText: '#5A4210', chipBorder: 'rgba(182,135,31,0.55)' },
+  { key: 'secretariat', label: 'Secretariat', Icon: Briefcase, emoji: 'Clipboard',           bleedIcon: ClipboardList,  bleedRotate: -6, accent: '#8A6BA0', border: 'rgba(108,74,120,0.55)', discBg: 'linear-gradient(145deg, #9E7FB4 0%, #6C4A78 100%)',              discGlyph: '#FAF8F3', chipInk: '#5F4470', chipBg: '#8A6BA0', chipText: '#FAF8F3', chipBorder: 'rgba(108,74,120,0.55)' },
+  { key: 'other',       label: 'Other',       Icon: Sparkles,  emoji: 'Sparkles',            bleedIcon: Sparkles,       bleedRotate: 0,  accent: '#6E5F4E', border: 'rgba(154,138,120,0.55)', discBg: 'linear-gradient(145deg, #A89880 0%, #7C6C58 100%)',             discGlyph: '#FAF8F3', chipInk: '#5C5140', chipBg: '#DDD4C0', chipText: '#5C5140', chipBorder: 'rgba(154,138,120,0.5)' },
 ];
 
 const ENTRY_TYPE_MAP: Record<EntryType, typeof ENTRY_TYPES[number]> =
   Object.fromEntries(ENTRY_TYPES.map((t) => [t.key, t])) as Record<EntryType, typeof ENTRY_TYPES[number]>;
+
+// ── Conference acronym display ───────────────────────────────────────────────
+// House rule: long, spelled-out conference names show the ACRONYM as the primary
+// label with the full name small beneath. Known MUN series are mapped explicitly
+// (naive initials get these wrong — e.g. LIMUN, BrumMUN, IEUMUN). Unknown names
+// fall through unchanged.
+const CONFERENCE_ACRONYMS: { match: RegExp; acronym: string; full: string }[] = [
+  { match: /asia youth international model united nations/i, acronym: 'AYIMUN',   full: 'Asia Youth International Model United Nations' },
+  { match: /harvard world model united nations|world model united nations/i, acronym: 'WorldMUN', full: 'Harvard World Model United Nations' },
+  { match: /london international model united nations/i,     acronym: 'LIMUN',    full: 'London International Model United Nations' },
+  { match: /ie university model united nations/i,            acronym: 'IEUMUN',   full: 'IE University Model United Nations' },
+  { match: /birmingham model united nations/i,              acronym: 'BrumMUN',  full: 'Birmingham Model United Nations' },
+  { match: /lse model united nations|lsesu model united nations/i, acronym: 'LSEMUN', full: 'LSE Model United Nations' },
+  { match: /ucl model united nations|uclu model united nations/i,  acronym: 'UCLMUN', full: 'UCL Model United Nations' },
+  { match: /hult (ashridge )?model united nations/i,        acronym: 'HultMUN',  full: 'Hult Model United Nations' },
+];
+
+function conferenceDisplay(name: string): { primary: string; secondary: string | null } {
+  const year = (name.match(/\b(19|20)\d{2}\b/) ?? [''])[0];
+  for (const c of CONFERENCE_ACRONYMS) {
+    if (c.match.test(name)) {
+      return { primary: year ? `${c.acronym} ${year}` : c.acronym, secondary: c.full };
+    }
+  }
+  return { primary: name, secondary: null };
+}
 
 // Committee suggestions shared with the conference setup flow.
 const COMMITTEE_SUGGESTIONS = COMMITTEE_PRESETS.map((p) => ({ name: p.name, acronym: p.acronym, logoPath: p.logoPath }));
@@ -78,11 +109,15 @@ const EXPERTISE_LEVELS_MODAL = ['beginner', 'intermediate', 'advanced', 'expert'
 const MAX_PHOTOS = 3;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
+// Soft pressed-in well — borrows the neumorphic NeuInset feel (recessed field,
+// forest-tinted inset shadow) without going full neu. Shared by every input in
+// the modal for consistent field styling.
 const inputStyle: React.CSSProperties = {
-  border: '1px solid #DDD4C0',
-  backgroundColor: 'rgba(250,248,243,0.9)',
+  border: '1px solid #E4DBC6',
+  backgroundColor: '#F4EFE3',
   color: '#1C1410',
   fontFamily: OUTFIT,
+  boxShadow: 'inset 2px 2px 5px rgba(27,56,40,0.10), inset -2px -2px 5px rgba(255,255,255,0.72)',
 };
 
 // ── Logo tiles ─────────────────────────────────────────────────────────────
@@ -376,6 +411,7 @@ function CVEntryModal({
   const [uploading, setUploading]           = useState(false);
   const [error, setError]                   = useState('');
 
+  const activeType     = ENTRY_TYPE_MAP[entryType] ?? ENTRY_TYPE_MAP.delegate;
   const showCommittee  = entryType === 'delegate' || entryType === 'chair';
   const showAllocation = entryType === 'delegate';
   const showAwards     = entryType === 'delegate';
@@ -642,10 +678,24 @@ function CVEntryModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <Eyebrow className="mb-1.5">{existing ? 'Edit Entry' : 'Add Conference'}</Eyebrow>
-        <h2 className="font-black text-lg mb-5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-          {existing ? existing.conference_name : 'New CV entry'}
-        </h2>
+        <div className="flex items-center gap-3 mb-5">
+          <span
+            className="flex items-center justify-center flex-shrink-0"
+            style={{
+              width: '44px', height: '44px', borderRadius: '13px',
+              background: `linear-gradient(145deg, ${activeType.accent}30, ${activeType.accent}18), #FAF8F3`,
+              boxShadow: `0 3px 9px ${activeType.accent}2E, inset 0 1px 0 rgba(255,255,255,0.6)`,
+            }}
+          >
+            <Emoji3D name={activeType.emoji} size={26} fallback={activeType.Icon} fallbackColor={activeType.accent} />
+          </span>
+          <div className="min-w-0">
+            <Eyebrow className="mb-1">{existing ? 'Edit Entry' : 'Add Conference'}</Eyebrow>
+            <h2 className="font-black text-lg leading-tight truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              {existing ? existing.conference_name : 'New CV entry'}
+            </h2>
+          </div>
+        </div>
 
         {error && (
           <p
@@ -671,15 +721,26 @@ function CVEntryModal({
                     type="button"
                     disabled={isVerified}
                     onClick={() => setEntryType(t.key)}
-                    className="flex flex-col items-center justify-center gap-1.5 rounded-xl py-2.5 focus:outline-none transition-all"
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl py-3 focus:outline-none transition-all"
                     style={{
-                      border: active ? `1.5px solid ${t.accent}` : '1px solid #DDD4C0',
-                      backgroundColor: active ? `${t.accent}14` : 'transparent',
+                      border: active ? `1.5px solid ${t.accent}` : '1px solid #E4DBC6',
+                      background: active
+                        ? `linear-gradient(160deg, ${t.accent}1F, ${t.accent}0D)`
+                        : '#F4EFE3',
+                      boxShadow: active
+                        ? `0 4px 12px ${t.accent}2E`
+                        : 'inset 2px 2px 5px rgba(27,56,40,0.08), inset -2px -2px 5px rgba(255,255,255,0.7)',
                       cursor: isVerified ? 'not-allowed' : 'pointer',
                       opacity: isVerified && !active ? 0.5 : 1,
                     }}
                   >
-                    <t.Icon size={17} strokeWidth={2} style={{ color: active ? t.accent : '#9A8A78' }} />
+                    <Emoji3D
+                      name={t.emoji}
+                      size={26}
+                      fallback={t.Icon}
+                      fallbackColor={active ? t.accent : '#9A8A78'}
+                      style={active ? undefined : { filter: 'grayscale(0.35) opacity(0.85)' }}
+                    />
                     <span style={{ fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 700, color: active ? '#1C1410' : '#9A8A78' }}>
                       {t.label}
                     </span>
@@ -1030,81 +1091,129 @@ function TimelineEntry({
 
       {/* Content card */}
       <div className="flex-1 min-w-0 pb-6">
-        <GlassCard className="!p-5 md:!p-6 relative" style={{ border: `1.5px solid ${type.border}` }}>
-          {/* Corner type badge — fully opaque tier disc, like the landing's gavel discs */}
+        <GlassCard className="!p-5 md:!p-6 relative" style={{ border: `1.5px solid ${type.border}`, isolation: 'isolate' }}>
+          {/* Faded, blended type silhouette bleeding off the RIGHT edge — sits at
+              zIndex -1 behind all content (card is a stacking context via its
+              backdrop-filter + isolation), inside a self-clipping overflow-hidden
+              layer so it can never force horizontal scroll, and pointer-events-none
+              so it never intercepts clicks. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 overflow-hidden"
+            style={{ zIndex: -1, borderRadius: '20px' }}
+          >
+            <type.bleedIcon
+              size={172}
+              strokeWidth={1}
+              className="pointer-events-none absolute"
+              style={{
+                right: '-46px',
+                top: '50%',
+                transform: `translateY(-50%) rotate(${-type.bleedRotate}deg)`,
+                color: 'rgba(27,56,40,0.05)',
+              }}
+            />
+          </div>
+
+          {/* Corner type badge — 3D Fluent emoji on a soft neu seat (application-side
+              icon language: NEU surface + soft shadow, no coloured glow). */}
           <span
             className="absolute flex items-center justify-center"
             title={type.label}
             style={{
-              top: '-12px', right: '14px', width: '32px', height: '32px', borderRadius: '9999px',
-              background: type.discBg,
+              top: '-12px', right: '14px', width: '34px', height: '34px', borderRadius: '9999px',
+              background: `linear-gradient(150deg, ${type.accent}22, ${type.accent}12), ${NEU.surface}`,
               border: '2px solid #FAF8F3',
-              boxShadow: `0 4px 12px ${type.accent}55, 0 0 0 1px ${type.accent}40`,
+              boxShadow: NEU.outSm,
             }}
           >
-            <type.Icon size={15} strokeWidth={2.2} style={{ color: type.discGlyph }} />
+            <Emoji3D name={type.emoji} size={20} fallback={type.Icon} fallbackColor={type.accent} />
           </span>
 
-          {/* Role chip + verification */}
+          {/* Role chip + verification — soft neu pills (NEU surface + gentle
+              shadow + tinted accent), matching the applications-side chip system. */}
           <div className="flex items-center justify-between gap-3 mb-2 pr-9">
             <span
               className="inline-flex items-center gap-1.5 flex-shrink-0"
               style={{
-                padding: '3px 10px',
-                borderRadius: '7px',
-                backgroundColor: type.chipBg,
-                border: `1px solid ${type.chipBorder}`,
-                color: type.chipText,
+                padding: '4px 11px 4px 7px',
+                borderRadius: '999px',
+                background: `linear-gradient(150deg, ${type.accent}1C, ${type.accent}0C), ${NEU.surface}`,
+                border: `1px solid ${type.accent}33`,
+                boxShadow: NEU.outSm,
+                color: type.chipInk,
                 fontFamily: OUTFIT,
                 fontSize: '10.5px',
                 fontWeight: 800,
-                letterSpacing: '0.09em',
+                letterSpacing: '0.06em',
                 textTransform: 'uppercase',
               }}
             >
-              <type.Icon size={11} strokeWidth={2.4} />
+              <Emoji3D name={type.emoji} size={14} fallback={type.Icon} fallbackColor={type.accent} />
               {type.label}
             </span>
-            <span className="flex-shrink-0">
-              <Pill
-                tone={isVerified ? 'forest' : 'neutral'}
-                dot={!isVerified}
-                icon={isVerified ? <BadgeCheck size={12} strokeWidth={2.4} /> : undefined}
-                size="sm"
-              >
-                {isVerified ? 'Verified' : 'Self-reported'}
-              </Pill>
+            <span
+              className="inline-flex items-center gap-1.5 flex-shrink-0"
+              style={{
+                padding: isVerified ? '4px 11px 4px 8px' : '4px 11px',
+                borderRadius: '999px',
+                background: isVerified ? `linear-gradient(150deg, #2A5A3C1C, #2A5A3C0C), ${NEU.surface}` : NEU.surface,
+                border: isVerified ? '1px solid rgba(42,90,60,0.28)' : '1px solid rgba(154,138,120,0.28)',
+                boxShadow: NEU.outSm,
+                color: isVerified ? '#245234' : '#8A7A66',
+                fontFamily: OUTFIT,
+                fontSize: '10px',
+                fontWeight: 700,
+                letterSpacing: '0.03em',
+              }}
+            >
+              {isVerified
+                ? <BadgeCheck size={12} strokeWidth={2.4} style={{ color: '#2A5A3C' }} />
+                : <span aria-hidden style={{ width: '5px', height: '5px', borderRadius: '9999px', backgroundColor: '#B6A88E', flexShrink: 0 }} />}
+              {isVerified ? 'Verified' : 'Self-reported'}
             </span>
           </div>
 
-          {/* Conference name — colored heading */}
-          <h3
-            className="font-black leading-tight"
-            style={{ color: '#1B3828', fontFamily: OUTFIT, fontSize: '18px', letterSpacing: '-0.01em', margin: 0 }}
-          >
-            {entry.conference_name}
-          </h3>
+          {/* Conference name — ACRONYM primary, spelled-out name small beneath */}
+          {(() => {
+            const disp = conferenceDisplay(entry.conference_name);
+            return (
+              <>
+                <h3
+                  className="font-black leading-tight"
+                  style={{ color: '#1B3828', fontFamily: OUTFIT, fontSize: '18px', letterSpacing: '-0.01em', margin: 0 }}
+                >
+                  {disp.primary}
+                </h3>
+                {disp.secondary && (
+                  <p className="mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 500, margin: '2px 0 0 0', lineHeight: 1.3 }}>
+                    {disp.secondary}
+                  </p>
+                )}
+              </>
+            );
+          })()}
 
           {/* Role line — varies by type */}
           {entry.entry_type === 'delegate' && (
             <>
-              <div className="flex items-center gap-1.5 flex-wrap mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                <User size={14} strokeWidth={2.2} style={{ color: type.accent, flexShrink: 0 }} />
-                <span className="inline-flex items-center gap-1.5 text-[14px]" style={{ fontWeight: 600 }}>
-                  {allocFlag && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={allocFlag}
-                      alt=""
-                      style={{ width: '20px', height: '13px', objectFit: 'cover', borderRadius: '2.5px', boxShadow: '0 1px 2px rgba(27,56,40,0.2)' }}
-                    />
-                  )}
+              {/* Country represented — the delegate's headline: bigger flag + bold allocation */}
+              <div className="flex items-center gap-2.5 flex-wrap mt-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                {allocFlag && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={allocFlag}
+                    alt=""
+                    style={{ width: '30px', height: '20px', objectFit: 'cover', borderRadius: '3.5px', boxShadow: '0 1.5px 4px rgba(27,56,40,0.25)', border: '1px solid rgba(255,255,255,0.7)' }}
+                  />
+                )}
+                <span className="inline-flex items-center text-[17px]" style={{ fontWeight: 800, color: '#1B3828', letterSpacing: '-0.01em' }}>
                   {entry.allocation}
                 </span>
               </div>
               {entry.committee && (
-                <div className="flex items-center gap-1.5 mt-1.5 text-[13px]" style={{ color: '#6E5F4E', fontFamily: OUTFIT }}>
-                  <CommitteeLogo committee={entry.committee} size={18} />
+                <div className="flex items-center gap-2 mt-2 text-[14px]" style={{ color: '#5C5140', fontFamily: OUTFIT, fontWeight: 500 }}>
+                  <CommitteeLogo committee={entry.committee} size={22} />
                   <span>{entry.committee}</span>
                 </div>
               )}
@@ -1113,7 +1222,7 @@ function TimelineEntry({
 
           {entry.entry_type === 'chair' && entry.committee && (
             <div className="flex items-center gap-1.5 flex-wrap mt-2 text-[14px]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
-              <Gavel size={14} strokeWidth={2} style={{ color: type.accent, flexShrink: 0 }} />
+              <Emoji3D name={type.emoji} size={16} fallback={Gavel} fallbackColor={type.accent} style={{ flexShrink: 0 }} />
               <CommitteeLogo committee={entry.committee} size={18} />
               <span>Chaired {entry.committee}</span>
             </div>
@@ -1121,7 +1230,7 @@ function TimelineEntry({
 
           {(entry.entry_type === 'secretariat' || entry.entry_type === 'other') && entry.allocation && (
             <div className="flex items-center gap-1.5 flex-wrap mt-2 text-[14px]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
-              <type.Icon size={14} strokeWidth={2} style={{ color: type.accent, flexShrink: 0 }} />
+              <Emoji3D name={type.emoji} size={16} fallback={type.Icon} fallbackColor={type.accent} style={{ flexShrink: 0 }} />
               <span>{entry.allocation}</span>
             </div>
           )}
