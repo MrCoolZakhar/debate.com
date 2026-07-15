@@ -600,8 +600,8 @@ export default function HomeClient() {
             </div>
           )}
 
-          {/* Hero — pulled up 72px so the video sits behind the transparent nav: the logo +
-              Pre-register overlay the video (and scroll away with it), while the fixed pill stays pinned. */}
+          {/* Hero — pulled up 72px so the video sits behind the transparent nav: the heading
+              overlays the video (and scrolls away with it), while the fixed pill stays pinned. */}
           <section className="relative z-10 flex flex-col items-center justify-center overflow-hidden" style={{ height: '100vh', marginTop: '-72px' }}>
             <div className="absolute inset-0 z-0">
               <video autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.55 }}>

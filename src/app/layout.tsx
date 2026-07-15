@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { LanguageProvider } from '@/contexts/LanguageContext';
-import PreRegisterGate from '@/components/PreRegisterGate';
 import DemoGate from '@/components/DemoGate';
 
 export const metadata: Metadata = {
@@ -103,7 +102,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <LanguageProvider>
             {children}
-            <PreRegisterGate />
             <DemoGate />
           </LanguageProvider>
         </AuthProvider>

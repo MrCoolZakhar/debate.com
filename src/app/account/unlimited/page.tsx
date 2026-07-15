@@ -25,6 +25,11 @@ function planLabel(sub: Subscription): string {
   return sub.current_period_end ? `Yearly pass, valid until ${formatExpiry(sub.current_period_end)}` : 'Yearly pass';
 }
 
+/** Whole days remaining until `iso`, floored at 0 (never negative). */
+function trialDaysLeft(iso: string): number {
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
+}
+
 /** Monthly button: "$5 A MONTH". Annual button: "$3.75 A MONTH · BILLED
  *  ANNUALLY ($45)", the annual total divided evenly across 12 months, both
  *  derived from unlimitedPricing(code) so the copy always matches whatever
@@ -350,6 +355,35 @@ export default function UnlimitedPage() {
                   </p>
                   <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>This usually takes a few seconds.</p>
                 </div>
+              </div>
+            ) : active && subscription!.plan === 'unlimited_trial' ? (
+              <div className="flex flex-col gap-2.5 items-start" style={{ width: '100%' }}>
+                <NeuPill active gradient={NEU_GRADIENTS.green}>
+                  <Check size={11} strokeWidth={2.6} /> ACTIVE
+                </NeuPill>
+                <p className="text-xs font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                  {subscription!.current_period_end
+                    ? `Free trial, ${trialDaysLeft(subscription!.current_period_end)} day${trialDaysLeft(subscription!.current_period_end) === 1 ? '' : 's'} left`
+                    : 'Free trial'}
+                </p>
+                {subscription!.current_period_end && (
+                  <p className="text-[11px]" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                    Your trial ends {formatExpiry(subscription!.current_period_end)}. Subscribe any time to keep Unlimited.
+                  </p>
+                )}
+                <NeuButton
+                  gradient={NEU_GRADIENTS.gold}
+                  disabled={busy !== null}
+                  onClick={() => startCheckout('monthly')}
+                  style={{ width: '100%', padding: '8px 16px', fontSize: 11.5 }}
+                >
+                  {busy === 'monthly' ? 'STARTING CHECKOUT…' : 'SUBSCRIBE TO KEEP IT'}
+                </NeuButton>
+                {purchaseError && (
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                    {purchaseError}
+                  </p>
+                )}
               </div>
             ) : active ? (
               <div className="flex flex-col gap-2 items-start">

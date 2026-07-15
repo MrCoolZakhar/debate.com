@@ -74,6 +74,13 @@ function SignUpInner() {
 
   const supabase = useMemo(() => createAuthClient(), []);
 
+  // Prefill from ?email=, e.g. an invite link that already knows the
+  // recipient's address. The user can still edit it before submitting.
+  useEffect(() => {
+    const emailParam = searchParams.get('email');
+    if (emailParam) setEmail(emailParam);
+  }, [searchParams]);
+
   // ── Live verification detection ──────────────────────────────────────────
   // While the awaiting screen shows, watch for the account being confirmed —
   // possibly in ANOTHER tab (the email link opens /auth/callback there, which

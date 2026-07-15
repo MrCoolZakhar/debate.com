@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: ['/', '/about', '/conferences', '/contact'],
-        disallow: ['/chair/', '/delegate/', '/voting/', '/advisor/', '/join/', '/create/', '/pre-register/', '/grain-dev/'],
+        disallow: ['/chair/', '/delegate/', '/voting/', '/advisor/', '/join/', '/create/', '/grain-dev/'],
       },
     ],
     sitemap: 'https://gavelling.com/sitemap.xml',
