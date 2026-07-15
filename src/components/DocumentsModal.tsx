@@ -326,7 +326,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
 
   useEffect(() => {
     if (!showSuspended) return;
-    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
+    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') router.push('/sessions'); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [showSuspended, router]);

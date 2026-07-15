@@ -9,8 +9,8 @@ import { Globe } from 'lucide-react';
 import ProfileDropdown from '@/components/ProfileDropdown';
 
 const NAV_LINKS_CONFIG = [
-  { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/' },
-  { en: 'CONFERENCES', es: 'CONFERENCIAS', fr: 'CONFÉRENCES',     ar: 'المؤتمرات',  href: '/conferences' },
+  { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/sessions' },
+  { en: 'CONFERENCES', es: 'CONFERENCIAS', fr: 'CONFÉRENCES',     ar: 'المؤتمرات',  href: '/' },
   { en: 'ABOUT US',    es: 'NOSOTROS',     fr: 'QUI SOMMES-NOUS', ar: 'من نحن',     href: '/about' },
   { en: 'CONTACT',     es: 'CONTÁCTANOS',  fr: 'CONTACT',         ar: 'تواصل معنا', href: '/contact' },
 ];
@@ -58,7 +58,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   // "SESSIONS APP" logo PNG. Sessions pages keep the existing PNG exactly.
   const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/my-conferences', '/invites'];
   const inConferencesArea =
-    !logoOverride && CONFERENCES_PREFIXES.some(p => pathname?.startsWith(p));
+    !logoOverride && (pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname?.startsWith(p)));
   const logoSrc = logoOverride?.src ?? '/GavellingLogo.png';
   const logoAlt = logoOverride?.alt ?? 'Gavelling';
 

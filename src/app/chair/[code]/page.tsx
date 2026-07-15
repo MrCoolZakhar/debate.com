@@ -1657,7 +1657,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   useEffect(() => {
     if (!sessionEnded && !sessionSuspended) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/'); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') router.push('/sessions'); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [sessionEnded, sessionSuspended, router]);
@@ -1773,7 +1773,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <div className="text-center max-w-sm">
           <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>This session is not associated with your account as a chair. Please try again, or contact your conference organisers.</p>
-          <Link href="/" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+          <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
         </div>
       </div>
     );
@@ -2117,7 +2117,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2" data-tutorial="topbar">
-        <Link href="/">
+        <Link href="/sessions">
           <img src="/GavellingLogo.png" alt="Gavelling" className="w-[150px] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
 

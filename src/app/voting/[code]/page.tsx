@@ -339,7 +339,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         <div className="text-center max-w-sm">
           <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>You don&apos;t chair this committee</h1>
           <p className="mb-6" style={{ color: '#6A5A4A' }}>The voting screen is part of the chair session. Only the committee&apos;s chair can open it.</p>
-          <Link href="/" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
+          <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
         </div>
       </div>
     );
@@ -352,7 +352,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="mb-4"><Emoji size="2.5rem">🔍</Emoji></div>
           <h1 className="text-2xl font-bold text-[#1C1410] mb-2">Committee not found</h1>
           <p className="text-[#6A5A4A] mb-6">Code &ldquo;{code}&rdquo; is invalid or the session ended.</p>
-          <Link href="/" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+          <Link href="/sessions" className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-6 py-3 rounded-lg font-semibold transition-colors">
             Go Home
           </Link>
         </div>
@@ -482,12 +482,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   };
   const handleEndDebate = async () => {
     await setPhaseInDB(committee.id, 'adjourned');
-    router.push('/');
+    router.push('/sessions');
   };
 
   const Header = ({ children }: { children?: React.ReactNode }) => (
     <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-6 h-12 flex items-center gap-4 shrink-0">
-      <Link href="/">
+      <Link href="/sessions">
         <img
           src="/GavellingLogo.png"
           alt="Gavelling"

@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        allow: ['/', '/about', '/conferences', '/contact'],
+        allow: ['/', '/about', '/conferences', '/sessions', '/contact'],
         disallow: ['/chair/', '/delegate/', '/voting/', '/advisor/', '/join/', '/create/', '/grain-dev/'],
       },
     ],

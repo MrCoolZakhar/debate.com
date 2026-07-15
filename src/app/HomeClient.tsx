@@ -531,7 +531,7 @@ export default function HomeClient() {
             '@context': 'https://schema.org',
             '@type': 'WebApplication',
             name: 'Gavelling',
-            url: 'https://gavelling.com',
+            url: 'https://gavelling.com/sessions',
             description: 'Modern MUN committee software. Manage roll call, speakers lists, motions, and voting, all in one place.',
             applicationCategory: 'EducationalApplication',
             operatingSystem: 'Web',

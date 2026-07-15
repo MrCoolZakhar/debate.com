@@ -907,7 +907,7 @@ export default function ConferencesMapPage() {
       {phase === 'world' && (
         <div style={{ position: 'absolute', bottom: 32, left: 48, zIndex: 30 }}>
           <Link
-            href="/conferences"
+            href="/"
             style={{
               backgroundColor: '#1B3828',
               border: '1px solid rgba(238,217,138,0.15)',

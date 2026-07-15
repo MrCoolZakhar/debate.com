@@ -847,7 +847,7 @@ export default function ConferencesExploreClient() {
         {/* ── Editorial header ─────────────────────────────────────── */}
         <header className="px-6 md:px-14 pt-8 pb-8">
           <Link
-            href="/conferences"
+            href="/"
             className="inline-flex items-center gap-1.5 text-[11px] mb-6 transition-colors font-semibold"
             style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', letterSpacing: '0.08em', textTransform: 'uppercase' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}

@@ -604,7 +604,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       .single();
 
     if (!confData) {
-      router.replace('/conferences');
+      router.replace('/');
       return;
     }
 
@@ -702,7 +702,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             You&apos;re not listed as an organizer of this conference. If you think this is a mistake, contact the conference&apos;s owner.
           </p>
           <button
-            onClick={() => router.push('/conferences')}
+            onClick={() => router.push('/')}
             className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
             style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}

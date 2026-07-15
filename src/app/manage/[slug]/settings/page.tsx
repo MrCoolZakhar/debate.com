@@ -2950,7 +2950,7 @@ export default function SettingsPage() {
                 const supabase = getAuthedClient(session.access_token);
                 const { error } = await supabase.rpc('delete_conference', { p_conference_id: view.id });
                 if (error) { setDeleteError(error.message || 'Could not delete view.'); setConfirmingDelete(false); setDeleting(false); return; }
-                window.location.href = '/conferences';
+                window.location.href = '/';
               }}
               onCancel={() => { if (!deleting) setConfirmingDelete(false); }}
             />

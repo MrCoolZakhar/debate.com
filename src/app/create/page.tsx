@@ -577,7 +577,7 @@ function CreatePageInner() {
         }}
       />
       <nav className="relative z-20 border-b border-[#DDD4C0]/60 px-8 md:px-14 flex items-center shrink-0" style={{ height: '72px', backgroundColor: '#EDE7D8' }}>
-        <Link href="/">
+        <Link href="/sessions">
           <img src="/GavellingLogo.png" alt="Gavelling" className="h-10 w-auto object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         </Link>
         {/* Language toggle — globe dropdown matching SiteNav */}
