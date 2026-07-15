@@ -133,6 +133,12 @@ export function roundMoney(n: number): number {
 /**
  * Compute the full line-item breakdown for a conference checkout.
  *
+ * Models a participant's OWN role fee only. Delegation pledge-spot purchases
+ * (kind: 'pledge_spots') never receive the platform-fee waiver modeled here,
+ * regardless of any subscription or entitlement — they always carry the full
+ * 5% + 3% + fixed service fee server-side (create-checkout v4). Do not reuse
+ * this function's waiver output for pledge-spot line items.
+ *
  * Waiver rules (also enforced server-side — see report/migration):
  *  - is_ambassador        → platform fee waived, always, forever.
  *  - unlimited_conferences_remaining > 0 → platform fee waived; the counter
