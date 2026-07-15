@@ -168,6 +168,34 @@ export default function UnlimitedPage() {
   const [busy, setBusy] = useState<'monthly' | 'yearly' | null>(null);
   const [purchaseError, setPurchaseError] = useState('');
 
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalError, setPortalError] = useState('');
+
+  async function handleManageSubscription() {
+    if (portalBusy) return;
+    setPortalBusy(true);
+    setPortalError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setPortalBusy(false);
+      setPortalError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('create-billing-portal');
+    if (error) {
+      setPortalBusy(false);
+      setPortalError(await extractFunctionErrorMessage(error));
+      return;
+    }
+    const result = data as { ok?: boolean; url?: string; error?: string } | null;
+    if (!result?.ok || !result.url) {
+      setPortalBusy(false);
+      setPortalError(result?.error || 'Could not open the billing portal. Please try again.');
+      return;
+    }
+    window.location.assign(result.url);
+  }
+
   async function startCheckout(plan: 'monthly' | 'yearly') {
     if (busy) return;
     setBusy(plan);
@@ -393,6 +421,27 @@ export default function UnlimitedPage() {
                 <p className="text-xs font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                   {planLabel(subscription!)}
                 </p>
+                {subscription!.plan === 'unlimited_monthly' && (
+                  <button
+                    type="button"
+                    onClick={handleManageSubscription}
+                    disabled={portalBusy}
+                    className="text-xs font-semibold focus:outline-none"
+                    style={{
+                      color: NEU.muted, fontFamily: OUTFIT, background: 'none', border: 'none', padding: 0,
+                      textDecoration: 'underline', cursor: portalBusy ? 'default' : 'pointer',
+                    }}
+                    onMouseEnter={(e) => { if (!portalBusy) (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+                  >
+                    {portalBusy ? 'OPENING…' : 'MANAGE SUBSCRIPTION'}
+                  </button>
+                )}
+                {portalError && (
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                    {portalError}
+                  </p>
+                )}
               </div>
             ) : confirmTimedOut ? (
               <p className="text-[13px]" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
