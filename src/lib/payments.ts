@@ -1,134 +1,126 @@
 // payments.ts — the Stripe-in-a-heartbeat seam.
 //
-// ALL payment UI must consume ONLY this module + src/lib/finance.ts. The
-// provider is selected here, in one place, so wiring Stripe later touches
-// exactly this file: the line items are built FROM the same
-// CheckoutBreakdown the UI rendered, guaranteeing what the user saw is what
-// gets charged.
-//
-// Today there is ONE real provider — 'manual': the intent is acknowledged
-// client-side and the organizer's existing manual mark-paid flow stays
-// authoritative (applications.payment_status is flipped by the organizer;
-// the unlimited-slot consumption trigger fires on that transition).
+// ALL payment UI must consume ONLY this module (+ src/lib/finance.ts for the
+// pure fee math). The provider is selected here, in one place. Stripe is now
+// live: createCheckout invokes the deployed `create-checkout` edge function,
+// which recomputes every amount server-side (active fee phase, voucher,
+// surcharge, partial clamp) and mints a real Checkout Session. The client
+// never does money math for what actually gets charged — it only mirrors
+// that math (via finance.ts) to render a preview.
 
-import type { CheckoutBreakdown } from '@/lib/finance';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { formatFee } from '@/lib/finance';
 
 // ── Provider seam ──────────────────────────────────────────────────────────
 
 export type PaymentProvider = 'manual' | 'stripe';
 
-/** Flip to 'stripe' once the Stripe provider below is implemented. */
-export const ACTIVE_PROVIDER: PaymentProvider = 'manual';
+export const ACTIVE_PROVIDER: PaymentProvider = 'stripe';
 
-export interface PaymentIntentInput extends CheckoutBreakdown {
+/**
+ * Conferences that stay on manual payment confirmation even while Stripe is
+ * the global active provider (e.g. test/demo conferences that shouldn't hit
+ * real checkout). Add a conference id here to re-enable manual mode for it
+ * without touching ACTIVE_PROVIDER globally.
+ */
+export const MANUAL_MODE_CONFERENCE_IDS = new Set<string>([]);
+
+/** Whether checkout for this conference goes through live Stripe. Organizer
+ *  pages use this to gate their manual mark-paid/unpaid/received controls. */
+export function isPaymentsLive(conferenceId?: string | null): boolean {
+  if (ACTIVE_PROVIDER !== 'stripe') return false;
+  if (conferenceId && MANUAL_MODE_CONFERENCE_IDS.has(conferenceId)) return false;
+  return true;
+}
+
+export type CheckoutKind = 'role_fee' | 'pledge_spots';
+
+export interface CreateCheckoutArgs {
   applicationId: string;
-  userId: string;
+  /** Used only to resolve isPaymentsLive for this conference (manual-mode override). */
+  conferenceId?: string;
+  /** The caller's session access token — create-checkout reads the user off it. */
+  accessToken: string;
+  kind: CheckoutKind;
+  /** role_fee only: a partial payment target in major currency units (e.g. 12.50). */
+  amount?: number;
+  /** role_fee only: a voucher code the participant entered. */
+  voucherCode?: string;
+  /** pledge_spots only: how many spots to pay for in this session (default 1). */
+  spotCount?: number;
+  /** Manual-mode message only — never sent to the server. */
+  feeAmount?: number;
+  feeCurrency?: string;
 }
 
 export interface PaymentResult {
-  /** 'recorded' = manual provider acknowledged; 'redirect' = hosted checkout. */
+  /** 'recorded' = manual provider acknowledged; 'redirect' = hosted checkout; 'error' = surfaced inline. */
   status: 'recorded' | 'redirect' | 'error';
   message?: string;
-  /** Set by hosted-checkout providers (Stripe Checkout session URL). */
+  /** Set on 'redirect' — the caller performs the navigation (window.location.assign). */
   redirectUrl?: string;
 }
 
-export async function createPaymentIntent(input: PaymentIntentInput): Promise<PaymentResult> {
-  switch (ACTIVE_PROVIDER) {
-    case 'manual':
-      return manualProvider(input);
-    // case 'stripe':
-    //   return stripeProvider(input);
-    default:
-      return manualProvider(input);
-  }
+export async function createCheckout(args: CreateCheckoutArgs): Promise<PaymentResult> {
+  return isPaymentsLive(args.conferenceId) ? stripeProvider(args) : manualProvider(args);
 }
 
-// ── Provider: manual (today) ───────────────────────────────────────────────
+// ── Provider: manual ────────────────────────────────────────────────────────
 // Records the intent client-side and tells the participant the organizing
-// team confirms payments manually. Nothing is written to the DB here — the
-// application row already carries voucher_id / voucher_discount /
-// fee_waiver_source from submission, so the organizer sees the exact same
-// breakdown when they mark the application paid.
+// team confirms payments manually. Nothing is written to the DB here.
 
-async function manualProvider(input: PaymentIntentInput): Promise<PaymentResult> {
+async function manualProvider(args: CreateCheckoutArgs): Promise<PaymentResult> {
+  const amountLabel = args.feeAmount != null && args.feeCurrency
+    ? ` of ${formatFee(args.feeAmount, args.feeCurrency)}`
+    : '';
   return {
     status: 'recorded',
     message:
-      `Secure card payment is being connected. Your total of ${formatFee(input.total, input.currency)} ` +
-      'is locked in, and the organizing team can confirm your payment manually in the meantime.',
+      `Secure card payment is being connected. Your payment${amountLabel} is locked in, ` +
+      'and the organizing team can confirm your payment manually in the meantime.',
   };
 }
 
-// ── Provider: stripe (skeleton — NOT active) ───────────────────────────────
-// When Stripe lands, implement a server route (e.g. /api/checkout) that:
-//
-//   const session = await stripe.checkout.sessions.create({
-//     mode: 'payment',
-//     customer: profile.stripe_customer_id ?? undefined,   // profiles.stripe_customer_id exists
-//     line_items: [
-//       // Built FROM the same CheckoutBreakdown the UI rendered:
-//       {
-//         price_data: {
-//           currency: input.currency.toLowerCase(),
-//           unit_amount: Math.round(input.postDiscount * 100), // fee minus voucher
-//           product_data: { name: 'Conference registration fee' },
-//         },
-//         quantity: 1,
-//       },
-//       ...(input.platformFee > 0 ? [{
-//         price_data: {
-//           currency: input.currency.toLowerCase(),
-//           unit_amount: Math.round(input.platformFee * 100),
-//           product_data: { name: 'Gavelling platform fee (5%)' },
-//         },
-//         quantity: 1,
-//       }] : []),
-//     ],
-//     // Metadata carries everything the webhook needs to reconcile:
-//     metadata: {
-//       applicationId: input.applicationId,
-//       userId: input.userId,
-//       voucherId: input.voucher?.voucherId ?? '',
-//       waiverSource: input.waiverSource ?? '',
-//     },
-//     success_url: `${origin}/conferences/[slug]/participant?paid=1`,
-//     cancel_url: `${origin}/conferences/[slug]/participant`,
-//     // Conference payouts: pass conferences.stripe_account_id via
-//     // payment_intent_data.transfer_data.destination +
-//     // application_fee_amount = Math.round(input.platformFee * 100).
-//   });
-//
-// then the webhook (checkout.session.completed) sets
-// applications.payment_status = 'paid' + stripe_payment_intent_id — the
-// consume-unlimited trigger and points award fire off that same transition,
-// identically to the manual path.
-//
-// async function stripeProvider(input: PaymentIntentInput): Promise<PaymentResult> {
-//   const res = await fetch('/api/checkout', { method: 'POST', body: JSON.stringify(input) });
-//   const { url } = await res.json();
-//   window.location.assign(url);
-//   return { status: 'redirect', redirectUrl: url };
-// }
+// ── Provider: stripe (live) ─────────────────────────────────────────────────
+// Invokes the deployed create-checkout edge function (verify_jwt on — it
+// reads the caller off the bearer token). On success it returns a Checkout
+// Session URL; the call site performs the redirect. All server-side
+// rejections (bad voucher, currency mismatch, nothing owed, partials
+// disabled, ...) come back as { ok:false, error } and are surfaced verbatim.
 
-// ── Legacy stub (kept for PaymentPanel backwards-compatibility) ────────────
-// PaymentPanel (participant view) predates the seam and calls this directly.
-// It now routes through the same manual provider message.
+async function stripeProvider(args: CreateCheckoutArgs): Promise<PaymentResult> {
+  const supabase = getAuthedClient(args.accessToken);
+  const { data, error } = await supabase.functions.invoke('create-checkout', {
+    body: {
+      applicationId: args.applicationId,
+      kind: args.kind,
+      ...(args.voucherCode ? { voucherCode: args.voucherCode } : {}),
+      ...(args.amount != null ? { amount: args.amount } : {}),
+      ...(args.spotCount != null ? { spotCount: args.spotCount } : {}),
+    },
+  });
 
-export interface InitiatePaymentArgs {
-  applicationId: string;
-  amountCents: number;
+  if (error) {
+    return { status: 'error', message: await extractFunctionErrorMessage(error) };
+  }
+  const result = data as { ok?: boolean; url?: string; error?: string } | null;
+  if (!result?.ok || !result.url) {
+    return { status: 'error', message: result?.error || 'Could not start checkout. Please try again.' };
+  }
+  return { status: 'redirect', redirectUrl: result.url };
 }
 
-export interface InitiatePaymentResult {
-  status: 'stub';
-  message: string;
-}
-
-export async function initiatePayment(_args: InitiatePaymentArgs): Promise<InitiatePaymentResult> {
-  return {
-    status: 'stub',
-    message: 'Secure card payment is being connected. In the meantime, the organizing team can confirm payments manually.',
-  };
+/** supabase.functions.invoke surfaces non-2xx responses as an error whose
+ *  original JSON body (our { ok:false, error } shape) lives on error.context. */
+async function extractFunctionErrorMessage(error: unknown): Promise<string> {
+  const ctx = (error as { context?: Response } | null)?.context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const body = await ctx.json();
+      if (body?.error) return body.error as string;
+    } catch {
+      // non-JSON error body, fall through to the generic message
+    }
+  }
+  return (error as Error | null)?.message || 'Could not start checkout. Please try again.';
 }

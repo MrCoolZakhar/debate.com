@@ -2,6 +2,8 @@
 // ConferenceDetailClient already fetches (MyApplication, RoleConfig, the
 // conference_allocations join) so the extracted components don't refetch.
 
+import type { FeePhase } from '@/lib/finance';
+
 export interface ParticipantApplication {
   id: string;
   role: string;
@@ -22,6 +24,7 @@ export interface ParticipantRoleConfig {
   fee_currency: string | null;
   payment_timing: string;
   allow_partial_payments: boolean;
+  fee_phases?: FeePhase[] | null;
 }
 
 export interface ParticipantAllocation {

@@ -37,10 +37,13 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
       />
       <PledgeInvoicingCard
         applicationId={application.id}
+        conferenceId={conferenceId}
+        amountPaid={application.amount_paid}
         pledgeType={application.pledge_type}
         spotsPledged={application.spots_pledged}
         pledgeConfirmedAt={application.pledge_confirmed_at}
         delegateFeeAmount={delegateConfig?.fee_amount ?? null}
+        delegateFeeCurrency={delegateConfig?.fee_currency ?? null}
         contactEmail={contactEmail}
       />
     </div>

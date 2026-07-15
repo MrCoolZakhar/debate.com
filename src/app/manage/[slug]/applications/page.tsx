@@ -21,6 +21,7 @@ import Portal from '@/components/Portal';
 import { getCountryByName, getFlagUrl, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
+import { isPaymentsLive } from '@/lib/payments';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc,
 } from '@/components/neu';
@@ -312,10 +313,13 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
  *  needed. "Remove waiver" stays reachable for any legacy waived rows. Portaled +
  *  edge-flipped so the clipping row card never cuts the menu off. */
 function PaymentMenu({
-  app, disabled, onMarkPaid, onRemind, onMarkUnpaid, onUndoWaive, align = 'left',
+  app, disabled, paymentsLive, onMarkPaid, onRemind, onMarkUnpaid, onUndoWaive, align = 'left',
 }: {
   app: Application;
   disabled?: boolean;
+  /** When true, Stripe is live for this conference — manual mark-paid/unpaid
+   *  is disabled (checkout + webhook own that state). Undo-waive stays free. */
+  paymentsLive?: boolean;
   onMarkPaid: () => void;
   onRemind: () => void;
   onMarkUnpaid: () => void;
@@ -362,17 +366,27 @@ function PaymentMenu({
   const waived = app.payment_status === 'waived';
   const label = paid ? 'Paid' : waived ? 'Waived' : 'Payment';
 
-  const item = (icon: LucideGlyph, text: string, onClick: () => void, tone: 'ink' | 'danger' = 'ink') => {
+  const item = (
+    icon: LucideGlyph, text: string, onClick: () => void, tone: 'ink' | 'danger' = 'ink',
+    opts?: { disabled?: boolean; title?: string },
+  ) => {
     const Icon = icon;
+    const itemDisabled = !!opts?.disabled;
     return (
       <button
-        onClick={() => { setOpen(false); onClick(); }}
+        onClick={() => { if (itemDisabled) return; setOpen(false); onClick(); }}
+        disabled={itemDisabled}
+        title={opts?.title}
         className="inline-flex items-center gap-2 w-full focus:outline-none"
-        style={{ padding: '9px 12px', borderRadius: 10, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: tone === 'danger' ? '#8B2020' : NEU.ink }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+        style={{
+          padding: '9px 12px', borderRadius: 10, background: 'transparent', border: 'none',
+          cursor: itemDisabled ? 'not-allowed' : 'pointer', textAlign: 'left', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
+          color: itemDisabled ? NEU.muted : (tone === 'danger' ? '#8B2020' : NEU.ink), opacity: itemDisabled ? 0.55 : 1,
+        }}
+        onMouseEnter={e => { if (!itemDisabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
       >
-        <Icon size={14} strokeWidth={2.4} style={{ color: tone === 'danger' ? '#8B2020' : NEU.deepGold }} />
+        <Icon size={14} strokeWidth={2.4} style={{ color: itemDisabled ? NEU.muted : (tone === 'danger' ? '#8B2020' : NEU.deepGold) }} />
         {text}
       </button>
     );
@@ -409,9 +423,11 @@ function PaymentMenu({
             style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: 196, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
           >
             <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-            {!paid && !waived && item(CircleCheck, 'Mark paid manually', onMarkPaid)}
+            {!paid && !waived && item(CircleCheck, 'Mark paid manually', onMarkPaid, 'ink',
+              paymentsLive ? { disabled: true, title: 'Payments are handled automatically via checkout' } : undefined)}
             {!paid && !waived && item(Send, 'Remind to pay', onRemind)}
-            {paid && item(RotateCcw, 'Mark as unpaid', onMarkUnpaid, 'danger')}
+            {paid && item(RotateCcw, 'Mark as unpaid', onMarkUnpaid, 'danger',
+              paymentsLive ? { disabled: true, title: 'Payments are handled automatically via checkout' } : undefined)}
             {waived && item(RotateCcw, 'Remove waiver', onUndoWaive, 'danger')}
           </div>
         </Portal>
@@ -997,6 +1013,7 @@ function FilterPanel({
 export default function ApplicationsPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  const paymentsLive = isPaymentsLive(conference?.id);
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   // Chairs are hidden by default (#2): the fresh participants filter carries
@@ -1531,7 +1548,7 @@ export default function ApplicationsPage() {
   }
 
   function handleMarkPaid(app: Application) {
-    if (!session || !conference || busyIds.has(app.id)) return;
+    if (!session || !conference || busyIds.has(app.id) || paymentsLive) return;
     const prevRow = applications.find(a => a.id === app.id) ?? app;
 
     setActionError('');
@@ -1572,7 +1589,7 @@ export default function ApplicationsPage() {
   }
 
   async function handleMarkUnpaid(app: Application) {
-    if (!session || busyIds.has(app.id)) return;
+    if (!session || busyIds.has(app.id) || paymentsLive) return;
     const { confirmed } = await confirm({
       title: 'Mark this application unpaid?',
       body: 'If their payment opened a delegation spot, one spot will be removed.',
@@ -1854,8 +1871,11 @@ export default function ApplicationsPage() {
   const selectedApps = filtered.filter(a => selectedIds.has(a.id));
   const allVisibleSelected = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
   // Chairs are always free, so bulk mark-paid / waive skip them entirely (#5).
+  // When Stripe checkout is live for this conference, manual mark-paid is not
+  // offered at all (bulk or single) — checkout + webhook own that state.
   const payEligible = (a: Application) =>
-    a.role !== 'chair'
+    !paymentsLive
+    && a.role !== 'chair'
     && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
     && a.payment_status !== 'paid' && a.payment_status !== 'waived';
   const bulkAcceptable = selectedApps.filter(a => a.status === 'submitted');
@@ -2324,6 +2344,7 @@ export default function ApplicationsPage() {
                           <PaymentMenu
                             app={app}
                             disabled={rowBusy}
+                            paymentsLive={paymentsLive}
                             align="right"
                             onMarkPaid={() => handleMarkPaid(app)}
                             onRemind={() => handleRemindPay(app)}
@@ -2503,6 +2524,7 @@ export default function ApplicationsPage() {
           <PaymentMenu
             app={app}
             disabled={rowBusy}
+            paymentsLive={paymentsLive}
             onMarkPaid={() => handleMarkPaid(app)}
             onRemind={() => handleRemindPay(app)}
             onMarkUnpaid={() => handleMarkUnpaid(app)}

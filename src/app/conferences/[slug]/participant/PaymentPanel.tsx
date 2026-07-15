@@ -1,15 +1,19 @@
 'use client';
 
 // Payment panel, never gated, always visible per selected application.
-// Real UI; Stripe wiring lands separately (see src/lib/payments.ts). Shows
-// the role fee, a status badge, and a PAY button that (for now) opens a
-// styled "not connected yet" modal instead of a real checkout.
+// PAY opens a real Stripe Checkout session (src/lib/payments.ts) — the
+// server recomputes every amount, this panel only mirrors that math (active
+// fee phase, remaining balance, 5% platform fee note) to preview it, and
+// surfaces whatever the server actually decides inline.
 
-import { useState } from 'react';
-import { CreditCard, Mail } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CreditCard, Mail, TriangleAlert } from 'lucide-react';
 import { formatFee, formatFeeAmount } from '@/lib/utils';
+import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
-import { initiatePayment } from '@/lib/payments';
+import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { createCheckout } from '@/lib/payments';
 import { SectionCard, OUTFIT } from './shared';
 
 type Badge = 'PAID' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';
@@ -31,8 +35,10 @@ function deriveBadge(paymentStatus: string, amountPaid: number): Badge {
 
 export interface PaymentPanelProps {
   applicationId: string;
+  conferenceId: string;
   feeAmount: number | null;
   feeCurrency: string | null;
+  feePhases?: FeePhase[] | null;
   allowPartial: boolean;
   paymentStatus: string;
   amountPaid: number;
@@ -43,9 +49,11 @@ export interface PaymentPanelProps {
 }
 
 export default function PaymentPanel({
-  applicationId, feeAmount, feeCurrency, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus,
+  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus,
 }: PaymentPanelProps) {
-  const fee = feeAmount ?? 0;
+  const { session } = useAuth();
+  const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: feeAmount, fee_phases: feePhases });
+  const fee = resolvedFee ?? 0;
   const currency = feeCurrency ?? 'GBP';
   const remaining = Math.max(0, fee - amountPaid);
   const badge = deriveBadge(paymentStatus, amountPaid);
@@ -53,17 +61,53 @@ export default function PaymentPanel({
   const showAmountSelector = allowPartial && owesSomething && remaining > 0;
 
   const [customAmount, setCustomAmount] = useState<string>(() => formatFeeAmount(remaining));
+  const [voucherOpen, setVoucherOpen] = useState(false);
+  const [voucherCode, setVoucherCode] = useState('');
   const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
   const [stubMessage, setStubMessage] = useState<string | null>(null);
+  // Opportunistic: suppresses the platform-fee note when the viewer happens to
+  // have organizer read access to an active Unlimited subscription for this
+  // conference. RLS quietly returns nothing for everyone else, so the note
+  // defaults to always-shown for ordinary participants.
+  const [hasActiveUnlimited, setHasActiveUnlimited] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    getAuthedClient(session.access_token)
+      .from('subscriptions')
+      .select('id')
+      .eq('conference_id', conferenceId)
+      .in('status', ['active', 'trialing'])
+      .limit(1)
+      .then(({ data }) => { if (!cancelled) setHasActiveUnlimited(!!data && data.length > 0); });
+    return () => { cancelled = true; };
+  }, [conferenceId, session]);
 
   const amountToCharge = showAmountSelector ? Math.min(Math.max(parseFloat(customAmount) || 1, 1), Math.max(remaining, 1)) : remaining;
 
   async function handlePay() {
-    if (paying || amountToCharge <= 0) return;
+    if (paying || amountToCharge <= 0 || !session) return;
     setPaying(true);
-    const result = await initiatePayment({ applicationId, amountCents: Math.round(amountToCharge * 100) });
+    setPayError(null);
+    const result = await createCheckout({
+      applicationId,
+      conferenceId,
+      accessToken: session.access_token,
+      kind: 'role_fee',
+      ...(showAmountSelector ? { amount: amountToCharge } : {}),
+      ...(voucherCode.trim() ? { voucherCode: voucherCode.trim().toUpperCase() } : {}),
+      feeAmount: fee,
+      feeCurrency: currency,
+    });
+    if (result.status === 'redirect' && result.redirectUrl) {
+      window.location.assign(result.redirectUrl);
+      return;
+    }
     setPaying(false);
-    setStubMessage(result.message);
+    if (result.status === 'error') setPayError(result.message ?? 'Something went wrong. Please try again.');
+    else setStubMessage(result.message ?? null);
   }
 
   return (
@@ -84,9 +128,21 @@ export default function PaymentPanel({
         {fee > 0 ? formatFee(fee, currency) : 'Free'}
       </p>
 
+      {fee > 0 && phase && (
+        <p className="text-[11px] font-bold mb-1" style={{ color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.03em' }}>
+          {phase.label.toUpperCase()} PRICING
+        </p>
+      )}
+
       {allowPartial && fee > 0 && (
-        <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        <p className="text-xs mb-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           Remaining balance: <span style={{ fontWeight: 700, color: '#1C1410' }}>{formatFee(remaining, currency)}</span>
+        </p>
+      )}
+
+      {fee > 0 && payableNow && !hasActiveUnlimited && (
+        <p className="text-[11px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+          A 5% Gavelling platform fee applies at checkout.
         </p>
       )}
 
@@ -159,6 +215,49 @@ export default function PaymentPanel({
               </p>
             </div>
           )}
+
+          <div className="mb-4">
+            {!voucherOpen ? (
+              <button
+                type="button"
+                onClick={() => setVoucherOpen(true)}
+                className="text-xs font-bold focus:outline-none"
+                style={{ color: '#1B3828', fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                Have a voucher?
+              </button>
+            ) : (
+              <div>
+                <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: '#6E5F4E', fontFamily: OUTFIT, letterSpacing: '0.01em' }}>
+                  VOUCHER CODE
+                </label>
+                <input
+                  type="text"
+                  value={voucherCode}
+                  onChange={e => setVoucherCode(e.target.value)}
+                  placeholder="e.g. EARLYBIRD10"
+                  className="w-full rounded-xl px-3.5 py-2.5 text-sm uppercase focus:outline-none"
+                  style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+                />
+                <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                  Checked and applied when you continue to checkout.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {payError && (
+            <div
+              className="flex items-start gap-2 rounded-xl px-3.5 py-2.5 mb-3"
+              style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)' }}
+            >
+              <TriangleAlert size={14} style={{ color: '#8B2020', marginTop: 1, flexShrink: 0 }} />
+              <p className="text-[12.5px]" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                {payError}
+              </p>
+            </div>
+          )}
+
           <button
             onClick={handlePay}
             disabled={paying}
@@ -172,7 +271,7 @@ export default function PaymentPanel({
             onMouseLeave={e => { if (!paying) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
             <CreditCard size={15} />
-            {paying ? 'OPENING...' : `PAY ${formatFee(amountToCharge, currency)}`}
+            {paying ? 'OPENING CHECKOUT...' : `PAY ${formatFee(amountToCharge, currency)}`}
           </button>
         </>
       ) : null}

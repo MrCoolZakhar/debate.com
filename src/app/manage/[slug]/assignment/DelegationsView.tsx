@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeft, Check, Trash2 } from 'lucide-react';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
+import { isPaymentsLive } from '@/lib/payments';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
@@ -176,6 +177,7 @@ interface DelegationsViewProps {
 
 export default function DelegationsView({ conference, showFlash }: DelegationsViewProps) {
   const { session } = useAuth();
+  const paymentsLive = isPaymentsLive(conference.id);
   const [societies, setSocieties] = useState<Society[]>([]);
   const [members, setMembers] = useState<PoolMember[]>([]);
   const [searchPool, setSearchPool] = useState<SearchApp[]>([]);
@@ -394,7 +396,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
   }
 
   async function handleMarkPledgeReceived(member: PoolMember, societyId: string) {
-    if (!session || busyIds.has(member.id)) return;
+    if (!session || busyIds.has(member.id) || paymentsLive) return;
     // F21: fully idempotent, nothing left to do once the pledge is satisfied.
     if (pledgeSatisfied(member)) return;
     const { confirmed } = await confirm({
@@ -1011,9 +1013,16 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                     <Check size={13} /> COVERED
                   </span>
                 ) : (
-                  <NeuButton onClick={() => handleMarkPledgeReceived(m, society.id)} gradient={NEU_GRADIENTS.green} style={{ padding: '7px 14px', fontSize: 10.5 }}>
-                    MARK RECEIVED
-                  </NeuButton>
+                  <span title={paymentsLive ? 'Payments are handled automatically via checkout' : undefined}>
+                    <NeuButton
+                      onClick={() => handleMarkPledgeReceived(m, society.id)}
+                      disabled={paymentsLive}
+                      gradient={NEU_GRADIENTS.green}
+                      style={{ padding: '7px 14px', fontSize: 10.5 }}
+                    >
+                      MARK RECEIVED
+                    </NeuButton>
+                  </span>
                 )}
               </div>
             ))}

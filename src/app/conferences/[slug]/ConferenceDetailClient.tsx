@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -412,6 +412,71 @@ export default function ConferenceDetailClient() {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('tab') === 'participant') setActiveTab('participant');
   }, []);
+  // Stripe checkout return (?payment=success|cancelled from create-checkout's
+  // success_url/cancel_url). Read once post-mount, then strip the query
+  // string immediately so a refresh never re-triggers it.
+  const [paymentReturn, setPaymentReturn] = useState<'success' | 'cancelled' | null>(null);
+  const [paymentConfirming, setPaymentConfirming] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [paymentTimedOut, setPaymentTimedOut] = useState(false);
+  const pollStartedRef = useRef(false);
+  useEffect(() => {
+    const payment = new URLSearchParams(window.location.search).get('payment');
+    if (payment === 'success' || payment === 'cancelled') {
+      setActiveTab('participant');
+      setPaymentReturn(payment);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+  // The webhook is the only authority on payment state — this just polls the
+  // application row every 2s (max ~20s) waiting for it to reflect what the
+  // webhook already applied, then refreshes the panel. Never marks anything
+  // paid client-side.
+  useEffect(() => {
+    if (paymentReturn !== 'success') return;
+    if (authLoading || loading || !user || !session || !conference) return;
+    if (pollStartedRef.current) return;
+    pollStartedRef.current = true;
+
+    setPaymentConfirming(true);
+    const conferenceId = conference.id;
+    const userId = user.id;
+    const accessToken = session.access_token;
+    const snapshot = new Map(myApplications.map(a => [a.id, `${a.payment_status}:${a.amount_paid}`]));
+    let attempts = 0;
+    let cancelled = false;
+
+    const tick = async () => {
+      attempts++;
+      const authed = getAuthedClient(accessToken);
+      const { data } = await authed
+        .from('applications')
+        .select('id, payment_status, amount_paid')
+        .eq('conference_id', conferenceId)
+        .eq('user_id', userId);
+      if (cancelled) return;
+      const rows = (data ?? []) as { id: string; payment_status: string; amount_paid: number }[];
+      const changed = rows.some(r => {
+        const prev = snapshot.get(r.id);
+        return prev !== undefined && prev !== `${r.payment_status}:${r.amount_paid}`;
+      });
+      if (changed) {
+        setPaymentConfirming(false);
+        setPaymentConfirmed(true);
+        fetchAll({ silent: true });
+        return;
+      }
+      if (attempts >= 10) {
+        setPaymentConfirming(false);
+        setPaymentTimedOut(true);
+        return;
+      }
+      setTimeout(tick, 2000);
+    };
+    tick();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentReturn, authLoading, loading, user, session, conference]);
   // Committee roster / occupancy / chair-recruitment (public reads)
   const [committeeSlots, setCommitteeSlots] = useState<Record<string, CommitteeSlot[]>>({});
   const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, string[]>>({});
@@ -1418,6 +1483,65 @@ export default function ConferenceDetailClient() {
 
               {/* Person tab, participant view */}
               {activeTab === 'participant' && (
+                <>
+                  {paymentReturn === 'success' && (
+                    <SectionCard className="!py-4 !px-5 mb-6">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex items-center justify-center flex-shrink-0"
+                          style={{
+                            width: 38, height: 38, borderRadius: '9999px',
+                            backgroundColor: paymentConfirmed ? 'rgba(61,122,82,0.13)' : 'rgba(184,132,74,0.14)',
+                          }}
+                        >
+                          {paymentConfirmed ? (
+                            <PartyPopper size={17} style={{ color: '#2A5A3C' }} />
+                          ) : paymentTimedOut ? (
+                            <Clock size={17} style={{ color: '#B8844A' }} />
+                          ) : (
+                            <Loader2 size={17} className={paymentConfirming ? 'animate-spin' : ''} style={{ color: '#B8844A' }} />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                            {paymentConfirmed ? 'Payment received!' : paymentTimedOut ? 'Your payment is processing' : 'Payment received — confirming...'}
+                          </p>
+                          <p className="text-[12.5px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+                            {paymentConfirmed
+                              ? 'Your registration is up to date.'
+                              : paymentTimedOut
+                                ? 'This page will reflect it shortly — no need to try again.'
+                                : 'Stripe confirmed your checkout, waiting for it to land here.'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setPaymentReturn(null)}
+                          className="flex-shrink-0 focus:outline-none"
+                          style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                          aria-label="Dismiss"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </SectionCard>
+                  )}
+                  {paymentReturn === 'cancelled' && (
+                    <SectionCard className="!py-3 !px-5 mb-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[13px]" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
+                          Payment cancelled — you can try again anytime.
+                        </p>
+                        <button
+                          onClick={() => setPaymentReturn(null)}
+                          className="flex-shrink-0 focus:outline-none"
+                          style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                          aria-label="Dismiss"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    </SectionCard>
+                  )}
                 <ParticipantView
                   conferenceId={conference.id}
                   conferenceSlug={conference.slug}
@@ -1429,6 +1553,7 @@ export default function ConferenceDetailClient() {
                   committees={committees}
                   allocationSwapMode={conference.allocation_swap_mode}
                 />
+                </>
               )}
 
               {/* Reviews tab */}

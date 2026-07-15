@@ -135,8 +135,10 @@ export default function ParticipantView({
           <PaymentPanel
             key={selected.id}
             applicationId={selected.id}
+            conferenceId={conferenceId}
             feeAmount={roleConfig?.fee_amount ?? 0}
             feeCurrency={roleConfig?.fee_currency ?? defaultFeeCurrency}
+            feePhases={roleConfig?.fee_phases ?? null}
             allowPartial={roleConfig?.allow_partial_payments ?? false}
             paymentStatus={selected.payment_status}
             amountPaid={selected.amount_paid}
