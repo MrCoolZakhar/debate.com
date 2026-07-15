@@ -50,6 +50,9 @@ export interface Conference {
   min_age: number | null;
   allocation_swap_mode: string;
   email_theme: EmailTheme;
+  financial_aid_enabled: boolean;
+  aid_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
+  aid_intro: string | null;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -83,6 +86,7 @@ const CONFERENCE_COLUMNS = [
   'external_payment_url', 'external_payment_note', 'organizer_id',
   'predecessor_conference_id', 'predecessor_approved', 'min_age',
   'allocation_swap_mode', 'email_theme',
+  'financial_aid_enabled', 'aid_questions', 'aid_intro',
 ].join(', ');
 
 // ── Nav definition ─────────────────────────────────────────────────────────

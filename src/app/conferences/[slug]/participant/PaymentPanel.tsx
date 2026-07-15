@@ -8,13 +8,25 @@
 
 import { useEffect, useState } from 'react';
 import { CreditCard, Mail, TriangleAlert } from 'lucide-react';
-import { formatFee, formatFeeAmount } from '@/lib/utils';
+import { formatFee, formatFeeAmount, currencySymbol } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { createCheckout } from '@/lib/payments';
 import { SectionCard, OUTFIT } from './shared';
+
+export interface AidQuestion {
+  id: string;
+  label: string;
+  required: boolean;
+  type: string;
+}
+
+interface AidRequestRow {
+  status: 'pending' | 'approved' | 'denied';
+  granted_amount: number | null;
+}
 
 type Badge = 'PAID' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';
 
@@ -45,7 +57,10 @@ export interface PaymentPanelProps {
   /** false when payment_timing is after_acceptance and the application is still 'submitted' */
   payableNow: boolean;
   contactEmail: string | null;
-  aidStatus?: 'none' | 'pending' | 'approved' | 'denied';
+  /** Conference-level financial aid config (separate application, financial_aid_requests table). */
+  financialAidEnabled: boolean;
+  aidQuestions: AidQuestion[];
+  aidIntro: string | null;
   /** True once the conference's Stripe Connect onboarding is complete. */
   paymentsEnabled: boolean;
   /** Organizer-provided payment page, shown as a fallback when paymentsEnabled is false. */
@@ -54,13 +69,87 @@ export interface PaymentPanelProps {
 }
 
 export default function PaymentPanel({
-  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus, paymentsEnabled, externalPaymentUrl, externalPaymentNote,
+  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, financialAidEnabled, aidQuestions, aidIntro, paymentsEnabled, externalPaymentUrl, externalPaymentNote,
 }: PaymentPanelProps) {
   const { user, session } = useAuth();
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: feeAmount, fee_phases: feePhases });
   const fee = resolvedFee ?? 0;
   const currency = feeCurrency ?? 'GBP';
-  const remaining = Math.max(0, fee - amountPaid);
+
+  // ── Financial aid request (separate lifecycle, financial_aid_requests table) ──
+  const [aidRequest, setAidRequest] = useState<AidRequestRow | null>(null);
+  const [aidRequestLoaded, setAidRequestLoaded] = useState(false);
+  const [aidModalOpen, setAidModalOpen] = useState(false);
+  const [aidStatement, setAidStatement] = useState('');
+  const [aidRequestedAmount, setAidRequestedAmount] = useState('');
+  const [aidCustomAnswers, setAidCustomAnswers] = useState<Record<string, string>>({});
+  const [aidSubmitting, setAidSubmitting] = useState(false);
+  const [aidSubmitError, setAidSubmitError] = useState('');
+
+  async function fetchAidRequest(): Promise<AidRequestRow | null> {
+    if (!financialAidEnabled || !user || !session) return null;
+    const { data } = await getAuthedClient(session.access_token)
+      .from('financial_aid_requests')
+      .select('status, granted_amount')
+      .eq('application_id', applicationId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return (data as AidRequestRow | null) ?? null;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const row = await fetchAidRequest();
+      if (cancelled) return;
+      setAidRequest(row);
+      setAidRequestLoaded(true);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [financialAidEnabled, applicationId, user, session]);
+
+  async function handleSubmitAid() {
+    if (aidSubmitting || !session) return;
+    if (!aidStatement.trim()) {
+      setAidSubmitError('Please tell us about your circumstances.');
+      return;
+    }
+    for (const q of aidQuestions) {
+      if (q.required && !(aidCustomAnswers[q.id] ?? '').trim()) {
+        setAidSubmitError(`Please answer: ${q.label}`);
+        return;
+      }
+    }
+    setAidSubmitting(true);
+    setAidSubmitError('');
+    const supabase = getAuthedClient(session.access_token);
+    const requestedAmountNum = aidRequestedAmount.trim() ? parseFloat(aidRequestedAmount) : null;
+    const { data, error } = await supabase.rpc('submit_aid_request', {
+      p_application_id: applicationId,
+      p_statement: aidStatement.trim(),
+      p_requested_amount: requestedAmountNum != null && !Number.isNaN(requestedAmountNum) ? requestedAmountNum : null,
+      p_custom_answers: aidCustomAnswers,
+    });
+    const result = data as { ok?: boolean; error?: string } | null;
+    if (error || !result?.ok) {
+      setAidSubmitting(false);
+      setAidSubmitError(result?.error || error?.message || 'Could not submit your request. Please try again.');
+      return;
+    }
+    setAidSubmitting(false);
+    setAidModalOpen(false);
+    setAidStatement('');
+    setAidRequestedAmount('');
+    setAidCustomAnswers({});
+    const row = await fetchAidRequest();
+    setAidRequest(row);
+  }
+
+  const grantedAmount = aidRequest?.status === 'approved' ? (aidRequest.granted_amount ?? 0) : 0;
+  const effectiveFee = Math.max(0, fee - grantedAmount);
+  const remaining = Math.max(0, effectiveFee - amountPaid);
   const badge = deriveBadge(paymentStatus, amountPaid);
   const owesSomething = badge === 'UNPAID' || badge === 'PARTIAL';
   const showAmountSelector = allowPartial && owesSomething && remaining > 0;
@@ -140,7 +229,7 @@ export default function PaymentPanel({
         </p>
       )}
 
-      {allowPartial && fee > 0 && (
+      {allowPartial && fee > 0 && grantedAmount === 0 && (
         <p className="text-xs mb-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           Remaining balance: <span style={{ fontWeight: 700, color: '#1C1410' }}>{formatFee(remaining, currency)}</span>
         </p>
@@ -152,7 +241,7 @@ export default function PaymentPanel({
         </p>
       )}
 
-      {aidStatus === 'pending' && (
+      {aidRequestLoaded && aidRequest?.status === 'pending' && (
         <p
           className="text-[13px] rounded-xl px-4 py-3 mb-3"
           style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
@@ -160,20 +249,25 @@ export default function PaymentPanel({
           Your financial aid request is under review.
         </p>
       )}
-      {aidStatus === 'approved' && (
-        <p
-          className="text-[13px] rounded-xl px-4 py-3 mb-3"
-          style={{ color: '#2A5A3C', fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', border: '1px solid rgba(61,122,82,0.24)', lineHeight: 1.6 }}
-        >
-          Financial aid approved — the organizing team will apply it to your balance.
-        </p>
+      {aidRequestLoaded && aidRequest?.status === 'approved' && grantedAmount > 0 && (
+        <div className="mb-3">
+          <p
+            className="text-[13px] rounded-xl px-4 py-3"
+            style={{ color: '#2A5A3C', fontFamily: OUTFIT, backgroundColor: 'rgba(61,122,82,0.1)', border: '1px solid rgba(61,122,82,0.24)', lineHeight: 1.6 }}
+          >
+            Financial aid applied: -{formatFee(grantedAmount, currency)}
+          </p>
+          <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            Balance due: <span style={{ fontWeight: 700, color: '#1C1410' }}>{formatFee(remaining, currency)}</span>
+          </p>
+        </div>
       )}
-      {aidStatus === 'denied' && (
+      {aidRequestLoaded && aidRequest?.status === 'denied' && (
         <p
           className="text-[13px] rounded-xl px-4 py-3 mb-3"
           style={{ color: '#6E5F4E', fontFamily: OUTFIT, backgroundColor: 'rgba(154,138,120,0.1)', border: '1px solid rgba(154,138,120,0.24)', lineHeight: 1.6 }}
         >
-          Your financial aid request was not approved — the standard fee applies.
+          Your financial aid request was not approved. The standard fee applies.
         </p>
       )}
 
@@ -312,6 +406,17 @@ export default function PaymentPanel({
             <CreditCard size={15} />
             {paying ? 'OPENING CHECKOUT...' : `PAY ${formatFee(amountToCharge, currency)}`}
           </button>
+
+          {financialAidEnabled && aidRequestLoaded && !aidRequest && (
+            <button
+              type="button"
+              onClick={() => setAidModalOpen(true)}
+              className="w-full text-xs font-semibold text-center focus:outline-none mt-2.5"
+              style={{ color: '#6E5F4E', fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Request Financial Aid
+            </button>
+          )}
         </>
       ) : null}
 
@@ -344,6 +449,123 @@ export default function PaymentPanel({
             >
               GOT IT
             </button>
+          </div>
+        </ModalOverlay>
+      )}
+
+      {aidModalOpen && (
+        <ModalOverlay onClose={() => { if (!aidSubmitting) setAidModalOpen(false); }}>
+          <div
+            className="rounded-2xl p-6 flex flex-col gap-4"
+            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 440, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
+          >
+            <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              Request Financial Aid
+            </p>
+
+            {aidIntro && (
+              <p className="text-sm" style={{ color: '#6E5F4E', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                {aidIntro}
+              </p>
+            )}
+
+            {aidQuestions.map(q => (
+              <div key={q.id}>
+                <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  {q.label}
+                  {q.required && <span className="ml-1 font-normal" style={{ color: '#9A8A78' }}>(required)</span>}
+                </label>
+                {q.type === 'text' ? (
+                  <input
+                    type="text"
+                    value={aidCustomAnswers[q.id] ?? ''}
+                    onChange={(e) => setAidCustomAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                    className="w-full rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                    style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+                  />
+                ) : (
+                  <textarea
+                    rows={3}
+                    value={aidCustomAnswers[q.id] ?? ''}
+                    onChange={(e) => setAidCustomAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                    className="w-full rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none"
+                    style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+                  />
+                )}
+              </div>
+            ))}
+
+            <div>
+              <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                Tell us about your circumstances
+                <span className="ml-1 font-normal" style={{ color: '#9A8A78' }}>(required)</span>
+              </label>
+              <textarea
+                rows={4}
+                value={aidStatement}
+                onChange={(e) => setAidStatement(e.target.value)}
+                placeholder="Tell the organizers about your circumstances and what support you need"
+                className="w-full rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none"
+                style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                Amount you are requesting <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <span style={{ color: '#6E5F4E', fontFamily: OUTFIT, fontWeight: 700 }}>{currencySymbol(currency)}</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={aidRequestedAmount}
+                  onChange={(e) => setAidRequestedAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="flex-1 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                  style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+                />
+              </div>
+              <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                Optional. The organizing team decides the final amount.
+              </p>
+            </div>
+
+            {aidSubmitError && (
+              <div
+                className="flex items-start gap-2 rounded-xl px-3.5 py-2.5"
+                style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)' }}
+              >
+                <TriangleAlert size={14} style={{ color: '#8B2020', marginTop: 1, flexShrink: 0 }} />
+                <p className="text-[12.5px]" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                  {aidSubmitError}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setAidModalOpen(false)}
+                disabled={aidSubmitting}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
+                style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: aidSubmitting ? 'default' : 'pointer' }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleSubmitAid}
+                disabled={aidSubmitting || !aidStatement.trim()}
+                className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
+                style={{
+                  backgroundColor: aidSubmitting || !aidStatement.trim() ? '#DDD4C0' : '#1B3828',
+                  color: aidSubmitting || !aidStatement.trim() ? '#9A8A78' : '#EED98A',
+                  fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: aidSubmitting || !aidStatement.trim() ? 'default' : 'pointer',
+                }}
+              >
+                {aidSubmitting ? 'SUBMITTING…' : 'SUBMIT REQUEST'}
+              </button>
+            </div>
           </div>
         </ModalOverlay>
       )}

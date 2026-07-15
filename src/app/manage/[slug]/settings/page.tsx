@@ -45,7 +45,6 @@ interface RoleConfig {
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime';
   custom_questions: CustomQuestion[];
   fee_phases: FeePhase[] | null;
-  financial_aid_enabled: boolean;
 }
 
 interface Organizer {
@@ -476,6 +475,14 @@ export default function SettingsPage() {
   const [publicToggleSaving, setPublicToggleSaving] = useState(false);
   const [withdrawingClaim, setWithdrawingClaim] = useState(false);
 
+  // Financial aid (conference-level, Conference tab)
+  const [aidToggleSaving, setAidToggleSaving] = useState(false);
+  const [aidError, setAidError] = useState('');
+  const [aidIntro, setAidIntro] = useState('');
+  const [aidIntroSaving, setAidIntroSaving] = useState(false);
+  const [aidIntroSaved, setAidIntroSaved] = useState(false);
+  const [aidQuestionModal, setAidQuestionModal] = useState<{ open: boolean; existing: CustomQuestion | null }>({ open: false, existing: null });
+
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
   const roleSeq = useRef(0);
@@ -641,6 +648,7 @@ export default function SettingsPage() {
     setCity(conference.city ?? '');
     setFormat((conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '');
     setExpectedDelegates(conference.expected_delegates != null ? String(conference.expected_delegates) : '');
+    setAidIntro(conference.aid_intro ?? '');
   }, [conference?.id, loadRoleConfigs, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
 
   // Partner typeahead: debounced authed search over public conferences,
@@ -707,6 +715,63 @@ export default function SettingsPage() {
   // rides saveRoleConfig's optimistic-update-with-rollback.
   function updateFeePhase(role: string, phases: FeePhase[], idx: number, patch: Partial<FeePhase>) {
     void saveRoleConfig(role, { fee_phases: phases.map((p, i) => (i === idx ? { ...p, ...patch } : p)) });
+  }
+
+  // ── Financial aid (conference-level) ────────────────────────────────────
+  // Aid is a separate application (financial_aid_requests table), not part of
+  // the conference application. This only edits the conference-level toggle,
+  // intro copy and question set that the payment-panel aid form reads.
+
+  async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: CustomQuestion[] }>): Promise<boolean> {
+    if (!conference) return false;
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setAidError('Your session has expired, please refresh and sign in again.');
+      return false;
+    }
+    const { data, error } = await supabase
+      .from('conferences')
+      .update(updates)
+      .eq('id', conference.id)
+      .select('id');
+    if (error || !data || data.length !== 1) {
+      setAidError(saveFailMessage(error));
+      return false;
+    }
+    await refreshConferenceQuiet();
+    setAidError('');
+    return true;
+  }
+
+  function handleAidToggle(next: boolean) {
+    if (!conference || aidToggleSaving) return;
+    setAidToggleSaving(true);
+    void saveAidConfig({ financial_aid_enabled: next }).finally(() => setAidToggleSaving(false));
+  }
+
+  async function handleSaveAidIntro() {
+    if (!conference || aidIntroSaving) return;
+    setAidIntroSaving(true);
+    const ok = await saveAidConfig({ aid_intro: aidIntro.trim() || null });
+    setAidIntroSaving(false);
+    if (ok) {
+      setAidIntroSaved(true);
+      setTimeout(() => setAidIntroSaved(false), 2500);
+    }
+  }
+
+  const currentAidQuestions: CustomQuestion[] = (conference?.aid_questions ?? []) as CustomQuestion[];
+
+  function handleSaveAidQuestion(q: CustomQuestion) {
+    const updated = aidQuestionModal.existing
+      ? currentAidQuestions.map(eq => eq.id === q.id ? q : eq)
+      : [...currentAidQuestions, q];
+    void saveAidConfig({ aid_questions: updated });
+    setAidQuestionModal({ open: false, existing: null });
+  }
+
+  function handleDeleteAidQuestion(id: string) {
+    void saveAidConfig({ aid_questions: currentAidQuestions.filter(q => q.id !== id) });
   }
 
   // Toggle that writes immediately (no dedicated save button): shows an
@@ -1949,23 +2014,6 @@ export default function SettingsPage() {
                       {PAYMENT_TIMING_OPTIONS.find(o => o.value === (config.payment_timing ?? 'anytime'))?.desc}
                     </p>
                   </div>
-
-                  {/* Financial aid */}
-                  <div className="mt-4 flex items-center justify-between gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                        Financial aid
-                      </label>
-                      <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        Applicants can request financial aid in their application.
-                      </p>
-                    </div>
-                    <PillToggle
-                      value={config.financial_aid_enabled ?? false}
-                      onChange={(v) => saveRoleConfig(role, { financial_aid_enabled: v })}
-                      size="md"
-                    />
-                  </div>
                 </>
               )}
             </div>
@@ -2482,6 +2530,117 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* ── Financial Aid card (conference-level) ── */}
+      {activeTab === 'conference' && <div style={cardStyle}>
+        <div className="flex items-center justify-between gap-4 mb-1">
+          <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            Financial Aid
+          </p>
+          <PillToggle
+            value={view.financial_aid_enabled ?? false}
+            onChange={aidToggleSaving ? () => {} : handleAidToggle}
+            size="md"
+          />
+        </div>
+        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Delegates can request financial aid from the payment panel once accepted. You review each request and grant a discount, applied automatically at checkout.
+        </p>
+
+        {aidError && (
+          <p className="text-xs mb-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{aidError}</p>
+        )}
+
+        {view.financial_aid_enabled && (
+          <>
+            <div className="mb-5">
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                Intro message (optional)
+              </label>
+              <textarea
+                rows={3}
+                value={aidIntro}
+                onChange={(e) => setAidIntro(e.target.value)}
+                placeholder="Shown at the top of the aid form"
+                style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+              />
+              <button
+                onClick={handleSaveAidIntro}
+                disabled={aidIntroSaving || aidIntroSaved}
+                className="mt-2 rounded-xl py-2 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex items-center justify-center gap-2"
+                style={{
+                  backgroundColor: aidIntroSaved ? '#3D7A52' : '#1B3828',
+                  color: '#EED98A',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.07em',
+                  opacity: aidIntroSaving ? 0.75 : 1,
+                  cursor: aidIntroSaving ? 'wait' : 'pointer',
+                }}
+              >
+                {aidIntroSaving && (
+                  <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
+                )}
+                {aidIntroSaving ? 'SAVING…' : aidIntroSaved ? 'SAVED ✓' : 'SAVE'}
+              </button>
+            </div>
+
+            <p className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              Aid questions
+            </p>
+            <div className="flex flex-col gap-3 mb-4">
+              {currentAidQuestions.length === 0 ? (
+                <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  No aid questions yet.
+                </p>
+              ) : (
+                currentAidQuestions.map(q => (
+                  <div
+                    key={q.id}
+                    className="rounded-xl p-4"
+                    style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.1)' }}
+                  >
+                    <p className="font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      {q.label}
+                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Pill tone="neutral" size="sm">{q.type === 'textarea' ? 'Paragraph' : 'Short answer'}</Pill>
+                      {q.required && <Pill tone="forest" size="sm">Required</Pill>}
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setAidQuestionModal({ open: true, existing: q })}
+                        className="text-xs font-semibold focus:outline-none hover:underline"
+                        style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
+                      >
+                        EDIT
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAidQuestion(q.id)}
+                        className="text-xs font-semibold focus:outline-none hover:underline"
+                        style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+                      >
+                        DELETE
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={() => setAidQuestionModal({ open: true, existing: null })}
+              className="w-full rounded-xl py-2.5 text-sm font-semibold focus:outline-none transition-all"
+              style={{ border: '1.5px dashed #DDD4C0', backgroundColor: 'transparent', color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+            >
+              + ADD QUESTION
+            </button>
+          </>
+        )}
+      </div>}
 
       {/* ── Minimum age card ── */}
       {activeTab === 'applications' && <div style={cardStyle}>
@@ -3340,6 +3499,15 @@ export default function SettingsPage() {
           existing={questionModal.existing}
           onSave={handleSaveQuestion}
           onClose={() => setQuestionModal({ open: false, existing: null })}
+        />
+      )}
+
+      {/* Aid question modal (conference-level, same component) */}
+      {aidQuestionModal.open && (
+        <QuestionModal
+          existing={aidQuestionModal.existing}
+          onSave={handleSaveAidQuestion}
+          onClose={() => setAidQuestionModal({ open: false, existing: null })}
         />
       )}
 

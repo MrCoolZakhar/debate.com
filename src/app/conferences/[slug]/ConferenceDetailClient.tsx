@@ -97,6 +97,9 @@ interface Conference {
   connect_onboarding_status: string;
   external_payment_url: string | null;
   external_payment_note: string | null;
+  financial_aid_enabled: boolean;
+  aid_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
+  aid_intro: string | null;
 }
 
 interface SecretariatMember {
@@ -162,7 +165,6 @@ interface MyApplication {
   pledge_type: 'delegation' | null;
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
-  aid_status: 'none' | 'pending' | 'approved' | 'denied';
 }
 
 interface ConferenceReview {
@@ -539,7 +541,8 @@ export default function ConferenceDetailClient() {
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
         contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
-        connect_onboarding_status, external_payment_url, external_payment_note
+        connect_onboarding_status, external_payment_url, external_payment_note,
+        financial_aid_enabled, aid_questions, aid_intro
       `)
       .eq('slug', slug)
       .single();
@@ -556,7 +559,8 @@ export default function ConferenceDetailClient() {
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
             contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
-            connect_onboarding_status, external_payment_url, external_payment_note
+            connect_onboarding_status, external_payment_url, external_payment_note,
+            financial_aid_enabled, aid_questions, aid_intro
           `)
           .eq('slug', slug)
           .single();
@@ -718,7 +722,7 @@ export default function ConferenceDetailClient() {
 
       const { data: appsData } = await authedSupabase
         .from('applications')
-        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at, aid_status')
+        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at')
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
 
@@ -1572,6 +1576,9 @@ export default function ConferenceDetailClient() {
                   paymentsEnabled={conference.connect_onboarding_status === 'complete'}
                   externalPaymentUrl={countrySupported ? null : conference.external_payment_url}
                   externalPaymentNote={countrySupported ? null : conference.external_payment_note}
+                  financialAidEnabled={conference.financial_aid_enabled}
+                  aidQuestions={conference.aid_questions}
+                  aidIntro={conference.aid_intro}
                 />
                 </>
               )}

@@ -16,7 +16,7 @@ import DelegateParticipant from './DelegateParticipant';
 import AdvisorParticipant from './AdvisorParticipant';
 import ChairParticipant from './ChairParticipant';
 import ObserverParticipant from './ObserverParticipant';
-import PaymentPanel from './PaymentPanel';
+import PaymentPanel, { type AidQuestion } from './PaymentPanel';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
@@ -62,10 +62,14 @@ export interface ParticipantViewProps {
   /** Organizer-provided payment page, shown as a fallback when paymentsEnabled is false. */
   externalPaymentUrl: string | null;
   externalPaymentNote: string | null;
+  /** Conference-level financial aid config (separate application, financial_aid_requests table). */
+  financialAidEnabled: boolean;
+  aidQuestions: AidQuestion[];
+  aidIntro: string | null;
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote,
+  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote, financialAidEnabled, aidQuestions, aidIntro,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -149,7 +153,9 @@ export default function ParticipantView({
             amountPaid={selected.amount_paid}
             payableNow={payableNow}
             contactEmail={contactEmail}
-            aidStatus={selected.aid_status}
+            financialAidEnabled={financialAidEnabled}
+            aidQuestions={aidQuestions}
+            aidIntro={aidIntro}
             paymentsEnabled={paymentsEnabled}
             externalPaymentUrl={externalPaymentUrl}
             externalPaymentNote={externalPaymentNote}

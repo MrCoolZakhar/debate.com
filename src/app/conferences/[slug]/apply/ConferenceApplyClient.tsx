@@ -21,7 +21,6 @@ import {
   GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
   MapPin, Landmark, Check, X, Plus, ArrowLeft, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
-  HeartHandshake,
 } from 'lucide-react';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -60,7 +59,6 @@ interface RoleConfig {
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
   custom_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
   fee_phases: FeePhase[] | null;
-  financial_aid_enabled: boolean;
 }
 
 interface CommitteeOption {
@@ -104,8 +102,6 @@ interface ExistingApp {
   custom_answers: Record<string, string> | null;
   pledge_type: 'delegation' | null;
   spots_pledged: number | null;
-  aid_requested: boolean;
-  aid_statement: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -572,10 +568,6 @@ function ConferenceApplyInner() {
   const [experienceLevel, setExperienceLevel] = useState('');
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
 
-  // ── Step, Financial aid (optional, only shown when the role enables it)
-  const [aidRequested, setAidRequested] = useState(false);
-  const [aidStatement, setAidStatement] = useState('');
-
   // ── Checkout: vouchers + fee waivers (finance.ts is the single math source)
   const [financeProfile, setFinanceProfile] = useState({ is_ambassador: false, unlimited_conferences_remaining: 0, has_active_subscription: false });
   const [voucherCode, setVoucherCode] = useState('');
@@ -674,15 +666,11 @@ function ConferenceApplyInner() {
   // doesn't apply to them, so experience_level submits null for this role.
   const skipExperience = role === 'faculty-advisor';
 
-  // Organiser-controlled, per role (application_role_configs.financial_aid_enabled).
-  const showAidStep = roleConfig?.financial_aid_enabled ?? false;
-
   const stepSequence = [
     'role',
     'society',
     ...(isInvoicingRole ? ['invoicing'] : []),
     ...(showPreferenceStep ? ['preferences'] : []),
-    ...(showAidStep ? ['aid'] : []),
     ...(skipExperience ? [] : ['experience']),
   ] as const;
   type StepKind = (typeof stepSequence)[number];
@@ -693,7 +681,6 @@ function ConferenceApplyInner() {
       case 'society': return isObserver ? 'Background' : 'Society';
       case 'invoicing': return 'Invoicing';
       case 'preferences': return 'Preferences';
-      case 'aid': return 'Aid';
       case 'experience': return 'Experience';
     }
   });
@@ -748,7 +735,7 @@ function ConferenceApplyInner() {
         .order('name', { ascending: true }),
       supabase
         .from('applications')
-        .select('id, status, is_independent, society_id, experience_level, custom_answers, pledge_type, spots_pledged, aid_requested, aid_statement')
+        .select('id, status, is_independent, society_id, experience_level, custom_answers, pledge_type, spots_pledged')
         .eq('conference_id', confData.id)
         .eq('user_id', user!.id)
         .eq('role', role)
@@ -807,8 +794,6 @@ function ConferenceApplyInner() {
       }
       setExperienceLevel(appData.experience_level ?? '');
       setCustomAnswers(appData.custom_answers ?? {});
-      setAidRequested(appData.aid_requested);
-      setAidStatement(appData.aid_statement ?? '');
 
       const { data: prefRows } = await supabase
         .from('application_preferences')
@@ -1093,13 +1078,6 @@ function ConferenceApplyInner() {
         insertPayload.pledge_type = willPledgeSpots ? 'delegation' : null;
         insertPayload.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
       }
-      if (showAidStep) {
-        insertPayload.aid_requested = aidRequested;
-        insertPayload.aid_statement = aidRequested ? aidStatement : null;
-        // Explicit 'pending' on request — the column otherwise defaults to
-        // 'none', never leave a requested application unmarked for review.
-        if (aidRequested) insertPayload.aid_status = 'pending';
-      }
 
       const { data: app, error: appError } = await supabase
         .from('applications')
@@ -1205,12 +1183,6 @@ function ConferenceApplyInner() {
           country_code: p.countryCode || null,
           country_name: p.countryName || null,
         }));
-      }
-      if (showAidStep) {
-        // aid_status itself isn't in the whitelist we set client-side, the
-        // RPC already handles the resubmit case (re-opening review etc).
-        updates.aid_requested = aidRequested;
-        updates.aid_statement = aidRequested ? aidStatement : null;
       }
 
       const { data, error } = await supabase.rpc('resubmit_application', {
@@ -2009,81 +1981,6 @@ function ConferenceApplyInner() {
     );
   }
 
-  function renderStepAid() {
-    return (
-      <>
-        <StepHeading
-          icon={HeartHandshake}
-          title="Financial aid"
-          subtitle="Optional — let the organizing team know if you need support with the registration fee."
-        />
-
-        <div className="rounded-2xl p-5 mb-6" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}>
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={aidRequested}
-              onChange={(e) => setAidRequested(e.target.checked)}
-              className="mt-0.5 flex-shrink-0"
-              style={{ width: 18, height: 18, accentColor: '#1B3828', cursor: 'pointer' }}
-            />
-            <span className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              I would like to apply for financial aid
-            </span>
-          </label>
-
-          {aidRequested && (
-            <div className="mt-4">
-              <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                Tell us about your circumstances
-              </label>
-              <textarea
-                rows={5}
-                value={aidStatement}
-                onChange={(e) => setAidStatement(e.target.value)}
-                placeholder="Tell the organizers about your circumstances and what support you need"
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-              />
-              <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                Aid decisions are made by the conference team after review — you&apos;ll be notified once there&apos;s an update.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-between mt-2 gap-4">
-          <button
-            onClick={() => setStep(s => s - 1)}
-            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            ← BACK
-          </button>
-          <button
-            onClick={handleContinue}
-            disabled={submitting}
-            className="flex-1 rounded-xl py-3 px-8 text-sm font-bold focus:outline-none transition-colors"
-            style={{
-              backgroundColor: submitting ? 'rgba(27,56,40,0.5)' : '#1B3828',
-              color: '#EED98A',
-              fontFamily: "'Outfit', sans-serif",
-              letterSpacing: '0.08em',
-              cursor: submitting ? 'not-allowed' : 'pointer',
-              boxShadow: submitting ? 'none' : '0 6px 18px rgba(27,56,40,0.22)',
-            }}
-            onMouseEnter={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            {step >= totalSteps ? (submitting ? 'SUBMITTING...' : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')) : 'CONTINUE →'}
-          </button>
-        </div>
-      </>
-    );
-  }
-
   function renderStepExperience() {
     const levels = [
       { value: 'beginner', label: 'BEGINNER', sub: 'First or second conference' },
@@ -2457,7 +2354,6 @@ function ConferenceApplyInner() {
           {currentStepKind === 'society' && renderStep2()}
           {currentStepKind === 'invoicing' && renderStepInvoicing()}
           {currentStepKind === 'preferences' && renderStep3Preferences()}
-          {currentStepKind === 'aid' && renderStepAid()}
           {currentStepKind === 'experience' && renderStepExperience()}
         </div>
 
