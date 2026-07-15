@@ -1425,7 +1425,7 @@ function ConferenceApplyInner() {
               >
                 <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.forest }}>
                   <InfinityIcon size={14} strokeWidth={2.4} />
-                  Gavelling Unlimited: platform fee waived ({financeProfile.unlimited_conferences_remaining} left)
+                  Gavelling Unlimited: platform fee waived{financeProfile.has_active_subscription ? '' : ` (${financeProfile.unlimited_conferences_remaining} left)`}
                 </span>
               </div>
             ) : null}

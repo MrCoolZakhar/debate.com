@@ -361,7 +361,7 @@ export default function UnlimitedPage() {
                 </p>
               </div>
             ) : confirmTimedOut ? (
-              <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+              <p className="text-[13px]" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
                 Payment received. Unlimited will activate here within a minute.
               </p>
             ) : (
