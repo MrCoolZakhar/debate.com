@@ -17,6 +17,7 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFee } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
+import { SUPPORTED_PAYOUT_COUNTRIES } from '@/lib/payments';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import {
@@ -922,6 +923,7 @@ export default function ConferenceDetailClient() {
   // Derived
   const isOrganizer = user?.id === conference.organizer_id;
   const countryObj = getCountryByName(conference.country);
+  const countrySupported = !countryObj?.code || SUPPORTED_PAYOUT_COUNTRIES.has(countryObj.code);
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const hasUnlimited = profile?.unlimited_status && profile.unlimited_status !== 'none';
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
@@ -1568,8 +1570,8 @@ export default function ConferenceDetailClient() {
                   committees={committees}
                   allocationSwapMode={conference.allocation_swap_mode}
                   paymentsEnabled={conference.connect_onboarding_status === 'complete'}
-                  externalPaymentUrl={conference.external_payment_url}
-                  externalPaymentNote={conference.external_payment_note}
+                  externalPaymentUrl={countrySupported ? null : conference.external_payment_url}
+                  externalPaymentNote={countrySupported ? null : conference.external_payment_note}
                 />
                 </>
               )}
