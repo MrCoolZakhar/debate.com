@@ -6,9 +6,10 @@ import Link from 'next/link';
 import {
   Search, Briefcase, X, Gavel, Users, ClipboardList,
   Banknote, Plane, HeartHandshake, Clock, MapPin, Check, ArrowRight,
-  CalendarDays, ChevronDown, CheckCircle2,
+  CalendarDays, ChevronDown, CheckCircle2, ScrollText,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import DecorativeBleed from '@/components/DecorativeBleed';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
@@ -857,7 +858,16 @@ export default function ConferencesRolesClient() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: NEU.base }}>
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: NEU.base, overflowX: 'clip' }}>
+      {/* Decorative bleed — faded forest job-board glyphs off the page edges,
+          behind the z-10 content column. */}
+      <DecorativeBleed
+        items={[
+          { Icon: Briefcase, size: 168, top: '-40px', left: '-46px', opacity: 0.05 },
+          { Icon: Gavel, size: 150, bottom: '-38px', right: '-30px', opacity: 0.045, rotate: -12 },
+          { Icon: ScrollText, size: 120, top: '46%', left: '-30px', opacity: 0.04 },
+        ]}
+      />
       {/* Grain overlay */}
       <div
         className="pointer-events-none fixed inset-0 z-0"

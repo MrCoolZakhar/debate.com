@@ -16,6 +16,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { User, FileText, CalendarDays, Trophy, Sparkles, LogOut, ArrowRight } from 'lucide-react';
+import Portal from '@/components/Portal';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
 interface NavConference {
@@ -43,7 +44,21 @@ interface ProfileDropdownProps {
 export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdownProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const PANEL_W = 280;
+  // The panel is portaled at fixed viewport coords (computed from the trigger)
+  // so it renders ABOVE every page's stacking context and can never slide under
+  // sticky bars or transformed cards. Right-aligned to the trigger, clamped.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const place = useCallback(() => {
+    const r = rootRef.current?.getBoundingClientRect();
+    if (!r) return;
+    let left = r.right - PANEL_W;
+    if (left + PANEL_W > window.innerWidth - 8) left = window.innerWidth - 8 - PANEL_W;
+    if (left < 8) left = 8;
+    setPos({ top: r.bottom + 8, left });
+  }, []);
 
   // "Your conferences" section, fetched lazily the first time the menu opens.
   const [myConfs, setMyConfs] = useState<NavConference[] | null>(null);
@@ -54,13 +69,27 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (panelRef.current?.contains(t)) return; // clicks inside the portaled panel
+      setOpen(false);
     }
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
+
+  // Reposition the portaled panel while open (scroll / resize).
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const handler = () => place();
+    window.addEventListener('scroll', handler, true);
+    window.addEventListener('resize', handler);
+    return () => {
+      window.removeEventListener('scroll', handler, true);
+      window.removeEventListener('resize', handler);
+    };
+  }, [open, place]);
 
   // Clear any pending hover-close timer on unmount.
   useEffect(() => () => {
@@ -187,20 +216,28 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
     >
       {trigger(open, toggle)}
 
-      {/* Dropdown, kokonutui profile-dropdown anatomy in house style */}
-      {open && (
+      {/* Dropdown, kokonutui profile-dropdown anatomy in house style. Portaled
+          at fixed coords with z-index 9999 so it always renders over sticky bars
+          / transformed cards, on every page. */}
+      {open && pos && (
+        <Portal>
         <div
-          className="absolute right-0 mt-2"
+          ref={panelRef}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
           style={{
-            width: '280px',
+            ...panelStyle,
+            position: 'fixed',
+            top: pos.top,
+            left: pos.left,
+            width: PANEL_W,
             backgroundColor: '#FAF8F3',
             border: '1px solid #DDD4C0',
             borderRadius: '16px',
             boxShadow: '0 20px 48px rgba(27, 56, 40, 0.16)',
-            zIndex: 50,
+            zIndex: 9999,
             overflow: 'hidden',
             animation: 'profileMenuIn 180ms ease both',
-            ...panelStyle,
           }}
         >
           <style>{`@keyframes profileMenuIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
@@ -416,6 +453,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             SIGN OUT
           </button>
         </div>
+        </Portal>
       )}
     </div>
   );

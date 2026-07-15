@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, User, Gavel, Briefcase, Sparkles, MessageSquareText } from 'lucide-react';
+import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, User, Gavel, Briefcase, Sparkles, MessageSquareText, ScrollText, Award } from 'lucide-react';
+import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonClient } from '@/lib/supabase';
@@ -1326,9 +1327,18 @@ export default function CVPage() {
 
       {/* Rank-up info panel — thresholds live behind the 'i' (ExperienceInfo). */}
       <div
-        className="rounded-2xl px-5 py-4 mb-8"
-        style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1.5px solid rgba(182,135,31,0.35)' }}
+        className="relative overflow-hidden rounded-2xl px-5 py-4 mb-8"
+        style={{ backgroundColor: 'rgba(238,217,138,0.14)', border: '1.5px solid rgba(182,135,31,0.35)', isolation: 'isolate' }}
       >
+        {/* Decorative bleed — faded CV glyphs tucked behind the rank content
+            (zIndex -1 under this isolated, opaque panel). */}
+        <DecorativeBleed
+          zIndex={-1}
+          items={[
+            { Icon: ScrollText, size: 128, top: '-30px', right: '-18px', opacity: 0.05 },
+            { Icon: Award, size: 96, bottom: '-26px', left: '-16px', opacity: 0.045, rotate: -10 },
+          ]}
+        />
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <TrendingUp size={15} strokeWidth={2.4} style={{ color: '#B6871F' }} />

@@ -3,8 +3,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock, ScrollText } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
@@ -1197,8 +1198,17 @@ export default function ConferenceDetailClient() {
         </div>
 
         {/* ── Main content ───────────────────────────────────────────── */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }} className="px-6 md:px-14 pt-10 pb-14 flex-1">
-          <div className="flex flex-col md:flex-row gap-8">
+        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', isolation: 'isolate' }} className="relative px-6 md:px-14 pt-10 pb-14 flex-1">
+          {/* Decorative bleed — faded MUN glyphs tucked behind the main content
+              column (zIndex -1; the page root already clips overflow-x). */}
+          <DecorativeBleed
+            zIndex={-1}
+            items={[
+              { Icon: Gavel, size: 160, top: '10px', right: '-30px', opacity: 0.045, rotate: -10 },
+              { Icon: ScrollText, size: 130, bottom: '80px', left: '-34px', opacity: 0.04 },
+            ]}
+          />
+          <div className="relative flex flex-col md:flex-row gap-8" style={{ zIndex: 1 }}>
 
             {/* Left column */}
             <div className="flex-1 min-w-0">

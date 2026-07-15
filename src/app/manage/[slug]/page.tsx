@@ -18,6 +18,7 @@ import {
   NeuPill, NeuButton, NeuChecklistRow, Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE,
 } from '@/components/neu';
 import Portal from '@/components/Portal';
+import DecorativeBleed from '@/components/DecorativeBleed';
 
 const RED = '#A8442F';
 
@@ -1051,9 +1052,19 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="flex flex-col"
-      style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px', fontFamily: OUTFIT }}
+      className="relative flex flex-col"
+      style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px', fontFamily: OUTFIT, isolation: 'isolate', overflowX: 'clip' }}
     >
+      {/* Decorative bleed — faded organiser glyphs off the dashboard edges,
+          tucked behind the content (zIndex -1). */}
+      <DecorativeBleed
+        zIndex={-1}
+        items={[
+          { Icon: Gavel, size: 170, top: '-30px', right: '-40px', opacity: 0.045, rotate: -12 },
+          { Icon: UsersRound, size: 150, bottom: '-42px', left: '-38px', opacity: 0.04 },
+          { Icon: Globe2, size: 110, top: '55%', right: '-24px', opacity: 0.035 },
+        ]}
+      />
 
       {orgInviteToast && (
         <div

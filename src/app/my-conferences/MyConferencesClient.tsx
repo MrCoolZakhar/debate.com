@@ -3,10 +3,11 @@
 import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Compass, Check, X, Mail, Plus, ChevronDown } from 'lucide-react';
+import { Compass, Check, X, Mail, Plus, ChevronDown, CalendarDays, Globe2, Gavel } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
+import DecorativeBleed from '@/components/DecorativeBleed';
 import { Eyebrow, OUTFIT, MONO } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, EASE, NeuIconDisc } from '@/components/neu';
 import {
@@ -934,10 +935,19 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   if (embedded) return body;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base, overflowX: 'clip' }}>
       <div
         className="pointer-events-none fixed inset-0 z-[1]"
         style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }}
+      />
+      {/* Decorative bleed — faded conference glyphs off the page edges, behind
+          the z-10 body. */}
+      <DecorativeBleed
+        items={[
+          { Icon: CalendarDays, size: 168, top: '-38px', right: '-44px', opacity: 0.05 },
+          { Icon: Globe2, size: 150, bottom: '-40px', left: '-36px', opacity: 0.045 },
+          { Icon: Gavel, size: 110, top: '52%', right: '-26px', opacity: 0.04, rotate: -12 },
+        ]}
       />
       <SiteNav hideLanguage />
       {body}

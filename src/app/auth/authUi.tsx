@@ -12,7 +12,8 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Globe2, CalendarCheck, MailCheck, RotateCw } from 'lucide-react';
+import { ArrowLeft, Globe2, CalendarCheck, MailCheck, RotateCw, Sparkles, Star } from 'lucide-react';
+import DecorativeBleed from '@/components/DecorativeBleed';
 
 export const OUTFIT = "'Outfit', sans-serif";
 
@@ -54,7 +55,16 @@ export function AuthLayout({
     >
       <BrandPanel eyebrow={eyebrow} headline={headline} sub={sub} />
 
-      <div className="relative flex items-center justify-center px-5 py-10 md:px-8 lg:py-12 min-h-screen lg:min-h-0">
+      <div className="relative flex items-center justify-center px-5 py-10 md:px-8 lg:py-12 min-h-screen lg:min-h-0" style={{ overflowX: 'clip' }}>
+        {/* Decorative bleed — faded forest glyphs drifting off the edges,
+            behind the z-10 glass card. */}
+        <DecorativeBleed
+          items={[
+            { Icon: Globe2, size: 170, top: '-42px', left: '-40px', opacity: 0.05 },
+            { Icon: Sparkles, size: 120, bottom: '-30px', right: '-24px', opacity: 0.045 },
+            { Icon: Star, size: 90, top: '18%', right: '6%', opacity: 0.04, rotate: 12 },
+          ]}
+        />
         {/* Grain texture */}
         <div
           className="pointer-events-none absolute inset-0 z-0"

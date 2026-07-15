@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TrendingUp, ShoppingBag, Minus, Settings, Trophy, Award, ArrowUpRight, ArrowDownRight, Ticket, Crown, Infinity as InfinityIcon, Check } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Minus, Settings, Trophy, Award, ArrowUpRight, ArrowDownRight, Ticket, Crown, Infinity as InfinityIcon, Check, Medal } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { Eyebrow, GlassCard, Pill, OUTFIT, MONO } from '../accountUi';
 import { NEU, NeuInset } from '@/components/neu';
+import DecorativeBleed from '@/components/DecorativeBleed';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -183,6 +184,14 @@ export default function PointsPage() {
         className="relative rounded-[20px] p-8 mb-6 text-center overflow-hidden"
         style={{ backgroundColor: '#1B3828', border: '1.5px solid rgba(238,217,138,0.4)', boxShadow: '0 16px 44px rgba(27,56,40,0.3)' }}
       >
+        {/* Decorative bleed — gold-ghost points glyphs off the corners of the
+            dark hero, behind the z-10 balance. */}
+        <DecorativeBleed
+          items={[
+            { Icon: Trophy, size: 150, top: '-36px', left: '-28px', color: 'rgba(238,217,138,0.08)' },
+            { Icon: Medal, size: 120, bottom: '-32px', right: '-22px', color: 'rgba(238,217,138,0.07)', rotate: 10 },
+          ]}
+        />
         {/* Grain overlay */}
         <div
           className="pointer-events-none absolute inset-0"
