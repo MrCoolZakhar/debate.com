@@ -1378,7 +1378,17 @@ function ConferenceApplyInner() {
               </p>
             )}
 
-            {/* Platform fee, 5% of post-discount, or the waived states */}
+            {/* Service fee, includes card processing; platform part waivable */}
+            <div style={{ ...summaryRow, marginBottom: 12, alignItems: 'flex-start' }}>
+              <span style={{ color: 'rgba(28,20,16,0.75)' }}>
+                Service fee
+                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: NEU.muted, marginTop: 2 }}>
+                  {breakdown.platformFeeWaived ? 'Card processing only, platform fee waived' : 'Includes card processing'}
+                </span>
+              </span>
+              <span style={amountStyle}>{formatFee(breakdown.serviceFee, breakdown.currency)}</span>
+            </div>
+
             {breakdown.waiverSource === 'ambassador' ? (
               <div
                 className="rounded-xl px-3.5 py-2.5"
@@ -1390,7 +1400,7 @@ function ConferenceApplyInner() {
               >
                 <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11.5, letterSpacing: '0.06em', color: '#7A5A20' }}>
                   <Crown size={14} strokeWidth={2.3} style={{ color: NEU.deepGold }} />
-                  AMBASSADOR: Gavelling fee waived, always
+                  AMBASSADOR: platform fee waived, always
                 </span>
               </div>
             ) : breakdown.waiverSource === 'unlimited' ? (
@@ -1400,15 +1410,10 @@ function ConferenceApplyInner() {
               >
                 <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.forest }}>
                   <InfinityIcon size={14} strokeWidth={2.4} />
-                  Gavelling Unlimited: fee waived ({financeProfile.unlimited_conferences_remaining} left)
+                  Gavelling Unlimited: platform fee waived ({financeProfile.unlimited_conferences_remaining} left)
                 </span>
               </div>
-            ) : (
-              <div style={{ ...summaryRow, marginBottom: 12 }}>
-                <span style={{ color: 'rgba(28,20,16,0.75)' }}>Gavelling fee (5%)</span>
-                <span style={amountStyle}>{formatFee(breakdown.platformFee, breakdown.currency)}</span>
-              </div>
-            )}
+            ) : null}
 
             {/* Total, big tabular-nums */}
             <div style={{ borderTop: '1.5px solid rgba(27,56,40,0.14)', paddingTop: 12, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>

@@ -57,10 +57,12 @@ export interface ParticipantViewProps {
   myAllocation: ParticipantAllocation | null;
   committees: ParticipantCommittee[];
   allocationSwapMode: string;
+  /** True once the conference's Stripe Connect onboarding is complete. */
+  paymentsEnabled: boolean;
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode,
+  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -145,6 +147,7 @@ export default function ParticipantView({
             payableNow={payableNow}
             contactEmail={contactEmail}
             aidStatus={selected.aid_status}
+            paymentsEnabled={paymentsEnabled}
           />
 
           <PayGate gateState={gateState}>
@@ -163,6 +166,7 @@ export default function ParticipantView({
                 allocationSwapMode={allocationSwapMode}
                 roleConfigs={roleConfigs}
                 contactEmail={contactEmail}
+                paymentsEnabled={paymentsEnabled}
               />
             ) : selected.role === 'chair' ? (
               <ChairParticipant conferenceId={conferenceId} />

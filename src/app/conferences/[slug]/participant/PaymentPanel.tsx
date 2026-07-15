@@ -46,10 +46,12 @@ export interface PaymentPanelProps {
   payableNow: boolean;
   contactEmail: string | null;
   aidStatus?: 'none' | 'pending' | 'approved' | 'denied';
+  /** True once the conference's Stripe Connect onboarding is complete. */
+  paymentsEnabled: boolean;
 }
 
 export default function PaymentPanel({
-  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus,
+  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus, paymentsEnabled,
 }: PaymentPanelProps) {
   const { session } = useAuth();
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: feeAmount, fee_phases: feePhases });
@@ -140,9 +142,9 @@ export default function PaymentPanel({
         </p>
       )}
 
-      {fee > 0 && payableNow && !hasActiveUnlimited && (
+      {fee > 0 && payableNow && paymentsEnabled && (
         <p className="text-[11px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-          A 5% Gavelling platform fee applies at checkout.
+          {hasActiveUnlimited ? 'A card processing fee is added at checkout.' : 'A service fee is added at checkout.'}
         </p>
       )}
 
@@ -181,6 +183,13 @@ export default function PaymentPanel({
       ) : fee === 0 ? (
         <p className="text-[13px]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           There&apos;s no fee for this role, nothing to pay.
+        </p>
+      ) : owesSomething && !paymentsEnabled ? (
+        <p
+          className="text-[13px] rounded-xl px-4 py-3"
+          style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
+        >
+          The organizing team has not enabled online payments yet. You will be able to pay here once they do.
         </p>
       ) : owesSomething ? (
         <>

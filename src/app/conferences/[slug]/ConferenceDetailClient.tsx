@@ -92,6 +92,7 @@ interface Conference {
   min_age: number | null;
   allocation_swap_mode: string;
   display_secretariat: SecretariatMember[] | null;
+  connect_onboarding_status: string;
 }
 
 interface SecretariatMember {
@@ -533,7 +534,8 @@ export default function ConferenceDetailClient() {
         start_date, end_date, fee_amount, fee_currency, expected_delegates,
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-        contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat
+        contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
+        connect_onboarding_status
       `)
       .eq('slug', slug)
       .single();
@@ -549,7 +551,8 @@ export default function ConferenceDetailClient() {
             start_date, end_date, fee_amount, fee_currency, expected_delegates,
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-            contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat
+            contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
+            connect_onboarding_status
           `)
           .eq('slug', slug)
           .single();
@@ -1552,6 +1555,7 @@ export default function ConferenceDetailClient() {
                   myAllocation={myAllocation}
                   committees={committees}
                   allocationSwapMode={conference.allocation_swap_mode}
+                  paymentsEnabled={conference.connect_onboarding_status === 'complete'}
                 />
                 </>
               )}

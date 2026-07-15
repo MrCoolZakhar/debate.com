@@ -26,10 +26,17 @@ export const ACTIVE_PROVIDER: PaymentProvider = 'stripe';
 export const MANUAL_MODE_CONFERENCE_IDS = new Set<string>([]);
 
 /** Whether checkout for this conference goes through live Stripe. Organizer
- *  pages use this to gate their manual mark-paid/unpaid/received controls. */
-export function isPaymentsLive(conferenceId?: string | null): boolean {
+ *  pages use this to gate their manual mark-paid/unpaid/received controls.
+ *  When `connectOnboardingStatus` is passed, payments are only live once the
+ *  conference's own Stripe Connect onboarding is 'complete' — unconnected
+ *  conferences fall back to manual controls even while Stripe is the active
+ *  provider globally. */
+export function isPaymentsLive(conferenceId?: string | null, connectOnboardingStatus?: string | null): boolean {
   if (ACTIVE_PROVIDER !== 'stripe') return false;
   if (conferenceId && MANUAL_MODE_CONFERENCE_IDS.has(conferenceId)) return false;
+  if (connectOnboardingStatus !== undefined && connectOnboardingStatus !== null) {
+    return connectOnboardingStatus === 'complete';
+  }
   return true;
 }
 
@@ -111,8 +118,9 @@ async function stripeProvider(args: CreateCheckoutArgs): Promise<PaymentResult> 
 }
 
 /** supabase.functions.invoke surfaces non-2xx responses as an error whose
- *  original JSON body (our { ok:false, error } shape) lives on error.context. */
-async function extractFunctionErrorMessage(error: unknown): Promise<string> {
+ *  original JSON body (our { ok:false, error } shape) lives on error.context.
+ *  Exported for reuse by other edge-function call sites (e.g. connect-onboard). */
+export async function extractFunctionErrorMessage(error: unknown): Promise<string> {
   const ctx = (error as { context?: Response } | null)?.context;
   if (ctx && typeof ctx.json === 'function') {
     try {

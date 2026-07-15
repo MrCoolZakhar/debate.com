@@ -997,7 +997,7 @@ export default function DashboardPage() {
       gradient: NEU_GRADIENTS.amber,
       title: 'Add financial information',
       // fee_amount === 0 is a deliberate free conference, any non-null fee counts as configured.
-      done: conference.fee_amount !== null || !!conference.stripe_account_id,
+      done: conference.fee_amount !== null || conference.connect_onboarding_status === 'complete',
       sub: 'Set your delegate fee or connect Stripe.',
       onClick: () => router.push(`/manage/${slug}/financials`),
     },

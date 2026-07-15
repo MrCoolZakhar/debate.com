@@ -33,10 +33,12 @@ export interface PledgeInvoicingCardProps {
   delegateFeeAmount: number | null;
   delegateFeeCurrency: string | null;
   contactEmail: string | null;
+  /** True once the conference's Stripe Connect onboarding is complete. */
+  paymentsEnabled: boolean;
 }
 
 export default function PledgeInvoicingCard({
-  applicationId, conferenceId, amountPaid, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, delegateFeeCurrency, contactEmail,
+  applicationId, conferenceId, amountPaid, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, delegateFeeCurrency, contactEmail, paymentsEnabled,
 }: PledgeInvoicingCardProps) {
   const { session } = useAuth();
   const [invoices, setInvoices] = useState<PledgeSpotInvoice[]>([]);
@@ -139,7 +141,16 @@ export default function PledgeInvoicingCard({
             </div>
           ))}
 
-          {!fullyCovered && remaining > 0 && (
+          {!fullyCovered && remaining > 0 && !paymentsEnabled && (
+            <p
+              className="text-[13px] rounded-xl px-4 py-3"
+              style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
+            >
+              The organizing team has not enabled online payments yet. You will be able to pay here once they do.
+            </p>
+          )}
+
+          {!fullyCovered && remaining > 0 && paymentsEnabled && (
             <div
               className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 flex-wrap"
               style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}

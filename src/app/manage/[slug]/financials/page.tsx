@@ -12,21 +12,25 @@
  * conference currency; converted figures are prefixed with "≈".
  *
  * The Stripe seam is a single integration point consistent with
- * src/lib/payments.ts: conference.stripe_account_id null → connect teaser
- * (stub, "coming soon"); set → CONNECTED pill. No payment writes happen on
- * this page, marking paid stays on the Applications page.
+ * src/lib/payments.ts: conference.connect_onboarding_status === 'complete'
+ * → CONNECTED pill; otherwise a live Payouts card walks the organiser
+ * through Stripe Connect onboarding (connect-onboard edge function). No
+ * payment writes happen on this page, marking paid stays on the
+ * Applications page.
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowRight, BadgePercent, CircleCheck, Clock, CreditCard, Eye, Gavel,
   GraduationCap, HandCoins, History, Hourglass, LayoutGrid, PiggyBank,
-  Receipt, TrendingUp, User, Users, Wallet,
+  Receipt, TrendingUp, TriangleAlert, User, Users, Wallet,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { extractFunctionErrorMessage } from '@/lib/payments';
 import { roundMoney, formatFee, currencySymbol, CURRENCY_CODES } from '@/lib/finance';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
@@ -179,11 +183,14 @@ const PIPELINE_FILTERS = [
 ] as const;
 type PipelineFilter = (typeof PIPELINE_FILTERS)[number]['value'];
 
+type ConnectStatus = 'none' | 'pending' | 'complete';
+
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function FinancialsPage() {
-  const { conference } = useManage();
+  const { conference, refreshConferenceQuiet } = useManage();
   const { session } = useAuth();
+  const router = useRouter();
   const [rows, setRows] = useState<FinRow[] | null>(null);
   const [filter, setFilter] = useState<PipelineFilter>('all');
   // Overview (tiles/estimate/pipeline/vouchers) vs History (transaction log).
@@ -192,6 +199,100 @@ export default function FinancialsPage() {
   // loaded; falls back to the conference currency. Display-only: stored
   // values and voucher creation always stay in the conference currency.
   const [displayCurrency, setDisplayCurrency] = useState('');
+
+  // ── Stripe Connect payouts card ──────────────────────────────────────────
+  const [connectStatus, setConnectStatus] = useState<ConnectStatus>('none');
+  const [connectBusy, setConnectBusy] = useState<'start' | 'status' | null>(null);
+  const [connectError, setConnectError] = useState('');
+
+  useEffect(() => {
+    if (!conference) return;
+    const s = conference.connect_onboarding_status;
+    setConnectStatus(s === 'pending' || s === 'complete' ? s : 'none');
+  }, [conference?.connect_onboarding_status]);
+
+  // ?connect=return|refresh, the redirect back from Stripe's hosted
+  // onboarding flow: check status once, then strip the param so a refresh
+  // doesn't re-fire it.
+  useEffect(() => {
+    if (!conference || !session) return;
+    const connectParam = new URLSearchParams(window.location.search).get('connect');
+    if (connectParam !== 'return' && connectParam !== 'refresh') return;
+    (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (supabase) {
+        const { data } = await supabase.functions.invoke('connect-onboard', {
+          body: { conferenceId: conference.id, action: 'status' },
+        });
+        const result = data as { ok?: boolean; status?: ConnectStatus } | null;
+        if (result?.ok && result.status) {
+          setConnectStatus(result.status);
+          refreshConferenceQuiet();
+        }
+      }
+      router.replace(`/manage/${conference.slug}/financials`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conference?.id, session?.access_token]);
+
+  async function startConnectOnboarding() {
+    if (!conference || connectBusy) return;
+    setConnectBusy('start');
+    setConnectError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setConnectBusy(null);
+      setConnectError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const countryCode = getCountryByName(conference.country)?.code;
+    const { data, error } = await supabase.functions.invoke('connect-onboard', {
+      body: {
+        conferenceId: conference.id,
+        action: 'start',
+        ...(countryCode ? { country: countryCode } : {}),
+      },
+    });
+    if (error) {
+      setConnectBusy(null);
+      setConnectError(await extractFunctionErrorMessage(error));
+      return;
+    }
+    const result = data as { ok?: boolean; url?: string; error?: string } | null;
+    if (!result?.ok || !result.url) {
+      setConnectBusy(null);
+      setConnectError(result?.error || 'Could not start onboarding. Please try again.');
+      return;
+    }
+    window.location.assign(result.url);
+  }
+
+  async function checkConnectStatus() {
+    if (!conference || connectBusy) return;
+    setConnectBusy('status');
+    setConnectError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setConnectBusy(null);
+      setConnectError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('connect-onboard', {
+      body: { conferenceId: conference.id, action: 'status' },
+    });
+    setConnectBusy(null);
+    if (error) {
+      setConnectError(await extractFunctionErrorMessage(error));
+      return;
+    }
+    const result = data as { ok?: boolean; status?: ConnectStatus; error?: string } | null;
+    if (!result?.ok || !result.status) {
+      setConnectError(result?.error || 'Could not check status. Please try again.');
+      return;
+    }
+    setConnectStatus(result.status);
+    refreshConferenceQuiet();
+  }
 
   useEffect(() => {
     if (!conference || !session) return;
@@ -262,7 +363,7 @@ export default function FinancialsPage() {
   if (!conference) return null;
 
   const loading = rows === null;
-  const stripeConnected = !!conference.stripe_account_id;
+  const stripeConnected = connectStatus === 'complete';
   const expectedDelegates = conference.expected_delegates || 0;
 
   // ── Display-currency conversion (approximate, display-only) ─────────────
@@ -379,8 +480,28 @@ export default function FinancialsPage() {
 
         {tab === 'overview' && (<>
 
-        {/* Stripe connect teaser, the single integration seam (payments.ts) */}
-        {!stripeConnected && (
+        {/* Payouts card, the single Stripe Connect integration seam (payments.ts + connect-onboard) */}
+        {connectStatus === 'complete' ? (
+          <div
+            className="flex items-center gap-3 rounded-[20px] px-5 py-4 mb-6"
+            style={{ backgroundColor: 'rgba(61,122,82,0.1)', border: '1.5px solid rgba(61,122,82,0.32)' }}
+          >
+            <span
+              className="flex items-center justify-center rounded-full flex-shrink-0"
+              style={{ width: 40, height: 40, backgroundColor: 'rgba(61,122,82,0.18)', border: '1.5px solid rgba(61,122,82,0.42)' }}
+            >
+              <CircleCheck size={19} strokeWidth={2.2} style={{ color: NEU.green }} />
+            </span>
+            <div>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, lineHeight: 1.3 }}>
+                Stripe connected
+              </p>
+              <p style={mutedCaption}>
+                Delegate payments go directly to your Stripe account.
+              </p>
+            </div>
+          </div>
+        ) : (
           <div
             className="flex items-center gap-4 flex-wrap rounded-[20px] px-5 py-4 mb-6"
             style={{
@@ -400,19 +521,46 @@ export default function FinancialsPage() {
             </span>
             <div className="flex-1 min-w-[220px]">
               <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#FAF8F3', lineHeight: 1.3 }}>
-                Connect Stripe to collect payments automatically
+                {connectStatus === 'pending' ? 'Finish your Stripe onboarding' : 'Connect Stripe to receive payments directly'}
               </p>
               <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
-                Until then, mark payments manually on the Applications page. Every figure below stays accurate either way.
+                {connectStatus === 'pending'
+                  ? 'Stripe still needs a few details before payouts can start.'
+                  : 'Delegate payments go straight to your own Stripe account. Gavelling never holds your money.'}
               </p>
+              {connectError && (
+                <p className="flex items-start gap-1.5 mt-2" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#F5A9A9', lineHeight: 1.5 }}>
+                  <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
+                  {connectError}
+                </p>
+              )}
             </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              <NeuButton icon={CreditCard} disabled gradient={NEU_GRADIENTS.gold}>
-                CONNECT
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {connectStatus === 'pending' && (
+                <button
+                  type="button"
+                  onClick={checkConnectStatus}
+                  disabled={connectBusy !== null}
+                  className="focus:outline-none"
+                  style={{
+                    border: 'none', background: 'transparent',
+                    cursor: connectBusy !== null ? 'default' : 'pointer',
+                    fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                    color: 'rgba(250,248,243,0.7)',
+                    textDecoration: connectBusy !== null ? 'none' : 'underline', textUnderlineOffset: 3,
+                  }}
+                >
+                  {connectBusy === 'status' ? 'CHECKING…' : 'CHECK STATUS'}
+                </button>
+              )}
+              <NeuButton
+                icon={CreditCard}
+                gradient={NEU_GRADIENTS.gold}
+                disabled={connectBusy !== null}
+                onClick={startConnectOnboarding}
+              >
+                {connectBusy === 'start' ? 'CONNECTING…' : connectStatus === 'pending' ? 'FINISH ONBOARDING' : 'CONNECT STRIPE'}
               </NeuButton>
-              <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(238,217,138,0.65)' }}>
-                COMING SOON
-              </span>
             </div>
           </div>
         )}

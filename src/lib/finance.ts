@@ -18,6 +18,30 @@ export { CURRENCIES, CURRENCY_CODES, type CurrencyOption };
 /** Gavelling's platform fee: 5% of the post-discount total. */
 export const PLATFORM_FEE_RATE = 0.05;
 
+/** Stripe processing pass-through: 3% of the post-discount total. */
+export const PROCESSING_RATE = 0.03;
+
+/** Currencies Stripe treats as having no minor unit (mirrors create-checkout). */
+export const ZERO_DECIMAL_CURRENCIES = new Set([
+  'JPY', 'KRW', 'VND', 'CLP', 'UGX', 'XAF', 'XOF', 'BIF', 'DJF', 'GNF', 'KMF',
+  'MGA', 'PYG', 'RWF', 'VUV', 'XPF',
+]);
+
+/** The processing fixed component, in major units of `currency`. */
+export function processingFixed(currency: string): number {
+  return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 50 : 0.30;
+}
+
+/** rate * amountMajor, rounded in minor units the same way the server does
+ *  (round(minor * rate) then back to major), so client previews match
+ *  create-checkout's cents-level rounding exactly. */
+function roundedRateAmount(amountMajor: number, rate: number, currency: string): number {
+  if (ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase())) {
+    return Math.round(amountMajor * rate);
+  }
+  return Math.round(amountMajor * 100 * rate) / 100;
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface VoucherInput {
@@ -49,12 +73,17 @@ export interface CheckoutBreakdown {
   voucherDiscount: number;
   /** baseFee - voucherDiscount. */
   postDiscount: number;
-  /** The 5% Gavelling fee actually charged (0 when waived or baseFee is 0). */
-  platformFee: number;
+  /** Combined service fee actually charged: serviceFeePlatform + serviceFeeProcessing. */
+  serviceFee: number;
+  /** 5% platform component of serviceFee (0 when waived or postDiscount is 0). */
+  serviceFeePlatform: number;
+  /** 3% + fixed processing component of serviceFee (0 only when postDiscount is 0). */
+  serviceFeeProcessing: number;
   platformFeeRate: number;
+  /** True when only the platform component was waived (ambassador/unlimited); processing still applies. */
   platformFeeWaived: boolean;
   waiverSource: WaiverSource;
-  /** postDiscount + platformFee. */
+  /** postDiscount + serviceFee. */
   total: number;
   /** Echo of the applied voucher, for line-item rendering + Stripe metadata. */
   voucher: VoucherInput | null;
@@ -146,27 +175,37 @@ export function computeCheckout({
 
   const postDiscount = roundMoney(baseFee - voucherDiscount);
 
-  // Platform fee: 5% of the post-discount total, waived for ambassadors
-  // (always) or holders of remaining unlimited-conference credits.
+  // Combined service fee: 5% platform + 3% processing + a fixed processing
+  // amount. The platform component alone is waived for ambassadors (always)
+  // or holders of remaining unlimited-conference credits; the processing
+  // component always applies whenever something is actually owed.
   const waiverSource: WaiverSource = profile.is_ambassador
     ? 'ambassador'
     : profile.unlimited_conferences_remaining > 0
       ? 'unlimited'
       : null;
   const platformFeeWaived = waiverSource !== null;
-  const rawPlatformFee = roundMoney(postDiscount * PLATFORM_FEE_RATE);
-  const platformFee = platformFeeWaived || postDiscount <= 0 ? 0 : rawPlatformFee;
+
+  const serviceFeePlatform = platformFeeWaived || postDiscount <= 0
+    ? 0
+    : roundedRateAmount(postDiscount, PLATFORM_FEE_RATE, feeCurrency);
+  const serviceFeeProcessing = postDiscount <= 0
+    ? 0
+    : roundMoney(roundedRateAmount(postDiscount, PROCESSING_RATE, feeCurrency) + processingFixed(feeCurrency));
+  const serviceFee = roundMoney(serviceFeePlatform + serviceFeeProcessing);
 
   return {
     currency: feeCurrency,
     baseFee,
     voucherDiscount,
     postDiscount,
-    platformFee,
+    serviceFee,
+    serviceFeePlatform,
+    serviceFeeProcessing,
     platformFeeRate: PLATFORM_FEE_RATE,
     platformFeeWaived,
     waiverSource,
-    total: roundMoney(postDiscount + platformFee),
+    total: roundMoney(postDiscount + serviceFee),
     voucher: appliedVoucher,
   };
 }

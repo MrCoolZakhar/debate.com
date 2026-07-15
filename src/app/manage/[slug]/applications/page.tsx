@@ -1013,7 +1013,7 @@ function FilterPanel({
 export default function ApplicationsPage() {
   const { conference } = useManage();
   const { session } = useAuth();
-  const paymentsLive = isPaymentsLive(conference?.id);
+  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status);
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   // Chairs are hidden by default (#2): the fresh participants filter carries
