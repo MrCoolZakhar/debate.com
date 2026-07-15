@@ -56,7 +56,7 @@ export interface PaymentPanelProps {
 export default function PaymentPanel({
   applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, aidStatus, paymentsEnabled, externalPaymentUrl, externalPaymentNote,
 }: PaymentPanelProps) {
-  const { session } = useAuth();
+  const { user, session } = useAuth();
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: feeAmount, fee_phases: feePhases });
   const fee = resolvedFee ?? 0;
   const currency = feeCurrency ?? 'GBP';
@@ -71,25 +71,25 @@ export default function PaymentPanel({
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [stubMessage, setStubMessage] = useState<string | null>(null);
-  // Opportunistic: suppresses the platform-fee note when the viewer happens to
-  // have organizer read access to an active Unlimited subscription for this
-  // conference. RLS quietly returns nothing for everyone else, so the note
-  // defaults to always-shown for ordinary participants.
+  // Suppresses the platform-fee note when the viewer holds an active PERSONAL
+  // Gavelling Unlimited subscription (owner_user_id = them, conference_id
+  // NULL) — Unlimited is a personal plan, not scoped to this conference.
   const [hasActiveUnlimited, setHasActiveUnlimited] = useState(false);
 
   useEffect(() => {
-    if (!session) return;
+    if (!user || !session) return;
     let cancelled = false;
     getAuthedClient(session.access_token)
       .from('subscriptions')
       .select('id')
-      .eq('conference_id', conferenceId)
+      .eq('owner_user_id', user.id)
+      .is('conference_id', null)
       .in('status', ['active', 'trialing'])
       .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
       .limit(1)
       .then(({ data }) => { if (!cancelled) setHasActiveUnlimited(!!data && data.length > 0); });
     return () => { cancelled = true; };
-  }, [conferenceId, session]);
+  }, [user, session]);
 
   const amountToCharge = showAmountSelector ? Math.min(Math.max(parseFloat(customAmount) || 1, 1), Math.max(remaining, 1)) : remaining;
 

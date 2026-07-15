@@ -1,27 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Sparkles, Crown, Infinity as InfinityIcon, Check, Ticket, ArrowRight } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { Sparkles, Crown, Infinity as InfinityIcon, Check, Ticket, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { extractFunctionErrorMessage, unlimitedPricing } from '@/lib/payments';
 import { formatFee } from '@/lib/finance';
 import { Eyebrow, GlassCard, OUTFIT } from '../accountUi';
 import { NEU, NeuInset } from '@/components/neu';
-import { LogoDisc } from '@/components/LogoDisc';
 
-interface OrgConference {
-  id: string;
-  slug: string;
-  acronym: string;
-  full_name: string;
-  logo_url: string | null;
-  country: string;
-}
-
-interface SubscriptionRow {
-  conference_id: string;
+interface Subscription {
   plan: string;
   status: string;
   current_period_end: string | null;
@@ -31,82 +20,110 @@ function formatExpiry(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function planLabel(sub: SubscriptionRow): string {
+function planLabel(sub: Subscription): string {
   if (sub.plan === 'unlimited_monthly') return 'Monthly plan';
   return sub.current_period_end ? `Yearly pass, valid until ${formatExpiry(sub.current_period_end)}` : 'Yearly pass';
 }
 
 export default function UnlimitedPage() {
   const { user, session, profile, loading: authLoading } = useAuth();
+  const router = useRouter();
 
-  // ── Purchase surface: every conference the viewer organizes ──────────────
-  const [conferences, setConferences] = useState<OrgConference[] | null>(null);
-  const [subsByConference, setSubsByConference] = useState<Record<string, SubscriptionRow>>({});
-  const [busy, setBusy] = useState<{ conferenceId: string; plan: 'monthly' | 'yearly' } | null>(null);
-  const [purchaseErrors, setPurchaseErrors] = useState<Record<string, string>>({});
+  // ── Personal subscription: owner_user_id = the viewer, conference_id NULL ──
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
+
+  const fetchSubscription = useCallback(async (): Promise<boolean> => {
+    if (!user || !session) return false;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('plan, status, current_period_end')
+      .eq('owner_user_id', user.id)
+      .is('conference_id', null)
+      .in('status', ['active', 'trialing'])
+      .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
+      .limit(1)
+      .maybeSingle();
+    const row = (data as Subscription | null) ?? null;
+    setSubscription(row);
+    setSubscriptionLoaded(true);
+    return !!row;
+  }, [user?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { fetchSubscription(); }, [fetchSubscription]);
+
+  // ?unlimited=success|cancelled, the redirect back from Stripe's hosted
+  // checkout. Success polls for the webhook-written subscriptions row (every
+  // 2s, up to 12s); cancelled just strips the param.
+  const [confirming, setConfirming] = useState(false);
+  const [confirmTimedOut, setConfirmTimedOut] = useState(false);
 
   useEffect(() => {
-    if (authLoading) return;
     if (!user || !session) return;
-    const supabase = getAuthedClient(session.access_token);
-    const userId = user.id;
-    const CONF = 'id, slug, acronym, full_name, logo_url, country';
+    const unlimitedParam = new URLSearchParams(window.location.search).get('unlimited');
+    if (unlimitedParam !== 'success' && unlimitedParam !== 'cancelled') return;
+    let cancelled = false;
+    if (unlimitedParam === 'success') {
+      setConfirming(true);
+      let attempts = 0;
+      const tick = async () => {
+        attempts++;
+        const found = await fetchSubscription();
+        if (cancelled) return;
+        if (found) {
+          setConfirming(false);
+          return;
+        }
+        if (attempts >= 6) {
+          setConfirming(false);
+          setConfirmTimedOut(true);
+          return;
+        }
+        setTimeout(tick, 2000);
+      };
+      tick();
+    }
+    router.replace('/account/unlimited');
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, session?.access_token]);
 
-    (async () => {
-      const [ownedRes, orgRes] = await Promise.all([
-        supabase.from('conferences').select(CONF).eq('organizer_id', userId),
-        supabase.from('conference_organizers').select(`conferences (${CONF})`).eq('user_id', userId),
-      ]);
+  // ── Purchase surface: the buyer's own country decides the region price ──
+  const [geoCountry, setGeoCountry] = useState<string | null>(null);
+  useEffect(() => {
+    fetch('/api/geo')
+      .then(r => r.json())
+      .then(g => setGeoCountry((g?.countryCode as string | null) ?? null))
+      .catch(() => {});
+  }, []);
+  const price = unlimitedPricing(geoCountry);
 
-      const byId = new Map<string, OrgConference>();
-      for (const c of (ownedRes.data ?? []) as OrgConference[]) byId.set(c.id, c);
-      for (const row of (orgRes.data ?? []) as { conferences: OrgConference | OrgConference[] | null }[]) {
-        const c = Array.isArray(row.conferences) ? row.conferences[0] : row.conferences;
-        if (c) byId.set(c.id, c);
-      }
-      const list = Array.from(byId.values()).sort((a, b) => a.acronym.localeCompare(b.acronym));
-      setConferences(list);
+  const [busy, setBusy] = useState<'monthly' | 'yearly' | null>(null);
+  const [purchaseError, setPurchaseError] = useState('');
 
-      if (list.length > 0) {
-        const { data: subsData } = await supabase
-          .from('subscriptions')
-          .select('conference_id, plan, status, current_period_end')
-          .in('conference_id', list.map(c => c.id))
-          .in('status', ['active', 'trialing'])
-          .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`);
-        const map: Record<string, SubscriptionRow> = {};
-        for (const s of (subsData as SubscriptionRow[] | null) ?? []) map[s.conference_id] = s;
-        setSubsByConference(map);
-      } else {
-        setSubsByConference({});
-      }
-    })();
-  }, [authLoading, user?.id, session?.access_token]);
-
-  async function startCheckout(conferenceId: string, plan: 'monthly' | 'yearly') {
+  async function startCheckout(plan: 'monthly' | 'yearly') {
     if (busy) return;
-    setBusy({ conferenceId, plan });
-    setPurchaseErrors(prev => ({ ...prev, [conferenceId]: '' }));
+    setBusy(plan);
+    setPurchaseError('');
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setBusy(null);
-      setPurchaseErrors(prev => ({ ...prev, [conferenceId]: 'Your session has expired, please refresh and sign in again.' }));
+      setPurchaseError('Your session has expired, please refresh and sign in again.');
       return;
     }
     const { data, error } = await supabase.functions.invoke('create-subscription-checkout', {
-      body: { conferenceId, plan },
+      body: { plan, ...(geoCountry ? { country: geoCountry } : {}) },
     });
     if (error) {
       setBusy(null);
-      setPurchaseErrors(prev => ({ ...prev, [conferenceId]: '' }));
-      const msg = await extractFunctionErrorMessage(error);
-      setPurchaseErrors(prev => ({ ...prev, [conferenceId]: msg }));
+      setPurchaseError(await extractFunctionErrorMessage(error));
       return;
     }
     const result = data as { ok?: boolean; url?: string; error?: string } | null;
     if (!result?.ok || !result.url) {
       setBusy(null);
-      setPurchaseErrors(prev => ({ ...prev, [conferenceId]: result?.error || 'Could not start checkout. Please try again.' }));
+      setPurchaseError(result?.error || 'Could not start checkout. Please try again.');
       return;
     }
     window.location.assign(result.url);
@@ -193,7 +210,7 @@ export default function UnlimitedPage() {
     setRedeemCode('');
   }
 
-  if (authLoading || conferences === null) {
+  if (authLoading || !subscriptionLoaded) {
     return (
       <div className="flex items-center justify-center py-20">
         <div
@@ -205,6 +222,7 @@ export default function UnlimitedPage() {
   }
 
   const balance = profile?.points_balance ?? 0;
+  const active = !!subscription;
 
   return (
     <div>
@@ -216,99 +234,95 @@ export default function UnlimitedPage() {
         Gavelling Unlimited
       </h1>
       <p className="text-sm mb-8" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 560 }}>
-        Your delegates skip the 5 percent Gavelling platform fee on their own registrations. Card processing still applies.
+        Skip the 5 percent Gavelling platform fee on your own registration fees, at every conference. Card processing still applies.
       </p>
 
-      {/* Purchase surface */}
-      <Eyebrow className="mb-3">Your Conferences</Eyebrow>
-      {conferences.length === 0 ? (
-        <GlassCard className="text-center !py-10 mb-10">
-          <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-            Unlimited applies to conferences you organize. Create or join an organizing team first.
-          </p>
-          <Link
-            href="/conferences"
-            className="inline-flex items-center gap-1.5 mt-4 text-xs font-bold"
-            style={{ color: '#1B3828', fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
-          >
-            EXPLORE CONFERENCES <ArrowRight size={13} strokeWidth={2.5} />
-          </Link>
-        </GlassCard>
-      ) : (
-        <>
-          <div className="flex flex-col gap-3 mb-3">
-            {conferences.map(conf => {
-              const sub = subsByConference[conf.id];
-              const price = unlimitedPricing(conf.country);
-              const rowBusy = busy?.conferenceId === conf.id ? busy.plan : null;
-              const err = purchaseErrors[conf.id];
-              return (
-                <GlassCard key={conf.id} className="!p-4">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <LogoDisc src={conf.logo_url} alt={conf.acronym} size={40} fallbackText={conf.acronym.slice(0, 3)} />
-                    <div className="flex-1 min-w-[160px]">
-                      <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{conf.acronym}</p>
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{conf.full_name}</p>
-                    </div>
-
-                    {sub ? (
-                      <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-extrabold"
-                          style={{ backgroundColor: 'rgba(61,122,82,0.14)', border: '1px solid rgba(61,122,82,0.4)', color: '#2A5A3C', fontFamily: OUTFIT, letterSpacing: '0.08em' }}
-                        >
-                          <Check size={11} strokeWidth={2.6} /> ACTIVE
-                        </span>
-                        <span className="text-xs font-semibold" style={{ color: '#6E5F4E', fontFamily: OUTFIT }}>
-                          {planLabel(sub)}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-                        <button
-                          onClick={() => startCheckout(conf.id, 'monthly')}
-                          disabled={busy !== null}
-                          className="rounded-full px-3.5 py-1.5 text-xs font-extrabold focus:outline-none"
-                          style={{
-                            border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
-                            background: busy !== null ? 'rgba(27,56,40,0.14)' : NEU.forest,
-                            color: busy !== null ? NEU.muted : NEU.gold,
-                            cursor: busy !== null ? 'default' : 'pointer',
-                          }}
-                        >
-                          {rowBusy === 'monthly' ? 'STARTING CHECKOUT…' : `GO UNLIMITED · ${formatFee(price.monthly, price.currency)}/MONTH`}
-                        </button>
-                        <button
-                          onClick={() => startCheckout(conf.id, 'yearly')}
-                          disabled={busy !== null}
-                          className="rounded-full px-3.5 py-1.5 text-xs font-extrabold focus:outline-none"
-                          style={{
-                            fontFamily: OUTFIT, letterSpacing: '0.05em',
-                            border: busy !== null ? '1px solid rgba(154,138,120,0.3)' : '1px solid rgba(27,56,40,0.35)',
-                            background: 'transparent',
-                            color: busy !== null ? NEU.muted : NEU.forest,
-                            cursor: busy !== null ? 'default' : 'pointer',
-                          }}
-                        >
-                          {rowBusy === 'yearly' ? 'STARTING CHECKOUT…' : `PAY YEARLY · ${formatFee(price.yearly, price.currency)}`}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {err && (
-                    <p className="mt-2.5 text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                      {err}
-                    </p>
-                  )}
-                </GlassCard>
-              );
-            })}
+      {/* Personal plan */}
+      <Eyebrow className="mb-3">Your Plan</Eyebrow>
+      <GlassCard className="!p-5 mb-3">
+        {confirming ? (
+          <div className="flex items-center gap-3">
+            <span
+              className="flex items-center justify-center rounded-full flex-shrink-0"
+              style={{ width: 40, height: 40, backgroundColor: 'rgba(182,135,31,0.16)', border: '1.5px solid rgba(182,135,31,0.38)' }}
+            >
+              <Loader2 size={18} strokeWidth={2.2} className="animate-spin" style={{ color: NEU.deepGold }} />
+            </span>
+            <div>
+              <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                Confirming your Unlimited purchase…
+              </p>
+              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>This usually takes a few seconds.</p>
+            </div>
           </div>
-          <p className="text-xs mb-10" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-            Applies to each delegate&apos;s own registration fee. Delegation spot purchases keep the standard service fee.
+        ) : active ? (
+          <div className="flex items-center gap-3">
+            <span
+              className="flex items-center justify-center rounded-full flex-shrink-0"
+              style={{ width: 40, height: 40, backgroundColor: 'rgba(61,122,82,0.14)', border: '1.5px solid rgba(61,122,82,0.4)' }}
+            >
+              <Check size={18} strokeWidth={2.6} style={{ color: '#2A5A3C' }} />
+            </span>
+            <div>
+              <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                Gavelling Unlimited active
+                <span style={{ color: '#9A8A78', fontWeight: 700 }}> · {planLabel(subscription!)}</span>
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                Your registrations skip the 5 percent Gavelling platform fee at every conference.
+              </p>
+            </div>
+          </div>
+        ) : confirmTimedOut ? (
+          <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+            Payment received. Unlimited will activate here within a minute.
           </p>
-        </>
-      )}
+        ) : (
+          <>
+            <p className="font-bold text-sm mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Go Unlimited</p>
+            <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+              One personal plan, applies to every conference you register for.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => startCheckout('monthly')}
+                disabled={busy !== null}
+                className="rounded-full px-3.5 py-1.5 text-xs font-extrabold focus:outline-none"
+                style={{
+                  border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
+                  background: busy !== null ? 'rgba(27,56,40,0.14)' : NEU.forest,
+                  color: busy !== null ? NEU.muted : NEU.gold,
+                  cursor: busy !== null ? 'default' : 'pointer',
+                }}
+              >
+                {busy === 'monthly' ? 'STARTING CHECKOUT…' : `GO UNLIMITED · ${formatFee(price.monthly, price.currency)}/MONTH`}
+              </button>
+              <button
+                onClick={() => startCheckout('yearly')}
+                disabled={busy !== null}
+                className="rounded-full px-3.5 py-1.5 text-xs font-extrabold focus:outline-none"
+                style={{
+                  fontFamily: OUTFIT, letterSpacing: '0.05em',
+                  border: busy !== null ? '1px solid rgba(154,138,120,0.3)' : '1px solid rgba(27,56,40,0.35)',
+                  background: 'transparent',
+                  color: busy !== null ? NEU.muted : NEU.forest,
+                  cursor: busy !== null ? 'default' : 'pointer',
+                }}
+              >
+                {busy === 'yearly' ? 'STARTING CHECKOUT…' : `PAY YEARLY · ${formatFee(price.yearly, price.currency)}`}
+              </button>
+            </div>
+            {purchaseError && (
+              <p className="mt-2.5 text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                {purchaseError}
+              </p>
+            )}
+          </>
+        )}
+      </GlassCard>
+      <p className="text-xs mb-10" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+        Applies to your own registration fees. Delegation spot purchases keep the standard service fee.
+      </p>
 
       {/* Gavelling Unlimited — entitlements + voucher redemption */}
       <Eyebrow className="mb-3">Gavelling Unlimited</Eyebrow>

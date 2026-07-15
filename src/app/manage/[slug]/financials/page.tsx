@@ -19,13 +19,13 @@
  * Applications page.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowRight, BadgePercent, CircleCheck, Clock, CreditCard, Eye, Gavel,
-  GraduationCap, HandCoins, History, Hourglass, LayoutGrid, Loader2, PiggyBank,
-  Receipt, Sparkles, TrendingUp, TriangleAlert, User, Users, Wallet,
+  GraduationCap, HandCoins, History, Hourglass, LayoutGrid, PiggyBank,
+  Receipt, TrendingUp, TriangleAlert, User, Users, Wallet,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -184,12 +184,6 @@ const PIPELINE_FILTERS = [
 type PipelineFilter = (typeof PIPELINE_FILTERS)[number]['value'];
 
 type ConnectStatus = 'none' | 'pending' | 'complete';
-
-interface SubscriptionRow {
-  plan: string;
-  status: string;
-  current_period_end: string | null;
-}
 
 // Neumorphic input well, pressed-in, transparent field inside (mirrors VouchersSection's inputStyle).
 const inputStyle: React.CSSProperties = {
@@ -377,66 +371,6 @@ export default function FinancialsPage() {
     }
     refreshConferenceQuiet();
   }
-
-  // ── Gavelling Unlimited (subscriptions + create-subscription-checkout) ──
-  const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
-  const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
-  const [unlimitedConfirming, setUnlimitedConfirming] = useState(false);
-  const [unlimitedTimedOut, setUnlimitedTimedOut] = useState(false);
-
-  // Active/trialing AND not expired (current_period_end null = monthly,
-  // still recurring; set = yearly one-time pass, valid until that date).
-  const fetchSubscription = useCallback(async (): Promise<boolean> => {
-    if (!conference || !session) return false;
-    const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
-      .from('subscriptions')
-      .select('plan, status, current_period_end')
-      .eq('conference_id', conference.id)
-      .in('status', ['active', 'trialing'])
-      .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
-      .limit(1)
-      .maybeSingle();
-    const row = (data as SubscriptionRow | null) ?? null;
-    setSubscription(row);
-    setSubscriptionLoaded(true);
-    return !!row;
-  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { fetchSubscription(); }, [fetchSubscription]);
-
-  // ?unlimited=success|cancelled, the redirect back from Stripe's hosted
-  // checkout for the Unlimited purchase. Success polls for the webhook-written
-  // subscriptions row (every 2s, up to 12s); cancelled just strips the param.
-  useEffect(() => {
-    if (!conference || !session) return;
-    const unlimitedParam = new URLSearchParams(window.location.search).get('unlimited');
-    if (unlimitedParam !== 'success' && unlimitedParam !== 'cancelled') return;
-    let cancelled = false;
-    if (unlimitedParam === 'success') {
-      setUnlimitedConfirming(true);
-      let attempts = 0;
-      const tick = async () => {
-        attempts++;
-        const found = await fetchSubscription();
-        if (cancelled) return;
-        if (found) {
-          setUnlimitedConfirming(false);
-          return;
-        }
-        if (attempts >= 6) {
-          setUnlimitedConfirming(false);
-          setUnlimitedTimedOut(true);
-          return;
-        }
-        setTimeout(tick, 2000);
-      };
-      tick();
-    }
-    router.replace(`/manage/${conference.slug}/financials`);
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conference?.id, session?.access_token]);
 
   useEffect(() => {
     if (!conference || !session) return;
@@ -834,113 +768,6 @@ export default function FinancialsPage() {
                 </NeuButton>
               </div>
             </NeuCard>
-          )}
-        </div>
-
-        {/* Gavelling Unlimited card, delegate-side platform-fee waiver purchase
-            (subscriptions table + create-subscription-checkout edge function) */}
-        <div className="mb-6">
-          {unlimitedConfirming ? (
-            <div
-              className="flex items-center gap-3 rounded-[20px] px-5 py-4"
-              style={{ backgroundColor: 'rgba(182,135,31,0.08)', border: '1.5px solid rgba(182,135,31,0.3)' }}
-            >
-              <span
-                className="flex items-center justify-center rounded-full flex-shrink-0"
-                style={{ width: 40, height: 40, backgroundColor: 'rgba(182,135,31,0.16)', border: '1.5px solid rgba(182,135,31,0.38)' }}
-              >
-                <Loader2 size={18} strokeWidth={2.2} className="animate-spin" style={{ color: NEU.deepGold }} />
-              </span>
-              <div>
-                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, lineHeight: 1.3 }}>
-                  Confirming your Unlimited purchase…
-                </p>
-                <p style={mutedCaption}>This usually takes a few seconds.</p>
-              </div>
-            </div>
-          ) : subscriptionLoaded && subscription ? (
-            <div
-              className="flex items-center gap-3 rounded-[20px] px-5 py-4"
-              style={{ backgroundColor: 'rgba(182,135,31,0.1)', border: '1.5px solid rgba(182,135,31,0.32)' }}
-            >
-              <span
-                className="flex items-center justify-center rounded-full flex-shrink-0"
-                style={{ width: 40, height: 40, backgroundColor: 'rgba(182,135,31,0.18)', border: '1.5px solid rgba(182,135,31,0.42)' }}
-              >
-                <Sparkles size={19} strokeWidth={2.2} style={{ color: NEU.deepGold }} />
-              </span>
-              <div>
-                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink, lineHeight: 1.3 }}>
-                  Gavelling Unlimited active
-                  <span style={{ color: NEU.muted, fontWeight: 700 }}>
-                    {' · '}
-                    {subscription.plan === 'unlimited_monthly'
-                      ? 'Monthly plan'
-                      : subscription.current_period_end
-                        ? `Yearly pass, valid until ${formatRowDate(subscription.current_period_end)}`
-                        : 'Yearly pass'}
-                  </span>
-                </p>
-                <p style={mutedCaption}>
-                  Delegates at {conference.acronym} pay no Gavelling platform fee on their own registrations.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div
-              className="rounded-[20px] px-5 py-4"
-              style={{
-                background: 'linear-gradient(150deg, #16301F 0%, #1B3828 52%, #2A5A3C 100%)',
-                boxShadow: '0 2px 8px rgba(27,56,40,0.14), 0 16px 40px rgba(27,56,40,0.22)',
-              }}
-            >
-              <div className="flex items-start gap-4 flex-wrap">
-                <span
-                  className="flex items-center justify-center rounded-full flex-shrink-0"
-                  style={{
-                    width: 44, height: 44,
-                    background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.34) 0%, rgba(27,56,40,0) 74%)',
-                    border: '1.5px solid rgba(238,217,138,0.5)',
-                  }}
-                >
-                  <Sparkles size={20} strokeWidth={2} style={{ color: NEU.gold }} />
-                </span>
-                <div className="flex-1 min-w-[220px]">
-                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#FAF8F3', lineHeight: 1.3 }}>
-                    Gavelling Unlimited
-                  </p>
-                  <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5, maxWidth: 480 }}>
-                    Your delegates skip the 5 percent Gavelling platform fee on their own registrations.
-                  </p>
-
-                  {unlimitedTimedOut && (
-                    <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11, color: 'rgba(250,248,243,0.75)', lineHeight: 1.5 }}>
-                      Payment received. Unlimited will activate here within a minute.
-                    </p>
-                  )}
-
-                  <Link
-                    href="/account/unlimited"
-                    className="inline-flex items-center justify-center gap-2 mt-3"
-                    style={{
-                      padding: '11px 22px',
-                      borderRadius: 999,
-                      background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
-                      color: NEU.forest,
-                      fontFamily: OUTFIT,
-                      fontSize: 13,
-                      fontWeight: 800,
-                      letterSpacing: '0.05em',
-                      textDecoration: 'none',
-                      boxShadow: `0 4px 10px ${NEU_GRADIENTS.gold[0]}4D, ${NEU.outSm}`,
-                    }}
-                  >
-                    <Sparkles size={15} strokeWidth={2.4} />
-                    GET UNLIMITED
-                  </Link>
-                </div>
-              </div>
-            </div>
           )}
         </div>
 

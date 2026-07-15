@@ -57,9 +57,10 @@ export interface VoucherInput {
 export interface FinanceProfile {
   is_ambassador: boolean;
   unlimited_conferences_remaining: number;
-  /** Optional: an active Unlimited subscription (unlimited_status !== 'none',
-   *  not expired). Used only to suppress the upsell — the fee waiver itself
-   *  keys off is_ambassador / unlimited_conferences_remaining. */
+  /** An active PERSONAL Gavelling Unlimited subscription (owner_user_id =
+   *  the viewer, conference_id NULL, active/trialing, not expired). Waives
+   *  the platform fee the same as is_ambassador / unlimited_conferences_remaining,
+   *  and also suppresses the upsell. */
   has_active_subscription?: boolean;
 }
 
@@ -140,11 +141,15 @@ export function roundMoney(n: number): number {
  * this function's waiver output for pledge-spot line items.
  *
  * Waiver rules (also enforced server-side — see report/migration):
- *  - is_ambassador        → platform fee waived, always, forever.
+ *  - is_ambassador          → platform fee waived, always, forever.
+ *  - has_active_subscription → platform fee waived by the viewer's personal
+ *    Gavelling Unlimited subscription, at every conference they register for.
  *  - unlimited_conferences_remaining > 0 → platform fee waived; the counter
  *    is decremented by a DB trigger when the application is actually PAID
  *    (applications.fee_waiver_source = 'unlimited'), never client-side.
- *  - Ambassador takes precedence (it never consumes an unlimited slot).
+ *  - Ambassador takes precedence (it never consumes an unlimited slot); an
+ *    active subscription is checked next, before the finite credit counter,
+ *    since it doesn't consume anything either.
  */
 export function computeCheckout({
   feeAmount,
@@ -187,9 +192,11 @@ export function computeCheckout({
   // component always applies whenever something is actually owed.
   const waiverSource: WaiverSource = profile.is_ambassador
     ? 'ambassador'
-    : profile.unlimited_conferences_remaining > 0
+    : profile.has_active_subscription
       ? 'unlimited'
-      : null;
+      : profile.unlimited_conferences_remaining > 0
+        ? 'unlimited'
+        : null;
   const platformFeeWaived = waiverSource !== null;
 
   const serviceFeePlatform = platformFeeWaived || postDiscount <= 0

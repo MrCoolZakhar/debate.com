@@ -577,7 +577,7 @@ function ConferenceApplyInner() {
   const [aidStatement, setAidStatement] = useState('');
 
   // ── Checkout: vouchers + fee waivers (finance.ts is the single math source)
-  const [financeProfile, setFinanceProfile] = useState({ is_ambassador: false, unlimited_conferences_remaining: 0 });
+  const [financeProfile, setFinanceProfile] = useState({ is_ambassador: false, unlimited_conferences_remaining: 0, has_active_subscription: false });
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherChecking, setVoucherChecking] = useState(false);
   const [voucherError, setVoucherError] = useState('');
@@ -729,7 +729,7 @@ function ConferenceApplyInner() {
 
     setConference(confData as Conference);
 
-    const [roleRes, committeesRes, societiesRes, appRes, profileRes] = await Promise.all([
+    const [roleRes, committeesRes, societiesRes, appRes, profileRes, subRes] = await Promise.all([
       supabase
         .from('application_role_configs')
         .select('*')
@@ -758,6 +758,20 @@ function ConferenceApplyInner() {
         .select('date_of_birth, is_ambassador, unlimited_conferences_remaining')
         .eq('id', user!.id)
         .maybeSingle(),
+      // Personal Gavelling Unlimited subscription: owner_user_id = the
+      // applicant, conference_id NULL (never conference-scoped), active/
+      // trialing and not expired. Drives has_active_subscription below so
+      // the order summary's Service fee line matches what create-checkout
+      // will actually charge.
+      supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('owner_user_id', user!.id)
+        .is('conference_id', null)
+        .in('status', ['active', 'trialing'])
+        .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     const committeesData = (committeesRes.data as CommitteeOption[]) ?? [];
@@ -773,6 +787,7 @@ function ConferenceApplyInner() {
     setFinanceProfile({
       is_ambassador: prof?.is_ambassador ?? false,
       unlimited_conferences_remaining: prof?.unlimited_conferences_remaining ?? 0,
+      has_active_subscription: !!subRes.data,
     });
 
     // Edit mode: prefill every step from the existing application, only once

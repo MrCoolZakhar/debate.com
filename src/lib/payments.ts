@@ -10,7 +10,6 @@
 
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { formatFee } from '@/lib/finance';
-import { getCountryByName } from '@/lib/countries';
 
 // ── Provider seam ──────────────────────────────────────────────────────────
 
@@ -43,8 +42,8 @@ export const SUPPORTED_PAYOUT_COUNTRIES = new Set<string>([
 
 /** ISO-2 codes charged Gavelling Unlimited's region A price (EU/EEA +
  *  Switzerland, UK, US, Middle East). Everyone else pays region B. Mirrors
- *  the create-subscription-checkout edge function, which is the pricing
- *  authority — this list is DISPLAY ONLY. */
+ *  create-subscription-checkout v2, which prices by the BUYER's location and
+ *  is the pricing authority — this list is DISPLAY ONLY. */
 export const UNLIMITED_REGION_A = new Set<string>([
   // EU 27
   'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR',
@@ -58,10 +57,13 @@ export const UNLIMITED_REGION_A = new Set<string>([
 
 /** Gavelling Unlimited pricing for display purposes only — the server
  *  (create-subscription-checkout) recomputes and enforces the real price by
- *  conference country. Keep in sync with that function. */
-export function unlimitedPricing(countryName: string | null): { monthly: number; yearly: number; currency: string } {
-  const code = countryName ? getCountryByName(countryName)?.code : undefined;
-  return code && UNLIMITED_REGION_A.has(code)
+ *  the buyer's location. Keep in sync with that function: region A when the
+ *  code is in UNLIMITED_REGION_A, or when the code is null/unknown (missing
+ *  geo defaults to region A, same as the server), else region B. */
+export function unlimitedPricing(countryCode: string | null): { monthly: number; yearly: number; currency: string } {
+  const code = countryCode?.toUpperCase();
+  const isRegionA = !code || UNLIMITED_REGION_A.has(code);
+  return isRegionA
     ? { monthly: 5, yearly: 45, currency: 'USD' }
     : { monthly: 2.5, yearly: 25, currency: 'USD' };
 }
