@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion, type PanInfo } from 'framer-motion';
 import { ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
@@ -34,7 +35,7 @@ import { UN_COUNTRIES } from '@/lib/countries';
 import { ConferenceCard } from '../ConferenceCard';
 import {
   LabConference, RatingSummary,
-  CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS, GRAIN,
+  CREAM, FOREST, GOLD, IVORY, PALE_GOLD, SANS,
   isConcluded, pickHeadliner,
   LabFooter,
 } from './shared';
@@ -270,7 +271,7 @@ export default function VariantStagefront({
           from { transform: translateX(0); }
           to { transform: translateX(-50%); }
         }
-        .sf-rail-track { animation: sfRailScroll 46s linear infinite; }
+        .sf-rail-track { animation: sfRailScroll 46s linear infinite; will-change: transform; }
         .sf-rail:hover .sf-rail-track { animation-play-state: paused; }
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
@@ -314,7 +315,14 @@ export default function VariantStagefront({
               image (not a live conference banner, which used to pull whichever
               conference happened to sort first and looked random). */}
           <div className="absolute inset-0 z-0" aria-hidden="true" style={{ overflow: 'hidden' }}>
-            <img src="/landing/podium-speaker.jpg" alt="" className="w-full h-full object-cover" style={{ objectPosition: 'center 32%' }} />
+            <Image
+              src="/landing/podium-speaker.jpg"
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+              style={{ objectFit: 'cover', objectPosition: 'center 32%' }}
+            />
             {/* Darkening + a short fade to cream at the very bottom of the hero */}
             <div
               className="absolute inset-0"
@@ -565,13 +573,14 @@ export default function VariantStagefront({
               */}
               <div
                 className="relative overflow-hidden rounded-3xl"
-                style={{ border: '1px solid rgba(27,56,40,0.14)', boxShadow: '0 30px 60px rgba(27,56,40,0.18)' }}
+                style={{ border: '1px solid rgba(27,56,40,0.14)', boxShadow: '0 30px 60px rgba(27,56,40,0.18)', aspectRatio: '3 / 2' }}
               >
-                <img
+                <Image
                   src="/landing/podium-speaker.jpg"
                   alt="A chair addressing a full auditorium of delegates"
-                  className="w-full object-cover"
-                  style={{ display: 'block', aspectRatio: '3 / 2' }}
+                  fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  style={{ objectFit: 'cover' }}
                 />
               </div>
 
@@ -662,11 +671,6 @@ export default function VariantStagefront({
             justifyContent: 'space-between',
           }}
         >
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.07 }}
-          />
-
           <div
             style={{
               position: 'absolute',
@@ -888,10 +892,12 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
               onClick={() => { if (!isActive) goToSlide(i); }}
               aria-hidden={!isActive}
             >
-              <img
+              <Image
                 src={slide.image}
                 alt={slide.imageAlt}
-                className="absolute inset-0 w-full h-full object-cover"
+                fill
+                sizes="(min-width: 768px) 640px, 82vw"
+                style={{ objectFit: 'cover' }}
                 draggable={false}
               />
               <div
@@ -1020,20 +1026,37 @@ function RegionalRail({
   onClick: (slug: string) => void;
 }) {
   const track = useRef<HTMLDivElement>(null);
+  const rail = useRef<HTMLDivElement>(null);
   // Only loop-duplicate when there are enough cards to fill the row; a couple of
   // cards looping looks jittery, so with <4 we render a single, static set.
   const loop = conferences.length >= 4;
   const sequence = loop ? [...conferences, ...conferences] : conferences;
 
+  // The marquee keeps animating (and repainting) even while scrolled off-screen
+  // unless we pause it ourselves. Only relevant when the track actually loops.
+  const [isVisible, setIsVisible] = useState(true);
+  useEffect(() => {
+    if (!loop) return;
+    const el = rail.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting), { threshold: 0 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loop]);
+
   return (
     <div
+      ref={rail}
       className="sf-rail"
       style={{ marginTop: '32px', overflowX: 'clip', maskImage: 'linear-gradient(to right, transparent, black 3%, black 97%, transparent)', WebkitMaskImage: 'linear-gradient(to right, transparent, black 3%, black 97%, transparent)' }}
     >
       <div
         ref={track}
         className={loop ? 'sf-rail-track' : undefined}
-        style={{ display: 'flex', gap: '24px', width: 'max-content', paddingLeft: '24px', paddingRight: '24px', paddingTop: '4px', paddingBottom: '12px' }}
+        style={{
+          display: 'flex', gap: '24px', width: 'max-content', paddingLeft: '24px', paddingRight: '24px', paddingTop: '4px', paddingBottom: '12px',
+          animationPlayState: loop && !isVisible ? 'paused' : undefined,
+        }}
       >
         {sequence.map((c, i) => {
           const isDupe = loop && i >= conferences.length;

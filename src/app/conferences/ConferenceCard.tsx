@@ -44,8 +44,6 @@ import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmount } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
 
-const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
-
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
 const PHOTO_REDUCED_MOTION_CSS = `
@@ -165,6 +163,8 @@ export function ConferenceCard({
         <img
           src={conf.banner_url}
           alt=""
+          loading="lazy"
+          decoding="async"
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
             transform: hovered ? 'scale(1.045)' : 'scale(1)',
@@ -174,7 +174,6 @@ export function ConferenceCard({
       ) : (
         <>
           <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${g0} 0%, ${g1} 100%)` }} />
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.1 }} />
           <span
             aria-hidden
             style={{
@@ -313,6 +312,8 @@ export function ConferenceCard({
             <img
               src={conf.banner_url}
               alt=""
+              loading="lazy"
+              decoding="async"
               style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
                 transform: hovered ? 'scale(1.05)' : 'scale(1)',
@@ -324,7 +325,6 @@ export function ConferenceCard({
         ) : (
           <>
             <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(120deg, ${g0} 0%, ${g1} 100%)` }} />
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.1 }} />
             <span
               aria-hidden
               style={{
