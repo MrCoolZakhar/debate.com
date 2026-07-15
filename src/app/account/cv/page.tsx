@@ -10,6 +10,7 @@ import { supabase as anonClient } from '@/lib/supabase';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { experienceProgress, syncExperienceLevel } from '@/lib/munExperience';
 import { COMMITTEE_PRESETS } from '@/components/CommitteeNameInput';
+import { committeeDisplayName } from '@/lib/presetNames';
 import { LogoDisc } from '@/components/LogoDisc';
 import {
   Eyebrow, GlassCard, Pill, LevelBadge, LEVEL_TONE, AwardChip, AwardArtwork, AWARD_LIST,
@@ -90,6 +91,28 @@ function conferenceDisplay(name: string): { primary: string; secondary: string |
     }
   }
   return { primary: name, secondary: null };
+}
+
+// ── Committee acronym display ────────────────────────────────────────────────
+// Show the committee's short acronym (e.g. DISEC, SPECPOL) rather than the full
+// spelled-out name. Explicit matches first (the shared presets don't cover every
+// committee), then the shared preset acronyms, then committeeDisplayName's
+// >4-word rule; short/unknown names pass through unchanged.
+const COMMITTEE_ACRONYMS: { match: RegExp; acronym: string }[] = [
+  { match: /disarmament (and )?international security/i,   acronym: 'DISEC' },
+  { match: /special political (and )?decoloniz/i,          acronym: 'SPECPOL' },
+  { match: /social,? humanitarian (and )?cultural/i,       acronym: 'SOCHUM' },
+  { match: /world economic forum/i,                        acronym: 'WEF' },
+];
+
+function committeeLabel(name: string): string {
+  const n = (name ?? '').trim();
+  if (!n) return n;
+  for (const c of COMMITTEE_ACRONYMS) if (c.match.test(n)) return c.acronym;
+  const q = n.toLowerCase();
+  const preset = COMMITTEE_SUGGESTIONS.find((p) => p.name.toLowerCase() === q || p.acronym.toLowerCase() === q);
+  if (preset) return committeeDisplayName(preset.name, preset.acronym);
+  return committeeDisplayName(n);
 }
 
 // Committee suggestions shared with the conference setup flow.
@@ -1149,7 +1172,6 @@ function TimelineEntry({
                 textTransform: 'uppercase',
               }}
             >
-              <Emoji3D name={type.emoji} size={14} fallback={type.Icon} fallbackColor={type.accent} />
               {type.label}
             </span>
             <span
@@ -1194,43 +1216,46 @@ function TimelineEntry({
             );
           })()}
 
-          {/* Role line — varies by type */}
+          {/* Role line — varies by type. The type glyph lives ONLY in the corner
+              disc; role lines carry no emoji (no repetition). */}
           {entry.entry_type === 'delegate' && (
             <>
               {/* Country represented — the delegate's headline: bigger flag + bold allocation */}
-              <div className="flex items-center gap-2.5 flex-wrap mt-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                {allocFlag && (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={allocFlag}
-                    alt=""
-                    style={{ width: '30px', height: '20px', objectFit: 'cover', borderRadius: '3.5px', boxShadow: '0 1.5px 4px rgba(27,56,40,0.25)', border: '1px solid rgba(255,255,255,0.7)' }}
-                  />
-                )}
-                <span className="inline-flex items-center text-[17px]" style={{ fontWeight: 800, color: '#1B3828', letterSpacing: '-0.01em' }}>
-                  {entry.allocation}
-                </span>
-              </div>
+              {entry.allocation && (
+                <div className="flex items-center gap-2.5 flex-wrap mt-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  {allocFlag && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={allocFlag}
+                      alt=""
+                      style={{ width: '30px', height: '20px', objectFit: 'cover', borderRadius: '3.5px', boxShadow: '0 1.5px 4px rgba(27,56,40,0.25)', border: '1px solid rgba(255,255,255,0.7)' }}
+                    />
+                  )}
+                  <span className="inline-flex items-center text-[17px]" style={{ fontWeight: 800, color: '#1B3828', letterSpacing: '-0.01em' }}>
+                    {entry.allocation}
+                  </span>
+                </div>
+              )}
               {entry.committee && (
                 <div className="flex items-center gap-2 mt-2 text-[14px]" style={{ color: '#5C5140', fontFamily: OUTFIT, fontWeight: 500 }}>
                   <CommitteeLogo committee={entry.committee} size={22} />
-                  <span>{entry.committee}</span>
+                  <span>{committeeLabel(entry.committee)}</span>
                 </div>
               )}
             </>
           )}
 
+          {/* Chair — just the committee (acronym), no "Chaired", no glyph */}
           {entry.entry_type === 'chair' && entry.committee && (
-            <div className="flex items-center gap-1.5 flex-wrap mt-2 text-[14px]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
-              <Emoji3D name={type.emoji} size={16} fallback={Gavel} fallbackColor={type.accent} style={{ flexShrink: 0 }} />
-              <CommitteeLogo committee={entry.committee} size={18} />
-              <span>Chaired {entry.committee}</span>
+            <div className="flex items-center gap-2 flex-wrap mt-2.5 text-[15px]" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 700 }}>
+              <CommitteeLogo committee={entry.committee} size={22} />
+              <span>{committeeLabel(entry.committee)}</span>
             </div>
           )}
 
+          {/* Secretariat / other — just the role title, no glyph */}
           {(entry.entry_type === 'secretariat' || entry.entry_type === 'other') && entry.allocation && (
-            <div className="flex items-center gap-1.5 flex-wrap mt-2 text-[14px]" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
-              <Emoji3D name={type.emoji} size={16} fallback={type.Icon} fallbackColor={type.accent} style={{ flexShrink: 0 }} />
+            <div className="flex items-center flex-wrap mt-2.5 text-[15px]" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 700 }}>
               <span>{entry.allocation}</span>
             </div>
           )}
