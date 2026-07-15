@@ -62,6 +62,15 @@ body {
   box-sizing: border-box;
 }
 
+/* Global horizontal-overflow safety net. `clip` (not `hidden`) so it can
+   never create a scroll container or break `position: sticky` descendants;
+   it only protects against stray elements that render wider than the
+   viewport somewhere on the page. Fix the root cause at its source first —
+   this is a backstop, not a substitute. */
+html, body {
+  overflow-x: clip;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

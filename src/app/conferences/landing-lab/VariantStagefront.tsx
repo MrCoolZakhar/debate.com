@@ -855,7 +855,7 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className="relative w-full outline-none"
-        style={{ height: 'clamp(440px, 50vw, 560px)' }}
+        style={{ height: 'clamp(440px, 50vw, 560px)', overflowX: 'clip' }}
       >
         {slides.map((slide, i) => {
           const offset = getOffset(i);
@@ -1028,7 +1028,7 @@ function RegionalRail({
   return (
     <div
       className="sf-rail"
-      style={{ marginTop: '32px', overflow: 'hidden', maskImage: 'linear-gradient(to right, transparent, black 3%, black 97%, transparent)', WebkitMaskImage: 'linear-gradient(to right, transparent, black 3%, black 97%, transparent)' }}
+      style={{ marginTop: '32px', overflowX: 'clip', maskImage: 'linear-gradient(to right, transparent, black 3%, black 97%, transparent)', WebkitMaskImage: 'linear-gradient(to right, transparent, black 3%, black 97%, transparent)' }}
     >
       <div
         ref={track}
