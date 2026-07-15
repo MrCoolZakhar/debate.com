@@ -333,10 +333,15 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
         </button>
       </nav>
 
-      {/* Mobile dropdown menu */}
+      {/* Mobile dropdown menu.
+          In overlay mode the <nav> is absolutely positioned (out of flow), so a
+          normal-flow dropdown would collapse to the top of the hero and the
+          floating logo/hamburger would sit on top of its first item (SESSIONS).
+          Pin it just below the 72px nav bar so every tab is visible. */}
       <div
-        className="md:hidden overflow-hidden transition-all duration-300 relative z-20"
+        className={`md:hidden overflow-hidden transition-all duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
         style={{
+          top: overlay ? '72px' : undefined,
           maxHeight: menuOpen ? '480px' : '0px',
           backgroundColor: '#FAF8F3',
           borderBottom: menuOpen ? '1px solid #DDD4C0' : 'none',

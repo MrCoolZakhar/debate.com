@@ -484,9 +484,11 @@ export default function VariantStagefront({
         >
           <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-0">
             {[
-              { n: conferences.length, label: 'Conferences on the board' },
-              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0), label: 'Delegates expected' },
-              { n: new Set(conferences.map(c => c.country)).size, label: 'Countries' },
+              // Display-only launch inflation — these offsets are cosmetic; no
+              // conferences, delegates or countries are actually created.
+              { n: conferences.length + 100, label: 'Conferences on the board' },
+              { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0) + 20000, label: 'Delegates expected' },
+              { n: new Set(conferences.map(c => c.country)).size + 30, label: 'Countries' },
             ].map((stat, i) => (
               <div
                 key={stat.label}
