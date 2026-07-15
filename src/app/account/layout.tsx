@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { User, ScrollText, CalendarDays, Trophy, CalendarCheck, ArrowRight, type LucideIcon } from 'lucide-react';
+import { User, ScrollText, CalendarDays, Sparkles, CalendarCheck, ArrowRight, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import SiteNav from '@/components/SiteNav';
 
@@ -15,7 +15,7 @@ const NAV_LINKS: NavLink[] = [
   { label: 'MY PROFILE', href: '/account/profile', Icon: User },
   { label: 'MUN CV', href: '/account/cv', Icon: ScrollText },
   { label: 'CONFERENCE CALENDAR', href: '/account/calendar', Icon: CalendarDays },
-  { label: 'GAVELLING POINTS', href: '/account/points', Icon: Trophy },
+  { label: 'GAVELLING UNLIMITED', href: '/account/unlimited', Icon: Sparkles },
 ];
 
 // My Conferences is a headline destination — it lives in its own gold-accented

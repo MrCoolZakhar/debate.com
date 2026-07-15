@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { User, FileText, CalendarDays, Trophy, Sparkles, LogOut, ArrowRight } from 'lucide-react';
+import { User, FileText, CalendarDays, Sparkles, LogOut, ArrowRight } from 'lucide-react';
 import Portal from '@/components/Portal';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
@@ -276,7 +276,6 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
               { label: 'MY PROFILE', href: '/account/profile', icon: User },
               { label: 'MUN CV', href: '/account/cv', icon: FileText },
               { label: 'CONFERENCE CALENDAR', href: '/account/calendar', icon: CalendarDays },
-              { label: 'GAVELLING POINTS', href: '/account/points', icon: Trophy },
             ].map((item) => {
               const RowIcon = item.icon;
               return (
@@ -303,7 +302,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
             {profile?.unlimited_status === 'none' ? (
               <Link
-                href="/unlimited"
+                href="/account/unlimited"
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
                 style={{

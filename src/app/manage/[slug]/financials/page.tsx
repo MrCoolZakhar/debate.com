@@ -30,7 +30,7 @@ import {
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { extractFunctionErrorMessage, SUPPORTED_PAYOUT_COUNTRIES, unlimitedPricing } from '@/lib/payments';
+import { extractFunctionErrorMessage, SUPPORTED_PAYOUT_COUNTRIES } from '@/lib/payments';
 import { roundMoney, formatFee, currencySymbol, CURRENCY_CODES } from '@/lib/finance';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
@@ -381,8 +381,6 @@ export default function FinancialsPage() {
   // ── Gavelling Unlimited (subscriptions + create-subscription-checkout) ──
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
-  const [unlimitedBusy, setUnlimitedBusy] = useState<'monthly' | 'yearly' | null>(null);
-  const [unlimitedError, setUnlimitedError] = useState('');
   const [unlimitedConfirming, setUnlimitedConfirming] = useState(false);
   const [unlimitedTimedOut, setUnlimitedTimedOut] = useState(false);
 
@@ -439,33 +437,6 @@ export default function FinancialsPage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conference?.id, session?.access_token]);
-
-  async function startUnlimitedCheckout(plan: 'monthly' | 'yearly') {
-    if (!conference || unlimitedBusy) return;
-    setUnlimitedBusy(plan);
-    setUnlimitedError('');
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setUnlimitedBusy(null);
-      setUnlimitedError('Your session has expired, please refresh and sign in again.');
-      return;
-    }
-    const { data, error } = await supabase.functions.invoke('create-subscription-checkout', {
-      body: { conferenceId: conference.id, plan },
-    });
-    if (error) {
-      setUnlimitedBusy(null);
-      setUnlimitedError(await extractFunctionErrorMessage(error));
-      return;
-    }
-    const result = data as { ok?: boolean; url?: string; error?: string } | null;
-    if (!result?.ok || !result.url) {
-      setUnlimitedBusy(null);
-      setUnlimitedError(result?.error || 'Could not start checkout. Please try again.');
-      return;
-    }
-    window.location.assign(result.url);
-  }
 
   useEffect(() => {
     if (!conference || !session) return;
@@ -544,9 +515,6 @@ export default function FinancialsPage() {
   const conferenceCountryCode = getCountryByName(conference.country)?.code;
   const countrySupported = !conferenceCountryCode || SUPPORTED_PAYOUT_COUNTRIES.has(conferenceCountryCode);
   const unsupportedNone = connectStatus === 'none' && !countrySupported;
-
-  // Gavelling Unlimited pricing, display only — the server is authoritative.
-  const unlimitedPrice = unlimitedPricing(conference.country);
 
   // ── Display-currency conversion (approximate, display-only) ─────────────
   // Switcher only renders when the conference currency has a known FX rate.
@@ -942,7 +910,7 @@ export default function FinancialsPage() {
                     Gavelling Unlimited
                   </p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5, maxWidth: 480 }}>
-                    Your delegates skip the 5 percent Gavelling platform fee on their own registrations. Card processing still applies.
+                    Your delegates skip the 5 percent Gavelling platform fee on their own registrations.
                   </p>
 
                   {unlimitedTimedOut && (
@@ -951,34 +919,25 @@ export default function FinancialsPage() {
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2 flex-wrap mt-3">
-                    <NeuButton
-                      icon={Sparkles}
-                      gradient={NEU_GRADIENTS.gold}
-                      disabled={unlimitedBusy !== null}
-                      onClick={() => startUnlimitedCheckout('monthly')}
-                    >
-                      {unlimitedBusy === 'monthly' ? 'STARTING CHECKOUT…' : `GO UNLIMITED · ${formatFee(unlimitedPrice.monthly, unlimitedPrice.currency)}/MONTH`}
-                    </NeuButton>
-                    <NeuButton
-                      gradient={NEU_GRADIENTS.sage}
-                      disabled={unlimitedBusy !== null}
-                      onClick={() => startUnlimitedCheckout('yearly')}
-                    >
-                      {unlimitedBusy === 'yearly' ? 'STARTING CHECKOUT…' : `PAY YEARLY · ${formatFee(unlimitedPrice.yearly, unlimitedPrice.currency)}`}
-                    </NeuButton>
-                  </div>
-
-                  <p className="mt-2.5" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: 'rgba(250,248,243,0.55)', lineHeight: 1.5, maxWidth: 480 }}>
-                    Applies to each delegate&apos;s own registration fee. Delegation spot purchases keep the standard service fee.
-                  </p>
-
-                  {unlimitedError && (
-                    <p className="flex items-start gap-1.5 mt-2" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#F5A9A9', lineHeight: 1.5 }}>
-                      <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
-                      {unlimitedError}
-                    </p>
-                  )}
+                  <Link
+                    href="/account/unlimited"
+                    className="inline-flex items-center justify-center gap-2 mt-3"
+                    style={{
+                      padding: '11px 22px',
+                      borderRadius: 999,
+                      background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
+                      color: NEU.forest,
+                      fontFamily: OUTFIT,
+                      fontSize: 13,
+                      fontWeight: 800,
+                      letterSpacing: '0.05em',
+                      textDecoration: 'none',
+                      boxShadow: `0 4px 10px ${NEU_GRADIENTS.gold[0]}4D, ${NEU.outSm}`,
+                    }}
+                  >
+                    <Sparkles size={15} strokeWidth={2.4} />
+                    GET UNLIMITED
+                  </Link>
                 </div>
               </div>
             </div>
