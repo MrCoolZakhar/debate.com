@@ -62,6 +62,9 @@ export default function PledgeInvoicingCard({
   const [payingSpots, setPayingSpots] = useState<number | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const [stubMessage, setStubMessage] = useState<string | null>(null);
+  // Bumped after a delegation-aid "covered" checkout response (spots settled
+  // server-side, no redirect) so the invoices list refetches without a reload.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const spots = spotsPledged ?? 0;
   const currency = delegateFeeCurrency ?? 'GBP';
@@ -159,7 +162,9 @@ export default function PledgeInvoicingCard({
     return () => { cancelled = true; };
     // amountPaid changes whenever any invoice on this application settles —
     // including these pledge-spot invoices — so it's the refetch signal.
-  }, [applicationId, pledgeType, session, amountPaid]);
+    // refreshKey covers the delegation-aid "covered" checkout path, where
+    // spots settle server-side without moving amountPaid (no cash changed hands).
+  }, [applicationId, pledgeType, session, amountPaid, refreshKey]);
 
   const settledInvoices = invoices.filter(i => i.status === 'settled');
   const settledCount = settledInvoices.length;
@@ -184,8 +189,12 @@ export default function PledgeInvoicingCard({
       return;
     }
     setPayingSpots(null);
-    if (result.status === 'error') setPayError(result.message ?? 'Something went wrong. Please try again.');
-    else setStubMessage(result.message ?? null);
+    if (result.status === 'error') {
+      setPayError(result.message ?? 'Something went wrong. Please try again.');
+    } else {
+      if (result.status === 'recorded') setRefreshKey(k => k + 1);
+      setStubMessage(result.message ?? null);
+    }
   }
 
   return (

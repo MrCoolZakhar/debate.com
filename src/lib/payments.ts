@@ -153,7 +153,10 @@ async function stripeProvider(args: CreateCheckoutArgs): Promise<PaymentResult> 
   if (error) {
     return { status: 'error', message: await extractFunctionErrorMessage(error) };
   }
-  const result = data as { ok?: boolean; url?: string; error?: string } | null;
+  const result = data as { ok?: boolean; url?: string; error?: string; covered?: boolean; message?: string } | null;
+  if (result?.ok && result.covered) {
+    return { status: 'recorded', message: result.message || "Your delegation's financial aid covered these spots — nothing to pay." };
+  }
   if (!result?.ok || !result.url) {
     return { status: 'error', message: result?.error || 'Could not start checkout. Please try again.' };
   }
