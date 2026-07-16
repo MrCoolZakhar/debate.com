@@ -30,7 +30,7 @@ import {
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { extractFunctionErrorMessage, SUPPORTED_PAYOUT_COUNTRIES } from '@/lib/payments';
+import { extractFunctionErrorMessage, isStripeCountrySupported } from '@/lib/payments';
 import { roundMoney, formatFee, currencySymbol, CURRENCY_CODES } from '@/lib/finance';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
@@ -316,16 +316,36 @@ export default function FinancialsPage() {
     refreshConferenceQuiet();
   }
 
-  // Country override reveal, for organisers whose conference.country resolves
-  // to an unsupported payout country but whose own bank account is actually
-  // in a supported one (e.g. a conference address in India, payout bank in
-  // the UK).
-  const [showCountryOverride, setShowCountryOverride] = useState(false);
-  const [overrideCountry, setOverrideCountry] = useState('');
-  const supportedCountryOptions = useMemo(
-    () => UN_COUNTRIES.filter(c => SUPPORTED_PAYOUT_COUNTRIES.has(c.code)).sort((a, b) => a.name.localeCompare(b.name)),
+  // ── Onboard payments: payout-country picker (drives Stripe-vs-manual) ────
+  // The bank-account country is independent of the conference's own
+  // location (conference.country), so it gets its own persisted column.
+  // Defaults to any previously-saved payout_country, else a best-effort
+  // guess from the conference's general country field.
+  const [payoutCountry, setPayoutCountry] = useState('');
+  const [editingPayoutCountry, setEditingPayoutCountry] = useState(false);
+  const [payoutCountrySaving, setPayoutCountrySaving] = useState(false);
+  const allCountryOptions = useMemo(
+    () => [...UN_COUNTRIES].sort((a, b) => a.name.localeCompare(b.name)),
     []
   );
+
+  useEffect(() => {
+    if (!conference) return;
+    setPayoutCountry(conference.payout_country || getCountryByName(conference.country)?.code || '');
+  }, [conference?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function selectPayoutCountry(code: string) {
+    if (!code || !conference) return;
+    setPayoutCountry(code);
+    setEditingPayoutCountry(false);
+    setPayoutCountrySaving(true);
+    const supabase = await getFreshAuthedClient();
+    if (supabase) {
+      await supabase.from('conferences').update({ payout_country: code }).eq('id', conference.id);
+      refreshConferenceQuiet();
+    }
+    setPayoutCountrySaving(false);
+  }
 
   // ── Own payment page (manual-payments fallback) ─────────────────────────
   const [paymentUrl, setPaymentUrl] = useState('');
@@ -444,11 +464,11 @@ export default function FinancialsPage() {
   const stripeConnected = connectStatus === 'complete';
   const expectedDelegates = conference.expected_delegates || 0;
 
-  // Country-aware payouts: unresolvable countries are treated as supported
-  // (we can't confidently say otherwise), so the existing flow never regresses.
-  const conferenceCountryCode = getCountryByName(conference.country)?.code;
-  const countrySupported = !conferenceCountryCode || SUPPORTED_PAYOUT_COUNTRIES.has(conferenceCountryCode);
-  const unsupportedNone = connectStatus === 'none' && !countrySupported;
+  // Onboard-payments flow (connectStatus === 'none'): whether Stripe Connect
+  // is offered for the picked payout country, and its name for copy.
+  const payoutStripeSupported = isStripeCountrySupported(payoutCountry);
+  const payoutCountryName = allCountryOptions.find(c => c.code === payoutCountry)?.name ?? payoutCountry;
+  const showPayoutCountryPicker = !payoutCountry || editingPayoutCountry;
 
   // ── Display-currency conversion (approximate, display-only) ─────────────
   // Switcher only renders when the conference currency has a known FX rate.
@@ -586,7 +606,7 @@ export default function FinancialsPage() {
                 </p>
               </div>
             </div>
-          ) : (
+          ) : connectStatus === 'pending' ? (
             <div
               className="flex items-center gap-4 flex-wrap rounded-[20px] px-5 py-4"
               style={{
@@ -606,63 +626,11 @@ export default function FinancialsPage() {
               </span>
               <div className="flex-1 min-w-[220px]">
                 <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#FAF8F3', lineHeight: 1.3 }}>
-                  {connectStatus === 'pending'
-                    ? 'Finish your Stripe onboarding'
-                    : unsupportedNone
-                      ? `Stripe payouts are not available in ${conference.country} yet`
-                      : 'Connect Stripe to receive payments directly'}
+                  Finish your Stripe onboarding
                 </p>
                 <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
-                  {connectStatus === 'pending'
-                    ? 'Stripe still needs a few details before payouts can start.'
-                    : unsupportedNone
-                      ? 'Manual payments are fully supported. You can also add your own payment page below so participants know exactly how to pay you.'
-                      : 'Delegate payments go straight to your own Stripe account. Gavelling never holds your money.'}
+                  Stripe still needs a few details before payouts can start.
                 </p>
-
-                {unsupportedNone && (
-                  <div className="mt-3">
-                    {!showCountryOverride ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowCountryOverride(true)}
-                        className="focus:outline-none"
-                        style={{
-                          border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
-                          fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, letterSpacing: '0.02em',
-                          color: 'rgba(250,248,243,0.75)', textDecoration: 'underline', textUnderlineOffset: 3,
-                        }}
-                      >
-                        My payout bank is in a supported country
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <select
-                          value={overrideCountry}
-                          onChange={e => setOverrideCountry(e.target.value)}
-                          style={{
-                            padding: '9px 12px', borderRadius: 12, border: 'none', outline: 'none',
-                            backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink,
-                            fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', minWidth: 200,
-                          }}
-                        >
-                          <option value="">Select a country…</option>
-                          {supportedCountryOptions.map(c => (
-                            <option key={c.code} value={c.code}>{c.name}</option>
-                          ))}
-                        </select>
-                        <NeuButton
-                          icon={CreditCard}
-                          gradient={NEU_GRADIENTS.gold}
-                          disabled={!overrideCountry || connectBusy !== null}
-                          onClick={() => startConnectOnboarding(overrideCountry)}
-                        >
-                          {connectBusy === 'start' ? 'CONNECTING…' : 'CONNECT STRIPE'}
-                        </NeuButton>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {connectError && (
                   <p className="flex items-start gap-1.5 mt-2" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#F5A9A9', lineHeight: 1.5 }}>
@@ -671,103 +639,222 @@ export default function FinancialsPage() {
                   </p>
                 )}
               </div>
-              {!unsupportedNone && (
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  {connectStatus === 'pending' && (
-                    <button
-                      type="button"
-                      onClick={checkConnectStatus}
-                      disabled={connectBusy !== null}
-                      className="focus:outline-none"
-                      style={{
-                        border: 'none', background: 'transparent',
-                        cursor: connectBusy !== null ? 'default' : 'pointer',
-                        fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-                        color: 'rgba(250,248,243,0.7)',
-                        textDecoration: connectBusy !== null ? 'none' : 'underline', textUnderlineOffset: 3,
-                      }}
-                    >
-                      {connectBusy === 'status' ? 'CHECKING…' : 'CHECK STATUS'}
-                    </button>
-                  )}
-                  <NeuButton
-                    icon={CreditCard}
-                    gradient={NEU_GRADIENTS.gold}
-                    disabled={connectBusy !== null}
-                    onClick={() => startConnectOnboarding()}
-                  >
-                    {connectBusy === 'start' ? 'CONNECTING…' : connectStatus === 'pending' ? 'FINISH ONBOARDING' : 'CONNECT STRIPE'}
-                  </NeuButton>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Own payment page, manual-payments fallback while Stripe isn't connected */}
-          {connectStatus !== 'complete' && (
-            <NeuCard style={{ marginTop: 12, padding: '18px 20px' }}>
-              <p style={{ ...fieldLabelStyle, color: NEU.deepGold, marginBottom: 4 }}>Your own payment page</p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginBottom: 14, lineHeight: 1.5 }}>
-                Optional. Point participants to your own payment method while Stripe is not connected.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="external-payment-url" style={fieldLabelStyle}>Payment page link</label>
-                  <input
-                    id="external-payment-url"
-                    type="url"
-                    value={paymentUrl}
-                    onChange={e => { setPaymentUrl(e.target.value); if (paymentUrlError) setPaymentUrlError(''); }}
-                    placeholder="https://..."
-                    style={inputStyle}
-                  />
-                  {paymentUrlError && (
-                    <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020' }}>
-                      {paymentUrlError}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-                    <label htmlFor="external-payment-note" style={{ ...fieldLabelStyle, marginBottom: 0 }}>
-                      Payment instructions · optional
-                    </label>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-                      {paymentNote.length}/{MAX_PAYMENT_NOTE_LENGTH}
-                    </span>
-                  </div>
-                  <textarea
-                    id="external-payment-note"
-                    rows={2}
-                    maxLength={MAX_PAYMENT_NOTE_LENGTH}
-                    value={paymentNote}
-                    onChange={e => setPaymentNote(e.target.value.slice(0, MAX_PAYMENT_NOTE_LENGTH))}
-                    placeholder="UPI: yourconference@okaxis. Send your payment screenshot to treasurer@yourmun.org"
-                    style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
-                  />
-                </div>
-              </div>
-
-              {paymentSaveError && (
-                <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020' }}>
-                  {paymentSaveError}
-                </p>
-              )}
-
-              <div className="flex items-center justify-between gap-3 flex-wrap mt-4">
-                <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.5, maxWidth: 420 }}>
-                  Participants will see this on their payment panel until you connect Stripe.
-                </p>
-                <NeuButton
-                  gradient={NEU_GRADIENTS.forest}
-                  disabled={paymentSaving}
-                  onClick={savePaymentPage}
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={checkConnectStatus}
+                  disabled={connectBusy !== null}
+                  className="focus:outline-none"
+                  style={{
+                    border: 'none', background: 'transparent',
+                    cursor: connectBusy !== null ? 'default' : 'pointer',
+                    fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                    color: 'rgba(250,248,243,0.7)',
+                    textDecoration: connectBusy !== null ? 'none' : 'underline', textUnderlineOffset: 3,
+                  }}
                 >
-                  {paymentSaving ? 'SAVING…' : 'SAVE'}
+                  {connectBusy === 'status' ? 'CHECKING…' : 'CHECK STATUS'}
+                </button>
+                <NeuButton
+                  icon={CreditCard}
+                  gradient={NEU_GRADIENTS.gold}
+                  disabled={connectBusy !== null}
+                  onClick={() => startConnectOnboarding()}
+                >
+                  {connectBusy === 'start' ? 'CONNECTING…' : 'FINISH ONBOARDING'}
                 </NeuButton>
               </div>
-            </NeuCard>
+            </div>
+          ) : (
+            // ── NOT SET UP: "Onboard payments" — pick a payout country, then
+            // branch to Stripe (if supported) + manual, or manual alone.
+            <div className="flex flex-col gap-4">
+              <div
+                className="rounded-[20px] px-5 py-4"
+                style={{
+                  background: 'linear-gradient(150deg, #16301F 0%, #1B3828 52%, #2A5A3C 100%)',
+                  boxShadow: '0 2px 8px rgba(27,56,40,0.14), 0 16px 40px rgba(27,56,40,0.22)',
+                }}
+              >
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span
+                    className="flex items-center justify-center rounded-full flex-shrink-0"
+                    style={{
+                      width: 44, height: 44,
+                      background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.34) 0%, rgba(27,56,40,0) 74%)',
+                      border: '1.5px solid rgba(238,217,138,0.5)',
+                    }}
+                  >
+                    <Wallet size={20} strokeWidth={2} style={{ color: NEU.gold }} />
+                  </span>
+                  <div className="flex-1 min-w-[220px]">
+                    <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: '#FAF8F3', lineHeight: 1.3 }}>
+                      Onboard payments
+                    </p>
+                    <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'rgba(250,248,243,0.68)', lineHeight: 1.5 }}>
+                      Pick where your payout bank account is — we&apos;ll show you the right way to get paid.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: 'rgba(250,248,243,0.75)', display: 'block', marginBottom: 8 }}>
+                    Which country is the bank account that will receive payments in?
+                  </label>
+                  {showPayoutCountryPicker ? (
+                    <select
+                      value={payoutCountry}
+                      onChange={e => selectPayoutCountry(e.target.value)}
+                      disabled={payoutCountrySaving}
+                      style={{
+                        padding: '9px 12px', borderRadius: 12, border: 'none', outline: 'none',
+                        backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink,
+                        fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', minWidth: 220,
+                      }}
+                    >
+                      <option value="">Select a country…</option>
+                      {allCountryOptions.map(c => (
+                        <option key={c.code} value={c.code}>{c.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span
+                        className="inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                        style={{ backgroundColor: 'rgba(250,248,243,0.1)', border: '1px solid rgba(250,248,243,0.22)' }}
+                      >
+                        <FlagImg code={payoutCountry} size={16} />
+                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#FAF8F3' }}>
+                          {payoutCountryName}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPayoutCountry(true)}
+                        className="focus:outline-none"
+                        style={{
+                          border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
+                          fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
+                          color: 'rgba(250,248,243,0.7)', textDecoration: 'underline', textUnderlineOffset: 3,
+                        }}
+                      >
+                        Change
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {payoutCountry && !showPayoutCountryPicker && (
+                <>
+                  {!payoutStripeSupported && (
+                    <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, lineHeight: 1.5 }}>
+                      Stripe isn&apos;t available for {payoutCountryName} yet — set up manual payments below.
+                    </p>
+                  )}
+                  <div className={`grid grid-cols-1 ${payoutStripeSupported ? 'md:grid-cols-2' : ''} gap-4 items-stretch`}>
+                    {payoutStripeSupported && (
+                      <NeuCard style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div className="flex items-center gap-3">
+                          <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={CreditCard} size={38} />
+                          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: NEU.ink }}>
+                            Onboard with Stripe
+                          </p>
+                        </div>
+                        <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
+                          Payments are processed automatically and marked paid on Gavelling instantly. Money lands directly in your own bank account — no manual tracking.
+                        </p>
+                        <p style={mutedCaption}>
+                          Stripe&apos;s standard processing fee applies, since your conference is the merchant of record. Gavelling charges nothing.
+                        </p>
+                        {connectError && (
+                          <p className="flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020', lineHeight: 1.5 }}>
+                            <TriangleAlert size={12} strokeWidth={2.4} style={{ marginTop: 2, flexShrink: 0 }} />
+                            {connectError}
+                          </p>
+                        )}
+                        <NeuButton
+                          icon={CreditCard}
+                          gradient={NEU_GRADIENTS.gold}
+                          disabled={connectBusy !== null}
+                          onClick={() => startConnectOnboarding(payoutCountry)}
+                          style={{ marginTop: 'auto' }}
+                        >
+                          {connectBusy === 'start' ? 'CONNECTING…' : 'CONNECT STRIPE'}
+                        </NeuButton>
+                      </NeuCard>
+                    )}
+
+                    {/* Manual payments — absorbs the "own payment page" fields */}
+                    <NeuCard style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div className="flex items-center gap-3">
+                        <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Receipt} size={38} />
+                        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: NEU.ink }}>
+                          Manual payments
+                        </p>
+                      </div>
+                      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.ink, lineHeight: 1.6 }}>
+                        Paste your own payment link below — delegates are redirected to it to pay — then mark each payment as received yourself from the Financials or Applications screens.
+                      </p>
+                      <p style={mutedCaption}>
+                        No processing fee, but everything is tracked manually.
+                      </p>
+
+                      <div>
+                        <label htmlFor="external-payment-url" style={fieldLabelStyle}>Payment page link</label>
+                        <input
+                          id="external-payment-url"
+                          type="url"
+                          value={paymentUrl}
+                          onChange={e => { setPaymentUrl(e.target.value); if (paymentUrlError) setPaymentUrlError(''); }}
+                          placeholder="https://..."
+                          style={inputStyle}
+                        />
+                        {paymentUrlError && (
+                          <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020' }}>
+                            {paymentUrlError}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+                          <label htmlFor="external-payment-note" style={{ ...fieldLabelStyle, marginBottom: 0 }}>
+                            Payment instructions · optional
+                          </label>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                            {paymentNote.length}/{MAX_PAYMENT_NOTE_LENGTH}
+                          </span>
+                        </div>
+                        <textarea
+                          id="external-payment-note"
+                          rows={2}
+                          maxLength={MAX_PAYMENT_NOTE_LENGTH}
+                          value={paymentNote}
+                          onChange={e => setPaymentNote(e.target.value.slice(0, MAX_PAYMENT_NOTE_LENGTH))}
+                          placeholder="UPI: yourconference@okaxis. Send your payment screenshot to treasurer@yourmun.org"
+                          style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+                        />
+                      </div>
+
+                      {paymentSaveError && (
+                        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020' }}>
+                          {paymentSaveError}
+                        </p>
+                      )}
+
+                      <NeuButton
+                        gradient={NEU_GRADIENTS.forest}
+                        disabled={paymentSaving}
+                        onClick={savePaymentPage}
+                        style={{ marginTop: 'auto' }}
+                      >
+                        {paymentSaving ? 'SAVING…' : 'SAVE'}
+                      </NeuButton>
+                    </NeuCard>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
 

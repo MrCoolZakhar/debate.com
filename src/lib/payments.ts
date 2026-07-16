@@ -40,6 +40,26 @@ export const SUPPORTED_PAYOUT_COUNTRIES = new Set<string>([
   'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
 ]);
 
+/** ISO-2 codes of countries Stripe Connect actually supports for onboarding
+ *  a merchant account (not just cross-border payouts to our UK platform —
+ *  this is the full "where can a conference open its own Stripe account"
+ *  list). The Financials "Onboard payments" flow gates its Stripe-vs-manual
+ *  branch on this set; SUPPORTED_PAYOUT_COUNTRIES stays for whatever other
+ *  callers still reference it. */
+export const STRIPE_CONNECT_COUNTRIES = new Set<string>([
+  'AU', 'AT', 'BE', 'BR', 'BG', 'CA', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI',
+  'FR', 'DE', 'GI', 'GR', 'HK', 'HU', 'IE', 'IT', 'JP', 'LV', 'LI', 'LT',
+  'LU', 'MY', 'MT', 'MX', 'NL', 'NZ', 'NO', 'PL', 'PT', 'RO', 'SG', 'SK',
+  'SI', 'ES', 'SE', 'CH', 'TH', 'AE', 'GB', 'US',
+]);
+
+/** Whether Stripe Connect onboarding is offered for this payout country —
+ *  the gate the Financials "Onboard payments" flow uses to decide between
+ *  showing the Stripe card or manual-only. */
+export function isStripeCountrySupported(code: string | null | undefined): boolean {
+  return !!code && STRIPE_CONNECT_COUNTRIES.has(code.toUpperCase());
+}
+
 /** ISO-2 codes charged Gavelling Unlimited's region A price (EU/EEA +
  *  Switzerland, UK, US, Middle East). Everyone else pays region B. Mirrors
  *  create-subscription-checkout v2, which prices by the BUYER's location and
