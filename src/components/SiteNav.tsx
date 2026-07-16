@@ -5,8 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { Globe } from 'lucide-react';
+import { Globe, Coins } from 'lucide-react';
 import ProfileDropdown from '@/components/ProfileDropdown';
+import { useCredits } from '@/hooks/useCredits';
 
 const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/sessions' },
@@ -40,6 +41,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
 
   const { user, profile, signOut } = useAuth();
   const { language, setLanguage } = useLanguage();
+  const { balance: creditBalance, loading: creditsLoading } = useCredits();
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
@@ -144,58 +146,40 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
         className={`${overlay ? 'absolute top-0 left-0 right-0' : 'relative'} z-30 flex items-center justify-between px-6 md:px-14 shrink-0`}
         style={{ height: '72px' }}
       >
-        {/* Logo */}
-        <Link href="/" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
-          {inConferencesArea ? (
-            <img
-              src="/Conferences.png"
-              alt="Gavelling Conferences"
-              style={{
-                height: 36,
-                width: 'auto',
-                objectFit: 'contain',
-                filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined,
-              }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          ) : (
-            <img
-              src={logoSrc}
-              alt={logoAlt}
-              className="h-8 md:h-10 w-auto object-contain"
-              style={
-                overlay
-                  ? { filter: 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(500%) hue-rotate(5deg) brightness(105%) drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }
-                  : undefined
-              }
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          )}
-        </Link>
-
-        {/* Desktop right actions */}
-        <div className="hidden md:flex items-center gap-3">
-
-          {/* Language toggle */}
-          {!hideLanguage && (
-          <div className="relative" ref={langMenuRef}>
-            <div className="relative" suppressHydrationWarning>
-              <span
-                className="absolute right-0 z-10 pointer-events-none"
+        {/* Logo + language toggle (left side) */}
+        <div className="flex items-center gap-1">
+          <Link href="/" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
+            {inConferencesArea ? (
+              <img
+                src="/Conferences.png"
+                alt="Gavelling Conferences"
                 style={{
-                  top: '-8px',
-                  backgroundColor: '#1B3828',
-                  color: '#EED98A',
-                  border: '1.5px solid rgba(238,217,138,0.55)',
-                  borderRadius: '5px',
-                  padding: '0px 4px',
-                  fontSize: '7px',
-                  fontWeight: 900,
-                  letterSpacing: '0.08em',
-                  whiteSpace: 'nowrap',
-                  lineHeight: '13px',
+                  height: 36,
+                  width: 'auto',
+                  objectFit: 'contain',
+                  filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined,
                 }}
-              >✨ NEW</span>
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <img
+                src={logoSrc}
+                alt={logoAlt}
+                className="h-8 md:h-10 w-auto object-contain"
+                style={
+                  overlay
+                    ? { filter: 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(500%) hue-rotate(5deg) brightness(105%) drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }
+                    : undefined
+                }
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
+          </Link>
+
+          {/* Language toggle (desktop only — mobile keeps its own toggle in the hamburger menu) */}
+          {!hideLanguage && (
+          <div className="hidden md:block relative" ref={langMenuRef}>
+            <div className="relative" suppressHydrationWarning>
               <button
                 onClick={() => setShowLangMenu((v) => !v)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
@@ -209,7 +193,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
             </div>
             {showLangMenu && (
               <div
-                className="absolute right-0 mt-1 w-36 rounded-xl overflow-hidden"
+                className="absolute left-0 mt-1 w-36 rounded-xl overflow-hidden"
                 style={{
                   backgroundColor: '#FAF8F3',
                   border: '1px solid #DDD4C0',
@@ -241,6 +225,51 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               </div>
             )}
           </div>
+          )}
+        </div>
+
+        {/* Desktop right actions */}
+        <div className="hidden md:flex items-center gap-3">
+
+          {/* Credit chip */}
+          {user && (
+            <Link
+              href="/account/unlimited"
+              className="relative flex items-center gap-1.5 focus:outline-none"
+              style={{
+                backgroundColor: '#1B3828',
+                color: '#EED98A',
+                borderRadius: '9999px',
+                padding: '7px 14px',
+                fontSize: '13px',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                fontFamily: "'Outfit', sans-serif",
+                textDecoration: 'none',
+                transition: 'background-color 150ms ease',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            >
+              <span
+                className="absolute right-0 z-10 pointer-events-none"
+                style={{
+                  top: '-8px',
+                  backgroundColor: '#1B3828',
+                  color: '#EED98A',
+                  border: '1.5px solid rgba(238,217,138,0.55)',
+                  borderRadius: '5px',
+                  padding: '0px 4px',
+                  fontSize: '7px',
+                  fontWeight: 900,
+                  letterSpacing: '0.08em',
+                  whiteSpace: 'nowrap',
+                  lineHeight: '13px',
+                }}
+              >✨ NEW</span>
+              <Coins size={14} strokeWidth={2} />
+              <span>{creditsLoading || creditBalance === null ? '—' : creditBalance}</span>
+            </Link>
           )}
 
           {/* Auth section */}
@@ -413,6 +442,28 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   {profile?.email ?? user.email}
                 </p>
               </div>
+
+              <Link
+                href="/account/unlimited"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 focus:outline-none"
+                style={{
+                  padding: '10px 16px',
+                  margin: '0 0 4px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(27, 56, 40, 0.07)',
+                  textDecoration: 'none',
+                }}
+              >
+                <Coins size={16} strokeWidth={2} style={{ color: '#B6871F' }} />
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                  {creditsLoading || creditBalance === null ? '—' : creditBalance}
+                </span>
+                <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}>
+                  Credits &amp; Subscription
+                </span>
+              </Link>
+
               <button
                 onClick={handleSignOut}
                 style={{
