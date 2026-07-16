@@ -4,6 +4,7 @@ import { HeartHandshake } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuIconDisc } from '@/components/neu';
 import { normalizeQuestions } from '@/lib/customQuestions';
+import AidFormEditor from './AidFormEditor';
 import AidRequestsSection from '../applications/AidRequestsSection';
 
 export default function FinancialAidPage() {
@@ -23,6 +24,17 @@ export default function FinancialAidPage() {
           </div>
         </div>
       </div>
+
+      <AidFormEditor
+        conferenceId={conference.id}
+        initialEnabled={conference.financial_aid_enabled}
+        initialIntro={conference.aid_intro}
+        initialQuestions={normalizeQuestions(conference.aid_questions)}
+      />
+
+      <p className="mb-3 mt-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
+        Requests
+      </p>
       <AidRequestsSection conferenceId={conference.id} conferenceSlug={conference.slug} aidQuestions={normalizeQuestions(conference.aid_questions)} />
     </div>
   );

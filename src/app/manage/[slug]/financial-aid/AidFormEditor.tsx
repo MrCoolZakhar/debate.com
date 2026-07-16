@@ -1,0 +1,162 @@
+'use client';
+
+// Financial aid FORM editor, organizer side — the enable toggle, intro copy
+// and question set that the payment-panel aid form (individual + delegation)
+// reads. Aid itself is a separate application (financial_aid_requests table),
+// this only edits the conference-level config columns. Review of submitted
+// requests lives alongside this in AidRequestsSection, same tab.
+
+import { useState } from 'react';
+import { useAuth } from '@/components/AuthProvider';
+import { useManage } from '@/app/manage/[slug]/layout';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { PillToggle } from '@/app/account/accountUi';
+import QuestionBuilder from '@/components/QuestionBuilder';
+import { type CustomQuestion, normalizeQuestions } from '@/lib/customQuestions';
+import { NEU, OUTFIT, NeuCard } from '@/components/neu';
+
+const inputStyle: React.CSSProperties = {
+  backgroundColor: '#FAF8F3',
+  border: '1.5px solid #DDD4C0',
+  borderRadius: '10px',
+  padding: '10px 14px',
+  fontSize: '13px',
+  color: '#1C1410',
+  fontFamily: OUTFIT,
+  outline: 'none',
+  transition: 'border-color 150ms ease',
+  width: '100%',
+};
+
+// Standard failure copy for a verified-write save: a write that returns an
+// error OR affects zero rows (RLS silently filtered it, or the row vanished)
+// is treated identically, never a silent false success.
+function saveFailMessage(error?: { message: string } | null): string {
+  return "Couldn't save, please refresh and try again." + (error?.message ? ' ' + error.message : '');
+}
+
+export interface AidFormEditorProps {
+  conferenceId: string;
+  initialEnabled: boolean;
+  initialIntro: string | null;
+  initialQuestions: CustomQuestion[];
+}
+
+export default function AidFormEditor({ conferenceId, initialEnabled, initialIntro, initialQuestions }: AidFormEditorProps) {
+  const { session } = useAuth();
+  const { refreshConferenceQuiet } = useManage();
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [intro, setIntro] = useState(initialIntro ?? '');
+  const [questions, setQuestions] = useState<CustomQuestion[]>(() => normalizeQuestions(initialQuestions));
+  const [toggleSaving, setToggleSaving] = useState(false);
+  const [introSaving, setIntroSaving] = useState(false);
+  const [introSaved, setIntroSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: CustomQuestion[] }>): Promise<boolean> {
+    if (!session) {
+      setError('Your session has expired, please refresh and sign in again.');
+      return false;
+    }
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error: writeError } = await supabase
+      .from('conferences')
+      .update(updates)
+      .eq('id', conferenceId)
+      .select('id');
+    if (writeError || !data || data.length !== 1) {
+      setError(saveFailMessage(writeError));
+      return false;
+    }
+    setError('');
+    await refreshConferenceQuiet();
+    return true;
+  }
+
+  function handleToggle(next: boolean) {
+    if (toggleSaving) return;
+    const previous = enabled;
+    setEnabled(next);
+    setToggleSaving(true);
+    void saveAidConfig({ financial_aid_enabled: next })
+      .then(ok => { if (!ok) setEnabled(previous); })
+      .finally(() => setToggleSaving(false));
+  }
+
+  async function handleSaveIntro() {
+    if (introSaving) return;
+    setIntroSaving(true);
+    const ok = await saveAidConfig({ aid_intro: intro.trim() || null });
+    setIntroSaving(false);
+    if (ok) {
+      setIntroSaved(true);
+      setTimeout(() => setIntroSaved(false), 2500);
+    }
+  }
+
+  function handleQuestionsChange(next: CustomQuestion[]) {
+    const previous = questions;
+    setQuestions(next);
+    void saveAidConfig({ aid_questions: next }).then(ok => { if (!ok) setQuestions(previous); });
+  }
+
+  return (
+    <NeuCard style={{ padding: 24, marginBottom: 20 }}>
+      <div className="flex items-center justify-between gap-4 mb-1">
+        <p className="font-semibold text-base" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          Aid application form
+        </p>
+        <PillToggle value={enabled} onChange={toggleSaving ? () => {} : handleToggle} size="md" />
+      </div>
+      <p className="text-sm mb-4" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+        Delegates can request financial aid from the payment panel once accepted. Review each request below and grant a discount, applied automatically at checkout.
+      </p>
+
+      {error && (
+        <p className="text-xs mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{error}</p>
+      )}
+
+      {enabled && (
+        <>
+          <div className="mb-5">
+            <label className="block text-xs font-semibold mb-1.5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+              Intro message (optional)
+            </label>
+            <textarea
+              rows={3}
+              value={intro}
+              onChange={(e) => setIntro(e.target.value)}
+              placeholder="Shown at the top of the aid form"
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            />
+            <button
+              onClick={handleSaveIntro}
+              disabled={introSaving || introSaved}
+              className="mt-2 rounded-xl py-2 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex items-center justify-center gap-2"
+              style={{
+                backgroundColor: introSaved ? NEU.green : NEU.forest,
+                color: NEU.gold,
+                fontFamily: OUTFIT,
+                letterSpacing: '0.07em',
+                opacity: introSaving ? 0.75 : 1,
+                cursor: introSaving ? 'wait' : 'pointer',
+              }}
+            >
+              {introSaving && (
+                <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: NEU.gold, borderTopColor: 'transparent' }} />
+              )}
+              {introSaving ? 'SAVING…' : introSaved ? 'SAVED ✓' : 'SAVE'}
+            </button>
+          </div>
+
+          <p className="block text-xs font-semibold mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            Aid questions
+          </p>
+          <QuestionBuilder questions={questions} onChange={handleQuestionsChange} />
+        </>
+      )}
+    </NeuCard>
+  );
+}
