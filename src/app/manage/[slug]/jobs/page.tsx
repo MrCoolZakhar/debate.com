@@ -44,12 +44,21 @@ const BORDER = '#DDD4C0';
 const DIVIDER = '#F0EDE6';
 const AMBER_TEXT = '#B6871F';
 
+// ── Enum case normalization ─────────────────────────────────────────────────
+// The DB CHECK constraints store category/compensation lowercase and hyphenated
+// ('chairs', 'travel-covered'); the UI toggles use uppercase, spaced labels
+// ('CHAIRS', 'TRAVEL COVERED'). Convert at the DB boundary so inserts/updates
+// satisfy job_postings_category_check / job_postings_compensation_check.
+const toDbEnum = (v: string) => v.toLowerCase().replace(/\s+/g, '-');
+const toUiEnum = (v: string) => v.toUpperCase().replace(/-/g, ' ');
+
 // ── Helper: category badge style ───────────────────────────────────────────
 
 function categoryBadgeStyle(cat: string) {
-  if (cat === 'CHAIRS')      return { backgroundColor: 'rgba(27,56,40,0.1)',   color: FOREST };
-  if (cat === 'SECRETARIAT') return { backgroundColor: 'rgba(238,217,138,0.15)', color: AMBER_TEXT };
-  return                             { backgroundColor: 'rgba(154,138,120,0.1)', color: MUTED };
+  const c = cat.toUpperCase();
+  if (c === 'CHAIRS')      return { backgroundColor: 'rgba(27,56,40,0.1)',   color: FOREST };
+  if (c === 'SECRETARIAT') return { backgroundColor: 'rgba(238,217,138,0.15)', color: AMBER_TEXT };
+  return                          { backgroundColor: 'rgba(154,138,120,0.1)', color: MUTED };
 }
 
 // ── Helper: format date ────────────────────────────────────────────────────
@@ -287,7 +296,7 @@ function PostingCard({
       <div className="flex items-center gap-3">
         <span
           className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...catStyle, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
+          style={{ ...catStyle, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}
         >
           {posting.category}
         </span>
@@ -312,9 +321,9 @@ function PostingCard({
         )}
         <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
           <CreditCard size={12} />
-          {posting.compensation === 'OTHER' && posting.compensation_note
+          {posting.compensation.toLowerCase() === 'other' && posting.compensation_note
             ? posting.compensation_note
-            : posting.compensation}
+            : toUiEnum(posting.compensation)}
         </span>
         {posting.deadline && (
           <span className="flex items-center gap-1 text-xs" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
@@ -406,12 +415,12 @@ function PostingModal({
   }) => void;
   onClose: () => void;
 }) {
-  const [category, setCategory] = useState(posting?.category ?? 'CHAIRS');
+  const [category, setCategory] = useState(posting?.category ? toUiEnum(posting.category) : 'CHAIRS');
   const [roleName, setRoleName] = useState(posting?.role_name ?? '');
   const [committeeId, setCommitteeId] = useState(posting?.conference_committees?.id ?? '');
   const [description, setDescription] = useState(posting?.description ?? '');
   const [requirements, setRequirements] = useState(posting?.requirements ?? '');
-  const [compensation, setCompensation] = useState(posting?.compensation ?? 'UNPAID');
+  const [compensation, setCompensation] = useState(posting?.compensation ? toUiEnum(posting.compensation) : 'UNPAID');
   const [compensationNote, setCompensationNote] = useState(posting?.compensation_note ?? '');
   const [deadline, setDeadline] = useState(
     posting?.deadline ? posting.deadline.slice(0, 16) : ''
@@ -738,12 +747,12 @@ export default function JobBoardPage() {
     const { data: created, error } = await supabase.from('job_postings').insert({
       conference_id: conference.id,
       posted_by: user.id,
-      category: data.category,
+      category: toDbEnum(data.category),
       role_name: data.role_name,
       committee_id: data.committee_id || null,
       description: data.description || null,
       requirements: data.requirements || null,
-      compensation: data.compensation,
+      compensation: toDbEnum(data.compensation),
       compensation_note: data.compensation_note || null,
       deadline: data.deadline || null,
       is_open: true,
@@ -774,11 +783,11 @@ export default function JobBoardPage() {
     const committee = data.committee_id ? committees.find(c => c.id === data.committee_id) ?? null : null;
     setPostings(prev => prev.map(p => p.id === posting.id ? {
       ...p,
-      category: data.category,
+      category: toDbEnum(data.category),
       role_name: data.role_name,
       description: data.description || null,
       requirements: data.requirements || null,
-      compensation: data.compensation,
+      compensation: toDbEnum(data.compensation),
       compensation_note: data.compensation_note || null,
       deadline: data.deadline || null,
       conference_committees: committee,
@@ -788,12 +797,12 @@ export default function JobBoardPage() {
     markBusy(posting.id, true);
     const supabase = getAuthedClient(session.access_token);
     supabase.from('job_postings').update({
-      category: data.category,
+      category: toDbEnum(data.category),
       role_name: data.role_name,
       committee_id: data.committee_id || null,
       description: data.description || null,
       requirements: data.requirements || null,
-      compensation: data.compensation,
+      compensation: toDbEnum(data.compensation),
       compensation_note: data.compensation_note || null,
       deadline: data.deadline || null,
     }).eq('id', posting.id).then(({ error }) => {
@@ -854,7 +863,7 @@ export default function JobBoardPage() {
 
   const visible = categoryTab === 'ALL'
     ? postings
-    : postings.filter(p => p.category === categoryTab);
+    : postings.filter(p => p.category.toUpperCase() === categoryTab);
 
   if (loading) {
     return (
