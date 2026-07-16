@@ -16,6 +16,8 @@ import { NEU, NeuInset, NeuCard, OUTFIT, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
+import CustomQuestionsField from '@/components/CustomQuestionsField';
+import { type CustomQuestion, type CustomAnswers, normalizeQuestions, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
 import {
   Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
   GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
@@ -57,7 +59,7 @@ interface RoleConfig {
   auto_accept: boolean;
   pay_at_application: boolean;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
-  custom_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
+  custom_questions: CustomQuestion[];
   fee_phases: FeePhase[] | null;
 }
 
@@ -99,7 +101,7 @@ interface ExistingApp {
   is_independent: boolean;
   society_id: string | null;
   experience_level: string | null;
-  custom_answers: Record<string, string> | null;
+  custom_answers: CustomAnswers | null;
   pledge_type: 'delegation' | null;
   spots_pledged: number | null;
 }
@@ -566,7 +568,8 @@ function ConferenceApplyInner() {
 
   // ── Step 4, Experience & Questions
   const [experienceLevel, setExperienceLevel] = useState('');
-  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
+  const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
+  const [customMissingIds, setCustomMissingIds] = useState<string[]>([]);
 
   // ── Checkout: vouchers + fee waivers (finance.ts is the single math source)
   const [financeProfile, setFinanceProfile] = useState({ is_ambassador: false, unlimited_conferences_remaining: 0, has_active_subscription: false });
@@ -957,6 +960,11 @@ function ConferenceApplyInner() {
   }
 
   async function handleSubmit() {
+    const questionCheck = validateAnswers(normalizeQuestions(roleConfig?.custom_questions ?? []), customAnswers);
+    if (!questionCheck.valid) {
+      setCustomMissingIds(questionCheck.missingIds);
+      return;
+    }
     if (needsDob || underAge) {
       setSubmitError(
         minAgeLimit != null
@@ -1130,6 +1138,11 @@ function ConferenceApplyInner() {
   // aren't touched here either, resubmitting only edits the whitelisted
   // fields, it never re-runs checkout.
   async function handleResubmit() {
+    const questionCheck = validateAnswers(normalizeQuestions(roleConfig?.custom_questions ?? []), customAnswers);
+    if (!questionCheck.valid) {
+      setCustomMissingIds(questionCheck.missingIds);
+      return;
+    }
     setSubmitting(true);
     setSubmitError('');
     if (!session || !existingApp) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
@@ -1988,7 +2001,7 @@ function ConferenceApplyInner() {
       { value: 'advanced', label: 'ADVANCED', sub: '10–20 conferences' },
       { value: 'expert', label: 'EXPERT', sub: '20+ conferences or chairing experience' },
     ];
-    const questions = roleConfig?.custom_questions ?? [];
+    const questions = normalizeQuestions(roleConfig?.custom_questions ?? []);
 
     return (
       <>
@@ -2019,32 +2032,18 @@ function ConferenceApplyInner() {
         </div>
 
         {questions.length > 0 && (
-          <div className="flex flex-col gap-4 mb-6">
-            {questions.map(q => (
-              <div key={q.id}>
-                <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                  {q.label}
-                  {q.required && <span className="ml-1 text-xs font-normal" style={{ color: '#9A8A78' }}>(required)</span>}
-                </label>
-                {q.type === 'text' ? (
-                  <input
-                    type="text"
-                    value={customAnswers[q.id] ?? ''}
-                    onChange={(e) => setCustomAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
-                    className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                    style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-                  />
-                ) : (
-                  <textarea
-                    rows={4}
-                    value={customAnswers[q.id] ?? ''}
-                    onChange={(e) => setCustomAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
-                    className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                    style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-                  />
-                )}
-              </div>
-            ))}
+          <div className="mb-6">
+            <CustomQuestionsField
+              questions={questions}
+              answers={customAnswers}
+              onChange={(next) => {
+                setCustomAnswers(next);
+                if (customMissingIds.length > 0) {
+                  setCustomMissingIds(prev => prev.filter(id => answerIsEmpty(next[id])));
+                }
+              }}
+              missingIds={customMissingIds}
+            />
           </div>
         )}
 

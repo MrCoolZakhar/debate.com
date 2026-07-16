@@ -30,6 +30,7 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
 import AidRequestsSection from './AidRequestsSection';
+import { type CustomQuestion, type CustomAnswers, normalizeQuestions, displayAnswer } from '@/lib/customQuestions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,13 +40,6 @@ interface AppPreference {
   country_code: string;
   country_name: string;
   conference_committees: { name: string; abbreviation: string | null; logo_url: string | null } | null;
-}
-
-interface CustomQuestion {
-  id: string;
-  label: string;
-  type: string;
-  required: boolean;
 }
 
 interface RoleConfigLite {
@@ -70,7 +64,7 @@ interface Application {
   checked_in_at: string | null;
   organizer_note: string | null;
   resubmitted_at: string | null;
-  custom_answers: Record<string, string> | null;
+  custom_answers: CustomAnswers | null;
   assigned_committee_id: string | null;
   assigned_country_code: string | null;
   assigned_country_name: string | null;
@@ -146,7 +140,8 @@ function ageForApp(app: Application, questions: CustomQuestion[]): number | null
   const dobQ = questions.find(q =>
     q.type === 'date' && /\b(birth|dob|born)\b/i.test(q.label)
   ) ?? questions.find(q => /date of birth|birth date|\bdob\b/i.test(q.label));
-  const raw = dobQ ? (answers[dobQ.id] ?? '').trim() : '';
+  const dobVal = dobQ ? answers[dobQ.id] : undefined;
+  const raw = typeof dobVal === 'string' ? dobVal.trim() : '';
   return raw ? ageAt(raw) : null;
 }
 
@@ -2035,7 +2030,7 @@ export default function ApplicationsPage() {
             // No recorded level → treat as the lowest tier "beginner" (#11).
             const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
             const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
-            const rowQuestions = roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? [];
+            const rowQuestions = normalizeQuestions(roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? []);
             const age = ageForApp(app, rowQuestions);
             const nationality = app.profiles?.nationality ?? null;
             const natCode = resolveRealCountryCode(nationality);
@@ -2476,7 +2471,7 @@ export default function ApplicationsPage() {
         const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
         const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
-        const questions = roleConfig?.custom_questions ?? [];
+        const questions = normalizeQuestions(roleConfig?.custom_questions ?? []);
         const answers = app.custom_answers ?? {};
         const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
         // Double-click guard, the row's controls grey out while its write is in flight.
@@ -2714,7 +2709,7 @@ export default function ApplicationsPage() {
                 ) : (
                   <div className="flex flex-col gap-3">
                     {questions.map(q => {
-                      const ans = (answers[q.id] ?? '').trim();
+                      const ans = displayAnswer(q, answers[q.id]);
                       return (
                         <div key={q.id}>
                           <p className="text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{q.label}</p>

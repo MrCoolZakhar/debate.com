@@ -21,10 +21,15 @@ import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite
 import { activeFeePhase, type FeePhase } from '@/lib/finance';
 import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
+import { type CustomQuestion, normalizeQuestions } from '@/lib/customQuestions';
+import QuestionBuilder from '@/components/QuestionBuilder';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface CustomQuestion {
+// Financial aid questions still use the older, narrower text/textarea shape
+// (that form is being rebuilt separately) — kept distinct from the shared
+// CustomQuestion type used by per-role application questions below.
+interface AidQuestion {
   id: string;
   label: string;
   type: 'text' | 'textarea';
@@ -249,8 +254,8 @@ function PartnerDisc({ logoUrl, acronym, size = 40 }: {
 // ── QuestionModal ──────────────────────────────────────────────────────────
 
 function QuestionModal({ existing, onSave, onClose }: {
-  existing: CustomQuestion | null;
-  onSave: (q: CustomQuestion) => void;
+  existing: AidQuestion | null;
+  onSave: (q: AidQuestion) => void;
   onClose: () => void;
 }) {
   const [label, setLabel] = useState(existing?.label ?? '');
@@ -434,7 +439,6 @@ export default function SettingsPage() {
   const { confirm, modal: confirmModal } = useConfirmModal();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
   const [selectedRole, setSelectedRole] = useState<string>('delegate');
-  const [questionModal, setQuestionModal] = useState<{ open: boolean; existing: CustomQuestion | null }>({ open: false, existing: null });
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -481,7 +485,7 @@ export default function SettingsPage() {
   const [aidIntro, setAidIntro] = useState('');
   const [aidIntroSaving, setAidIntroSaving] = useState(false);
   const [aidIntroSaved, setAidIntroSaved] = useState(false);
-  const [aidQuestionModal, setAidQuestionModal] = useState<{ open: boolean; existing: CustomQuestion | null }>({ open: false, existing: null });
+  const [aidQuestionModal, setAidQuestionModal] = useState<{ open: boolean; existing: AidQuestion | null }>({ open: false, existing: null });
 
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
@@ -722,7 +726,7 @@ export default function SettingsPage() {
   // the conference application. This only edits the conference-level toggle,
   // intro copy and question set that the payment-panel aid form reads.
 
-  async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: CustomQuestion[] }>): Promise<boolean> {
+  async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: AidQuestion[] }>): Promise<boolean> {
     if (!conference) return false;
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
@@ -760,9 +764,9 @@ export default function SettingsPage() {
     }
   }
 
-  const currentAidQuestions: CustomQuestion[] = (conference?.aid_questions ?? []) as CustomQuestion[];
+  const currentAidQuestions: AidQuestion[] = (conference?.aid_questions ?? []) as AidQuestion[];
 
-  function handleSaveAidQuestion(q: CustomQuestion) {
+  function handleSaveAidQuestion(q: AidQuestion) {
     const updated = aidQuestionModal.existing
       ? currentAidQuestions.map(eq => eq.id === q.id ? q : eq)
       : [...currentAidQuestions, q];
@@ -1326,21 +1330,11 @@ export default function SettingsPage() {
   // ── Custom questions ────────────────────────────────────────────────────
 
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
-  const currentQuestions: CustomQuestion[] = selectedConfig?.custom_questions ?? [];
+  const currentQuestions: CustomQuestion[] = normalizeQuestions(selectedConfig?.custom_questions ?? []);
   const enabledRoles = ROLES.filter(r => roleConfigs.find(rc => rc.role === r)?.is_enabled);
 
-  function handleSaveQuestion(q: CustomQuestion) {
-    const updated = questionModal.existing
-      ? currentQuestions.map(eq => eq.id === q.id ? q : eq)
-      : [...currentQuestions, q];
-    // saveRoleConfig patches local state synchronously (optimistic with its
-    // own rollback + inline error), close the modal immediately.
-    void saveRoleConfig(selectedRole, { custom_questions: updated });
-    setQuestionModal({ open: false, existing: null });
-  }
-
-  function handleDeleteQuestion(id: string) {
-    void saveRoleConfig(selectedRole, { custom_questions: currentQuestions.filter(q => q.id !== id) });
+  function handleQuestionsChange(next: CustomQuestion[]) {
+    void saveRoleConfig(selectedRole, { custom_questions: next });
   }
 
   async function handleBannerUpload(file: File) {
@@ -2737,57 +2731,7 @@ export default function SettingsPage() {
         </div>
 
         {enabledRoles.length > 0 && (
-          <>
-            <div className="flex flex-col gap-3 mb-4">
-              {currentQuestions.length === 0 ? (
-                <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  No custom questions for {roleLabel(selectedRole)} yet.
-                </p>
-              ) : (
-                currentQuestions.map(q => (
-                  <div
-                    key={q.id}
-                    className="rounded-xl p-4"
-                    style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.1)' }}
-                  >
-                    <p className="font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      {q.label}
-                    </p>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Pill tone="neutral" size="sm">{q.type === 'textarea' ? 'Paragraph' : 'Short answer'}</Pill>
-                      {q.required && <Pill tone="forest" size="sm">Required</Pill>}
-                    </div>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setQuestionModal({ open: true, existing: q })}
-                        className="text-xs font-semibold focus:outline-none hover:underline"
-                        style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
-                      >
-                        EDIT
-                      </button>
-                      <button
-                        onClick={() => handleDeleteQuestion(q.id)}
-                        className="text-xs font-semibold focus:outline-none hover:underline"
-                        style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
-                      >
-                        DELETE
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <button
-              onClick={() => setQuestionModal({ open: true, existing: null })}
-              className="w-full rounded-xl py-2.5 text-sm font-semibold focus:outline-none transition-all"
-              style={{ border: '1.5px dashed #DDD4C0', backgroundColor: 'transparent', color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-            >
-              + ADD QUESTION
-            </button>
-          </>
+          <QuestionBuilder questions={currentQuestions} onChange={handleQuestionsChange} />
         )}
       </div>}
 
@@ -3493,16 +3437,7 @@ export default function SettingsPage() {
         </section>
       </div>
 
-      {/* Question modal */}
-      {questionModal.open && (
-        <QuestionModal
-          existing={questionModal.existing}
-          onSave={handleSaveQuestion}
-          onClose={() => setQuestionModal({ open: false, existing: null })}
-        />
-      )}
-
-      {/* Aid question modal (conference-level, same component) */}
+      {/* Aid question modal (conference-level) */}
       {aidQuestionModal.open && (
         <QuestionModal
           existing={aidQuestionModal.existing}
