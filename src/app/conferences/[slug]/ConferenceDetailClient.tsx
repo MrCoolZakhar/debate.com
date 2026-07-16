@@ -153,6 +153,7 @@ interface RoleConfig {
   payment_timing: string;
   allow_partial_payments: boolean;
   fee_phases: FeePhase[] | null;
+  allow_resubmission: boolean;
 }
 
 interface MyApplication {
@@ -166,6 +167,7 @@ interface MyApplication {
   pledge_type: 'delegation' | null;
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
+  organizer_note: string | null;
 }
 
 interface ConferenceReview {
@@ -598,7 +600,7 @@ export default function ConferenceDetailClient() {
         .order('name', { ascending: true }),
       supabase
         .from('application_role_configs')
-        .select('role, is_enabled, applications_open_at, applications_close_at, fee_amount, fee_currency, auto_accept, payment_timing, allow_partial_payments, fee_phases')
+        .select('role, is_enabled, applications_open_at, applications_close_at, fee_amount, fee_currency, auto_accept, payment_timing, allow_partial_payments, fee_phases, allow_resubmission')
         .eq('conference_id', conf.id),
     ]);
 
@@ -723,7 +725,7 @@ export default function ConferenceDetailClient() {
 
       const { data: appsData } = await authedSupabase
         .from('applications')
-        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at')
+        .select('id, role, status, payment_status, society_id, self_paid, pledge_type, spots_pledged, pledge_confirmed_at, organizer_note')
         .eq('conference_id', conf.id)
         .eq('user_id', user.id);
 

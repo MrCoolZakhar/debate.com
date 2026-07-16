@@ -39,6 +39,7 @@ interface RoleConfig {
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime';
   custom_questions: CustomQuestion[];
   fee_phases: FeePhase[] | null;
+  allow_resubmission: boolean;
 }
 
 interface Organizer {
@@ -1813,6 +1814,23 @@ export default function SettingsPage() {
                     <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                       {PAYMENT_TIMING_OPTIONS.find(o => o.value === (config.payment_timing ?? 'anytime'))?.desc}
                     </p>
+                  </div>
+
+                  {/* Resubmission */}
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                        Allow resubmission
+                      </label>
+                      <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        Let denied applicants edit and resubmit.
+                      </p>
+                    </div>
+                    <PillToggle
+                      value={config.allow_resubmission ?? false}
+                      onChange={(v) => saveRoleConfig(role, { allow_resubmission: v })}
+                      size="md"
+                    />
                   </div>
                 </>
               )}

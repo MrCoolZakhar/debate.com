@@ -15,6 +15,7 @@ export interface ParticipantApplication {
   pledge_type: 'delegation' | null;
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
+  organizer_note: string | null;
 }
 
 export interface ParticipantRoleConfig {
@@ -24,6 +25,7 @@ export interface ParticipantRoleConfig {
   payment_timing: string;
   allow_partial_payments: boolean;
   fee_phases?: FeePhase[] | null;
+  allow_resubmission: boolean;
 }
 
 export interface ParticipantAllocation {

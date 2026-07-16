@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
@@ -47,6 +47,7 @@ interface RoleConfigLite {
   custom_questions: CustomQuestion[];
   fee_amount: number | null;
   fee_currency: string | null;
+  allow_resubmission: boolean;
 }
 
 interface Application {
@@ -1068,7 +1069,7 @@ export default function ApplicationsPage() {
         .order('submitted_at', { ascending: false }),
       supabase
         .from('application_role_configs')
-        .select('role, payment_timing, custom_questions, fee_amount, fee_currency')
+        .select('role, payment_timing, custom_questions, fee_amount, fee_currency, allow_resubmission')
         .eq('conference_id', conference.id),
     ]);
 
@@ -1323,6 +1324,18 @@ export default function ApplicationsPage() {
       } catch {
         setActionError('Rejected, but the rejection email could not be queued.');
       }
+
+      // Refund whatever credit the applicant spent, if any — a benign
+      // {refunded:false} just means there was nothing to refund (e.g. they
+      // still have another live application holding the credit).
+      try {
+        const freshSupabase = await getFreshAuthedClient();
+        if (freshSupabase) {
+          await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+        }
+      } catch {
+        setActionError('Rejected, but the credit refund could not be confirmed. Refresh to verify.');
+      }
     })()
       .catch(() => {
         restoreRow(prevRow);
@@ -1450,6 +1463,17 @@ export default function ApplicationsPage() {
           const nextIds = (c.chair_user_ids ?? []).filter(id => id !== prevRow.user_id);
           await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
         }
+      }
+
+      // Refund whatever credit the applicant spent, if any — same benign
+      // {refunded:false} handling as reject.
+      try {
+        const freshSupabase = await getFreshAuthedClient();
+        if (freshSupabase) {
+          await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+        }
+      } catch {
+        setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
       }
     })()
       .catch(() => {
@@ -2449,7 +2473,7 @@ export default function ApplicationsPage() {
               value={rejectNote}
               onChange={e => setRejectNote(e.target.value)}
               rows={2}
-              placeholder="Optional note to delegate..."
+              placeholder={roleConfig?.allow_resubmission ? 'What should they fix before resubmitting?' : 'Optional note to delegate...'}
               className="flex-1 rounded-lg px-3 py-2 text-xs outline-none resize-none"
               style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
             />

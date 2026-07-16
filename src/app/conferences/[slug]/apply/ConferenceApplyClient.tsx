@@ -630,6 +630,7 @@ function ConferenceApplyInner() {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [resubmitNeedsCredit, setResubmitNeedsCredit] = useState(false);
 
   // ── Step 2, Society
   const [isIndependent, setIsIndependent] = useState(false);
@@ -1296,6 +1297,7 @@ function ConferenceApplyInner() {
     }
     setSubmitting(true);
     setSubmitError('');
+    setResubmitNeedsCredit(false);
     if (!session || !existingApp) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
     const supabase = getAuthedClient(session.access_token);
 
@@ -1356,6 +1358,19 @@ function ConferenceApplyInner() {
       if (error) throw error;
       const result = data as { ok: boolean; resubmitted?: boolean; error?: string };
       if (!result.ok) throw new Error(result.error ?? 'Could not resubmit your application. Please try again.');
+
+      // Re-consume the credit that was refunded when this application was
+      // rejected — resubmission spends it again, same as a fresh submit.
+      const { data: credit } = await supabase.rpc('consume_credit_for_application', {
+        p_application_id: existingApp.id,
+      });
+      const creditResult = credit as { ok?: boolean; consumed?: boolean; need_credit?: boolean } | null;
+      if (creditResult?.need_credit) {
+        setResubmitNeedsCredit(true);
+        setSubmitting(false);
+        return;
+      }
+      refreshCredits();
 
       // Same event key a fresh submission would use ('application_received'),
       // gated by the organizer's normal three-state template rules (drafted/
@@ -2373,6 +2388,17 @@ function ConferenceApplyInner() {
           <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
             <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
               Out of credits?{' '}
+              <Link href="/account/unlimited" style={{ color: '#8B2020', textDecoration: 'underline' }}>
+                Buy more or upgrade your subscription!
+              </Link>
+            </p>
+          </div>
+        )}
+
+        {resubmitNeedsCredit && (
+          <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
+            <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+              You need a credit to resubmit.{' '}
               <Link href="/account/unlimited" style={{ color: '#8B2020', textDecoration: 'underline' }}>
                 Buy more or upgrade your subscription!
               </Link>

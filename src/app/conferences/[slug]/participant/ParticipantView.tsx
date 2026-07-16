@@ -119,7 +119,12 @@ export default function ParticipantView({
       {selected.status === 'rejected' ? (
         // Payment and role content are meaningless once rejected, replaces
         // both rather than gating them (a rejection isn't a PayGate state).
-        <RejectedCard conferenceSlug={conferenceSlug} role={selected.role} />
+        <RejectedCard
+          conferenceSlug={conferenceSlug}
+          role={selected.role}
+          organizerNote={selected.organizer_note}
+          allowResubmission={roleConfig?.allow_resubmission ?? false}
+        />
       ) : (
         <>
           {selected.status === 'submitted' && (
