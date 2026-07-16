@@ -1344,19 +1344,68 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
-  async function openRejectConfirm(app: Application) {
+  // Single reject control, used everywhere a REJECT action appears (the
+  // compact card's quick actions AND the review modal's action bar) so
+  // there is exactly one reject UI and one behavior: idle REJECT button →
+  // expands in place into a feedback textarea + CONFIRM/CANCEL. CONFIRM
+  // calls handleReject directly — no second native confirm dialog on top.
+  function renderRejectControls(app: Application) {
+    const isRejecting = rejectingId === app.id;
+    const roleConfig = roleConfigs.find(rc => rc.role === app.role);
+    const rowBusy = busyIds.has(app.id);
+    const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
     const pool = poolForRole(app.role);
     const releasesSpot = app.payment_status === 'paid' && !app.self_paid && !!app.society_id && !!pool;
-    const { confirmed } = await confirm({
-      title: 'Reject this application?',
-      body: releasesSpot
-        ? "Their payment used a delegation-purchased spot. Rejecting will release that spot back to the delegation as open."
-        : "This rejects the application. You can reinstate it later if needed.",
-      confirmLabel: 'Reject',
-      danger: true,
-    });
-    if (!confirmed) return;
-    handleReject(app.id);
+
+    if (!isRejecting) {
+      return (
+        <button
+          onClick={() => setRejectingId(app.id)}
+          disabled={rowBusy}
+          className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+          style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+        >
+          <X size={13} />
+          REJECT
+        </button>
+      );
+    }
+
+    return (
+      <div className="flex flex-col gap-2 flex-1" style={{ minWidth: 260 }}>
+        {releasesSpot && (
+          <p className="text-[11px]" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+            Their payment used a delegation-purchased spot. Rejecting will release that spot back to the delegation as open.
+          </p>
+        )}
+        <div className="flex items-start gap-2">
+          <textarea
+            value={rejectNote}
+            onChange={e => setRejectNote(e.target.value)}
+            rows={2}
+            placeholder={roleConfig?.allow_resubmission ? 'What should they fix before resubmitting?' : 'Optional note to delegate...'}
+            className="flex-1 rounded-lg px-3 py-2 text-xs outline-none resize-none"
+            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
+          />
+          <button
+            onClick={() => handleReject(app.id)}
+            disabled={rowBusy}
+            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
+            style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+          >
+            <Check size={13} />
+            CONFIRM
+          </button>
+          <button
+            onClick={() => { setRejectingId(null); setRejectNote(''); }}
+            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
+            style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+          >
+            CANCEL
+          </button>
+        </div>
+      </div>
+    );
   }
 
   function handleReinstate(appId: string) {
@@ -2221,19 +2270,7 @@ export default function ApplicationsPage() {
                           <Check size={13} strokeWidth={2.8} />
                           ACCEPT
                         </button>
-                        <button
-                          onClick={() => openRejectConfirm(app)}
-                          disabled={rowBusy}
-                          className="inline-flex items-center gap-1.5 focus:outline-none"
-                          style={{
-                            padding: '7px 13px', borderRadius: 999,
-                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-                            color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.09)', border: '1px solid rgba(139,32,32,0.22)', cursor: 'pointer', ...busyStyle,
-                          }}
-                        >
-                          <Ban size={12} strokeWidth={2.6} />
-                          REJECT
-                        </button>
+                        {renderRejectControls(app)}
                       </div>
                     )}
 
@@ -2438,7 +2475,6 @@ export default function ApplicationsPage() {
         const email = app.profiles?.email ?? app.invited_email ?? '';
         const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
         const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
-        const isRejecting = rejectingId === app.id;
         // No recorded level → treat as "beginner" (#11).
         const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
         const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
@@ -2467,43 +2503,7 @@ export default function ApplicationsPage() {
           />
         ) : null;
 
-        const rejectControls = isRejecting ? (
-          <div className="flex items-start gap-2 flex-1" style={{ minWidth: 260 }}>
-            <textarea
-              value={rejectNote}
-              onChange={e => setRejectNote(e.target.value)}
-              rows={2}
-              placeholder={roleConfig?.allow_resubmission ? 'What should they fix before resubmitting?' : 'Optional note to delegate...'}
-              className="flex-1 rounded-lg px-3 py-2 text-xs outline-none resize-none"
-              style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
-            />
-            <button
-              onClick={() => openRejectConfirm(app)}
-              disabled={rowBusy}
-              className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-              style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
-            >
-              <Check size={13} />
-              CONFIRM
-            </button>
-            <button
-              onClick={() => { setRejectingId(null); setRejectNote(''); }}
-              className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-              style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-            >
-              CANCEL
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setRejectingId(app.id)}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
-          >
-            <X size={13} />
-            REJECT
-          </button>
-        );
+        const rejectControls = renderRejectControls(app);
 
         // Withdraw (F: PART 2 item 1): accepted/assigned only, and only when
         // payment_status is 'unpaid' or 'waived'. Paid applicants must have

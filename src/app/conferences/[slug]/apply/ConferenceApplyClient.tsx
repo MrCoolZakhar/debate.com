@@ -271,7 +271,7 @@ function CreditInfoTip() {
             }}
           >
             <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(28,20,16,0.8)', fontFamily: OUTFIT }}>
-              Credits are how Gavelling covers processing and platform automation — separate from what you pay the conference itself.
+              Credits are how Gavelling covers processing and platform automation. They&apos;re separate from what you pay the conference itself.
             </p>
             <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(28,20,16,0.8)', fontFamily: OUTFIT }}>
               Credits cost $3 each ($1 in eligible regions); a subscription can include them.

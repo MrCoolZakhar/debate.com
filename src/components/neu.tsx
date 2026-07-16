@@ -657,7 +657,7 @@ export function NeuChecklistRow({
           style={{
             fontFamily: OUTFIT, fontSize: dense ? 12 : 13, fontWeight: 700,
             color: done ? NEU.muted : NEU.ink,
-            textDecoration: done ? 'line-through' : 'none',
+            textDecorationLine: done ? 'line-through' : 'none',
             textDecorationColor: 'rgba(154,138,120,0.55)',
           }}
         >
