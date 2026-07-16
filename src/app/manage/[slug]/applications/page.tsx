@@ -192,14 +192,15 @@ const STATUS_PILL: Record<string, { grad: [string, string]; label: string; icon:
   'checked-in': { grad: ['#2F7A5C', '#1F6E52'], label: 'Checked In', icon: UserRoundCheck },
   rejected:     { grad: ['#9A3030', '#7A1F1F'], label: 'Rejected',   icon: Ban },
   withdrawn:    { grad: ['#8A7E6E', '#6B5F52'], label: 'Withdrawn',  icon: LogOut },
-  // Not a real applications.status value — see effectiveStatus(): a rejected
-  // application whose role allows resubmission and hasn't been resubmitted
-  // yet reads as this instead of the final-sounding "Rejected".
-  'awaiting-resubmission': { grad: ['#C79A52', '#B8844A'], label: 'Awaiting Resubmission', icon: RotateCcw },
 };
 
-function StatusPill({ status, size = 'md' }: { status: string; size?: 'sm' | 'md' }) {
-  const t = STATUS_PILL[status] ?? { grad: ['#9A8A78', '#6B5F52'] as [string, string], label: status.replace('-', ' '), icon: Clock };
+function StatusPill({ status, size = 'md', awaitingResubmission = false }: { status: string; size?: 'sm' | 'md'; awaitingResubmission?: boolean }) {
+  // A rejected application whose role allows resubmission reads as "Awaiting
+  // Resubmission" (amber/pending) instead of the final-sounding "Rejected" —
+  // same underlying status, display only.
+  const t = (status === 'rejected' && awaitingResubmission)
+    ? { grad: ['#C79A52', '#B8844A'] as [string, string], label: 'Awaiting Resubmission', icon: RotateCcw }
+    : STATUS_PILL[status] ?? { grad: ['#9A8A78', '#6B5F52'] as [string, string], label: status.replace('-', ' '), icon: Clock };
   const Icon = t.icon;
   const iconSize = size === 'sm' ? 12 : 14;
   return (
@@ -1348,18 +1349,6 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
-  // A rejected application whose role allows resubmission and hasn't been
-  // resubmitted yet reads as "awaiting resubmission" (amber/pending) rather
-  // than the final-sounding "rejected" (red) — same underlying status, so
-  // REINSTATE/handleReject logic is untouched, this only changes the label.
-  function effectiveStatus(app: Application): string {
-    if (app.status === 'rejected') {
-      const roleConfig = roleConfigs.find(rc => rc.role === app.role);
-      if (roleConfig?.allow_resubmission && !app.resubmitted_at) return 'awaiting-resubmission';
-    }
-    return app.status;
-  }
-
   // Single reject control, used everywhere a REJECT action appears (the
   // compact card's quick actions AND the review modal's action bar) so
   // there is exactly one reject UI and one behavior: idle REJECT button →
@@ -2275,7 +2264,10 @@ export default function ApplicationsPage() {
                     style={{ flex: '0 0 auto', minWidth: 200, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
                     <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
-                      <StatusPill status={effectiveStatus(app)} />
+                      <StatusPill
+                        status={app.status}
+                        awaitingResubmission={app.status === 'rejected' && (roleConfigs.find(rc => rc.role === app.role)?.allow_resubmission ?? false)}
+                      />
                       {app.resubmitted_at && (
                         <span
                           className="inline-flex items-center gap-1"
@@ -2647,7 +2639,11 @@ export default function ApplicationsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     {!app.user_id && <NotRegisteredChip />}
                     <RolePill role={app.role} size="sm" />
-                    <StatusPill status={effectiveStatus(app)} size="sm" />
+                    <StatusPill
+                      status={app.status}
+                      size="sm"
+                      awaitingResubmission={app.status === 'rejected' && (roleConfig?.allow_resubmission ?? false)}
+                    />
                     {app.resubmitted_at && (
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
