@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Ticket, Crown, Coins, Infinity as InfinityIcon, Check, Loader2, Minus, Plus } from 'lucide-react';
+import { Sparkles, Ticket, Crown, Coins, Infinity as InfinityIcon, Check, Loader2, Minus, Plus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useCredits } from '@/hooks/useCredits';
@@ -19,6 +19,17 @@ interface Subscription {
 
 function formatExpiry(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// localStorage key for the "buy credits mid-apply, come back" round trip —
+// written on mount when ?returnTo is present, read once an entitlement
+// (subscription or credit purchase) is confirmed. Must be an internal path:
+// starts with "/" and NOT "//" (a "//evil.com"-style protocol-relative URL),
+// so a tampered value can never bounce someone off-site.
+const RETURN_TO_KEY = 'gavelling-credits-returnto';
+
+function isInternalPath(path: string | null | undefined): path is string {
+  return !!path && path.startsWith('/') && !path.startsWith('//');
 }
 
 function planLabel(sub: Subscription): string {
@@ -102,6 +113,38 @@ export default function UnlimitedPage() {
   const { user, session, profile, loading: authLoading } = useAuth();
   const router = useRouter();
 
+  // ── "Buy credits mid-apply, come back" round trip ─────────────────────────
+  // ?returnTo arrives once, on the very first navigation here from
+  // goBuyCredits — persist it to localStorage so it survives however many
+  // Stripe redirects the buyer's chosen purchase button goes through.
+  const [returnBannerVisible, setReturnBannerVisible] = useState(false);
+
+  useEffect(() => {
+    const returnTo = new URLSearchParams(window.location.search).get('returnTo');
+    if (!returnTo) return;
+    try {
+      localStorage.setItem(RETURN_TO_KEY, returnTo);
+    } catch { /* ignore */ }
+    if (isInternalPath(returnTo)) setReturnBannerVisible(true);
+  }, []);
+
+  /** Called once an entitlement (subscription or credit purchase) is
+   *  confirmed. Redirects back to the saved returnTo and clears it; returns
+   *  false (does nothing) when there's no valid one, so the caller falls
+   *  back to its normal "stay on this page" behavior. */
+  function tryReturnTo(): boolean {
+    let returnTo: string | null = null;
+    try {
+      returnTo = localStorage.getItem(RETURN_TO_KEY);
+    } catch {
+      return false;
+    }
+    if (!isInternalPath(returnTo)) return false;
+    try { localStorage.removeItem(RETURN_TO_KEY); } catch { /* ignore */ }
+    router.replace(returnTo);
+    return true;
+  }
+
   // ── Personal subscription: owner_user_id = the viewer, conference_id NULL ──
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
@@ -146,6 +189,7 @@ export default function UnlimitedPage() {
         if (cancelled) return;
         if (found) {
           setConfirming(false);
+          tryReturnTo();
           return;
         }
         if (attempts >= 6) {
@@ -311,6 +355,7 @@ export default function UnlimitedPage() {
           fetchCreditLots();
           fetchSubscription();
           setCreditsConfirming(false);
+          tryReturnTo();
           return;
         }
         if (attempts >= 6) {
@@ -473,6 +518,21 @@ export default function UnlimitedPage() {
       <p className="text-sm mb-8" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 560 }}>
         Gavelling credits cover applying to conferences. Buy them as you go, get one free every month with Pro, or go Unlimited and never think about it.
       </p>
+
+      {returnBannerVisible && (
+        <div
+          className="flex items-center gap-2.5 rounded-2xl px-4 py-3 mb-6"
+          style={{
+            background: 'linear-gradient(150deg, rgba(238,217,138,0.32), rgba(182,135,31,0.14))',
+            border: '1.5px solid rgba(182,135,31,0.4)',
+          }}
+        >
+          <ArrowLeft size={15} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+          <p className="text-sm font-semibold" style={{ color: '#7A5A20', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+            Add a credit to finish your application — we&apos;ll take you right back.
+          </p>
+        </div>
+      )}
 
       {/* ── Your credits — balance, expiry breakdown, buy control ── */}
       <GlassCard className="!p-6 mb-6">

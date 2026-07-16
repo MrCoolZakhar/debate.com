@@ -601,6 +601,10 @@ function ConferenceApplyInner() {
   const { slug } = useParams() as { slug: string };
   const searchParams = useSearchParams();
   const role = searchParams.get('role') ?? 'delegate';
+  // Snapshot key for the "buy credits mid-apply, come back and resume" flow
+  // (see goBuyCredits / the resume-restore effect below) — namespaced per
+  // conference + role so switching roles never clobbers another draft.
+  const resumeKey = `gavelling-apply-resume:${slug}:${role}`;
   // Edit-and-resubmit: opens the same stepper prefilled from the applicant's
   // own existing application for this role, instead of the fresh-apply flow.
   // Only takes effect once fetchAll confirms the application is actually in
@@ -817,6 +821,60 @@ function ConferenceApplyInner() {
     fetchAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, slug, role]);
+
+  // Resume an in-progress application after a "buy credits" round trip
+  // (goBuyCredits saved it to localStorage before sending them to the store).
+  // Waits for the same load gate the rest of the flow uses (authLoading/
+  // loading), so roleConfig/committees are already in place before jumping
+  // straight to Overview. Never applies in edit mode — that flow prefills
+  // from the existing application instead. The snapshot is removed the
+  // moment it's read, restored or not, so it can never re-trigger (also
+  // self-guards against React StrictMode's dev-mode double effect firing).
+  useEffect(() => {
+    if (isEditMode || authLoading || loading) return;
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(resumeKey);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    try {
+      localStorage.removeItem(resumeKey);
+    } catch { /* ignore */ }
+    try {
+      const snap = JSON.parse(raw) as {
+        savedAt: number;
+        step: number;
+        isIndependent: boolean;
+        societyInput: string;
+        selectedSocietyId: string | null;
+        willPledgeSpots: boolean | null;
+        spotsPledged: number | '';
+        preferences: Preference[];
+        experienceLevel: string;
+        customAnswers: CustomAnswers;
+        voucherCode: string;
+        appliedVoucher: VoucherInput | null;
+      };
+      if (typeof snap.savedAt !== 'number' || Date.now() - snap.savedAt > 2 * 60 * 60 * 1000) return;
+      setIsIndependent(snap.isIndependent);
+      setSocietyInput(snap.societyInput);
+      setSelectedSocietyId(snap.selectedSocietyId);
+      setWillPledgeSpots(snap.willPledgeSpots);
+      setSpotsPledged(snap.spotsPledged);
+      setPreferences(snap.preferences);
+      setExperienceLevel(snap.experienceLevel);
+      setCustomAnswers(snap.customAnswers);
+      setVoucherCode(snap.voucherCode);
+      setAppliedVoucher(snap.appliedVoucher);
+      setStep(totalSteps);
+      refreshCredits();
+    } catch {
+      // Corrupted snapshot — nothing usable to restore.
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, authLoading, loading]);
 
   // ── Pooled/delegation credit balance for the Overview gate, refetched
   // whenever the anticipated society changes (independent/observer → null).
@@ -1283,6 +1341,7 @@ function ConferenceApplyInner() {
         await supabase.from('application_preferences').insert(prefRows);
       }
 
+      try { localStorage.removeItem(resumeKey); } catch { /* ignore */ }
       const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
     } catch (err: unknown) {
@@ -1390,12 +1449,41 @@ function ConferenceApplyInner() {
         await queueEventEmail(supabase, conference!.id, 'application_received', [existingApp.id]);
       } catch { /* non-fatal, the resubmission itself already succeeded */ }
 
+      try { localStorage.removeItem(resumeKey); } catch { /* ignore */ }
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}&resubmitted=1`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setSubmitError(msg);
       setSubmitting(false);
     }
+  }
+
+  // Sent to the Credits & Subscription store when the applicant runs out of
+  // credits mid-apply — snapshots every field they've filled in so far to
+  // localStorage, then sends them off to buy a credit. The resume-restore
+  // effect below reads this back once they're returned via ?returnTo.
+  function goBuyCredits() {
+    try {
+      const snapshot = {
+        savedAt: Date.now(),
+        step,
+        isIndependent,
+        societyInput,
+        selectedSocietyId,
+        willPledgeSpots,
+        spotsPledged,
+        preferences,
+        experienceLevel,
+        customAnswers,
+        voucherCode,
+        appliedVoucher,
+      };
+      localStorage.setItem(resumeKey, JSON.stringify(snapshot));
+    } catch {
+      // Quota exceeded / serialization failure — nothing to restore later,
+      // but that must never block the applicant from going to buy a credit.
+    }
+    router.push(`/account/unlimited?returnTo=${encodeURIComponent(`/conferences/${slug}/apply?role=${role}`)}`);
   }
 
   // ── Step render helpers ───────────────────────────────────────────────────
@@ -2398,9 +2486,14 @@ function ConferenceApplyInner() {
           <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
             <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
               Out of credits?{' '}
-              <Link href="/account/unlimited" style={{ color: '#8B2020', textDecoration: 'underline' }}>
+              <button
+                type="button"
+                onClick={goBuyCredits}
+                className="focus:outline-none"
+                style={{ color: '#8B2020', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
+              >
                 Buy more or upgrade your subscription!
-              </Link>
+              </button>
             </p>
           </div>
         )}
@@ -2409,9 +2502,14 @@ function ConferenceApplyInner() {
           <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
             <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
               You need a credit to resubmit.{' '}
-              <Link href="/account/unlimited" style={{ color: '#8B2020', textDecoration: 'underline' }}>
+              <button
+                type="button"
+                onClick={goBuyCredits}
+                className="focus:outline-none"
+                style={{ color: '#8B2020', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
+              >
                 Buy more or upgrade your subscription!
-              </Link>
+              </button>
             </p>
           </div>
         )}
