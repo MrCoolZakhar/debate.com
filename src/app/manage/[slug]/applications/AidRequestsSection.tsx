@@ -16,13 +16,7 @@ import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { NEU, OUTFIT } from '@/components/neu';
-
-interface AidQuestion {
-  id: string;
-  label: string;
-  required: boolean;
-  type: string;
-}
+import { type CustomQuestion, type CustomAnswers, normalizeQuestions, displayAnswer } from '@/lib/customQuestions';
 
 interface AidRequestRow {
   id: string;
@@ -30,7 +24,7 @@ interface AidRequestRow {
   user_id: string;
   statement: string | null;
   requested_amount: number | null;
-  custom_answers: Record<string, string> | null;
+  custom_answers: CustomAnswers | null;
   status: 'pending' | 'approved' | 'denied';
   granted_amount: number | null;
   reviewed_at: string | null;
@@ -80,10 +74,14 @@ function StatusChip({ status }: { status: AidRequestRow['status'] }) {
   );
 }
 
-export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQuestions }: { conferenceId: string; conferenceSlug: string; aidQuestions: AidQuestion[] }) {
+export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQuestions }: { conferenceId: string; conferenceSlug: string; aidQuestions: CustomQuestion[] }) {
   const { session } = useAuth();
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
+  // Defensive re-normalization: aidQuestions is already normalized by the
+  // caller, but this keeps the component correct for any future caller that
+  // passes the raw legacy shape straight from the DB.
+  const normalizedAidQuestions = normalizeQuestions(aidQuestions);
 
   const [requests, setRequests] = useState<AidRequestRow[]>([]);
   const [roleFees, setRoleFees] = useState<RoleFee[]>([]);
@@ -349,16 +347,19 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQu
               </p>
             </div>
 
-            {aidQuestions.length > 0 && (
+            {normalizedAidQuestions.length > 0 && (
               <div className="flex flex-col gap-3 pt-3" style={{ borderTop: '1px solid #F0EDE6' }}>
-                {aidQuestions.map(q => (
-                  <div key={q.id}>
-                    <p className="text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{q.label}</p>
-                    <p className="text-sm" style={{ color: (reviewing.custom_answers?.[q.id] ?? '').trim() ? '#1C1410' : '#9A8A78', fontFamily: OUTFIT, fontStyle: (reviewing.custom_answers?.[q.id] ?? '').trim() ? 'normal' : 'italic' }}>
-                      {(reviewing.custom_answers?.[q.id] ?? '').trim() || 'No answer provided.'}
-                    </p>
-                  </div>
-                ))}
+                {normalizedAidQuestions.map(q => {
+                  const ans = displayAnswer(q, reviewing.custom_answers?.[q.id]);
+                  return (
+                    <div key={q.id}>
+                      <p className="text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{q.label}</p>
+                      <p className="text-sm" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: OUTFIT, fontStyle: ans ? 'normal' : 'italic' }}>
+                        {ans || 'No answer provided.'}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

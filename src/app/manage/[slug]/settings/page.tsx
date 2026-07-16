@@ -13,7 +13,6 @@ import { createClient } from '@supabase/supabase-js';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal, ConfirmModal } from '@/components/ConfirmModal';
-import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { DatePicker } from '@/components/DatePicker';
@@ -25,16 +24,6 @@ import { type CustomQuestion, normalizeQuestions } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 
 // ── Types ──────────────────────────────────────────────────────────────────
-
-// Financial aid questions still use the older, narrower text/textarea shape
-// (that form is being rebuilt separately) — kept distinct from the shared
-// CustomQuestion type used by per-role application questions below.
-interface AidQuestion {
-  id: string;
-  label: string;
-  type: 'text' | 'textarea';
-  required: boolean;
-}
 
 interface RoleConfig {
   id: string;
@@ -251,123 +240,6 @@ function PartnerDisc({ logoUrl, acronym, size = 40 }: {
   return <LogoDisc src={logoUrl} alt={acronym} size={size} fallbackText={acronym?.[0] ?? '?'} />;
 }
 
-// ── QuestionModal ──────────────────────────────────────────────────────────
-
-function QuestionModal({ existing, onSave, onClose }: {
-  existing: AidQuestion | null;
-  onSave: (q: AidQuestion) => void;
-  onClose: () => void;
-}) {
-  const [label, setLabel] = useState(existing?.label ?? '');
-  const [type, setType] = useState<'text' | 'textarea'>(existing?.type ?? 'text');
-  const [required, setRequired] = useState(existing?.required ?? false);
-
-  function handleSave() {
-    if (!label.trim()) return;
-    onSave({ id: existing?.id ?? crypto.randomUUID(), label: label.trim(), type, required });
-  }
-
-  return (
-    <Portal><div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl p-6"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="font-black text-lg mb-5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          {existing ? 'Edit Question' : 'Add Question'}
-        </h2>
-
-        <div className="mb-4">
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-            Question Label
-          </label>
-          <input
-            type="text"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="e.g. Why do you want to attend this conference?"
-            style={inputStyle}
-            onFocus={fgInput}
-            onBlur={bgInput}
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-            Type
-          </label>
-          <div className="flex gap-2">
-            {(['text', 'textarea'] as const).map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setType(t)}
-                className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
-                style={{
-                  backgroundColor: type === t ? '#1B3828' : 'transparent',
-                  color: type === t ? '#EED98A' : '#1C1410',
-                  border: type === t ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.06em',
-                }}
-              >
-                {t === 'text' ? 'TEXT' : 'TEXTAREA'}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            {type === 'text' ? 'Single line answer' : 'Multi-line answer'}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 mb-6">
-          <input
-            type="checkbox"
-            id="q-required"
-            checked={required}
-            onChange={(e) => setRequired(e.target.checked)}
-            className="w-4 h-4 cursor-pointer"
-            style={{ accentColor: '#1B3828' }}
-          />
-          <label htmlFor="q-required" className="text-sm font-medium cursor-pointer" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-            Required question
-          </label>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-          >
-            CANCEL
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!label.trim()}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{
-              backgroundColor: label.trim() ? '#1B3828' : '#DDD4C0',
-              color: label.trim() ? '#EED98A' : '#9A8A78',
-              fontFamily: "'Outfit', sans-serif",
-              letterSpacing: '0.06em',
-            }}
-          >
-            {existing ? 'SAVE' : 'ADD QUESTION'}
-          </button>
-        </div>
-      </div>
-    </div></Portal>
-  );
-}
-
 // ── Settings page ──────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -485,7 +357,6 @@ export default function SettingsPage() {
   const [aidIntro, setAidIntro] = useState('');
   const [aidIntroSaving, setAidIntroSaving] = useState(false);
   const [aidIntroSaved, setAidIntroSaved] = useState(false);
-  const [aidQuestionModal, setAidQuestionModal] = useState<{ open: boolean; existing: AidQuestion | null }>({ open: false, existing: null });
 
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
@@ -726,7 +597,7 @@ export default function SettingsPage() {
   // the conference application. This only edits the conference-level toggle,
   // intro copy and question set that the payment-panel aid form reads.
 
-  async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: AidQuestion[] }>): Promise<boolean> {
+  async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: CustomQuestion[] }>): Promise<boolean> {
     if (!conference) return false;
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
@@ -764,18 +635,10 @@ export default function SettingsPage() {
     }
   }
 
-  const currentAidQuestions: AidQuestion[] = (conference?.aid_questions ?? []) as AidQuestion[];
+  const currentAidQuestions: CustomQuestion[] = normalizeQuestions(conference?.aid_questions ?? []);
 
-  function handleSaveAidQuestion(q: AidQuestion) {
-    const updated = aidQuestionModal.existing
-      ? currentAidQuestions.map(eq => eq.id === q.id ? q : eq)
-      : [...currentAidQuestions, q];
-    void saveAidConfig({ aid_questions: updated });
-    setAidQuestionModal({ open: false, existing: null });
-  }
-
-  function handleDeleteAidQuestion(id: string) {
-    void saveAidConfig({ aid_questions: currentAidQuestions.filter(q => q.id !== id) });
+  function handleAidQuestionsChange(next: CustomQuestion[]) {
+    void saveAidConfig({ aid_questions: next });
   }
 
   // Toggle that writes immediately (no dedicated save button): shows an
@@ -2583,55 +2446,7 @@ export default function SettingsPage() {
             <p className="block text-xs font-semibold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               Aid questions
             </p>
-            <div className="flex flex-col gap-3 mb-4">
-              {currentAidQuestions.length === 0 ? (
-                <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  No aid questions yet.
-                </p>
-              ) : (
-                currentAidQuestions.map(q => (
-                  <div
-                    key={q.id}
-                    className="rounded-xl p-4"
-                    style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.1)' }}
-                  >
-                    <p className="font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      {q.label}
-                    </p>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Pill tone="neutral" size="sm">{q.type === 'textarea' ? 'Paragraph' : 'Short answer'}</Pill>
-                      {q.required && <Pill tone="forest" size="sm">Required</Pill>}
-                    </div>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setAidQuestionModal({ open: true, existing: q })}
-                        className="text-xs font-semibold focus:outline-none hover:underline"
-                        style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
-                      >
-                        EDIT
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAidQuestion(q.id)}
-                        className="text-xs font-semibold focus:outline-none hover:underline"
-                        style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
-                      >
-                        DELETE
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <button
-              onClick={() => setAidQuestionModal({ open: true, existing: null })}
-              className="w-full rounded-xl py-2.5 text-sm font-semibold focus:outline-none transition-all"
-              style={{ border: '1.5px dashed #DDD4C0', backgroundColor: 'transparent', color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-            >
-              + ADD QUESTION
-            </button>
+            <QuestionBuilder questions={currentAidQuestions} onChange={handleAidQuestionsChange} />
           </>
         )}
       </div>}
@@ -3436,15 +3251,6 @@ export default function SettingsPage() {
 
         </section>
       </div>
-
-      {/* Aid question modal (conference-level) */}
-      {aidQuestionModal.open && (
-        <QuestionModal
-          existing={aidQuestionModal.existing}
-          onSave={handleSaveAidQuestion}
-          onClose={() => setAidQuestionModal({ open: false, existing: null })}
-        />
-      )}
 
       {/* Drag-to-fit crop step, flattens the chosen framing into a square
           transparent PNG, then hands off to the existing upload path. */}

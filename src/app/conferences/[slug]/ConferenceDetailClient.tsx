@@ -18,6 +18,7 @@ import { formatFee } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { SUPPORTED_PAYOUT_COUNTRIES } from '@/lib/payments';
+import { normalizeQuestions } from '@/lib/customQuestions';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import {
@@ -1577,7 +1578,7 @@ export default function ConferenceDetailClient() {
                   externalPaymentUrl={countrySupported ? null : conference.external_payment_url}
                   externalPaymentNote={countrySupported ? null : conference.external_payment_note}
                   financialAidEnabled={conference.financial_aid_enabled}
-                  aidQuestions={conference.aid_questions}
+                  aidQuestions={normalizeQuestions(conference.aid_questions)}
                   aidIntro={conference.aid_intro}
                 />
                 </>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
-  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
+  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, Inbox, LogOut, MapPin,
   MessageSquareText, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   Users, Wallet, X,
 } from 'lucide-react';
@@ -29,7 +29,6 @@ import {
   poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
-import AidRequestsSection from './AidRequestsSection';
 import { type CustomQuestion, type CustomAnswers, normalizeQuestions, displayAnswer } from '@/lib/customQuestions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -991,40 +990,6 @@ function FilterPanel({
   );
 }
 
-// ── Applications / Financial Aid view toggle ─────────────────────────────────
-
-function AppAidViewToggle({ view, setView }: { view: 'applications' | 'aid'; setView: (v: 'applications' | 'aid') => void }) {
-  const options: { value: 'applications' | 'aid'; label: string; icon: typeof Inbox }[] = [
-    { value: 'applications', label: 'Applications', icon: Inbox },
-    { value: 'aid', label: 'Financial Aid', icon: HeartHandshake },
-  ];
-  return (
-    <div className="inline-flex items-center rounded-full p-1" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-      {options.map(opt => {
-        const active = view === opt.value;
-        const Icon = opt.icon;
-        return (
-          <button
-            key={opt.value}
-            onClick={() => setView(opt.value)}
-            className="inline-flex items-center gap-1.5 focus:outline-none"
-            style={{
-              padding: '7px 14px', borderRadius: 999,
-              fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
-              color: active ? NEU.gold : NEU.muted,
-              backgroundColor: active ? NEU.forest : 'transparent',
-              border: 'none', cursor: 'pointer', transition: 'background-color 150ms ease, color 150ms ease',
-            }}
-          >
-            <Icon size={13} strokeWidth={2.5} />
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── ApplicationsPage ──────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
@@ -1038,10 +1003,6 @@ export default function ApplicationsPage() {
   const [filters, setFilters] = useState<FilterState>({
     status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '',
   });
-  // Financial aid is a separate application (financial_aid_requests table),
-  // reviewed from its own section of this page rather than filtered into the
-  // main applications list.
-  const [view, setView] = useState<'applications' | 'aid'>('applications');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
@@ -1798,26 +1759,6 @@ export default function ApplicationsPage() {
 
   if (!conference) return null;
 
-  if (view === 'aid') {
-    return (
-      <div className="px-6 md:px-10 py-8">
-        <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
-          <div className="flex items-center gap-3.5">
-            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={HeartHandshake} emoji="Handshake" size={46} />
-            <div>
-              <p className="mb-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
-                {conference.acronym} · Financial Aid
-              </p>
-              <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>Financial Aid</h1>
-            </div>
-          </div>
-          <AppAidViewToggle view={view} setView={setView} />
-        </div>
-        <AidRequestsSection conferenceId={conference.id} conferenceSlug={conference.slug} aidQuestions={conference.aid_questions} />
-      </div>
-    );
-  }
-
   // Empty selection = no constraint on that dimension (fresh page shows all).
   const filtered = applications.filter(a => {
     if (filters.status.size > 0 && !filters.status.has(a.status)) return false;
@@ -1929,7 +1870,6 @@ export default function ApplicationsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
-          <AppAidViewToggle view={view} setView={setView} />
           <FilterPanel filters={filters} setFilters={setFilters} activeCount={activeFilterCount} />
           <button
             onClick={handleExportCSV}

@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -117,7 +117,8 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
   {
     header: 'FINANCIAL',
     items: [
-      { icon: CreditCard, label: 'Financials', href: `/manage/${slug}/financials`, external: false, badge: 0 },
+      { icon: CreditCard,     label: 'Financials',    href: `/manage/${slug}/financials`,    external: false, badge: 0 },
+      { icon: HeartHandshake, label: 'Financial Aid', href: `/manage/${slug}/financial-aid`, external: false, badge: 0 },
     ],
   },
   {
@@ -722,6 +723,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const SECTION_PERMS: Record<string, string> = {
     committees: 'committees', applications: 'applications', import: 'import', assignment: 'assignment',
     documents: 'documents', communications: 'email_builder', financials: 'financials',
+    'financial-aid': 'financials',
     settings: 'settings', jobs: 'job_board',
   };
   const currentSegment = pathname.split('/')[3] ?? '';

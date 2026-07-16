@@ -14,14 +14,9 @@ import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { createCheckout } from '@/lib/payments';
+import { type CustomQuestion, type CustomAnswers, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
+import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { SectionCard, OUTFIT } from './shared';
-
-export interface AidQuestion {
-  id: string;
-  label: string;
-  required: boolean;
-  type: string;
-}
 
 interface AidRequestRow {
   status: 'pending' | 'approved' | 'denied';
@@ -59,7 +54,7 @@ export interface PaymentPanelProps {
   contactEmail: string | null;
   /** Conference-level financial aid config (separate application, financial_aid_requests table). */
   financialAidEnabled: boolean;
-  aidQuestions: AidQuestion[];
+  aidQuestions: CustomQuestion[];
   aidIntro: string | null;
   /** True once the conference's Stripe Connect onboarding is complete. */
   paymentsEnabled: boolean;
@@ -82,7 +77,8 @@ export default function PaymentPanel({
   const [aidModalOpen, setAidModalOpen] = useState(false);
   const [aidStatement, setAidStatement] = useState('');
   const [aidRequestedAmount, setAidRequestedAmount] = useState('');
-  const [aidCustomAnswers, setAidCustomAnswers] = useState<Record<string, string>>({});
+  const [aidCustomAnswers, setAidCustomAnswers] = useState<CustomAnswers>({});
+  const [aidMissingIds, setAidMissingIds] = useState<string[]>([]);
   const [aidSubmitting, setAidSubmitting] = useState(false);
   const [aidSubmitError, setAidSubmitError] = useState('');
 
@@ -116,11 +112,11 @@ export default function PaymentPanel({
       setAidSubmitError('Please tell us about your circumstances.');
       return;
     }
-    for (const q of aidQuestions) {
-      if (q.required && !(aidCustomAnswers[q.id] ?? '').trim()) {
-        setAidSubmitError(`Please answer: ${q.label}`);
-        return;
-      }
+    const questionCheck = validateAnswers(aidQuestions, aidCustomAnswers);
+    if (!questionCheck.valid) {
+      setAidMissingIds(questionCheck.missingIds);
+      setAidSubmitError('Please answer all required questions.');
+      return;
     }
     setAidSubmitting(true);
     setAidSubmitError('');
@@ -143,6 +139,7 @@ export default function PaymentPanel({
     setAidStatement('');
     setAidRequestedAmount('');
     setAidCustomAnswers({});
+    setAidMissingIds([]);
     const row = await fetchAidRequest();
     setAidRequest(row);
   }
@@ -469,31 +466,19 @@ export default function PaymentPanel({
               </p>
             )}
 
-            {aidQuestions.map(q => (
-              <div key={q.id}>
-                <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  {q.label}
-                  {q.required && <span className="ml-1 font-normal" style={{ color: '#9A8A78' }}>(required)</span>}
-                </label>
-                {q.type === 'text' ? (
-                  <input
-                    type="text"
-                    value={aidCustomAnswers[q.id] ?? ''}
-                    onChange={(e) => setAidCustomAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
-                    className="w-full rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                    style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
-                  />
-                ) : (
-                  <textarea
-                    rows={3}
-                    value={aidCustomAnswers[q.id] ?? ''}
-                    onChange={(e) => setAidCustomAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
-                    className="w-full rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none"
-                    style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
-                  />
-                )}
-              </div>
-            ))}
+            {aidQuestions.length > 0 && (
+              <CustomQuestionsField
+                questions={aidQuestions}
+                answers={aidCustomAnswers}
+                onChange={(next) => {
+                  setAidCustomAnswers(next);
+                  if (aidMissingIds.length > 0) {
+                    setAidMissingIds(prev => prev.filter(id => answerIsEmpty(next[id])));
+                  }
+                }}
+                missingIds={aidMissingIds}
+              />
+            )}
 
             <div>
               <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>

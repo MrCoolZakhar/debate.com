@@ -10,13 +10,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Pencil } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { type CustomQuestion } from '@/lib/customQuestions';
 import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './shared';
 import { PayGate, RejectedCard } from './PayGate';
 import DelegateParticipant from './DelegateParticipant';
 import AdvisorParticipant from './AdvisorParticipant';
 import ChairParticipant from './ChairParticipant';
 import ObserverParticipant from './ObserverParticipant';
-import PaymentPanel, { type AidQuestion } from './PaymentPanel';
+import PaymentPanel from './PaymentPanel';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
@@ -64,7 +65,7 @@ export interface ParticipantViewProps {
   externalPaymentNote: string | null;
   /** Conference-level financial aid config (separate application, financial_aid_requests table). */
   financialAidEnabled: boolean;
-  aidQuestions: AidQuestion[];
+  aidQuestions: CustomQuestion[];
   aidIntro: string | null;
 }
 
