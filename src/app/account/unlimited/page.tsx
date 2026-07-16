@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Ticket, Crown, Infinity as InfinityIcon, Check, Loader2 } from 'lucide-react';
+import { Sparkles, Ticket, Crown, Coins, Infinity as InfinityIcon, Check, Loader2, Minus, Plus } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
-import { extractFunctionErrorMessage, unlimitedPricing } from '@/lib/payments';
+import { useCredits } from '@/hooks/useCredits';
+import { extractFunctionErrorMessage, unlimitedPricing, creditPricing, proPricing } from '@/lib/payments';
 import { formatFee } from '@/lib/finance';
 import { Eyebrow, GlassCard } from '../accountUi';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuPill, NeuIconDisc, NeuInset } from '@/components/neu';
@@ -81,11 +82,17 @@ const FREE_FEATURES: PlanFeature[] = [
   { text: 'Apply to any conference' },
   { text: 'Committee sessions, documents and placards' },
   { text: 'Delegation tools and Q&A with organizers' },
-  { text: 'Standard service fee at checkout' },
+  { text: 'Pay per application with Gavelling credits' },
+];
+
+const PRO_FEATURES: PlanFeature[] = [
+  { text: '1 Gavelling credit every month' },
+  { text: 'Archive of past conferences', comingSoon: true },
+  { text: 'Upcoming conferences tools', comingSoon: true },
 ];
 
 const UNLIMITED_FEATURES: PlanFeature[] = [
-  { text: '0 percent Gavelling platform fee as a conference attendee' },
+  { text: 'Unlimited Gavelling credits — never think about it' },
   { text: 'Your MUN historical statistics', comingSoon: true },
   { text: 'Unlimited email builder use as a conference organizer', comingSoon: true },
   { text: 'Premium job board opportunities', comingSoon: true },
@@ -165,8 +172,9 @@ export default function UnlimitedPage() {
   }, []);
   const price = unlimitedPricing(geoCountry);
 
-  const [busy, setBusy] = useState<'monthly' | 'yearly' | null>(null);
+  const [busy, setBusy] = useState<'monthly' | 'yearly' | 'pro' | null>(null);
   const [purchaseError, setPurchaseError] = useState('');
+  const proPrice = proPricing(geoCountry);
 
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalError, setPortalError] = useState('');
@@ -218,6 +226,139 @@ export default function UnlimitedPage() {
     if (!result?.ok || !result.url) {
       setBusy(null);
       setPurchaseError(result?.error || 'Could not start checkout. Please try again.');
+      return;
+    }
+    window.location.assign(result.url);
+  }
+
+  async function startProCheckout() {
+    if (busy) return;
+    setBusy('pro');
+    setPurchaseError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setBusy(null);
+      setPurchaseError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('create-credit-checkout', {
+      body: { kind: 'pro_monthly', ...(geoCountry ? { country: geoCountry } : {}) },
+    });
+    if (error) {
+      setBusy(null);
+      setPurchaseError(await extractFunctionErrorMessage(error));
+      return;
+    }
+    const result = data as { ok?: boolean; url?: string; error?: string } | null;
+    if (!result?.ok || !result.url) {
+      setBusy(null);
+      setPurchaseError(result?.error || 'Could not start checkout. Please try again.');
+      return;
+    }
+    window.location.assign(result.url);
+  }
+
+  // ── Gavelling credits: balance (shared header hook) + expiry breakdown ────
+  const { balance: creditBalance, loading: creditBalanceLoading, refresh: refreshCredits } = useCredits();
+
+  interface CreditLot { remaining: number; source: string; expires_at: string | null }
+  const [creditLots, setCreditLots] = useState<CreditLot[]>([]);
+  const [creditLotsLoaded, setCreditLotsLoaded] = useState(false);
+
+  const fetchCreditLots = useCallback(async () => {
+    if (!user || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('credit_lots')
+      .select('remaining, source, expires_at')
+      .gt('remaining', 0);
+    setCreditLots((data as CreditLot[] | null) ?? []);
+    setCreditLotsLoaded(true);
+  }, [user?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { fetchCreditLots(); }, [fetchCreditLots]);
+
+  const permanentCredits = creditLots.filter(l => !l.expires_at).reduce((n, l) => n + l.remaining, 0);
+  const expiringLots = creditLots
+    .filter((l): l is CreditLot & { expires_at: string } => !!l.expires_at)
+    .sort((a, b) => a.expires_at.localeCompare(b.expires_at));
+  const expiringCredits = expiringLots.reduce((n, l) => n + l.remaining, 0);
+  const soonestExpiry = expiringLots[0]?.expires_at ?? null;
+
+  // ?credits=success|cancelled, the redirect back from create-credit-checkout.
+  // Success polls credit_balance() directly (every 2s, up to 12s, mirrors the
+  // ?unlimited=success confirm loop above); cancelled just strips the param.
+  const [creditsConfirming, setCreditsConfirming] = useState(false);
+  const [creditsConfirmTimedOut, setCreditsConfirmTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!user || !session) return;
+    const creditsParam = new URLSearchParams(window.location.search).get('credits');
+    if (creditsParam !== 'success' && creditsParam !== 'cancelled') return;
+    let cancelled = false;
+    if (creditsParam === 'success') {
+      setCreditsConfirming(true);
+      const supabase = getAuthedClient(session.access_token);
+      const startingBalance = creditBalance;
+      let attempts = 0;
+      const tick = async () => {
+        attempts++;
+        const { data } = await supabase.rpc('credit_balance');
+        if (cancelled) return;
+        const newBalance = typeof data === 'number' ? data : null;
+        if (newBalance !== null && newBalance !== startingBalance) {
+          refreshCredits();
+          fetchCreditLots();
+          fetchSubscription();
+          setCreditsConfirming(false);
+          return;
+        }
+        if (attempts >= 6) {
+          setCreditsConfirming(false);
+          setCreditsConfirmTimedOut(true);
+          refreshCredits();
+          fetchCreditLots();
+          fetchSubscription();
+          return;
+        }
+        setTimeout(tick, 2000);
+      };
+      tick();
+    }
+    router.replace('/account/unlimited');
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, session?.access_token]);
+
+  // ── Buy credits, a simple quantity stepper ────────────────────────────────
+  const [buyQty, setBuyQty] = useState(1);
+  const [buyBusy, setBuyBusy] = useState(false);
+  const [buyError, setBuyError] = useState('');
+  const creditPrice = creditPricing(geoCountry);
+  const buyTotal = Math.round(creditPrice.each * buyQty * 100) / 100;
+
+  async function handleBuyCredits() {
+    if (buyBusy) return;
+    setBuyBusy(true);
+    setBuyError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setBuyBusy(false);
+      setBuyError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('create-credit-checkout', {
+      body: { kind: 'credits', quantity: buyQty, ...(geoCountry ? { country: geoCountry } : {}) },
+    });
+    if (error) {
+      setBuyBusy(false);
+      setBuyError(await extractFunctionErrorMessage(error));
+      return;
+    }
+    const result = data as { ok?: boolean; url?: string; error?: string } | null;
+    if (!result?.ok || !result.url) {
+      setBuyBusy(false);
+      setBuyError(result?.error || 'Could not start checkout. Please try again.');
       return;
     }
     window.location.assign(result.url);
@@ -296,7 +437,7 @@ export default function UnlimitedPage() {
       setUnlimitedRemaining(prev => prev + granted);
       setRedeemResult({
         ok: true,
-        text: `Unlimited unlocked for your next ${granted} conference${granted === 1 ? '' : 's'}. The 5% Gavelling fee is waived automatically at checkout.`,
+        text: `Unlimited unlocked for your next ${granted} conference${granted === 1 ? '' : 's'}. No credits needed while it's active.`,
       });
     } else {
       setRedeemResult({ ok: true, text: 'Code redeemed successfully.' });
@@ -317,22 +458,111 @@ export default function UnlimitedPage() {
 
   const balance = profile?.points_balance ?? 0;
   const active = !!subscription;
+  const isUnlimitedPlan = !!subscription && subscription.plan.startsWith('unlimited');
+  const isProPlan = subscription?.plan === 'pro_monthly';
 
   return (
     <div>
-      <Eyebrow className="mb-2">Unlimited</Eyebrow>
+      <Eyebrow className="mb-2">Credits</Eyebrow>
       <h1
         className="font-black text-[26px] mb-1"
         style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}
       >
-        Gavelling Unlimited
+        Credits &amp; Subscription
       </h1>
       <p className="text-sm mb-8" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 560 }}>
-        Skip the 5 percent Gavelling platform fee on your own registration fees, at every conference. Card processing still applies.
+        Gavelling credits cover applying to conferences. Buy them as you go, get one free every month with Pro, or go Unlimited and never think about it.
       </p>
 
-      {/* Free vs Unlimited comparison */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-3 items-stretch">
+      {/* ── Your credits — balance, expiry breakdown, buy control ── */}
+      <GlassCard className="!p-6 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Coins} size={48} />
+            <div>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 4 }}>
+                YOUR CREDITS
+              </p>
+              <p className="font-black text-[34px] leading-none" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                {creditBalanceLoading || creditBalance === null ? '—' : creditBalance}
+              </p>
+              {creditLotsLoaded && (permanentCredits > 0 || expiringCredits > 0) && (
+                <p className="text-xs mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                  {permanentCredits} permanent
+                  {expiringCredits > 0 && soonestExpiry ? ` · ${expiringCredits} expire ${formatExpiry(soonestExpiry)}` : ''}
+                </p>
+              )}
+              <p className="text-[11px] mt-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6, maxWidth: 340 }}>
+                Purchased credits never expire. Credits included with a subscription refresh monthly and don&apos;t roll over.
+              </p>
+              {creditsConfirming ? (
+                <div className="flex items-center gap-2 mt-2.5">
+                  <Loader2 size={14} strokeWidth={2.4} className="animate-spin" style={{ color: NEU.deepGold }} />
+                  <p className="text-xs font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                    Confirming your purchase…
+                  </p>
+                </div>
+              ) : creditsConfirmTimedOut ? (
+                <p className="text-xs mt-2.5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                  Payment received. Your credits will appear here within a minute.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Buy credits, quantity stepper + live total */}
+          <div className="flex flex-col gap-2.5" style={{ minWidth: 220 }}>
+            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.14em', color: NEU.muted }}>
+              BUY CREDITS
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1 rounded-full" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm, padding: '4px' }}>
+                <button
+                  type="button"
+                  onClick={() => setBuyQty(q => Math.max(1, q - 1))}
+                  disabled={buyBusy || buyQty <= 1}
+                  className="flex items-center justify-center rounded-full focus:outline-none"
+                  style={{ width: 26, height: 26, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: buyBusy || buyQty <= 1 ? 'default' : 'pointer', opacity: buyBusy || buyQty <= 1 ? 0.5 : 1 }}
+                >
+                  <Minus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
+                </button>
+                <span className="text-center font-bold text-sm" style={{ width: 28, fontFamily: OUTFIT, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+                  {buyQty}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setBuyQty(q => Math.min(20, q + 1))}
+                  disabled={buyBusy || buyQty >= 20}
+                  className="flex items-center justify-center rounded-full focus:outline-none"
+                  style={{ width: 26, height: 26, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: buyBusy || buyQty >= 20 ? 'default' : 'pointer', opacity: buyBusy || buyQty >= 20 ? 0.5 : 1 }}
+                >
+                  <Plus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
+                </button>
+              </div>
+              <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                {formatFee(creditPrice.each, creditPrice.currency)} each
+              </span>
+            </div>
+            <NeuButton
+              gradient={NEU_GRADIENTS.gold}
+              disabled={buyBusy}
+              onClick={handleBuyCredits}
+              style={{ width: '100%' }}
+            >
+              {buyBusy ? 'STARTING CHECKOUT…' : `BUY FOR ${formatFee(buyTotal, creditPrice.currency)}`}
+            </NeuButton>
+            {buyError && (
+              <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                {buyError}
+              </p>
+            )}
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* Free / Pro / Unlimited tiers */}
+      <Eyebrow className="mb-3">Plans</Eyebrow>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-3 items-stretch">
         {/* FREE card, quieter */}
         <NeuCard style={{ padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
           <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Ticket} size={44} />
@@ -340,7 +570,7 @@ export default function UnlimitedPage() {
             Free
           </h2>
           <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
-            Everything you need to take part.
+            Apply with credits · full platform access.
           </p>
 
           <div className="flex flex-col gap-3.5 flex-1">
@@ -349,6 +579,66 @@ export default function UnlimitedPage() {
 
           <div className="mt-6">
             {!active && <NeuPill>CURRENT PLAN</NeuPill>}
+          </div>
+        </NeuCard>
+
+        {/* PRO card */}
+        <NeuCard style={{ padding: '26px 24px', display: 'flex', flexDirection: 'column' }}>
+          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Coins} size={44} />
+          <h2 className="font-black text-lg mt-4 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            Gavelling Pro
+          </h2>
+          <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
+            {formatFee(proPrice.monthly, proPrice.currency)}/mo — 1 credit every month + archive &amp; upcoming tools.
+          </p>
+
+          <div className="flex flex-col gap-3.5 flex-1">
+            {PRO_FEATURES.map(f => <PlanFeatureRow key={f.text} feature={f} accent="forest" />)}
+          </div>
+
+          <div className="mt-6">
+            {isProPlan ? (
+              <div className="flex flex-col gap-2 items-start">
+                <NeuPill active gradient={NEU_GRADIENTS.green}>
+                  <Check size={11} strokeWidth={2.6} /> ACTIVE
+                </NeuPill>
+                <button
+                  type="button"
+                  onClick={handleManageSubscription}
+                  disabled={portalBusy}
+                  className="text-xs font-semibold focus:outline-none"
+                  style={{
+                    color: NEU.muted, fontFamily: OUTFIT, background: 'none', border: 'none', padding: 0,
+                    textDecoration: 'underline', cursor: portalBusy ? 'default' : 'pointer',
+                  }}
+                  onMouseEnter={(e) => { if (!portalBusy) (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+                >
+                  {portalBusy ? 'OPENING…' : 'MANAGE SUBSCRIPTION'}
+                </button>
+                {portalError && (
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                    {portalError}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                <NeuButton
+                  gradient={NEU_GRADIENTS.amber}
+                  disabled={busy !== null}
+                  onClick={startProCheckout}
+                  style={{ width: '100%' }}
+                >
+                  {busy === 'pro' ? 'STARTING CHECKOUT…' : `${formatFee(proPrice.monthly, proPrice.currency)} A MONTH`}
+                </NeuButton>
+                {purchaseError && (
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                    {purchaseError}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </NeuCard>
 
@@ -366,7 +656,7 @@ export default function UnlimitedPage() {
             Gavelling Unlimited
           </h2>
           <p className="text-[13px] mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
-            For people who live this.
+            Unlimited credits — never think about it.
           </p>
 
           <div className="flex flex-col gap-3.5 flex-1">
@@ -384,7 +674,7 @@ export default function UnlimitedPage() {
                   <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>This usually takes a few seconds.</p>
                 </div>
               </div>
-            ) : active && subscription!.plan === 'unlimited_trial' ? (
+            ) : isUnlimitedPlan && subscription!.plan === 'unlimited_trial' ? (
               <div className="flex flex-col gap-2.5 items-start" style={{ width: '100%' }}>
                 <NeuPill active gradient={NEU_GRADIENTS.green}>
                   <Check size={11} strokeWidth={2.6} /> ACTIVE
@@ -413,7 +703,7 @@ export default function UnlimitedPage() {
                   </p>
                 )}
               </div>
-            ) : active ? (
+            ) : isUnlimitedPlan ? (
               <div className="flex flex-col gap-2 items-start">
                 <NeuPill active gradient={NEU_GRADIENTS.green}>
                   <Check size={11} strokeWidth={2.6} /> ACTIVE
@@ -475,12 +765,8 @@ export default function UnlimitedPage() {
           </div>
         </NeuCard>
       </div>
-      <p className="text-xs mb-10" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
-        Applies to your own registration fees. Delegation spot purchases keep the standard service fee.
-      </p>
-
-      {/* Gavelling Unlimited — entitlements + voucher redemption */}
-      <Eyebrow className="mb-3">Gavelling Unlimited</Eyebrow>
+      {/* Ambassador status + subscription voucher redemption */}
+      <Eyebrow className="mb-3">Ambassador &amp; Vouchers</Eyebrow>
       <GlassCard className="!p-5 mb-10">
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {isAmbassador && (
@@ -493,7 +779,7 @@ export default function UnlimitedPage() {
               }}
             >
               <Crown size={12} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
-              AMBASSADOR: GAVELLING FEE WAIVED, ALWAYS
+              AMBASSADOR STATUS — ALWAYS COVERED
             </span>
           )}
           {unlimitedRemaining > 0 && (
@@ -505,7 +791,7 @@ export default function UnlimitedPage() {
               }}
             >
               <InfinityIcon size={12} strokeWidth={2.6} />
-              {unlimitedRemaining} conference{unlimitedRemaining === 1 ? '' : 's'} with the fee waived
+              {unlimitedRemaining} conference{unlimitedRemaining === 1 ? '' : 's'} of Unlimited remaining
             </span>
           )}
         </div>

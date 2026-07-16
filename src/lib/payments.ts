@@ -68,6 +68,24 @@ export function unlimitedPricing(countryCode: string | null): { monthly: number;
     : { monthly: 2.5, yearly: 25, currency: 'USD' };
 }
 
+/** Gavelling credit (one-off, non-expiring) pricing for display purposes only
+ *  — create-credit-checkout recomputes and enforces the real price. Mirrors
+ *  unlimitedPricing's region split (UNLIMITED_REGION_A). */
+export function creditPricing(countryCode: string | null): { each: number; currency: string } {
+  const code = countryCode?.toUpperCase();
+  const isRegionA = !code || UNLIMITED_REGION_A.has(code);
+  return isRegionA ? { each: 3, currency: 'USD' } : { each: 1, currency: 'USD' };
+}
+
+/** Gavelling Pro (1 credit/month + archive & upcoming tools) pricing for
+ *  display purposes only — create-credit-checkout recomputes and enforces
+ *  the real price. Mirrors unlimitedPricing's region split. */
+export function proPricing(countryCode: string | null): { monthly: number; currency: string } {
+  const code = countryCode?.toUpperCase();
+  const isRegionA = !code || UNLIMITED_REGION_A.has(code);
+  return isRegionA ? { monthly: 3, currency: 'USD' } : { monthly: 1.5, currency: 'USD' };
+}
+
 /** Whether checkout for this conference goes through live Stripe. Organizer
  *  pages use this to gate their manual mark-paid/unpaid/received controls.
  *  When `connectOnboardingStatus` is passed, payments are only live once the

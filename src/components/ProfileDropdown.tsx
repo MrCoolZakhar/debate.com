@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { User, FileText, CalendarDays, Sparkles, LogOut, ArrowRight } from 'lucide-react';
+import { User, FileText, CalendarDays, Sparkles, Coins, LogOut, ArrowRight } from 'lucide-react';
 import Portal from '@/components/Portal';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
@@ -320,19 +320,29 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                 <span style={{ color: '#B6871F' }}>✦</span>
               </Link>
             ) : profile ? (
-              <div className="px-4 py-2">
+              <Link
+                href="/account/unlimited"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
+                style={{
+                  color: '#1C1410',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.05em',
+                  fontSize: '12px',
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                <Coins size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                <span className="flex-1">CREDITS &amp; SUBSCRIPTION</span>
                 <span
-                  className="text-xs font-black px-2 py-0.5 rounded-full"
-                  style={{
-                    backgroundColor: '#EED98A',
-                    color: '#1B3828',
-                    fontFamily: "'Outfit', sans-serif",
-                    letterSpacing: '0.06em',
-                  }}
+                  className="text-[10px] font-black px-1.5 py-0.5 rounded-full"
+                  style={{ backgroundColor: '#EED98A', color: '#1B3828', letterSpacing: '0.04em' }}
                 >
-                  GAVELLING UNLIMITED ✦
+                  ✦
                 </span>
-              </div>
+              </Link>
             ) : null}
           </div>
 
