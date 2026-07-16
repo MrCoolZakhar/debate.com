@@ -743,6 +743,9 @@ function ConferenceApplyInner() {
   const isPreferenceRole = role === 'delegate' || role === 'head-delegate';
   const isObserver = role === 'observer';
   const isInvoicingRole = role === 'head-delegate' || role === 'faculty-advisor';
+  // Chairs and observers are never part of a society/delegation — the
+  // Independent/With-a-society step has nothing to ask them.
+  const showSocietyStep = role !== 'chair' && role !== 'observer';
 
   // ── Preference mode (organiser-controlled). Governs whether the Preferences
   // step appears at all, and which pickers it shows.
@@ -784,7 +787,7 @@ function ConferenceApplyInner() {
 
   const stepSequence = [
     'role',
-    'society',
+    ...(showSocietyStep ? ['society'] : []),
     ...(isInvoicingRole ? ['invoicing'] : []),
     ...(showPreferenceStep ? ['preferences'] : []),
     ...(skipExperience ? [] : ['experience']),
@@ -795,7 +798,7 @@ function ConferenceApplyInner() {
   const stepLabels = stepSequence.map((kind) => {
     switch (kind) {
       case 'role': return 'Role';
-      case 'society': return isObserver ? 'Background' : 'Society';
+      case 'society': return 'Society';
       case 'invoicing': return 'Invoicing';
       case 'preferences': return 'Preferences';
       case 'experience': return 'Experience';
@@ -953,6 +956,13 @@ function ConferenceApplyInner() {
   useEffect(() => {
     if (isInvoicingRole) setIsIndependent(false);
   }, [isInvoicingRole]);
+
+  // Chairs and observers skip the society step entirely — default to
+  // "independent" so society_id stays null and nothing downstream (credit
+  // pool coverage, submit payload) mistakes them for part of a delegation.
+  useEffect(() => {
+    if (!showSocietyStep) setIsIndependent(true);
+  }, [showSocietyStep]);
 
   // Society autocomplete
   useEffect(() => {
