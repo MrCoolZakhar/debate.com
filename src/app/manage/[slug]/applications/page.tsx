@@ -192,6 +192,10 @@ const STATUS_PILL: Record<string, { grad: [string, string]; label: string; icon:
   'checked-in': { grad: ['#2F7A5C', '#1F6E52'], label: 'Checked In', icon: UserRoundCheck },
   rejected:     { grad: ['#9A3030', '#7A1F1F'], label: 'Rejected',   icon: Ban },
   withdrawn:    { grad: ['#8A7E6E', '#6B5F52'], label: 'Withdrawn',  icon: LogOut },
+  // Not a real applications.status value — see effectiveStatus(): a rejected
+  // application whose role allows resubmission and hasn't been resubmitted
+  // yet reads as this instead of the final-sounding "Rejected".
+  'awaiting-resubmission': { grad: ['#C79A52', '#B8844A'], label: 'Awaiting Resubmission', icon: RotateCcw },
 };
 
 function StatusPill({ status, size = 'md' }: { status: string; size?: 'sm' | 'md' }) {
@@ -1344,6 +1348,18 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
+  // A rejected application whose role allows resubmission and hasn't been
+  // resubmitted yet reads as "awaiting resubmission" (amber/pending) rather
+  // than the final-sounding "rejected" (red) — same underlying status, so
+  // REINSTATE/handleReject logic is untouched, this only changes the label.
+  function effectiveStatus(app: Application): string {
+    if (app.status === 'rejected') {
+      const roleConfig = roleConfigs.find(rc => rc.role === app.role);
+      if (roleConfig?.allow_resubmission && !app.resubmitted_at) return 'awaiting-resubmission';
+    }
+    return app.status;
+  }
+
   // Single reject control, used everywhere a REJECT action appears (the
   // compact card's quick actions AND the review modal's action bar) so
   // there is exactly one reject UI and one behavior: idle REJECT button →
@@ -1427,6 +1443,16 @@ export default function ApplicationsPage() {
         setActionError('Could not reinstate the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
+  }
+
+  async function openReinstateConfirm(app: Application) {
+    const { confirmed } = await confirm({
+      title: 'Reinstate this application?',
+      body: 'This returns the application to Submitted so you can review it again. Any rejection note will be cleared.',
+      confirmLabel: 'Reinstate',
+    });
+    if (!confirmed) return;
+    handleReinstate(app.id);
   }
 
   // ── Withdraw from conference (accepted/assigned, unpaid or waived only) ────
@@ -1832,9 +1858,21 @@ export default function ApplicationsPage() {
 
   if (!conference) return null;
 
-  // Empty selection = no constraint on that dimension (fresh page shows all).
+  // The default-view size (withdrawn/removed applicants excluded), used both
+  // to gate the "filters active" reminder and as its denominator — so the
+  // baked-in withdrawn exclusion is never mistaken for a user-applied filter.
+  const defaultScopeCount = applications.filter(a => a.status !== 'withdrawn').length;
+
+  // Empty selection = no constraint on that dimension (fresh page shows all)
+  // — EXCEPT withdrawn/removed applicants, who stay out of the default view
+  // even with no status filter active; they're only reachable by explicitly
+  // adding the Withdrawn status filter.
   const filtered = applications.filter(a => {
-    if (filters.status.size > 0 && !filters.status.has(a.status)) return false;
+    if (filters.status.size > 0) {
+      if (!filters.status.has(a.status)) return false;
+    } else if (a.status === 'withdrawn') {
+      return false;
+    }
     if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
     if (filters.payment.size > 0) {
       const ps = a.payment_status;
@@ -1890,6 +1928,8 @@ export default function ApplicationsPage() {
   // (all roles by default, #10) but ignore the status / payment dimensions —
   // those are exactly what the tiles let you click into.
   const statScope = applications.filter(a => {
+    // Withdrawn/removed applicants never count toward the stat tiles.
+    if (a.status === 'withdrawn') return false;
     if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
     if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
@@ -1990,10 +2030,12 @@ export default function ApplicationsPage() {
       </div>
 
       {/* Visible reminder that a filter is narrowing the list — a role/status/
-          payment/date filter can never silently hide rows again. */}
-      {!loading && filtered.length < applications.length && (
+          payment/date filter can never silently hide rows again. Withdrawn/
+          removed applicants are excluded from the default view on purpose
+          (not a user-applied filter), so they're left out of this count too. */}
+      {!loading && filtered.length < defaultScopeCount && (
         <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted }}>
-          Showing {filtered.length} of {applications.length} — filters active
+          Showing {filtered.length} of {defaultScopeCount} — filters active
         </p>
       )}
 
@@ -2233,7 +2275,7 @@ export default function ApplicationsPage() {
                     style={{ flex: '0 0 auto', minWidth: 200, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
                     <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
-                      <StatusPill status={app.status} />
+                      <StatusPill status={effectiveStatus(app)} />
                       {app.resubmitted_at && (
                         <span
                           className="inline-flex items-center gap-1"
@@ -2271,6 +2313,29 @@ export default function ApplicationsPage() {
                           ACCEPT
                         </button>
                         {renderRejectControls(app)}
+                      </div>
+                    )}
+
+                    {/* Reinstate for rejected / awaiting-resubmission applicants —
+                        undo a rejection in one click, right where REJECT sits
+                        for submitted applicants. */}
+                    {app.status === 'rejected' && (
+                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
+                        <button
+                          onClick={() => openReinstateConfirm(app)}
+                          disabled={rowBusy}
+                          className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+                          style={{
+                            padding: '7px 14px', borderRadius: 999,
+                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                            color: '#1C1410', backgroundColor: 'transparent', border: '1px solid #DDD4C0', cursor: 'pointer', ...busyStyle,
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                        >
+                          <RotateCcw size={13} strokeWidth={2.6} />
+                          REINSTATE
+                        </button>
                       </div>
                     )}
 
@@ -2582,7 +2647,7 @@ export default function ApplicationsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     {!app.user_id && <NotRegisteredChip />}
                     <RolePill role={app.role} size="sm" />
-                    <StatusPill status={app.status} size="sm" />
+                    <StatusPill status={effectiveStatus(app)} size="sm" />
                     {app.resubmitted_at && (
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
@@ -2803,7 +2868,7 @@ export default function ApplicationsPage() {
 
                 {app.status === 'rejected' && (
                   <button
-                    onClick={() => handleReinstate(app.id)}
+                    onClick={() => openReinstateConfirm(app)}
                     disabled={rowBusy}
                     className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
                     style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
