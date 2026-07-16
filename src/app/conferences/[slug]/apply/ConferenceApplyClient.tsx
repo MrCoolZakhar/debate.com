@@ -1,11 +1,13 @@
 'use client';
 
-import { Fragment, Suspense, useEffect, useState } from 'react';
+import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
+import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { useCredits } from '@/hooks/useCredits';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { formatFee } from '@/lib/utils';
@@ -17,12 +19,13 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
-import { type CustomQuestion, type CustomAnswers, normalizeQuestions, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
+import { type CustomQuestion, type CustomAnswers, normalizeQuestions, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import {
   Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
   GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
   MapPin, Landmark, Check, X, Plus, ArrowLeft, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
+  Info, Coins,
 } from 'lucide-react';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -191,7 +194,97 @@ const STEP_ICON: Record<string, IconType> = {
   Background: ClipboardList,
   Preferences: ListOrdered,
   Experience: GraduationCap,
+  Overview: Coins,
 };
+
+/** Roles a Gavelling credit is charged for at submission — chairs and any
+ *  other role are exempt (see consume_credit_for_application). */
+const CREDIT_CHARGED_ROLES = ['delegate', 'head-delegate', 'faculty-advisor', 'observer'];
+
+/**
+ * The "ℹ️" credit explainer. Per the UI rules, hint/info affordances reveal on
+ * HOVER (not click), and — since the Overview card that hosts it doesn't clip
+ * overflow — still goes through Portal at fixed viewport coordinates so it can
+ * never be cut off if that card's styling changes later (mirrors PaymentMenu's
+ * portal pattern in the applications page).
+ */
+function CreditInfoTip() {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const panelW = 280;
+    const left = Math.min(Math.max(8, r.right - panelW), window.innerWidth - panelW - 8);
+    setPos({ top: r.bottom + 8, left });
+  }, []);
+
+  const openNow = () => {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+    place();
+    setOpen(true);
+  };
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 200);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
+
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label="What are Gavelling credits?"
+        onMouseEnter={openNow}
+        onMouseLeave={scheduleClose}
+        onFocus={openNow}
+        onBlur={scheduleClose}
+        className="flex items-center justify-center rounded-full focus:outline-none"
+        style={{ width: 24, height: 24, backgroundColor: 'rgba(27,56,40,0.08)', border: 'none', cursor: 'default' }}
+      >
+        <Info size={13} strokeWidth={2.4} style={{ color: NEU.forest }} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            onMouseEnter={openNow}
+            onMouseLeave={scheduleClose}
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: 280,
+              backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 14,
+              boxShadow: '0 10px 30px rgba(27,56,40,0.18)', padding: 14,
+            }}
+          >
+            <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(28,20,16,0.8)', fontFamily: OUTFIT }}>
+              Credits are how Gavelling covers processing and platform automation — separate from what you pay the conference itself.
+            </p>
+            <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(28,20,16,0.8)', fontFamily: OUTFIT }}>
+              Credits cost $3 each ($1 in eligible regions); a subscription can include them.
+            </p>
+            <p className="text-xs leading-relaxed font-semibold" style={{ color: NEU.forest, fontFamily: OUTFIT }}>
+              Credits are refunded if your application is rejected, or if you no longer attend the conference.
+            </p>
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
 
 /** SSR-safe prefers-reduced-motion hook. */
 function useReducedMotion(): boolean {
@@ -582,6 +675,13 @@ function ConferenceApplyInner() {
   const [geoCountry, setGeoCountry] = useState<string | null>(null);
   const [upsellDismissed, setUpsellDismissed] = useState(true); // true until localStorage read
 
+  // ── Credits, the personal balance comes from the shared header hook; the
+  // pooled/delegation balance is fetched separately for whichever society
+  // this application would attach to (see previewSocietyId below).
+  const { balance: creditBalance, loading: creditBalanceLoading, refresh: refreshCredits } = useCredits();
+  const [poolBalance, setPoolBalance] = useState<number | null>(null);
+  const [recapOpen, setRecapOpen] = useState(false);
+
   useEffect(() => {
     try {
       setUpsellDismissed(localStorage.getItem('gavin-unlimited-upsell-dismissed') === '1');
@@ -669,12 +769,25 @@ function ConferenceApplyInner() {
   // doesn't apply to them, so experience_level submits null for this role.
   const skipExperience = role === 'faculty-advisor';
 
+  // ── Credit coverage — same logic backs Step 1's note and the Overview
+  // step's gate, so it's computed once here. previewSocietyId anticipates
+  // the society this application would attach to (mirrors handleSubmit's
+  // own societyId resolution for the already-selected-society case; a
+  // brand-new society created at submit time has no pool balance yet, so
+  // it's correctly treated as uncovered until then).
+  const isExemptRole = !CREDIT_CHARGED_ROLES.includes(role);
+  const hasUnlimited = financeProfile.has_active_subscription;
+  const previewSocietyId = !isIndependent && !isObserver ? selectedSocietyId : null;
+  const poolCovered = !!previewSocietyId && (poolBalance ?? 0) > 0;
+  const canApply = isExemptRole || hasUnlimited || poolCovered || (creditBalance ?? 0) >= 1;
+
   const stepSequence = [
     'role',
     'society',
     ...(isInvoicingRole ? ['invoicing'] : []),
     ...(showPreferenceStep ? ['preferences'] : []),
     ...(skipExperience ? [] : ['experience']),
+    'overview',
   ] as const;
   type StepKind = (typeof stepSequence)[number];
   const totalSteps = stepSequence.length;
@@ -685,6 +798,7 @@ function ConferenceApplyInner() {
       case 'invoicing': return 'Invoicing';
       case 'preferences': return 'Preferences';
       case 'experience': return 'Experience';
+      case 'overview': return 'Overview';
     }
   });
   const currentStepKind: StepKind = stepSequence[step - 1] ?? 'role';
@@ -699,6 +813,19 @@ function ConferenceApplyInner() {
     fetchAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, slug, role]);
+
+  // ── Pooled/delegation credit balance for the Overview gate, refetched
+  // whenever the anticipated society changes (independent/observer → null).
+  useEffect(() => {
+    if (!previewSocietyId || !session) { setPoolBalance(null); return; }
+    let cancelled = false;
+    const supabase = getAuthedClient(session.access_token);
+    supabase.rpc('society_credit_balance', { p_society: previewSocietyId }).then(({ data, error }) => {
+      if (cancelled) return;
+      setPoolBalance(!error && typeof data === 'number' ? data : null);
+    });
+    return () => { cancelled = true; };
+  }, [previewSocietyId, session]);
 
   async function fetchAll() {
     setLoading(true);
@@ -963,6 +1090,11 @@ function ConferenceApplyInner() {
     const questionCheck = validateAnswers(normalizeQuestions(roleConfig?.custom_questions ?? []), customAnswers);
     if (!questionCheck.valid) {
       setCustomMissingIds(questionCheck.missingIds);
+      // Submit now happens from the Overview step, but the answers themselves
+      // are edited on Experience — send the applicant back there so the
+      // missing-answer highlights are actually visible.
+      const experienceIdx = stepSequence.indexOf('experience');
+      if (experienceIdx >= 0) setStep(experienceIdx + 1);
       return;
     }
     if (needsDob || underAge) {
@@ -1094,6 +1226,25 @@ function ConferenceApplyInner() {
         .single();
 
       if (appError) throw appError;
+      const newAppId = (app as { id: string }).id;
+
+      // Consume a Gavelling credit for this application. The Overview step
+      // already gated submission on canApply, so need_credit here means the
+      // applicant's coverage changed between viewing Overview and clicking
+      // submit (e.g. balance spent in another tab) — block the redirect and
+      // surface it rather than silently sending an uncharged application
+      // through, the application row stays as-is so a retry (after buying
+      // credits) doesn't create a duplicate.
+      const { data: credit } = await supabase.rpc('consume_credit_for_application', {
+        p_application_id: newAppId,
+      });
+      const creditResult = credit as { ok?: boolean; consumed?: boolean; need_credit?: boolean } | null;
+      if (creditResult?.need_credit) {
+        setSubmitError("You're out of credits. Buy more or upgrade your subscription, then try submitting again.");
+        setSubmitting(false);
+        return;
+      }
+      refreshCredits();
 
       // Record the voucher redemption atomically (BEFORE INSERT trigger locks
       // the voucher row, enforces active/expiry/limit, bumps redeemed_count).
@@ -1103,7 +1254,7 @@ function ConferenceApplyInner() {
         await supabase.rpc('redeem_voucher', {
           p_voucher_id: appliedVoucher.voucherId,
           p_context: 'conference_signup',
-          p_application_id: (app as { id: string }).id,
+          p_application_id: newAppId,
         });
       }
 
@@ -1112,7 +1263,7 @@ function ConferenceApplyInner() {
         // delegate ranked committees without a country). conference_committee_id
         // is always present in every mode.
         const prefRows = preferences.map((p, i) => ({
-          application_id: (app as { id: string }).id,
+          application_id: newAppId,
           preference_order: i + 1,
           conference_committee_id: p.committeeId,
           country_code: p.countryCode || null,
@@ -1378,52 +1529,68 @@ function ConferenceApplyInner() {
               </p>
             )}
 
-            {/* Service fee, includes card processing; platform part waivable */}
-            <div style={{ ...summaryRow, marginBottom: 12, alignItems: 'flex-start' }}>
-              <span style={{ color: 'rgba(28,20,16,0.75)' }}>
-                Service fee
-                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: NEU.muted, marginTop: 2 }}>
-                  {breakdown.platformFeeWaived ? 'Card processing only, platform fee waived' : 'Includes card processing'}
-                </span>
-              </span>
-              <span style={amountStyle}>{formatFee(breakdown.serviceFee, breakdown.currency)}</span>
-            </div>
-
-            {breakdown.waiverSource === 'ambassador' ? (
-              <div
-                className="rounded-xl px-3.5 py-2.5"
-                style={{
-                  marginBottom: 12,
-                  background: 'linear-gradient(150deg, rgba(238,217,138,0.32), rgba(182,135,31,0.14))',
-                  border: '1.5px solid rgba(182,135,31,0.5)',
-                }}
-              >
-                <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11.5, letterSpacing: '0.06em', color: '#7A5A20' }}>
-                  <Crown size={14} strokeWidth={2.3} style={{ color: NEU.deepGold }} />
-                  AMBASSADOR: platform fee waived, always
+            {/* Conference fee, no service fee shown — payment happens later,
+                direct to the conference, once the applicant is accepted. */}
+            <div style={{ borderTop: '1.5px solid rgba(27,56,40,0.14)', paddingTop: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.18em', color: NEU.muted }}>CONFERENCE FEE</span>
+                <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 28, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                  {formatFee(breakdown.postDiscount, breakdown.currency)}
                 </span>
               </div>
-            ) : breakdown.waiverSource === 'unlimited' ? (
-              <div
-                className="rounded-xl px-3.5 py-2.5"
-                style={{ marginBottom: 12, backgroundColor: 'rgba(27,56,40,0.07)', border: '1.5px solid rgba(27,56,40,0.28)' }}
-              >
-                <span className="inline-flex items-center gap-2" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.forest }}>
-                  <InfinityIcon size={14} strokeWidth={2.4} />
-                  Gavelling Unlimited: platform fee waived{financeProfile.has_active_subscription ? '' : ` (${financeProfile.unlimited_conferences_remaining} left)`}
-                </span>
-              </div>
-            ) : null}
-
-            {/* Total, big tabular-nums */}
-            <div style={{ borderTop: '1.5px solid rgba(27,56,40,0.14)', paddingTop: 12, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.18em', color: NEU.muted }}>TOTAL</span>
-              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 28, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                {formatFee(breakdown.total, breakdown.currency)}
-              </span>
+              <p className="text-right mt-1" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
+                Paid to the conference after you&apos;re accepted.
+              </p>
             </div>
           </NeuInset>
         )}
+
+        {/* ── Journey card, always shown (including FREE-fee roles) ── */}
+        <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: 'rgba(27,56,40,0.04)', border: '1.5px solid rgba(27,56,40,0.12)' }}>
+          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.22em', color: NEU.muted, marginBottom: 16 }}>
+            YOUR JOURNEY
+          </p>
+          <div className="flex items-start">
+            {[
+              'Apply',
+              rc.auto_accept ? 'Instantly accepted' : 'Get accepted',
+              'Pay the conference',
+              'Manage in Gavelling',
+            ].map((label, i) => (
+              <Fragment key={label}>
+                {i > 0 && <div style={{ flex: 1, height: 1, backgroundColor: 'rgba(27,56,40,0.18)', marginTop: 15 }} />}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 74 }}>
+                  <div
+                    style={{
+                      width: 30, height: 30, borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: 'rgba(27,56,40,0.09)', border: '1px solid rgba(27,56,40,0.2)',
+                    }}
+                  >
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, color: NEU.forest }}>{i + 1}</span>
+                  </div>
+                  <span style={{ fontSize: 10.5, marginTop: 6, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>
+                    {label}
+                  </span>
+                </div>
+              </Fragment>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Credit note, same coverage logic as the Overview step's gate ── */}
+        <div className="flex items-center gap-2 mb-6 px-1">
+          <Coins size={14} strokeWidth={2.2} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+          <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.muted }}>
+            {isExemptRole
+              ? 'No credit needed for this role.'
+              : hasUnlimited
+              ? 'Applying uses 1 Gavelling credit — included with Unlimited'
+              : poolCovered
+              ? 'Applying uses 1 Gavelling credit — covered by your delegation'
+              : 'Applying uses 1 Gavelling credit'}
+          </p>
+        </div>
 
         {/* ── Gavin upsell, only when no waiver is active; dismissable; never blocks ── */}
         {showUpsell && (
@@ -2058,19 +2225,191 @@ function ConferenceApplyInner() {
             ← BACK
           </button>
           <button
+            onClick={handleContinue}
+            className="flex-1 rounded-xl py-3 px-8 text-sm font-bold focus:outline-none transition-colors flex items-center justify-center gap-2"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            CONTINUE <ArrowRight size={16} strokeWidth={2.4} />
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  /**
+   * Final step — read-only recap + the credit gate. Submit lives here only;
+   * every earlier step advances via handleContinue/advanceStep now that
+   * 'overview' is always last in stepSequence.
+   */
+  function renderStepOverview() {
+    const questions = normalizeQuestions(roleConfig?.custom_questions ?? []);
+    const societyLabel = isObserver ? null : isIndependent ? 'Independent' : (societyInput.trim() || '—');
+    const tierLabel = hasUnlimited ? 'Unlimited' : 'Free';
+    const costLabel = isExemptRole
+      ? 'No credit needed for this role.'
+      : hasUnlimited
+      ? 'Included with Gavelling Unlimited ∞'
+      : poolCovered
+      ? 'Covered by your delegation'
+      : 'This application uses 1 Gavelling credit';
+    // Edit mode resubmits the existing application via resubmit_application —
+    // it never runs the credit-consuming create path in handleSubmit, so the
+    // gate/cost card only applies to fresh submissions.
+    const gated = !isEditMode && !canApply;
+
+    return (
+      <>
+        <StepHeading icon={BadgeCheck} title="Overview" subtitle="Review your application before submitting." />
+
+        {/* ── Application recap, collapsed by default (click to toggle) ── */}
+        <button
+          type="button"
+          onClick={() => setRecapOpen(v => !v)}
+          className="w-full flex items-center justify-between rounded-xl px-4 py-3 mb-2 focus:outline-none"
+          style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}
+        >
+          <span className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+            Your application
+          </span>
+          {recapOpen
+            ? <ChevronUp size={18} strokeWidth={2.3} style={{ color: NEU.muted }} />
+            : <ChevronDown size={18} strokeWidth={2.3} style={{ color: NEU.muted }} />}
+        </button>
+
+        {recapOpen && (
+          <NeuInset className="p-4 mb-4" small>
+            <div className="flex flex-col gap-3">
+              <div>
+                <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted, marginBottom: 3 }}>ROLE</p>
+                <p className="capitalize" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, color: NEU.ink }}>{role.replace(/-/g, ' ')}</p>
+              </div>
+
+              {societyLabel && (
+                <div>
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted, marginBottom: 3 }}>DELEGATION</p>
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, color: NEU.ink }}>{societyLabel}</p>
+                </div>
+              )}
+
+              {showPreferenceStep && (
+                <div>
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted, marginBottom: 3 }}>PREFERENCES</p>
+                  {preferences.length === 0 ? (
+                    <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, fontStyle: 'italic' }}>None selected.</p>
+                  ) : (
+                    <ol className="flex flex-col gap-1">
+                      {preferences.map((p, i) => (
+                        <li key={i} style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink }}>
+                          {i + 1}. {p.committeeName}{p.countryName ? ` — ${p.countryName}` : ''}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )}
+
+              {!skipExperience && (
+                <div>
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted, marginBottom: 3 }}>EXPERIENCE</p>
+                  <p className="capitalize" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13.5, color: NEU.ink }}>{experienceLevel || '—'}</p>
+                </div>
+              )}
+
+              {questions.length > 0 && (
+                <div className="flex flex-col gap-2.5 pt-1" style={{ borderTop: '1px solid rgba(27,56,40,0.1)' }}>
+                  {questions.map(q => {
+                    const ans = displayAnswer(q, customAnswers[q.id]);
+                    return (
+                      <div key={q.id}>
+                        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.ink, marginBottom: 2 }}>{q.label}</p>
+                        <p className="whitespace-pre-wrap" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: ans ? NEU.muted : '#B08A6A', fontStyle: ans ? 'normal' : 'italic' }}>
+                          {ans || 'No answer provided.'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </NeuInset>
+        )}
+
+        {/* ── Cost card ── */}
+        <div className="relative rounded-2xl p-5 mb-4" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}>
+          <div className="absolute top-3.5 right-3.5">
+            <CreditInfoTip />
+          </div>
+
+          <div className="flex items-center gap-3 mb-3 pr-8">
+            <span
+              className="flex items-center justify-center flex-shrink-0"
+              style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, #2A5A3C)' }}
+            >
+              <Coins size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
+            </span>
+            <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              {costLabel}
+            </p>
+          </div>
+
+          {!isExemptRole && !hasUnlimited && !poolCovered && (
+            <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              You have {creditBalanceLoading || creditBalance === null ? '—' : creditBalance} credit{creditBalance === 1 ? '' : 's'}.
+            </p>
+          )}
+
+          {/* Subscription placard */}
+          <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid rgba(27,56,40,0.1)' }}>
+            <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11.5, color: NEU.muted }}>Your plan</span>
+            <Pill tone={hasUnlimited ? 'gold' : 'neutral'} icon={hasUnlimited ? <InfinityIcon size={12} strokeWidth={2.4} /> : undefined}>
+              {tierLabel}
+            </Pill>
+          </div>
+        </div>
+
+        {gated && (
+          <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
+            <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+              Out of credits?{' '}
+              <Link href="/account/unlimited" style={{ color: '#8B2020', textDecoration: 'underline' }}>
+                Buy more or upgrade your subscription!
+              </Link>
+            </p>
+          </div>
+        )}
+
+        {submitError && (
+          <p className="mb-4 text-sm" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+            {submitError}
+          </p>
+        )}
+
+        <div className="flex justify-between mt-2 gap-4">
+          <button
+            onClick={() => setStep(s => s - 1)}
+            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
+            style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: OUTFIT }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            ← BACK
+          </button>
+          <button
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || gated}
             className="flex-1 rounded-xl py-3 px-8 text-sm font-bold focus:outline-none transition-colors"
             style={{
-              backgroundColor: submitting ? 'rgba(27,56,40,0.5)' : '#1B3828',
-              color: '#EED98A',
-              fontFamily: "'Outfit', sans-serif",
+              backgroundColor: (submitting || gated) ? 'rgba(27,56,40,0.35)' : '#1B3828',
+              color: (submitting || gated) ? NEU.muted : '#EED98A',
+              fontFamily: OUTFIT,
               letterSpacing: '0.08em',
-              cursor: submitting ? 'not-allowed' : 'pointer',
-              boxShadow: submitting ? 'none' : '0 6px 18px rgba(27,56,40,0.22)',
+              cursor: (submitting || gated) ? 'not-allowed' : 'pointer',
+              boxShadow: (submitting || gated) ? 'none' : '0 6px 18px rgba(27,56,40,0.22)',
             }}
-            onMouseEnter={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            onMouseEnter={(e) => { if (!submitting && !gated) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={(e) => { if (!submitting && !gated) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
             {submitting ? (
               <span className="flex items-center justify-center gap-2">
@@ -2354,6 +2693,7 @@ function ConferenceApplyInner() {
           {currentStepKind === 'invoicing' && renderStepInvoicing()}
           {currentStepKind === 'preferences' && renderStep3Preferences()}
           {currentStepKind === 'experience' && renderStepExperience()}
+          {currentStepKind === 'overview' && renderStepOverview()}
         </div>
 
         {submitError && (
