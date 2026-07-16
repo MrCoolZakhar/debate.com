@@ -740,10 +740,11 @@ const ROLE_OPTIONS = [
   { label: 'Observers', value: 'observer' },
 ];
 
-// Chairs are hidden by default (#2): every participant role EXCEPT chair. Used
-// to seed the participants filter and to detect the "default scope" for the
-// Total stat tile.
-const DEFAULT_ROLES = ['delegate', 'head-delegate', 'faculty-advisor', 'observer'];
+// Default participants filter is EMPTY = no constraint, every role (including
+// chair) is visible on a fresh page load. Used to seed the participants filter
+// and to detect the "default scope" for the Total stat tile — an empty role
+// set here doubles as "no active filter" for activeFilterCount below.
+const DEFAULT_ROLES: string[] = [];
 
 /** Set equality for the small filter sets. */
 function sameSet(a: Set<string>, b: string[]): boolean {
@@ -1032,9 +1033,8 @@ export default function ApplicationsPage() {
   const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status);
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
-  // Chairs are hidden by default (#2): the fresh participants filter carries
-  // every non-chair role, so the row list and stat scope both exclude chairs
-  // until the organiser turns Chairs on.
+  // Empty role set = no constraint, so a fresh page shows every role
+  // (including chairs) in both the row list and the stat scope.
   const [filters, setFilters] = useState<FilterState>({
     status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '',
   });
@@ -1841,7 +1841,7 @@ export default function ApplicationsPage() {
 
   const activeFilterCount =
     (filters.status.size > 0 ? 1 : 0) +
-    // The default participants set (chairs hidden) is not a "changed" filter.
+    // DEFAULT_ROLES is empty, so any non-empty role selection counts as active.
     (!sameSet(filters.role, DEFAULT_ROLES) ? 1 : 0) +
     (filters.payment.size > 0 ? 1 : 0) +
     (filters.dateFrom || filters.dateTo ? 1 : 0);
@@ -1873,8 +1873,8 @@ export default function ApplicationsPage() {
     : null;
 
   // Stat tiles count over the SAME population the list shows by role/date/aid
-  // (so hiding chairs lowers Total sensibly, #2/#10) but ignore the status /
-  // payment dimensions — those are exactly what the tiles let you click into.
+  // (all roles by default, #10) but ignore the status / payment dimensions —
+  // those are exactly what the tiles let you click into.
   const statScope = applications.filter(a => {
     if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
@@ -1975,6 +1975,14 @@ export default function ApplicationsPage() {
           <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
         ))}
       </div>
+
+      {/* Visible reminder that a filter is narrowing the list — a role/status/
+          payment/date filter can never silently hide rows again. */}
+      {!loading && filtered.length < applications.length && (
+        <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted }}>
+          Showing {filtered.length} of {applications.length} — filters active
+        </p>
+      )}
 
       {/* Loading */}
       {loading && (
