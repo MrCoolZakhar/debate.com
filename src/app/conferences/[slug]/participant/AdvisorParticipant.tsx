@@ -8,8 +8,9 @@ import DelegationPanel from './DelegationPanel';
 import PledgeInvoicingCard from './PledgeInvoicingCard';
 import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantApplication, ParticipantRoleConfig } from './types';
+import { type CustomQuestion } from '@/lib/customQuestions';
 
-export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote }: {
+export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, financialAidEnabled, aidQuestions, aidIntro }: {
   conferenceId: string;
   application: ParticipantApplication;
   allocationSwapMode: string;
@@ -18,6 +19,9 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
   paymentsEnabled: boolean;
   externalPaymentUrl: string | null;
   externalPaymentNote: string | null;
+  financialAidEnabled: boolean;
+  aidQuestions: CustomQuestion[];
+  aidIntro: string | null;
 }) {
   if (!application.society_id) {
     return (
@@ -41,6 +45,7 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
       <PledgeInvoicingCard
         applicationId={application.id}
         conferenceId={conferenceId}
+        societyId={application.society_id}
         amountPaid={application.amount_paid}
         pledgeType={application.pledge_type}
         spotsPledged={application.spots_pledged}
@@ -51,6 +56,9 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
         paymentsEnabled={paymentsEnabled}
         externalPaymentUrl={externalPaymentUrl}
         externalPaymentNote={externalPaymentNote}
+        financialAidEnabled={financialAidEnabled}
+        aidQuestions={aidQuestions}
+        aidIntro={aidIntro}
       />
     </div>
   );

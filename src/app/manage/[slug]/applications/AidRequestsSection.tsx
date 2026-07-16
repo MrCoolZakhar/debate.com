@@ -29,6 +29,10 @@ interface AidRequestRow {
   granted_amount: number | null;
   reviewed_at: string | null;
   created_at: string;
+  /** Set for delegation-pool requests (submitted by an advisor for their whole
+   *  delegation); null for individual requests, unchanged behaviour. */
+  society_id: string | null;
+  societies: { name: string } | null;
   applications: {
     id: string;
     role: string;
@@ -74,6 +78,19 @@ function StatusChip({ status }: { status: AidRequestRow['status'] }) {
   );
 }
 
+/** Marks a pool request an advisor filed for their whole delegation, distinct
+ *  from an individual applicant's own aid request. */
+function DelegationChip() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
+      style={{ fontSize: 9, fontFamily: OUTFIT, letterSpacing: '0.08em', backgroundColor: '#1B3828', color: '#EED98A', border: '1px solid #1B3828' }}
+    >
+      DELEGATION
+    </span>
+  );
+}
+
 export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQuestions }: { conferenceId: string; conferenceSlug: string; aidQuestions: CustomQuestion[] }) {
   const { session } = useAuth();
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
@@ -101,6 +118,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQu
         .from('financial_aid_requests')
         .select(`
           id, application_id, user_id, statement, requested_amount, custom_answers, status, granted_amount, reviewed_at, created_at,
+          society_id, societies (name),
           applications (id, role, payment_status, profiles (display_name, email))
         `)
         .eq('conference_id', conferenceId)
@@ -158,9 +176,12 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQu
       return;
     }
 
-    // Full grant: nothing is owed, waive the application's fee so they have access.
+    // Full grant on an INDIVIDUAL request: nothing is owed, waive the
+    // application's fee so they have access. Delegation requests are a pool
+    // applied to spot pricing server-side at checkout — never auto-waive the
+    // advisor's own role fee for those.
     const { amount: fee } = roleFeeFor(r.applications.role);
-    if (granted >= fee) {
+    if (!r.society_id && granted >= fee) {
       const { data: waiveData, error: waiveError } = await supabase
         .from('applications')
         .update({ payment_status: 'waived' })
@@ -290,8 +311,11 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQu
       ) : (
         <div className="flex flex-col gap-2.5">
           {filtered.map(r => {
-            const name = r.applications?.profiles?.display_name ?? 'Unknown applicant';
-            const { amount: fee, currency } = roleFeeFor(r.applications?.role ?? '');
+            const isDelegation = !!r.society_id;
+            const name = isDelegation
+              ? (r.societies?.name ?? 'Unknown delegation')
+              : (r.applications?.profiles?.display_name ?? 'Unknown applicant');
+            const { amount: fee, currency } = roleFeeFor(isDelegation ? 'delegate' : (r.applications?.role ?? ''));
             return (
               <button
                 key={r.id}
@@ -302,12 +326,21 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQu
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <p className="font-semibold text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
-                    <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{roleLabel(r.applications?.role ?? '')}</span>
+                    {isDelegation ? (
+                      <>
+                        <DelegationChip />
+                        <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                          {r.applications?.profiles?.display_name ?? 'Unknown advisor'}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{roleLabel(r.applications?.role ?? '')}</span>
+                    )}
                     <StatusChip status={r.status} />
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-                      Fee {formatFee(fee, currency)}
+                      {isDelegation ? 'Delegation pool' : `Fee ${formatFee(fee, currency)}`}
                       {r.requested_amount != null && ` · Requested ${formatFee(r.requested_amount, currency)}`}
                       {r.status === 'approved' && r.granted_amount != null && ` · Granted ${formatFee(r.granted_amount, currency)}`}
                     </span>
@@ -333,8 +366,12 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQu
               <StatusChip status={reviewing.status} />
             </div>
             <p className="text-xs -mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-              {roleLabel(reviewing.applications?.role ?? '')} · Fee {formatFee(roleFeeFor(reviewing.applications?.role ?? '').amount, roleFeeFor(reviewing.applications?.role ?? '').currency)}
-              {reviewing.requested_amount != null && ` · Requested ${formatFee(reviewing.requested_amount, roleFeeFor(reviewing.applications?.role ?? '').currency)}`}
+              {reviewing.society_id ? (
+                <>Delegation · {reviewing.societies?.name ?? 'Unknown delegation'}</>
+              ) : (
+                <>{roleLabel(reviewing.applications?.role ?? '')} · Fee {formatFee(roleFeeFor(reviewing.applications?.role ?? '').amount, roleFeeFor(reviewing.applications?.role ?? '').currency)}</>
+              )}
+              {reviewing.requested_amount != null && ` · Requested ${formatFee(reviewing.requested_amount, roleFeeFor(reviewing.society_id ? 'delegate' : (reviewing.applications?.role ?? '')).currency)}`}
             </p>
 
             <div>
@@ -367,7 +404,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQu
               <div className="pt-3 flex flex-col gap-3" style={{ borderTop: '1px solid #F0EDE6' }}>
                 <div>
                   <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                    Amount to grant
+                    {reviewing.society_id ? 'Amount to grant to the delegation' : 'Amount to grant'}
                   </label>
                   <input
                     type="number"
@@ -379,7 +416,9 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQu
                     style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
                   />
                   <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                    Granting the full fee amount also waives their remaining balance automatically.
+                    {reviewing.society_id
+                      ? "This amount is a pool applied across the delegation's spots at checkout."
+                      : 'Granting the full fee amount also waives their remaining balance automatically.'}
                   </p>
                 </div>
 

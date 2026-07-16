@@ -181,6 +181,9 @@ export default function ParticipantView({
                 paymentsEnabled={paymentsEnabled}
                 externalPaymentUrl={externalPaymentUrl}
                 externalPaymentNote={externalPaymentNote}
+                financialAidEnabled={financialAidEnabled}
+                aidQuestions={aidQuestions}
+                aidIntro={aidIntro}
               />
             ) : selected.role === 'chair' ? (
               <ChairParticipant conferenceId={conferenceId} />
