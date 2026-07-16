@@ -325,12 +325,6 @@ export default function PledgeInvoicingCard({
             </div>
           )}
 
-          {!fullyCovered && remaining > 0 && paymentsEnabled && (
-            <p className="text-[11px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-              A service fee is added at checkout.
-            </p>
-          )}
-
           {payError && (
             <div
               className="flex items-start gap-2 rounded-xl px-3.5 py-2.5"

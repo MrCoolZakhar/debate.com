@@ -930,7 +930,6 @@ export default function ConferenceDetailClient() {
   const countryObj = getCountryByName(conference.country);
   const countrySupported = !countryObj?.code || SUPPORTED_PAYOUT_COUNTRIES.has(countryObj.code);
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
-  const hasUnlimited = profile?.unlimited_status && profile.unlimited_status !== 'none';
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
   const now = new Date();
   // Single source of truth for public fee displays (hero circle, cards): the
@@ -2058,25 +2057,6 @@ export default function ConferenceDetailClient() {
                             </div>
                           );
                         })}
-                        <p className="text-[10.5px] mt-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.65 }}>
-                          A 5% Gavelling surcharge applies at checkout, waived with{' '}
-                          <span style={{ color: '#B6871F', fontWeight: 600 }}>Gavelling Unlimited</span>.
-                        </p>
-                        {hasUnlimited && (
-                          <div className="mt-2">
-                            <span
-                              className="text-[10px] px-2 py-0.5 rounded-full"
-                              style={{
-                                backgroundColor: 'rgba(238,217,138,0.15)',
-                                color: '#B6871F',
-                                fontFamily: "'Outfit', sans-serif",
-                                fontWeight: 500,
-                              }}
-                            >
-                              ✦ Surcharge waived with your Unlimited plan
-                            </span>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>

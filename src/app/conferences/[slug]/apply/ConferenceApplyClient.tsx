@@ -877,9 +877,9 @@ function ConferenceApplyInner() {
         .maybeSingle(),
       // Personal Gavelling Unlimited subscription: owner_user_id = the
       // applicant, conference_id NULL (never conference-scoped), active/
-      // trialing and not expired. Drives has_active_subscription below so
-      // the order summary's Service fee line matches what create-checkout
-      // will actually charge.
+      // trialing and not expired. Drives has_active_subscription below,
+      // recorded as fee_waiver_source for reporting — the conference fee
+      // itself carries no Gavelling surcharge regardless.
       supabase
         .from('subscriptions')
         .select('id')
@@ -1622,7 +1622,7 @@ function ConferenceApplyInner() {
                 You could be saving {localizedApproxSavings(10, geoCountry)}/month with Gavelling Unlimited
               </p>
               <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, lineHeight: 1.6 }}>
-                5% off every conference · Gavelling Points for merchandise · Full Premium features
+                Unlimited Gavelling credits · Gavelling Points for merchandise · Full Premium features
               </p>
               <Link
                 href="/account/points"

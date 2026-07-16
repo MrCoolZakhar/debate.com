@@ -3,8 +3,10 @@
 // Payment panel, never gated, always visible per selected application.
 // PAY opens a real Stripe Checkout session (src/lib/payments.ts) — the
 // server recomputes every amount, this panel only mirrors that math (active
-// fee phase, remaining balance, 5% platform fee note) to preview it, and
-// surfaces whatever the server actually decides inline.
+// fee phase, remaining balance) to preview it, and surfaces whatever the
+// server actually decides inline. No Gavelling fee/surcharge: the delegate
+// pays exactly the conference fee minus voucher/aid — Gavelling now runs on
+// credits charged to the applicant separately (see useCredits/apply flow).
 
 import { useEffect, useState } from 'react';
 import { CreditCard, Mail, TriangleAlert } from 'lucide-react';
@@ -157,25 +159,6 @@ export default function PaymentPanel({
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [stubMessage, setStubMessage] = useState<string | null>(null);
-  // Suppresses the platform-fee note when the viewer holds an active PERSONAL
-  // Gavelling Unlimited subscription (owner_user_id = them, conference_id
-  // NULL) — Unlimited is a personal plan, not scoped to this conference.
-  const [hasActiveUnlimited, setHasActiveUnlimited] = useState(false);
-
-  useEffect(() => {
-    if (!user || !session) return;
-    let cancelled = false;
-    getAuthedClient(session.access_token)
-      .from('subscriptions')
-      .select('id')
-      .eq('owner_user_id', user.id)
-      .is('conference_id', null)
-      .in('status', ['active', 'trialing'])
-      .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
-      .limit(1)
-      .then(({ data }) => { if (!cancelled) setHasActiveUnlimited(!!data && data.length > 0); });
-    return () => { cancelled = true; };
-  }, [user, session]);
 
   const amountToCharge = showAmountSelector ? Math.min(Math.max(parseFloat(customAmount) || 1, 1), Math.max(remaining, 1)) : remaining;
 
@@ -229,12 +212,6 @@ export default function PaymentPanel({
       {allowPartial && fee > 0 && grantedAmount === 0 && (
         <p className="text-xs mb-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           Remaining balance: <span style={{ fontWeight: 700, color: '#1C1410' }}>{formatFee(remaining, currency)}</span>
-        </p>
-      )}
-
-      {fee > 0 && payableNow && paymentsEnabled && (
-        <p className="text-[11px] mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-          {hasActiveUnlimited ? 'A card processing fee is added at checkout.' : 'A service fee is added at checkout.'}
         </p>
       )}
 
