@@ -984,7 +984,7 @@ function ConferenceApplyInner() {
    */
   async function loadPreferenceData() {
     if (!session || !conference) return;
-    if (committees.length === 0) { setPrefDataLoaded(true); return; }
+    if (committees.length === 0) return;
     setPrefDataLoading(true);
     const supabase = getAuthedClient(session.access_token);
     const ids = committees.map(c => c.id);
