@@ -286,6 +286,49 @@ export default function ConferencesMapPage() {
     setHovered(null);
   }
 
+  // Shared world → continent transition, driven by BOTH desktop scroll and a
+  // touch/click tap on a continent (mobile has no hover or wheel).
+  function enterContinent(key: ContinentKey) {
+    const continent = CONTINENTS.find((c) => c.key === key);
+    if (!continent) return;
+    setHovered(key);
+    setSelected(key);
+    setPhase('clouds');
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play();
+    }
+    setTimeout(() => {
+      setPhase('continent');
+      setCardLoading(true);
+      Promise.all([
+        fetchActiveConferences(continent.countries),
+        fetchContinentDetail(continent.countries),
+      ]).then(([cnt, det]) => {
+        setActiveCount(cnt);
+        setDetail({ activeCount: cnt, highlighted: det.highlighted, flagCountries: det.flagCountries });
+        setCardLoading(false);
+      });
+    }, 1700);
+  }
+
+  // Shared continent → world transition (desktop scroll-up + mobile back button).
+  function exitContinent() {
+    setPhase('clouds');
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play();
+    }
+    setTimeout(() => {
+      setPhase('world');
+      setSelected(null);
+      setHovered(null);
+      setActiveCount(0);
+      setDetail(null);
+      recheckHover();
+    }, 1700);
+  }
+
   // Forward scroll: world → clouds → continent
   useEffect(() => {
     if (phase !== 'world') return;
@@ -293,31 +336,7 @@ export default function ConferencesMapPage() {
     const handleWheel = () => {
       const key = hoveredRef.current;
       if (!key) return;
-
-      const continent = CONTINENTS.find((c) => c.key === key);
-      if (!continent) return;
-
-      setSelected(key);
-      setPhase('clouds');
-
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-        videoRef.current.play();
-      }
-
-      setTimeout(() => {
-        setPhase('continent');
-        setCardLoading(true);
-
-        Promise.all([
-          fetchActiveConferences(continent.countries),
-          fetchContinentDetail(continent.countries),
-        ]).then(([cnt, det]) => {
-          setActiveCount(cnt);
-          setDetail({ activeCount: cnt, highlighted: det.highlighted, flagCountries: det.flagCountries });
-          setCardLoading(false);
-        });
-      }, 1700);
+      enterContinent(key);
     };
 
     document.addEventListener('wheel', handleWheel);
@@ -330,19 +349,7 @@ export default function ConferencesMapPage() {
 
     const handleScrollUp = (e: WheelEvent) => {
       if (e.deltaY >= 0) return;
-      setPhase('clouds');
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-        videoRef.current.play();
-      }
-      setTimeout(() => {
-        setPhase('world');
-        setSelected(null);
-        setHovered(null);
-        setActiveCount(0);
-        setDetail(null);
-        recheckHover();
-      }, 1700);
+      exitContinent();
     };
 
     document.addEventListener('wheel', handleScrollUp);
@@ -542,9 +549,10 @@ export default function ConferencesMapPage() {
               stroke="transparent"
               strokeWidth={1.5}
               vectorEffect="non-scaling-stroke"
-              style={{ pointerEvents: 'all', cursor: 'crosshair' }}
+              style={{ pointerEvents: 'all', cursor: 'pointer' }}
               onMouseEnter={() => setHovered(cont.key)}
               onMouseLeave={() => setHovered(null)}
+              onClick={() => enterContinent(cont.key)}
             />
           ))}
         </svg>
@@ -839,8 +847,9 @@ export default function ConferencesMapPage() {
             </div>
           </div>
 
-          {/* Scroll-up-to-return hint */}
+          {/* Scroll-up-to-return hint — desktop only (mobile uses the tap button) */}
           <div
+            className="hidden md:block"
             style={{
               position: 'absolute',
               zIndex: 30,
@@ -870,9 +879,10 @@ export default function ConferencesMapPage() {
         </>
       )}
 
-      {/* LAYER 10, Hint text (world phase) */}
+      {/* LAYER 10, Hint text (world phase) — desktop only (mobile gets a tap list) */}
       {phase === 'world' && (
         <div
+          className="hidden md:block"
           style={{
             position: 'absolute',
             bottom: 32,
@@ -898,7 +908,7 @@ export default function ConferencesMapPage() {
               boxShadow: '0 2px 12px rgba(27,56,40,0.15)',
             }}
           >
-            HOVER A CONTINENT AND SCROLL TO EXPLORE
+            TAP A CONTINENT TO EXPLORE
           </p>
         </div>
       )}
@@ -926,6 +936,70 @@ export default function ConferencesMapPage() {
           >
             ← BACK TO CONFERENCES
           </Link>
+        </div>
+      )}
+
+      {/* Mobile continent picker — the SVG hover zones are laid out in a
+          100×100 space stretched with preserveAspectRatio="none", so they don't
+          line up with the continents on a portrait viewport. Touch users get an
+          explicit tappable list instead of the (mobile-broken) hover map. */}
+      {phase === 'world' && (
+        <div className="md:hidden" style={{ position: 'absolute', left: 0, right: 0, bottom: 92, zIndex: 30, padding: '0 16px' }}>
+          <p style={{ textAlign: 'center', margin: '0 0 10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 10.5, letterSpacing: '0.14em', color: '#EDE7D8', textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}>
+            TAP A CONTINENT
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxWidth: 340, margin: '0 auto' }}>
+            {CONTINENTS.map((cont) => (
+              <button
+                key={cont.key}
+                type="button"
+                onClick={() => enterContinent(cont.key)}
+                style={{
+                  backgroundColor: 'rgba(27,56,40,0.86)',
+                  border: '1px solid rgba(238,217,138,0.22)',
+                  borderRadius: 12,
+                  padding: '12px 10px',
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: '#EDE7D8',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.03em',
+                  cursor: 'pointer',
+                  WebkitBackdropFilter: 'blur(4px)',
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                {cont.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Back to the world map (continent phase) — a tappable control so touch
+          users, who have no scroll-up gesture, can return to the map. */}
+      {phase === 'continent' && (
+        <div style={{ position: 'absolute', bottom: 32, left: 48, zIndex: 30 }}>
+          <button
+            type="button"
+            onClick={exitContinent}
+            style={{
+              backgroundColor: '#1B3828',
+              border: '1px solid rgba(238,217,138,0.15)',
+              borderRadius: 24,
+              padding: '9px 22px',
+              fontSize: 11,
+              fontWeight: 700,
+              color: '#EDE7D8',
+              fontFamily: "'Outfit', sans-serif",
+              letterSpacing: '0.14em',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 12px rgba(27,56,40,0.15)',
+              cursor: 'pointer',
+            }}
+          >
+            ← BACK TO MAP
+          </button>
         </div>
       )}
     </div>

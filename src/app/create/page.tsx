@@ -294,7 +294,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
   const isHovered = (id: string) => hovered === id;
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 relative z-10 overflow-hidden">
+    <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-8 relative z-10 overflow-hidden">
 
       {/* Bottom surface shadow */}
       <div
@@ -316,21 +316,22 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
       {/* Headline */}
       <h1
         className="font-black uppercase tracking-wide text-center mb-4 relative"
-        style={{ fontSize: '48px', lineHeight: 1.05, color: '#1B3828' }}
+        style={{ fontSize: 'clamp(30px, 7vw, 48px)', lineHeight: 1.05, color: '#1B3828' }}
       >
         {t('create_select_type')}
       </h1>
 
       {/* Subtitle */}
       <p
-        className="text-center mb-12 relative"
-        style={{ fontSize: '16px', color: '#6A5A4A', maxWidth: '560px', lineHeight: 1.65, whiteSpace: 'nowrap' }}
+        className="text-center mb-8 md:mb-12 relative px-4"
+        style={{ fontSize: '16px', color: '#6A5A4A', maxWidth: '560px', lineHeight: 1.65 }}
       >
         {t('create_choose_format')}
       </p>
 
-      {/* Cards row */}
-      <div className="flex flex-row items-end justify-center gap-5 relative" style={{ maxWidth: '900px', width: '100%', height: '460px' }}>
+      {/* Cards row — horizontal scroll-snap on mobile so all three stay reachable
+          within the fixed cockpit width; centered, no-scroll from md up. */}
+      <div className="flex flex-row items-end md:justify-center gap-5 relative w-full overflow-x-auto md:overflow-visible px-6 md:px-0 snap-x snap-mandatory" style={{ maxWidth: '900px', height: '460px' }}>
         {cards.map((card) => {
           const active = isHovered(card.id);
           const isMun = card.id === 'mun';
@@ -339,7 +340,7 @@ function SelectScreen({ onSelect }: { onSelect: () => void }) {
               key={card.id}
               onMouseEnter={() => setHovered(card.id)}
               onMouseLeave={() => setHovered('mun')}
-              className="relative flex flex-col items-center rounded-2xl overflow-hidden"
+              className="relative flex flex-col items-center rounded-2xl overflow-hidden flex-shrink-0 snap-center"
               style={{
                 backgroundColor: card.bg,
                 border: card.id === 'mun' ? `1.5px solid ${card.border}` : `1.5px dashed ${card.border}`,

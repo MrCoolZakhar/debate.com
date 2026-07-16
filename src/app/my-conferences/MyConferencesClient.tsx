@@ -819,8 +819,8 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
       className={embedded ? 'w-full' : 'relative z-10 flex-1 px-6 py-10'}
       style={embedded ? undefined : { maxWidth: '1000px', margin: '0 auto', width: '100%' }}
     >
-        <div className="flex items-start justify-between gap-4">
-          <div>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="min-w-0">
             <Eyebrow className="mb-2">Every Role, One Place</Eyebrow>
             <h1 className="font-black text-[26px] mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>
               My Conferences
@@ -829,7 +829,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
               Every conference you&apos;re part of, sorted by the role you hold there.
             </p>
           </div>
-          <div className="flex-shrink-0 mt-1">
+          <div className="flex-shrink-0 sm:mt-1">
             <NeuAnchorCta href="/conferences/new" icon={Plus}>Organise a conference</NeuAnchorCta>
           </div>
         </div>

@@ -889,10 +889,10 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 56px)', padding: '14px 20px 20px' }}>
         <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 48, backgroundColor: NEU.surface, boxShadow: NEU.out, marginBottom: 12 }} />
-        <div className="flex" style={{ alignItems: 'stretch', gap: 14 }}>
-          <div className="rounded-[22px] animate-pulse" style={{ flexBasis: '32%', flexShrink: 0, minWidth: 300, height: 450, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+        <div className="flex flex-col xl:flex-row" style={{ alignItems: 'stretch', gap: 14 }}>
+          <div className="rounded-[22px] animate-pulse w-full xl:basis-[32%] xl:shrink-0 xl:min-w-[300px]" style={{ height: 450, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
           <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: 14 }}>
-            <div className="flex-shrink-0" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1.7fr) repeat(3, minmax(0,1fr))', gap: 14, height: 166 }}>
+            <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 h-auto xl:h-[166px] xl:[grid-template-columns:minmax(0,1.15fr)_minmax(0,1.7fr)_repeat(3,minmax(0,1fr))]" style={{ gap: 14 }}>
               {[0, 1, 2, 3, 4].map(i => (
                 <div key={i} className="rounded-[22px] animate-pulse" style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }} />
               ))}
@@ -1114,10 +1114,10 @@ export default function DashboardPage() {
           column stretches to match, so the revenue graph fills exactly the
           remaining height with no void anywhere. A slightly shorter-than-
           viewport page is intentional, snug beats stretched-with-holes. ── */}
-      <div className="flex" style={{ alignItems: 'stretch', gap: 14 }}>
+      <div className="flex flex-col xl:flex-row" style={{ alignItems: 'stretch', gap: 14 }}>
 
         {/* Set-up priorities, left column, content-sized, pending first */}
-        <NeuCard className="flex flex-col" style={{ flexBasis: '32%', flexShrink: 0, minWidth: 300, padding: '14px 15px 11px' }}>
+        <NeuCard className="flex flex-col w-full xl:basis-[32%] xl:shrink-0 xl:min-w-[300px]" style={{ padding: '14px 15px 11px' }}>
           <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 9 }}>
             <div className="min-w-0">
               <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>Set-up priorities</h2>
@@ -1164,13 +1164,8 @@ export default function DashboardPage() {
             Firm height so the revenue graph below lands clearly shorter; each
             card fills it via space-between rather than floating a void. */}
         <div
-          className="flex-shrink-0"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1.7fr) repeat(3, minmax(0, 1fr))',
-            gap: 14,
-            height: 166,
-          }}
+          className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 h-auto xl:h-[166px] xl:[grid-template-columns:minmax(0,1.15fr)_minmax(0,1.7fr)_repeat(3,minmax(0,1fr))]"
+          style={{ gap: 14 }}
         >
           <UnallocatedTile count={unallocated} href={`/manage/${slug}/assignment`} />
 

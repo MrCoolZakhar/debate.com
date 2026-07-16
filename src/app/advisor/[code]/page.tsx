@@ -505,9 +505,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
 
       {/* Stats bar removed — moved into left panel */}
 
-      <div className="flex-1 flex overflow-hidden relative z-[2]">
+      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden relative z-[2]">
         {/* Left: Current speaker + queue — forest green */}
-        <div className="w-80 flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
+        <div className="w-full md:w-80 flex flex-col md:overflow-hidden md:shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
           {/* Header — matches RollCallPanel style */}
           <div className="px-4 pt-4 pb-3 shrink-0 relative z-10" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
             <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
@@ -640,8 +640,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               </div>
             </>
           ) : (
-            <div className="flex gap-4">
-              <div className="w-1/2 shrink-0 transition-all duration-200">
+            <div className="flex flex-col lg:flex-row gap-4">
+              <div className="w-full lg:w-1/2 lg:shrink-0 transition-all duration-200">
                 {selectedDelegate && (
                   <ExpandedDelegateCard
                     delegate={selectedDelegate}
@@ -655,7 +655,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
                 <p className="text-xs font-mono uppercase tracking-wider mb-3" style={{ color: '#1B3828', fontWeight: 700 }}>
                   {t('advisor_other_delegates').replace('{n}', String(otherDelegates.length))}
                 </p>
-                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+                <div className="grid gap-2 grid-cols-3 sm:grid-cols-5">
                   {otherDelegates.map((d) => (
                     <CollapsedDelegateCard
                       key={d.id}

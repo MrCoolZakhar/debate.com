@@ -75,7 +75,7 @@ export default function ContactClient() {
   };
 
   return (
-    <div className="h-screen bg-[#EDE7D8] flex flex-col relative overflow-hidden">
+    <div className="min-h-screen md:h-screen bg-[#EDE7D8] flex flex-col relative md:overflow-hidden">
 
       {/* Grain overlay */}
       <div
@@ -89,7 +89,7 @@ export default function ContactClient() {
         }}
       />
 
-      <div className="relative z-10 flex flex-col h-full">
+      <div className="relative z-10 flex flex-col md:h-full">
         <SiteNav />
 
         {/* ── Hero split ── */}
@@ -97,11 +97,9 @@ export default function ContactClient() {
 
           {/* Left — editorial green panel */}
           <div
-            className="relative flex flex-col px-10 py-12 md:px-14 md:py-14 md:sticky md:top-0 md:h-screen"
+            className="relative flex flex-col px-10 py-12 md:px-14 md:py-14 md:sticky md:top-0 md:h-screen md:basis-[44%] md:shrink-0"
             style={{
               background: 'linear-gradient(160deg, #1B3828 0%, #142B1C 60%, #0E1E13 100%)',
-              flexBasis: '44%',
-              flexShrink: 0,
             }}
           >
             {/* Grain tint on green */}
@@ -116,11 +114,11 @@ export default function ContactClient() {
               }}
             />
 
-            <div className="relative z-10 flex flex-col h-full">
+            <div className="relative z-10 flex flex-col md:h-full">
               {/* Heading */}
               <h1
                 className="font-black text-white tracking-tight leading-[0.9]"
-                style={{ fontSize: 'clamp(62px, 7.5vw, 110px)' }}
+                style={{ fontSize: 'clamp(40px, 11vw, 110px)' }}
               >
                 {t('contact_hero_line1')}{t('contact_hero_line2_plain') ? <><br />{t('contact_hero_line2_plain')}{' '}</> : ' '}
                 <span
@@ -169,7 +167,7 @@ export default function ContactClient() {
 
           {/* Right — form */}
           <div
-            className="flex-1 flex flex-col justify-start px-10 py-10 md:px-14 md:pt-10 overflow-y-auto"
+            className="flex-1 flex flex-col justify-start px-10 py-10 md:px-14 md:pt-10 md:overflow-y-auto"
             style={{ backgroundColor: '#EDE7D8' }}
           >
             {submitted ? (

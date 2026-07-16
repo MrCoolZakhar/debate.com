@@ -545,8 +545,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           />
         )}
         {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-96 space-y-3">
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="w-full max-w-sm space-y-3">
             <p className="text-xs font-mono text-[#9A8A78] text-center mb-5 tracking-widest">
               {t('voting_select_dr')}
             </p>
@@ -682,8 +682,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </p>
           </div>
 
-          {/* Vote buttons */}
-          <div className="flex gap-3 w-full max-w-3xl mb-4">
+          {/* Vote buttons — wrap into a grid on small screens (up to 6 options
+              won't fit a single non-wrapping row on a phone). */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex gap-3 w-full max-w-3xl mb-4">
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
               className="flex-1 bg-[#2A7A3C] hover:bg-[#3D8A52] border border-[#2A7A3C] text-white font-black text-base py-6 rounded-2xl transition-colors"
