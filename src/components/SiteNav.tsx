@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { Globe, Coins } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import { useCredits } from '@/hooks/useCredits';
 
@@ -267,7 +267,8 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   lineHeight: '13px',
                 }}
               >✨ NEW</span>
-              <Coins size={14} strokeWidth={2} />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/gavel-mark.png" alt="" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
               <span>{creditsLoading || creditBalance === null ? '—' : creditBalance}</span>
             </Link>
           )}
@@ -455,7 +456,8 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   textDecoration: 'none',
                 }}
               >
-                <Coins size={16} strokeWidth={2} style={{ color: '#B6871F' }} />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/gavel-mark.png" alt="" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
                 <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
                   {creditsLoading || creditBalance === null ? '—' : creditBalance}
                 </span>
