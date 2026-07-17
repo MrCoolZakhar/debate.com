@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap } from 'lucide-react';
+import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
@@ -40,13 +40,6 @@ const inputStyle: React.CSSProperties = {
   backgroundColor: 'rgba(250,248,243,0.9)',
   color: '#1C1410',
   fontFamily: OUTFIT,
-};
-
-// Where the delegate does MUN — captured during onboarding
-// (profiles.education_level). Read-only here; noted on the profile.
-const EDUCATION_LABELS: Record<string, string> = {
-  high_school: 'High School',
-  university: 'University',
 };
 
 // Folds the forest/ivory neumorphic surface into the existing GlassCard usages:
@@ -320,6 +313,23 @@ export default function ProfilePage() {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     supabase.from('profiles').update({ [field]: value }).eq('id', user!.id);
+  }
+
+  // Education level — where the delegate does MUN. Meaningful downstream: it is
+  // surfaced as their level when they apply to conferences. Persist immediately
+  // with an optimistic update, matching the notification-toggle pattern. Values
+  // must match what onboarding writes: 'high_school' | 'university'.
+  function handleEducationChange(value: 'high_school' | 'university') {
+    if (value === educationLevel) return;
+    const prev = educationLevel;
+    setEducationLevel(value);
+    if (!session || !user) return;
+    const supabase = getAuthedClient(session.access_token);
+    supabase
+      .from('profiles')
+      .update({ education_level: value })
+      .eq('id', user.id)
+      .then(({ error }) => { if (error) setEducationLevel(prev); });
   }
 
   async function handleSignOut() {
@@ -914,21 +924,83 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Education — where they do MUN, captured at onboarding. Read-only. */}
-          {educationLevel && (
-            <div>
-              <label
-                className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
-                style={{ color: '#1C1410', fontFamily: OUTFIT }}
-              >
-                <GraduationCap size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
-                Education
-              </label>
-              <Pill tone="forest" size="sm" icon={<GraduationCap size={11} strokeWidth={2.4} />}>
-                {EDUCATION_LABELS[educationLevel] ?? educationLevel}
-              </Pill>
-            </div>
-          )}
+          {/* Education — where they do MUN. Editable two-state switch; the value
+              is shown as the delegate's level when they apply to conferences, so
+              it saves immediately (optimistic) on toggle. */}
+          <div>
+            <label
+              className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
+              style={{ color: '#1C1410', fontFamily: OUTFIT }}
+            >
+              <GraduationCap size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
+              Education
+            </label>
+            {(() => {
+              const OPTIONS = [
+                { key: 'high_school' as const, label: 'High School', Icon: School },
+                { key: 'university'  as const, label: 'University',  Icon: GraduationCap },
+              ];
+              const selectedIdx = OPTIONS.findIndex((o) => o.key === educationLevel);
+              return (
+                <div
+                  role="radiogroup"
+                  aria-label="Education level"
+                  className="relative grid grid-cols-2 gap-1 rounded-full p-1 select-none"
+                  style={{
+                    maxWidth: '340px',
+                    backgroundColor: 'rgba(27,56,40,0.06)',
+                    boxShadow: NEU.inSm,
+                  }}
+                >
+                  {/* Sliding forest thumb — only rendered once a side is chosen. */}
+                  {selectedIdx >= 0 && (
+                    <span
+                      aria-hidden
+                      className="absolute rounded-full"
+                      style={{
+                        top: '4px',
+                        bottom: '4px',
+                        left: selectedIdx === 0 ? '4px' : 'calc(50% + 2px)',
+                        width: 'calc(50% - 6px)',
+                        background: 'linear-gradient(150deg, #24492F, #1B3828)',
+                        boxShadow: '0 4px 12px rgba(27,56,40,0.3), inset 0 1px 0 rgba(238,217,138,0.25)',
+                        border: '1px solid rgba(238,217,138,0.35)',
+                        transition: 'left 260ms cubic-bezier(0.4,0,0.2,1)',
+                      }}
+                    />
+                  )}
+                  {OPTIONS.map((o) => {
+                    const active = educationLevel === o.key;
+                    return (
+                      <button
+                        key={o.key}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => handleEducationChange(o.key)}
+                        className="relative z-[1] inline-flex items-center justify-center gap-2 rounded-full py-2.5 px-3 text-[13px] font-bold focus:outline-none"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: active ? '#EED98A' : '#6B5D4A',
+                          fontFamily: OUTFIT,
+                          letterSpacing: '0.01em',
+                          transition: 'color 200ms ease',
+                        }}
+                      >
+                        <o.Icon size={16} strokeWidth={2.2} style={{ color: active ? '#EED98A' : '#9A8A78', transition: 'color 200ms ease' }} />
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+            <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              Shown as your level when you apply to conferences.
+            </p>
+          </div>
         </div>
 
         <div className="relative mt-7 flex items-center gap-4" style={{ zIndex: 1 }}>

@@ -138,15 +138,17 @@ export default function OnboardingPage() {
   }
 
   // Where to send the user after onboarding. Honor a `?next=` param (the OAuth
-  // callback forwards Google signups here with their intended destination), but
-  // only same-origin relative paths, and never back into onboarding (no loop).
+  // callback forwards Google signups here with their intended destination — e.g.
+  // an in-progress conference application to continue), but only same-origin
+  // relative paths, and never back into onboarding (no loop). With no `next`,
+  // a fresh delegate lands on their own profile by default.
   function postOnboardingDest(): string {
-    if (typeof window === 'undefined') return '/';
+    if (typeof window === 'undefined') return '/account/profile';
     const next = new URLSearchParams(window.location.search).get('next');
     if (next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/auth/onboarding')) {
       return next;
     }
-    return '/';
+    return '/account/profile';
   }
 
   async function finish() {

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
@@ -735,6 +735,16 @@ function ConferenceApplyInner() {
   // full mode: which committee's country tray is expanded for picking.
   const [expandedCommitteeId, setExpandedCommitteeId] = useState<string | null>(null);
   const [prefError, setPrefError] = useState('');
+  // Scroll-anchor for the preference list. The "YOUR RANKING" panel sits ABOVE
+  // the picker, so adding/removing a preference changes the document height and
+  // drifts whatever chip you're clicking on. Before each mutation we snapshot
+  // scrollY + document height; a layout effect then re-anchors the viewport by
+  // the exact height delta so the picker stays put under the cursor (no jump).
+  const prefScrollAnchor = useRef<{ y: number; h: number } | null>(null);
+  const anchorPrefScroll = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    prefScrollAnchor.current = { y: window.scrollY, h: document.documentElement.scrollHeight };
+  }, []);
 
   // ── Step 4, Experience & Questions
   // experienceLevel is NO LONGER user-chosen. It is auto-derived from the
@@ -747,6 +757,8 @@ function ConferenceApplyInner() {
   // the applicant add a conference without leaving the flow.
   const [cvModalOpen, setCvModalOpen] = useState(false);
   const [cvRefreshing, setCvRefreshing] = useState(false);
+  // The choosable experience slider's track — pointer x is mapped to a band.
+  const expTrackRef = useRef<HTMLDivElement | null>(null);
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
   const [customMissingIds, setCustomMissingIds] = useState<string[]>([]);
   // Custom questions render as one Section per page within this step.
@@ -1171,6 +1183,18 @@ function ConferenceApplyInner() {
     setSocietySuggestions(filtered);
     setSocietyDropdownOpen(true);
   }, [societyInput, societies]);
+
+  // Re-anchor the viewport after a preference add/remove so the picker doesn't
+  // jump. Only fires when a mutating handler set the anchor (edit-mode prefill,
+  // resume-restore and reorders leave it null / height-neutral). Runs before
+  // paint (useLayoutEffect), so there's no visible flicker.
+  useLayoutEffect(() => {
+    const a = prefScrollAnchor.current;
+    if (!a) return;
+    prefScrollAnchor.current = null;
+    const delta = document.documentElement.scrollHeight - a.h;
+    if (delta !== 0) window.scrollTo(0, a.y + delta);
+  }, [preferences]);
 
   // Load committee slots + availability once, as soon as we know a preference
   // step will be shown (mode-gated). Skipped entirely for mode 'none'.
@@ -2133,11 +2157,18 @@ function ConferenceApplyInner() {
       : 'Rank the committee-and-country pairings you would most like to represent.';
     const atMax = preferences.length >= 8;
 
-    const addPref = (entry: Preference) =>
+    // Every mutator snapshots the scroll anchor first so the layout effect can
+    // keep the picker from jumping when the ranking panel above grows/shrinks.
+    const addPref = (entry: Preference) => {
+      anchorPrefScroll();
       setPreferences(prev => (prev.length >= 8 ? prev : [...prev, entry]));
-    const removeAt = (i: number) =>
+    };
+    const removeAt = (i: number) => {
+      anchorPrefScroll();
       setPreferences(prev => prev.filter((_, x) => x !== i));
-    const move = (i: number, dir: -1 | 1) =>
+    };
+    const move = (i: number, dir: -1 | 1) => {
+      anchorPrefScroll();
       setPreferences(prev => {
         const j = i + dir;
         if (j < 0 || j >= prev.length) return prev;
@@ -2145,6 +2176,7 @@ function ConferenceApplyInner() {
         [next[i], next[j]] = [next[j], next[i]];
         return next;
       });
+    };
     const committeeRank = (id: string) => {
       const i = preferences.findIndex(p => p.committeeId === id);
       return i < 0 ? null : i + 1;
@@ -2172,7 +2204,7 @@ function ConferenceApplyInner() {
         <div className="flex flex-col gap-2">
           {preferences.map((p, i) => (
             <RankedRow
-              key={`${p.committeeId}-${p.countryCode}-${i}`}
+              key={`${p.committeeId}-${p.countryCode}`}
               index={i}
               total={preferences.length}
               committee={committees.find(c => c.id === p.committeeId)}
@@ -2362,8 +2394,6 @@ function ConferenceApplyInner() {
   }
 
   function renderStepExperience() {
-    // Rank is auto-derived from the applicant's MUN CV — no manual picker.
-    const rank = experienceProgress(cvEntryCount);
     // Each Section block starts a new page within this step; no sections at
     // all still produces exactly one (possibly empty) page, so the step keeps
     // working unchanged for roles with a flat question list or none.
@@ -2394,36 +2424,84 @@ function ConferenceApplyInner() {
     return (
       <>
         {isFirstPage && (() => {
-          // Derived experience slider — its position is DRIVEN by how many
-          // conferences the applicant has on their MUN CV (cvEntryCount →
-          // experienceProgress), not a free manual choice. The thumb sits
-          // between the four band stops proportionally to real experience.
+          // Choosable experience slider. The applicant DRAGS the thumb between
+          // the four band stops (Beginner→Expert) — same thresholds as their
+          // profile MUN rank — and whatever the slider shows is what submits as
+          // experience_level. It can also be AUTOFILLED from the MUN CV: the
+          // "Import" button and adding a conference both set it to the derived
+          // level (cvEntryCount → experienceProgress).
           const bands = EXPERIENCE_BANDS;
           const n = bands.length;
-          const bandIdx = Math.max(0, bands.findIndex(b => b.level === rank.level));
-          const frac = rank.nextLabel ? rank.progress : 0;
-          const pct = Math.min(100, Math.max(0, ((bandIdx + frac) / (n - 1)) * 100));
-          const accent = EXPERIENCE_ACCENT[rank.level] ?? NEU.deepGold;
-          const RankIcon = EXPERIENCE_ICON[rank.level] ?? GraduationCap;
+          const cvDerived = experienceProgress(cvEntryCount);
+          const chosenLevel = experienceLevel || cvDerived.level;
+          const chosenIdx = Math.max(0, bands.findIndex(b => b.level === chosenLevel));
+          const pct = (chosenIdx / (n - 1)) * 100;
+          const accent = EXPERIENCE_ACCENT[chosenLevel] ?? NEU.deepGold;
+          const RankIcon = EXPERIENCE_ICON[chosenLevel] ?? GraduationCap;
+
+          const setLevelByIdx = (idx: number) => {
+            const clamped = Math.min(n - 1, Math.max(0, idx));
+            setExperienceLevel(bands[clamped].level);
+          };
+          const levelFromClientX = (clientX: number) => {
+            const el = expTrackRef.current;
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            if (r.width <= 0) return;
+            const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+            setLevelByIdx(Math.round(frac * (n - 1)));
+          };
+          const onTrackPointerDown = (e: React.PointerEvent) => {
+            e.preventDefault();
+            levelFromClientX(e.clientX);
+            const move = (ev: PointerEvent) => levelFromClientX(ev.clientX);
+            const up = () => {
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+          };
+          const onTrackKeyDown = (e: React.KeyboardEvent) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); setLevelByIdx(chosenIdx - 1); }
+            else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); setLevelByIdx(chosenIdx + 1); }
+            else if (e.key === 'Home') { e.preventDefault(); setLevelByIdx(0); }
+            else if (e.key === 'End') { e.preventDefault(); setLevelByIdx(n - 1); }
+          };
+          const matchesCv = chosenLevel === cvDerived.level;
           return (
           <>
             <h2 className="font-semibold text-base mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               About You
             </h2>
             <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-              Your MUN experience level is set automatically from your MUN CV — the organiser sees it with your application and uses it for allocations.
+              Choose your MUN experience level below, or import it from your MUN CV. The organiser sees it with your application and uses it for allocations.
             </p>
 
             <div className="mb-6">
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <LevelBadge level={rank.level} size="md" />
+                <LevelBadge level={chosenLevel} size="md" />
                 <span className="text-xs font-semibold" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
                   {cvEntryCount} conference{cvEntryCount === 1 ? '' : 's'} on your MUN CV
                 </span>
               </div>
 
-              {/* Derived level slider (read-only, position from CV count). */}
-              <div className="relative select-none" style={{ height: 34 }}>
+              {/* Choosable level slider — drag the thumb, click a stop/label, or
+                  use the arrow keys; snaps to one of the four bands. */}
+              <div
+                ref={expTrackRef}
+                role="slider"
+                tabIndex={0}
+                aria-label="MUN experience level"
+                aria-valuemin={1}
+                aria-valuemax={n}
+                aria-valuenow={chosenIdx + 1}
+                aria-valuetext={bands[chosenIdx]?.label}
+                onPointerDown={onTrackPointerDown}
+                onKeyDown={onTrackKeyDown}
+                className="relative select-none focus:outline-none"
+                style={{ height: 34, cursor: 'pointer', touchAction: 'none' }}
+              >
                 {/* Inset neu track */}
                 <div
                   className="absolute left-0 right-0"
@@ -2434,23 +2512,35 @@ function ConferenceApplyInner() {
                   className="absolute"
                   style={{ top: '50%', transform: 'translateY(-50%)', left: 0, width: `${pct}%`, height: 8, borderRadius: 9999, background: `linear-gradient(90deg, ${accent}CC, ${accent})`, transition: 'width 320ms cubic-bezier(0.22,1,0.36,1)' }}
                 />
-                {/* Band stops */}
+                {/* Band stops — each clickable to jump to that level */}
                 {bands.map((b, i) => {
-                  const on = i <= bandIdx;
+                  const on = i <= chosenIdx;
                   return (
-                    <span
+                    <button
                       key={b.level}
-                      aria-hidden
-                      className="absolute"
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={`Set level to ${b.label}`}
+                      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setLevelByIdx(i); }}
+                      className="absolute focus:outline-none"
                       style={{
                         left: `${(i / (n - 1)) * 100}%`, top: '50%',
                         transform: 'translate(-50%, -50%)',
-                        width: 13, height: 13, borderRadius: 9999,
-                        background: on ? accent : NEU.surface,
-                        border: `2px solid ${on ? '#FAF8F3' : '#DDD4C0'}`,
-                        boxShadow: NEU.outSm,
+                        width: 18, height: 18, borderRadius: 9999,
+                        background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
                       }}
-                    />
+                    >
+                      <span
+                        aria-hidden
+                        className="block"
+                        style={{
+                          width: 13, height: 13, borderRadius: 9999, margin: '0 auto',
+                          background: on ? accent : NEU.surface,
+                          border: `2px solid ${on ? '#FAF8F3' : '#DDD4C0'}`,
+                          boxShadow: NEU.outSm,
+                        }}
+                      />
+                    </button>
                   );
                 })}
                 {/* Thumb, carries the current rank insignia */}
@@ -2468,28 +2558,34 @@ function ConferenceApplyInner() {
                   <RankIcon size={14} strokeWidth={2.4} style={{ color: '#FAF8F3' }} />
                 </span>
               </div>
-              {/* Stop labels */}
+              {/* Stop labels — also clickable */}
               <div className="flex justify-between mt-2">
                 {bands.map((b, i) => (
-                  <span
+                  <button
                     key={b.level}
+                    type="button"
+                    onClick={() => setLevelByIdx(i)}
+                    className="focus:outline-none"
                     style={{
                       fontFamily: OUTFIT, fontSize: 10.5,
-                      fontWeight: i === bandIdx ? 800 : 600,
-                      color: i === bandIdx ? accent : '#9A8A78',
+                      fontWeight: i === chosenIdx ? 800 : 600,
+                      color: i === chosenIdx ? accent : '#9A8A78',
                       flex: '1 1 0',
                       textAlign: i === 0 ? 'left' : i === n - 1 ? 'right' : 'center',
+                      background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
                     }}
                   >
                     {b.label}
-                  </span>
+                  </button>
                 ))}
               </div>
 
               <p className="text-xs mt-3" style={{ color: '#6E5F4E', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-                {rank.nextLabel
-                  ? `You're ${rank.label}. Add ${rank.remaining} more conference${rank.remaining === 1 ? '' : 's'} to your MUN CV to reach ${rank.nextLabel}.`
-                  : `You're ${rank.label} — the top rank. Nicely done.`}
+                {matchesCv
+                  ? (cvDerived.nextLabel
+                      ? `This matches your MUN CV (${cvEntryCount} conference${cvEntryCount === 1 ? '' : 's'} → ${cvDerived.label}). Add ${cvDerived.remaining} more to reach ${cvDerived.nextLabel}.`
+                      : `This matches your MUN CV — ${cvDerived.label}, the top rank. Nicely done.`)
+                  : `Your MUN CV suggests ${cvDerived.label} (${cvEntryCount} conference${cvEntryCount === 1 ? '' : 's'}). Import to match, or keep your choice.`}
               </p>
 
               {/* ── CV actions: import (re-pull count) + add a conference inline.

@@ -426,6 +426,13 @@ export default function ConferenceDetailClient() {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('tab') === 'participant') setActiveTab('participant');
   }, []);
+  // Perceived-perf: warm the apply route's JS chunk + loading UI so the "Apply"
+  // CTA (which navigates via router.push) feels instant. Prefetch is a no-op in
+  // dev and safe/idempotent in prod; does not change any data semantics.
+  useEffect(() => {
+    if (!slug) return;
+    router.prefetch(`/conferences/${slug}/apply`);
+  }, [slug, router]);
   // Stripe checkout return (?payment=success|cancelled from create-checkout's
   // success_url/cancel_url). Read once post-mount, then strip the query
   // string immediately so a refresh never re-triggers it.

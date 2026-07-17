@@ -6,7 +6,6 @@ import DecorativeBleed from '@/components/DecorativeBleed';
 import { Emoji3D, NEU } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { experienceProgress, syncExperienceLevel } from '@/lib/munExperience';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -14,7 +13,7 @@ import {
   CVEntryModal, ENTRY_TYPE_MAP, COMMITTEE_SUGGESTIONS, type CVEntry,
 } from '@/components/CVEntryModal';
 import {
-  Eyebrow, GlassCard, LevelBadge, AwardChip, ExperienceInfo, getCommitteeLogo, monogramFor, OUTFIT, MONO,
+  Eyebrow, GlassCard, LevelBadge, LevelInsignia, LEVEL_ACCENT, AwardChip, ExperienceInfo, getCommitteeLogo, monogramFor, OUTFIT, MONO,
 } from '../accountUi';
 
 // ── Conference acronym display ───────────────────────────────────────────────
@@ -118,9 +117,6 @@ function TimelineEntry({
   const railDate = entry.event_date
     ? new Date(`${entry.event_date}T00:00:00`).toLocaleDateString('en', { month: 'long', year: 'numeric' })
     : '—';
-
-  const allocCountry = entry.allocation ? getCountryByName(entry.allocation) : null;
-  const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
 
   // Awards only ever surface for delegate entries.
   const displayAwards = entry.entry_type === 'delegate'
@@ -257,31 +253,24 @@ function TimelineEntry({
 
           {/* Role line — varies by type. The type glyph lives ONLY in the corner
               disc; role lines carry no emoji (no repetition). */}
-          {entry.entry_type === 'delegate' && (
-            <>
-              {/* Country represented — the delegate's headline: bigger flag + bold allocation */}
-              {entry.allocation && (
-                <div className="flex items-center gap-2.5 flex-wrap mt-2.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  {allocFlag && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={allocFlag}
-                      alt=""
-                      style={{ width: '30px', height: '20px', objectFit: 'cover', borderRadius: '3.5px', boxShadow: '0 1.5px 4px rgba(27,56,40,0.25)', border: '1px solid rgba(255,255,255,0.7)' }}
-                    />
-                  )}
-                  <span className="inline-flex items-center text-[17px]" style={{ fontWeight: 800, color: '#1B3828', letterSpacing: '-0.01em' }}>
-                    {entry.allocation}
-                  </span>
-                </div>
-              )}
-              {entry.committee && (
-                <div className="flex items-center gap-2 mt-2 text-[14px]" style={{ color: '#5C5140', fontFamily: OUTFIT, fontWeight: 500 }}>
-                  <CommitteeLogo committee={entry.committee} size={22} />
-                  <span>{committeeLabel(entry.committee)}</span>
-                </div>
-              )}
-            </>
+          {/* Delegate subheading — COMMITTEE (logo + acronym) — ALLOCATION.
+              The committee leads with its own small emblem; no country flag and
+              no allocation glyph — just committee dash allocation. */}
+          {entry.entry_type === 'delegate' && (entry.committee || entry.allocation) && (
+            <div className="flex items-center gap-2 flex-wrap mt-2.5" style={{ fontFamily: OUTFIT }}>
+              {entry.committee && <CommitteeLogo committee={entry.committee} size={22} />}
+              <span className="inline-flex items-baseline flex-wrap gap-x-1.5 text-[15px]" style={{ letterSpacing: '-0.005em', lineHeight: 1.3 }}>
+                {entry.committee && (
+                  <span style={{ color: '#1B3828', fontWeight: 700 }}>{committeeLabel(entry.committee)}</span>
+                )}
+                {entry.committee && entry.allocation && (
+                  <span aria-hidden style={{ color: '#B6A88E', fontWeight: 500 }}>—</span>
+                )}
+                {entry.allocation && (
+                  <span style={{ color: '#5C5140', fontWeight: 600 }}>{entry.allocation}</span>
+                )}
+              </span>
+            </div>
           )}
 
           {/* Chair — just the committee (acronym), no "Chaired", no glyph */}
@@ -449,32 +438,54 @@ export default function CVPage() {
         </button>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      {/* Stats row — three showcase counts + the rank, shown as a MASSIVE
+          insignia with its tier name beneath (no "Experience" word). */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 items-stretch">
         {[
-          { label: 'CONFERENCES', value: String(totalConferences), isExp: false },
-          { label: 'AWARDS', value: String(totalAwards), isExp: false },
-          { label: 'VERIFIED', value: String(totalVerified), isExp: false },
-          { label: 'EXPERIENCE', value: exp.label, isExp: true },
+          { label: 'CONFERENCES', value: String(totalConferences) },
+          { label: 'AWARDS', value: String(totalAwards) },
+          { label: 'VERIFIED', value: String(totalVerified) },
         ].map((stat) => (
-          <GlassCard key={stat.label} className="!p-4 text-center">
-            {stat.isExp ? (
-              <div className="flex items-center justify-center" style={{ minHeight: '31px' }}>
-                <LevelBadge level={exp.level} size="sm" />
-              </div>
-            ) : (
-              <p
-                className="font-black"
-                style={{ color: '#1C1410', fontFamily: MONO, fontSize: '24px', lineHeight: 1.3, margin: 0 }}
-              >
-                {stat.value}
-              </p>
-            )}
-            <p className="mt-1" style={{ color: '#B6871F', fontFamily: MONO, fontSize: '8.5px', letterSpacing: '0.22em', margin: '4px 0 0 0' }}>
+          <GlassCard key={stat.label} className="!p-4 text-center flex flex-col items-center justify-center">
+            <p
+              style={{
+                color: '#1B3828',
+                fontFamily: OUTFIT,
+                fontSize: '42px',
+                fontWeight: 900,
+                lineHeight: 1,
+                letterSpacing: '-0.03em',
+                fontVariantNumeric: 'tabular-nums',
+                margin: 0,
+              }}
+            >
+              {stat.value}
+            </p>
+            <p className="mt-2" style={{ color: '#B6871F', fontFamily: OUTFIT, fontSize: '10px', fontWeight: 800, letterSpacing: '0.2em', margin: '10px 0 0 0' }}>
               {stat.label}
             </p>
           </GlassCard>
         ))}
+
+        {/* Rank tile — big insignia glyph, tier name directly under it. */}
+        <GlassCard className="!p-4 text-center flex flex-col items-center justify-center">
+          <span
+            className="inline-flex items-center justify-center flex-shrink-0"
+            style={{
+              width: '58px',
+              height: '58px',
+              borderRadius: '9999px',
+              background: `linear-gradient(150deg, ${LEVEL_ACCENT[exp.level] ?? '#9A8A78'}26, ${LEVEL_ACCENT[exp.level] ?? '#9A8A78'}12)`,
+              border: `1px solid ${LEVEL_ACCENT[exp.level] ?? '#9A8A78'}55`,
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55)',
+            }}
+          >
+            <LevelInsignia level={exp.level} size={40} />
+          </span>
+          <p className="mt-2" style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: '17px', fontWeight: 800, letterSpacing: '-0.01em', margin: '10px 0 0 0', lineHeight: 1 }}>
+            {exp.label}
+          </p>
+        </GlassCard>
       </div>
 
       {/* Rank-up info panel — thresholds live behind the 'i' (ExperienceInfo). */}
