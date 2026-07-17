@@ -14,6 +14,8 @@ import {
   PasswordField,
   PrimaryButton,
   TextField,
+  safeNext,
+  withNext,
 } from '../authUi';
 
 function SignInInner() {
@@ -21,9 +23,7 @@ function SignInInner() {
   const searchParams = useSearchParams();
   const hasCallbackError = searchParams.get('error') === 'auth_callback_failed';
   const justVerified = searchParams.get('verified') === '1';
-  const rawNext = searchParams.get('next');
-  // Only allow relative paths (must start with a single "/") to prevent open-redirect.
-  const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/';
+  const next = safeNext(searchParams, '/');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -136,7 +136,7 @@ function SignInInner() {
 
       <p className="text-sm text-center mt-5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
         Don&apos;t have an account?{' '}
-        <Link href="/auth/signup" className="font-semibold transition-colors" style={{ color: '#1B3828' }}>
+        <Link href={withNext('/auth/signup', searchParams)} className="font-semibold transition-colors" style={{ color: '#1B3828' }}>
           Sign up
         </Link>
       </p>

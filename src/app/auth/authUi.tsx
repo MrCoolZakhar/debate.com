@@ -17,6 +17,27 @@ import DecorativeBleed from '@/components/DecorativeBleed';
 
 export const OUTFIT = "'Outfit', sans-serif";
 
+// ── Return-to (`?next=`) handling ────────────────────────────────────────────
+// Shared by /auth/signin and /auth/signup so a logged-out visitor's intended
+// destination (e.g. a conference's apply page) survives hopping between the
+// two pages, not just a single page's own submit handler.
+
+/** Reads and sanitizes `?next=` — only a same-origin relative path is honored
+ *  (prevents open-redirect); anything else falls back to `fallback`. */
+export function safeNext(searchParams: URLSearchParams, fallback: string): string {
+  const raw = searchParams.get('next');
+  return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : fallback;
+}
+
+/** Appends the current page's `?next=` (only if one was actually supplied and
+ *  valid) to a same-site auth link, so switching between sign-in and sign-up
+ *  never drops the visitor's return-to destination. */
+export function withNext(href: string, searchParams: URLSearchParams): string {
+  const raw = searchParams.get('next');
+  const valid = raw && raw.startsWith('/') && !raw.startsWith('//');
+  return valid ? `${href}?next=${encodeURIComponent(raw)}` : href;
+}
+
 // ── Brand marks ────────────────────────────────────────────────────────────
 
 /** Card header: the real GAVELLING CONFERENCES logo lockup (same mark the

@@ -22,6 +22,8 @@ import {
   PrimaryButton,
   TextField,
   isValidEmail,
+  safeNext,
+  withNext,
 } from '../authUi';
 
 // Today's date as an ISO 'YYYY-MM-DD' string — the latest birthday we allow.
@@ -60,8 +62,7 @@ function SignUpInner() {
   // back on its own token page rather than the default onboarding funnel.
   // Only relative paths are allowed (must start with a single "/") to prevent
   // open-redirect, same guard as /auth/signin's next handling.
-  const rawNext = searchParams.get('next');
-  const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/auth/onboarding';
+  const next = safeNext(searchParams, '/auth/onboarding');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [dob, setDob] = useState(''); // ISO 'YYYY-MM-DD' from the DatePicker
@@ -142,7 +143,7 @@ function SignUpInner() {
       .resend({
         type: 'signup',
         email,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/auth/onboarding` },
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
       })
       .then(({ error }) => (error ? error.message : null))
       .catch((e) => (e instanceof Error ? e.message : 'Could not resend right now. Please try again.'));
@@ -309,7 +310,7 @@ function SignUpInner() {
 
           <p className="text-sm text-center mt-5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
             Already have an account?{' '}
-            <Link href="/auth/signin" className="font-semibold transition-colors" style={{ color: '#1B3828' }}>
+            <Link href={withNext('/auth/signin', searchParams)} className="font-semibold transition-colors" style={{ color: '#1B3828' }}>
               Sign in
             </Link>
           </p>

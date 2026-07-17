@@ -898,7 +898,8 @@ function ConferenceApplyInner() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      router.replace(`/auth/signin?next=/conferences/${slug}/apply?role=${role}`);
+      const returnTo = `/conferences/${slug}/apply?role=${role}`;
+      router.replace(`/auth/signin?next=${encodeURIComponent(returnTo)}`);
       return;
     }
     fetchAll();
