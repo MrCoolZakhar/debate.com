@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   Search, SlidersHorizontal, ArrowLeft, LayoutGrid, Rows3, Users, ArrowRight, Check,
   CalendarDays, Ticket, Globe, ChevronDown, CalendarArrowUp, CalendarArrowDown,
+  MapPin, Monitor, School, GraduationCap,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { Emoji3D } from '@/components/neu';
@@ -51,6 +52,22 @@ const FORMAT_LABELS: Record<string, string> = {
   'in-person': 'In person',
   'online': 'Online',
   'hybrid': 'Hybrid',
+};
+
+// Small lucide icons that showcase HOW a conference happens, so a row reads at
+// a glance: format (where it meets) and student level (who it is for).
+type RowIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+
+const FORMAT_ICONS: Record<string, RowIcon> = {
+  'in-person': MapPin,   // meets in a physical place
+  'online': Monitor,     // meets on screen
+  'hybrid': Globe,       // both worlds
+};
+
+const LEVEL_ICONS: Record<string, RowIcon> = {
+  school: School,             // high school
+  university: GraduationCap,  // university
+  both: GraduationCap,        // HS & Uni
 };
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -371,18 +388,20 @@ function splitDateRange(start: string | null, end: string | null): { range: stri
   return { range, year };
 }
 
-function RowChip({ label }: { label: string }) {
+function RowChip({ label, icon: Icon }: { label: string; icon?: RowIcon }) {
   return (
     <span
-      className="inline-flex flex-shrink-0"
+      className="inline-flex items-center flex-shrink-0"
       style={{
         fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10.5px', letterSpacing: '0.09em',
         color: '#6B5F52', backgroundColor: 'transparent',
         border: '1px solid rgba(154,138,120,0.45)',
-        padding: '3.5px 10px', borderRadius: 9999, whiteSpace: 'nowrap',
+        gap: '5px',
+        padding: Icon ? '3.5px 10px 3.5px 8px' : '3.5px 10px', borderRadius: 9999, whiteSpace: 'nowrap',
         textTransform: 'uppercase',
       }}
     >
+      {Icon && <Icon size={12.5} strokeWidth={2.25} style={{ color: '#2A5A3C', flexShrink: 0 }} />}
       {label}
     </span>
   );
@@ -429,7 +448,7 @@ function ConferenceListRow({
         paddingTop: '22px',
         paddingBottom: '22px',
         backgroundColor: hovered ? 'rgba(27,56,40,0.035)' : 'transparent',
-        borderBottom: '1px solid rgba(221,212,192,0.6)',
+        borderBottom: '2px solid rgba(27,56,40,0.16)',
         textDecoration: 'none',
         transition: 'background-color 160ms ease',
       }}
@@ -459,8 +478,10 @@ function ConferenceListRow({
         )}
       </div>
 
-      {/* Name · city/country with flag · badge chips */}
-      <div className="min-w-0" style={{ flex: '0 1 auto', maxWidth: '460px' }}>
+      {/* Name · city/country with flag · badge chips.
+          Grows to absorb ALL slack so the metadata columns to its right land in
+          the same position on every row (tidy, scannable columns). */}
+      <div className="min-w-0" style={{ flex: '1 1 0' }}>
         <div
           className="truncate"
           style={{
@@ -469,7 +490,7 @@ function ConferenceListRow({
             transition: 'color 160ms ease', lineHeight: 1.2,
           }}
         >
-          {conf.full_name}
+          {conf.acronym || conf.full_name}
         </div>
         <div
           className="flex items-center gap-2 truncate"
@@ -479,8 +500,8 @@ function ConferenceListRow({
           <span className="truncate">{conf.city}, {conf.country}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-2.5">
-          {conf.format && <RowChip label={formatLabel} />}
-          {levelLabel && <RowChip label={levelLabel} />}
+          {conf.format && <RowChip label={formatLabel} icon={FORMAT_ICONS[conf.format]} />}
+          {levelLabel && <RowChip label={levelLabel} icon={LEVEL_ICONS[conf.student_level]} />}
           {/* Mobile-only inline date (right columns hidden below sm) */}
           <span
             className="sm:hidden inline-flex items-center gap-1.5 flex-shrink-0"
@@ -492,11 +513,12 @@ function ConferenceListRow({
         </div>
       </div>
 
-      {/* Right rail, the three metadata columns spread evenly across the free
-          space so the row reads full instead of leaving a wide empty gutter. */}
+      {/* Right rail — fixed-width metadata columns, right-aligned. Because the
+          name block absorbs all slack, date / delegates / fee sit at identical
+          horizontal positions on every row so they read as tidy columns. */}
       <div
-        className="hidden sm:flex items-center flex-1 min-w-0"
-        style={{ justifyContent: 'space-around', gap: '20px' }}
+        className="hidden sm:flex items-center flex-shrink-0"
+        style={{ justifyContent: 'flex-end', gap: '24px' }}
       >
       {/* Date (two-line) */}
       <div className="flex items-start gap-2 flex-shrink-0" style={{ width: '152px' }}>
@@ -608,7 +630,10 @@ export default function ConferencesExploreClient() {
 
   const [conferences, setConferences] = useState<Conference[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  // Seed the search from a ?search= hand-off (the landing-page hero search
+  // navigates here with the visitor's query) so the list filters immediately.
+  // The on-page search box then owns the value as usual.
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') ?? '');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [formatFilter, setFormatFilter] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
   const [levelFilter, setLevelFilter] = useState<'school' | 'university' | 'both' | ''>('');
@@ -1098,7 +1123,7 @@ export default function ConferencesExploreClient() {
               </div>
             )
           ) : view === 'list' ? (
-            <div style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+            <div style={{ borderTop: '2px solid rgba(27,56,40,0.16)' }}>
               {displayed.map(conf => (
                 <ConferenceListRow
                   key={conf.id}

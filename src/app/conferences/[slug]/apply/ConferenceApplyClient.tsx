@@ -6,13 +6,14 @@ import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
 import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useCredits } from '@/hooks/useCredits';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { formatFee } from '@/lib/utils';
-import { Pill, LevelBadge } from '@/app/account/accountUi';
+import { Pill, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { experienceProgress, EXPERIENCE_BANDS } from '@/lib/munExperience';
+import { creditPricing, extractFunctionErrorMessage } from '@/lib/payments';
 import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE, Emoji3D } from '@/components/neu';
@@ -26,7 +27,7 @@ import { type CustomAnswers, normalizeBlocks, questionsOf, splitIntoSections, va
 import {
   Gavel, Users, Sprout,
   GraduationCap, Trophy, Crown, Sparkles,
-  MapPin, Landmark, Check, X, Plus, ArrowRight, CalendarClock,
+  MapPin, Landmark, Check, X, Plus, Minus, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
   Info, Coins,
 } from 'lucide-react';
@@ -302,16 +303,19 @@ function useReducedMotion(): boolean {
 
 // ── Preference-picker building blocks ─────────────────────────────────────
 
-/** Difficulty tier chip: escalating insignia + accent, tabular label. */
+/** Difficulty tier chip: the SAME escalating delegate-rank insignia used for a
+ *  delegate's MUN level (chevron marks + crowned star) — so a committee's level
+ *  reads with the exact iconography as a delegate's rank. */
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
-  const meta = DIFFICULTY_META[difficulty];
+  const key = (difficulty ?? '').toLowerCase();
+  const meta = DIFFICULTY_META[key];
   if (!meta) return null;
-  const { label, accent, icon: Icon } = meta;
+  const accent = LEVEL_ACCENT[key] ?? meta.accent;
   return (
     <span
       className="inline-flex items-center gap-1"
       style={{
-        padding: '3px 9px 3px 7px',
+        padding: '3px 9px 3px 6px',
         borderRadius: 999,
         background: `${accent}14`,
         border: `1px solid ${accent}44`,
@@ -322,8 +326,8 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
         color: accent,
       }}
     >
-      <Icon size={12} strokeWidth={2.4} style={{ color: accent }} />
-      {label}
+      <LevelInsignia level={key} size={13} />
+      {meta.label}
     </span>
   );
 }
@@ -590,6 +594,96 @@ function RankedRow({
         >
           <X size={15} strokeWidth={2.4} />
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Image-forward option card for the Overview upgrade surface (buy credits /
+ * upgrade to Unlimited). A photo header carries a hover effect: on hover the
+ * image darkens under a translucent scrim and a descriptive line fades in over
+ * it. The footer slot holds the live controls (stepper + buy, or an upgrade
+ * button). Consistent with the onboarding/apply neu photography.
+ */
+function UpgradePhotoCard({
+  image, eyebrow, title, hoverText, accent, children,
+}: {
+  image: string;
+  eyebrow: string;
+  title: string;
+  hoverText: string;
+  accent: string;
+  children: React.ReactNode;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex flex-col overflow-hidden"
+      style={{
+        borderRadius: 20,
+        backgroundColor: NEU.surface,
+        boxShadow: hovered ? NEU.outHover : NEU.out,
+        border: `1.5px solid ${accent}33`,
+        transition: `box-shadow 240ms ${EASE}, transform 240ms ${EASE}`,
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+      }}
+    >
+      {/* Photo header + hover reveal */}
+      <div className="relative" style={{ height: 118, overflow: 'hidden' }}>
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url(${image})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            transform: hovered ? 'scale(1.05)' : 'scale(1)',
+            transition: `transform 500ms ${EASE}, filter 300ms ${EASE}`,
+            filter: hovered ? 'saturate(1.05)' : 'saturate(0.9)',
+          }}
+        />
+        {/* Darkening scrim — deepens on hover */}
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background: hovered
+              ? 'linear-gradient(180deg, rgba(16,28,21,0.42) 0%, rgba(16,28,21,0.72) 100%)'
+              : 'linear-gradient(180deg, rgba(16,28,21,0.10) 0%, rgba(16,28,21,0.40) 100%)',
+            transition: `background 300ms ${EASE}`,
+          }}
+        />
+        {/* Eyebrow + title, always legible on the image */}
+        <div className="absolute left-0 right-0 bottom-0 px-4 pb-3">
+          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 9.5, letterSpacing: '0.16em', color: '#EED98A', marginBottom: 2 }}>
+            {eyebrow}
+          </p>
+          <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, color: '#FAF8F3', lineHeight: 1.1, textShadow: '0 1px 6px rgba(16,28,21,0.5)' }}>
+            {title}
+          </p>
+        </div>
+        {/* Descriptive copy revealed over the darkened image on hover */}
+        <div
+          className="absolute inset-0 flex items-center px-4"
+          style={{
+            opacity: hovered ? 1 : 0,
+            transform: hovered ? 'translateY(0)' : 'translateY(6px)',
+            transition: `opacity 260ms ${EASE}, transform 260ms ${EASE}`,
+            pointerEvents: 'none',
+          }}
+        >
+          <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, color: '#FAF8F3', lineHeight: 1.5, textShadow: '0 1px 6px rgba(16,28,21,0.6)' }}>
+            {hoverText}
+          </p>
+        </div>
+      </div>
+
+      {/* Live controls */}
+      <div className="p-4">
+        {children}
       </div>
     </div>
   );
@@ -1674,7 +1768,11 @@ function ConferenceApplyInner() {
   // credits mid-apply — snapshots every field they've filled in so far to
   // localStorage, then sends them off to buy a credit. The resume-restore
   // effect below reads this back once they're returned via ?returnTo.
-  function goBuyCredits() {
+  /** Snapshot the in-progress application to localStorage so a checkout /
+   *  upgrade round trip (Stripe redirect, then a fresh mount back on this URL)
+   *  can restore it straight to the Overview step. Shared by the "go buy a
+   *  credit" link, the inline credits stepper, and the Unlimited upgrade card. */
+  function saveResumeSnapshot() {
     try {
       const snapshot = {
         savedAt: Date.now(),
@@ -1695,7 +1793,70 @@ function ConferenceApplyInner() {
       // Quota exceeded / serialization failure — nothing to restore later,
       // but that must never block the applicant from going to buy a credit.
     }
+  }
+
+  function goBuyCredits() {
+    saveResumeSnapshot();
     router.push(`/account/unlimited?returnTo=${encodeURIComponent(`/conferences/${slug}/apply?role=${role}`)}`);
+  }
+
+  // ── Inline credit purchase (Overview step) ───────────────────────────────
+  // The applicant can top up credits without leaving the apply flow: a simple
+  // quantity stepper wired to the SAME create-credit-checkout edge function the
+  // account + delegation buy-credit surfaces use. Region price comes from the
+  // buyer's geo (creditPricing), and we snapshot the application first so the
+  // returnTo round trip restores them to Overview.
+  const [geoCountry, setGeoCountry] = useState<string | null>(null);
+  useEffect(() => {
+    fetch('/api/geo')
+      .then(r => r.json())
+      .then(g => setGeoCountry((g?.countryCode as string | null) ?? null))
+      .catch(() => {});
+  }, []);
+  const [creditQty, setCreditQty] = useState(1);
+  const [buyingCredits, setBuyingCredits] = useState(false);
+  const [buyCreditsError, setBuyCreditsError] = useState('');
+  const [upgradingUnlimited, setUpgradingUnlimited] = useState(false);
+  const CREDIT_MAX_QTY = 20;
+
+  async function handleBuyCreditsInline() {
+    if (buyingCredits) return;
+    setBuyingCredits(true);
+    setBuyCreditsError('');
+    saveResumeSnapshot();
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setBuyingCredits(false);
+      setBuyCreditsError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke('create-credit-checkout', {
+      body: {
+        kind: 'credits',
+        quantity: creditQty,
+        returnTo: `/conferences/${slug}/apply?role=${role}`,
+        ...(geoCountry ? { country: geoCountry } : {}),
+      },
+    });
+    if (error) {
+      setBuyingCredits(false);
+      setBuyCreditsError(await extractFunctionErrorMessage(error));
+      return;
+    }
+    const result = data as { ok?: boolean; url?: string; error?: string } | null;
+    if (!result?.ok || !result.url) {
+      setBuyingCredits(false);
+      setBuyCreditsError(result?.error || 'Could not start checkout. Please try again.');
+      return;
+    }
+    window.location.assign(result.url);
+  }
+
+  /** Upgrade to Gavelling Unlimited — routes to the existing subscription flow
+   *  (/account/unlimited) with a returnTo, snapshotting the application first. */
+  function goUnlimited() {
+    setUpgradingUnlimited(true);
+    goBuyCredits();
   }
 
   // ── Step render helpers ───────────────────────────────────────────────────
@@ -1833,9 +1994,9 @@ function ConferenceApplyInner() {
         {showSociety && (
           <>
             {/* ── Big two-card choice (onboarding wizard parity): Independent vs
-                Delegation. Clean icon cards, no decorative image backdrop.
-                Invoicing roles are always with a society, so they skip straight
-                to the picker. ── */}
+                Delegation. The image cards return here — the same podium /
+                handshake photography the onboarding wizard uses. Invoicing roles
+                are always with a society, so they skip straight to the picker. ── */}
             {!isInvoicingRole && (
               <TwoTabPick
                 value={isIndependent ? 'independent' : 'society'}
@@ -1844,13 +2005,13 @@ function ConferenceApplyInner() {
                   {
                     key: 'independent',
                     label: 'Independent',
-                    icon: <Gavel size={78} strokeWidth={1.6} style={{ color: NEU.deepGold }} />,
+                    image: '/onboarding/podium-01.jpg',
                     sub: 'Applying on your own',
                   },
                   {
                     key: 'society',
                     label: 'With a delegation',
-                    icon: <Users size={78} strokeWidth={1.6} style={{ color: NEU.forest }} />,
+                    image: '/onboarding/handshake-01.jpg',
                     sub: 'Part of a society or high school',
                   },
                 ]}
@@ -2175,7 +2336,24 @@ function ConferenceApplyInner() {
 
         {rankedPanel}
 
-        {/* ── Picker ──────────────────────────────────────────────────────── */}
+        {/* ── Picker ────────────────────────────────────────────────────────
+            Scrollable, fixed-height viewport for the committee list. Expanding
+            a committee's country tray now scrolls WITHIN this box instead of
+            growing the page, so opening a committee never shifts / re-orders the
+            list above it (the jarring reflow the old inline layout caused). */}
+        <div
+          className="pref-picker-scroll"
+          style={{
+            maxHeight: '58vh',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            paddingRight: 4,
+            marginRight: -4,
+            // Anchor the scrollport so a tray opening at the bottom reveals in
+            // place rather than nudging the whole column.
+            scrollbarGutter: 'stable',
+          }}
+        >
         {committees.length === 0 ? (
           <NeuInset style={{ padding: 20 }}>
             <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, textAlign: 'center' }}>
@@ -2267,6 +2445,20 @@ function ConferenceApplyInner() {
                           No countries listed for this committee yet.
                         </p>
                       ) : (
+                        <>
+                        {/* Free-vs-taken summary — mirrors the conference-portal
+                            roster: how many allocations are still open to pick. */}
+                        <div className="flex items-center justify-between mb-2.5" style={{ paddingLeft: 2 }}>
+                          <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.14em', color: NEU.muted }}>
+                            PICK AN ALLOCATION
+                          </span>
+                          <span
+                            className="inline-flex items-center gap-1"
+                            style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10.5, letterSpacing: '0.02em', color: info.openCount <= 0 ? '#8B2020' : NEU.green, fontVariantNumeric: 'tabular-nums' }}
+                          >
+                            {info.openCount <= 0 ? 'ALL TAKEN' : `${info.openCount} of ${info.total} free`}
+                          </span>
+                        </div>
                         <div className="flex flex-wrap gap-2">
                           {info.slots.map(slot => {
                             const taken = info.taken.has(slot.country_code);
@@ -2284,6 +2476,7 @@ function ConferenceApplyInner() {
                             );
                           })}
                         </div>
+                        </>
                       )}
                     </NeuInset>
                   )}
@@ -2292,6 +2485,7 @@ function ConferenceApplyInner() {
             })}
           </div>
         )}
+        </div>
 
         {prefError && (
           <p className="mt-4 text-xs text-center" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
@@ -2371,12 +2565,55 @@ function ConferenceApplyInner() {
           const matchesCv = chosenLevel === cvDerived.level;
           return (
             <div className="mb-2">
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <LevelBadge level={chosenLevel} size="md" />
-                <span className="text-xs font-semibold" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                  {cvEntryCount} conference{cvEntryCount === 1 ? '' : 's'} on your MUN CV
-                </span>
+              {/* ── Step imagery — the same onboarding photography used across
+                  the apply flow, so "About you" no longer reads as a bare form. ── */}
+              <div
+                aria-hidden
+                className="relative w-full overflow-hidden mb-5"
+                style={{
+                  height: 132,
+                  borderRadius: 20,
+                  backgroundImage: 'url(/onboarding/graduation-01.jpg)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center 38%',
+                  boxShadow: NEU.out,
+                }}
+              >
+                <div
+                  className="absolute inset-0"
+                  style={{ background: 'linear-gradient(180deg, rgba(22,48,31,0.10) 0%, rgba(22,48,31,0.42) 100%)' }}
+                />
               </div>
+
+              {/* ── Level hero — the delegate-rank insignia, sized up so the
+                  applicant's tier is the visual anchor of the step. ── */}
+              {(() => {
+                const heroAccent = LEVEL_ACCENT[chosenLevel] ?? NEU.deepGold;
+                const heroLabel = chosenLevel ? chosenLevel.charAt(0).toUpperCase() + chosenLevel.slice(1) : 'Unranked';
+                return (
+                  <div className="flex items-center gap-3.5 mb-4">
+                    <span
+                      className="inline-flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: 54, height: 54, borderRadius: 9999,
+                        background: `linear-gradient(150deg, ${heroAccent}26, ${heroAccent}12)`,
+                        border: `1.5px solid ${heroAccent}55`,
+                        boxShadow: NEU.outSm,
+                      }}
+                    >
+                      <LevelInsignia level={chosenLevel} size={40} />
+                    </span>
+                    <div className="min-w-0">
+                      <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.16em', color: NEU.muted, marginBottom: 2 }}>
+                        YOUR MUN LEVEL
+                      </p>
+                      <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 20, color: NEU.ink, lineHeight: 1.1 }}>
+                        {heroLabel}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Choosable level slider — drag the thumb, click a stop/label, or
                   use the arrow keys; snaps to one of the four bands. */}
@@ -2480,14 +2717,15 @@ function ConferenceApplyInner() {
                   : `Your MUN CV suggests ${cvDerived.label} (${cvEntryCount} conference${cvEntryCount === 1 ? '' : 's'}). Import to match, or keep your choice.`}
               </p>
 
-              {/* ── CV actions: import (re-pull count) + add a conference inline.
-                  Colourful 3D emoji, neumorphic 3D buttons. ── */}
-              <div className="flex flex-wrap gap-3 mt-5">
+              {/* ── CV action: import (re-pull the live conference count). The
+                  separate "Add a conference" button was removed — importing from
+                  the MUN CV is the single, clear affordance now. ── */}
+              <div className="mt-5">
                 <button
                   type="button"
                   onClick={refreshCvCount}
                   disabled={cvRefreshing}
-                  className="flex-1 min-w-[180px] flex items-center justify-center gap-2.5 rounded-2xl px-5 py-3.5 focus:outline-none"
+                  className="w-full flex items-center justify-center gap-2.5 rounded-2xl px-5 py-3.5 focus:outline-none"
                   style={{
                     backgroundColor: NEU.surface,
                     boxShadow: cvRefreshing ? NEU.inSm : NEU.out,
@@ -2503,25 +2741,10 @@ function ConferenceApplyInner() {
                     {cvRefreshing ? 'Importing…' : 'Import from my MUN CV'}
                   </span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setCvModalOpen(true)}
-                  className="flex-1 min-w-[180px] flex items-center justify-center gap-2.5 rounded-2xl px-5 py-3.5 focus:outline-none"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(238,217,138,0.35), rgba(182,135,31,0.16))',
-                    boxShadow: NEU.out,
-                    border: '1.5px solid rgba(182,135,31,0.5)',
-                    cursor: 'pointer',
-                    transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outHover; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.out; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-                >
-                  <Emoji3D name="Graduation cap" size={26} fallback={GraduationCap} fallbackColor={NEU.deepGold} />
-                  <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink }}>
-                    Add a conference
-                  </span>
-                </button>
+                {/* How many conferences the delegate already has on their CV. */}
+                <p className="text-center text-xs font-semibold mt-2.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                  You have <span style={{ fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{cvEntryCount}</span> conference{cvEntryCount === 1 ? '' : 's'} on your MUN CV
+                </p>
               </div>
             </div>
           );
@@ -2793,6 +3016,113 @@ function ConferenceApplyInner() {
             )}
           </>
         )}
+
+        {/* ── Inline top-up + upgrade — add credits or move to Gavelling
+            Unlimited without leaving the application. Only shown when this role
+            actually spends credits (never for sponsored / exempt / already-
+            Unlimited / edit resubmits), so it stays additive to the summary
+            above and never interferes with Submit. ── */}
+        {!creditsSponsored && !isExemptRole && !hasUnlimited && !isEditMode && (() => {
+          const creditPrice = creditPricing(geoCountry);
+          const creditTotal = Math.round(creditPrice.each * creditQty * 100) / 100;
+          return (
+            <div className="mb-4">
+              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 12 }}>
+                NEED MORE CREDITS?
+              </p>
+              <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                {/* Add credits — quantity stepper + direct checkout */}
+                <UpgradePhotoCard
+                  image="/onboarding/laptop-01.jpg"
+                  eyebrow="TOP UP"
+                  title="Add credits"
+                  hoverText="Each credit gives one delegate fee-free access to one conference. Unused credits never expire."
+                  accent={NEU.deepGold}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-1 rounded-full" style={{ backgroundColor: NEU.base, padding: 4, boxShadow: NEU.inSm }}>
+                      <button
+                        type="button"
+                        onClick={() => setCreditQty(q => Math.max(1, q - 1))}
+                        disabled={buyingCredits || creditQty <= 1}
+                        aria-label="Fewer credits"
+                        className="flex items-center justify-center rounded-full focus:outline-none"
+                        style={{ width: 26, height: 26, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: buyingCredits || creditQty <= 1 ? 'default' : 'pointer', opacity: buyingCredits || creditQty <= 1 ? 0.5 : 1 }}
+                      >
+                        <Minus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
+                      </button>
+                      <span className="text-center font-bold text-sm" style={{ width: 26, fontFamily: OUTFIT, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+                        {creditQty}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCreditQty(q => Math.min(CREDIT_MAX_QTY, q + 1))}
+                        disabled={buyingCredits || creditQty >= CREDIT_MAX_QTY}
+                        aria-label="More credits"
+                        className="flex items-center justify-center rounded-full focus:outline-none"
+                        style={{ width: 26, height: 26, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: buyingCredits || creditQty >= CREDIT_MAX_QTY ? 'default' : 'pointer', opacity: buyingCredits || creditQty >= CREDIT_MAX_QTY ? 0.5 : 1 }}
+                      >
+                        <Plus size={13} strokeWidth={2.6} style={{ color: NEU.ink }} />
+                      </button>
+                    </div>
+                    <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, whiteSpace: 'nowrap' }}>
+                      {formatFee(creditPrice.each, creditPrice.currency)} each
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleBuyCreditsInline}
+                    disabled={buyingCredits}
+                    className="w-full rounded-xl py-2.5 font-bold text-xs focus:outline-none"
+                    style={{
+                      backgroundColor: buyingCredits ? 'rgba(27,56,40,0.14)' : NEU.forest,
+                      color: buyingCredits ? NEU.muted : NEU.gold,
+                      fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none',
+                      boxShadow: NEU.outSm, cursor: buyingCredits ? 'default' : 'pointer',
+                    }}
+                  >
+                    {buyingCredits ? 'STARTING CHECKOUT…' : `BUY FOR ${formatFee(creditTotal, creditPrice.currency)}`}
+                  </button>
+                </UpgradePhotoCard>
+
+                {/* Upgrade to Gavelling Unlimited — existing subscription flow */}
+                <UpgradePhotoCard
+                  image="/onboarding/globe-01.jpg"
+                  eyebrow="GO UNLIMITED"
+                  title="Gavelling Unlimited"
+                  hoverText="Apply to unlimited conferences with no per-application credits — one subscription covers it all."
+                  accent="#B6871F"
+                >
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <InfinityIcon size={15} strokeWidth={2.4} style={{ color: '#B6871F' }} />
+                    <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.4 }}>
+                      Never spend a credit again.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={goUnlimited}
+                    disabled={upgradingUnlimited}
+                    className="w-full rounded-xl py-2.5 font-bold text-xs focus:outline-none"
+                    style={{
+                      background: upgradingUnlimited ? 'rgba(182,135,31,0.4)' : 'linear-gradient(135deg, #EED98A, #B6871F)',
+                      color: '#3A2A08',
+                      fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none',
+                      boxShadow: NEU.outSm, cursor: upgradingUnlimited ? 'default' : 'pointer',
+                    }}
+                  >
+                    {upgradingUnlimited ? 'OPENING…' : 'UPGRADE'}
+                  </button>
+                </UpgradePhotoCard>
+              </div>
+              {buyCreditsError && (
+                <p className="text-xs mt-2.5 text-center" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                  {buyCreditsError}
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {submitError && (
           <p className="mb-4 text-sm text-center" style={{ color: '#8B2020', fontFamily: OUTFIT }}>

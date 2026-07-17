@@ -26,7 +26,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, type PanInfo } from 'framer-motion';
-import { ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, ChevronLeft, ChevronRight, MapPin, Search } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -276,6 +276,9 @@ export default function VariantStagefront({
         /* Hero "up next" rail: horizontal snap on narrow screens, vertical stack ≥lg. */
         .sf-hero-rail { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .sf-hero-rail::-webkit-scrollbar { display: none; }
+        /* Hero search field: translucent light-on-dark, muted cream placeholder. */
+        .sf-hero-search-input::placeholder { color: rgba(237,231,216,0.6); opacity: 1; }
+        .sf-hero-search-input::-webkit-input-placeholder { color: rgba(237,231,216,0.6); }
         /* Fluid hero aside: the trio grows with the viewport (356px was fixed —
            at 1440/1920 the cards read undersized with dead space around them).
            Width tracks ~23.5vw and the photo-card height tracks ~12.5vw so the
@@ -381,30 +384,11 @@ export default function VariantStagefront({
                 Real conferences, real committee rooms, from London to San Salvador. Pick your weekend.
               </p>
 
-              <div className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-8" style={{ marginTop: '32px' }}>
-                <Link
-                  href="/conferences/explore"
-                  className="inline-flex items-center gap-2.5"
-                  style={{
-                    fontFamily: SANS,
-                    fontSize: 'clamp(15px, 1.05vw, 18px)',
-                    fontWeight: 800,
-                    letterSpacing: '0.04em',
-                    color: '#14100B',
-                    backgroundColor: PALE_GOLD,
-                    padding: 'clamp(15px, 1.1vw, 19px) clamp(28px, 2.1vw, 38px)',
-                    borderRadius: '9999px',
-                    textDecoration: 'none',
-                    boxShadow: '0 14px 36px rgba(0,0,0,0.35)',
-                    transition: 'transform 180ms ease, background-color 180ms ease',
-                    alignSelf: 'flex-start',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
-                >
-                  Find a conference <ArrowRight size={17} strokeWidth={2.5} />
-                </Link>
-                <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
+              <div className="flex flex-col gap-3" style={{ marginTop: '32px', maxWidth: 'clamp(460px, 40vw, 640px)' }}>
+                <HeroSearchBar />
+                <div className="flex justify-end">
+                  <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
+                </div>
               </div>
             </div>
 
@@ -790,6 +774,87 @@ export default function VariantStagefront({
 }
 
 // ── Local pieces ─────────────────────────────────────────────────────────────
+
+// Prominent hero search field. Finds conferences by NAME or LOCATION the same
+// way the Explore directory does — on submit it navigates to /conferences/explore
+// with the query as `?search=`, which the Explore client reads to pre-fill and
+// filter (name · acronym · city · country). Empty query just opens Explore.
+function HeroSearchBar() {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+  const [focused, setFocused] = useState(false);
+
+  const submit = () => {
+    const q = query.trim();
+    router.push(q ? `/conferences/explore?search=${encodeURIComponent(q)}` : '/conferences/explore');
+  };
+
+  return (
+    <div
+      className="flex items-center gap-2"
+      style={{
+        backgroundColor: focused ? 'rgba(237,231,216,0.20)' : 'rgba(237,231,216,0.13)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        border: `1px solid ${focused ? 'rgba(238,217,138,0.60)' : 'rgba(237,231,216,0.30)'}`,
+        borderRadius: '9999px',
+        padding: '7px 8px 7px clamp(16px, 1.4vw, 22px)',
+        boxShadow: focused
+          ? '0 18px 44px rgba(0,0,0,0.42), 0 0 0 3px rgba(238,217,138,0.16)'
+          : '0 14px 36px rgba(0,0,0,0.34)',
+        transition: 'border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease',
+      }}
+    >
+      <Search size={20} strokeWidth={2.25} style={{ color: 'rgba(237,231,216,0.72)', flexShrink: 0 }} aria-hidden="true" />
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder="Search by conference name or city…"
+        aria-label="Search conferences by name or city"
+        className="sf-hero-search-input"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          fontFamily: SANS,
+          fontSize: 'clamp(15px, 1.05vw, 17px)',
+          fontWeight: 500,
+          color: CREAM,
+        }}
+      />
+      <button
+        type="button"
+        onClick={submit}
+        aria-label="Search conferences"
+        className="inline-flex items-center justify-center gap-2 flex-shrink-0"
+        style={{
+          fontFamily: SANS,
+          fontSize: 'clamp(14px, 1vw, 16px)',
+          fontWeight: 800,
+          letterSpacing: '0.03em',
+          color: '#14100B',
+          backgroundColor: PALE_GOLD,
+          border: 'none',
+          cursor: 'pointer',
+          borderRadius: '9999px',
+          padding: 'clamp(11px, 0.9vw, 14px) clamp(18px, 1.5vw, 26px)',
+          transition: 'transform 160ms ease, background-color 160ms ease',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
+      >
+        <Search size={16} strokeWidth={2.75} className="sm:hidden" aria-hidden="true" />
+        <span className="hidden sm:inline">Search</span>
+      </button>
+    </div>
+  );
+}
 
 function HeroTextLink({ href, label }: { href: string; label: string }) {
   const [hover, setHover] = useState(false);
