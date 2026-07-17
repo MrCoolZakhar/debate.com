@@ -551,7 +551,6 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
 
   async function handleSave(force = false) {
     if (!name.trim()) { setError('Committee name is required.'); return; }
-    if (topics.length === 0) { setError('Add at least one topic.'); return; }
     if (roster.length === 0) { setError(isCharacterRoster ? 'Add at least one character.' : 'Add at least one country.'); return; }
     if (!session) return;
     setSaving(true); setError('');
@@ -683,7 +682,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
             </div>
           </div>
           <div>
-            <label style={labelStyle}>Topics * (at least one, up to 3)</label>
+            <label style={labelStyle}>Topics (optional, up to 3)</label>
             <div className="flex gap-2">
               <input value={topicInput} onChange={e => setTopicInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }} placeholder="Type a topic..." style={{ ...inputStyle, flex: 1 }} disabled={topics.length >= 3} />
               <button onClick={addTopic} disabled={topics.length >= 3} className="rounded-xl px-4 font-bold text-sm focus:outline-none" style={{ backgroundColor: topics.length >= 3 ? '#DDD4C0' : '#1B3828', color: topics.length >= 3 ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>Add topic</button>
