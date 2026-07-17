@@ -11,16 +11,11 @@ import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantApplication, ParticipantRoleConfig } from './types';
 import { type FormBlock } from '@/lib/customQuestions';
 
-export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidBlocks, aidIntro }: {
+export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, financialAidEnabled, aidBlocks, aidIntro }: {
   conferenceId: string;
   application: ParticipantApplication;
   allocationSwapMode: string;
   roleConfigs: ParticipantRoleConfig[];
-  contactEmail: string | null;
-  paymentsEnabled: boolean;
-  externalPaymentUrl: string | null;
-  externalPaymentNote: string | null;
-  manualActive: boolean;
   financialAidEnabled: boolean;
   aidBlocks: FormBlock[];
   aidIntro: string | null;
@@ -47,19 +42,8 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
       />
       <PledgeInvoicingCard
         applicationId={application.id}
-        conferenceId={conferenceId}
         societyId={application.society_id}
-        amountPaid={application.amount_paid}
-        pledgeType={application.pledge_type}
-        spotsPledged={application.spots_pledged}
-        pledgeConfirmedAt={application.pledge_confirmed_at}
-        delegateFeeAmount={delegateConfig?.fee_amount ?? null}
-        delegateFeeCurrency={delegateConfig?.fee_currency ?? null}
-        contactEmail={contactEmail}
-        paymentsEnabled={paymentsEnabled}
-        externalPaymentUrl={externalPaymentUrl}
-        externalPaymentNote={externalPaymentNote}
-        manualActive={manualActive}
+        currency={delegateConfig?.fee_currency ?? 'GBP'}
         financialAidEnabled={financialAidEnabled}
         aidBlocks={aidBlocks}
         aidIntro={aidIntro}

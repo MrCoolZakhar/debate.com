@@ -4,20 +4,24 @@
 // from the "YOUR APPLICATION" card's PAY AND REQUEST AID button once an
 // application is submitted (payable pre-acceptance for the app fee — see
 // ConferenceDetailClient). LEFT column is the real invoices list synced from
-// sync_participant_invoices (role_fee/app_fee/addon; pledge_spot stays out —
-// it has its own dedicated "Buy Delegation Spots" flow on the right, unchanged).
-// role_fee keeps its own rich voucher/partial-amount panel (its dedicated PAY
-// button still goes through the applicationId+kind checkout, the only path
-// that applies a freshly-typed voucher code); role_fee is ALSO selectable for
-// the combined "Pay Selected" flow, which charges via create-checkout's
-// invoiceIds path — that path recomputes role_fee's aid/voucher server-side
-// at charge time (v16), so a combined payment never overcharges an aid/
-// voucher recipient, it just can't pick up a voucher typed but never
-// submitted through the panel's own button. app_fee/addon are generic cards,
-// each individually payable via the invoiceId path (payInvoiceCheckout) or
-// selectable into the combined batch. RIGHT column action buttons are always
-// visible now — unavailable ones dim and explain why on click, instead of
-// disappearing.
+// sync_participant_invoices (role_fee/app_fee/addon/pledge_spot). role_fee
+// keeps its own rich voucher panel (its dedicated PAY button still goes
+// through the invoiceId checkout, the only path that applies a
+// freshly-typed voucher code) and, when waived (covered by the delegation),
+// renders as a covered notice with no pay affordance; role_fee is ALSO
+// selectable for the combined "Pay Selected" flow, which charges via
+// create-checkout's invoiceIds path — that path recomputes role_fee's
+// aid/voucher server-side at charge time (v16), so a combined payment never
+// overcharges an aid/voucher recipient, it just can't pick up a voucher
+// typed but never submitted through the panel's own button. app_fee/addon/
+// pledge_spot are generic cards, each individually payable via the
+// invoiceId path (payInvoiceCheckout) or selectable into the combined
+// batch — pledge_spot cards are owned by the delegation leader (own
+// application_id), materialized by add_pledged_spots. RIGHT column action
+// buttons are always visible now — unavailable ones dim and explain why on
+// click, instead of disappearing. "Add Delegation Spots" lets a leader
+// pledge more spots (add_pledged_spots), which materialize as new
+// pledge_spot invoices in the list above rather than being paid inline.
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -795,6 +799,85 @@ function AddonsModal({
   );
 }
 
+// ── Add delegation spots ─────────────────────────────────────────────────────
+// Pledges MORE spots for the leader's delegation via add_pledged_spots, which
+// materializes each new spot as an owed pledge_spot invoice — no payment
+// happens here, the new invoices just appear in the list above (genericInvoices)
+// once onAdded triggers a refetch.
+
+function AddSpotsPanel({
+  applicationId, accessToken, onAdded,
+}: {
+  applicationId: string;
+  accessToken: string | undefined;
+  onAdded: () => void;
+}) {
+  const [count, setCount] = useState(1);
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [justAdded, setJustAdded] = useState<number | null>(null);
+
+  async function handleAdd() {
+    if (adding || !accessToken || count < 1) return;
+    setAdding(true);
+    setError(null);
+    setJustAdded(null);
+    const supabase = getAuthedClient(accessToken);
+    const { data, error: rpcError } = await supabase.rpc('add_pledged_spots', {
+      p_application_id: applicationId,
+      p_count: count,
+    });
+    const result = data as { ok?: boolean; spots_pledged?: number; error?: string } | null;
+    setAdding(false);
+    if (rpcError || !result?.ok) {
+      setError(result?.error || rpcError?.message || 'Could not add spots. Please try again.');
+      return;
+    }
+    setJustAdded(count);
+    setCount(1);
+    onAdded();
+  }
+
+  return (
+    <NeuCard style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="flex items-center gap-3">
+        <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Users2} size={36} />
+        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink, margin: 0 }}>Add Delegation Spots</p>
+      </div>
+      <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: 0, lineHeight: 1.5 }}>
+        Pledge more spots for your delegation — each becomes a payable invoice above.
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={1}
+          value={count}
+          onChange={e => setCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+          className="rounded-xl px-3 py-2 text-sm text-center focus:outline-none"
+          style={{ width: 64, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
+        />
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={adding}
+          className="flex-1 rounded-xl py-2.5 text-xs font-bold focus:outline-none"
+          style={{
+            border: 'none', backgroundColor: adding ? '#DDD4C0' : NEU.forest,
+            color: adding ? '#9A8A78' : NEU.gold,
+            fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding ? 'default' : 'pointer',
+          }}
+        >
+          {adding ? 'ADDING…' : 'ADD'}
+        </button>
+      </div>
+      {justAdded && !error && (
+        <Note tone="green">{`Added ${justAdded} spot${justAdded === 1 ? '' : 's'} — check the invoices above.`}</Note>
+      )}
+      {error && <Note tone="red">{error}</Note>}
+    </NeuCard>
+  );
+}
+
 // ── Invoice + actions (only mounted once real data is loaded, so its money
 // math hooks initialize against real values) ────────────────────────────────
 
@@ -833,6 +916,7 @@ function PayInvoiceAndActions({
   const badge = roleFeeInvoice ? invoiceBadge(roleFeeInvoice) : deriveBadge(application.payment_status, application.amount_paid);
   const owesSomething = badge === 'UNPAID' || badge === 'PARTIAL';
   const roleFeeSelectable = !!roleFeeInvoice && !isInvoiceSettled(roleFeeInvoice) && dueCents > 0;
+  const isCovered = roleFeeInvoice?.status === 'waived';
   const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status);
   const payableNow = gateState !== 'under_review';
   const paymentsEnabled = conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete';
@@ -853,9 +937,10 @@ function PayInvoiceAndActions({
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [spotsOpen, setSpotsOpen] = useState(false);
 
-  // Generic (app_fee / addon) invoice cards — pledge_spot renders through its
-  // own dedicated panel on the right, never as a generic card.
-  const genericInvoices = invoices.filter(inv => inv.kind === 'app_fee' || inv.kind === 'addon');
+  // Generic invoice cards — app_fee, addon, and pledge_spot (owed delegation
+  // spots, materialized by add_pledged_spots). All three are individually
+  // payable or selectable into the combined "Pay Selected" batch.
+  const genericInvoices = invoices.filter(inv => inv.kind === 'app_fee' || inv.kind === 'addon' || inv.kind === 'pledge_spot');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [genericPayingId, setGenericPayingId] = useState<string | null>(null);
@@ -997,7 +1082,9 @@ function PayInvoiceAndActions({
                       {roleLabel(application.role)} fee
                     </p>
                     <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: '2px 0 0 0' }}>
-                      {fee > 0 ? `${formatFee(fee, currency)} · balance due ${centsToFee(dueCents, currency)}` : 'Free'}
+                      {isCovered
+                        ? `${invoiceLabel(roleFeeInvoice!)} · ${centsToFee(0, currency)}`
+                        : fee > 0 ? `${formatFee(fee, currency)} · balance due ${centsToFee(dueCents, currency)}` : 'Free'}
                     </p>
                   </div>
                 </div>
@@ -1010,6 +1097,16 @@ function PayInvoiceAndActions({
 
             {invoiceOpen && (
               <div style={{ padding: '0 20px 20px 20px', borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                {isCovered ? (
+                  <div className="pt-4">
+                    <div className="flex items-center justify-between pb-4">
+                      <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{invoiceLabel(roleFeeInvoice!)}</span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{centsToFee(0, currency)}</span>
+                    </div>
+                    <Note tone="green">Nothing to pay — this spot is covered.</Note>
+                  </div>
+                ) : (
+                <>
                 <div className="pt-4 flex flex-col gap-1.5 mb-4">
                   <div className="flex items-center justify-between">
                     <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>Fee</span>
@@ -1178,6 +1275,8 @@ function PayInvoiceAndActions({
                 ) : (
                   <Note tone="green">Paid in full. Thank you!</Note>
                 )}
+                </>
+                )}
               </div>
             )}
           </NeuCard>
@@ -1310,34 +1409,30 @@ function PayInvoiceAndActions({
         <ActionRow
           icon={Users2}
           gradient={NEU_GRADIENTS.forest}
-          title="Buy Delegation Spots"
-          subtitle={canBuyDelegationStuff ? (spotsOpen ? 'Hide' : 'Pay for pledged spots') : 'Delegation leaders only'}
+          title="Add Delegation Spots"
+          subtitle={canBuyDelegationStuff ? (spotsOpen ? 'Hide' : 'Pledge more spots') : 'Delegation leaders only'}
           dimmed={!canBuyDelegationStuff}
           onClick={() => {
-            if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can buy spots or credits.'); return; }
+            if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can add spots or credits.'); return; }
             setSpotsOpen(v => !v);
           }}
         />
         {canBuyDelegationStuff && spotsOpen && (
-          <PledgeInvoicingCard
-            applicationId={application.id}
-            conferenceId={conference.id}
-            societyId={application.society_id as string}
-            amountPaid={application.amount_paid}
-            pledgeType={application.pledge_type}
-            spotsPledged={application.spots_pledged}
-            pledgeConfirmedAt={application.pledge_confirmed_at}
-            delegateFeeAmount={delegateRoleConfig?.fee_amount ?? null}
-            delegateFeeCurrency={delegateRoleConfig?.fee_currency ?? null}
-            contactEmail={conference.contact_email}
-            paymentsEnabled={paymentsEnabled}
-            externalPaymentUrl={externalPaymentUrl}
-            externalPaymentNote={conference.external_payment_note}
-            manualActive={manualActive}
-            financialAidEnabled={conference.financial_aid_enabled}
-            aidBlocks={aidBlocks}
-            aidIntro={conference.aid_intro}
-          />
+          <>
+            <AddSpotsPanel
+              applicationId={application.id}
+              accessToken={session?.access_token}
+              onAdded={onInvoicesChanged}
+            />
+            <PledgeInvoicingCard
+              applicationId={application.id}
+              societyId={application.society_id as string}
+              currency={delegateRoleConfig?.fee_currency ?? currency}
+              financialAidEnabled={conference.financial_aid_enabled}
+              aidBlocks={aidBlocks}
+              aidIntro={conference.aid_intro}
+            />
+          </>
         )}
 
         <ActionRow

@@ -51,20 +51,11 @@ function pickDefault(apps: ParticipantApplication[]): ParticipantApplication {
 export interface ParticipantViewProps {
   conferenceId: string;
   conferenceSlug: string;
-  contactEmail: string | null;
   myApplications: ParticipantApplication[];
   roleConfigs: ParticipantRoleConfig[];
   myAllocation: ParticipantAllocation | null;
   committees: ParticipantCommittee[];
   allocationSwapMode: string;
-  /** True once the conference's Stripe Connect onboarding is complete AND
-   *  Stripe is the active payment_method. */
-  paymentsEnabled: boolean;
-  /** Organizer-provided payment page, shown when manual is the active method. */
-  externalPaymentUrl: string | null;
-  externalPaymentNote: string | null;
-  /** True when 'manual' is the conference's active payment_method. */
-  manualActive: boolean;
   /** Conference-level financial aid config (separate application, financial_aid_requests table). */
   financialAidEnabled: boolean;
   aidBlocks: FormBlock[];
@@ -72,7 +63,7 @@ export interface ParticipantViewProps {
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, contactEmail, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidBlocks, aidIntro,
+  conferenceId, conferenceSlug, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, financialAidEnabled, aidBlocks, aidIntro,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -163,11 +154,6 @@ export default function ParticipantView({
                 application={selected}
                 allocationSwapMode={allocationSwapMode}
                 roleConfigs={roleConfigs}
-                contactEmail={contactEmail}
-                paymentsEnabled={paymentsEnabled}
-                externalPaymentUrl={externalPaymentUrl}
-                externalPaymentNote={externalPaymentNote}
-                manualActive={manualActive}
                 financialAidEnabled={financialAidEnabled}
                 aidBlocks={aidBlocks}
                 aidIntro={aidIntro}

@@ -1570,16 +1570,11 @@ export default function ConferenceDetailClient() {
                 <ParticipantView
                   conferenceId={conference.id}
                   conferenceSlug={conference.slug}
-                  contactEmail={conference.contact_email}
                   myApplications={myApplications}
                   roleConfigs={roleConfigs}
                   myAllocation={myAllocation}
                   committees={committees}
                   allocationSwapMode={conference.allocation_swap_mode}
-                  paymentsEnabled={conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete'}
-                  externalPaymentUrl={conference.payment_method === 'manual' ? conference.external_payment_url : null}
-                  externalPaymentNote={conference.external_payment_note}
-                  manualActive={conference.payment_method === 'manual'}
                   financialAidEnabled={conference.financial_aid_enabled}
                   aidBlocks={normalizeBlocks(conference.aid_questions)}
                   aidIntro={conference.aid_intro}
