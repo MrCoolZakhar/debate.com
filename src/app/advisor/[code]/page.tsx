@@ -98,7 +98,7 @@ function ExpandedDelegateCard({
 
   const handleNudge = (nudgeKey: string) => {
     const msg = t(nudgeKey as any);
-    sendMessageDB(committee.id, 'Faculty Advisor', msg, true, delegate.country);
+    sendMessageDB(committee.id, 'Faculty Advisor', msg, committee.code, undefined, true, delegate.country);
     setNudgeSent(msg);
     setTimeout(() => setNudgeSent(null), 1500);
   };

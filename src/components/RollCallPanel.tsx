@@ -354,17 +354,17 @@ function RollCallPanelInner({
       : (current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent');
     setLocalStatuses((prev) => ({ ...prev, [id]: next }));
     onStatusChange?.(id, next);
-    setDelegateStatusInDB(id, next);
+    setDelegateStatusInDB(id, next, committee.code, committee.dbChairJoinSuffix ?? undefined);
     if (!isRollCallPhase && next === 'absent' && queuePositionMap.has(id)) {
       onRemoveFromList?.(id);
-      removeFromSpeakersListInDB(committee.id, id);
+      removeFromSpeakersListInDB(committee.id, id, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
   };
 
   const toggleObserver = (id: string, current: boolean) => {
     const next = !current;
     setLocalObservers((prev) => ({ ...prev, [id]: next }));   // instant visual
-    setDelegateObserverInDB(id, next);                        // fire-and-forget
+    setDelegateObserverInDB(id, next, committee.code, committee.dbChairJoinSuffix ?? undefined); // fire-and-forget
     // Becoming an observer downgrades present-voting → present.
     if (next) {
       const delegate = committee.delegates.find((d) => d.id === id);
@@ -372,7 +372,7 @@ function RollCallPanelInner({
       if (cur === 'present-voting') {
         setLocalStatuses((prev) => ({ ...prev, [id]: 'present' }));
         onStatusChange?.(id, 'present');
-        setDelegateStatusInDB(id, 'present');
+        setDelegateStatusInDB(id, 'present', committee.code, committee.dbChairJoinSuffix ?? undefined);
       }
     }
   };
@@ -382,7 +382,7 @@ function RollCallPanelInner({
     committee.delegates.forEach((d) => {
       newStatuses[d.id] = 'present';
       onStatusChange?.(d.id, 'present');
-      setDelegateStatusInDB(d.id, 'present');
+      setDelegateStatusInDB(d.id, 'present', committee.code, committee.dbChairJoinSuffix ?? undefined);
     });
     setLocalStatuses(newStatuses);
   };
@@ -392,7 +392,7 @@ function RollCallPanelInner({
     committee.delegates.forEach((d) => {
       newStatuses[d.id] = 'present-voting';
       onStatusChange?.(d.id, 'present-voting');
-      setDelegateStatusInDB(d.id, 'present-voting');
+      setDelegateStatusInDB(d.id, 'present-voting', committee.code, committee.dbChairJoinSuffix ?? undefined);
     });
     setLocalStatuses(newStatuses);
   };
@@ -402,14 +402,14 @@ function RollCallPanelInner({
     committee.delegates.forEach((d) => {
       newStatuses[d.id] = 'absent';
       onStatusChange?.(d.id, 'absent');
-      setDelegateStatusInDB(d.id, 'absent');
+      setDelegateStatusInDB(d.id, 'absent', committee.code, committee.dbChairJoinSuffix ?? undefined);
     });
     setLocalStatuses(newStatuses);
   };
 
   const handleBeginSession = () => {
     onPhaseChange?.('speakers-list');
-    setPhaseInDB(committee.id, 'speakers-list');
+    setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handleAddDelegate = (country: string) => {

@@ -248,12 +248,12 @@ function JoinPageInner() {
       // Conference chair: no country allocation — route to the chair view using their profile name.
       if (mode === 'chair') {
         const chairDisplayName = (profile?.display_name ?? user.email ?? 'Chair').trim();
-        addChairName(foundCommittee!.id, chairDisplayName);
+        addChairName(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined);
         const goChair = () => router.push(`/chair/${foundCommittee!.code}?chairName=${encodeURIComponent(chairDisplayName)}`);
         // Claim-at-will head chair works for conference sessions too; no password required —
         // access was already verified against the conference chair/organizer records.
         if (chairRole === 'head') {
-          updateCommitteeHeadChairInDB(foundCommittee!.id, chairDisplayName).finally(goChair);
+          updateCommitteeHeadChairInDB(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined).finally(goChair);
         } else {
           goChair();
         }
@@ -283,11 +283,11 @@ function JoinPageInner() {
         setPasswordError('Incorrect password. Ask your head chair.');
         return;
       }
-      addChairName(foundCommittee.id, name);
+      addChairName(foundCommittee.id, name, foundCommittee.code, foundCommittee.dbChairJoinSuffix ?? undefined);
       const go = () => router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
       // Claim-at-will: joining as head chair takes the gavel; co-chair joins view-only.
       if (chairRole === 'head') {
-        updateCommitteeHeadChairInDB(foundCommittee.id, name).finally(go);
+        updateCommitteeHeadChairInDB(foundCommittee.id, name, foundCommittee.code, foundCommittee.dbChairJoinSuffix ?? undefined).finally(go);
       } else {
         go();
       }

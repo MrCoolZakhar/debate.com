@@ -112,7 +112,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
         stateRef.current[k].id && !stateRef.current[k].reconciled);
       if (!candKey) continue;
       const entry = stateRef.current[candKey];
-      updateFeedback(entry.id!, { speechContext: p.context, speechSeconds: p.seconds });
+      updateFeedback(entry.id!, { speechContext: p.context, speechSeconds: p.seconds }, committee.code, committee.dbChairJoinSuffix ?? undefined);
       setState((prev) => ({
         ...prev,
         [pastKey]: { ...entry, reconciled: true },
@@ -124,10 +124,10 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
 
   const persist = (item: FeedItem, content: string, scores: Record<string, number>) => {
     const cur = stateRef.current[item.key];
-    if (cur?.id) { updateFeedback(cur.id, { content, factorScores: scores }); return; }
+    if (cur?.id) { updateFeedback(cur.id, { content, factorScores: scores }, committee.code, committee.dbChairJoinSuffix ?? undefined); return; }
     if (creatingRef.current.has(item.key)) return;
     creatingRef.current.add(item.key);
-    addFeedback(committee.id, item.country, chairName, content, {
+    addFeedback(committee.id, item.country, chairName, content, committee.code, committee.dbChairJoinSuffix ?? undefined, {
       level: 'speech', factorScores: scores, speechContext: item.context, speechSeconds: item.seconds ?? null,
     }).then((id) => {
       creatingRef.current.delete(item.key);
@@ -135,7 +135,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
       setState((prev) => {
         const latest = prev[item.key] ?? { content, scores, country: item.country };
         if (latest.content !== content || JSON.stringify(latest.scores) !== JSON.stringify(scores)) {
-          updateFeedback(id, { content: latest.content, factorScores: latest.scores });
+          updateFeedback(id, { content: latest.content, factorScores: latest.scores }, committee.code, committee.dbChairJoinSuffix ?? undefined);
         }
         return { ...prev, [item.key]: { ...latest, id, country: item.country } };
       });

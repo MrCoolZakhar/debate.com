@@ -178,7 +178,7 @@ export default function ChatPanel({
     setMsg('');
     atBottomRef.current = true;
     // Fire-and-forget, the bubble is already on screen; the echo will reconcile it.
-    sendMessageToDB(committee.id, senderName, content, isPrivate, recipient);
+    sendMessageToDB(committee.id, senderName, content, committee.code, isChair ? (committee.dbChairJoinSuffix ?? undefined) : undefined, isPrivate, recipient);
     requestAnimationFrame(() => { scrollToBottom(false); inputRef.current?.focus(); });
   };
 

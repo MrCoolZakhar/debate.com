@@ -352,14 +352,14 @@ export function SettingsPanel({ committee, onClose, myChairName, onBecomeHeadCha
   const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => {
     updateSetting(committee.code, key, value);
     // Persist the full settings object to the DB so other devices/instances read the same values.
-    saveCommitteeSettings(committee.id, { ...getSettings(committee.code), [key]: value });
+    saveCommitteeSettings(committee.id, { ...getSettings(committee.code), [key]: value }, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   // Scoring config, local store + DB jsonb (so delegates/FAs on other devices see it)
   const scoring: ScoringConfig = s.scoring ?? DEFAULT_SCORING;
   const updScoring = (next: ScoringConfig) => {
     updateSetting(committee.code, 'scoring', next);
-    updateCommitteeScoringInDB(committee.id, next);
+    updateCommitteeScoringInDB(committee.id, next, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
   const setSource = (id: string, patch: Partial<ScoreSource>) =>
     updScoring({ ...scoring, sources: scoring.sources.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
@@ -379,9 +379,9 @@ export function SettingsPanel({ committee, onClose, myChairName, onBecomeHeadCha
     if (s.chairJoinSuffix === '') {
       const newSuffix = Math.floor(1000 + Math.random() * 9000).toString();
       upd('chairJoinSuffix', newSuffix);
-      updateCommitteeChairSuffixInDB(committee.id, newSuffix);
+      updateCommitteeChairSuffixInDB(committee.id, newSuffix, committee.code, committee.dbChairJoinSuffix ?? undefined);
     } else {
-      updateCommitteeChairSuffixInDB(committee.id, s.chairJoinSuffix);
+      updateCommitteeChairSuffixInDB(committee.id, s.chairJoinSuffix, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.chairJoinSuffix]);

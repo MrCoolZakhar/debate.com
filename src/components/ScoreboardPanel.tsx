@@ -80,7 +80,7 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
       country: selected,
       type: deduct ? 'manual-deduct' : 'manual-award',
       value: amt, note: awardNote.trim(),
-    });
+    }, committee.code, committee.dbChairJoinSuffix ?? undefined);
     setAwardAmt(''); setAwardNote('');
   };
 

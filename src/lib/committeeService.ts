@@ -4,6 +4,7 @@
 // ============================================================
 
 import { supabase } from './supabase';
+import { sessionClient } from './sessionClient';
 import {
   Committee,
   Delegate,
@@ -95,8 +96,9 @@ export async function createCommittee(
   const createPromise = async (): Promise<{ code: string; chairJoinSuffix: string } | null> => {
     const code = generateCode();
     const chairJoinSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+    const client = sessionClient(code, chairJoinSuffix);
 
-    const { data: committeeRow, error: committeeError } = await supabase
+    const { data: committeeRow, error: committeeError } = await client
       .from('committees')
       .insert({
         code, name, topic, chair_names: chairNames, phase: 'pre-session', speaker_time_limit: 90,
@@ -116,12 +118,12 @@ export async function createCommittee(
       const BATCH_SIZE = 50;
       for (let i = 0; i < delegateRows.length; i += BATCH_SIZE) {
         const batch = delegateRows.slice(i, i + BATCH_SIZE);
-        const { error: delegateError } = await supabase.from('delegates').insert(batch);
+        const { error: delegateError } = await client.from('delegates').insert(batch);
         if (delegateError) console.error('Error inserting delegates batch:', delegateError);
       }
     }
 
-    await supabase.from('current_speaker').insert({
+    await client.from('current_speaker').insert({
       committee_id: committeeRow.id, delegate_id: null, country: null, time_remaining: 90,
     });
     return { code, chairJoinSuffix };
@@ -219,14 +221,14 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
 // COMMITTEE SETTINGS (persisted to committees.settings jsonb)
 // ============================================================
 
-export async function saveCommitteeSettings(committeeId: string, settings: object): Promise<void> {
+export async function saveCommitteeSettings(committeeId: string, settings: object, code: string, chairSuffix?: string): Promise<void> {
   // Merge into the existing settings jsonb so chairJoinSuffix/separateChairCode are preserved.
   const { data: row, error: readErr } = await supabase
     .from('committees').select('settings').eq('id', committeeId).single();
   if (readErr) { console.error('Error reading committee settings:', readErr); return; }
   const current = (row?.settings as Record<string, unknown>) ?? {};
   const merged = { ...current, ...settings };
-  const { error } = await supabase.from('committees').update({ settings: merged }).eq('id', committeeId);
+  const { error } = await sessionClient(code, chairSuffix).from('committees').update({ settings: merged }).eq('id', committeeId);
   if (error) console.error('Error saving committee settings:', error);
 }
 
@@ -234,8 +236,8 @@ export async function saveCommitteeSettings(committeeId: string, settings: objec
 // PHASE MANAGEMENT
 // ============================================================
 
-export async function setPhase(committeeId: string, phase: SessionPhase): Promise<void> {
-  const { error } = await supabase.from('committees').update({ phase }).eq('id', committeeId);
+export async function setPhase(committeeId: string, phase: SessionPhase, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('committees').update({ phase }).eq('id', committeeId);
   if (error) console.error('Error setting phase:', error);
 }
 
@@ -243,20 +245,22 @@ export async function setPhase(committeeId: string, phase: SessionPhase): Promis
 // ROLL CALL
 // ============================================================
 
-export async function setDelegateStatus(delegateId: string, status: DelegateStatus): Promise<void> {
-  const { error } = await supabase.from('delegates').update({ status }).eq('id', delegateId);
+export async function setDelegateStatus(delegateId: string, status: DelegateStatus, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('delegates').update({ status }).eq('id', delegateId);
   if (error) console.error('Error setting delegate status:', error);
 }
 
-export async function setDelegateObserver(delegateId: string, isObserver: boolean): Promise<void> {
-  const { error } = await supabase.from('delegates').update({ is_observer: isObserver }).eq('id', delegateId);
+export async function setDelegateObserver(delegateId: string, isObserver: boolean, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('delegates').update({ is_observer: isObserver }).eq('id', delegateId);
   if (error) console.error('Error setting delegate observer:', error);
 }
 
 export async function batchSetDelegateStatuses(
-  updates: { id: string; status: DelegateStatus }[]
+  updates: { id: string; status: DelegateStatus }[],
+  code: string,
+  chairSuffix?: string,
 ): Promise<void> {
-  await Promise.all(updates.map(({ id, status }) => setDelegateStatus(id, status)));
+  await Promise.all(updates.map(({ id, status }) => setDelegateStatus(id, status, code, chairSuffix)));
 }
 
 // ============================================================
@@ -264,17 +268,17 @@ export async function batchSetDelegateStatuses(
 // Never touched by caucuses or motions
 // ============================================================
 
-export async function addToSpeakersList(committeeId: string, delegateId: string, country: string, position?: number): Promise<void> {
+export async function addToSpeakersList(committeeId: string, delegateId: string, country: string, code: string, chairSuffix?: string, position?: number): Promise<void> {
   const pos = position !== undefined ? position : Date.now();
-  const { error } = await supabase.from('speakers_list').insert({
+  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').insert({
     committee_id: committeeId, delegate_id: delegateId, country,
     position: pos, list_type: 'gsl',
   });
   if (error) console.error('Error adding to GSL:', error);
 }
 
-export async function removeFromSpeakersList(committeeId: string, delegateId: string): Promise<void> {
-  const { error } = await supabase.from('speakers_list').delete()
+export async function removeFromSpeakersList(committeeId: string, delegateId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').delete()
     .eq('committee_id', committeeId).eq('delegate_id', delegateId).eq('list_type', 'gsl');
   if (error) console.error('Error removing from GSL:', error);
 }
@@ -284,9 +288,9 @@ export async function removeFromSpeakersList(committeeId: string, delegateId: st
 // Temporary — per-motion, wiped when caucus ends, GSL untouched
 // ============================================================
 
-export async function addToCaucusList(committeeId: string, delegateId: string, country: string, position?: number): Promise<void> {
+export async function addToCaucusList(committeeId: string, delegateId: string, country: string, code: string, chairSuffix?: string, position?: number): Promise<void> {
   const pos = position !== undefined ? position : Date.now();
-  const { error } = await supabase.from('speakers_list').insert({
+  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').insert({
     committee_id: committeeId, delegate_id: delegateId, country,
     position: pos, list_type: 'caucus',
   });
@@ -297,6 +301,8 @@ export async function addToCaucusList(committeeId: string, delegateId: string, c
 export async function batchAddToCaucusList(
   committeeId: string,
   delegates: { delegateId: string; country: string }[],
+  code: string,
+  chairSuffix?: string,
 ): Promise<void> {
   if (delegates.length === 0) return;
   const rows = delegates.map((d, i) => ({
@@ -306,18 +312,18 @@ export async function batchAddToCaucusList(
     position: i + 1,
     list_type: 'caucus',
   }));
-  const { error } = await supabase.from('speakers_list').insert(rows);
+  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').insert(rows);
   if (error) console.error('Error batch adding to caucus list:', error);
 }
 
-export async function removeFromCaucusList(committeeId: string, delegateId: string): Promise<void> {
-  const { error } = await supabase.from('speakers_list').delete()
+export async function removeFromCaucusList(committeeId: string, delegateId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').delete()
     .eq('committee_id', committeeId).eq('delegate_id', delegateId).eq('list_type', 'caucus');
   if (error) console.error('Error removing from caucus list:', error);
 }
 
-export async function clearCaucusList(committeeId: string): Promise<void> {
-  const { error } = await supabase.from('speakers_list').delete()
+export async function clearCaucusList(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').delete()
     .eq('committee_id', committeeId).eq('list_type', 'caucus');
   if (error) console.error('Error clearing caucus list:', error);
 }
@@ -325,14 +331,17 @@ export async function clearCaucusList(committeeId: string): Promise<void> {
 export async function reorderSpeakersList(
   committeeId: string,
   entries: { delegateId: string; country: string }[],
+  code: string,
+  chairSuffix?: string,
   listType: 'gsl' | 'caucus' = 'gsl',
 ): Promise<void> {
   if (entries.length === 0) return;
   // Parallel in-place position updates — avoids DELETE+INSERT which fires a
   // DELETE realtime event causing the delegate view to briefly flash an empty list.
+  const client = sessionClient(code, chairSuffix);
   await Promise.all(
     entries.map((e, i) =>
-      supabase.from('speakers_list')
+      client.from('speakers_list')
         .update({ position: i + 1 })
         .eq('committee_id', committeeId)
         .eq('delegate_id', e.delegateId)
@@ -345,8 +354,8 @@ export async function reorderSpeakersList(
 // DELEGATES
 // ============================================================
 
-export async function addDelegate(committeeId: string, country: string): Promise<string | null> {
-  const { data, error } = await supabase.from('delegates')
+export async function addDelegate(committeeId: string, country: string, code: string, chairSuffix?: string): Promise<string | null> {
+  const { data, error } = await sessionClient(code, chairSuffix).from('delegates')
     .insert({ committee_id: committeeId, country, status: 'absent', is_observer: false })
     .select('id').single();
   if (error) { console.error('Error adding delegate:', error); return null; }
@@ -363,15 +372,18 @@ export async function nextSpeaker(
   nextDelegateId: string | null,
   nextCountry: string | null,
   removeDelegateId: string | null,
+  code: string,
+  chairSuffix?: string,
 ): Promise<void> {
+  const client = sessionClient(code, chairSuffix);
   await Promise.all([
     removeDelegateId
-      ? supabase.from('speakers_list').delete()
+      ? client.from('speakers_list').delete()
           .eq('committee_id', committeeId)
           .eq('delegate_id', removeDelegateId)
           .eq('list_type', 'gsl')
       : Promise.resolve(),
-    supabase.from('current_speaker')
+    client.from('current_speaker')
       .update({
         delegate_id: nextDelegateId,
         country: nextCountry,
@@ -384,26 +396,26 @@ export async function nextSpeaker(
 
 // Sync time_remaining to DB at structural moments (pause, expire).
 // tickSpeakerTimer removed — per-second DB writes caused excessive realtime events.
-export async function syncSpeakerTime(committeeId: string, timeRemaining: number): Promise<void> {
-  await supabase.from('current_speaker')
+export async function syncSpeakerTime(committeeId: string, timeRemaining: number, code: string, chairSuffix?: string): Promise<void> {
+  await sessionClient(code, chairSuffix).from('current_speaker')
     .update({ time_remaining: timeRemaining })
     .eq('committee_id', committeeId);
 }
 
-export async function startSpeakerTimer(committeeId: string): Promise<void> {
-  await supabase.from('current_speaker')
+export async function startSpeakerTimer(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+  await sessionClient(code, chairSuffix).from('current_speaker')
     .update({ started_at: new Date().toISOString() })
     .eq('committee_id', committeeId);
 }
 
-export async function stopSpeakerTimer(committeeId: string): Promise<void> {
-  await supabase.from('current_speaker')
+export async function stopSpeakerTimer(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+  await sessionClient(code, chairSuffix).from('current_speaker')
     .update({ started_at: null })
     .eq('committee_id', committeeId);
 }
 
-export async function clearCurrentSpeaker(committeeId: string): Promise<void> {
-  await supabase.from('current_speaker')
+export async function clearCurrentSpeaker(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+  await sessionClient(code, chairSuffix).from('current_speaker')
     .update({ delegate_id: null, country: null, time_remaining: 0, started_at: null })
     .eq('committee_id', committeeId);
 }
@@ -511,10 +523,11 @@ export async function getPendingMotionsList(committeeId: string): Promise<Pendin
 // ============================================================
 
 export async function addPendingMotion(
-  committeeId: string, motion: Omit<PendingMotion, 'id' | 'disruptiveness'>, motionOrder?: string[],
+  committeeId: string, motion: Omit<PendingMotion, 'id' | 'disruptiveness'>,
+  code: string, chairSuffix: string | undefined, motionOrder?: string[],
 ): Promise<string | null> {
   const disruptiveness = calcDisruptiveness(motion.type, motion.totalTime, motionOrder);
-  const { data, error } = await supabase.from('motions').insert({
+  const { data, error } = await sessionClient(code, chairSuffix).from('motions').insert({
     committee_id: committeeId, type: motion.type, proposed_by: motion.proposedBy,
     total_time: motion.totalTime, speaking_time: motion.speakingTime, topic: motion.topic,
     tour_order: motion.tourOrder ?? null,
@@ -524,13 +537,13 @@ export async function addPendingMotion(
   return data.id as string;
 }
 
-export async function removePendingMotion(motionId: string): Promise<void> {
-  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+export async function removePendingMotion(motionId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
   if (error) console.error('Error removing motion:', error);
 }
 
-export async function clearPendingMotions(committeeId: string): Promise<void> {
-  const { error } = await supabase.from('motions').delete()
+export async function clearPendingMotions(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('motions').delete()
     .eq('committee_id', committeeId).eq('status', 'pending');
   if (error) console.error('Error clearing motions:', error);
 }
@@ -539,8 +552,8 @@ export async function clearPendingMotions(committeeId: string): Promise<void> {
 // CAUCUS
 // ============================================================
 
-export async function updateCaucus(committeeId: string, caucus: CaucusState | null): Promise<void> {
-  const { error } = await supabase.from('committees').update({ caucus }).eq('id', committeeId);
+export async function updateCaucus(committeeId: string, caucus: CaucusState | null, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('committees').update({ caucus }).eq('id', committeeId);
   if (error) console.error('Error updating caucus:', error);
 }
 
@@ -550,8 +563,9 @@ export async function updateCaucus(committeeId: string, caucus: CaucusState | nu
 
 export async function addDocument(
   committeeId: string, doc: Omit<CommitteeDocument, 'id' | 'submittedAt'>,
+  code: string, chairSuffix?: string,
 ): Promise<CommitteeDocument | null> {
-  const { data, error } = await supabase.from('documents').insert({
+  const { data, error } = await sessionClient(code, chairSuffix).from('documents').insert({
     committee_id: committeeId, type: doc.type, doc_code: doc.docCode, title: doc.title,
     sponsors: doc.sponsors, content: doc.content, status: doc.status,
     file_url: doc.fileUrl ?? null, file_name: doc.fileName ?? null,
@@ -578,14 +592,14 @@ export async function addDocument(
   };
 }
 
-export async function updateDocumentStatus(docId: string, status: DocumentStatus): Promise<void> {
-  const { error } = await supabase.from('documents').update({ status }).eq('id', docId);
+export async function updateDocumentStatus(docId: string, status: DocumentStatus, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('documents').update({ status }).eq('id', docId);
   if (error) console.error('Error updating document status:', error);
 }
 
 // Chair approval gate — set/clear a document's approval. null clears the decision (back to undecided).
-export async function updateDocumentApproval(docId: string, approval: 'approved' | 'rejected' | null): Promise<void> {
-  const { error } = await supabase.from('documents').update({ approval }).eq('id', docId);
+export async function updateDocumentApproval(docId: string, approval: 'approved' | 'rejected' | null, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('documents').update({ approval }).eq('id', docId);
   if (error) console.error('Error updating document approval:', error);
 }
 
@@ -595,8 +609,10 @@ export async function updateDocumentTimings(
   presentationMinutes: number,
   qaMinutes: number,
   status: DocumentStatus,
+  code: string,
+  chairSuffix?: string,
 ): Promise<void> {
-  const { error } = await supabase.from('documents').update({
+  const { error } = await sessionClient(code, chairSuffix).from('documents').update({
     reading_minutes: readingMinutes,
     presentation_minutes: presentationMinutes,
     qa_minutes: qaMinutes,
@@ -608,16 +624,18 @@ export async function updateDocumentTimings(
 export async function deleteDocumentsByType(
   committeeId: string,
   type: 'working-paper' | 'draft-resolution',
+  code: string,
+  chairSuffix?: string,
 ): Promise<void> {
-  const { error } = await supabase.from('documents')
+  const { error } = await sessionClient(code, chairSuffix).from('documents')
     .delete()
     .eq('committee_id', committeeId)
     .eq('type', type);
   if (error) console.error('Error deleting documents by type:', error);
 }
 
-export async function removeDocument(docId: string): Promise<void> {
-  const { error } = await supabase.from('documents').delete().eq('id', docId);
+export async function removeDocument(docId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('documents').delete().eq('id', docId);
   if (error) console.error('Error removing document:', error);
 }
 
@@ -627,12 +645,13 @@ export async function removeDocument(docId: string): Promise<void> {
 
 export async function sendMessage(
   committeeId: string, sender: string, content: string,
+  code: string, chairSuffix: string | undefined,
   isPrivate: boolean = false, recipient?: string,
   messageType?: 'general' | 'speech-comment',
 ): Promise<void> {
   // Encode messageType as a prefix so it survives without a schema change
   const encoded = messageType === 'speech-comment' ? `[🎙️] ${content}` : content;
-  const { error } = await supabase.from('messages').insert({
+  const { error } = await sessionClient(code, chairSuffix).from('messages').insert({
     committee_id: committeeId, sender, content: encoded, is_private: isPrivate, recipient: recipient ?? null,
   });
   if (error) console.error('Error sending message:', error);
@@ -645,6 +664,7 @@ export async function sendMessage(
 export async function requestJoinSession(
   committeeId: string, delegateId: string, country: string,
   desiredStatus: 'present' | 'present-voting',
+  code: string,
 ): Promise<void> {
   // Check if there's already a pending join-request from this country
   const { data: existing } = await supabase
@@ -657,7 +677,7 @@ export async function requestJoinSession(
     .maybeSingle();
   if (existing) return; // already pending
 
-  const { error } = await supabase.from('motions').insert({
+  const { error } = await sessionClient(code).from('motions').insert({
     committee_id: committeeId,
     type: 'join-request',
     proposed_by: country,
@@ -673,14 +693,15 @@ export async function requestJoinSession(
 export async function approveJoinRequest(
   committeeId: string, motionId: string, delegateId: string,
   desiredStatus: 'present' | 'present-voting',
+  code: string, chairSuffix?: string,
 ): Promise<void> {
-  await setDelegateStatus(delegateId, desiredStatus);
-  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+  await setDelegateStatus(delegateId, desiredStatus, code, chairSuffix);
+  const { error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
   if (error) console.error('Error approving join request:', error);
 }
 
-export async function denyJoinRequest(motionId: string): Promise<void> {
-  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+export async function denyJoinRequest(motionId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
   if (error) console.error('Error denying join request:', error);
 }
 
@@ -688,14 +709,14 @@ export async function denyJoinRequest(motionId: string): Promise<void> {
 // GSL REQUESTS — delegate asks chair to add them to the GSL
 // ============================================================
 
-export async function requestGslSpot(committeeId: string, delegateId: string, country: string): Promise<void> {
+export async function requestGslSpot(committeeId: string, delegateId: string, country: string, code: string): Promise<void> {
   // Idempotent — ignore if already pending
   const { data: existing } = await supabase
     .from('motions').select('id')
     .eq('committee_id', committeeId).eq('type', 'gsl-request')
     .eq('proposed_by', country).eq('status', 'pending').maybeSingle();
   if (existing) return;
-  const { error } = await supabase.from('motions').insert({
+  const { error } = await sessionClient(code).from('motions').insert({
     committee_id: committeeId,
     type: 'gsl-request',
     proposed_by: country,
@@ -710,14 +731,15 @@ export async function requestGslSpot(committeeId: string, delegateId: string, co
 
 export async function approveGslRequest(
   committeeId: string, motionId: string, delegateId: string, country: string,
+  code: string, chairSuffix?: string,
 ): Promise<void> {
-  await addToSpeakersList(committeeId, delegateId, country);
-  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+  await addToSpeakersList(committeeId, delegateId, country, code, chairSuffix);
+  const { error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
   if (error) console.error('Error approving GSL request:', error);
 }
 
-export async function denyGslRequest(motionId: string): Promise<void> {
-  const { error } = await supabase.from('motions').delete().eq('id', motionId);
+export async function denyGslRequest(motionId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
   if (error) console.error('Error denying GSL request:', error);
 }
 
@@ -735,9 +757,9 @@ export type LedgerEventType =
 export async function logEvent(committeeId: string, e: {
   country: string; type: LedgerEventType; sourceId?: string; // sourceId = which scoring source
   seconds?: number; context?: string; topic?: string; value?: number; note?: string;
-}): Promise<void> {
+}, code: string, chairSuffix?: string): Promise<void> {
   const payload = JSON.stringify({ ...e, timestamp: new Date().toISOString() });
-  const { error } = await supabase.from('messages').insert({
+  const { error } = await sessionClient(code, chairSuffix).from('messages').insert({
     committee_id: committeeId, sender: '__system__',
     content: `__log__:${payload}`, is_private: true, recipient: '__log__',
   });
@@ -750,9 +772,11 @@ export async function logSpeakingTime(
   seconds: number,
   context: 'speakers-list' | 'moderated-caucus' | 'unmoderated-caucus' | 'tour-de-table',
   topic: string,
+  code: string,
+  chairSuffix?: string,
 ): Promise<void> {
   if (seconds <= 0) return;
-  await logEvent(committeeId, { country, type: 'speech', seconds, context, topic });
+  await logEvent(committeeId, { country, type: 'speech', seconds, context, topic }, code, chairSuffix);
 }
 
 // ============================================================
@@ -775,9 +799,10 @@ export interface FeedbackEntry {
 
 export async function addFeedback(
   committeeId: string, country: string, chairName: string, content: string,
+  code: string, chairSuffix: string | undefined,
   opts?: { level?: FeedbackLevel; factorScores?: Record<string, number>; speechContext?: string | null; speechSeconds?: number | null },
 ): Promise<string | null> {
-  const { data, error } = await supabase.from('feedback').insert({
+  const { data, error } = await sessionClient(code, chairSuffix).from('feedback').insert({
     committee_id: committeeId, country, chair_name: chairName, content,
     level: opts?.level ?? 'speech',
     factor_scores: opts?.factorScores ?? {},
@@ -790,18 +815,19 @@ export async function addFeedback(
 
 export async function updateFeedback(
   id: string, patch: { content?: string; factorScores?: Record<string, number>; speechContext?: string | null; speechSeconds?: number | null },
+  code: string, chairSuffix?: string,
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (patch.content !== undefined) update.content = patch.content;
   if (patch.factorScores !== undefined) update.factor_scores = patch.factorScores;
   if (patch.speechContext !== undefined) update.speech_context = patch.speechContext;
   if (patch.speechSeconds !== undefined) update.speech_seconds = patch.speechSeconds;
-  const { error } = await supabase.from('feedback').update(update).eq('id', id);
+  const { error } = await sessionClient(code, chairSuffix).from('feedback').update(update).eq('id', id);
   if (error) console.error('Error updating feedback:', error);
 }
 
-export async function deleteFeedback(id: string): Promise<void> {
-  const { error } = await supabase.from('feedback').delete().eq('id', id);
+export async function deleteFeedback(id: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('feedback').delete().eq('id', id);
   if (error) console.error('Error deleting feedback:', error);
 }
 
@@ -848,21 +874,21 @@ export async function getDelegateFeedback(
 // SESSION CLEANUP
 // ============================================================
 
-export async function suspendSession(committeeId: string): Promise<void> {
+export async function suspendSession(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabase.from('committees')
+  const { error } = await sessionClient(code, chairSuffix).from('committees')
     .update({ expires_at: expiresAt, phase: 'adjourned' }).eq('id', committeeId);
   if (error) console.error('Error suspending session:', error);
 }
 
-export async function resumeSession(committeeId: string): Promise<void> {
-  const { error } = await supabase.from('committees')
+export async function resumeSession(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('committees')
     .update({ suspended_at: null, phase: 'speakers-list' }).eq('id', committeeId);
   if (error) console.error('Error resuming session:', error);
 }
 
-export async function claimResumeSession(committeeId: string, chairName: string): Promise<boolean> {
-  const { data, error } = await supabase
+export async function claimResumeSession(committeeId: string, chairName: string, code: string, chairSuffix?: string): Promise<boolean> {
+  const { data, error } = await sessionClient(code, chairSuffix)
     .from('committees')
     .update({ resuming_chair: chairName })
     .eq('id', committeeId)
@@ -872,8 +898,8 @@ export async function claimResumeSession(committeeId: string, chairName: string)
   return !error && !!data;
 }
 
-export async function startResumeRollCall(committeeId: string): Promise<void> {
-  const { error } = await supabase.from('committees').update({
+export async function startResumeRollCall(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('committees').update({
     suspended_at: null,
     resuming_chair: null,
     phase: 'pre-session',
@@ -881,16 +907,16 @@ export async function startResumeRollCall(committeeId: string): Promise<void> {
   if (error) console.error('Error starting resume roll call:', error);
 }
 
-export async function suspendDebate(committeeId: string): Promise<void> {
-  const { error } = await supabase.from('committees')
+export async function suspendDebate(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+  const { error } = await sessionClient(code, chairSuffix).from('committees')
     .update({ suspended_at: new Date().toISOString(), phase: 'adjourned' })
     .eq('id', committeeId);
   if (error) console.error('Error suspending debate:', error);
 }
 
-export async function endDebate(committeeId: string): Promise<void> {
+export async function endDebate(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
   const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabase.from('committees')
+  const { error } = await sessionClient(code, chairSuffix).from('committees')
     .update({ ended_at: new Date().toISOString(), expires_at: expiresAt, phase: 'adjourned' })
     .eq('id', committeeId);
   if (error) console.error('Error ending debate:', error);
@@ -900,7 +926,7 @@ export async function endDebate(committeeId: string): Promise<void> {
 // CODE MANAGEMENT
 // ============================================================
 
-export async function updateCommitteeCode(committeeId: string, newCode: string): Promise<boolean> {
+export async function updateCommitteeCode(committeeId: string, newCode: string, code: string, chairSuffix?: string): Promise<boolean> {
   const upper = newCode.toUpperCase().trim();
   if (!upper || upper.length < 4) return false;
 
@@ -909,7 +935,7 @@ export async function updateCommitteeCode(committeeId: string, newCode: string):
     .from('committees').select('id').eq('code', upper).maybeSingle();
   if (existing) return false; // code already taken
 
-  const { error } = await supabase
+  const { error } = await sessionClient(code, chairSuffix)
     .from('committees').update({ code: upper }).eq('id', committeeId);
   if (error) { console.error('Error updating committee code:', error); return false; }
   return true;
@@ -919,14 +945,14 @@ export async function updateCommitteeCode(committeeId: string, newCode: string):
 // CHAIR JOIN SUFFIX
 // ============================================================
 
-export async function updateCommitteeChairSuffixInDB(committeeId: string, chairJoinSuffix: string): Promise<void> {
+export async function updateCommitteeChairSuffixInDB(committeeId: string, chairJoinSuffix: string, code: string, currentChairSuffix?: string): Promise<void> {
   const { data: existing } = await supabase
     .from('committees')
     .select('settings')
     .eq('id', committeeId)
     .single();
   const currentSettings = (existing?.settings as Record<string, unknown>) ?? {};
-  await supabase
+  await sessionClient(code, currentChairSuffix)
     .from('committees')
     .update({ settings: { ...currentSettings, chairJoinSuffix } })
     .eq('id', committeeId);
@@ -938,14 +964,14 @@ export async function updateCommitteeChairSuffixInDB(committeeId: string, chairJ
 // Sets who holds the gavel. Any chair may claim it — from Settings or when joining as chair.
 // Stored in settings so every device derives view-only status from it instead of a
 // presence join-order race. null/unset → the committee creator (chair_names[0]) is head.
-export async function updateCommitteeHeadChairInDB(committeeId: string, headChair: string): Promise<void> {
+export async function updateCommitteeHeadChairInDB(committeeId: string, headChair: string, code: string, chairSuffix?: string): Promise<void> {
   const { data: existing } = await supabase
     .from('committees')
     .select('settings')
     .eq('id', committeeId)
     .single();
   const currentSettings = (existing?.settings as Record<string, unknown>) ?? {};
-  const { error } = await supabase
+  const { error } = await sessionClient(code, chairSuffix)
     .from('committees')
     .update({ settings: { ...currentSettings, headChair } })
     .eq('id', committeeId);
@@ -954,14 +980,14 @@ export async function updateCommitteeHeadChairInDB(committeeId: string, headChai
 
 // Persist the scoring config into the committee settings jsonb so it reaches
 // delegates / FAs / co-chairs on other devices (localStorage never syncs across devices).
-export async function updateCommitteeScoringInDB(committeeId: string, scoring: unknown): Promise<void> {
+export async function updateCommitteeScoringInDB(committeeId: string, scoring: unknown, code: string, chairSuffix?: string): Promise<void> {
   const { data: existing } = await supabase
     .from('committees')
     .select('settings')
     .eq('id', committeeId)
     .single();
   const currentSettings = (existing?.settings as Record<string, unknown>) ?? {};
-  await supabase
+  await sessionClient(code, chairSuffix)
     .from('committees')
     .update({ settings: { ...currentSettings, scoring } })
     .eq('id', committeeId);
@@ -971,7 +997,7 @@ export async function updateCommitteeScoringInDB(committeeId: string, scoring: u
 // CHAIR NAMES
 // ============================================================
 
-export async function addChairName(committeeId: string, name: string): Promise<void> {
+export async function addChairName(committeeId: string, name: string, code: string, chairSuffix?: string): Promise<void> {
   const { data } = await supabase
     .from('committees')
     .select('chair_names')
@@ -979,15 +1005,15 @@ export async function addChairName(committeeId: string, name: string): Promise<v
     .single();
   const current: string[] = data?.chair_names ?? [];
   if (current.includes(name)) return;
-  const { error } = await supabase
+  const { error } = await sessionClient(code, chairSuffix)
     .from('committees')
     .update({ chair_names: [...current, name] })
     .eq('id', committeeId);
   if (error) console.error('Error adding chair name:', error);
 }
 
-export async function updateSpeakerTimeLimit(committeeId: string, limitSeconds: number): Promise<void> {
-  await supabase.from('committees').update({ speaker_time_limit: limitSeconds }).eq('id', committeeId);
+export async function updateSpeakerTimeLimit(committeeId: string, limitSeconds: number, code: string, chairSuffix?: string): Promise<void> {
+  await sessionClient(code, chairSuffix).from('committees').update({ speaker_time_limit: limitSeconds }).eq('id', committeeId);
 }
 
 // ============================================================

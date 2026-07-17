@@ -814,7 +814,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     setPendingIds((prev) => new Set([...prev, tempId]));
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
 
-    addPendingMotionInDB(committee.id, motion, motionOrder).then((realId) => {
+    addPendingMotionInDB(committee.id, motion, committee.code, committee.dbChairJoinSuffix ?? undefined, motionOrder).then((realId) => {
       if (!realId) return;
       update((c) => ({
         ...c,
@@ -832,7 +832,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
     // Only call DB if this is a real UUID (not a temp optimistic ID)
     if (!motionId.startsWith('temp-')) {
-      removePendingMotionInDB(motionId);
+      removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
   };
 
@@ -843,7 +843,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     // Remove old motion from local state immediately (same as handleRemove but inline
     // so committee.pendingMotions is clean before the re-add, avoiding the duplicate check)
     update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== oldId) }));
-    if (!oldId.startsWith('temp-')) removePendingMotionInDB(oldId);
+    if (!oldId.startsWith('temp-')) removePendingMotionInDB(oldId, committee.code, committee.dbChairJoinSuffix ?? undefined);
 
     // Add replacement, same logic as handleRaised but NO duplicate check
     const tempId = `temp-${Date.now()}`;
@@ -852,7 +852,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     setPendingIds((prev) => new Set([...prev, tempId]));
     update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
 
-    addPendingMotionInDB(committee.id, motion, motionOrder).then((realId) => {
+    addPendingMotionInDB(committee.id, motion, committee.code, committee.dbChairJoinSuffix ?? undefined, motionOrder).then((realId) => {
       if (!realId) return;
       update((c) => ({
         ...c,
@@ -876,7 +876,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 
     // The proposer earns a point for getting a motion approved onto the floor.
     if (motion.proposedBy) {
-      logEvent(committee.id, { country: motion.proposedBy, type: 'motion-raised', sourceId: 'motionRaised' });
+      logEvent(committee.id, { country: motion.proposedBy, type: 'motion-raised', sourceId: 'motionRaised' }, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
 
     if (motion.type === 'unmoderated') {
@@ -889,10 +889,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       };
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      removePendingMotionInDB(motion.id);
-      clearCaucusListInDB(committee.id);
-      updateCaucusInDB(committee.id, caucus);
-      setPhaseInDB(committee.id, 'unmoderated-caucus');
+      removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseInDB(committee.id, 'unmoderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
       return;
     }
     if (motion.type === 'consultation') {
@@ -906,10 +906,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      removePendingMotionInDB(motion.id);
-      clearCaucusListInDB(committee.id);
-      updateCaucusInDB(committee.id, caucus);
-      setPhaseInDB(committee.id, 'unmoderated-caucus');
+      removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseInDB(committee.id, 'unmoderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
       return;
 
     } else if (motion.type === 'moderated') {
@@ -922,10 +922,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       };
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
-      removePendingMotionInDB(motion.id);
-      clearCaucusListInDB(committee.id);
-      updateCaucusInDB(committee.id, caucus);
-      setPhaseInDB(committee.id, 'moderated-caucus');
+      removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
       return;
 
     } else if (motion.type === 'tour') {
@@ -954,11 +954,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         }));
         update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue, currentSpeaker: null }));
         onClose();
-        removePendingMotionInDB(motion.id);
-        updateCaucusInDB(committee.id, caucus);
-        setPhaseInDB(committee.id, 'moderated-caucus');
-        clearCaucusListInDB(committee.id).then(() =>
-          batchAddToCaucusListInDB(committee.id, caucusQueue)
+        removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+        updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
+        setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+        clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(() =>
+          batchAddToCaucusListInDB(committee.id, caucusQueue, committee.code, committee.dbChairJoinSuffix ?? undefined)
         );
         return;
       }
@@ -986,14 +986,16 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       // GSL preserved, caucusQueue filled with ordered delegates
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue, currentSpeaker: null }));
       onClose();
-      removePendingMotionInDB(motion.id);
-      updateCaucusInDB(committee.id, caucus);
-      setPhaseInDB(committee.id, 'moderated-caucus');
+      removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
       // Await clear before insert to prevent race condition (DELETE winning after INSERT)
-      clearCaucusListInDB(committee.id).then(() =>
+      clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(() =>
         batchAddToCaucusListInDB(
           committee.id,
-          presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }))
+          presentDelegates.map((d) => ({ delegateId: d.id, country: d.country })),
+          committee.code,
+          committee.dbChairJoinSuffix ?? undefined,
         )
       );
       return;
@@ -1014,17 +1016,17 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
             onClick={async () => {
               const motionId = specialVoteMotion!.id;
               if (!motionId.startsWith('temp-')) {
-                await removePendingMotionInDB(motionId);
+                await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
               }
               update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
               if (isSuspend) {
                 onCommitteeUpdate?.((c) => ({ ...c, suspendedAt: new Date().toISOString(), phase: 'adjourned' as const }));
-                suspendDebateInDB(committee.id);
+                suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
               } else {
                 const now = new Date();
                 const expires = new Date(now.getTime() + 1 * 60 * 60 * 1000);
                 onCommitteeUpdate?.((c) => ({ ...c, endedAt: now.toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
-                endDebateInDB(committee.id);
+                endDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
               }
               setSpecialVoteMotion(null);
               onClose();
@@ -1037,7 +1039,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           <button
             onClick={() => {
               const motionId = specialVoteMotion.id;
-              removePendingMotionInDB(motionId);
+              removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
               update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
               setSpecialVoteMotion(null);
               onClose();

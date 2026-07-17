@@ -578,7 +578,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
     const now = Date.now();
     if (prev) {
       const secs = Math.max(0, Math.round((now - cowSpeakerStartRef.current) / 1000));
-      if (secs > 0) logEvent(committee.id, { country: prev, type: 'speech', context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, seconds: secs });
+      if (secs > 0) logEvent(committee.id, { country: prev, type: 'speech', context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, seconds: secs }, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
     cowSpeakerStartRef.current = now;
     const spoken = prev && !(caucus.spokenCountries ?? []).includes(prev)
@@ -586,7 +586,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
       : (caucus.spokenCountries ?? []);
     const updated = { ...caucus, currentSpeaker: countryName, spokenCountries: spoken };
     updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: updated } : c), true);
-    updateCaucusInDB(committee.id, updated);
+    updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
     if (cowEnabled) { setCowRemaining(cowDefaultSecs); setCowActive(true); }
   };
 
@@ -610,8 +610,8 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
 
   const handleEndCaucus = () => {
     setRunning(false);
-    setPhaseInDB(committee.id, 'speakers-list');
-    updateCaucusInDB(committee.id, null);
+    setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
+    updateCaucusInDB(committee.id, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => {
       // Ending a caucus never touches the GSL — the speakers list is returned exactly as it
       // was before the caucus. (Previously prepended currentSpeaker into the GSL; harmless in
@@ -756,7 +756,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
                     const newRemaining = c.caucus.remainingTime + addSecs;
                     const newTotal = c.caucus.totalTime + addSecs;
                     const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                    updateCaucusInDB(committee.id, updated);
+                    updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
                     return { ...c, caucus: updated };
                   }, true);
                   setShowExtendUnmod(false);
@@ -779,7 +779,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
               const newRemaining = c.caucus.remainingTime + addSecs;
               const newTotal = c.caucus.totalTime + addSecs;
               const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-              updateCaucusInDB(committee.id, updated);
+              updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
               return { ...c, caucus: updated };
             }, true);
             setShowExtendUnmod(false);
@@ -878,7 +878,7 @@ function ModeratedCaucusMain({
     if (queue.length >= maxByTime) return;
     const nextPosition = queue.length + 1;
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
-    addToCaucusListInDB(committee.id, delegateId, delegate.country, nextPosition);
+    addToCaucusListInDB(committee.id, delegateId, delegate.country, committee.code, committee.dbChairJoinSuffix ?? undefined, nextPosition);
   };
 
   const handleCaucusAddFirst = (delegateId: string) => {
@@ -888,8 +888,8 @@ function ModeratedCaucusMain({
     if (queue.length >= maxByTime) return;
     const newList = [{ delegateId, country: delegate.country }, ...queue];
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
-    addToCaucusListInDB(committee.id, delegateId, delegate.country, 0);
-    reorderSpeakersListInDB(committee.id, newList, 'caucus');
+    addToCaucusListInDB(committee.id, delegateId, delegate.country, committee.code, committee.dbChairJoinSuffix ?? undefined, 0);
+    reorderSpeakersListInDB(committee.id, newList, committee.code, committee.dbChairJoinSuffix ?? undefined, 'caucus');
   };
 
   const handleCaucusAddLast = (delegateId: string) => {
@@ -900,17 +900,17 @@ function ModeratedCaucusMain({
     const nextPosition = queue.length + 1;
     const newList = [...queue, { delegateId, country: delegate.country }];
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
-    addToCaucusListInDB(committee.id, delegateId, delegate.country, nextPosition);
+    addToCaucusListInDB(committee.id, delegateId, delegate.country, committee.code, committee.dbChairJoinSuffix ?? undefined, nextPosition);
   };
 
   const handleCaucusRemoveFromQueue = (delegateId: string) => {
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
-    removeFromCaucusListInDB(committee.id, delegateId);
+    removeFromCaucusListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handleCaucusReorderQueue = (newList: { delegateId: string; country: string }[]) => {
     updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
-    reorderSpeakersListInDB(committee.id, newList, 'caucus');
+    reorderSpeakersListInDB(committee.id, newList, committee.code, committee.dbChairJoinSuffix ?? undefined, 'caucus');
   };
 
   return (
@@ -1075,7 +1075,7 @@ function ModeratedCaucusMain({
                               const newRemaining = c.caucus.remainingTime + addSecs;
                               const newTotal = c.caucus.totalTime + addSecs;
                               const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                              updateCaucusInDB(committee.id, updated);
+                              updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
                               return { ...c, caucus: updated };
                             }, true);
                             setShowExtendMod(false);
@@ -1098,7 +1098,7 @@ function ModeratedCaucusMain({
                         const newRemaining = c.caucus.remainingTime + addSecs;
                         const newTotal = c.caucus.totalTime + addSecs;
                         const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                        updateCaucusInDB(committee.id, updated);
+                        updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
                         return { ...c, caucus: updated };
                       }, true);
                       setShowExtendMod(false);
@@ -1227,6 +1227,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const timerRunningRef = useRef(false);
   const isViewOnlyRef = useRef(false);
   const committeeIdRef = useRef('');
+  const committeeCodeRef = useRef('');
+  const chairSuffixRef = useRef<string | undefined>(undefined);
   const committeePhaseRef = useRef('');
   const speakerTimeLimitRef = useRef(speakerTimeLimit);
   // Accumulates seconds granted via +time to the CURRENT speaker so speaking-time logging
@@ -1241,6 +1243,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   isViewOnlyRef.current = isViewOnly;
   speakerTimeLimitRef.current = speakerTimeLimit;
   committeePhaseRef.current = committee?.phase ?? '';
+  committeeCodeRef.current = committee?.code ?? '';
+  chairSuffixRef.current = committee?.dbChairJoinSuffix ?? undefined;
 
   useEffect(() => {
     if (committee) document.title = `${abbreviateCommitteeName(committee.name)} - Gavelling Session`;
@@ -1264,7 +1268,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           (m) => m.type === 'suspend-debate' || m.type === 'end-debate'
         );
         if (staleMotions.length > 0) {
-          staleMotions.forEach((m) => removePendingMotionInDB(m.id));
+          staleMotions.forEach((m) => removePendingMotionInDB(m.id, found.code, found.dbChairJoinSuffix ?? undefined));
           found.pendingMotions = (found.pendingMotions ?? []).filter(
             (m) => m.type !== 'suspend-debate' && m.type !== 'end-debate'
           );
@@ -1480,8 +1484,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if (!prev?.caucus || prev.phase !== 'moderated-caucus') return prev;
       const next = Math.max(0, prev.caucus.remainingTime - 1);
       if (next === 0) {
-        updateCaucusInDB(prev.id, null);
-        setPhaseInDB(prev.id, 'speakers-list');
+        updateCaucusInDB(prev.id, null, prev.code, prev.dbChairJoinSuffix ?? undefined);
+        setPhaseInDB(prev.id, 'speakers-list', prev.code, prev.dbChairJoinSuffix ?? undefined);
         // Auto-expiry must mirror the manual End button: clear the caucus and its speaker but
         // NEVER prepend the current caucus speaker (or a Room-Order "Speaker N" placeholder)
         // into the permanent GSL. The GSL is returned exactly as it was before the caucus.
@@ -1577,10 +1581,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
     }), true);
-    setDelegateStatusInDB(delegateId, next);
+    setDelegateStatusInDB(delegateId, next, committeeCodeRef.current, chairSuffixRef.current);
     if (next === 'absent' && committeePhaseRef.current !== 'pre-session') {
-      removeFromSpeakersListInDB(committeeIdRef.current, delegateId);
-      removeFromCaucusListInDB(committeeIdRef.current, delegateId);
+      removeFromSpeakersListInDB(committeeIdRef.current, delegateId, committeeCodeRef.current, chairSuffixRef.current);
+      removeFromCaucusListInDB(committeeIdRef.current, delegateId, committeeCodeRef.current, chairSuffixRef.current);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1593,21 +1597,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (alreadyOn) return;
     if (committee.currentSpeaker?.delegateId === delegateId) return;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: [...c.speakersList, { delegateId, country: delegate.country }] }), true);
-    addToSpeakersListInDB(committee.id, delegateId, delegate.country);
+    addToSpeakersListInDB(committee.id, delegateId, delegate.country, committee.code, committee.dbChairJoinSuffix ?? undefined);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id, committee?.delegates, committee?.speakersList, committee?.currentSpeaker]);
 
   const handleRemoveFromSpeakersList = useCallback((delegateId: string) => {
     if (!committee) return;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: c.speakersList.filter((s) => s.delegateId !== delegateId) }), true);
-    removeFromSpeakersListInDB(committee.id, delegateId);
+    removeFromSpeakersListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id]);
 
   const handleReorderSpeakersList = useCallback((newList: { delegateId: string; country: string }[]) => {
     if (!committee) return;
     updateLocal(setCommittee, (c) => ({ ...c, speakersList: newList }), true);
-    reorderSpeakersListInDB(committee.id, newList, 'gsl');
+    reorderSpeakersListInDB(committee.id, newList, committee.code, committee.dbChairJoinSuffix ?? undefined, 'gsl');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id]);
 
@@ -1621,10 +1625,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
     }), true);
-    setDelegateStatusInDB(delegateId, status);
+    setDelegateStatusInDB(delegateId, status, committee.code, committee.dbChairJoinSuffix ?? undefined);
     if (status === 'absent' && committee.phase !== 'pre-session') {
-      removeFromSpeakersListInDB(committee.id, delegateId);
-      removeFromCaucusListInDB(committee.id, delegateId);
+      removeFromSpeakersListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      removeFromCaucusListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id, committee?.phase]);
@@ -1632,7 +1636,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleDelegateAdd = useCallback(async (country: string) => {
     if (!committee) return;
     const { addDelegate: addDelegateInDB } = await import('@/lib/committeeService');
-    const realId = await addDelegateInDB(committee.id, country);
+    const realId = await addDelegateInDB(committee.id, country, committee.code, committee.dbChairJoinSuffix ?? undefined);
     if (realId) {
       updateLocal(setCommittee, (c) => ({
         ...c,
@@ -1808,7 +1812,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const handleNextSpeaker = async () => {
     setTimerRunning(false);
-    stopSpeakerTimerInDB(committeeIdRef.current);
+    stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
     setExtraTimeAdded(false);
 
     if (committee.currentSpeaker) {
@@ -1821,7 +1825,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         const topic = committee.phase === 'moderated-caucus'
           ? (committee.caucus?.purpose ?? committee.topic)
           : committee.topic;
-        logSpeakingTime(committee.id, committee.currentSpeaker.country, secondsSpoken, ctx, topic);
+        logSpeakingTime(committee.id, committee.currentSpeaker.country, secondsSpoken, ctx, topic, committee.code, committee.dbChairJoinSuffix ?? undefined);
       }
     }
     extraTimeAddedSecsRef.current = 0;
@@ -1847,6 +1851,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       next?.delegateId ?? null,
       next?.country ?? null,
       removeDelegateId,
+      committee.code,
+      committee.dbChairJoinSuffix ?? undefined,
     );
     localUpdateTime.current = Date.now();
   };
@@ -1864,17 +1870,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const starting = !timerRunning;
     setTimerRunning(starting);
     if (starting) {
-      startSpeakerTimerInDB(committeeIdRef.current);
+      startSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
     } else {
       // Sync current remaining time to DB on pause (S2 — no per-second writes)
-      stopSpeakerTimerInDB(committeeIdRef.current);
-      syncSpeakerTimeInDB(committeeIdRef.current, speakerTimeRemaining);
+      stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
+      syncSpeakerTimeInDB(committeeIdRef.current, speakerTimeRemaining, committeeCodeRef.current, chairSuffixRef.current);
     }
   };
 
   const handleRestartTime = () => {
     setTimerRunning(false);
-    stopSpeakerTimerInDB(committeeIdRef.current);
+    stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
     setExtraTimeAdded(false);
     extraTimeAddedSecsRef.current = 0;
     if (committee?.phase === 'moderated-caucus' && committee.caucus) {
@@ -1890,7 +1896,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         : prevSpoken;
       const updated = { ...committee.caucus, speakerTimeRemaining: speakTime, remainingTime: newRemainingTime, spokenCountries: newSpoken };
       updateLocal(setCommittee, (c) => ({ ...c, caucus: updated }), true);
-      updateCaucusInDB(committee.id, updated);
+      updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
     } else {
       setSpeakerTimeRemaining(speakerTimeLimit);
     }
@@ -1899,7 +1905,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleNextCaucusSpeaker = async () => {
     if (!committee.caucus) return;
     setTimerRunning(false);
-    stopSpeakerTimerInDB(committeeIdRef.current);
+    stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
     setExtraTimeAdded(false);
 
     // Compute everything from current snapshot BEFORE any state updates
@@ -1926,6 +1932,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         spentOnCurrent,
         'moderated-caucus',
         committee.caucus.purpose ?? committee.topic,
+        committee.code,
+        committee.dbChairJoinSuffix ?? undefined,
       );
     }
     extraTimeAddedSecsRef.current = 0;
@@ -1942,9 +1950,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         currentSpeaker: null,
         speakerTimeRemaining: speakTime,
       }), true);
-      updateCaucusInDB(committee.id, null);
-      setPhaseInDB(committee.id, 'speakers-list');
-      await nextSpeakerInDB(committee.id, speakTime, null, null, null);
+      updateCaucusInDB(committee.id, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      await nextSpeakerInDB(committee.id, speakTime, null, null, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
       localUpdateTime.current = Date.now();
       return;
     }
@@ -1967,11 +1975,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }), true);
 
     // DB calls outside setState
-    updateCaucusInDB(committee.id, updatedCaucus);
+    updateCaucusInDB(committee.id, updatedCaucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
     // Remove the newly-active speaker from the DB caucus queue —
     // nextSpeakerInDB only removes from the GSL, so we must do this separately.
     if (next?.delegateId) {
-      removeFromCaucusListInDB(committee.id, next.delegateId);
+      removeFromCaucusListInDB(committee.id, next.delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
     await nextSpeakerInDB(
       committee.id,
@@ -1979,15 +1987,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       next?.delegateId ?? null,
       next?.country ?? null,
       null,
+      committee.code,
+      committee.dbChairJoinSuffix ?? undefined,
     );
     localUpdateTime.current = Date.now();
   };
 
   const handleEndCaucus = () => {
     setTimerRunning(false);
-    stopSpeakerTimerInDB(committeeIdRef.current);
-    setPhaseInDB(committee.id, 'speakers-list');
-    updateCaucusInDB(committee.id, null);
+    stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
+    setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
+    updateCaucusInDB(committee.id, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => ({
       ...c,
       caucus: null,
@@ -2004,24 +2014,24 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setSpeakerTimeLimitInput(String(seconds));
     setSpeakerTimeRemaining(seconds);
     updateLocal(setCommittee, (c) => ({ ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }));
-    updateSpeakerTimeLimit(committee.id, seconds);
+    updateSpeakerTimeLimit(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handleResumeSession = () => {
     try { localStorage.setItem('gavelling_tutorial_seen_' + committee.id, '1'); } catch {}
     updateLocal(setCommittee, (c) => ({ ...c, phase: 'speakers-list' }));
-    setPhaseInDB(committee.id, 'speakers-list');
+    setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handleResumeClick = async () => {
     if (!committee) return;
     try { localStorage.setItem('gavelling_tutorial_seen_' + committee.id, '1'); } catch {}
     const claimedName = myChairName || committee.chairNames[0] || 'Chair';
-    const claimed = await claimResumeSessionInDB(committee.id, claimedName);
+    const claimed = await claimResumeSessionInDB(committee.id, claimedName, committee.code, committee.dbChairJoinSuffix ?? undefined);
     if (!claimed) return;
     updateLocal(setCommittee, (c) => ({ ...c, phase: 'pre-session', suspendedAt: null }));
     setSessionSuspended(false);
-    await startResumeRollCallInDB(committee.id);
+    await startResumeRollCallInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handlePhaseChange = (phase: string) => {
@@ -2031,14 +2041,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         const absentIds = new Set(c.delegates.filter((d) => d.status === 'absent').map((d) => d.id));
         const toRemove = c.speakersList.filter((s) => absentIds.has(s.delegateId));
         updated.speakersList = c.speakersList.filter((s) => !absentIds.has(s.delegateId));
-        toRemove.forEach((s) => removeFromSpeakersListInDB(c.id, s.delegateId));
+        toRemove.forEach((s) => removeFromSpeakersListInDB(c.id, s.delegateId, c.code, c.dbChairJoinSuffix ?? undefined));
       }
       return updated;
     }, true);
   };
 
   const handleApproveJoinRequest = async (motionId: string, delegateId: string, desiredStatus: 'present' | 'present-voting') => {
-    await approveJoinRequest(committee.id, motionId, delegateId, desiredStatus);
+    await approveJoinRequest(committee.id, motionId, delegateId, desiredStatus, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => ({
       ...c,
       delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status: desiredStatus } : d),
@@ -2047,7 +2057,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   const handleDenyJoinRequest = async (motionId: string) => {
-    await denyJoinRequest(motionId);
+    await denyJoinRequest(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => ({
       ...c,
       pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
@@ -2062,7 +2072,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       speakersList: [...c.speakersList, { delegateId, country }],
       pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
     }), true);
-    await approveGslRequest(committee.id, motionId, delegateId, country);
+    await approveGslRequest(committee.id, motionId, delegateId, country, committee.code, committee.dbChairJoinSuffix ?? undefined);
     localUpdateTime.current = Date.now();
   };
 
@@ -2071,7 +2081,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       ...c,
       pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
     }), true);
-    await denyGslRequest(motionId);
+    await denyGslRequest(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
     localUpdateTime.current = Date.now();
   };
 
@@ -2420,16 +2430,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       }
                       const inlinePos = (committee.caucusQueue ?? []).length + 1;
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
-                      addToCaucusListInDB(committee.id, delegateId, delegate.country, inlinePos);
+                      addToCaucusListInDB(committee.id, delegateId, delegate.country, committee.code, committee.dbChairJoinSuffix ?? undefined, inlinePos);
                     }}
                     onListIds={caucusQueueIds}
                     onRemoveFromList={(delegateId) => {
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
-                      removeFromCaucusListInDB(committee.id, delegateId);
+                      removeFromCaucusListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
                     }}
                     onReorderList={(newList) => {
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: newList }), true);
-                      reorderSpeakersListInDB(committee.id, newList, 'caucus');
+                      reorderSpeakersListInDB(committee.id, newList, committee.code, committee.dbChairJoinSuffix ?? undefined, 'caucus');
                     }}
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
@@ -2794,7 +2804,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onBecomeHeadChair={() => {
             if (!myChairName) return;
             updateLocal(setCommittee, (c) => ({ ...c, dbHeadChair: myChairName }));
-            updateCommitteeHeadChairInDB(committee.id, myChairName);
+            updateCommitteeHeadChairInDB(committee.id, myChairName, committee.code, committee.dbChairJoinSuffix ?? undefined);
           }}
           onClose={() => setShowSettings(false)}
         />
@@ -2903,7 +2913,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <button
                   onClick={() => {
                     if (!rtrCountry) return;
-                    logEvent(committee.id, { country: rtrCountry, type: 'right-of-reply', sourceId: 'rightOfReply' });
+                    logEvent(committee.id, { country: rtrCountry, type: 'right-of-reply', sourceId: 'rightOfReply' }, committee.code, committee.dbChairJoinSuffix ?? undefined);
                     setRtrTimeRemaining(rtrSeconds);
                     setRtrTimerActive(false);
                     setRtrOpen(true);

@@ -337,7 +337,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
       content: '',
       status: 'submitted',
       ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
-    });
+    }, committee.code);
     setTitle('');
     setCoSponsors([]);
     setFileName(null);
@@ -974,7 +974,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: newStatus } : d),
     } : prev);
     recordStatusChange(committee.id, country);
-    setDelegateStatusInDB(myDelegate.id, newStatus);
+    setDelegateStatusInDB(myDelegate.id, newStatus, committee.code);
   };
 
   // ── Join request handler (absent → P or PV)
@@ -987,13 +987,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         ...prev,
         delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: desiredStatus } : d),
       } : prev);
-      setDelegateStatusInDB(myDelegate.id, desiredStatus);
+      setDelegateStatusInDB(myDelegate.id, desiredStatus, committee.code);
       return;
     }
     // Chair approval ON → request a seat and wait in the waiting room.
     setJoinRequesting(true);
     setJoinStatus(desiredStatus);
-    await requestJoinSession(committee.id, myDelegate.id, country, desiredStatus);
+    await requestJoinSession(committee.id, myDelegate.id, country, desiredStatus, committee.code);
     setJoinRequesting(false);
   };
 
@@ -1003,7 +1003,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
   const handleAddMeToSpeakers = () => {
     if (!myDelegate || isAbsent) return;
-    requestGslSpot(committee.id, myDelegate.id, myDelegate.country);
+    requestGslSpot(committee.id, myDelegate.id, myDelegate.country, committee.code);
   };
 
   // Section 7 — shortened tab labels

@@ -346,7 +346,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
         <div className="flex gap-8">
           <button
             onClick={async () => {
-              await suspendDebateInDB(committee.id);
+              await suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
               setShowSuspended(true);
             }}
             className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
@@ -522,7 +522,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         type, docCode, title: title.trim(), sponsors, content: content.trim(), status: 'submitted',
         ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
       };
-      const saved = await addDocumentInDB(committee.id, newDoc);
+      const saved = await addDocumentInDB(committee.id, newDoc, committee.code, committee.dbChairJoinSuffix ?? undefined);
       if (saved) onDocumentAdded(saved);
       onDone();
     } finally {
@@ -864,17 +864,17 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 
   const handleStatusChange = (docId: string, status: DocumentStatus) => {
     update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, status } : d) }));
-    updateDocumentStatusInDB(docId, status);
+    updateDocumentStatusInDB(docId, status, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handleApprovalChange = (docId: string, approval: 'approved' | 'rejected') => {
     update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, approval } : d) }));
-    updateDocumentApprovalInDB(docId, approval);
+    updateDocumentApprovalInDB(docId, approval, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handleRemove = (docId: string) => {
     update((c) => ({ ...c, documents: (c.documents ?? []).filter((d) => d.id !== docId) }));
-    removeDocumentInDB(docId);
+    removeDocumentInDB(docId, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handleStartPresentation = (doc: CommitteeDocument) => {
@@ -889,7 +889,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
     // Save timings to DB and mark as introduced
     const updatedDoc = { ...activeDoc, readingMinutes: readingMins, presentationMinutes: presentationMins, qaMinutes: qaMins, status: 'introduced' as DocumentStatus };
     update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === activeDoc.id ? updatedDoc : d) }));
-    updateDocumentTimingsInDB(activeDoc.id, readingMins, presentationMins, qaMins, 'introduced');
+    updateDocumentTimingsInDB(activeDoc.id, readingMins, presentationMins, qaMins, 'introduced', committee.code, committee.dbChairJoinSuffix ?? undefined);
     setActiveDoc(updatedDoc);
     // Start first non-zero stage
     if (readingMins > 0) setStage('reading');

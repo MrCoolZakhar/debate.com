@@ -418,7 +418,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const persistResult = (docId: string, result: 'passed' | 'failed') => {
     if (resultPersistedRef.current) return;
     resultPersistedRef.current = true;
-    updateDocumentStatusInDB(docId, result);
+    updateDocumentStatusInDB(docId, result, committee.code, committee.dbChairJoinSuffix ?? undefined);
     // Update local committee state so the DR list reflects the result immediately
     setCommittee((prev) => {
       if (!prev) return prev;
@@ -477,11 +477,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   };
 
   const handleBackToSession = async () => {
-    await setPhaseInDB(committee.id, 'speakers-list');
+    await setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
     router.push(`/chair/${committee.code}`);
   };
   const handleEndDebate = async () => {
-    await setPhaseInDB(committee.id, 'adjourned');
+    await setPhaseInDB(committee.id, 'adjourned', committee.code, committee.dbChairJoinSuffix ?? undefined);
     router.push('/sessions');
   };
 
@@ -526,7 +526,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     setRollCallStatuses((prev) => {
       const cur = prev[id] ?? 'absent';
       const next: DelegateStatus = cur === 'absent' ? 'present' : cur === 'present' ? 'present-voting' : 'absent';
-      setDelegateStatusInDB(id, next);
+      setDelegateStatusInDB(id, next, committee.code, committee.dbChairJoinSuffix ?? undefined);
       return { ...prev, [id]: next };
     });
   };
