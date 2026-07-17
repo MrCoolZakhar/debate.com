@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
-  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, Inbox, LogOut, MapPin,
+  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
   MessageSquareText, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   Users, Wallet, X,
 } from 'lucide-react';
@@ -22,6 +22,7 @@ import { getCountryByName, getFlagUrl, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
 import { isPaymentsLive } from '@/lib/payments';
+import { formatFee } from '@/lib/utils';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc,
 } from '@/components/neu';
@@ -78,6 +79,26 @@ interface Application {
   spots_pledged: number | null;
   pledge_confirmed_at: string | null;
   society_id: string | null;
+  // Denormalized aid snapshot on the application row itself — checked as a
+  // fallback alongside the linked financial_aid_requests row (see previewAid)
+  // so a request is never missed regardless of which one is populated.
+  aid_requested: boolean;
+  aid_statement: string | null;
+  aid_status: string | null;
+  aid_requested_amount: number | null;
+}
+
+// The applicant's financial_aid_requests row, fetched on demand when the
+// review modal opens (mirrors previewCv) — the source of truth for the
+// statement/amount/status in the vast majority of cases, since aid is filed
+// via a separate request rather than always mirrored onto applications.
+interface PreviewAidRequest {
+  id: string;
+  statement: string | null;
+  requested_amount: number | null;
+  status: 'pending' | 'approved' | 'denied';
+  granted_amount: number | null;
+  created_at: string;
 }
 
 // Lightweight committee shape for the inline quick-allocate picker (#7). Loaded
@@ -114,6 +135,14 @@ interface PreviewCvEntry {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Same tri-color scheme as AidRequestsSection's StatusChip, so a request's
+// status reads consistently whether seen from Applications or Financial Aid.
+const AID_STATUS_STYLES: Record<string, { bg: string; color: string; border: string; label: string }> = {
+  pending: { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F', border: 'rgba(184,132,74,0.42)', label: 'PENDING' },
+  approved: { bg: 'rgba(61,122,82,0.17)', color: '#2A5A3C', border: 'rgba(61,122,82,0.45)', label: 'APPROVED' },
+  denied: { bg: 'rgba(154,138,120,0.16)', color: '#6B5F52', border: 'rgba(154,138,120,0.35)', label: 'DENIED' },
+};
 
 // Real ISO 3166-1 alpha-2 codes, so a committee "country" that is actually a
 // crisis/JCC character name (country_code stores the character, e.g. "Indira
@@ -1026,6 +1055,9 @@ export default function ApplicationsPage() {
   // Previewed applicant's MUN CV, fetched on demand when the review modal opens.
   const [previewCv, setPreviewCv] = useState<PreviewCvEntry[] | null>(null);
   const [previewCvLoading, setPreviewCvLoading] = useState(false);
+  // The applicant's financial_aid_requests row (if any), fetched on demand
+  // when the review modal opens — same lazy pattern as previewCv.
+  const [previewAid, setPreviewAid] = useState<PreviewAidRequest | null>(null);
   // App ids with a write in flight, double-click guard for row actions.
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   // Multi-select for bulk actions. Ids are pruned to what's visible whenever
@@ -1071,6 +1103,7 @@ export default function ApplicationsPage() {
           payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
+          aid_requested, aid_statement, aid_status, aid_requested_amount,
           assigned_committee:conference_committees!assigned_committee_id (name, abbreviation, topics, logo_url),
           profiles (display_name, email, avatar_url, nationality, date_of_birth, mun_experience_level),
           societies (name),
@@ -1157,6 +1190,28 @@ export default function ApplicationsPage() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewId, session?.access_token]);
+
+  // Fetch the applicant's financial_aid_requests row on demand — surfaces aid
+  // in the review modal so an organiser doesn't have to switch to the
+  // Financial Aid tab. Read-only here; approve/deny still lives there.
+  useEffect(() => {
+    if (!reviewId || !session) { setPreviewAid(null); return; }
+    let cancelled = false;
+    setPreviewAid(null);
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { data } = await supabase
+        .from('financial_aid_requests')
+        .select('id, statement, requested_amount, status, granted_amount, created_at')
+        .eq('application_id', reviewId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      setPreviewAid((data as PreviewAidRequest | null) ?? null);
+    })();
+    return () => { cancelled = true; };
   }, [reviewId, session?.access_token]);
 
   // ── Quick-allocate committee load (#7) ──────────────────────────────────────
@@ -2596,6 +2651,15 @@ export default function ApplicationsPage() {
         // matching label.
         const questionIds = new Set(questions.map(q => q.id));
         const orphanedAnswers = Object.entries(answers).filter(([key]) => !questionIds.has(key));
+        // Financial aid: the linked financial_aid_requests row (fetched on demand,
+        // previewAid) is the source of truth when present; the denormalized
+        // columns on the application row are checked too so a request is never
+        // missed if that row hasn't loaded yet (or doesn't exist for any reason).
+        const aidStatus = previewAid?.status ?? (app.aid_status && app.aid_status !== 'none' ? app.aid_status : null);
+        const hasAidRequest = !!previewAid || app.aid_requested || !!aidStatus;
+        const aidStatement = previewAid?.statement ?? app.aid_statement;
+        const aidRequestedAmount = previewAid?.requested_amount ?? app.aid_requested_amount;
+        const aidCurrency = roleConfig?.fee_currency ?? 'GBP';
         const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
         // Double-click guard, the row's controls grey out while its write is in flight.
         const rowBusy = busyIds.has(app.id);
@@ -2785,6 +2849,45 @@ export default function ApplicationsPage() {
                 <p className="text-xs italic mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                   &ldquo;{app.organizer_note}&rdquo;
                 </p>
+              )}
+
+              {/* Financial aid (read-only — approve/deny still lives on the Financial Aid tab) */}
+              {hasAidRequest && (
+                <div className="rounded-xl px-4 py-3.5 mb-4" style={{ backgroundColor: 'rgba(184,132,74,0.07)', border: '1px solid rgba(184,132,74,0.25)' }}>
+                  <div className="flex items-center justify-between gap-3 mb-2.5">
+                    <p className="flex items-center gap-2 text-xs" style={{ color: '#8A6614', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.1em' }}>
+                      <HeartHandshake size={13} />
+                      FINANCIAL AID REQUESTED
+                    </p>
+                    {aidStatus && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold flex-shrink-0"
+                        style={{
+                          fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em',
+                          backgroundColor: (AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).bg,
+                          color: (AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).color,
+                          border: `1px solid ${(AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).border}`,
+                        }}
+                      >
+                        {(AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).label}
+                      </span>
+                    )}
+                  </div>
+                  {aidRequestedAmount != null && (
+                    <p className="text-xs mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      Requested <span className="font-bold">{formatFee(aidRequestedAmount, aidCurrency)}</span>
+                      {previewAid?.status === 'approved' && previewAid.granted_amount != null && (
+                        <> · Granted <span className="font-bold">{formatFee(previewAid.granted_amount, aidCurrency)}</span></>
+                      )}
+                    </p>
+                  )}
+                  <p
+                    className="text-sm whitespace-pre-wrap"
+                    style={{ color: aidStatement ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: aidStatement ? 'normal' : 'italic' }}
+                  >
+                    {aidStatement || 'No statement provided.'}
+                  </p>
+                </div>
               )}
 
               {/* Custom answers */}
