@@ -5,7 +5,7 @@ import { DatePicker } from '@/components/DatePicker';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', borderRadius: '12px', padding: '12px 16px', fontSize: '14px',
-  border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410',
+  borderWidth: '1.5px', borderStyle: 'solid', borderColor: '#DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410',
   fontFamily: "'Outfit', sans-serif",
 };
 
