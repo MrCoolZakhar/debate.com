@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
@@ -16,7 +16,7 @@ import { experienceProgress, EXPERIENCE_BANDS } from '@/lib/munExperience';
 import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE, Emoji3D } from '@/components/neu';
-import { TwoTabPick } from '@/components/wizard';
+import { WizardShell, TwoTabPick } from '@/components/wizard';
 import { CVEntryModal } from '@/components/CVEntryModal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
@@ -24,9 +24,9 @@ import { DatePicker } from '@/components/DatePicker';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { type CustomAnswers, normalizeBlocks, questionsOf, splitIntoSections, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import {
-  Gavel, Users, Building2, ListOrdered, Sprout,
-  GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
-  MapPin, Landmark, Check, X, Plus, ArrowLeft, ArrowRight, CalendarClock,
+  Gavel, Users, Sprout,
+  GraduationCap, Trophy, Crown, Sparkles,
+  MapPin, Landmark, Check, X, Plus, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
   Info, Coins,
 } from 'lucide-react';
@@ -143,55 +143,59 @@ const DIFFICULTY_META: Record<string, { label: string; accent: string; icon: Ico
 };
 
 /**
- * A gold-tinted rounded-square icon chip that anchors a step heading —
- * echoes the detail page's stat-strip icon chips.
+ * Shared step footer — the SAME centered pill button the delegate onboarding
+ * wizard uses (src/app/auth/onboarding StepFooter): a filled forest/gold pill
+ * for a real "Continue" / "Submit", or an underlined muted link when the step
+ * is genuinely optional and nothing has been chosen ("Skip this question →").
+ * WizardShell already owns the back arrow, so no back button lives here.
  */
-function StepHeading({
-  icon: Icon,
-  title,
-  subtitle,
+function WizardFooter({
+  onNext,
+  nextLabel,
+  primary,
+  disabled = false,
 }: {
-  icon: IconType;
-  title: string;
-  subtitle?: string;
+  onNext: () => void;
+  nextLabel: string;
+  /** true → filled pill (Continue/Submit); false → underlined skip link. */
+  primary: boolean;
+  disabled?: boolean;
 }) {
+  const [hover, setHover] = useState(false);
   return (
-    <div className="flex items-start gap-3.5 mb-6">
-      <span
-        className="flex items-center justify-center flex-shrink-0"
+    <div className="flex justify-center" style={{ marginTop: 26 }}>
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={disabled}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        className="inline-flex items-center gap-2 focus:outline-none"
         style={{
-          width: '42px',
-          height: '42px',
-          borderRadius: '13px',
-          background: 'linear-gradient(150deg, rgba(238,217,138,0.28), rgba(182,135,31,0.14))',
-          border: '1.5px solid rgba(182,135,31,0.4)',
+          fontFamily: OUTFIT,
+          fontWeight: 800,
+          fontSize: 14,
+          letterSpacing: '0.06em',
+          padding: '14px 34px',
+          borderRadius: 999,
+          border: 'none',
+          cursor: disabled ? 'default' : 'pointer',
+          color: primary ? NEU.gold : NEU.muted,
+          background: primary ? NEU.forest : 'transparent',
+          boxShadow: primary ? (hover ? NEU.outSmHover : NEU.outSm) : 'none',
+          textDecoration: primary ? 'none' : 'underline',
+          textUnderlineOffset: 4,
+          opacity: disabled ? 0.6 : 1,
+          transform: primary && hover && !disabled ? 'translateY(-1px)' : 'translateY(0)',
+          transition: `all 220ms ${EASE}`,
         }}
       >
-        <Icon size={20} strokeWidth={2.1} style={{ color: '#B6871F' }} />
-      </span>
-      <div className="min-w-0 pt-0.5">
-        <h2 style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '18px', lineHeight: 1.2 }}>
-          {title}
-        </h2>
-        {subtitle && (
-          <p className="text-sm mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            {subtitle}
-          </p>
-        )}
-      </div>
+        {nextLabel}
+        <ArrowRight size={16} strokeWidth={2.6} />
+      </button>
     </div>
   );
 }
-
-/** Icon per wizard step, keyed by label. */
-const STEP_ICON: Record<string, IconType> = {
-  Role: BadgeCheck,
-  Society: Building2,
-  Background: ClipboardList,
-  Preferences: ListOrdered,
-  Experience: GraduationCap,
-  Overview: Coins,
-};
 
 /** Roles a Gavelling credit is charged for at submission — chairs and any
  *  other role are exempt (see consume_credit_for_application). */
@@ -294,60 +298,6 @@ function useReducedMotion(): boolean {
     return () => mq.removeEventListener?.('change', onChange);
   }, []);
   return reduced;
-}
-
-// ── Glassmorphism option cards ─────────────────────────────────────────────
-// Design parity with the delegate onboarding wizard (src/components/wizard.tsx
-// CardSelect / TwoTabPick): big tactile option tiles with a translucent whitish
-// fill + backdrop blur over the ivory page, a soft border, and a gold-tinted
-// lift on hover. Selected reads as a light glass card with a forest border and
-// the gold check overlay — same language as onboarding.
-const GLASS_FLOAT = '-4px -5px 12px rgba(255,255,255,0.55), 6px 10px 24px rgba(27,56,40,0.13)';
-const GLASS_LIFT = '-5px -6px 16px rgba(255,255,255,0.72), 10px 16px 34px rgba(27,56,40,0.2), 0 12px 30px rgba(182,135,31,0.3)';
-
-function glassCardStyle(selected: boolean, hovered: boolean, reducedMotion: boolean): React.CSSProperties {
-  const blur = hovered ? 'blur(16px) saturate(1.2) brightness(1.06)' : 'blur(10px) saturate(1.08)';
-  return {
-    position: 'relative',
-    borderRadius: 22,
-    border: selected ? `2px solid ${NEU.forest}` : '1.5px solid rgba(255,255,255,0.55)',
-    background: selected ? 'rgba(255,255,255,0.78)' : 'rgba(255,255,255,0.6)',
-    backdropFilter: blur,
-    WebkitBackdropFilter: blur,
-    boxShadow: selected ? `${NEU.out}, 0 10px 26px rgba(182,135,31,0.24)` : hovered ? GLASS_LIFT : GLASS_FLOAT,
-    transform: reducedMotion
-      ? 'none'
-      : hovered
-        ? 'translateY(-4px) scale(1.03)'
-        : selected
-          ? 'translateY(-2px) scale(1.01)'
-          : 'translateY(0) scale(1)',
-    transition: reducedMotion ? 'none' : `transform 320ms ${EASE}, box-shadow 320ms ${EASE}, border-color 320ms ${EASE}, background 240ms ${EASE}`,
-    transformOrigin: 'center',
-    cursor: 'pointer',
-    outline: 'none',
-  };
-}
-
-/** Gold check medallion that fades/scales in on a selected glass card. */
-function GlassCheck({ visible }: { visible: boolean }) {
-  return (
-    <span
-      aria-hidden
-      className="absolute flex items-center justify-center"
-      style={{
-        top: 10, right: 10, width: 24, height: 24, borderRadius: 999,
-        background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
-        boxShadow: `0 2px 7px ${NEU.deepGold}66`,
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'scale(1)' : 'scale(0.5)',
-        transition: `all 260ms ${EASE}`,
-        pointerEvents: 'none',
-      }}
-    >
-      <Check size={14} strokeWidth={3.2} style={{ color: NEU.forest }} />
-    </span>
-  );
 }
 
 // ── Preference-picker building blocks ─────────────────────────────────────
@@ -694,8 +644,6 @@ function ConferenceApplyInner() {
   const [withdrawConfirm, setWithdrawConfirm] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
-  // Hover key for the glassy invoicing option tiles.
-  const [invoicingHover, setInvoicingHover] = useState<boolean | null>(null);
 
   // ── Step 2, Society
   const [isIndependent, setIsIndependent] = useState(false);
@@ -852,6 +800,13 @@ function ConferenceApplyInner() {
   // doesn't apply to them, so experience_level submits null for this role.
   const skipExperience = role === 'faculty-advisor';
 
+  // Custom questions live in their OWN step (shown for ANY role that has them,
+  // placed right before Overview) — NOT bolted onto Experience. Advisors skip
+  // Experience, so hosting questions there meant their questions never
+  // rendered and Submit silently stalled trying to jump to a step they don't
+  // have; a dedicated 'questions' step fixes that for every role.
+  const hasCustomQuestions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? [])).length > 0;
+
   // ── Credit coverage — same logic backs Step 1's note and the Overview
   // step's gate, so it's computed once here. previewSocietyId anticipates
   // the society this application would attach to (mirrors handleSubmit's
@@ -877,6 +832,7 @@ function ConferenceApplyInner() {
     ...(isInvoicingRole ? ['invoicing'] : []),
     ...(showPreferenceStep ? ['preferences'] : []),
     ...(skipExperience ? [] : ['experience']),
+    ...(hasCustomQuestions ? ['questions'] : []),
     'overview',
   ] as const;
   type StepKind = (typeof stepSequence)[number];
@@ -887,6 +843,7 @@ function ConferenceApplyInner() {
       case 'invoicing': return 'Invoicing';
       case 'preferences': return 'Preferences';
       case 'experience': return 'Experience';
+      case 'questions': return 'Questions';
       case 'overview': return 'Overview';
     }
   });
@@ -1298,9 +1255,9 @@ function ConferenceApplyInner() {
       return;
     }
     const nextStep = step + 1;
-    // Entering Experience fresh (from whichever step precedes it in this
-    // role's sequence) always starts on its first section page.
-    if (stepSequence[nextStep - 1] === 'experience') setQuestionPage(0);
+    // Entering the Questions step fresh (from whichever step precedes it in
+    // this role's sequence) always starts on its first section page.
+    if (stepSequence[nextStep - 1] === 'questions') setQuestionPage(0);
     setStep(nextStep);
   }
 
@@ -1366,16 +1323,16 @@ function ConferenceApplyInner() {
     const questionCheck = validateAnswers(questionsOf(blocks), customAnswers);
     if (!questionCheck.valid) {
       setCustomMissingIds(questionCheck.missingIds);
-      // Submit now happens from the Overview step, but the answers themselves
-      // are edited on Experience — send the applicant back there, to the
+      // Submit happens from the Overview step, but the answers live on the
+      // dedicated Questions step — send the applicant back there, to the
       // specific section page holding the first missing answer, so the
       // missing-answer highlight is actually visible (not just on-page).
       const pages = splitIntoSections(blocks);
       const firstMissingId = questionCheck.missingIds[0];
       const targetPage = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === firstMissingId));
       setQuestionPage(targetPage >= 0 ? targetPage : 0);
-      const experienceIdx = stepSequence.indexOf('experience');
-      if (experienceIdx >= 0) setStep(experienceIdx + 1);
+      const questionsIdx = stepSequence.indexOf('questions');
+      if (questionsIdx >= 0) setStep(questionsIdx + 1);
       return;
     }
     if (needsDob || underAge) {
@@ -1571,9 +1528,18 @@ function ConferenceApplyInner() {
   // aren't touched here either, resubmitting only edits the whitelisted
   // fields, it never re-runs checkout.
   async function handleResubmit() {
-    const questionCheck = validateAnswers(questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? [])), customAnswers);
+    const blocks = normalizeBlocks(roleConfig?.custom_questions ?? []);
+    const questionCheck = validateAnswers(questionsOf(blocks), customAnswers);
     if (!questionCheck.valid) {
       setCustomMissingIds(questionCheck.missingIds);
+      // Route to the Questions step / page holding the first missing answer,
+      // so the highlight is visible instead of failing silently on Overview.
+      const pages = splitIntoSections(blocks);
+      const firstMissingId = questionCheck.missingIds[0];
+      const targetPage = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === firstMissingId));
+      setQuestionPage(targetPage >= 0 ? targetPage : 0);
+      const questionsIdx = stepSequence.indexOf('questions');
+      if (questionsIdx >= 0) setStep(questionsIdx + 1);
       return;
     }
     setSubmitting(true);
@@ -1851,46 +1817,46 @@ function ConferenceApplyInner() {
     const showSociety = !isObserver;
     const takenMsg = 'This delegation has already applied — ask its head delegate or faculty advisor to invite you.';
     return (
-      <>
-        <StepHeading
-          icon={isObserver ? ClipboardList : Users}
-          title={isObserver ? 'Background' : 'Your Delegation'}
-          subtitle={
-            !showSociety
-              ? 'As an observer, no delegation information is required.'
-              : isInvoicingRole
-              ? 'Which society or high school are you representing?'
-              : 'Are you applying independently or as part of a high school/society?'
-          }
-        />
-
+      <WizardShell
+        step={step}
+        total={totalSteps}
+        onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
+        title={!showSociety ? 'A little background' : isInvoicingRole ? 'Your delegation' : 'How are you applying?'}
+        sub={
+          !showSociety
+            ? 'As an observer, no delegation information is required — just continue.'
+            : isInvoicingRole
+            ? 'Which society or high school are you representing?'
+            : 'Are you applying independently or as part of a high school / society?'
+        }
+      >
         {showSociety && (
           <>
             {/* ── Big two-card choice (onboarding wizard parity): Independent vs
-                Delegation, each a large glassy image card. Invoicing roles are
-                always with a society, so they skip straight to the picker. ── */}
+                Delegation. Clean icon cards, no decorative image backdrop.
+                Invoicing roles are always with a society, so they skip straight
+                to the picker. ── */}
             {!isInvoicingRole && (
-              <div className="mb-6">
-                <TwoTabPick
-                  value={isIndependent ? 'independent' : 'society'}
-                  onChange={(key) => { setIsIndependent(key === 'independent'); setSocietyError(''); }}
-                  options={[
-                    {
-                      key: 'independent',
-                      label: 'Independent',
-                      image: '/onboarding/podium-01.jpg',
-                      sub: 'Applying on your own',
-                    },
-                    {
-                      key: 'society',
-                      label: 'With a delegation',
-                      image: '/onboarding/handshake-01.jpg',
-                      sub: 'Part of a society or high school',
-                    },
-                  ]}
-                />
-              </div>
+              <TwoTabPick
+                value={isIndependent ? 'independent' : 'society'}
+                onChange={(key) => { setIsIndependent(key === 'independent'); setSocietyError(''); }}
+                options={[
+                  {
+                    key: 'independent',
+                    label: 'Independent',
+                    icon: <Gavel size={78} strokeWidth={1.6} style={{ color: NEU.deepGold }} />,
+                    sub: 'Applying on your own',
+                  },
+                  {
+                    key: 'society',
+                    label: 'With a delegation',
+                    icon: <Users size={78} strokeWidth={1.6} style={{ color: NEU.forest }} />,
+                    sub: 'Part of a society or high school',
+                  },
+                ]}
+              />
             )}
+            {!isInvoicingRole && <div className="mb-6" />}
 
             {/* Invite banner — the applicant arrived via a delegation invite. */}
             {!isIndependent && invitedSocietyId && (
@@ -2024,70 +1990,43 @@ function ConferenceApplyInner() {
           </>
         )}
 
-        <div className="flex justify-between items-center mt-6">
-          {step > 1 ? (
-            <button
-              onClick={() => setStep(s => s - 1)}
-              className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex items-center gap-1.5"
-              style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              <ArrowLeft size={15} strokeWidth={2.4} /> BACK
-            </button>
-          ) : <span />}
-          <button
-            onClick={handleContinue}
-            className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors flex items-center gap-2"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            CONTINUE <ArrowRight size={16} strokeWidth={2.4} />
-          </button>
-        </div>
-      </>
+        <WizardFooter onNext={handleContinue} nextLabel="Continue" primary />
+      </WizardShell>
     );
   }
 
   function renderStepInvoicing() {
-    const options: Array<{ value: boolean; label: string }> = [
-      { value: true, label: 'YES' },
-      { value: false, label: 'NO' },
-    ];
     const showSpots = willPledgeSpots === true;
+    const pledgeValue = willPledgeSpots === null ? null : willPledgeSpots ? 'yes' : 'no';
 
     return (
-      <>
-        <h2 className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Will you be paying for delegation spots?
-        </h2>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          This is separate from your own registration fee. It only covers spots for your delegates.
-        </p>
+      <WizardShell
+        step={step}
+        total={totalSteps}
+        onBack={() => setStep(s => s - 1)}
+        title="Paying for delegation spots?"
+        sub="Separate from your own registration fee — this only covers spots for your delegates."
+      >
+        <TwoTabPick
+          value={pledgeValue}
+          onChange={(key) => { setWillPledgeSpots(key === 'yes'); setInvoicingError(''); }}
+          options={[
+            {
+              key: 'yes',
+              label: 'Yes',
+              icon: <Coins size={78} strokeWidth={1.7} style={{ color: NEU.deepGold }} />,
+              sub: "I'll pay for my delegation's spots",
+            },
+            {
+              key: 'no',
+              label: 'No',
+              icon: <Users size={78} strokeWidth={1.7} style={{ color: NEU.forest }} />,
+              sub: 'My delegates will pay their own way',
+            },
+          ]}
+        />
 
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          {options.map(opt => {
-            const selected = willPledgeSpots === opt.value;
-            const hovered = invoicingHover === opt.value;
-            return (
-              <button
-                key={String(opt.value)}
-                type="button"
-                onClick={() => { setWillPledgeSpots(opt.value); setInvoicingError(''); }}
-                onMouseEnter={() => setInvoicingHover(opt.value)}
-                onMouseLeave={() => setInvoicingHover(null)}
-                className="flex items-center justify-center focus:outline-none"
-                style={{ ...glassCardStyle(selected, hovered, reducedMotion), minHeight: 104, padding: '22px' }}
-              >
-                <GlassCheck visible={selected} />
-                <p className="font-bold text-lg" style={{ color: NEU.ink, fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}>
-                  {opt.label}
-                </p>
-              </button>
-            );
-          })}
-        </div>
+        <div className="mt-6" />
 
         {showSpots && (
           <div className="mb-6">
@@ -2116,36 +2055,18 @@ function ConferenceApplyInner() {
         )}
 
         {invoicingError && (
-          <p className="mb-3 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+          <p className="mt-3 text-xs text-center" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
             {invoicingError}
           </p>
         )}
 
-        <div className="flex justify-between mt-2">
-          <button
-            onClick={() => setStep(s => s - 1)}
-            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            ← BACK
-          </button>
-          <button
-            onClick={handleContinue}
-            disabled={submitting}
-            className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors"
-            style={{
-              backgroundColor: submitting ? 'rgba(27,56,40,0.5)' : '#1B3828', color: '#EED98A',
-              fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: submitting ? 'not-allowed' : 'pointer',
-            }}
-            onMouseEnter={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!submitting) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            {step >= totalSteps ? (submitting ? 'SUBMITTING...' : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')) : 'CONTINUE →'}
-          </button>
-        </div>
-      </>
+        <WizardFooter
+          onNext={handleContinue}
+          nextLabel={step >= totalSteps ? (submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')) : 'Continue'}
+          primary
+          disabled={submitting}
+        />
+      </WizardShell>
     );
   }
 
@@ -2223,19 +2144,28 @@ function ConferenceApplyInner() {
     // ── Loading skeleton while slots + availability load.
     if (prefDataLoading && !prefDataLoaded) {
       return (
-        <>
-          <StepHeading icon={ListOrdered} title="Your Preferences" subtitle={subtitle} />
+        <WizardShell
+          step={step}
+          total={totalSteps}
+          onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
+          title="Your preferences"
+          sub={subtitle}
+        >
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
           </div>
-        </>
+        </WizardShell>
       );
     }
 
     return (
-      <>
-        <StepHeading icon={ListOrdered} title="Your Preferences" subtitle={subtitle} />
-
+      <WizardShell
+        step={step}
+        total={totalSteps}
+        onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
+        title="Your preferences"
+        sub={subtitle}
+      >
         {minPrefs > 0 && (
           <p className="mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
             Pick and order at least <span style={{ fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{minPrefs}</span>
@@ -2364,66 +2294,36 @@ function ConferenceApplyInner() {
         )}
 
         {prefError && (
-          <p className="mt-4 text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+          <p className="mt-4 text-xs text-center" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
             {prefError}
           </p>
         )}
 
-        <div className="flex justify-between mt-6">
-          <button
-            onClick={() => setStep(s => s - 1)}
-            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex items-center gap-1.5"
-            style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', fontFamily: OUTFIT }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            <ArrowLeft size={15} strokeWidth={2.4} /> BACK
-          </button>
-          <button
-            onClick={handleContinue}
-            className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors flex items-center gap-2"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            CONTINUE <ArrowRight size={16} strokeWidth={2.4} />
-          </button>
-        </div>
-      </>
+        {/* Genuinely optional only when the conference sets no minimum (minPrefs
+            === 0) AND nothing has been ranked — then this reads as a skip link,
+            exactly like an optional onboarding question. Otherwise it's a real
+            required "Continue" (handleContinue blocks below the minimum). */}
+        <WizardFooter
+          onNext={handleContinue}
+          nextLabel={minPrefs === 0 && preferences.length === 0 ? 'Skip this question' : 'Continue'}
+          primary={!(minPrefs === 0 && preferences.length === 0)}
+        />
+      </WizardShell>
     );
   }
 
   function renderStepExperience() {
-    // Each Section block starts a new page within this step; no sections at
-    // all still produces exactly one (possibly empty) page, so the step keeps
-    // working unchanged for roles with a flat question list or none.
-    const pages = splitIntoSections(normalizeBlocks(roleConfig?.custom_questions ?? []));
-    const page = pages[questionPage] ?? { section: null, blocks: [] };
-    const isFirstPage = questionPage === 0;
-    const isLastPage = questionPage === pages.length - 1;
-
     // Experience can be the very first step for roles with no society/
     // preference steps (chair, observer) — there's nowhere to go back to then.
-    const canGoBack = !isFirstPage || step > 1;
-    function handleBackExperience() {
-      if (!isFirstPage) { setQuestionPage(p => p - 1); return; }
-      if (step > 1) setStep(s => s - 1);
-    }
-
-    function handleContinueExperience() {
-      const questionCheck = validateAnswers(questionsOf(page.blocks), customAnswers);
-      if (!questionCheck.valid) {
-        setCustomMissingIds(questionCheck.missingIds);
-        return;
-      }
-      setCustomMissingIds([]);
-      if (!isLastPage) { setQuestionPage(p => p + 1); return; }
-      handleContinue();
-    }
-
     return (
-      <>
-        {isFirstPage && (() => {
+      <WizardShell
+        step={step}
+        total={totalSteps}
+        onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
+        title="About you"
+        sub="Set your MUN experience level, or import it from your MUN CV. The organiser sees it with your application and uses it for allocations."
+      >
+        {(() => {
           // Choosable experience slider. The applicant DRAGS the thumb between
           // the four band stops (Beginner→Expert) — same thresholds as their
           // profile MUN rank — and whatever the slider shows is what submits as
@@ -2470,15 +2370,7 @@ function ConferenceApplyInner() {
           };
           const matchesCv = chosenLevel === cvDerived.level;
           return (
-          <>
-            <h2 className="font-semibold text-base mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              About You
-            </h2>
-            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-              Choose your MUN experience level below, or import it from your MUN CV. The organiser sees it with your application and uses it for allocations.
-            </p>
-
-            <div className="mb-6">
+            <div className="mb-2">
               <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <LevelBadge level={chosenLevel} size="md" />
                 <span className="text-xs font-semibold" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
@@ -2632,31 +2524,60 @@ function ConferenceApplyInner() {
                 </button>
               </div>
             </div>
-          </>
           );
         })()}
 
+        <WizardFooter onNext={handleContinue} nextLabel="Continue" primary />
+      </WizardShell>
+    );
+  }
+
+  /**
+   * Dedicated custom-questions step. Shown for ANY role whose role config has
+   * questions (hasCustomQuestions), placed right before Overview — so advisors
+   * (and any role that skips Experience) still see and answer their questions
+   * instead of Submit stalling. Each Section block is its own page.
+   */
+  function renderStepQuestions() {
+    const pages = splitIntoSections(normalizeBlocks(roleConfig?.custom_questions ?? []));
+    const page = pages[questionPage] ?? { section: null, blocks: [] };
+    const isFirstPage = questionPage === 0;
+    const isLastPage = questionPage === pages.length - 1;
+
+    // There's always a step before Questions (society/invoicing/preferences/
+    // experience), but a later section page goes back a page, not a step.
+    const canGoBack = !isFirstPage || step > 1;
+    function handleBackQuestions() {
+      if (!isFirstPage) { setQuestionPage(p => p - 1); return; }
+      if (step > 1) setStep(s => s - 1);
+    }
+    function handleContinueQuestions() {
+      const questionCheck = validateAnswers(questionsOf(page.blocks), customAnswers);
+      if (!questionCheck.valid) {
+        setCustomMissingIds(questionCheck.missingIds);
+        return;
+      }
+      setCustomMissingIds([]);
+      if (!isLastPage) { setQuestionPage(p => p + 1); return; }
+      handleContinue();
+    }
+
+    return (
+      <WizardShell
+        step={step}
+        total={totalSteps}
+        onBack={canGoBack ? handleBackQuestions : undefined}
+        title={page.section?.title || 'A few questions'}
+        sub={page.section?.description || 'The organiser would like a little more from you.'}
+      >
         {pages.length > 1 && (
           <p className="mb-3" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted }}>
             SECTION {questionPage + 1} OF {pages.length}
           </p>
         )}
 
-        {page.section && (
-          <div className="mb-4">
-            <h3 className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              {page.section.title}
-            </h3>
-            {page.section.description && (
-              <p className="text-sm mt-1" style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif" }}>
-                {page.section.description}
-              </p>
-            )}
-          </div>
-        )}
-
         {page.blocks.length > 0 && (
-          <div className="mb-6">
+          <div className="mb-2">
             <CustomQuestionsField
               blocks={page.blocks}
               answers={customAnswers}
@@ -2671,29 +2592,8 @@ function ConferenceApplyInner() {
           </div>
         )}
 
-        <div className="flex justify-between mt-2 gap-4">
-          {canGoBack ? (
-            <button
-              onClick={handleBackExperience}
-              className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
-              style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              ← BACK
-            </button>
-          ) : <span />}
-          <button
-            onClick={handleContinueExperience}
-            className="flex-1 rounded-xl py-3 px-8 text-sm font-bold focus:outline-none transition-colors flex items-center justify-center gap-2"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            CONTINUE <ArrowRight size={16} strokeWidth={2.4} />
-          </button>
-        </div>
-      </>
+        <WizardFooter onNext={handleContinueQuestions} nextLabel="Continue" primary />
+      </WizardShell>
     );
   }
 
@@ -2719,9 +2619,18 @@ function ConferenceApplyInner() {
     const gated = !isEditMode && !canApply;
 
     return (
-      <>
-        <StepHeading icon={BadgeCheck} title="Overview" subtitle="Review your application before submitting." />
-
+      <WizardShell
+        step={step}
+        total={totalSteps}
+        onBack={() => {
+          // Landing back on Experience (skipped entirely for advisors) always
+          // re-opens the Questions step's first section page.
+          if (stepSequence[step - 2] === 'questions') setQuestionPage(0);
+          setStep(s => s - 1);
+        }}
+        title="Overview"
+        sub="Review your application before submitting."
+      >
         {/* ── Application recap, collapsed by default (click to toggle) ── */}
         <button
           type="button"
@@ -2886,49 +2795,17 @@ function ConferenceApplyInner() {
         )}
 
         {submitError && (
-          <p className="mb-4 text-sm" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+          <p className="mb-4 text-sm text-center" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
             {submitError}
           </p>
         )}
 
-        <div className="flex justify-between mt-2 gap-4">
-          <button
-            onClick={() => {
-              // Landing back on Experience (skipped entirely for advisors)
-              // always re-opens its first section page.
-              if (stepSequence[step - 2] === 'experience') setQuestionPage(0);
-              setStep(s => s - 1);
-            }}
-            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: OUTFIT }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            ← BACK
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || gated}
-            className="flex-1 rounded-xl py-3 px-8 text-sm font-bold focus:outline-none transition-colors"
-            style={{
-              backgroundColor: (submitting || gated) ? 'rgba(27,56,40,0.35)' : '#1B3828',
-              color: (submitting || gated) ? NEU.muted : '#EED98A',
-              fontFamily: OUTFIT,
-              letterSpacing: '0.08em',
-              cursor: (submitting || gated) ? 'not-allowed' : 'pointer',
-              boxShadow: (submitting || gated) ? 'none' : '0 6px 18px rgba(27,56,40,0.22)',
-            }}
-            onMouseEnter={(e) => { if (!submitting && !gated) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!submitting && !gated) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            {submitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="inline-block w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
-                SUBMITTING...
-              </span>
-            ) : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')}
-          </button>
-        </div>
+        <WizardFooter
+          onNext={handleSubmit}
+          nextLabel={submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')}
+          primary
+          disabled={submitting || gated}
+        />
 
         {/* ── Withdraw application — secondary, destructive; only while the
             application is still pending ('submitted'). Two-step confirm. ── */}
@@ -2984,7 +2861,7 @@ function ConferenceApplyInner() {
             )}
           </div>
         )}
-      </>
+      </WizardShell>
     );
   }
 
@@ -3192,9 +3069,9 @@ function ConferenceApplyInner() {
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       <SiteNav />
 
-      <div className="relative z-10 flex-1 px-6 py-10" style={{ maxWidth: 680, margin: '0 auto', width: '100%' }}>
+      <div className="relative z-10 flex-1 px-6 py-10" style={{ maxWidth: 760, margin: '0 auto', width: '100%' }}>
         {/* Breadcrumb */}
-        <div className="mb-6">
+        <div className="mb-4">
           <Link
             href={`/conferences/${slug}`}
             className="text-xs"
@@ -3205,66 +3082,28 @@ function ConferenceApplyInner() {
         </div>
 
         {isEditMode && (
-          <div
-            className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 mb-5"
-            style={{ backgroundColor: 'rgba(182,135,31,0.14)', border: '1px solid rgba(182,135,31,0.35)' }}
-          >
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', fontFamily: "'Outfit', sans-serif" }}>
-              EDITING YOUR APPLICATION
-            </span>
+          <div className="flex justify-center mb-2">
+            <div
+              className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5"
+              style={{ backgroundColor: 'rgba(182,135,31,0.14)', border: '1px solid rgba(182,135,31,0.35)' }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', fontFamily: "'Outfit', sans-serif" }}>
+                EDITING YOUR APPLICATION
+              </span>
+            </div>
           </div>
         )}
 
-        {/* Step indicator */}
-        <div className="flex items-start mb-8">
-          {stepLabels.map((label, i) => {
-            const stepNum = i + 1;
-            const isActive = stepNum === step;
-            const isCompleted = stepNum < step;
-            return (
-              <Fragment key={stepNum}>
-                {i > 0 && (
-                  <div style={{ flex: 1, height: 1, backgroundColor: '#DDD4C0', marginTop: 16 }} />
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-                  <div
-                    style={{
-                      width: 32, height: 32, borderRadius: '50%',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 700, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
-                      backgroundColor: isActive ? '#1B3828' : isCompleted ? 'rgba(27,56,40,0.12)' : '#EDE7D8',
-                      color: isActive ? '#EED98A' : isCompleted ? '#1B3828' : '#9A8A78',
-                      border: (!isActive && !isCompleted) ? '1px solid #DDD4C0' : 'none',
-                    }}
-                  >
-                    {isCompleted ? '✓' : stepNum}
-                  </div>
-                  <span style={{ fontSize: 10, marginTop: 4, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                    {label}
-                  </span>
-                </div>
-                {i < totalSteps - 1 && (
-                  <div style={{ flex: 1, height: 1, backgroundColor: '#DDD4C0', marginTop: 16 }} />
-                )}
-              </Fragment>
-            );
-          })}
-        </div>
-
-        {/* Form card */}
-        <div className="rounded-2xl p-6 md:p-8" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #C8BEA8', boxShadow: '0 2px 6px rgba(27,56,40,0.05), 0 16px 40px rgba(27,56,40,0.08)' }}>
-          {currentStepKind === 'society' && renderStep2()}
-          {currentStepKind === 'invoicing' && renderStepInvoicing()}
-          {currentStepKind === 'preferences' && renderStep3Preferences()}
-          {currentStepKind === 'experience' && renderStepExperience()}
-          {currentStepKind === 'overview' && renderStepOverview()}
-        </div>
-
-        {submitError && (
-          <p className="mt-4 text-sm text-center" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-            {submitError}
-          </p>
-        )}
+        {/* Each step now supplies its own WizardShell — the golden segmented
+            progress bar, big title/subtitle, top-left back arrow and (optional)
+            skip link — so the flow reads exactly like the onboarding wizard.
+            No separate step indicator or form card wrapper anymore. */}
+        {currentStepKind === 'society' && renderStep2()}
+        {currentStepKind === 'invoicing' && renderStepInvoicing()}
+        {currentStepKind === 'preferences' && renderStep3Preferences()}
+        {currentStepKind === 'experience' && renderStepExperience()}
+        {currentStepKind === 'questions' && renderStepQuestions()}
+        {currentStepKind === 'overview' && renderStepOverview()}
       </div>
 
       {/* Inline "add a conference to my MUN CV" — the shared modal. Saving

@@ -261,7 +261,7 @@ export default function OnboardingPage() {
             sub="A rough starting point. Your level updates automatically as your MUN CV grows."
             onBack={() => setStep(2)}
           >
-            <CardSelect options={LEVEL_OPTIONS} value={level} onChange={pickLevel} columns={2} />
+            <CardSelect options={LEVEL_OPTIONS} value={level} onChange={pickLevel} columns={2} size="lg" />
             <StepFooter
               onNext={() => setStep(4)}
               nextLabel={level ? 'Continue' : 'Skip this question'}

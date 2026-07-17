@@ -188,6 +188,58 @@ function SocialInput({
   );
 }
 
+/** A banner preset rendered as a big enlarging picture card (matches the
+ *  wizard-kit CardSelect lift: hover grows the card, blooms a gold-tinted
+ *  glow, and frosts the rim). Selected keeps a forest border + gold check. */
+function BannerPreset({ src, selected, onClick }: { src: string; selected: boolean; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      aria-label="Use this banner preset"
+      aria-pressed={selected}
+      className="focus:outline-none"
+      style={{
+        position: 'relative', height: 78, borderRadius: 16, overflow: 'hidden',
+        border: selected
+          ? `2px solid ${NEU.forest}`
+          : hovered
+            ? '2px solid rgba(255,255,255,0.8)'
+            : '2px solid rgba(27,56,40,0.10)',
+        backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center',
+        boxShadow: hovered
+          ? '-5px -6px 16px rgba(255,255,255,0.85), 9px 15px 34px rgba(27,56,40,0.20), 0 9px 28px rgba(182,135,31,0.22)'
+          : selected
+            ? NEU.outSm
+            : '-3px -3px 8px rgba(255,255,255,0.5), 5px 8px 16px rgba(27,56,40,0.12)',
+        transform: hovered
+          ? 'translateY(-5px) scale(1.05)'
+          : selected
+            ? 'translateY(-1px) scale(1.01)'
+            : 'translateY(0) scale(1)',
+        transformOrigin: 'center', willChange: 'transform', cursor: 'pointer',
+        transition: `transform 300ms ${EASE}, box-shadow 300ms ${EASE}, border-color 300ms ${EASE}`,
+      }}
+    >
+      {selected && (
+        <span
+          className="absolute flex items-center justify-center"
+          style={{
+            top: 5, right: 5, width: 20, height: 20, borderRadius: 999,
+            background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
+            boxShadow: `0 2px 7px ${NEU.deepGold}66`,
+          }}
+        >
+          <Check size={12} strokeWidth={3.2} style={{ color: NEU.forest }} />
+        </span>
+      )}
+    </button>
+  );
+}
+
 function ContinueButton({ label = 'Continue', disabled, onClick }: { label?: string; disabled?: boolean; onClick: () => void }) {
   return (
     <div className="flex justify-center" style={{ marginTop: 26 }}>
@@ -897,39 +949,15 @@ export default function NewConferencePage() {
                   </div>
                 </NeuInset>
 
-                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
-                  {BANNER_PRESETS.map((p) => {
-                    const selected = bannerUrl === p;
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => { setBannerUrl(p); setBannerError(''); }}
-                        aria-label="Use this banner preset"
-                        aria-pressed={selected}
-                        className="focus:outline-none"
-                        style={{
-                          position: 'relative', height: 52, borderRadius: 12, overflow: 'hidden',
-                          border: selected ? `2px solid ${NEU.forest}` : '2px solid rgba(27,56,40,0.10)',
-                          backgroundImage: `url(${p})`, backgroundSize: 'cover', backgroundPosition: 'center',
-                          boxShadow: selected ? NEU.outSm : 'none',
-                          cursor: 'pointer', transition: `border-color 200ms ${EASE}`,
-                        }}
-                      >
-                        {selected && (
-                          <span
-                            className="absolute flex items-center justify-center"
-                            style={{
-                              top: 4, right: 4, width: 18, height: 18, borderRadius: 999,
-                              background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
-                            }}
-                          >
-                            <Check size={11} strokeWidth={3.2} style={{ color: NEU.forest }} />
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', padding: '4px 2px' }}>
+                  {BANNER_PRESETS.map((p) => (
+                    <BannerPreset
+                      key={p}
+                      src={p}
+                      selected={bannerUrl === p}
+                      onClick={() => { setBannerUrl(p); setBannerError(''); }}
+                    />
+                  ))}
                 </div>
 
                 <div className="flex justify-center" style={{ marginTop: 16 }}>
@@ -947,7 +975,7 @@ export default function NewConferencePage() {
                 {bannerError && <ErrorNote>{bannerError}</ErrorNote>}
                 <ContinueButton onClick={() => advance(9)} />
                 <div className="flex justify-center" style={{ marginTop: 12 }}>
-                  <SkipLink onClick={() => { setBannerUrl(''); advance(9); }} label="Skip for now" />
+                  <SkipLink onClick={() => { setBannerUrl(''); advance(9); }} label="Skip this question →" />
                 </div>
               </WizardShell>
             )}
@@ -994,7 +1022,7 @@ export default function NewConferencePage() {
                       setInstagram(''); setFacebook(''); setTiktok(''); setWhatsapp(''); setWebsite('');
                       advance(10);
                     }}
-                    label="Skip for now"
+                    label="Skip this question →"
                   />
                 </div>
               </WizardShell>

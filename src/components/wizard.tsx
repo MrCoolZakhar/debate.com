@@ -342,6 +342,7 @@ export function CardSelect({
   multiple = false,
   searchable = false,
   columns = 3,
+  size = 'default',
 }: {
   /** Every option must carry an icon or image, never text-only. */
   options: WizardOption[];
@@ -352,7 +353,15 @@ export function CardSelect({
   multiple?: boolean;
   searchable?: boolean;
   columns?: number;
+  /**
+   * Card scale. `'default'` is the compact list tile (countries, venues).
+   * `'lg'` renders big, generous cards with an oversized icon/image — for
+   * short pick-one/pick-few choices that should feel as bold as step 1's
+   * TwoTabPick (e.g. the experience-level question).
+   */
+  size?: 'default' | 'lg';
 }) {
+  const big = size === 'lg';
   const [query, setQuery] = useState('');
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [searchFocus, setSearchFocus] = useState(false);
@@ -422,7 +431,7 @@ export function CardSelect({
 
       <div
         role={multiple ? 'group' : 'radiogroup'}
-        className="grid gap-4"
+        className={big ? 'grid gap-5' : 'grid gap-4'}
         style={{
           gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
           maxHeight: searchable ? 360 : undefined,
@@ -445,8 +454,10 @@ export function CardSelect({
               className="flex flex-col items-center justify-center"
               style={{
                 ...cardBaseStyle(selected, hovered),
-                minHeight: 156,
-                padding: opt.image ? '0 0 18px' : '28px 14px 22px',
+                minHeight: big ? 218 : 156,
+                padding: opt.image
+                  ? big ? '0 0 26px' : '0 0 18px'
+                  : big ? '44px 20px 34px' : '28px 14px 22px',
                 overflow: 'hidden',
               }}
             >
@@ -457,8 +468,8 @@ export function CardSelect({
                   style={{
                     display: 'block',
                     width: '100%',
-                    height: 110,
-                    marginBottom: 15,
+                    height: big ? 150 : 110,
+                    marginBottom: big ? 22 : 15,
                     backgroundImage: `url(${opt.image})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
@@ -470,7 +481,11 @@ export function CardSelect({
                 <span
                   aria-hidden
                   className="flex items-center justify-center"
-                  style={{ fontSize: 46, height: 58, marginBottom: 13 }}
+                  style={{
+                    fontSize: big ? 76 : 46,
+                    height: big ? 96 : 58,
+                    marginBottom: big ? 20 : 13,
+                  }}
                 >
                   {opt.icon}
                 </span>
@@ -479,8 +494,8 @@ export function CardSelect({
                 className="truncate w-full"
                 style={{
                   fontFamily: OUTFIT,
-                  fontWeight: 700,
-                  fontSize: 14.5,
+                  fontWeight: big ? 800 : 700,
+                  fontSize: big ? 20 : 14.5,
                   color: selected ? NEU.forest : NEU.ink,
                   padding: '0 10px',
                 }}
@@ -492,10 +507,10 @@ export function CardSelect({
                   className="truncate w-full"
                   style={{
                     fontFamily: OUTFIT,
-                    fontSize: 12,
+                    fontSize: big ? 14.5 : 12,
                     fontWeight: 500,
                     color: NEU.muted,
-                    marginTop: 4,
+                    marginTop: big ? 7 : 4,
                     padding: '0 10px',
                     fontVariantNumeric: 'tabular-nums',
                   }}
