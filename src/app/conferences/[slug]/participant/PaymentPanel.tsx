@@ -192,7 +192,7 @@ export default function PaymentPanel({
     <SectionCard>
       <div className="flex items-center justify-between gap-3 mb-1">
         <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
-          PAYMENT
+          {financialAidEnabled ? 'PAY AND FINANCIAL AID' : 'PAYMENT'}
         </p>
         <span
           className="px-2.5 py-0.5 rounded-full"
@@ -300,12 +300,17 @@ export default function PaymentPanel({
           </p>
         </>
       ) : owesSomething && !paymentsEnabled ? (
-        <p
-          className="text-[13px] rounded-xl px-4 py-3"
-          style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
+        <div
+          className="rounded-xl px-4 py-3"
+          style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}
         >
-          Online payment isn&apos;t set up for this conference yet.
-        </p>
+          <p className="text-[13px] font-bold" style={{ color: '#B8844A', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+            Payments coming soon
+          </p>
+          <p className="text-[12px] mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+            The organizing team is finishing payment setup — you&apos;ll be able to pay here shortly.
+          </p>
+        </div>
       ) : owesSomething ? (
         <>
           {showAmountSelector && (
@@ -397,19 +402,19 @@ export default function PaymentPanel({
             <CreditCard size={15} />
             {paying ? 'OPENING CHECKOUT...' : `PAY ${formatFee(amountToCharge, currency)}`}
           </button>
-
-          {financialAidEnabled && aidRequestLoaded && !aidRequest && (
-            <button
-              type="button"
-              onClick={() => setAidModalOpen(true)}
-              className="w-full text-xs font-semibold text-center focus:outline-none mt-2.5"
-              style={{ color: '#6E5F4E', fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            >
-              Request Financial Aid
-            </button>
-          )}
         </>
       ) : null}
+
+      {payableNow && owesSomething && financialAidEnabled && aidRequestLoaded && !aidRequest && (
+        <button
+          type="button"
+          onClick={() => setAidModalOpen(true)}
+          className="w-full text-xs font-semibold text-center focus:outline-none mt-2.5"
+          style={{ color: '#6E5F4E', fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          Request Financial Aid
+        </button>
+      )}
 
       {stubMessage && (
         <ModalOverlay onClose={() => setStubMessage(null)}>

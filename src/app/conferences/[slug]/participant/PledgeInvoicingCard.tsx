@@ -295,12 +295,17 @@ export default function PledgeInvoicingCard({
           )}
 
           {!fullyCovered && remaining > 0 && !manualActive && !paymentsEnabled && (
-            <p
-              className="text-[13px] rounded-xl px-4 py-3"
-              style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}
             >
-              Online payment isn&apos;t set up for this conference yet.
-            </p>
+              <p className="text-[13px] font-bold" style={{ color: '#B8844A', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                Payments coming soon
+              </p>
+              <p className="text-[12px] mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                The organizing team is finishing payment setup — you&apos;ll be able to pay here shortly.
+              </p>
+            </div>
           )}
 
           {!fullyCovered && remaining > 0 && paymentsEnabled && (
