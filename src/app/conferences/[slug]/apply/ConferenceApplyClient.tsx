@@ -19,7 +19,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
-import { type CustomAnswers, normalizeBlocks, questionsOf, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
+import { type CustomAnswers, normalizeBlocks, questionsOf, splitIntoSections, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import {
   Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
   GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
@@ -668,6 +668,8 @@ function ConferenceApplyInner() {
   const [experienceLevel, setExperienceLevel] = useState('');
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
   const [customMissingIds, setCustomMissingIds] = useState<string[]>([]);
+  // Custom questions render as one Section per page within this step.
+  const [questionPage, setQuestionPage] = useState(0);
 
   // ── Checkout: vouchers + fee waivers (finance.ts is the single math source)
   const [financeProfile, setFinanceProfile] = useState({ is_ambassador: false, unlimited_conferences_remaining: 0, has_active_subscription: false });
@@ -810,6 +812,16 @@ function ConferenceApplyInner() {
     }
   });
   const currentStepKind: StepKind = stepSequence[step - 1] ?? 'role';
+
+  // A role switch mid-flow means a different question set (different pages),
+  // so any in-progress section pagination is stale — start over. Forward/back
+  // step transitions into Experience reset the page themselves, right beside
+  // the setStep call (see advanceStep and the Overview "back" button), so
+  // handleSubmit's targeted redirect to the page holding a missing answer
+  // isn't immediately clobbered by a separate effect.
+  useEffect(() => {
+    setQuestionPage(0);
+  }, [role]);
 
   // ── Auth gate + fetch
   useEffect(() => {
@@ -1109,7 +1121,11 @@ function ConferenceApplyInner() {
       handleSubmit();
       return;
     }
-    setStep(s => s + 1);
+    const nextStep = step + 1;
+    // Entering Experience fresh (from whichever step precedes it in this
+    // role's sequence) always starts on its first section page.
+    if (stepSequence[nextStep - 1] === 'experience') setQuestionPage(0);
+    setStep(nextStep);
   }
 
   function handleContinue() {
@@ -1156,12 +1172,18 @@ function ConferenceApplyInner() {
   }
 
   async function handleSubmit() {
-    const questionCheck = validateAnswers(questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? [])), customAnswers);
+    const blocks = normalizeBlocks(roleConfig?.custom_questions ?? []);
+    const questionCheck = validateAnswers(questionsOf(blocks), customAnswers);
     if (!questionCheck.valid) {
       setCustomMissingIds(questionCheck.missingIds);
       // Submit now happens from the Overview step, but the answers themselves
-      // are edited on Experience — send the applicant back there so the
-      // missing-answer highlights are actually visible.
+      // are edited on Experience — send the applicant back there, to the
+      // specific section page holding the first missing answer, so the
+      // missing-answer highlight is actually visible (not just on-page).
+      const pages = splitIntoSections(blocks);
+      const firstMissingId = questionCheck.missingIds[0];
+      const targetPage = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === firstMissingId));
+      setQuestionPage(targetPage >= 0 ? targetPage : 0);
       const experienceIdx = stepSequence.indexOf('experience');
       if (experienceIdx >= 0) setStep(experienceIdx + 1);
       return;
@@ -2281,40 +2303,85 @@ function ConferenceApplyInner() {
       { value: 'advanced', label: 'ADVANCED', sub: '10–20 conferences' },
       { value: 'expert', label: 'EXPERT', sub: '20+ conferences or chairing experience' },
     ];
-    const blocks = normalizeBlocks(roleConfig?.custom_questions ?? []);
+    // Each Section block starts a new page within this step; no sections at
+    // all still produces exactly one (possibly empty) page, so the step keeps
+    // working unchanged for roles with a flat question list or none.
+    const pages = splitIntoSections(normalizeBlocks(roleConfig?.custom_questions ?? []));
+    const page = pages[questionPage] ?? { section: null, blocks: [] };
+    const isFirstPage = questionPage === 0;
+    const isLastPage = questionPage === pages.length - 1;
+
+    function handleBackExperience() {
+      if (!isFirstPage) { setQuestionPage(p => p - 1); return; }
+      setStep(s => s - 1);
+    }
+
+    function handleContinueExperience() {
+      const questionCheck = validateAnswers(questionsOf(page.blocks), customAnswers);
+      if (!questionCheck.valid) {
+        setCustomMissingIds(questionCheck.missingIds);
+        return;
+      }
+      setCustomMissingIds([]);
+      if (!isLastPage) { setQuestionPage(p => p + 1); return; }
+      handleContinue();
+    }
 
     return (
       <>
-        <h2 className="font-semibold text-base mb-6" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          About You
-        </h2>
+        {isFirstPage && (
+          <>
+            <h2 className="font-semibold text-base mb-6" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              About You
+            </h2>
 
-        <div className="mb-6">
-          <label className="block font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-            MUN Experience Level
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            {levels.map(lvl => (
-              <button
-                key={lvl.value}
-                onClick={() => setExperienceLevel(lvl.value)}
-                className="rounded-xl p-3 text-center focus:outline-none transition-all"
-                style={{
-                  border: experienceLevel === lvl.value ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                  backgroundColor: experienceLevel === lvl.value ? 'rgba(27,56,40,0.06)' : 'transparent',
-                }}
-              >
-                <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{lvl.label}</p>
-                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{lvl.sub}</p>
-              </button>
-            ))}
+            <div className="mb-6">
+              <label className="block font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                MUN Experience Level
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {levels.map(lvl => (
+                  <button
+                    key={lvl.value}
+                    onClick={() => setExperienceLevel(lvl.value)}
+                    className="rounded-xl p-3 text-center focus:outline-none transition-all"
+                    style={{
+                      border: experienceLevel === lvl.value ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                      backgroundColor: experienceLevel === lvl.value ? 'rgba(27,56,40,0.06)' : 'transparent',
+                    }}
+                  >
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{lvl.label}</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{lvl.sub}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {pages.length > 1 && (
+          <p className="mb-3" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted }}>
+            SECTION {questionPage + 1} OF {pages.length}
+          </p>
+        )}
+
+        {page.section && (
+          <div className="mb-4">
+            <h3 className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              {page.section.title}
+            </h3>
+            {page.section.description && (
+              <p className="text-sm mt-1" style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif" }}>
+                {page.section.description}
+              </p>
+            )}
           </div>
-        </div>
+        )}
 
-        {blocks.length > 0 && (
+        {page.blocks.length > 0 && (
           <div className="mb-6">
             <CustomQuestionsField
-              blocks={blocks}
+              blocks={page.blocks}
               answers={customAnswers}
               onChange={(next) => {
                 setCustomAnswers(next);
@@ -2329,7 +2396,7 @@ function ConferenceApplyInner() {
 
         <div className="flex justify-between mt-2 gap-4">
           <button
-            onClick={() => setStep(s => s - 1)}
+            onClick={handleBackExperience}
             className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
             style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
@@ -2338,7 +2405,7 @@ function ConferenceApplyInner() {
             ← BACK
           </button>
           <button
-            onClick={handleContinue}
+            onClick={handleContinueExperience}
             className="flex-1 rounded-xl py-3 px-8 text-sm font-bold focus:outline-none transition-colors flex items-center justify-center gap-2"
             style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -2522,7 +2589,12 @@ function ConferenceApplyInner() {
 
         <div className="flex justify-between mt-2 gap-4">
           <button
-            onClick={() => setStep(s => s - 1)}
+            onClick={() => {
+              // Landing back on Experience (skipped entirely for advisors)
+              // always re-opens its first section page.
+              if (stepSequence[step - 2] === 'experience') setQuestionPage(0);
+              setStep(s => s - 1);
+            }}
             className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
             style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: OUTFIT }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
