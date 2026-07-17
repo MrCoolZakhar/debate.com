@@ -78,7 +78,6 @@ export default function PledgeInvoicingCard({
   const [delegationAid, setDelegationAid] = useState<DelegationAidRequest | null>(null);
   const [delegationAidLoaded, setDelegationAidLoaded] = useState(false);
   const [aidModalOpen, setAidModalOpen] = useState(false);
-  const [aidStatement, setAidStatement] = useState('');
   const [aidRequestedAmount, setAidRequestedAmount] = useState('');
   const [aidCustomAnswers, setAidCustomAnswers] = useState<CustomAnswers>({});
   const [aidMissingIds, setAidMissingIds] = useState<string[]>([]);
@@ -111,10 +110,6 @@ export default function PledgeInvoicingCard({
 
   async function handleSubmitDelegationAid() {
     if (aidSubmitting || !session) return;
-    if (!aidStatement.trim()) {
-      setAidSubmitError("Please tell us about your delegation's circumstances.");
-      return;
-    }
     const questionCheck = validateAnswers(normalizeQuestions(aidQuestions), aidCustomAnswers);
     if (!questionCheck.valid) {
       setAidMissingIds(questionCheck.missingIds);
@@ -127,7 +122,7 @@ export default function PledgeInvoicingCard({
     const requestedAmountNum = aidRequestedAmount.trim() ? parseFloat(aidRequestedAmount) : null;
     const { data, error } = await supabase.rpc('submit_aid_request', {
       p_application_id: applicationId,
-      p_statement: aidStatement.trim(),
+      p_statement: null,
       p_requested_amount: requestedAmountNum != null && !Number.isNaN(requestedAmountNum) ? requestedAmountNum : null,
       p_custom_answers: aidCustomAnswers,
       p_society_id: societyId,
@@ -140,7 +135,6 @@ export default function PledgeInvoicingCard({
     }
     setAidSubmitting(false);
     setAidModalOpen(false);
-    setAidStatement('');
     setAidRequestedAmount('');
     setAidCustomAnswers({});
     setAidMissingIds([]);
@@ -470,21 +464,6 @@ export default function PledgeInvoicingCard({
 
             <div>
               <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                Tell us about your delegation&apos;s circumstances
-                <span className="ml-1 font-normal" style={{ color: '#9A8A78' }}>(required)</span>
-              </label>
-              <textarea
-                rows={4}
-                value={aidStatement}
-                onChange={(e) => setAidStatement(e.target.value)}
-                placeholder="Tell the organizers about your delegation's circumstances and what support you need"
-                className="w-full rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none"
-                style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                 Amount you are requesting for the delegation <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span>
               </label>
               <div className="flex items-center gap-2">
@@ -528,12 +507,12 @@ export default function PledgeInvoicingCard({
               </button>
               <button
                 onClick={handleSubmitDelegationAid}
-                disabled={aidSubmitting || !aidStatement.trim()}
+                disabled={aidSubmitting}
                 className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
                 style={{
-                  backgroundColor: aidSubmitting || !aidStatement.trim() ? '#DDD4C0' : '#1B3828',
-                  color: aidSubmitting || !aidStatement.trim() ? '#9A8A78' : '#EED98A',
-                  fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: aidSubmitting || !aidStatement.trim() ? 'default' : 'pointer',
+                  backgroundColor: aidSubmitting ? '#DDD4C0' : '#1B3828',
+                  color: aidSubmitting ? '#9A8A78' : '#EED98A',
+                  fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: aidSubmitting ? 'default' : 'pointer',
                 }}
               >
                 {aidSubmitting ? 'SUBMITTING…' : 'SUBMIT REQUEST'}
