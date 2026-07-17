@@ -29,6 +29,9 @@ interface TabEntry {
   /** Set for delegation leaders (head delegate / faculty advisor) — links to
    *  the delegation seat portal for the society they lead. */
   manageDelegationHref?: string;
+  /** Set for a rejected application whose role config has allow_resubmission
+   *  — links to the apply flow in edit mode. */
+  resubmitHref?: string;
 }
 
 interface LoadedData {
@@ -88,12 +91,14 @@ function isPublicConf(conf: CardConference): boolean {
 const first = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 
-/** A submitted-but-not-yet-accepted application shows a neutral "Applied" tag
- *  instead of the eventual role label, so applicants don't have to hunt for
- *  a conference they already applied to. Accepted/assigned/checked-in all
- *  keep the normal role label. */
+/** A submitted-but-not-yet-accepted application shows a neutral "Applied" tag,
+ *  and a rejected one shows a distinct "Not accepted" tag — instead of the
+ *  eventual role label, so applicants don't have to hunt for a conference
+ *  they already applied to (or wonder why a rejected role vanished).
+ *  Accepted/assigned/checked-in all keep the normal role label. */
 function roleOrAppliedTag(status: string, key: string, label: string, tone: RoleTag['tone'], countryName?: string): RoleTag {
   if (status === 'submitted') return { key, label: 'Applied', tone: 'amber' };
+  if (status === 'rejected') return { key, label: 'Not accepted', tone: 'rose' };
   return countryName ? { key, label, tone, countryName } : { key, label, tone };
 }
 
@@ -490,6 +495,7 @@ function CardGrid({ entries, tab, muted }: { entries: TabEntry[]; tab: TabKey; m
           roles={[e.tag]}
           href={tab === 'organizer' ? `/manage/${e.conference.slug}` : `/conferences/${e.conference.slug}`}
           manageDelegationHref={e.manageDelegationHref}
+          resubmitHref={e.resubmitHref}
           muted={muted}
         />
       ))}
@@ -640,13 +646,13 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         .select(`id, role, is_head_delegate, assigned_country_name, society_id, status, conferences (${CONF})`)
         .eq('user_id', user.id)
         .in('role', ['delegate', 'head-delegate'])
-        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in']),
+        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in', 'rejected']),
       supabase
         .from('applications')
-        .select(`id, assigned_committee_id, assigned_committee:conference_committees!assigned_committee_id (name), conferences (${CONF})`)
+        .select(`id, assigned_committee_id, assigned_committee:conference_committees!assigned_committee_id (name), status, conferences (${CONF})`)
         .eq('user_id', user.id)
         .eq('role', 'chair')
-        .in('status', ['accepted', 'assigned']),
+        .in('status', ['accepted', 'assigned', 'rejected']),
       supabase
         .from('conference_committees')
         .select(`id, name, conferences (${CONF})`)
@@ -656,18 +662,52 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         .select(`id, society_id, status, conferences (${CONF})`)
         .eq('user_id', user.id)
         .eq('role', 'faculty-advisor')
-        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in']),
+        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in', 'rejected']),
       supabase
         .from('applications')
         .select(`id, status, conferences (${CONF})`)
         .eq('user_id', user.id)
         .eq('role', 'observer')
-        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in']),
+        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in', 'rejected']),
       supabase
         .from('conference_organizers')
         .select(`role, conferences (${CONF})`)
         .eq('user_id', user.id),
     ]);
+
+    // Resubmission eligibility for rejected applications: a follow-up lookup
+    // against application_role_configs, scoped to just the conferences with a
+    // rejected row (readable here the same way the apply flow itself reads
+    // it — public conference or organizer, and a rejected applicant's
+    // conference is always the former).
+    const rejectedConfIds = new Set<string>();
+    const collectRejected = (rows: { status: string; conferences: CardConference | CardConference[] | null }[]) => {
+      for (const row of rows) {
+        if (row.status !== 'rejected') continue;
+        const conf = first(row.conferences);
+        if (conf) rejectedConfIds.add(conf.id);
+      }
+    };
+    collectRejected((delegateRes.data ?? []) as { status: string; conferences: CardConference | CardConference[] | null }[]);
+    collectRejected((chairAppRes.data ?? []) as { status: string; conferences: CardConference | CardConference[] | null }[]);
+    collectRejected((advisorRes.data ?? []) as { status: string; conferences: CardConference | CardConference[] | null }[]);
+    collectRejected((observerRes.data ?? []) as { status: string; conferences: CardConference | CardConference[] | null }[]);
+
+    const allowResubmitMap = new Map<string, boolean>(); // key: `${conferenceId}:${role}`
+    if (rejectedConfIds.size > 0) {
+      const { data: rcRows } = await supabase
+        .from('application_role_configs')
+        .select('conference_id, role, allow_resubmission')
+        .in('conference_id', Array.from(rejectedConfIds));
+      for (const rc of (rcRows ?? []) as { conference_id: string; role: string; allow_resubmission: boolean }[]) {
+        allowResubmitMap.set(`${rc.conference_id}:${rc.role}`, rc.allow_resubmission);
+      }
+    }
+    function resubmitHrefFor(conf: CardConference | null, role: string, status: string): string | undefined {
+      if (!conf || status !== 'rejected') return undefined;
+      if (!allowResubmitMap.get(`${conf.id}:${role}`)) return undefined;
+      return `/conferences/${conf.slug}/apply?role=${role}&edit=1`;
+    }
 
     // Delegate — role delegate/head-delegate; head dels (by role or the
     // "apply as head delegate for my society" flag) get the Head Delegate badge.
@@ -680,46 +720,53 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
       if (!conf) continue;
       const isHeadDel = row.role === 'head-delegate' || row.is_head_delegate;
       const isApplied = row.status === 'submitted';
+      const isRejected = row.status === 'rejected';
       const country = row.assigned_country_name ?? null;
       const tag: RoleTag = isHeadDel
         ? roleOrAppliedTag(row.status, 'head-delegate', 'Head Delegate', ROLE_TONE.delegate)
         : roleOrAppliedTag(row.status, 'delegate', country ? `Delegate · ${country}` : 'Delegate', ROLE_TONE.delegate, country ?? undefined);
       // Head delegates lead their society's block seats → surface the portal,
-      // but only once accepted — a merely-submitted application isn't a
-      // confirmed delegation lead yet.
-      const manageDelegationHref = !isApplied && isHeadDel && row.society_id ? `/delegation/${row.society_id}` : undefined;
-      if (!delegateMap.has(conf.id)) delegateMap.set(conf.id, { conference: conf, tag, manageDelegationHref });
+      // but only once accepted — a merely-submitted (or rejected) application
+      // isn't a confirmed delegation lead.
+      const manageDelegationHref = !isApplied && !isRejected && isHeadDel && row.society_id ? `/delegation/${row.society_id}` : undefined;
+      const resubmitHref = resubmitHrefFor(conf, row.role, row.status);
+      if (!delegateMap.has(conf.id)) delegateMap.set(conf.id, { conference: conf, tag, manageDelegationHref, resubmitHref });
     }
 
     // Chair — union of a chair-role application and direct committee
-    // chair_user_ids membership (invited chairs need no application at all).
+    // chair_user_ids membership (invited chairs need no application at all;
+    // treated as implicitly 'accepted' since they're already chairing).
     const chairMap = new Map<string, TabEntry>();
-    function upsertChair(conf: CardConference | null, committeeName: string | null) {
+    function upsertChair(conf: CardConference | null, committeeName: string | null, status: string, resubmitHref?: string) {
       if (!conf) return;
       const label = committeeName ? `Chair · ${committeeName}` : 'Chair';
+      const tag = roleOrAppliedTag(status, 'chair', label, ROLE_TONE.chair);
       const existing = chairMap.get(conf.id);
       if (existing) {
-        if (!existing.tag.label.includes('·') && committeeName) {
+        if (status !== 'rejected' && !existing.tag.label.includes('·') && committeeName) {
           existing.tag = { key: 'chair', label, tone: ROLE_TONE.chair };
         }
         if (!existing.conference.banner_url && conf.banner_url) existing.conference.banner_url = conf.banner_url;
         if (!existing.conference.logo_url && conf.logo_url) existing.conference.logo_url = conf.logo_url;
+        if (!existing.resubmitHref && resubmitHref) existing.resubmitHref = resubmitHref;
       } else {
-        chairMap.set(conf.id, { conference: conf, tag: { key: 'chair', label, tone: ROLE_TONE.chair } });
+        chairMap.set(conf.id, { conference: conf, tag, resubmitHref });
       }
     }
     for (const row of (chairAppRes.data ?? []) as {
       assigned_committee_id: string | null;
       assigned_committee: { name: string } | { name: string }[] | null;
+      status: string;
       conferences: CardConference | CardConference[] | null;
     }[]) {
-      upsertChair(first(row.conferences), first(row.assigned_committee)?.name ?? null);
+      const conf = first(row.conferences);
+      upsertChair(conf, first(row.assigned_committee)?.name ?? null, row.status, resubmitHrefFor(conf, 'chair', row.status));
     }
     for (const row of (chairCommitteeRes.data ?? []) as {
       name: string | null;
       conferences: CardConference | CardConference[] | null;
     }[]) {
-      upsertChair(first(row.conferences), row.name);
+      upsertChair(first(row.conferences), row.name, 'accepted');
     }
 
     // Advisor / Observer — plain role membership, one badge each.
@@ -728,12 +775,14 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
       const conf = first(row.conferences);
       if (conf && !advisorMap.has(conf.id)) {
         // A faculty advisor attached to a society leads that delegation's
-        // seats, but only once accepted, not on a bare submitted application.
-        const manageDelegationHref = row.status !== 'submitted' && row.society_id ? `/delegation/${row.society_id}` : undefined;
+        // seats, but only once accepted — not on a bare submitted or
+        // rejected application.
+        const manageDelegationHref = row.status !== 'submitted' && row.status !== 'rejected' && row.society_id ? `/delegation/${row.society_id}` : undefined;
         advisorMap.set(conf.id, {
           conference: conf,
           tag: roleOrAppliedTag(row.status, 'faculty-advisor', 'Faculty Advisor', ROLE_TONE.advisor),
           manageDelegationHref,
+          resubmitHref: resubmitHrefFor(conf, 'faculty-advisor', row.status),
         });
       }
     }
@@ -743,7 +792,11 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     for (const row of (observerRes.data ?? []) as { status: string; conferences: CardConference | CardConference[] | null }[]) {
       const conf = first(row.conferences);
       if (conf && !delegateMap.has(conf.id)) {
-        delegateMap.set(conf.id, { conference: conf, tag: roleOrAppliedTag(row.status, 'observer', 'Observer', ROLE_TONE.observer) });
+        delegateMap.set(conf.id, {
+          conference: conf,
+          tag: roleOrAppliedTag(row.status, 'observer', 'Observer', ROLE_TONE.observer),
+          resubmitHref: resubmitHrefFor(conf, 'observer', row.status),
+        });
       }
     }
 

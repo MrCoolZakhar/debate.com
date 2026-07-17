@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CalendarClock, MapPin, ArrowUpRight, Sparkles, Users } from 'lucide-react';
+import { CalendarClock, MapPin, ArrowUpRight, Sparkles, Users, RefreshCw } from 'lucide-react';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Pill, type PillTone, OUTFIT } from '@/app/account/accountUi';
 import { NEU, EASE } from '@/components/neu';
@@ -178,7 +178,7 @@ function CountdownChip({ label, tone }: { label: string; tone: PillTone }) {
 // ── Conference card ──────────────────────────────────────────────────────────
 
 export function PersonalConferenceCard({
-  conference, roles, href, manageHref, manageDelegationHref, muted = false,
+  conference, roles, href, manageHref, manageDelegationHref, resubmitHref, muted = false,
 }: {
   conference: CardConference;
   roles: RoleTag[];
@@ -189,6 +189,9 @@ export function PersonalConferenceCard({
   /** Optional "Manage delegation" affordance for delegation leaders (head
    *  delegate / faculty advisor) — links to the delegation seat portal. */
   manageDelegationHref?: string;
+  /** Set when a rejected application's role allows resubmission — links to
+   *  the apply flow in edit mode (?edit=1), prefilled from what was submitted. */
+  resubmitHref?: string;
   /** Past conferences render slightly muted. */
   muted?: boolean;
 }) {
@@ -333,6 +336,34 @@ export function PersonalConferenceCard({
           >
             <Users size={13} strokeWidth={2.6} style={{ color: NEU.forest }} />
             Manage delegation
+            <ArrowUpRight size={13} strokeWidth={2.6} />
+          </Link>
+        </div>
+      )}
+
+      {/* Resubmit affordance — rejected application, role allows resubmission */}
+      {resubmitHref && (
+        <div className="mt-3.5 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+          <Link
+            href={resubmitHref}
+            className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+            style={{
+              padding: '6px 13px',
+              borderRadius: 999,
+              backgroundColor: 'rgba(139,32,32,0.08)',
+              border: '1px solid rgba(139,32,32,0.22)',
+              color: '#8B2020',
+              fontFamily: OUTFIT,
+              fontSize: '12px',
+              fontWeight: 800,
+              letterSpacing: '0.03em',
+              textDecoration: 'none',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.14)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
+          >
+            <RefreshCw size={13} strokeWidth={2.6} />
+            Resubmit application
             <ArrowUpRight size={13} strokeWidth={2.6} />
           </Link>
         </div>
