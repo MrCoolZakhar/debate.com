@@ -1530,7 +1530,7 @@ export default function SettingsPage() {
             Application opening is not available until Financial Onboarding is completed.
           </p>
           <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
-            Set up how your conference gets paid before you can configure and open applications. Even free conferences must choose a method — if yours is free, pick Manual and note &quot;This conference is free.&quot;
+            Set up how your conference gets paid before you can configure and open applications. Even free conferences must choose a method, so if yours is free, pick Manual and note &quot;This conference is free.&quot;
           </p>
           <button
             onClick={() => router.push(`/manage/${conference.slug}/financials`)}

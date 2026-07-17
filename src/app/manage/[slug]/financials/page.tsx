@@ -828,7 +828,7 @@ export default function FinancialsPage() {
               <p style={mutedCaption}>
                 No processing fee, but everything is tracked manually.
               </p>
-              <p style={mutedCaption}>
+              <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 10, padding: '10px 12px', lineHeight: 1.5 }}>
                 Running a free conference? Choose Manual and write &quot;This conference is free&quot; in the instructions — you still need a method set before applications can open.
               </p>
 
