@@ -22,7 +22,7 @@ export function SectionCard({ children, className = '' }: { children: React.Reac
 
 // ── Pay gate state ───────────────────────────────────────────────────────────
 // Single source of truth for "is this application's gated content visible /
-// is payment actionable yet", shared by PayGate (content) and PaymentPanel
+// is payment actionable yet", shared by PayGate (content) and the /pay page
 // (the "available once accepted" note).
 
 export type GateState = 'full' | 'locked' | 'under_review';

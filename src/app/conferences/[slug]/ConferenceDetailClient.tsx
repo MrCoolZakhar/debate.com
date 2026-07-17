@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock, ScrollText } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock, ScrollText, CreditCard } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
@@ -1570,7 +1570,6 @@ export default function ConferenceDetailClient() {
                   conferenceId={conference.id}
                   conferenceSlug={conference.slug}
                   contactEmail={conference.contact_email}
-                  defaultFeeCurrency={conference.fee_currency}
                   myApplications={myApplications}
                   roleConfigs={roleConfigs}
                   myAllocation={myAllocation}
@@ -1782,6 +1781,9 @@ export default function ConferenceDetailClient() {
                         const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'rgba(237,231,216,0.8)', hint: '' };
                         const allocCountry = myAllocation ? getCountryByName(myAllocation.country_name) : null;
                         const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
+                        const myRolePaymentTiming = roleConfigs.find(r => r.role === myApp.role)?.payment_timing;
+                        const payable = myApp.status === 'accepted' || myApp.status === 'assigned' || myApp.status === 'checked-in'
+                          || (myApp.status === 'submitted' && myRolePaymentTiming === 'anytime');
                         return (
                           <>
                             <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 8px 0' }}>
@@ -1802,6 +1804,18 @@ export default function ConferenceDetailClient() {
                               <p className="text-xs" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: '4px 0 0 0' }}>
                                 {meta.hint}
                               </p>
+                            )}
+                            {payable && (
+                              <Link
+                                href={`/conferences/${slug}/pay`}
+                                className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-all focus:outline-none"
+                                style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                              >
+                                <CreditCard size={15} strokeWidth={2.2} />
+                                PAY AND REQUEST AID
+                              </Link>
                             )}
                             {myAllocation && (
                               <div

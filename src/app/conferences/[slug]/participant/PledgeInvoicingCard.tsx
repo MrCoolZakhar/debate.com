@@ -1,10 +1,10 @@
 'use client';
 
 // PLEDGE & INVOICING card, advisor-only. A pledge is only ever about paying
-// for delegation spots (the advisor's own fee is handled by the universal
-// PaymentPanel above, like any other participant). Settled spots render
-// straight from the invoices table (payer RLS read); unpaid spots get a PAY
-// affordance offering one spot or all remaining, via kind 'pledge_spots'.
+// for delegation spots (the advisor's own fee is handled on the /pay page,
+// like any other participant). Settled spots render straight from the
+// invoices table (payer RLS read); unpaid spots get a PAY affordance
+// offering one spot or all remaining, via kind 'pledge_spots'.
 
 import { useEffect, useState } from 'react';
 import { CreditCard, Mail, Check, TriangleAlert } from 'lucide-react';

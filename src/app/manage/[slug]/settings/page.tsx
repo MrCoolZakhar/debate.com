@@ -1364,8 +1364,8 @@ export default function SettingsPage() {
 
   // Applications can't be configured or opened until the conference has
   // chosen a payment method, even free conferences need one on file (they
-  // just pick Manual and note it's free) so PaymentPanel/PledgeInvoicingCard
-  // always have somewhere to point delegates.
+  // just pick Manual and note it's free) so the /pay page and
+  // PledgeInvoicingCard always have somewhere to point delegates.
   const applicationsGated = activeTab === 'applications' && !conference.payment_method;
 
   // Inner grouped sub-card. These sit *inside* the raised floating panel, so

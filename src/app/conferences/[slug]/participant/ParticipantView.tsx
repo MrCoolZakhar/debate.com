@@ -2,9 +2,10 @@
 
 // Participant view, the person tab. Orchestrates: role pill switcher (when
 // the viewer has more than one application here), the pay-gated content for
-// the selected application, the payment panel, and Q&R, the latter two are
-// never gated. Deliberately has no conference summary card: the page around
-// this tab already is one.
+// the selected application, and Q&R, the latter never gated. Payment itself
+// lives on its own /pay page now, reached from the "YOUR APPLICATION" card.
+// Deliberately has no conference summary card: the page around this tab
+// already is one.
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -17,7 +18,6 @@ import DelegateParticipant from './DelegateParticipant';
 import AdvisorParticipant from './AdvisorParticipant';
 import ChairParticipant from './ChairParticipant';
 import ObserverParticipant from './ObserverParticipant';
-import PaymentPanel from './PaymentPanel';
 import RequestsPanel from './RequestsPanel';
 import ApplyPointer from './ApplyPointer';
 import type { ParticipantApplication, ParticipantRoleConfig, ParticipantAllocation, ParticipantCommittee } from './types';
@@ -52,7 +52,6 @@ export interface ParticipantViewProps {
   conferenceId: string;
   conferenceSlug: string;
   contactEmail: string | null;
-  defaultFeeCurrency: string;
   myApplications: ParticipantApplication[];
   roleConfigs: ParticipantRoleConfig[];
   myAllocation: ParticipantAllocation | null;
@@ -73,7 +72,7 @@ export interface ParticipantViewProps {
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidQuestions, aidIntro,
+  conferenceId, conferenceSlug, contactEmail, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidQuestions, aidIntro,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -89,7 +88,6 @@ export default function ParticipantView({
   const roleConfig = roleConfigs.find(rc => rc.role === selected.role) ?? null;
   const paymentTiming = roleConfig?.payment_timing ?? 'anytime';
   const gateState = getGateState(paymentTiming, selected.status, selected.payment_status);
-  const payableNow = gateState !== 'under_review';
 
   return (
     <div className="flex flex-col gap-6">
@@ -149,27 +147,6 @@ export default function ParticipantView({
               </div>
             </SectionCard>
           )}
-
-          <PaymentPanel
-            key={selected.id}
-            applicationId={selected.id}
-            conferenceId={conferenceId}
-            feeAmount={roleConfig?.fee_amount ?? 0}
-            feeCurrency={roleConfig?.fee_currency ?? defaultFeeCurrency}
-            feePhases={roleConfig?.fee_phases ?? null}
-            allowPartial={roleConfig?.allow_partial_payments ?? false}
-            paymentStatus={selected.payment_status}
-            amountPaid={selected.amount_paid}
-            payableNow={payableNow}
-            contactEmail={contactEmail}
-            financialAidEnabled={financialAidEnabled}
-            aidQuestions={aidQuestions}
-            aidIntro={aidIntro}
-            paymentsEnabled={paymentsEnabled}
-            externalPaymentUrl={externalPaymentUrl}
-            externalPaymentNote={externalPaymentNote}
-            manualActive={manualActive}
-          />
 
           <PayGate gateState={gateState}>
             {DELEGATE_ROLES.has(selected.role) ? (
