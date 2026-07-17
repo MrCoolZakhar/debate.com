@@ -7,6 +7,7 @@
 // requests lives alongside this in AidRequestsSection, same tab.
 
 import { useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -52,6 +53,9 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
   const [introSaving, setIntroSaving] = useState(false);
   const [introSaved, setIntroSaved] = useState(false);
   const [error, setError] = useState('');
+  // Decoupled from `enabled` — organizers can open the form to edit it
+  // whether or not aid is currently switched on.
+  const [expanded, setExpanded] = useState(false);
 
   async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: FormBlock[] }>): Promise<boolean> {
     if (!session) {
@@ -116,7 +120,22 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
         <p className="text-xs mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{error}</p>
       )}
 
-      {enabled && (
+      {!expanded && (
+        <div className="flex justify-center pt-1">
+          <button
+            onClick={() => setExpanded(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold focus:outline-none transition-colors"
+            style={{ color: NEU.muted, fontFamily: OUTFIT }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+          >
+            <ChevronDown size={14} />
+            Edit questions
+          </button>
+        </div>
+      )}
+
+      {expanded && (
         <>
           <div className="mb-5">
             <label className="block text-xs font-semibold mb-1.5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
@@ -155,6 +174,19 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
             Aid questions
           </p>
           <QuestionBuilder value={blocks} onChange={handleBlocksChange} />
+
+          <div className="flex justify-center pt-2">
+            <button
+              onClick={() => setExpanded(false)}
+              className="flex items-center gap-1.5 text-xs font-semibold focus:outline-none transition-colors"
+              style={{ color: NEU.muted, fontFamily: OUTFIT }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+            >
+              <ChevronUp size={14} />
+              Collapse
+            </button>
+          </div>
         </>
       )}
     </NeuCard>
