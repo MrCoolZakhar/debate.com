@@ -12,7 +12,7 @@ import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { currencySymbol } from '@/lib/utils';
-import { type FormBlock, type CustomAnswers, questionsOf, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
+import { type FormBlock, type CustomAnswers, questionsOf, splitIntoSections, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { OUTFIT } from './shared';
 
@@ -39,8 +39,36 @@ export default function AidRequestModal({
   const [missingIds, setMissingIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  // Each Section block gets its own page within this modal (see
+  // ConferenceApplyClient's Experience step for the same pattern). The modal
+  // stays mounted across opens (the caller just flips `open`), so resetting
+  // to page 0 on open is a state-adjustment-on-prop-change done during render
+  // (React's documented alternative to an effect for this exact case) rather
+  // than a useEffect, which would fire a render late and cascade.
+  const [page, setPage] = useState(0);
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setPage(0);
+  }
 
   if (!open) return null;
+
+  const pages = splitIntoSections(aidBlocks);
+  const current = pages[page] ?? { section: null, blocks: [] };
+  const isFirst = page === 0;
+  const isLast = page === pages.length - 1;
+
+  function handleNext() {
+    const questionCheck = validateAnswers(questionsOf(current.blocks), customAnswers);
+    if (!questionCheck.valid) {
+      setMissingIds(questionCheck.missingIds);
+      setSubmitError('Please answer all required questions.');
+      return;
+    }
+    setSubmitError('');
+    setPage(p => p + 1);
+  }
 
   async function handleSubmit() {
     if (submitting || !session) return;
@@ -48,6 +76,11 @@ export default function AidRequestModal({
     if (!questionCheck.valid) {
       setMissingIds(questionCheck.missingIds);
       setSubmitError('Please answer all required questions.');
+      // Jump to the page holding the first missing answer so the highlight
+      // is actually visible, not just recorded off-page.
+      const firstMissingId = questionCheck.missingIds[0];
+      const targetPage = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === firstMissingId));
+      setPage(targetPage >= 0 ? targetPage : 0);
       return;
     }
     setSubmitting(true);
@@ -85,15 +118,34 @@ export default function AidRequestModal({
           {societyId ? 'Request Financial Aid for Your Delegation' : 'Request Financial Aid'}
         </p>
 
-        {aidIntro && (
+        {isFirst && aidIntro && (
           <p className="text-sm" style={{ color: '#6E5F4E', fontFamily: OUTFIT, lineHeight: 1.6 }}>
             {aidIntro}
           </p>
         )}
 
-        {aidBlocks.length > 0 && (
+        {pages.length > 1 && (
+          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: '#9A8A78' }}>
+            SECTION {page + 1} OF {pages.length}
+          </p>
+        )}
+
+        {current.section && (
+          <div>
+            <h3 className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              {current.section.title}
+            </h3>
+            {current.section.description && (
+              <p className="text-sm mt-1" style={{ color: '#6E5F4E', fontFamily: OUTFIT }}>
+                {current.section.description}
+              </p>
+            )}
+          </div>
+        )}
+
+        {current.blocks.length > 0 && (
           <CustomQuestionsField
-            blocks={aidBlocks}
+            blocks={current.blocks}
             answers={customAnswers}
             onChange={(next) => {
               setCustomAnswers(next);
@@ -105,27 +157,29 @@ export default function AidRequestModal({
           />
         )}
 
-        <div>
-          <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            Amount you are requesting <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span>
-          </label>
-          <div className="flex items-center gap-2">
-            <span style={{ color: '#6E5F4E', fontFamily: OUTFIT, fontWeight: 700 }}>{currencySymbol(currency)}</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={requestedAmount}
-              onChange={(e) => setRequestedAmount(e.target.value)}
-              placeholder="0.00"
-              className="flex-1 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-              style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
-            />
+        {isLast && (
+          <div>
+            <label className="block font-semibold text-xs mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              Amount you are requesting <span className="font-normal" style={{ color: '#9A8A78' }}>(optional)</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <span style={{ color: '#6E5F4E', fontFamily: OUTFIT, fontWeight: 700 }}>{currencySymbol(currency)}</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={requestedAmount}
+                onChange={(e) => setRequestedAmount(e.target.value)}
+                placeholder="0.00"
+                className="flex-1 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+              />
+            </div>
+            <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              Optional. The organizing team decides the final amount.
+            </p>
           </div>
-          <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            Optional. The organizing team decides the final amount.
-          </p>
-        </div>
+        )}
 
         {submitError && (
           <div
@@ -141,15 +195,15 @@ export default function AidRequestModal({
 
         <div className="flex gap-3">
           <button
-            onClick={onClose}
+            onClick={isFirst ? onClose : () => { setSubmitError(''); setPage(p => p - 1); }}
             disabled={submitting}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
             style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting ? 'default' : 'pointer' }}
           >
-            CANCEL
+            {isFirst ? 'CANCEL' : 'BACK'}
           </button>
           <button
-            onClick={handleSubmit}
+            onClick={isLast ? handleSubmit : handleNext}
             disabled={submitting}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
             style={{
@@ -158,7 +212,7 @@ export default function AidRequestModal({
               fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting ? 'default' : 'pointer',
             }}
           >
-            {submitting ? 'SUBMITTING…' : 'SUBMIT REQUEST'}
+            {isLast ? (submitting ? 'SUBMITTING…' : 'SUBMIT REQUEST') : 'NEXT'}
           </button>
         </div>
       </div>
