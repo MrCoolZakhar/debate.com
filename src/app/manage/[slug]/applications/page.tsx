@@ -1057,6 +1057,11 @@ export default function ApplicationsPage() {
     const seq = ++loadSeq.current;
     if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
+    // Materialize this conference's invoices first, so the gating query right
+    // below is guaranteed to see any app-fee invoice a submitted application
+    // now owes (same sync-before-read pattern as financials/invoices and
+    // useInvoiceTotals).
+    await supabase.rpc('sync_conference_invoices', { p_conference_id: conference.id });
     const [appRes, cfgRes, gatingRes] = await Promise.all([
       supabase
         .from('applications')
