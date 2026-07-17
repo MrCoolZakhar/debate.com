@@ -2590,6 +2590,12 @@ export default function ApplicationsPage() {
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
         const questions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? []));
         const answers = app.custom_answers ?? {};
+        // Keys in custom_answers with no matching current question — the
+        // question was edited/removed since this applicant answered it. Their
+        // answer is still shown (never silently dropped), just without a
+        // matching label.
+        const questionIds = new Set(questions.map(q => q.id));
+        const orphanedAnswers = Object.entries(answers).filter(([key]) => !questionIds.has(key));
         const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
         // Double-click guard, the row's controls grey out while its write is in flight.
         const rowBusy = busyIds.has(app.id);
@@ -2787,7 +2793,7 @@ export default function ApplicationsPage() {
                   <MessageSquareText size={12} />
                   APPLICATION ANSWERS
                 </p>
-                {questions.length === 0 ? (
+                {questions.length === 0 && orphanedAnswers.length === 0 ? (
                   <p className="text-xs italic" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                     No custom questions configured for this role.
                   </p>
@@ -2804,6 +2810,29 @@ export default function ApplicationsPage() {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+                {orphanedAnswers.length > 0 && (
+                  <div className="mt-4 pt-4" style={{ borderTop: '1px dashed #DDD4C0' }}>
+                    <p className="flex items-center gap-2 text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.1em' }}>
+                      <MessageSquareText size={12} />
+                      ADDITIONAL ANSWERS (QUESTION SINCE CHANGED)
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      {orphanedAnswers.map(([key, value]) => {
+                        const ans = Array.isArray(value) ? value.join(', ') : value;
+                        return (
+                          <div key={key}>
+                            <p className="text-xs italic mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              This question no longer exists in the current form.
+                            </p>
+                            <p className="text-sm whitespace-pre-wrap" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: ans ? 'normal' : 'italic' }}>
+                              {ans || 'No answer provided.'}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

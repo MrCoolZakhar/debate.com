@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, Copy, GripVertical, Heading, Plus, Rows3, X } from 'lucide-react';
+import { ChevronUp, ChevronDown, Copy, GripVertical, Heading, Lock, Plus, Rows3, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { Pill } from '@/app/account/accountUi';
 import {
@@ -28,8 +28,9 @@ function bgInput(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
 
 // ── Question edit modal ──────────────────────────────────────────────────────
 
-function QuestionEditModal({ existing, onSave, onClose }: {
+function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
   existing: CustomQuestion | null;
+  fieldsLocked: boolean;
   onSave: (q: CustomQuestion) => void;
   onClose: () => void;
 }) {
@@ -43,9 +44,10 @@ function QuestionEditModal({ existing, onSave, onClose }: {
   const choice = isChoiceType(type);
   const showPlaceholder = type === 'short_text' || type === 'paragraph' || type === 'number';
   const validOptions = options.map(o => o.trim()).filter(Boolean);
-  const canSave = label.trim().length > 0 && (!choice || validOptions.length >= 2);
+  const canSave = fieldsLocked || (label.trim().length > 0 && (!choice || validOptions.length >= 2));
 
   function moveOption(idx: number, dir: -1 | 1) {
+    if (fieldsLocked) return;
     setOptions(prev => {
       const next = [...prev];
       const target = idx + dir;
@@ -56,6 +58,10 @@ function QuestionEditModal({ existing, onSave, onClose }: {
   }
 
   function handleSave() {
+    if (fieldsLocked && existing) {
+      onSave({ ...existing, help: help.trim() ? help.trim() : undefined });
+      return;
+    }
     if (!canSave) return;
     onSave({
       id: existing?.id ?? crypto.randomUUID(),
@@ -68,6 +74,10 @@ function QuestionEditModal({ existing, onSave, onClose }: {
     });
   }
 
+  const lockedFieldStyle: React.CSSProperties = fieldsLocked
+    ? { ...inputStyle, backgroundColor: '#F0EDE6', color: '#9A8A78', cursor: 'not-allowed' }
+    : inputStyle;
+
   return (
     <Portal><div
       className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 overflow-y-auto"
@@ -79,9 +89,14 @@ function QuestionEditModal({ existing, onSave, onClose }: {
         style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-black text-lg mb-5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+        <h2 className="font-black text-lg mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           {existing ? 'Edit Question' : 'Add Question'}
         </h2>
+        {fieldsLocked && (
+          <p className="flex items-center gap-1.5 text-xs mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <Lock size={11} /> Locked — only help text can be changed for a question with submitted answers.
+          </p>
+        )}
 
         <div className="mb-4">
           <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -92,7 +107,8 @@ function QuestionEditModal({ existing, onSave, onClose }: {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="e.g. Why do you want to attend this conference?"
-            style={inputStyle}
+            style={lockedFieldStyle}
+            disabled={fieldsLocked}
             onFocus={fgInput}
             onBlur={bgInput}
           />
@@ -107,14 +123,16 @@ function QuestionEditModal({ existing, onSave, onClose }: {
               <button
                 key={t}
                 type="button"
-                onClick={() => setType(t)}
+                onClick={() => { if (!fieldsLocked) setType(t); }}
+                disabled={fieldsLocked}
                 className="py-2 px-3 rounded-[10px] font-bold text-xs focus:outline-none transition-all"
                 style={{
-                  backgroundColor: type === t ? '#1B3828' : 'transparent',
-                  color: type === t ? '#EED98A' : '#1C1410',
-                  border: type === t ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                  backgroundColor: type === t ? (fieldsLocked ? '#DDD4C0' : '#1B3828') : 'transparent',
+                  color: type === t ? (fieldsLocked ? '#9A8A78' : '#EED98A') : (fieldsLocked ? '#B8AC98' : '#1C1410'),
+                  border: type === t ? `1.5px solid ${fieldsLocked ? '#DDD4C0' : '#1B3828'}` : '1.5px solid #DDD4C0',
                   fontFamily: "'Outfit', sans-serif",
                   letterSpacing: '0.04em',
+                  cursor: fieldsLocked ? 'not-allowed' : 'pointer',
                 }}
               >
                 {QUESTION_TYPE_LABELS[t].toUpperCase()}
@@ -136,34 +154,35 @@ function QuestionEditModal({ existing, onSave, onClose }: {
                     value={opt}
                     onChange={(e) => setOptions(prev => prev.map((o, i) => (i === idx ? e.target.value : o)))}
                     placeholder={`Option ${idx + 1}`}
-                    style={{ ...inputStyle, flex: 1 }}
+                    style={{ ...lockedFieldStyle, flex: 1 }}
+                    disabled={fieldsLocked}
                     onFocus={fgInput}
                     onBlur={bgInput}
                   />
                   <button
                     type="button"
                     onClick={() => moveOption(idx, -1)}
-                    disabled={idx === 0}
+                    disabled={fieldsLocked || idx === 0}
                     className="p-1.5 rounded-lg focus:outline-none"
-                    style={{ color: idx === 0 ? '#DDD4C0' : '#1C1410', cursor: idx === 0 ? 'default' : 'pointer' }}
+                    style={{ color: fieldsLocked || idx === 0 ? '#DDD4C0' : '#1C1410', cursor: fieldsLocked || idx === 0 ? 'default' : 'pointer' }}
                   >
                     <ChevronUp size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => moveOption(idx, 1)}
-                    disabled={idx === options.length - 1}
+                    disabled={fieldsLocked || idx === options.length - 1}
                     className="p-1.5 rounded-lg focus:outline-none"
-                    style={{ color: idx === options.length - 1 ? '#DDD4C0' : '#1C1410', cursor: idx === options.length - 1 ? 'default' : 'pointer' }}
+                    style={{ color: fieldsLocked || idx === options.length - 1 ? '#DDD4C0' : '#1C1410', cursor: fieldsLocked || idx === options.length - 1 ? 'default' : 'pointer' }}
                   >
                     <ChevronDown size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => setOptions(prev => prev.filter((_, i) => i !== idx))}
-                    disabled={options.length <= 2}
+                    disabled={fieldsLocked || options.length <= 2}
                     className="p-1.5 rounded-lg focus:outline-none"
-                    style={{ color: options.length <= 2 ? '#DDD4C0' : '#8B2020', cursor: options.length <= 2 ? 'default' : 'pointer' }}
+                    style={{ color: fieldsLocked || options.length <= 2 ? '#DDD4C0' : '#8B2020', cursor: fieldsLocked || options.length <= 2 ? 'default' : 'pointer' }}
                   >
                     <X size={14} />
                   </button>
@@ -172,13 +191,14 @@ function QuestionEditModal({ existing, onSave, onClose }: {
             </div>
             <button
               type="button"
-              onClick={() => setOptions(prev => [...prev, ''])}
+              onClick={() => { if (!fieldsLocked) setOptions(prev => [...prev, '']); }}
+              disabled={fieldsLocked}
               className="mt-2 flex items-center gap-1 text-xs font-semibold focus:outline-none hover:underline"
-              style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
+              style={{ color: fieldsLocked ? '#B8AC98' : '#1B3828', fontFamily: "'Outfit', sans-serif", cursor: fieldsLocked ? 'not-allowed' : 'pointer' }}
             >
               <Plus size={12} /> ADD OPTION
             </button>
-            {validOptions.length < 2 && (
+            {!fieldsLocked && validOptions.length < 2 && (
               <p className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
                 At least 2 options are required.
               </p>
@@ -195,7 +215,8 @@ function QuestionEditModal({ existing, onSave, onClose }: {
               type="text"
               value={placeholder}
               onChange={(e) => setPlaceholder(e.target.value)}
-              style={inputStyle}
+              style={lockedFieldStyle}
+              disabled={fieldsLocked}
               onFocus={fgInput}
               onBlur={bgInput}
             />
@@ -222,11 +243,12 @@ function QuestionEditModal({ existing, onSave, onClose }: {
             type="checkbox"
             id="qb-required"
             checked={required}
-            onChange={(e) => setRequired(e.target.checked)}
+            onChange={(e) => { if (!fieldsLocked) setRequired(e.target.checked); }}
+            disabled={fieldsLocked}
             className="w-4 h-4 cursor-pointer"
             style={{ accentColor: '#1B3828' }}
           />
-          <label htmlFor="qb-required" className="text-sm font-medium cursor-pointer" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <label htmlFor="qb-required" className="text-sm font-medium cursor-pointer" style={{ color: fieldsLocked ? '#9A8A78' : '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
             Required question
           </label>
         </div>
@@ -367,8 +389,9 @@ const ACCENT: Record<FormBlock['kind'], string | null> = {
   section: '#1B3828',
 };
 
-function BlockCard({ block, onEdit, onDuplicate, onDelete }: {
+function BlockCard({ block, locked, onEdit, onDuplicate, onDelete }: {
   block: FormBlock;
+  locked: boolean;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -381,7 +404,7 @@ function BlockCard({ block, onEdit, onDuplicate, onDelete }: {
     >
       {accent && <div style={{ height: 4, backgroundColor: accent }} />}
       <div className="p-4 flex items-start gap-2.5">
-        <GripVertical size={15} className="mt-0.5 flex-shrink-0" style={{ color: '#B8AC98', cursor: 'grab' }} />
+        <GripVertical size={15} className="mt-0.5 flex-shrink-0" style={{ color: locked ? '#DDD4C0' : '#B8AC98', cursor: locked ? 'not-allowed' : 'grab' }} />
         <div className="flex-1 min-w-0">
           {block.kind === 'question' ? (
             <>
@@ -391,6 +414,9 @@ function BlockCard({ block, onEdit, onDuplicate, onDelete }: {
               <div className="flex items-center gap-2 mb-2">
                 <Pill tone="neutral" size="sm">{QUESTION_TYPE_LABELS[block.type]}</Pill>
                 {block.required && <Pill tone="forest" size="sm">Required</Pill>}
+                {locked && (
+                  <Pill tone="neutral" size="sm" icon={<Lock size={9} />}>Locked</Pill>
+                )}
               </div>
             </>
           ) : (
@@ -425,13 +451,15 @@ function BlockCard({ block, onEdit, onDuplicate, onDelete }: {
             >
               <Copy size={11} /> DUPLICATE
             </button>
-            <button
-              onClick={onDelete}
-              className="text-xs font-semibold focus:outline-none hover:underline"
-              style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
-            >
-              DELETE
-            </button>
+            {!locked && (
+              <button
+                onClick={onDelete}
+                className="text-xs font-semibold focus:outline-none hover:underline"
+                style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+              >
+                DELETE
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -447,13 +475,19 @@ type ModalState =
   | { kind: 'section'; existing: SectionBlock | null }
   | null;
 
-export default function QuestionBuilder({ value, onChange }: {
+export default function QuestionBuilder({ value, onChange, locked = false }: {
   value: FormBlock[];
   onChange: (next: FormBlock[]) => void;
+  /** True once the role has submitted applications — existing questions can no
+   *  longer be deleted or reordered (protects already-collected answers), but
+   *  new questions/titles/sections may still be added and help text edited. */
+  locked?: boolean;
 }) {
   const [modal, setModal] = useState<ModalState>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const isLocked = (block: FormBlock) => locked && block.kind === 'question';
 
   function handleSaveQuestion(q: CustomQuestion) {
     const block: FormBlock = { ...q, kind: 'question' };
@@ -482,6 +516,8 @@ export default function QuestionBuilder({ value, onChange }: {
   }
 
   function handleDelete(id: string) {
+    const block = value.find(b => b.id === id);
+    if (block && isLocked(block)) return;
     onChange(value.filter(b => b.id !== id));
   }
 
@@ -490,6 +526,7 @@ export default function QuestionBuilder({ value, onChange }: {
     dragIndexRef.current = null;
     setDragOverIndex(null);
     if (from === null || from === dropIdx) return;
+    if (isLocked(value[from])) return;
     const next = [...value];
     const [moved] = next.splice(from, 1);
     next.splice(from < dropIdx ? dropIdx - 1 : dropIdx, 0, moved);
@@ -504,27 +541,31 @@ export default function QuestionBuilder({ value, onChange }: {
             No questions yet.
           </p>
         ) : (
-          value.map((block, idx) => (
-            <div key={block.id}>
-              {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
-                <div className="h-0.5 rounded-full mx-2 mb-2" style={{ backgroundColor: '#1B3828' }} />
-              )}
-              <div
-                draggable
-                onDragStart={() => { dragIndexRef.current = idx; }}
-                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(idx); }}
-                onDrop={() => handleDrop(idx)}
-                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
-              >
-                <BlockCard
-                  block={block}
-                  onEdit={() => handleEdit(block)}
-                  onDuplicate={() => handleDuplicate(idx)}
-                  onDelete={() => handleDelete(block.id)}
-                />
+          value.map((block, idx) => {
+            const blockLocked = isLocked(block);
+            return (
+              <div key={block.id}>
+                {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
+                  <div className="h-0.5 rounded-full mx-2 mb-2" style={{ backgroundColor: '#1B3828' }} />
+                )}
+                <div
+                  draggable={!blockLocked}
+                  onDragStart={() => { if (!blockLocked) dragIndexRef.current = idx; }}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverIndex(idx); }}
+                  onDrop={() => handleDrop(idx)}
+                  onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
+                >
+                  <BlockCard
+                    block={block}
+                    locked={blockLocked}
+                    onEdit={() => handleEdit(block)}
+                    onDuplicate={() => handleDuplicate(idx)}
+                    onDelete={() => handleDelete(block.id)}
+                  />
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -561,6 +602,7 @@ export default function QuestionBuilder({ value, onChange }: {
       {modal?.kind === 'question' && (
         <QuestionEditModal
           existing={modal.existing}
+          fieldsLocked={locked && modal.existing !== null}
           onSave={handleSaveQuestion}
           onClose={() => setModal(null)}
         />
