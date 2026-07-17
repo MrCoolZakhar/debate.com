@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, X,
+  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -1362,6 +1362,12 @@ export default function SettingsPage() {
   // `conference` only changes once refreshConferenceQuiet() confirms a write.
   const view: Conference = conference;
 
+  // Applications can't be configured or opened until the conference has
+  // chosen a payment method, even free conferences need one on file (they
+  // just pick Manual and note it's free) so PaymentPanel/PledgeInvoicingCard
+  // always have somewhere to point delegates.
+  const applicationsGated = activeTab === 'applications' && !conference.payment_method;
+
   // Inner grouped sub-card. These sit *inside* the raised floating panel, so
   // they read as quiet content groups (thicker 1.5px edge, a whisper of warm
   // shadow) and let the panel itself stay the protagonist surface.
@@ -1507,8 +1513,39 @@ export default function SettingsPage() {
             </div>
           </div>
 
+      {/* ── APPLICATIONS TAB — locked until a payment method is on file ── */}
+      {applicationsGated && (
+        <div className="flex flex-col items-center text-center" style={{ ...cardStyle, padding: '48px 32px' }}>
+          <span
+            className="flex items-center justify-center flex-shrink-0 mb-5"
+            style={{
+              width: '56px', height: '56px', borderRadius: '16px',
+              background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
+              boxShadow: '0 6px 16px rgba(27,56,40,0.28)',
+            }}
+          >
+            <Lock size={24} strokeWidth={2.1} style={{ color: '#EED98A' }} />
+          </span>
+          <p className="font-black text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", maxWidth: '420px' }}>
+            Application opening is not available until Financial Onboarding is completed.
+          </p>
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
+            Set up how your conference gets paid before you can configure and open applications. Even free conferences must choose a method — if yours is free, pick Manual and note &quot;This conference is free.&quot;
+          </p>
+          <button
+            onClick={() => router.push(`/manage/${conference.slug}/financials`)}
+            className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em', cursor: 'pointer' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            Go to Financial Settings
+          </button>
+        </div>
+      )}
+
       {/* ── APPLICATIONS TAB ── */}
-      {activeTab === 'applications' && <div style={cardStyle}>
+      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Application Windows
         </p>
@@ -1840,7 +1877,7 @@ export default function SettingsPage() {
       </div>}
 
       {/* ── Delegate preference mode card ── */}
-      {activeTab === 'applications' && <div style={cardStyle}>
+      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Delegate Preferences
         </p>
@@ -1886,7 +1923,7 @@ export default function SettingsPage() {
       </div>}
 
       {/* ── Delegation allocation swaps card ── */}
-      {activeTab === 'applications' && <div style={cardStyle}>
+      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Delegation Allocation Swaps
         </p>
@@ -2350,7 +2387,7 @@ export default function SettingsPage() {
       )}
 
       {/* ── Minimum age card ── */}
-      {activeTab === 'applications' && <div style={cardStyle}>
+      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Minimum Age
         </p>
@@ -2406,7 +2443,7 @@ export default function SettingsPage() {
         )}
       </div>}
 
-      {activeTab === 'applications' && <div style={cardStyle}>
+      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Custom Questions
         </p>

@@ -828,6 +828,9 @@ export default function FinancialsPage() {
               <p style={mutedCaption}>
                 No processing fee, but everything is tracked manually.
               </p>
+              <p style={mutedCaption}>
+                Running a free conference? Choose Manual and write &quot;This conference is free&quot; in the instructions — you still need a method set before applications can open.
+              </p>
 
               <div>
                 <label htmlFor="external-payment-url" style={fieldLabelStyle}>Payment page link · optional</label>
