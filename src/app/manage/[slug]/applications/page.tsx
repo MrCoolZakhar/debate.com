@@ -1003,6 +1003,9 @@ export default function ApplicationsPage() {
   const { session } = useAuth();
   const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
   const [applications, setApplications] = useState<Application[]>([]);
+  // Unpaid gating app-fee invoices (kind='app_fee', gates_acceptance=true,
+  // status not settled/waived/void), fetched alongside the applications list.
+  const [gatingInvoices, setGatingInvoices] = useState<{ application_id: string | null; society_id: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   // Empty role set = no constraint, so a fresh page shows every role
   // (including chairs) in both the row list and the stat scope.
@@ -1054,7 +1057,7 @@ export default function ApplicationsPage() {
     const seq = ++loadSeq.current;
     if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const [appRes, cfgRes] = await Promise.all([
+    const [appRes, cfgRes, gatingRes] = await Promise.all([
       supabase
         .from('applications')
         .select(`
@@ -1076,6 +1079,14 @@ export default function ApplicationsPage() {
         .from('application_role_configs')
         .select('role, payment_timing, custom_questions, fee_amount, fee_currency, allow_resubmission')
         .eq('conference_id', conference.id),
+      // Unpaid gating app-fee invoices — blocks Accept until paid (PART 7).
+      supabase
+        .from('invoices')
+        .select('application_id, society_id')
+        .eq('conference_id', conference.id)
+        .eq('kind', 'app_fee')
+        .eq('gates_acceptance', true)
+        .not('status', 'in', '(settled,waived,void)'),
     ]);
 
     if (seq !== loadSeq.current) return; // stale response, a newer load superseded this one
@@ -1083,6 +1094,7 @@ export default function ApplicationsPage() {
     const apps = (appRes.data ?? []) as unknown as Application[];
     setApplications(apps);
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
+    setGatingInvoices((gatingRes.data ?? []) as { application_id: string | null; society_id: string | null }[]);
     setLoading(false);
 
     // Batched MUN-history counts, ONE query for every visible applicant.
@@ -1900,7 +1912,16 @@ export default function ApplicationsPage() {
     && a.role !== 'chair'
     && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
     && a.payment_status !== 'paid' && a.payment_status !== 'waived';
-  const bulkAcceptable = selectedApps.filter(a => a.status === 'submitted');
+  // Accept is blocked while a gating app-fee invoice is unpaid, matched by
+  // this application's own id, or its society's (per-delegation surcharges
+  // are tied to whichever application first triggered them, not necessarily
+  // this one — see sync_participant_invoices).
+  const gatingAppIds = new Set(gatingInvoices.map(i => i.application_id).filter((id): id is string => !!id));
+  const gatingSocietyIds = new Set(gatingInvoices.map(i => i.society_id).filter((id): id is string => !!id));
+  const isAcceptBlockedByFee = (a: Application) =>
+    gatingAppIds.has(a.id) || (!!a.society_id && gatingSocietyIds.has(a.society_id));
+  const ACCEPT_BLOCKED_MESSAGE = "Conference Application Fee unpaid — they can be accepted once it's paid.";
+  const bulkAcceptable = selectedApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
   const bulkRejectable = selectedApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
   const bulkCheckInable = selectedApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
   const bulkPayable = selectedApps.filter(payEligible);
@@ -2292,13 +2313,17 @@ export default function ApplicationsPage() {
                       <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
                         <button
                           onClick={() => handleAccept(app.id)}
-                          disabled={rowBusy}
+                          disabled={rowBusy || isAcceptBlockedByFee(app)}
+                          title={isAcceptBlockedByFee(app) ? ACCEPT_BLOCKED_MESSAGE : undefined}
                           className="inline-flex items-center gap-1.5 focus:outline-none"
                           style={{
                             padding: '7px 14px', borderRadius: 999,
                             fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
                             color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-                            boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}44, ${NEU.outSm}`, border: 'none', cursor: 'pointer', ...busyStyle,
+                            boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}44, ${NEU.outSm}`, border: 'none',
+                            cursor: isAcceptBlockedByFee(app) ? 'not-allowed' : 'pointer',
+                            opacity: isAcceptBlockedByFee(app) ? 0.5 : 1,
+                            ...busyStyle,
                           }}
                         >
                           <Check size={13} strokeWidth={2.8} />
@@ -2446,22 +2471,42 @@ export default function ApplicationsPage() {
             </span>
             <span style={{ width: 1, height: 22, background: 'rgba(154,138,120,0.3)' }} />
 
-            {bulkAcceptable.length > 0 && (
-              <button
-                onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
-                className="inline-flex items-center gap-1.5 focus:outline-none"
-                style={{
-                  padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
-                  background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-                  boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
-                  animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
-                }}
-              >
-                <Check size={14} strokeWidth={2.8} />
-                Accept {bulkAcceptable.length}
-              </button>
-            )}
+            {(() => {
+              const submittedSelected = selectedApps.filter(a => a.status === 'submitted');
+              const blockedCount = submittedSelected.length - bulkAcceptable.length;
+              if (submittedSelected.length === 0) return null;
+              return bulkAcceptable.length > 0 ? (
+                <button
+                  onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
+                  title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded — ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
+                  className="inline-flex items-center gap-1.5 focus:outline-none"
+                  style={{
+                    padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
+                    background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                    boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+                    animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
+                  }}
+                >
+                  <Check size={14} strokeWidth={2.8} />
+                  Accept {bulkAcceptable.length}
+                  {blockedCount > 0 && ` (${blockedCount} unpaid)`}
+                </button>
+              ) : (
+                <span
+                  title={ACCEPT_BLOCKED_MESSAGE}
+                  className="inline-flex items-center gap-1.5"
+                  style={{
+                    padding: '8px 15px', borderRadius: 999, border: '1px solid rgba(184,132,74,0.4)', cursor: 'not-allowed',
+                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#9A6B2F',
+                    backgroundColor: 'rgba(184,132,74,0.1)',
+                  }}
+                >
+                  <Check size={14} strokeWidth={2.8} />
+                  Accept fee unpaid
+                </span>
+              );
+            })()}
             {bulkCheckInable.length > 0 && (
               <button
                 onClick={() => runBulk(bulkCheckInable, { title: `Check in ${bulkCheckInable.length} attendee${bulkCheckInable.length === 1 ? '' : 's'}?`, body: 'They will be marked as physically present on-site.', confirmLabel: 'Check in all' }, a => handleCheckIn(a))}
@@ -2810,14 +2855,28 @@ export default function ApplicationsPage() {
                   {actionError}
                 </p>
               )}
+              {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
+                <p
+                  className="text-xs font-semibold mt-4 rounded-lg px-3 py-2"
+                  style={{ color: '#9A6B2F', backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif" }}
+                >
+                  {ACCEPT_BLOCKED_MESSAGE}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
                 {app.status === 'submitted' && (
                   <>
                     <button
                       onClick={() => handleAccept(app.id)}
-                      disabled={rowBusy}
+                      disabled={rowBusy || isAcceptBlockedByFee(app)}
+                      title={isAcceptBlockedByFee(app) ? ACCEPT_BLOCKED_MESSAGE : undefined}
                       className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                      style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+                      style={{
+                        backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif",
+                        cursor: isAcceptBlockedByFee(app) ? 'not-allowed' : 'pointer',
+                        opacity: isAcceptBlockedByFee(app) ? 0.5 : 1,
+                        ...busyStyle,
+                      }}
                     >
                       <Check size={13} />
                       ACCEPT
