@@ -30,7 +30,9 @@ interface InvoiceApplication {
   role: string;
   user_id: string | null;
   invited_name: string | null;
+  society_id: string | null;
   profiles: { display_name: string } | null;
+  societies: { name: string } | null;
 }
 
 interface InvoiceWithApp extends InvoiceRow {
@@ -39,12 +41,14 @@ interface InvoiceWithApp extends InvoiceRow {
 
 const first = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
 
-const KIND_OPTIONS: { value: string; label: string }[] = [
-  { value: 'role_fee', label: 'Registration' },
-  { value: 'app_fee', label: 'Application Fee' },
-  { value: 'addon', label: 'Add-on' },
-  { value: 'pledge_spot', label: 'Delegation Spot' },
-];
+/** Static kind label, used for the row's kind SUBTITLE (generic type) — the
+ *  row's primary label already shows the specific add-on name via
+ *  invoiceLabel(). The kind FILTER dropdown is built separately, per-addon. */
+const KIND_LABEL: Record<string, string> = {
+  role_fee: 'Registration', app_fee: 'Application Fee', addon: 'Add-on', pledge_spot: 'Delegation Spot',
+};
+
+const INDEPENDENT_DELEGATION = '__independent__';
 
 const STATUS_OPTIONS: InvoiceStatus[] = ['open', 'partial', 'settled', 'waived', 'void'];
 
@@ -69,8 +73,10 @@ export default function FinancialsInvoicesPage() {
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState('');
 
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
   const [kindFilter, setKindFilter] = useState<string>('all');
+  const [delegationFilter, setDelegationFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
   useEffect(() => {
@@ -84,7 +90,10 @@ export default function FinancialsInvoicesPage() {
           id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status,
           gates_acceptance, payable_before_acceptance, application_id, society_id, config_id,
           aid_applied_cents, created_at,
-          application:applications!invoices_application_id_fkey (id, role, user_id, invited_name, profiles (display_name))
+          application:applications!invoices_application_id_fkey (
+            id, role, user_id, invited_name, society_id,
+            profiles (display_name), societies (name)
+          )
         `)
         .eq('conference_id', conference.id)
         .neq('status', 'void')
@@ -130,10 +139,42 @@ export default function FinancialsInvoicesPage() {
   const loading = invoices === null;
   const rows = invoices ?? [];
   const availableRoles = Array.from(new Set(rows.map(r => first(r.application)?.role).filter((r): r is string => !!r))).sort();
+  const availableDelegations = Array.from(
+    new Set(rows.map(r => first(r.application)?.societies?.name).filter((s): s is string => !!s))
+  ).sort();
+  const hasIndependent = rows.some(r => !first(r.application)?.societies?.name);
+  // Per-add-on kind options, distinct by config_id — "Add-on" as a single
+  // bucket doesn't distinguish a Gala Dinner invoice from a Socials Ticket
+  // one, so each active add-on gets its own filter entry.
+  const addonKindOptions = Array.from(
+    new Map(
+      rows.filter(r => r.kind === 'addon' && r.config_id).map(r => [r.config_id as string, invoiceLabel(r)])
+    ).entries()
+  ).map(([configId, label]) => ({ value: `addon:${configId}`, label }));
+  const kindOptions = [
+    { value: 'role_fee', label: 'Registration' },
+    { value: 'app_fee', label: 'Application Fee' },
+    ...addonKindOptions,
+    { value: 'pledge_spot', label: 'Delegation Spot' },
+  ];
 
   const filtered = rows.filter(r => {
+    if (search.trim()) {
+      const app = first(r.application);
+      const name = (app?.profiles?.display_name ?? app?.invited_name ?? '').toLowerCase();
+      if (!name.includes(search.trim().toLowerCase())) return false;
+    }
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-    if (kindFilter !== 'all' && r.kind !== kindFilter) return false;
+    if (kindFilter !== 'all') {
+      if (kindFilter.startsWith('addon:')) {
+        if (!(r.kind === 'addon' && r.config_id === kindFilter.slice('addon:'.length))) return false;
+      } else if (r.kind !== kindFilter) return false;
+    }
+    if (delegationFilter !== 'all') {
+      const socName = first(r.application)?.societies?.name ?? null;
+      if (delegationFilter === INDEPENDENT_DELEGATION) { if (socName) return false; }
+      else if (socName !== delegationFilter) return false;
+    }
     if (roleFilter !== 'all' && first(r.application)?.role !== roleFilter) return false;
     return true;
   });
@@ -158,14 +199,28 @@ export default function FinancialsInvoicesPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search delegate…"
+          style={{ ...inputStyle, width: 200 }}
+        />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as InvoiceStatus | 'all')} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
           <option value="all">All statuses</option>
           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{INVOICE_STATUS_LABEL[s]}</option>)}
         </select>
         <select value={kindFilter} onChange={e => setKindFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
           <option value="all">All kinds</option>
-          {KIND_OPTIONS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
+          {kindOptions.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
         </select>
+        {(availableDelegations.length > 0 || hasIndependent) && (
+          <select value={delegationFilter} onChange={e => setDelegationFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
+            <option value="all">All delegations</option>
+            {hasIndependent && <option value={INDEPENDENT_DELEGATION}>Independent</option>}
+            {availableDelegations.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        )}
         {availableRoles.length > 0 && (
           <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
             <option value="all">All roles</option>
@@ -213,7 +268,7 @@ export default function FinancialsInvoicesPage() {
                     {invoiceLabel(inv)}
                   </p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted }}>
-                    {KIND_OPTIONS.find(k => k.value === inv.kind)?.label ?? inv.kind}
+                    {KIND_LABEL[inv.kind] ?? inv.kind}
                   </p>
                 </div>
 
