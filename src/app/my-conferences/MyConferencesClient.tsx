@@ -88,6 +88,15 @@ function isPublicConf(conf: CardConference): boolean {
 const first = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 
+/** A submitted-but-not-yet-accepted application shows a neutral "Applied" tag
+ *  instead of the eventual role label, so applicants don't have to hunt for
+ *  a conference they already applied to. Accepted/assigned/checked-in all
+ *  keep the normal role label. */
+function roleOrAppliedTag(status: string, key: string, label: string, tone: RoleTag['tone'], countryName?: string): RoleTag {
+  if (status === 'submitted') return { key, label: 'Applied', tone: 'amber' };
+  return countryName ? { key, label, tone, countryName } : { key, label, tone };
+}
+
 // ── NeuSegmented, pressed-in track + gliding forest-glass thumb ──────────────
 // The signature control of this page: an inset ivory well (NEU.base + NEU.inSm)
 // with a soft, gently-transparent forest gradient thumb that slides under the
@@ -628,10 +637,10 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     const [delegateRes, chairAppRes, chairCommitteeRes, advisorRes, observerRes, organizerRes] = await Promise.all([
       supabase
         .from('applications')
-        .select(`id, role, is_head_delegate, assigned_country_name, society_id, conferences (${CONF})`)
+        .select(`id, role, is_head_delegate, assigned_country_name, society_id, status, conferences (${CONF})`)
         .eq('user_id', user.id)
         .in('role', ['delegate', 'head-delegate'])
-        .in('status', ['accepted', 'assigned']),
+        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in']),
       supabase
         .from('applications')
         .select(`id, assigned_committee_id, assigned_committee:conference_committees!assigned_committee_id (name), conferences (${CONF})`)
@@ -644,16 +653,16 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         .contains('chair_user_ids', [user.id]),
       supabase
         .from('applications')
-        .select(`id, society_id, conferences (${CONF})`)
+        .select(`id, society_id, status, conferences (${CONF})`)
         .eq('user_id', user.id)
         .eq('role', 'faculty-advisor')
-        .in('status', ['accepted', 'assigned']),
+        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in']),
       supabase
         .from('applications')
-        .select(`id, conferences (${CONF})`)
+        .select(`id, status, conferences (${CONF})`)
         .eq('user_id', user.id)
         .eq('role', 'observer')
-        .in('status', ['accepted', 'assigned']),
+        .in('status', ['accepted', 'assigned', 'submitted', 'checked-in']),
       supabase
         .from('conference_organizers')
         .select(`role, conferences (${CONF})`)
@@ -664,18 +673,21 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     // "apply as head delegate for my society" flag) get the Head Delegate badge.
     const delegateMap = new Map<string, TabEntry>();
     for (const row of (delegateRes.data ?? []) as {
-      role: string; is_head_delegate: boolean; assigned_country_name: string | null; society_id: string | null;
+      role: string; is_head_delegate: boolean; assigned_country_name: string | null; society_id: string | null; status: string;
       conferences: CardConference | CardConference[] | null;
     }[]) {
       const conf = first(row.conferences);
       if (!conf) continue;
       const isHeadDel = row.role === 'head-delegate' || row.is_head_delegate;
+      const isApplied = row.status === 'submitted';
       const country = row.assigned_country_name ?? null;
       const tag: RoleTag = isHeadDel
-        ? { key: 'head-delegate', label: 'Head Delegate', tone: ROLE_TONE.delegate }
-        : { key: 'delegate', label: country ? `Delegate · ${country}` : 'Delegate', tone: ROLE_TONE.delegate, countryName: country ?? undefined };
-      // Head delegates lead their society's block seats → surface the portal.
-      const manageDelegationHref = isHeadDel && row.society_id ? `/delegation/${row.society_id}` : undefined;
+        ? roleOrAppliedTag(row.status, 'head-delegate', 'Head Delegate', ROLE_TONE.delegate)
+        : roleOrAppliedTag(row.status, 'delegate', country ? `Delegate · ${country}` : 'Delegate', ROLE_TONE.delegate, country ?? undefined);
+      // Head delegates lead their society's block seats → surface the portal,
+      // but only once accepted — a merely-submitted application isn't a
+      // confirmed delegation lead yet.
+      const manageDelegationHref = !isApplied && isHeadDel && row.society_id ? `/delegation/${row.society_id}` : undefined;
       if (!delegateMap.has(conf.id)) delegateMap.set(conf.id, { conference: conf, tag, manageDelegationHref });
     }
 
@@ -712,21 +724,26 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
 
     // Advisor / Observer — plain role membership, one badge each.
     const advisorMap = new Map<string, TabEntry>();
-    for (const row of (advisorRes.data ?? []) as { society_id: string | null; conferences: CardConference | CardConference[] | null }[]) {
+    for (const row of (advisorRes.data ?? []) as { society_id: string | null; status: string; conferences: CardConference | CardConference[] | null }[]) {
       const conf = first(row.conferences);
       if (conf && !advisorMap.has(conf.id)) {
-        // A faculty advisor attached to a society leads that delegation's seats.
-        const manageDelegationHref = row.society_id ? `/delegation/${row.society_id}` : undefined;
-        advisorMap.set(conf.id, { conference: conf, tag: { key: 'faculty-advisor', label: 'Faculty Advisor', tone: ROLE_TONE.advisor }, manageDelegationHref });
+        // A faculty advisor attached to a society leads that delegation's
+        // seats, but only once accepted, not on a bare submitted application.
+        const manageDelegationHref = row.status !== 'submitted' && row.society_id ? `/delegation/${row.society_id}` : undefined;
+        advisorMap.set(conf.id, {
+          conference: conf,
+          tag: roleOrAppliedTag(row.status, 'faculty-advisor', 'Faculty Advisor', ROLE_TONE.advisor),
+          manageDelegationHref,
+        });
       }
     }
     // Observers are folded into the Delegate list — they don't get their own
     // tab. A conference the user already delegates at keeps its delegate tag;
     // observer-only conferences join the delegate list with an Observer badge.
-    for (const row of (observerRes.data ?? []) as { conferences: CardConference | CardConference[] | null }[]) {
+    for (const row of (observerRes.data ?? []) as { status: string; conferences: CardConference | CardConference[] | null }[]) {
       const conf = first(row.conferences);
       if (conf && !delegateMap.has(conf.id)) {
-        delegateMap.set(conf.id, { conference: conf, tag: { key: 'observer', label: 'Observer', tone: ROLE_TONE.observer } });
+        delegateMap.set(conf.id, { conference: conf, tag: roleOrAppliedTag(row.status, 'observer', 'Observer', ROLE_TONE.observer) });
       }
     }
 
