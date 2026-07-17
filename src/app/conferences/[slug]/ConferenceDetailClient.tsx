@@ -1782,9 +1782,12 @@ export default function ConferenceDetailClient() {
                         const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'rgba(237,231,216,0.8)', hint: '' };
                         const allocCountry = myAllocation ? getCountryByName(myAllocation.country_name) : null;
                         const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
-                        const myRolePaymentTiming = roleConfigs.find(r => r.role === myApp.role)?.payment_timing;
-                        const payable = myApp.status === 'accepted' || myApp.status === 'assigned' || myApp.status === 'checked-in'
-                          || (myApp.status === 'submitted' && myRolePaymentTiming === 'anytime');
+                        // The conference application fee (if any) is always
+                        // payable pre-acceptance, so the entry point shows as
+                        // soon as the application is submitted, regardless of
+                        // the role fee's own payment_timing.
+                        const payable = myApp.status === 'submitted' || myApp.status === 'accepted'
+                          || myApp.status === 'assigned' || myApp.status === 'checked-in';
                         return (
                           <>
                             <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 8px 0' }}>
