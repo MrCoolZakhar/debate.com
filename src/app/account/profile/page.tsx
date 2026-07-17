@@ -473,27 +473,27 @@ export default function ProfilePage() {
               <span
                 className="inline-flex items-center justify-center flex-shrink-0"
                 style={{
-                  width: '58px', height: '58px', borderRadius: '9999px',
+                  width: '78px', height: '78px', borderRadius: '9999px',
                   background: 'radial-gradient(circle at 34% 30%, rgba(250,248,243,0.20), rgba(238,217,138,0.12) 55%, rgba(27,56,40,0.25))',
                   border: '1.5px solid rgba(238,217,138,0.55)',
                   boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 16px rgba(27,56,40,0.35)',
                 }}
               >
-                <LevelInsignia level={exp.level} size={34} />
+                <LevelInsignia level={exp.level} size={48} />
               </span>
               <div>
                 <span
                   className="inline-flex items-center gap-2"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 >
-                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: '10.5px', letterSpacing: '0.18em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: '12.5px', letterSpacing: '0.18em', color: '#EED98A', margin: 0, textTransform: 'uppercase' }}>
                     Your MUN Rank
                   </p>
                   <ExperienceInfo tone="gold" align="left" currentLevel={exp.level} />
                 </span>
                 <p
                   className="font-black"
-                  style={{ fontFamily: OUTFIT, fontSize: '38px', lineHeight: 1.05, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}
+                  style={{ fontFamily: OUTFIT, fontSize: '50px', lineHeight: 1.02, color: '#FAF8F3', letterSpacing: '-0.02em', margin: '4px 0 0 0' }}
                 >
                   {exp.label}
                 </p>

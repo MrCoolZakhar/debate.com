@@ -11,7 +11,8 @@ import { useCredits } from '@/hooks/useCredits';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { formatFee } from '@/lib/utils';
-import { Pill } from '@/app/account/accountUi';
+import { Pill, LevelBadge } from '@/app/account/accountUi';
+import { experienceProgress } from '@/lib/munExperience';
 import { computeCheckout, localizedApproxSavings, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE } from '@/components/neu';
@@ -666,7 +667,11 @@ function ConferenceApplyInner() {
   const [prefError, setPrefError] = useState('');
 
   // ── Step 4, Experience & Questions
+  // experienceLevel is NO LONGER user-chosen. It is auto-derived from the
+  // applicant's MUN CV (count of mun_cv_entries → experienceProgress) and shown
+  // read-only. It still feeds the submit payload so the organiser sees the rank.
   const [experienceLevel, setExperienceLevel] = useState('');
+  const [cvEntryCount, setCvEntryCount] = useState(0);
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
   const [customMissingIds, setCustomMissingIds] = useState<string[]>([]);
   // Custom questions render as one Section per page within this step.
@@ -925,7 +930,7 @@ function ConferenceApplyInner() {
 
     setConference(confData as Conference);
 
-    const [roleRes, committeesRes, societiesRes, appRes, profileRes, subRes] = await Promise.all([
+    const [roleRes, committeesRes, societiesRes, appRes, profileRes, subRes, cvCountRes] = await Promise.all([
       supabase
         .from('application_role_configs')
         .select('*')
@@ -951,7 +956,7 @@ function ConferenceApplyInner() {
         .maybeSingle(),
       supabase
         .from('profiles')
-        .select('date_of_birth, is_ambassador, unlimited_conferences_remaining')
+        .select('date_of_birth, is_ambassador, unlimited_conferences_remaining, mun_experience_level')
         .eq('id', user!.id)
         .maybeSingle(),
       // Personal Gavelling Unlimited subscription: owner_user_id = the
@@ -968,6 +973,13 @@ function ConferenceApplyInner() {
         .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
         .limit(1)
         .maybeSingle(),
+      // MUN CV entry count — the applicant's rank is derived from this (same
+      // source the CV page uses: entries.length → experienceProgress). head+
+      // count avoids pulling any rows.
+      supabase
+        .from('mun_cv_entries')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id),
     ]);
 
     const committeesData = (committeesRes.data as CommitteeOption[]) ?? [];
@@ -978,13 +990,27 @@ function ConferenceApplyInner() {
     setCommittees(committeesData);
     setSocieties(societiesData);
     setExistingApp(appData);
-    const prof = profileRes.data as { date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number } | null;
+    const prof = profileRes.data as { date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number; mun_experience_level: string | null } | null;
     setMyDob(prof?.date_of_birth ?? null);
     setFinanceProfile({
       is_ambassador: prof?.is_ambassador ?? false,
       unlimited_conferences_remaining: prof?.unlimited_conferences_remaining ?? 0,
       has_active_subscription: !!subRes.data,
     });
+
+    // Auto-derive the MUN rank from the applicant's CV. We derive from the live
+    // CV count (experienceProgress) rather than trusting the mirrored
+    // profiles.mun_experience_level, which can lag behind CV edits; the mirror
+    // is used only as a fallback if the count query somehow failed.
+    const cvCount = cvCountRes.count ?? 0;
+    setCvEntryCount(cvCount);
+    const derivedLevel = cvCountRes.error
+      ? (prof?.mun_experience_level ?? experienceProgress(0).level)
+      : experienceProgress(cvCount).level;
+    // Feed the derived rank into the submit payload (experience_level). This is
+    // the single place experienceLevel is set on load, for both fresh and edit
+    // applications — the stale saved manual value is never restored anymore.
+    setExperienceLevel(derivedLevel);
 
     // Edit mode: prefill every step from the existing application, only once
     // it's confirmed editable (rejected or submitted) — never for accepted/
@@ -1001,7 +1027,9 @@ function ConferenceApplyInner() {
         setWillPledgeSpots(appData.pledge_type === 'delegation');
         setSpotsPledged(appData.spots_pledged ? appData.spots_pledged : '');
       }
-      setExperienceLevel(appData.experience_level ?? '');
+      // NOTE: experience_level is intentionally NOT restored from the saved
+      // application here — the rank is always the freshly derived one (set from
+      // the CV count above), never a stale manual choice.
       setCustomAnswers(appData.custom_answers ?? {});
 
       const { data: prefRows } = await supabase
@@ -2305,12 +2333,8 @@ function ConferenceApplyInner() {
   }
 
   function renderStepExperience() {
-    const levels = [
-      { value: 'beginner', label: 'BEGINNER', sub: 'First or second conference' },
-      { value: 'intermediate', label: 'INTERMEDIATE', sub: '3–10 conferences' },
-      { value: 'advanced', label: 'ADVANCED', sub: '10–20 conferences' },
-      { value: 'expert', label: 'EXPERT', sub: '20+ conferences or chairing experience' },
-    ];
+    // Rank is auto-derived from the applicant's MUN CV — no manual picker.
+    const rank = experienceProgress(cvEntryCount);
     // Each Section block starts a new page within this step; no sections at
     // all still produces exactly one (possibly empty) page, so the step keeps
     // working unchanged for roles with a flat question list or none.
@@ -2345,24 +2369,46 @@ function ConferenceApplyInner() {
 
             <div className="mb-6">
               <label className="block font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                MUN Experience Level
+                Your MUN Rank
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                {levels.map(lvl => (
-                  <button
-                    key={lvl.value}
-                    onClick={() => setExperienceLevel(lvl.value)}
-                    className="rounded-xl p-3 text-center focus:outline-none transition-all"
-                    style={{
-                      border: experienceLevel === lvl.value ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                      backgroundColor: experienceLevel === lvl.value ? 'rgba(27,56,40,0.06)' : 'transparent',
-                    }}
-                  >
-                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{lvl.label}</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{lvl.sub}</p>
-                  </button>
-                ))}
+
+              {/* Read-only rank card — auto-derived from the applicant's MUN CV. */}
+              <div
+                className="rounded-xl p-4"
+                style={{ border: '1.5px solid #DDD4C0', backgroundColor: 'rgba(27,56,40,0.04)' }}
+              >
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <LevelBadge level={rank.level} size="md" />
+                  <span className="text-xs font-semibold" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    {cvEntryCount} conference{cvEntryCount === 1 ? '' : 's'} on your CV
+                  </span>
+                </div>
+
+                {/* Progress toward the next band (mirrors the CV page copy). */}
+                <div className="mt-3 rounded-full overflow-hidden" style={{ height: 6, backgroundColor: 'rgba(27,56,40,0.1)' }}>
+                  <div style={{ width: `${Math.round(rank.progress * 100)}%`, height: '100%', background: 'linear-gradient(90deg, #B6871F, #EED98A)', transition: 'width 400ms ease' }} />
+                </div>
+                <p className="text-xs mt-2" style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+                  {rank.nextLabel
+                    ? `You're ${rank.label}. Add ${rank.remaining} more conference${rank.remaining === 1 ? '' : 's'} to your MUN CV to reach ${rank.nextLabel}.`
+                    : `You're ${rank.label} — the top rank. Nicely done.`}
+                </p>
               </div>
+
+              {/* Prompt: rank is drawn from the CV — nudge to add missing entries. */}
+              <p className="text-xs mt-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
+                This rank is drawn automatically from your MUN CV — the organiser sees it with your application. Attended conferences that aren&apos;t on your profile yet?{' '}
+                <Link
+                  href="/account/cv"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold underline"
+                  style={{ color: '#1B3828' }}
+                >
+                  Add them to your MUN CV
+                </Link>{' '}
+                so your rank reflects them.
+              </p>
             </div>
           </>
         )}

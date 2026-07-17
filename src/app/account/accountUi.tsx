@@ -5,9 +5,10 @@
 // Outfit eyebrows, Outfit for UI text, lucide icons only.
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Medal, Award, Info, X } from 'lucide-react';
+import { Medal, Award, Info, X, Star } from 'lucide-react';
 import { EXPERIENCE_BANDS } from '@/lib/munExperience';
 import Portal from '@/components/Portal';
+import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
 
 export const OUTFIT = "'Outfit', sans-serif";
 // No monospace on the conferences side — MONO is an Outfit alias kept only so
@@ -167,15 +168,17 @@ export function LevelBadge({ level, size = 'md' }: { level: string; size?: 'sm' 
   const key = (level ?? '').toLowerCase();
   const accent = LEVEL_ACCENT[key] ?? '#9A8A78';
   const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unranked';
-  const disc = size === 'sm' ? 20 : 24;
-  const glyph = size === 'sm' ? 14 : 17;
-  const fs = size === 'sm' ? '12px' : '13.5px';
+  // The insignia disc + glyph are deliberately oversized — the rank star is the
+  // hero of the badge, so it reads at a glance rather than as a timid dot.
+  const disc = size === 'sm' ? 28 : 36;
+  const glyph = size === 'sm' ? 22 : 28;
+  const fs = size === 'sm' ? '12.5px' : '14.5px';
   return (
     <span
       className="inline-flex items-center"
       style={{
-        gap: size === 'sm' ? '6px' : '7px',
-        padding: size === 'sm' ? '3px 11px 3px 4px' : '4px 13px 4px 5px',
+        gap: size === 'sm' ? '7px' : '8px',
+        padding: size === 'sm' ? '3px 12px 3px 4px' : '4px 14px 4px 5px',
         borderRadius: '9px',
         backgroundColor: '#FAF8F3',
         border: '1px solid rgba(221,212,192,0.95)',
@@ -427,11 +430,11 @@ export function Eyebrow({ children, color = '#B6871F', className = '', size = 's
 
 // ── GlassCard ──────────────────────────────────────────────────────────────
 
-export function GlassCard({ children, className = '', style = {} }: {
+export function GlassCard({ children, className = '', style = {}, ...rest }: {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
-}) {
+} & React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={`rounded-[20px] p-6 md:p-7 ${className}`}
@@ -443,6 +446,7 @@ export function GlassCard({ children, className = '', style = {} }: {
         boxShadow: '0 1px 3px rgba(27,56,40,0.07), 0 12px 32px rgba(27,56,40,0.08)',
         ...style,
       }}
+      {...rest}
     >
       {children}
     </div>
@@ -508,6 +512,19 @@ const COMMITTEE_LOGO_PRESETS: [RegExp, string][] = [
 ];
 
 export function getCommitteeLogo(committee: string): string | null {
+  const q = (committee ?? '').trim().toLowerCase();
+  if (!q) return null;
+  // Prefer the fuller shared committee list used by the conference committee
+  // picker (CONFERENCE_COMMITTEE_PRESETS) — it carries the real emblem for
+  // bodies the regex list misses or flattens to the generic UN seal (DISEC,
+  // SPECPOL, SOCHUM, UNICEF, UNESCO, FAO, IAEA, ICC, ICJ, FIFA, House of
+  // Commons, US Senate, Press Corps, …). Exact name/acronym match so a CV
+  // committee resolves to its own logo even for a conference never run here.
+  const preset = CONFERENCE_COMMITTEE_PRESETS.find(
+    (p) => p.name.toLowerCase() === q || p.acronym.toLowerCase() === q,
+  );
+  if (preset?.logoPath) return preset.logoPath;
+  // Fall back to the loose regex presets for free-text committee names.
   for (const [pattern, path] of COMMITTEE_LOGO_PRESETS) {
     if (pattern.test(committee)) return path;
   }
@@ -524,37 +541,52 @@ export function monogramFor(name: string): string {
 
 // ── Awards ─────────────────────────────────────────────────────────────────
 
+// Ordered by medal tier so the multi-select reads as an escalating ladder:
+// GOLD (Best Delegate, Diplomacy Award) → SILVER (Outstanding, Honourable
+// Mention) → BRONZE (Verbal Commendation, Best Position Paper). Custom
+// free-text honours fall outside this list and render as the green "special"
+// tier (see awardTier).
 export const AWARD_LIST = [
   'Best Delegate',
+  'Diplomacy Award',
   'Outstanding Delegate',
   'Honourable Mention',
-  'Best Position Paper',
   'Verbal Commendation',
-  'Diplomacy Award',
+  'Best Position Paper',
 ] as const;
+
+/** True when an award is a custom, free-text honour (not one of the presets). */
+export function isCustomAward(name: string): boolean {
+  return !AWARD_LIST.some((a) => a.toLowerCase() === name.trim().toLowerCase());
+}
 
 export function awardSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
 // ── Award tiers ──────────────────────────────────────────────────────────────
-// Gold   → Best Delegate, Diplomacy Award (the top honours)
-// Silver → Outstanding / Most Outstanding Delegate, Honourable Mention
-// Bronze → Verbal Commendation, Best Position Paper, and anything else.
+// Gold    → Best Delegate, Diplomacy Award (the top honours)
+// Silver  → Outstanding / Most Outstanding Delegate, Honourable Mention
+// Bronze  → Verbal Commendation, Best Position Paper
+// Special → any custom, free-text honour the delegate types in — Gavelling
+//           forest green, distinct from the metal medals.
 
-export type AwardTier = 'gold' | 'silver' | 'bronze';
+export type AwardTier = 'gold' | 'silver' | 'bronze' | 'special';
 
 const AWARD_TIER_STYLE: Record<AwardTier, { bg: string; border: string; text: string; from: string; to: string; medal: string }> = {
-  gold:   { bg: 'rgba(238,217,138,0.24)', border: 'rgba(182,135,31,0.45)',  text: '#7A5A20', from: 'rgba(238,217,138,0.7)',  to: 'rgba(182,135,31,0.4)',  medal: '#7A5A20' },
-  silver: { bg: 'rgba(176,184,196,0.24)', border: 'rgba(120,132,150,0.5)',  text: '#4C5563', from: 'rgba(214,220,228,0.85)', to: 'rgba(140,152,168,0.5)', medal: '#4C5563' },
-  bronze: { bg: 'rgba(190,140,100,0.22)', border: 'rgba(150,96,56,0.5)',    text: '#7A4B2B', from: 'rgba(206,150,104,0.8)',  to: 'rgba(150,96,56,0.45)',  medal: '#7A4B2B' },
+  gold:    { bg: 'rgba(238,217,138,0.24)', border: 'rgba(182,135,31,0.45)',  text: '#7A5A20', from: 'rgba(238,217,138,0.7)',  to: 'rgba(182,135,31,0.4)',  medal: '#7A5A20' },
+  silver:  { bg: 'rgba(176,184,196,0.24)', border: 'rgba(120,132,150,0.5)',  text: '#4C5563', from: 'rgba(214,220,228,0.85)', to: 'rgba(140,152,168,0.5)', medal: '#4C5563' },
+  bronze:  { bg: 'rgba(190,140,100,0.22)', border: 'rgba(150,96,56,0.5)',    text: '#7A4B2B', from: 'rgba(206,150,104,0.8)',  to: 'rgba(150,96,56,0.45)',  medal: '#7A4B2B' },
+  // Forest-green special honour. Light glyph on a deep green disc.
+  special: { bg: 'rgba(27,56,40,0.12)',    border: 'rgba(42,90,60,0.45)',    text: '#1B3828', from: 'rgba(63,122,82,0.9)',   to: 'rgba(27,56,40,0.7)',    medal: '#FAF8F3' },
 };
 
 export function awardTier(name: string): AwardTier {
   const n = name.toLowerCase();
   if (/best delegate|diplomacy/.test(n)) return 'gold';
   if (/outstanding|honou?rable mention/.test(n)) return 'silver';
-  return 'bronze'; // verbal commendation, best position paper, anything else
+  if (/verbal commendation|position paper/.test(n)) return 'bronze';
+  return 'special'; // custom free-text honour → green
 }
 
 // Some award labels changed over time but their artwork asset did not. Older CV
@@ -575,9 +607,13 @@ export function awardArtworkPath(name: string): string {
  */
 export function AwardArtwork({ name, size = 20 }: { name: string; size?: number }) {
   const [failed, setFailed] = useState(false);
-  const tier = AWARD_TIER_STYLE[awardTier(name)];
+  const t = awardTier(name);
+  const tier = AWARD_TIER_STYLE[t];
 
-  if (failed) {
+  // Custom "special" honours never have a bundled PNG (the name is free-text),
+  // so render the green disc directly — no 404 round-trip. Metal medals fall
+  // back to their disc only if the artwork asset is missing.
+  if (t === 'special' || failed) {
     return (
       <span
         className="flex items-center justify-center flex-shrink-0 rounded-full"
@@ -588,7 +624,9 @@ export function AwardArtwork({ name, size = 20 }: { name: string; size?: number 
           border: `1px solid ${tier.border}`,
         }}
       >
-        {awardTier(name) === 'bronze' && /position paper/i.test(name)
+        {t === 'special'
+          ? <Star size={Math.round(size * 0.55)} strokeWidth={2.2} fill={tier.medal} style={{ color: tier.medal }} />
+          : t === 'bronze' && /position paper/i.test(name)
           ? <Award size={Math.round(size * 0.55)} strokeWidth={2.2} style={{ color: tier.medal }} />
           : <Medal size={Math.round(size * 0.55)} strokeWidth={2.2} style={{ color: tier.medal }} />}
       </span>

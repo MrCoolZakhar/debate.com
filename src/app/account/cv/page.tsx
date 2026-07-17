@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { BadgeCheck, ImagePlus, Pencil, Trash2, X, Check, Plus, TrendingUp, User, UserRound, Gavel, Hammer, Briefcase, ClipboardList, Sparkles, MessageSquareText, ScrollText, Award } from 'lucide-react';
+import { ImagePlus, Trash2, X, Check, Plus, TrendingUp, User, UserRound, Gavel, Hammer, Briefcase, ClipboardList, Sparkles, MessageSquareText, ScrollText, Award, Star } from 'lucide-react';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { Emoji3D, NEU } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
@@ -9,11 +9,12 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonClient } from '@/lib/supabase';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { experienceProgress, syncExperienceLevel } from '@/lib/munExperience';
-import { COMMITTEE_PRESETS } from '@/components/CommitteeNameInput';
+import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
 import { committeeDisplayName } from '@/lib/presetNames';
 import { LogoDisc } from '@/components/LogoDisc';
+import Portal from '@/components/Portal';
 import {
-  Eyebrow, GlassCard, Pill, LevelBadge, LEVEL_TONE, AwardChip, AwardArtwork, AWARD_LIST,
+  Eyebrow, GlassCard, Pill, LevelBadge, LEVEL_ACCENT, AwardChip, AwardArtwork, AWARD_LIST, isCustomAward,
   ExperienceInfo, getCommitteeLogo, monogramFor, OUTFIT, MONO,
 } from '../accountUi';
 
@@ -115,8 +116,11 @@ function committeeLabel(name: string): string {
   return committeeDisplayName(n);
 }
 
-// Committee suggestions shared with the conference setup flow.
-const COMMITTEE_SUGGESTIONS = COMMITTEE_PRESETS.map((p) => ({ name: p.name, acronym: p.acronym, logoPath: p.logoPath }));
+// Committee suggestions — the SAME fuller list the conference committee picker
+// offers (CONFERENCE_COMMITTEE_PRESETS), so the CV autocomplete surfaces DISEC,
+// SPECPOL, SOCHUM, UNICEF, ICC, ICJ, FIFA, House of Commons, etc. — not just the
+// short standalone-session list.
+const COMMITTEE_SUGGESTIONS = CONFERENCE_COMMITTEE_PRESETS.map((p) => ({ name: p.name, acronym: p.acronym, logoPath: p.logoPath }));
 
 interface ConferenceSuggestion {
   kind: 'gavelling' | 'community';
@@ -142,6 +146,42 @@ const inputStyle: React.CSSProperties = {
   fontFamily: OUTFIT,
   boxShadow: 'inset 2px 2px 5px rgba(27,56,40,0.10), inset -2px -2px 5px rgba(255,255,255,0.72)',
 };
+
+// ── Anchored dropdown (portaled, never clipped) ──────────────────────────────
+// The Add/Edit modal is a scrollable overflow-y:auto box, so an in-flow
+// `absolute` typeahead would be clipped by it. Every autocomplete here renders
+// its menu through a Portal at fixed viewport coordinates measured from the
+// trigger, repositioning on scroll/resize and flipping above the anchor when
+// there isn't room below. (Mirrors ConferenceRosterPicker's useAnchoredDropdown.)
+function useAnchoredDropdown<T extends HTMLElement>(
+  open: boolean,
+  anchorRef: React.RefObject<T | null>,
+  estHeight = 280,
+) {
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const place = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const margin = 8;
+    let top = r.bottom + 6;
+    if (top + estHeight > window.innerHeight - margin && r.top - 6 - estHeight > margin) {
+      top = r.top - 6 - estHeight;
+    }
+    setPos({ top: Math.max(margin, top), left: r.left, width: r.width });
+  }, [anchorRef, estHeight]);
+  useEffect(() => {
+    if (!open) { setPos(null); return; }
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
+  return pos;
+}
 
 // ── Logo tiles ─────────────────────────────────────────────────────────────
 
@@ -197,15 +237,19 @@ function CommitteeAutocomplete({
   value, onChange, disabled, placeholder = 'e.g. UN Security Council',
 }: { value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string }) {
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLInputElement>(null);
   const matches = useMemo(() => {
     const q = value.trim().toLowerCase();
     if (!q) return [];
     return COMMITTEE_SUGGESTIONS.filter((p) => p.name.toLowerCase().includes(q) || p.acronym.toLowerCase().includes(q)).slice(0, 6);
   }, [value]);
+  const menuOpen = open && matches.length > 0;
+  const pos = useAnchoredDropdown(menuOpen, anchorRef, 280);
 
   return (
     <div className="relative">
       <input
+        ref={anchorRef}
         type="text"
         required
         disabled={disabled}
@@ -217,29 +261,31 @@ function CommitteeAutocomplete({
         onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setOpen(true); }}
         onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setOpen(false), 150); }}
       />
-      {open && matches.length > 0 && (
-        <div
-          className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-hidden"
-          style={{ backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
-        >
-          {matches.map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(p.name); setOpen(false); }}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left focus:outline-none"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.logoPath} alt="" width={20} height={20} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
-              <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>{p.name}</span>
-              <span style={{ color: '#1B3828', fontFamily: MONO, fontSize: '10px', fontWeight: 700 }}>{p.acronym}</span>
-            </button>
-          ))}
-        </div>
+      {menuOpen && pos && (
+        <Portal>
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999, backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
+          >
+            {matches.map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onChange(p.name); setOpen(false); }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left focus:outline-none"
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.logoPath} alt="" width={20} height={20} className="rounded-sm shrink-0 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
+                <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>{p.name}</span>
+                <span style={{ color: '#1B3828', fontFamily: MONO, fontSize: '10px', fontWeight: 700 }}>{p.acronym}</span>
+              </button>
+            ))}
+          </div>
+        </Portal>
       )}
     </div>
   );
@@ -251,6 +297,7 @@ function AllocationAutocomplete({
   value, onChange, disabled,
 }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLInputElement>(null);
   const allocCountry = getCountryByName(value);
   const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
   const matches = useMemo(() => {
@@ -258,6 +305,8 @@ function AllocationAutocomplete({
     if (!q) return [];
     return UN_COUNTRIES.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 8);
   }, [value]);
+  const menuOpen = open && matches.length > 0;
+  const pos = useAnchoredDropdown(menuOpen, anchorRef, 240);
 
   return (
     <div className="relative">
@@ -271,6 +320,7 @@ function AllocationAutocomplete({
         />
       )}
       <input
+        ref={anchorRef}
         type="text"
         required
         disabled={disabled}
@@ -282,28 +332,30 @@ function AllocationAutocomplete({
         onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setOpen(true); }}
         onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setOpen(false), 150); }}
       />
-      {open && matches.length > 0 && (
-        <div
-          className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-y-auto"
-          style={{ maxHeight: '224px', backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
-        >
-          {matches.map((c) => (
-            <button
-              key={c.code}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(c.name); setOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
-              style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={getFlagUrl(c.code)} alt="" style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }} />
-              {c.name}
-            </button>
-          ))}
-        </div>
+      {menuOpen && pos && (
+        <Portal>
+          <div
+            className="rounded-xl overflow-y-auto"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999, maxHeight: '224px', backgroundColor: 'rgba(250,248,243,0.98)', border: '1px solid #DDD4C0', boxShadow: '0 16px 40px rgba(27,56,40,0.16)' }}
+          >
+            {matches.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onChange(c.name); setOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
+                style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={getFlagUrl(c.code)} alt="" style={{ width: '20px', height: '14px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }} />
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </Portal>
       )}
     </div>
   );
@@ -398,21 +450,139 @@ function DescriptionField({ value, onChange, placeholder }: { value: string; onC
   );
 }
 
+// ── Expertise slider (beginner → intermediate → advanced → expert) ────────────
+// A 4-stop neumorphic slider replacing the old pill buttons. Click a stop, drag
+// the thumb, or use the arrow keys. Always resolves to one of the four levels
+// (defaults to beginner) — the chosen tier renders as a LevelBadge on the card.
+
+function ExpertiseSlider({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const n = EXPERTISE_LEVELS_MODAL.length;
+  const cur = Math.max(0, EXPERTISE_LEVELS_MODAL.indexOf(value)); // unset → 0 (beginner)
+  const accent = LEVEL_ACCENT[EXPERTISE_LEVELS_MODAL[cur]] ?? '#2A5A3C';
+  const pct = (cur / (n - 1)) * 100;
+
+  const setFromClientX = useCallback((clientX: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    onChange(EXPERTISE_LEVELS_MODAL[Math.round(ratio * (n - 1))]);
+  }, [n, onChange]);
+
+  return (
+    <div>
+      <div
+        ref={trackRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Expertise level"
+        aria-valuemin={1}
+        aria-valuemax={n}
+        aria-valuenow={cur + 1}
+        aria-valuetext={EXPERTISE_LEVELS_MODAL[cur]}
+        onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setFromClientX(e.clientX); }}
+        onPointerMove={(e) => { if (e.buttons === 1) setFromClientX(e.clientX); }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); onChange(EXPERTISE_LEVELS_MODAL[Math.max(0, cur - 1)]); }
+          if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); onChange(EXPERTISE_LEVELS_MODAL[Math.min(n - 1, cur + 1)]); }
+        }}
+        className="relative focus:outline-none"
+        style={{ height: '34px', cursor: 'pointer', touchAction: 'none' }}
+      >
+        {/* Inset neu track */}
+        <div
+          className="absolute left-0 right-0"
+          style={{ top: '50%', transform: 'translateY(-50%)', height: '8px', borderRadius: '9999px', backgroundColor: NEU.base, boxShadow: NEU.inSm }}
+        />
+        {/* Filled portion */}
+        <div
+          className="absolute"
+          style={{ top: '50%', transform: 'translateY(-50%)', left: 0, width: `calc(${pct}% )`, height: '8px', borderRadius: '9999px', background: `linear-gradient(90deg, ${accent}CC, ${accent})`, transition: 'width 180ms cubic-bezier(0.22,1,0.36,1)' }}
+        />
+        {/* Stops */}
+        {EXPERTISE_LEVELS_MODAL.map((lvl, i) => {
+          const on = i <= cur;
+          return (
+            <button
+              key={lvl}
+              type="button"
+              aria-label={lvl}
+              onClick={() => onChange(lvl)}
+              className="absolute focus:outline-none"
+              style={{
+                left: `${(i / (n - 1)) * 100}%`, top: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '13px', height: '13px', borderRadius: '9999px',
+                background: on ? accent : NEU.surface,
+                border: `2px solid ${on ? '#FAF8F3' : '#DDD4C0'}`,
+                boxShadow: NEU.outSm, cursor: 'pointer', padding: 0,
+              }}
+            />
+          );
+        })}
+        {/* Thumb */}
+        <span
+          aria-hidden
+          className="absolute"
+          style={{
+            left: `${pct}%`, top: '50%', transform: 'translate(-50%, -50%)',
+            width: '22px', height: '22px', borderRadius: '9999px',
+            background: `radial-gradient(120% 120% at 30% 25%, ${accent} 0%, ${accent}CC 70%)`,
+            border: '2.5px solid #FAF8F3', boxShadow: `0 3px 8px ${accent}55, ${NEU.outSm}`,
+            transition: 'left 180ms cubic-bezier(0.22,1,0.36,1)', pointerEvents: 'none',
+          }}
+        />
+      </div>
+      {/* Stop labels */}
+      <div className="flex justify-between mt-1.5">
+        {EXPERTISE_LEVELS_MODAL.map((lvl, i) => (
+          <button
+            key={lvl}
+            type="button"
+            onClick={() => onChange(lvl)}
+            className="focus:outline-none"
+            style={{
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              fontFamily: OUTFIT, fontSize: '10.5px', textTransform: 'capitalize',
+              fontWeight: i === cur ? 800 : 600,
+              color: i === cur ? accent : '#9A8A78',
+              flex: '1 1 0', textAlign: i === 0 ? 'left' : i === n - 1 ? 'right' : 'center',
+            }}
+          >
+            {lvl}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Add / Edit modal ───────────────────────────────────────────────────────
 
 function CVEntryModal({
   existing,
   onClose,
   onSaved,
+  onDelete,
   userId,
 }: {
   existing: CVEntry | null;
   onClose: () => void;
   onSaved: () => void;
+  onDelete: (id: string) => Promise<void>;
   userId: string;
 }) {
   const { session } = useAuth();
   const isVerified = existing?.source === 'gavelling_verified';
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (!existing || isVerified || deleting) return;
+    setDeleting(true);
+    await onDelete(existing.id);
+    onClose();
+  }
 
   const [entryType, setEntryType]           = useState<EntryType>(existing?.entry_type ?? 'delegate');
   const [conferenceName, setConferenceName] = useState(existing?.conference_name ?? '');
@@ -426,6 +596,7 @@ function CVEntryModal({
   const [expertiseLevel, setExpertiseLevel] = useState(existing?.expertise_level ?? '');
   const [eventDate, setEventDate]           = useState(existing?.event_date ?? '');
   const [awards, setAwards]                 = useState<string[]>(existing?.awards ?? []);
+  const [specialDraft, setSpecialDraft]     = useState('');
   const [photos, setPhotos]                 = useState<string[]>(existing?.photos ?? []);
   const [description, setDescription]       = useState(existing?.description ?? '');
   const [logoUrl, setLogoUrl]               = useState<string | null>(existing?.logo_url ?? null);
@@ -446,6 +617,9 @@ function CVEntryModal({
   const [suggestOpen, setSuggestOpen]       = useState(false);
   const suppressSuggest = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const suggestAnchorRef = useRef<HTMLDivElement>(null);
+  const suggestMenuOpen = suggestOpen && suggestions.length > 0;
+  const suggestPos = useAnchoredDropdown(suggestMenuOpen, suggestAnchorRef, 320);
 
   useEffect(() => {
     const q = conferenceName.trim();
@@ -564,6 +738,21 @@ function CVEntryModal({
 
   function toggleAward(name: string) {
     setAwards((prev) => (prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]));
+  }
+
+  // The custom, free-text "special" honours the delegate typed in (anything not
+  // in the AWARD_LIST presets). They live in the same `awards` array and render
+  // in the green special tier.
+  const customAwards = awards.filter((a) => isCustomAward(a));
+
+  function addSpecialAward() {
+    const name = specialDraft.trim();
+    if (!name) return;
+    setAwards((prev) => (prev.some((a) => a.toLowerCase() === name.toLowerCase()) ? prev : [...prev, name]));
+    setSpecialDraft('');
+  }
+  function removeAward(name: string) {
+    setAwards((prev) => prev.filter((a) => a !== name));
   }
 
   async function handlePhotoFiles(files: FileList | null) {
@@ -778,7 +967,7 @@ function CVEntryModal({
             <label className="block text-[13px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               Conference Name
             </label>
-            <div className="flex items-center gap-2.5">
+            <div ref={suggestAnchorRef} className="flex items-center gap-2.5">
               {logoUrl && (
                 <LogoDisc src={logoUrl} size={34} fallbackText={monogramFor(conferenceName)} />
               )}
@@ -799,50 +988,53 @@ function CVEntryModal({
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setSuggestOpen(false), 150); }}
               />
             </div>
-            {suggestOpen && suggestions.length > 0 && (
-              <div
-                className="absolute z-30 left-0 right-0 mt-1.5 rounded-xl overflow-hidden"
-                style={{
-                  backgroundColor: 'rgba(250,248,243,0.98)',
-                  border: '1px solid #DDD4C0',
-                  boxShadow: '0 16px 40px rgba(27,56,40,0.16)',
-                }}
-              >
-                {suggestions.map((s) => (
-                  <button
-                    key={`${s.kind}-${s.name}`}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => pickSuggestion(s)}
-                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left focus:outline-none"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    {s.logoUrl ? (
-                      <LogoDisc src={s.logoUrl} size={26} fallbackText={monogramFor(s.name)} />
-                    ) : (
-                      <span
-                        className="flex items-center justify-center flex-shrink-0"
-                        style={{ width: '26px', height: '26px', borderRadius: '7px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: '10px' }}
-                      >
-                        {monogramFor(s.name)}
-                      </span>
-                    )}
-                    <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>
-                      {s.name}
-                      {s.acronym && (
-                        <span style={{ color: '#9A8A78', fontFamily: MONO, fontSize: '10px', marginLeft: '8px' }}>{s.acronym}</span>
+            {suggestMenuOpen && suggestPos && (
+              <Portal>
+                <div
+                  className="rounded-xl overflow-hidden"
+                  style={{
+                    position: 'fixed', top: suggestPos.top, left: suggestPos.left, width: suggestPos.width, zIndex: 9999,
+                    backgroundColor: 'rgba(250,248,243,0.98)',
+                    border: '1px solid #DDD4C0',
+                    boxShadow: '0 16px 40px rgba(27,56,40,0.16)',
+                  }}
+                >
+                  {suggestions.map((s) => (
+                    <button
+                      key={`${s.kind}-${s.name}`}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pickSuggestion(s)}
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left focus:outline-none"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      {s.logoUrl ? (
+                        <LogoDisc src={s.logoUrl} size={26} fallbackText={monogramFor(s.name)} />
+                      ) : (
+                        <span
+                          className="flex items-center justify-center flex-shrink-0"
+                          style={{ width: '26px', height: '26px', borderRadius: '7px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: '10px' }}
+                        >
+                          {monogramFor(s.name)}
+                        </span>
                       )}
-                    </span>
-                    <span className="flex-shrink-0">
-                      <Pill tone={s.kind === 'gavelling' ? 'forest' : 'neutral'} size="sm">
-                        {s.kind === 'gavelling' ? 'On Gavelling' : 'Community'}
-                      </Pill>
-                    </span>
-                  </button>
-                ))}
-              </div>
+                      <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 500 }}>
+                        {s.name}
+                        {s.acronym && (
+                          <span style={{ color: '#9A8A78', fontFamily: MONO, fontSize: '10px', marginLeft: '8px' }}>{s.acronym}</span>
+                        )}
+                      </span>
+                      <span className="flex-shrink-0">
+                        <Pill tone={s.kind === 'gavelling' ? 'forest' : 'neutral'} size="sm">
+                          {s.kind === 'gavelling' ? 'On Gavelling' : 'Community'}
+                        </Pill>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Portal>
             )}
           </div>
 
@@ -865,16 +1057,17 @@ function CVEntryModal({
             </Field>
           )}
 
-          {/* Role title — secretariat + other */}
+          {/* Role title — secretariat + other. For "other", this is the actual
+              name of the role (stored in the allocation column, shown on the card). */}
           {showRoleTitle && (
-            <Field label={entryType === 'secretariat' ? 'Position / Title' : 'Role Title'}>
+            <Field label={entryType === 'secretariat' ? 'Position / Title' : 'What was your role?'}>
               <input
                 type="text"
                 required
                 disabled={isVerified}
                 value={roleTitle}
                 onChange={(e) => setRoleTitle(e.target.value)}
-                placeholder={entryType === 'secretariat' ? 'e.g. Under-Secretary-General for Committees' : 'e.g. Press Corps, Tech Team, Volunteer'}
+                placeholder={entryType === 'secretariat' ? 'e.g. Under-Secretary-General for Committees' : 'e.g. Press Corps, Photographer, Tech Team, Volunteer'}
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
                 style={{ ...inputStyle, opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
@@ -907,31 +1100,16 @@ function CVEntryModal({
             }
           />
 
-          {/* Expertise level — delegate only */}
+          {/* Expertise level — delegate only. 4-stop slider. */}
           {showExpertise && (
             <div>
-              <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                Expertise Level
-              </label>
-              <div className="flex gap-2 flex-wrap">
-                {EXPERTISE_LEVELS_MODAL.map((lvl) => {
-                  const active = expertiseLevel === lvl;
-                  const tone = LEVEL_TONE[lvl] ?? 'forest';
-                  return (
-                    <button
-                      key={lvl}
-                      type="button"
-                      onClick={() => setExpertiseLevel(active ? '' : lvl)}
-                      className="focus:outline-none transition-all"
-                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', opacity: active ? 1 : 0.6 }}
-                    >
-                      <Pill tone={active ? tone : 'neutral'} size="sm">
-                        <span style={{ textTransform: 'capitalize' }}>{lvl}</span>
-                      </Pill>
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-[13px] font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  Expertise Level
+                </label>
+                <LevelBadge level={expertiseLevel || 'beginner'} size="sm" />
               </div>
+              <ExpertiseSlider value={expertiseLevel || 'beginner'} onChange={setExpertiseLevel} />
             </div>
           )}
 
@@ -965,6 +1143,66 @@ function CVEntryModal({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Special award — free-text, rendered in the green special tier */}
+              <div className="mt-3">
+                <label className="flex items-center gap-1.5 text-[12px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  <Star size={12} strokeWidth={2.4} fill="#2A5A3C" style={{ color: '#2A5A3C' }} />
+                  Special award
+                  <span className="font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>a custom honour not listed above</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={specialDraft}
+                    onChange={(e) => setSpecialDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecialAward(); } }}
+                    placeholder="e.g. Best Speaker, Spirit of the Committee"
+                    className="flex-1 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
+                    style={inputStyle}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#2A5A3C'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                  />
+                  <button
+                    type="button"
+                    onClick={addSpecialAward}
+                    disabled={!specialDraft.trim()}
+                    className="rounded-xl px-4 text-[12px] font-bold focus:outline-none"
+                    style={{
+                      background: specialDraft.trim() ? `linear-gradient(150deg, #2A5A3C, #1B3828)` : NEU.surface,
+                      color: specialDraft.trim() ? '#EED98A' : '#9A8A78',
+                      border: 'none', boxShadow: NEU.outSm,
+                      fontFamily: OUTFIT, letterSpacing: '0.04em',
+                      cursor: specialDraft.trim() ? 'pointer' : 'default',
+                    }}
+                  >
+                    ADD
+                  </button>
+                </div>
+                {customAwards.length > 0 && (
+                  <div className="flex gap-2 flex-wrap mt-2.5">
+                    {customAwards.map((a) => (
+                      <span
+                        key={a}
+                        className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-1.5 py-[3px]"
+                        style={{ backgroundColor: 'rgba(27,56,40,0.10)', border: '1px solid rgba(42,90,60,0.4)', color: '#1B3828', fontFamily: OUTFIT, fontSize: '11px', fontWeight: 600 }}
+                      >
+                        <AwardArtwork name={a} size={18} />
+                        {a}
+                        <button
+                          type="button"
+                          onClick={() => removeAward(a)}
+                          aria-label={`Remove ${a}`}
+                          className="flex items-center justify-center focus:outline-none"
+                          style={{ width: '15px', height: '15px', borderRadius: '9999px', background: 'rgba(27,56,40,0.12)', border: 'none', color: '#1B3828', cursor: 'pointer', marginLeft: '2px' }}
+                        >
+                          <X size={9} strokeWidth={3} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1035,7 +1273,7 @@ function CVEntryModal({
               type="button"
               onClick={onClose}
               className="flex-1 rounded-xl py-2.5 font-semibold text-[13px] focus:outline-none"
-              style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: 'pointer' }}
+              style={{ color: '#6E5F4E', backgroundColor: NEU.surface, border: 'none', boxShadow: NEU.outSm, fontFamily: OUTFIT, cursor: 'pointer' }}
             >
               CANCEL
             </button>
@@ -1044,17 +1282,43 @@ function CVEntryModal({
               disabled={submitting || uploading}
               className="flex-1 rounded-xl py-2.5 font-bold text-[13px] focus:outline-none transition-colors"
               style={{
-                backgroundColor: submitting || uploading ? '#DDD4C0' : '#1B3828',
+                background: submitting || uploading ? '#DDD4C0' : 'linear-gradient(150deg, #2A5A3C, #1B3828)',
                 color: submitting || uploading ? '#9A8A78' : '#EED98A',
                 fontFamily: OUTFIT,
                 letterSpacing: '0.08em',
                 border: 'none',
+                boxShadow: submitting || uploading ? 'none' : `0 4px 10px rgba(27,56,40,0.28), ${NEU.outSm}`,
                 cursor: submitting || uploading ? 'default' : 'pointer',
               }}
             >
               {submitting ? 'SAVING...' : existing ? 'SAVE CHANGES' : 'ADD ENTRY'}
             </button>
           </div>
+
+          {/* Delete — only for manual (self-reported) entries. Verified entries
+              are owned by the platform and cannot be removed from here. */}
+          {existing && !isVerified && (
+            <div className="pt-3 mt-1" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 font-bold text-[12px] focus:outline-none transition-colors"
+                style={{
+                  color: deleting ? '#C9A0A0' : '#8B2020',
+                  backgroundColor: 'rgba(139,32,32,0.06)',
+                  border: '1px solid rgba(139,32,32,0.28)',
+                  fontFamily: OUTFIT, letterSpacing: '0.06em',
+                  cursor: deleting ? 'default' : 'pointer',
+                }}
+                onMouseEnter={(e) => { if (!deleting) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.12)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
+              >
+                <Trash2 size={13} strokeWidth={2.2} />
+                {deleting ? 'DELETING…' : 'DELETE THIS ENTRY'}
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>
@@ -1066,22 +1330,19 @@ function CVEntryModal({
 function TimelineEntry({
   entry,
   onEdit,
-  onDelete,
-  deleting,
   isLast,
 }: {
   entry: CVEntry;
   onEdit: () => void;
-  onDelete: () => void;
-  deleting: boolean;
   isLast: boolean;
 }) {
-  const isVerified = entry.source === 'gavelling_verified';
+  const [hovered, setHovered] = useState(false);
   const type = ENTRY_TYPE_MAP[entry.entry_type] ?? ENTRY_TYPE_MAP.delegate;
   // Date lives on the timeline rail (under the logo), not inside the card.
+  // Full month + year ("August 2026"), sized to read clearly on the rail.
   // Undated entries show an em-dash rather than leaking created_at.
   const railDate = entry.event_date
-    ? new Date(`${entry.event_date}T00:00:00`).toLocaleDateString('en', { month: 'short', year: 'numeric' }).toUpperCase()
+    ? new Date(`${entry.event_date}T00:00:00`).toLocaleDateString('en', { month: 'long', year: 'numeric' })
     : '—';
 
   const allocCountry = entry.allocation ? getCountryByName(entry.allocation) : null;
@@ -1092,29 +1353,53 @@ function TimelineEntry({
     ? (entry.awards.length > 0 ? entry.awards : (entry.award && entry.award !== 'None' ? [entry.award] : []))
     : [];
 
+  // Cards are compact by default and expand only when they carry richer content
+  // (a description, awards, or photos) — no empty air on a bare entry.
+  const isRich = entry.photos.length > 0 || !!entry.description || displayAwards.length > 0;
+  const cardPad = isRich ? '!p-5 md:!p-5' : '!p-4';
+
   return (
     <div className="relative flex gap-4 md:gap-5">
       {/* Timeline rail: big conference logo + date + connecting line */}
       <div className="relative flex flex-col items-center flex-shrink-0" style={{ width: '64px' }}>
         <ConferenceLogo entry={entry} size={64} />
         <span
-          className="mt-1.5 text-center whitespace-nowrap"
-          style={{ fontFamily: MONO, fontSize: '9.5px', letterSpacing: '0.06em', color: '#8A7A66', lineHeight: 1.3 }}
+          className="mt-2 text-center"
+          style={{ fontFamily: OUTFIT, fontSize: '13.5px', fontWeight: 700, color: '#5C5140', lineHeight: 1.2, letterSpacing: '-0.005em' }}
         >
           {railDate}
         </span>
         {!isLast && (
           <div
             aria-hidden
-            className="flex-1 mt-2"
-            style={{ width: '2px', minHeight: '24px', background: 'linear-gradient(180deg, rgba(200,190,168,0.95), rgba(200,190,168,0.35))', borderRadius: '9999px' }}
+            className="flex-1 mt-2.5"
+            style={{ width: '3px', minHeight: '24px', background: 'linear-gradient(180deg, rgba(42,90,60,0.28) 0%, rgba(200,190,168,0.5) 55%, rgba(200,190,168,0.18) 100%)', borderRadius: '9999px' }}
           />
         )}
       </div>
 
-      {/* Content card */}
-      <div className="flex-1 min-w-0 pb-6">
-        <GlassCard className="!p-5 md:!p-6 relative" style={{ border: `1.5px solid ${type.border}`, isolation: 'isolate' }}>
+      {/* Content card — click anywhere to edit */}
+      <div className="flex-1 min-w-0 pb-5">
+        <GlassCard
+          className={`${cardPad} relative`}
+          style={{
+            border: `1.5px solid ${type.border}`,
+            isolation: 'isolate',
+            cursor: 'pointer',
+            boxShadow: hovered
+              ? '0 2px 5px rgba(27,56,40,0.10), 0 18px 40px rgba(27,56,40,0.13)'
+              : '0 1px 3px rgba(27,56,40,0.07), 0 12px 32px rgba(27,56,40,0.08)',
+            transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+            transition: 'box-shadow 240ms cubic-bezier(0.22,1,0.36,1), transform 240ms cubic-bezier(0.22,1,0.36,1)',
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label={`Edit ${entry.conference_name} entry`}
+          onClick={onEdit}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(); } }}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
           {/* Faded, blended type silhouette bleeding off the RIGHT edge — sits at
               zIndex -1 behind all content (card is a stacking context via its
               backdrop-filter + isolation), inside a self-clipping overflow-hidden
@@ -1153,9 +1438,9 @@ function TimelineEntry({
             <Emoji3D name={type.emoji} size={20} fallback={type.Icon} fallbackColor={type.accent} />
           </span>
 
-          {/* Role chip + verification — soft neu pills (NEU surface + gentle
-              shadow + tinted accent), matching the applications-side chip system. */}
-          <div className="flex items-center justify-between gap-3 mb-2 pr-9">
+          {/* Role chip — soft neu pill (NEU surface + gentle shadow + tinted
+              accent), matching the applications-side chip system. */}
+          <div className="flex items-center gap-3 mb-2 pr-9">
             <span
               className="inline-flex items-center gap-1.5 flex-shrink-0"
               style={{
@@ -1173,26 +1458,6 @@ function TimelineEntry({
               }}
             >
               {type.label}
-            </span>
-            <span
-              className="inline-flex items-center gap-1.5 flex-shrink-0"
-              style={{
-                padding: isVerified ? '4px 11px 4px 8px' : '4px 11px',
-                borderRadius: '999px',
-                background: isVerified ? `linear-gradient(150deg, #2A5A3C1C, #2A5A3C0C), ${NEU.surface}` : NEU.surface,
-                border: isVerified ? '1px solid rgba(42,90,60,0.28)' : '1px solid rgba(154,138,120,0.28)',
-                boxShadow: NEU.outSm,
-                color: isVerified ? '#245234' : '#8A7A66',
-                fontFamily: OUTFIT,
-                fontSize: '10px',
-                fontWeight: 700,
-                letterSpacing: '0.03em',
-              }}
-            >
-              {isVerified
-                ? <BadgeCheck size={12} strokeWidth={2.4} style={{ color: '#2A5A3C' }} />
-                : <span aria-hidden style={{ width: '5px', height: '5px', borderRadius: '9999px', backgroundColor: '#B6A88E', flexShrink: 0 }} />}
-              {isVerified ? 'Verified' : 'Self-reported'}
             </span>
           </div>
 
@@ -1275,11 +1540,18 @@ function TimelineEntry({
             </div>
           )}
 
-          {/* Photo strip */}
+          {/* Photo strip — clicks open the photo, not the editor */}
           {entry.photos.length > 0 && (
             <div className="flex gap-2 mt-3">
               {entry.photos.map((url) => (
-                <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block">
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
@@ -1290,33 +1562,6 @@ function TimelineEntry({
               ))}
             </div>
           )}
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-1 mt-3 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.5)' }}>
-            <button
-              onClick={onEdit}
-              aria-label="Edit entry"
-              className="flex items-center justify-center rounded-lg focus:outline-none transition-colors"
-              style={{ width: '28px', height: '28px', background: 'none', border: 'none', color: '#9A8A78', cursor: 'pointer' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              <Pencil size={13} strokeWidth={1.9} />
-            </button>
-            {!isVerified && (
-              <button
-                onClick={onDelete}
-                disabled={deleting}
-                aria-label="Delete entry"
-                className="flex items-center justify-center rounded-lg focus:outline-none transition-colors"
-                style={{ width: '28px', height: '28px', background: 'none', border: 'none', color: deleting ? '#DDD4C0' : '#9A8A78', cursor: 'pointer' }}
-                onMouseEnter={(e) => { if (!deleting) { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.07)'; } }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                <Trash2 size={13} strokeWidth={1.9} />
-              </button>
-            )}
-          </div>
         </GlassCard>
       </div>
     </div>
@@ -1331,7 +1576,6 @@ export default function CVPage() {
   const [loading, setLoading]       = useState(true);
   const [modalEntry, setModalEntry] = useState<CVEntry | null>(null);
   const [modalOpen, setModalOpen]   = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchEntries = useCallback(async () => {
     if (!user || !session) return;
@@ -1365,16 +1609,16 @@ export default function CVPage() {
     fetchEntries();
   }, [authLoading, fetchEntries]);
 
-  async function handleDelete(id: string) {
+  const handleDelete = useCallback(async (id: string) => {
     if (!session || !user) return;
-    setDeletingId(id);
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('mun_cv_entries').delete().eq('id', id);
-    const next = entries.filter((e) => e.id !== id);
-    setEntries(next);
-    setDeletingId(null);
-    syncExperienceLevel(supabase, user.id, next.length);
-  }
+    setEntries((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      syncExperienceLevel(supabase, user.id, next.length);
+      return next;
+    });
+  }, [session, user]);
 
   const totalConferences = entries.length;
   const totalAwards = entries.reduce((sum, e) => {
@@ -1535,9 +1779,7 @@ export default function CVPage() {
               key={entry.id}
               entry={entry}
               isLast={i === entries.length - 1}
-              deleting={deletingId === entry.id}
               onEdit={() => { setModalEntry(entry); setModalOpen(true); }}
-              onDelete={() => handleDelete(entry.id)}
             />
           ))}
         </div>
@@ -1549,6 +1791,7 @@ export default function CVPage() {
           userId={user.id}
           onClose={() => { setModalOpen(false); setModalEntry(null); }}
           onSaved={fetchEntries}
+          onDelete={handleDelete}
         />
       )}
     </div>
