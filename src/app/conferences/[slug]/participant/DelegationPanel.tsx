@@ -41,12 +41,13 @@ function pledgeStatusLabel(m: PoolMember): string {
 
 // ── Member row ───────────────────────────────────────────────────────────────
 
-function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwap }: {
+function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwap, covered }: {
   member: PoolMember;
   swapMode: boolean;
   swapSelectable: boolean;
   swapSelected: boolean;
   onToggleSwap: () => void;
+  covered?: boolean;
 }) {
   const name = member.profiles?.display_name ?? 'Unknown';
   const chip = derivePaymentChip(member.payment_status ?? 'unpaid', !!member.self_paid, 0);
@@ -65,7 +66,18 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
       }}
       title={swapMode && !swapSelectable ? 'No allocation yet, not swappable' : undefined}
     >
-      <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} size={28} />
+      <div className="relative flex-shrink-0">
+        <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} size={28} />
+        {covered && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/gavel-mark.png"
+            alt=""
+            title="Covered by delegation credits"
+            style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, objectFit: 'contain' }}
+          />
+        )}
+      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
@@ -128,6 +140,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
 
   const [society, setSociety] = useState<Society | null>(null);
   const [members, setMembers] = useState<PoolMember[]>([]);
+  const [coveredIds, setCoveredIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [swapMode, setSwapMode] = useState(false);
   const [swapSelection, setSwapSelection] = useState<string[]>([]);
@@ -139,12 +152,14 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
     if (!societyId || !session) return;
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const [{ data: societyRow }, { data: memberRows }] = await Promise.all([
+    const [{ data: societyRow }, { data: memberRows }, { data: coveredRows }] = await Promise.all([
       supabase.from('societies').select('id, name, spots_purchased').eq('id', societyId).maybeSingle(),
       supabase.from('applications').select(POOL_MEMBER_SELECT).eq('society_id', societyId).in('status', ['accepted', 'assigned']),
+      supabase.rpc('society_credit_covered_apps', { p_society: societyId }),
     ]);
     setSociety((societyRow as Society | null) ?? null);
     setMembers((memberRows ?? []) as unknown as PoolMember[]);
+    setCoveredIds(new Set((coveredRows ?? []) as string[]));
     setLoading(false);
   }, [societyId, session]);
 
@@ -318,6 +333,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
                 swapSelectable={!!m.assigned_committee_id}
                 swapSelected={swapSelection.includes(m.id)}
                 onToggleSwap={() => toggleSwapSelect(m.id)}
+                covered={coveredIds.has(m.id)}
               />
             ))}
           </div>
@@ -336,6 +352,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
                 swapSelectable={!!m.assigned_committee_id}
                 swapSelected={swapSelection.includes(m.id)}
                 onToggleSwap={() => toggleSwapSelect(m.id)}
+                covered={coveredIds.has(m.id)}
               />
             ))}
           </div>

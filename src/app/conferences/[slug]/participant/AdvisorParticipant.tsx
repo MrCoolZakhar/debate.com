@@ -5,6 +5,7 @@
 // content here beyond the delegation roster and their own pledge.
 
 import DelegationPanel from './DelegationPanel';
+import DelegationCreditsCard from './DelegationCreditsCard';
 import PledgeInvoicingCard from './PledgeInvoicingCard';
 import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantApplication, ParticipantRoleConfig } from './types';
@@ -38,6 +39,7 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
 
   return (
     <div className="flex flex-col gap-6">
+      <DelegationCreditsCard societyId={application.society_id} />
       <DelegationPanel
         conferenceId={conferenceId}
         societyId={application.society_id}
