@@ -500,6 +500,48 @@ export default function ConferenceDetailClient() {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'availability' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // Anchor the committee slider to the MIDDLE: when the set fits, `justify-content: safe center`
+  // (on the track's inline style) centers it; when it overflows, start scrolled to the centre so
+  // the user pans out to the sides. Re-centres on a new arrangement (list / sort / tab change) and
+  // on resize, but never fights the user once they've scrolled.
+  const committeeUserScrolledRef = useRef(false);
+  const committeeProgrammaticScrollRef = useRef(false);
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+    // New arrangement: allow a fresh re-centre.
+    committeeUserScrolledRef.current = false;
+    const centre = () => {
+      const node = carouselRef.current;
+      if (!node) return;
+      const overflow = node.scrollWidth - node.clientWidth;
+      if (overflow > 1 && !committeeUserScrolledRef.current) {
+        committeeProgrammaticScrollRef.current = true;
+        node.scrollLeft = overflow / 2;
+        requestAnimationFrame(() => { committeeProgrammaticScrollRef.current = false; });
+      }
+    };
+    const onScroll = () => {
+      if (committeeProgrammaticScrollRef.current) return;
+      committeeUserScrolledRef.current = true; // honour manual scrolling
+    };
+    const onResize = () => centre();
+    // Measure after paint so scrollWidth/clientWidth are final. rAF handles the normal
+    // (visible) case; a short timeout is a fallback for when rAF is throttled (e.g. the
+    // page mounts in a hidden/background tab).
+    const raf = requestAnimationFrame(centre);
+    const to = setTimeout(centre, 80);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(to);
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+    };
+    // `loading` / `authLoading` matter because the whole page early-returns a skeleton
+    // while either is true — the carousel (and its ref) only mounts once they clear.
+  }, [committees, sortKey, sortDir, activeTab, loading, authLoading]);
   // Role-aware sidebar: organizer detection + one-button apply role picker
   const [organizerRole, setOrganizerRole] = useState<string | null>(null);
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
@@ -2223,6 +2265,10 @@ export default function ConferenceDetailClient() {
                           ref={carouselRef}
                           className="flex gap-4 overflow-x-auto"
                           style={{
+                            // `safe center` centres the set when it fits, and falls back to
+                            // start-alignment (no clipping, scroll still reaches the first card)
+                            // when it overflows — the effect then scrolls to the middle.
+                            justifyContent: 'safe center',
                             scrollSnapType: 'x mandatory',
                             scrollbarWidth: 'none',
                             msOverflowStyle: 'none',

@@ -44,8 +44,32 @@ export async function GET(request: NextRequest) {
         },
       }
     );
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Onboarding gate: OAuth/Google sign-ups never pass through the signup
+      // wizard, so a brand-new user would otherwise land straight in the app
+      // without recording their education level / MUN CV. The onboarding wizard
+      // writes profiles.education_level, so a user whose profile has a null
+      // education_level (or no profile row yet) hasn't onboarded — send them to
+      // /auth/onboarding, preserving the intended destination so onboarding can
+      // forward them on afterwards. Users who already onboarded skip this and
+      // go straight to `next`, so nobody loops.
+      const userId = data.user?.id;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('education_level')
+          .eq('id', userId)
+          .maybeSingle();
+        if (!profile || profile.education_level == null) {
+          if (next === '/auth/onboarding') {
+            return NextResponse.redirect(`${origin}/auth/onboarding`);
+          }
+          return NextResponse.redirect(
+            `${origin}/auth/onboarding?next=${encodeURIComponent(next)}`,
+          );
+        }
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
     // Exchange failed — the code was expired, already used, or malformed.

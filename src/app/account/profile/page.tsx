@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin } from 'lucide-react';
+import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
@@ -42,6 +42,13 @@ const inputStyle: React.CSSProperties = {
   fontFamily: OUTFIT,
 };
 
+// Where the delegate does MUN — captured during onboarding
+// (profiles.education_level). Read-only here; noted on the profile.
+const EDUCATION_LABELS: Record<string, string> = {
+  high_school: 'High School',
+  university: 'University',
+};
+
 // Folds the forest/ivory neumorphic surface into the existing GlassCard usages:
 // opaque parchment surface + soft extruded dual-shadow (no hard border), so the
 // profile reads like the rest of the neu dashboard.
@@ -64,6 +71,7 @@ export default function ProfilePage() {
     notify_email_documents:    true,
     notify_email_reminders:    true,
   });
+  const [educationLevel, setEducationLevel] = useState<string | null>(null);
   const [cvCount, setCvCount]         = useState<number | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving]           = useState(false);
@@ -122,7 +130,7 @@ export default function ProfilePage() {
 
     supabase
       .from('profiles')
-      .select('display_name, nationality, date_of_birth, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
+      .select('display_name, nationality, date_of_birth, education_level, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -130,6 +138,7 @@ export default function ProfilePage() {
           setDisplayName(data.display_name ?? '');
           setNationality(data.nationality ?? '');
           setDateOfBirth(data.date_of_birth ?? '');
+          setEducationLevel(data.education_level ?? null);
           setNotifications({
             notify_email_marketing:    data.notify_email_marketing    ?? true,
             notify_email_applications: data.notify_email_applications ?? true,
@@ -904,6 +913,22 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
+
+          {/* Education — where they do MUN, captured at onboarding. Read-only. */}
+          {educationLevel && (
+            <div>
+              <label
+                className="flex items-center gap-1.5 text-[13px] font-semibold mb-1.5"
+                style={{ color: '#1C1410', fontFamily: OUTFIT }}
+              >
+                <GraduationCap size={13} strokeWidth={2.3} style={{ color: '#B6871F' }} />
+                Education
+              </label>
+              <Pill tone="forest" size="sm" icon={<GraduationCap size={11} strokeWidth={2.4} />}>
+                {EDUCATION_LABELS[educationLevel] ?? educationLevel}
+              </Pill>
+            </div>
+          )}
         </div>
 
         <div className="relative mt-7 flex items-center gap-4" style={{ zIndex: 1 }}>

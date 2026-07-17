@@ -51,7 +51,7 @@ export function WizardShell({
   return (
     <div
       className="w-full flex flex-col items-center"
-      style={{ maxWidth: 640, margin: '0 auto', padding: '8px 4px 32px' }}
+      style={{ maxWidth: 720, margin: '0 auto', padding: '8px 4px 32px' }}
     >
       {/* Progress dots */}
       <div className="flex items-center gap-2" style={{ marginBottom: 28 }} aria-label={`Step ${step} of ${total}`}>
@@ -170,25 +170,43 @@ function GoldCheck({ visible }: { visible: boolean }) {
 }
 
 // Floating card look: a soft forest-tinted drop shadow lifts every option off
-// the ivory page; hover grows the card (~1.04) and deepens the shadow so it
-// reads as picked-up. Selected stays clearly distinct (forest border + the
-// gold check overlay). Motion rides the house cubic-bezier easing.
+// the ivory page; hover grows the card and deepens the shadow so it reads as
+// picked-up. Selected stays clearly distinct (forest border + gold check
+// overlay). Motion rides the house cubic-bezier easing.
 const CARD_FLOAT = '-4px -5px 12px rgba(255,255,255,0.6), 6px 10px 24px rgba(27,56,40,0.14)';
-const CARD_LIFT = '-5px -6px 16px rgba(255,255,255,0.72), 10px 16px 38px rgba(27,56,40,0.24)';
+// Hovered: a larger, softer drop shadow that also blooms a gold-tinted glow, so
+// the lifted card glints warm against the ivory page.
+const CARD_LIFT_GLASS =
+  '-6px -7px 20px rgba(255,255,255,0.9), 12px 20px 46px rgba(27,56,40,0.22), 0 12px 44px rgba(182,135,31,0.24)';
 
 function cardBaseStyle(selected: boolean, hovered: boolean): React.CSSProperties {
   return {
     position: 'relative',
-    border: selected ? `2px solid ${NEU.forest}` : '2px solid rgba(27,56,40,0.10)',
+    // On hover the card turns glassy — a soft light border reads as a frosted
+    // rim; selected keeps its forest border for a legible active state.
+    border: hovered
+      ? '2px solid rgba(255,255,255,0.8)'
+      : selected
+        ? `2px solid ${NEU.forest}`
+        : '2px solid rgba(27,56,40,0.10)',
     borderRadius: 22,
-    backgroundColor: selected ? NEU.surface : NEU.base,
-    boxShadow: hovered ? CARD_LIFT : selected ? NEU.out : CARD_FLOAT,
+    // Glassmorphism on hover: a whitish semi-transparent fill + backdrop blur,
+    // so the card frosts over the ivory ground. Selected (unhovered) keeps the
+    // solid surface; the default rests on the base tone.
+    backgroundColor: hovered
+      ? 'rgba(255,255,255,0.6)'
+      : selected
+        ? NEU.surface
+        : NEU.base,
+    backdropFilter: hovered ? 'blur(16px) saturate(1.2)' : undefined,
+    WebkitBackdropFilter: hovered ? 'blur(16px) saturate(1.2)' : undefined,
+    boxShadow: hovered ? CARD_LIFT_GLASS : selected ? NEU.out : CARD_FLOAT,
     transform: hovered
-      ? 'translateY(-4px) scale(1.04)'
+      ? 'translateY(-6px) scale(1.05)'
       : selected
         ? 'translateY(-2px) scale(1.01)'
         : 'translateY(0) scale(1)',
-    transition: `transform 320ms ${EASE}, box-shadow 320ms ${EASE}, border-color 320ms ${EASE}`,
+    transition: `transform 320ms ${EASE}, box-shadow 320ms ${EASE}, border-color 320ms ${EASE}, background-color 320ms ${EASE}`,
     transformOrigin: 'center',
     willChange: 'transform',
     cursor: 'pointer',
@@ -249,8 +267,8 @@ export function TwoTabPick({
             className="flex flex-col items-center justify-start focus-visible:ring-2"
             style={{
               ...cardBaseStyle(selected, hovered),
-              minHeight: 308,
-              padding: opt.image ? '0 0 28px' : '42px 22px 34px',
+              minHeight: 400,
+              padding: opt.image ? '0 0 34px' : '56px 26px 44px',
               overflow: 'hidden',
             }}
           >
@@ -262,8 +280,8 @@ export function TwoTabPick({
                 style={{
                   display: 'block',
                   width: '100%',
-                  height: 190,
-                  marginBottom: 22,
+                  height: 248,
+                  marginBottom: 26,
                   backgroundImage: `url(${opt.image})`,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
@@ -276,7 +294,7 @@ export function TwoTabPick({
               <span
                 aria-hidden
                 className="flex items-center justify-center"
-                style={{ fontSize: 84, height: 104, marginBottom: 20 }}
+                style={{ fontSize: 100, height: 124, marginBottom: 24 }}
               >
                 {opt.icon}
               </span>
@@ -286,9 +304,9 @@ export function TwoTabPick({
               style={{
                 fontFamily: OUTFIT,
                 fontWeight: 800,
-                fontSize: 20,
+                fontSize: 25,
                 color: selected ? NEU.forest : NEU.ink,
-                padding: '0 12px',
+                padding: '0 14px',
               }}
             >
               {opt.label}
@@ -297,12 +315,12 @@ export function TwoTabPick({
               <span
                 style={{
                   fontFamily: OUTFIT,
-                  fontSize: 13.5,
+                  fontSize: 15,
                   fontWeight: 500,
                   color: NEU.muted,
-                  marginTop: 7,
-                  padding: '0 16px',
-                  lineHeight: 1.45,
+                  marginTop: 9,
+                  padding: '0 20px',
+                  lineHeight: 1.5,
                 }}
               >
                 {opt.sub}

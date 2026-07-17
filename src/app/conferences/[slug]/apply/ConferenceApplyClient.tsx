@@ -302,6 +302,60 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
+// ── Glassmorphism option cards ─────────────────────────────────────────────
+// Design parity with the delegate onboarding wizard (src/components/wizard.tsx
+// CardSelect / TwoTabPick): big tactile option tiles with a translucent whitish
+// fill + backdrop blur over the ivory page, a soft border, and a gold-tinted
+// lift on hover. Selected reads as a light glass card with a forest border and
+// the gold check overlay — same language as onboarding.
+const GLASS_FLOAT = '-4px -5px 12px rgba(255,255,255,0.55), 6px 10px 24px rgba(27,56,40,0.13)';
+const GLASS_LIFT = '-5px -6px 16px rgba(255,255,255,0.72), 10px 16px 34px rgba(27,56,40,0.2), 0 12px 30px rgba(182,135,31,0.3)';
+
+function glassCardStyle(selected: boolean, hovered: boolean, reducedMotion: boolean): React.CSSProperties {
+  const blur = hovered ? 'blur(16px) saturate(1.2) brightness(1.06)' : 'blur(10px) saturate(1.08)';
+  return {
+    position: 'relative',
+    borderRadius: 22,
+    border: selected ? `2px solid ${NEU.forest}` : '1.5px solid rgba(255,255,255,0.55)',
+    background: selected ? 'rgba(255,255,255,0.78)' : 'rgba(255,255,255,0.6)',
+    backdropFilter: blur,
+    WebkitBackdropFilter: blur,
+    boxShadow: selected ? `${NEU.out}, 0 10px 26px rgba(182,135,31,0.24)` : hovered ? GLASS_LIFT : GLASS_FLOAT,
+    transform: reducedMotion
+      ? 'none'
+      : hovered
+        ? 'translateY(-4px) scale(1.03)'
+        : selected
+          ? 'translateY(-2px) scale(1.01)'
+          : 'translateY(0) scale(1)',
+    transition: reducedMotion ? 'none' : `transform 320ms ${EASE}, box-shadow 320ms ${EASE}, border-color 320ms ${EASE}, background 240ms ${EASE}`,
+    transformOrigin: 'center',
+    cursor: 'pointer',
+    outline: 'none',
+  };
+}
+
+/** Gold check medallion that fades/scales in on a selected glass card. */
+function GlassCheck({ visible }: { visible: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className="absolute flex items-center justify-center"
+      style={{
+        top: 10, right: 10, width: 24, height: 24, borderRadius: 999,
+        background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
+        boxShadow: `0 2px 7px ${NEU.deepGold}66`,
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'scale(1)' : 'scale(0.5)',
+        transition: `all 260ms ${EASE}`,
+        pointerEvents: 'none',
+      }}
+    >
+      <Check size={14} strokeWidth={3.2} style={{ color: NEU.forest }} />
+    </span>
+  );
+}
+
 // ── Preference-picker building blocks ─────────────────────────────────────
 
 /** Difficulty tier chip: escalating insignia + accent, tabular label. */
@@ -637,6 +691,13 @@ function ConferenceApplyInner() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [resubmitNeedsCredit, setResubmitNeedsCredit] = useState(false);
+  // Withdraw (edit mode, submitted applications only) — two-step confirm.
+  const [withdrawConfirm, setWithdrawConfirm] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState('');
+  // Hover keys for the glassy option tiles (society / invoicing).
+  const [societyHover, setSocietyHover] = useState<string | null>(null);
+  const [invoicingHover, setInvoicingHover] = useState<boolean | null>(null);
 
   // ── Step 2, Society
   const [isIndependent, setIsIndependent] = useState(false);
@@ -1516,6 +1577,37 @@ function ConferenceApplyInner() {
     }
   }
 
+  // Withdraw the application entirely. There's no user DELETE policy on
+  // `applications`, and the "update own submitted" RLS policy forbids moving
+  // status off 'submitted', so this goes through the SECURITY DEFINER
+  // withdraw_application RPC: it verifies auth.uid() owns the row, only allows
+  // withdrawal while status is 'submitted', flips status to 'withdrawn', and
+  // refunds any Gavelling credit that was held. On success we leave the apply
+  // flow for the applicant's conferences list.
+  async function handleWithdraw() {
+    if (!session || !existingApp) { setWithdrawError('Your session expired. Please sign in again.'); return; }
+    if (existingApp.status !== 'submitted') {
+      setWithdrawError('This application can no longer be withdrawn.');
+      return;
+    }
+    setWithdrawing(true);
+    setWithdrawError('');
+    const supabase = getAuthedClient(session.access_token);
+    try {
+      const { data, error } = await supabase.rpc('withdraw_application', { p_application_id: existingApp.id });
+      if (error) throw error;
+      const result = data as { ok: boolean; error?: string } | null;
+      if (!result?.ok) throw new Error(result?.error ?? 'Could not withdraw your application. Please try again.');
+      refreshCredits();
+      try { localStorage.removeItem(resumeKey); } catch { /* ignore */ }
+      router.push('/my-conferences');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not withdraw your application. Please try again.';
+      setWithdrawError(msg);
+      setWithdrawing(false);
+    }
+  }
+
   // Sent to the Credits & Subscription store when the applicant runs out of
   // credits mid-apply — snapshots every field they've filled in so far to
   // localStorage, then sends them off to buy a credit. The resume-restore
@@ -1845,43 +1937,35 @@ function ConferenceApplyInner() {
           <>
             {/* Toggle */}
             {!isInvoicingRole && (
-              <div className="grid grid-cols-2 gap-3 mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 {(['independent', 'society'] as const).map(type => {
                   const selected = type === 'independent' ? isIndependent : !isIndependent;
+                  const hovered = societyHover === type;
                   const TileIcon = type === 'independent' ? User : Building2;
                   return (
                     <button
                       key={type}
+                      type="button"
                       onClick={() => setIsIndependent(type === 'independent')}
-                      className="relative rounded-xl p-4 flex flex-col items-center gap-2.5 focus:outline-none"
-                      style={{
-                        border: selected ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        backgroundColor: selected ? '#1B3828' : 'transparent',
-                        boxShadow: selected ? '0 6px 18px rgba(27,56,40,0.18)' : 'none',
-                        transition: reducedMotion ? 'none' : 'all 200ms cubic-bezier(0.22,1,0.36,1)',
-                      }}
-                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                      onMouseLeave={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      onMouseEnter={() => setSocietyHover(type)}
+                      onMouseLeave={() => setSocietyHover(null)}
+                      className="flex flex-col items-center justify-center gap-3.5 focus:outline-none"
+                      style={{ ...glassCardStyle(selected, hovered, reducedMotion), minHeight: 172, padding: '30px 20px' }}
                     >
-                      {selected && (
-                        <span
-                          className="absolute top-2.5 right-2.5 flex items-center justify-center rounded-full"
-                          style={{ width: 18, height: 18, backgroundColor: '#EED98A' }}
-                        >
-                          <Check size={12} strokeWidth={3} style={{ color: '#1B3828' }} />
-                        </span>
-                      )}
+                      <GlassCheck visible={selected} />
                       <span
-                        className="flex items-center justify-center rounded-xl"
+                        className="flex items-center justify-center"
                         style={{
-                          width: 40, height: 40,
-                          backgroundColor: selected ? 'rgba(238,217,138,0.15)' : 'rgba(27,56,40,0.06)',
-                          border: selected ? '1px solid rgba(238,217,138,0.35)' : '1px solid rgba(27,56,40,0.12)',
+                          width: 54, height: 54, borderRadius: 16,
+                          background: selected ? 'linear-gradient(150deg, #16301F, #2A5A3C)' : 'rgba(27,56,40,0.06)',
+                          border: selected ? '1px solid rgba(238,217,138,0.4)' : '1px solid rgba(27,56,40,0.12)',
+                          boxShadow: selected ? '0 6px 16px rgba(27,56,40,0.28)' : 'none',
+                          transition: reducedMotion ? 'none' : `all 260ms ${EASE}`,
                         }}
                       >
-                        <TileIcon size={19} strokeWidth={2.1} style={{ color: selected ? '#EED98A' : '#1B3828' }} />
+                        <TileIcon size={24} strokeWidth={2.1} style={{ color: selected ? NEU.gold : NEU.forest }} />
                       </span>
-                      <p className="font-bold text-sm" style={{ color: selected ? '#EED98A' : '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      <p className="font-bold text-[15px]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                         {type === 'independent' ? 'Independent' : 'With a society'}
                       </p>
                     </button>
@@ -2015,20 +2099,22 @@ function ConferenceApplyInner() {
           This is separate from your own registration fee. It only covers spots for your delegates.
         </p>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-2 gap-4 mb-6">
           {options.map(opt => {
             const selected = willPledgeSpots === opt.value;
+            const hovered = invoicingHover === opt.value;
             return (
               <button
                 key={String(opt.value)}
+                type="button"
                 onClick={() => { setWillPledgeSpots(opt.value); setInvoicingError(''); }}
-                className="relative rounded-xl p-4 text-center focus:outline-none transition-all"
-                style={{
-                  border: selected ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                  backgroundColor: selected ? 'rgba(27,56,40,0.06)' : 'transparent',
-                }}
+                onMouseEnter={() => setInvoicingHover(opt.value)}
+                onMouseLeave={() => setInvoicingHover(null)}
+                className="flex items-center justify-center focus:outline-none"
+                style={{ ...glassCardStyle(selected, hovered, reducedMotion), minHeight: 104, padding: '22px' }}
               >
-                <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'DM Mono', monospace", letterSpacing: '0.06em' }}>
+                <GlassCheck visible={selected} />
+                <p className="font-bold text-lg" style={{ color: NEU.ink, fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em' }}>
                   {opt.label}
                 </p>
               </button>
@@ -2700,6 +2786,61 @@ function ConferenceApplyInner() {
             ) : (isEditMode ? 'RESUBMIT APPLICATION' : 'SUBMIT APPLICATION')}
           </button>
         </div>
+
+        {/* ── Withdraw application — secondary, destructive; only while the
+            application is still pending ('submitted'). Two-step confirm. ── */}
+        {isEditMode && existingApp?.status === 'submitted' && (
+          <div className="mt-8 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.12)' }}>
+            {!withdrawConfirm ? (
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => { setWithdrawConfirm(true); setWithdrawError(''); }}
+                  className="text-xs font-semibold focus:outline-none"
+                  style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.04em', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+                >
+                  Withdraw application
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl p-4" style={{ backgroundColor: 'rgba(139,32,32,0.05)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
+                <p className="font-bold text-sm mb-1" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                  Withdraw this application?
+                </p>
+                <p className="text-xs mb-3" style={{ color: 'rgba(28,20,16,0.72)', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                  Your application to {conference?.acronym} will be cancelled and removed from your conferences. Any Gavelling credit you spent is refunded. This can&apos;t be undone — you&apos;d need to apply again.
+                </p>
+                {withdrawError && (
+                  <p className="text-xs mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                    {withdrawError}
+                  </p>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleWithdraw}
+                    disabled={withdrawing}
+                    className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none"
+                    style={{ backgroundColor: withdrawing ? 'rgba(139,32,32,0.4)' : '#8B2020', color: '#FBEDED', fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
+                  >
+                    {withdrawing ? 'WITHDRAWING…' : 'YES, WITHDRAW'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setWithdrawConfirm(false); setWithdrawError(''); }}
+                    disabled={withdrawing}
+                    className="rounded-xl py-2 px-4 text-xs font-bold focus:outline-none"
+                    style={{ border: '1.5px solid #C8BEA8', color: NEU.ink, fontFamily: OUTFIT, background: 'transparent', cursor: withdrawing ? 'not-allowed' : 'pointer' }}
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </>
     );
   }
