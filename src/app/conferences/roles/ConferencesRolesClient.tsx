@@ -24,6 +24,12 @@ import {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
+// Feature flag: the live job board (postings, filters, apply flow) is
+// temporarily hidden behind a friendly "coming soon" screen. Flip this to
+// `true` to restore the full board exactly as it was — nothing below has
+// been deleted, only gated.
+const JOB_BOARD_ENABLED: boolean = false;
+
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
 const FOREST = NEU.forest;
@@ -711,6 +717,133 @@ function Footer() {
   );
 }
 
+// ── Coming-soon screen ───────────────────────────────────────────────────
+// Rendered in place of the live board while JOB_BOARD_ENABLED is false.
+// Reuses the same page shell (ambient washes, grain, SiteNav, Footer) so the
+// experience stays cohesive with the rest of the conferences surface.
+
+function ComingSoonScreen() {
+  return (
+    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: NEU.base, overflowX: 'clip' }}>
+      {/* Decorative bleed — faded forest glyphs off the page edges. */}
+      <DecorativeBleed
+        items={[
+          { Icon: Briefcase, size: 168, top: '-40px', left: '-46px', opacity: 0.05 },
+          { Icon: Gavel, size: 150, bottom: '-38px', right: '-30px', opacity: 0.045, rotate: -12 },
+          { Icon: ScrollText, size: 120, top: '46%', left: '-30px', opacity: 0.04 },
+        ]}
+      />
+      {/* Grain overlay */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          backgroundImage: GRAIN,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '300px 300px',
+          mixBlendMode: 'multiply',
+          opacity: 0.18,
+        }}
+      />
+
+      {/* Soft ambient washes */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute z-0"
+        style={{
+          top: '-140px', left: '8%', width: '620px', height: '420px',
+          background: 'radial-gradient(ellipse at center, rgba(238,217,138,0.22) 0%, transparent 65%)',
+          filter: 'blur(48px)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute z-0"
+        style={{
+          top: '-80px', right: '4%', width: '520px', height: '380px',
+          background: 'radial-gradient(ellipse at center, rgba(42,90,60,0.13) 0%, transparent 65%)',
+          filter: 'blur(48px)',
+        }}
+      />
+
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <SiteNav />
+
+        <main className="flex-1 flex items-center justify-center px-6 py-16 md:py-24">
+          <NeuCard
+            className="w-full text-center"
+            style={{ maxWidth: 520, padding: '40px 28px 44px' }}
+          >
+            {/* Otter-in-construction, seated in a soft neu inset */}
+            <div className="flex justify-center">
+              <NeuInset
+                className="inline-flex items-center justify-center"
+                style={{ borderRadius: 28, padding: 18 }}
+              >
+                <img
+                  src="/WIP.png"
+                  alt="Gavelling otter in a hard hat, hard at work"
+                  style={{ width: 'clamp(200px, 52vw, 280px)', height: 'auto', display: 'block' }}
+                />
+              </NeuInset>
+            </div>
+
+            {/* Eyebrow */}
+            <p
+              className="mt-7"
+              style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: GOLD_DEEP }}
+            >
+              CHAIR &amp; STAFF BOARD
+            </p>
+
+            {/* Headline */}
+            <h1
+              className="mt-2"
+              style={{
+                fontFamily: OUTFIT, fontWeight: 900,
+                fontSize: 'clamp(28px, 5.5vw, 40px)', lineHeight: 1.05, color: INK, margin: 0,
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Opportunities are{' '}
+              <span style={{ color: FOREST }}>coming soon</span>
+              <span style={{ color: GOLD_DEEP }}>.</span>
+            </h1>
+
+            {/* Subcopy */}
+            <p
+              className="mt-4 mx-auto"
+              style={{ fontFamily: OUTFIT, fontSize: 14.5, color: '#6B5D4B', maxWidth: 400, lineHeight: 1.65 }}
+            >
+              This is where{' '}
+              <span style={{ color: INK, fontWeight: 700 }}>chairing</span>,{' '}
+              <span style={{ color: INK, fontWeight: 700 }}>secretariat</span>, and{' '}
+              <span style={{ color: INK, fontWeight: 700 }}>staff</span>{' '}
+              opportunities across conferences will live. We&rsquo;re putting the
+              finishing touches on it — check back soon.
+            </p>
+
+            {/* Category glyph chips — a quiet preview of what's coming */}
+            <div className="mt-7 flex items-center justify-center gap-2 flex-wrap">
+              {CATEGORY_ORDER.map(key => (
+                <GlyphChip
+                  key={key}
+                  emoji={CATEGORY_META[key].emoji}
+                  icon={CATEGORY_META[key].icon}
+                  gradient={CATEGORY_META[key].gradient}
+                  label={CATEGORY_META[key].single}
+                  tone={key === 'chairs' ? 'gold' : 'ink'}
+                />
+              ))}
+            </div>
+          </NeuCard>
+        </main>
+
+        <Footer />
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 const COMP_FILTERS = [
@@ -856,6 +989,12 @@ export default function ConferencesRolesClient() {
       isSignedIn={!!user}
     />
   );
+
+  // While the board is disabled, show only the friendly coming-soon screen.
+  // (All hooks above have already run, so this early return is hook-safe.)
+  if (!JOB_BOARD_ENABLED) {
+    return <ComingSoonScreen />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: NEU.base, overflowX: 'clip' }}>

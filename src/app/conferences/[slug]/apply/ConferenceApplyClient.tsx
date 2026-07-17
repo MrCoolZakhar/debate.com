@@ -12,17 +12,19 @@ import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { formatFee } from '@/lib/utils';
 import { Pill, LevelBadge } from '@/app/account/accountUi';
-import { experienceProgress } from '@/lib/munExperience';
-import { computeCheckout, localizedApproxSavings, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
+import { experienceProgress, EXPERIENCE_BANDS } from '@/lib/munExperience';
+import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { queueEventEmail } from '@/lib/emailEvents';
-import { NEU, NeuInset, NeuCard, OUTFIT, EASE } from '@/components/neu';
+import { NEU, NeuInset, NeuCard, OUTFIT, EASE, Emoji3D } from '@/components/neu';
+import { TwoTabPick } from '@/components/wizard';
+import { CVEntryModal } from '@/components/CVEntryModal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { type CustomAnswers, normalizeBlocks, questionsOf, splitIntoSections, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import {
-  Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
+  Gavel, Users, Building2, ListOrdered, Sprout,
   GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
   MapPin, Landmark, Check, X, Plus, ArrowLeft, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
@@ -114,14 +116,6 @@ interface ExistingApp {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 type IconType = typeof Gavel;
-
-/** lucide icon per applying-as role, for the Step 1 role tile. */
-function roleIcon(role: string): IconType {
-  if (role === 'observer') return Eye;
-  if (role === 'head-delegate') return Users;
-  if (role === 'chair') return Gavel;
-  return Mic; // delegate
-}
 
 /** Escalating insignia per experience level (recruit → prestige). */
 const EXPERIENCE_ICON: Record<string, IconType> = {
@@ -657,6 +651,11 @@ function ConferenceApplyInner() {
   const { slug } = useParams() as { slug: string };
   const searchParams = useSearchParams();
   const role = searchParams.get('role') ?? 'delegate';
+  // Delegation-invite token (?role=delegate&delegationInvite=<token>). We only
+  // CONSUME it here — resolve it via the resolve_delegation_invite RPC and
+  // pre-select the invited delegation (the invite creation + landing route +
+  // RPCs are built elsewhere).
+  const delegationInviteToken = searchParams.get('delegationInvite');
   // Snapshot key for the "buy credits mid-apply, come back and resume" flow
   // (see goBuyCredits / the resume-restore effect below) — namespaced per
   // conference + role so switching roles never clobbers another draft.
@@ -695,8 +694,7 @@ function ConferenceApplyInner() {
   const [withdrawConfirm, setWithdrawConfirm] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
-  // Hover keys for the glassy option tiles (society / invoicing).
-  const [societyHover, setSocietyHover] = useState<string | null>(null);
+  // Hover key for the glassy invoicing option tiles.
   const [invoicingHover, setInvoicingHover] = useState<boolean | null>(null);
 
   // ── Step 2, Society
@@ -706,6 +704,17 @@ function ConferenceApplyInner() {
   const [selectedSocietyId, setSelectedSocietyId] = useState<string | null>(null);
   const [societyDropdownOpen, setSocietyDropdownOpen] = useState(false);
   const [societyError, setSocietyError] = useState('');
+  // Delegations that ALREADY have a head-delegate / faculty-advisor application
+  // for this conference — grayed out and non-selectable in the picker (a second
+  // delegation application for the same society isn't allowed; joiners are
+  // invited by that society's head delegate instead). Populated from the
+  // conference_taken_society_ids RPC.
+  const [takenSocietyIds, setTakenSocietyIds] = useState<Set<string>>(new Set());
+  // Delegation-invite consume (?delegationInvite=<token>): the resolved society
+  // is pre-selected AND bypasses the "already applied" grayout, since the
+  // applicant was explicitly invited to join it.
+  const [invitedSocietyId, setInvitedSocietyId] = useState<string | null>(null);
+  const [inviteSocietyName, setInviteSocietyName] = useState<string | null>(null);
 
   // ── Step, Invoicing (head-delegate / faculty-advisor only). A pledge is
   // ONLY about paying for delegation spots, everyone's own fee flows through
@@ -733,6 +742,11 @@ function ConferenceApplyInner() {
   // read-only. It still feeds the submit payload so the organiser sees the rank.
   const [experienceLevel, setExperienceLevel] = useState('');
   const [cvEntryCount, setCvEntryCount] = useState(0);
+  // "Add to / import from my MUN CV" affordances on the Experience step — the
+  // derived rank re-reads the live CV count, and the shared CVEntryModal lets
+  // the applicant add a conference without leaving the flow.
+  const [cvModalOpen, setCvModalOpen] = useState(false);
+  const [cvRefreshing, setCvRefreshing] = useState(false);
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
   const [customMissingIds, setCustomMissingIds] = useState<string[]>([]);
   // Custom questions render as one Section per page within this step.
@@ -744,32 +758,12 @@ function ConferenceApplyInner() {
   const [voucherChecking, setVoucherChecking] = useState(false);
   const [voucherError, setVoucherError] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherInput | null>(null);
-  // Gavin upsell, geo country for the localized "~$10/mo" figure, plus a
-  // localStorage dismiss so the banner never nags. Never blocks checkout.
-  const [geoCountry, setGeoCountry] = useState<string | null>(null);
-  const [upsellDismissed, setUpsellDismissed] = useState(true); // true until localStorage read
-
   // ── Credits, the personal balance comes from the shared header hook; the
   // pooled/delegation balance is fetched separately for whichever society
   // this application would attach to (see previewSocietyId below).
   const { balance: creditBalance, loading: creditBalanceLoading, refresh: refreshCredits } = useCredits();
   const [poolBalance, setPoolBalance] = useState<number | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
-
-  useEffect(() => {
-    try {
-      setUpsellDismissed(localStorage.getItem('gavin-unlimited-upsell-dismissed') === '1');
-    } catch { setUpsellDismissed(false); }
-    fetch('/api/geo')
-      .then(r => r.json())
-      .then(g => setGeoCountry((g?.countryCode as string | null) ?? null))
-      .catch(() => {});
-  }, []);
-
-  function dismissUpsell() {
-    setUpsellDismissed(true);
-    try { localStorage.setItem('gavin-unlimited-upsell-dismissed', '1'); } catch { /* ignore */ }
-  }
 
   /** Human copy for validate_voucher's machine reasons. */
   function voucherReasonText(reason: string): string {
@@ -862,8 +856,11 @@ function ConferenceApplyInner() {
   const creditsSponsored = conference?.credits_sponsored ?? false;
   const canApply = creditsSponsored || isExemptRole || hasUnlimited || poolCovered || (creditBalance ?? 0) >= 1;
 
+  // Redesign: the flow no longer opens on a price/credit ('role') step. It
+  // starts straight at the Independent-vs-Delegation ('society') choice; any
+  // fee/voucher detail for non-sponsored conferences is now surfaced minimally
+  // on the final 'overview' review instead.
   const stepSequence = [
-    'role',
     ...(showSocietyStep ? ['society'] : []),
     ...(isInvoicingRole ? ['invoicing'] : []),
     ...(showPreferenceStep ? ['preferences'] : []),
@@ -874,7 +871,6 @@ function ConferenceApplyInner() {
   const totalSteps = stepSequence.length;
   const stepLabels = stepSequence.map((kind) => {
     switch (kind) {
-      case 'role': return 'Role';
       case 'society': return 'Society';
       case 'invoicing': return 'Invoicing';
       case 'preferences': return 'Preferences';
@@ -1114,6 +1110,40 @@ function ConferenceApplyInner() {
       setPreferences(existingPrefs);
     }
 
+    // Which delegations already have a head-delegate / faculty-advisor
+    // application for this conference — grayed out in the society picker. A
+    // privacy-safe SECURITY DEFINER RPC (returns only non-sensitive society ids;
+    // RLS would otherwise hide other applicants' rows).
+    supabase
+      .rpc('conference_taken_society_ids', { p_conference_id: confData.id })
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        const ids = (data as Array<{ society_id?: string } | string>).map(
+          (r) => (typeof r === 'string' ? r : r.society_id ?? ''),
+        );
+        setTakenSocietyIds(new Set(ids.filter(Boolean)));
+      });
+
+    // Delegation invite: resolve the token and, when it matches THIS
+    // conference, pre-select that delegation (bypassing the grayout for it).
+    if (delegationInviteToken && !isEditMode && !appData) {
+      const { data: inviteData } = await supabase.rpc('resolve_delegation_invite', {
+        p_token: delegationInviteToken,
+      });
+      const invite = inviteData as
+        | { ok?: boolean; society_id?: string; society_name?: string; conference_id?: string }
+        | null;
+      if (invite?.ok && invite.society_id && invite.conference_id === confData.id) {
+        setInvitedSocietyId(invite.society_id);
+        setInviteSocietyName(invite.society_name ?? null);
+        setIsIndependent(false);
+        setSelectedSocietyId(invite.society_id);
+        setSocietyInput(
+          invite.society_name ?? societiesData.find(s => s.id === invite.society_id)?.name ?? '',
+        );
+      }
+    }
+
     setLoading(false);
   }
 
@@ -1208,6 +1238,33 @@ function ConferenceApplyInner() {
     setMyDob(dobInput);
   }
 
+  // Re-pull the applicant's live MUN CV count and re-derive their rank — used
+  // by the "Import my experience from my MUN CV" button and after adding a CV
+  // entry inline, so the derived slider updates immediately.
+  async function refreshCvCount() {
+    if (!session || !user) return;
+    setCvRefreshing(true);
+    const supabase = getAuthedClient(session.access_token);
+    const { count, error } = await supabase
+      .from('mun_cv_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+    setCvRefreshing(false);
+    if (error) return;
+    const c = count ?? 0;
+    setCvEntryCount(c);
+    setExperienceLevel(experienceProgress(c).level);
+  }
+
+  // Delete handler wired into the shared CVEntryModal (only reachable when
+  // editing an existing entry — the inline "add" flow never triggers it).
+  async function handleDeleteCvEntry(id: string) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    await supabase.from('mun_cv_entries').delete().eq('id', id);
+    await refreshCvCount();
+  }
+
   // Advisors skip Experience (F15), so 'invoicing' can now be the final step
   // in their sequence, advance to it normally, but submit instead of
   // stepping past the end when there's nothing left.
@@ -1232,6 +1289,20 @@ function ConferenceApplyInner() {
       if (!isObserver && !isIndependent && !isInvoicingRole && societyInput.trim() && !selectedSocietyId) {
         setSocietyError('Please select an existing delegation from the list.');
         return;
+      }
+      // Block delegations that have already applied to this conference (unless
+      // this applicant was explicitly invited to that one). Resolve the id the
+      // application would attach to — an explicit selection, or an exact
+      // name match for invoicing roles that type a name.
+      if (!isObserver && !isIndependent) {
+        const matchedByName = societies.find(
+          s => s.name.toLowerCase() === societyInput.trim().toLowerCase(),
+        );
+        const resolvedId = selectedSocietyId ?? matchedByName?.id ?? null;
+        if (resolvedId && resolvedId !== invitedSocietyId && takenSocietyIds.has(resolvedId)) {
+          setSocietyError('This delegation has already applied — ask its head delegate or faculty advisor to invite you.');
+          return;
+        }
       }
       setSocietyError('');
       advanceStep();
@@ -1639,287 +1710,122 @@ function ConferenceApplyInner() {
 
   // ── Step render helpers ───────────────────────────────────────────────────
 
-  function renderStep1() {
-    const rc = roleConfig!;
-    const RoleIcon = roleIcon(role);
-    // Today's price: the fee phase whose date window covers today (e.g. Early
-    // Bird), falling back to the flat role fee. The phase label surfaces on
-    // the order summary's fee line so applicants see WHY this price applies.
+  /**
+   * Compact registration-fee + voucher summary, surfaced ONLY on the final
+   * 'overview' review (the old leading price step is gone). Returns null for
+   * free roles / sponsored conferences / edit mode, so it never shows unless
+   * there is a real conference fee to preview. All math from finance.ts.
+   */
+  function renderOrderSummary() {
+    const rc = roleConfig;
+    if (!rc || isEditMode) return null;
     const { amount: resolvedFee, phase: currentPhase } = activePhaseFee(rc);
-    const isFree = !(resolvedFee > 0);
+    if (!(resolvedFee > 0)) return null;
     const breakdown = computeCheckout({
       feeAmount: resolvedFee,
       feeCurrency: rc.fee_currency,
       voucher: appliedVoucher,
       profile: financeProfile,
     });
-    const showUpsell = !isFree && !breakdown.platformFeeWaived && !upsellDismissed;
     const summaryRow: React.CSSProperties = {
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink,
     };
     const amountStyle: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', fontWeight: 700 };
     return (
-      <>
-        <StepHeading icon={BadgeCheck} title="Applying as" subtitle="Confirm your role and the registration fee." />
+      <NeuInset className="p-5 mb-4">
+        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.22em', color: NEU.muted, marginBottom: 14 }}>
+          ORDER SUMMARY
+        </p>
 
-        {/* Role + fee, role identity on the left, gold-ringed fee medallion on the right */}
-        <div
-          className="rounded-2xl p-5 mb-4 flex items-center gap-5"
-          style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}
-        >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 mb-1">
-              <span
-                className="flex items-center justify-center flex-shrink-0"
-                style={{
-                  width: '34px', height: '34px', borderRadius: '11px',
-                  background: 'linear-gradient(150deg, #16301F, #2A5A3C)',
-                }}
+        {/* Fee line, names the active fee phase when one applies */}
+        <div style={{ ...summaryRow, marginBottom: 10 }}>
+          <span style={{ color: 'rgba(28,20,16,0.75)' }}>
+            Registration fee
+            {currentPhase && (
+              <span style={{ color: NEU.muted, fontWeight: 600 }}>: {currentPhase.label || 'Current phase'}</span>
+            )}
+          </span>
+          <span style={amountStyle}>{formatFee(breakdown.baseFee, breakdown.currency)}</span>
+        </div>
+
+        {/* Voucher, single field + APPLY chip, or the applied green line */}
+        {appliedVoucher ? (
+          <div style={{ ...summaryRow, marginBottom: 10 }}>
+            <span className="inline-flex items-center gap-1.5" style={{ color: NEU.green, fontWeight: 600 }}>
+              <Ticket size={14} strokeWidth={2.2} />
+              Voucher {appliedVoucher.code}
+              <button
+                onClick={() => { setAppliedVoucher(null); setVoucherCode(''); }}
+                aria-label="Remove voucher"
+                className="focus:outline-none"
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: NEU.muted, display: 'inline-flex', padding: 2 }}
               >
-                <RoleIcon size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
-              </span>
-              <p className="font-black text-xl capitalize" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                {role.replace(/-/g, ' ')}
-              </p>
-            </div>
-            <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              {conference?.full_name}
-            </p>
-            {rc.auto_accept && (
-              <div className="mt-3">
-                <Pill tone="forest" icon={<BadgeCheck size={12} strokeWidth={2.4} />}>
-                  Auto-accepted
-                </Pill>
-              </div>
-            )}
-          </div>
-
-          {/* Fee medallion, echoes the detail page's gold-ringed pricing medallion */}
-          <div
-            className="relative flex flex-col items-center justify-center flex-shrink-0"
-            style={{
-              width: '104px', height: '104px', borderRadius: '9999px',
-              background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.32) 0%, rgba(250,248,243,0) 72%)',
-              border: '1.5px solid rgba(182,135,31,0.42)',
-              boxShadow: '0 8px 22px rgba(27,56,40,0.1), 0 0 0 6px rgba(238,217,138,0.12)',
-            }}
-          >
-            {isFree ? (
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '22px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
-            ) : (
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '27px', color: '#1C1410', lineHeight: 1 }}>
-                {formatFee(resolvedFee, rc.fee_currency)}
-              </span>
-            )}
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '7.5px', letterSpacing: '0.15em', color: '#9A8A78', marginTop: '6px' }}>
-              PER DELEGATE
+                <X size={13} strokeWidth={2.4} />
+              </button>
+            </span>
+            <span style={{ ...amountStyle, color: NEU.green }}>
+              −{formatFee(breakdown.voucherDiscount, breakdown.currency)}
             </span>
           </div>
-        </div>
-
-        {/* ── ORDER SUMMARY, neumorphic well; all math from finance.computeCheckout ── */}
-        {!isFree && (
-          <NeuInset className="p-5 mb-4">
-            <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.22em', color: NEU.muted, marginBottom: 14 }}>
-              ORDER SUMMARY
-            </p>
-
-            {/* Fee line, names the active fee phase when one applies */}
-            <div style={{ ...summaryRow, marginBottom: 10 }}>
-              <span style={{ color: 'rgba(28,20,16,0.75)' }}>
-                Registration fee
-                {currentPhase && (
-                  <span style={{ color: NEU.muted, fontWeight: 600 }}>: {currentPhase.label || 'Current phase'}</span>
-                )}
-              </span>
-              <span style={amountStyle}>{formatFee(breakdown.baseFee, breakdown.currency)}</span>
-            </div>
-
-            {/* Voucher, single field + APPLY chip, or the applied green line */}
-            {appliedVoucher ? (
-              <div style={{ ...summaryRow, marginBottom: 10 }}>
-                <span className="inline-flex items-center gap-1.5" style={{ color: NEU.green, fontWeight: 600 }}>
-                  <Ticket size={14} strokeWidth={2.2} />
-                  Voucher {appliedVoucher.code}
-                  <button
-                    onClick={() => { setAppliedVoucher(null); setVoucherCode(''); }}
-                    aria-label="Remove voucher"
-                    className="focus:outline-none"
-                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: NEU.muted, display: 'inline-flex', padding: 2 }}
-                  >
-                    <X size={13} strokeWidth={2.4} />
-                  </button>
-                </span>
-                <span style={{ ...amountStyle, color: NEU.green }}>
-                  −{formatFee(breakdown.voucherDiscount, breakdown.currency)}
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-stretch gap-2" style={{ marginBottom: voucherError ? 4 : 10 }}>
-                <input
-                  type="text"
-                  value={voucherCode}
-                  onChange={(e) => { setVoucherCode(e.target.value.toUpperCase()); setVoucherError(''); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleApplyVoucher(); }}
-                  placeholder="Voucher code"
-                  aria-label="Voucher code"
-                  className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-sm focus:outline-none"
-                  style={{
-                    border: voucherError ? '1.5px solid #8B2020' : '1.5px solid #DDD4C0',
-                    backgroundColor: '#FAF8F3', color: NEU.ink, fontFamily: OUTFIT,
-                    letterSpacing: '0.08em', textTransform: 'uppercase',
-                  }}
-                />
-                <button
-                  onClick={handleApplyVoucher}
-                  disabled={voucherChecking || !voucherCode.trim()}
-                  className="rounded-full px-4 text-xs font-extrabold focus:outline-none"
-                  style={{
-                    border: 'none', fontFamily: OUTFIT, letterSpacing: '0.1em',
-                    background: voucherChecking || !voucherCode.trim() ? 'rgba(27,56,40,0.14)' : NEU.forest,
-                    color: voucherChecking || !voucherCode.trim() ? NEU.muted : NEU.gold,
-                    cursor: voucherChecking || !voucherCode.trim() ? 'default' : 'pointer',
-                    boxShadow: NEU.outSm,
-                  }}
-                >
-                  {voucherChecking ? 'CHECKING…' : 'APPLY'}
-                </button>
-              </div>
-            )}
-            {voucherError && !appliedVoucher && (
-              <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, marginBottom: 10 }}>
-                {voucherError}
-              </p>
-            )}
-
-            {/* Conference fee, no service fee shown — payment happens later,
-                direct to the conference, once the applicant is accepted. */}
-            <div style={{ borderTop: '1.5px solid rgba(27,56,40,0.14)', paddingTop: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.18em', color: NEU.muted }}>CONFERENCE FEE</span>
-                <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 28, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                  {formatFee(breakdown.postDiscount, breakdown.currency)}
-                </span>
-              </div>
-              <p className="text-right mt-1" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
-                Paid to the conference after you&apos;re accepted.
-              </p>
-            </div>
-          </NeuInset>
-        )}
-
-        {/* ── Journey card, always shown (including FREE-fee roles) ── */}
-        <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: 'rgba(27,56,40,0.04)', border: '1.5px solid rgba(27,56,40,0.12)' }}>
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.22em', color: NEU.muted, marginBottom: 16 }}>
-            YOUR JOURNEY
-          </p>
-          <div className="flex items-start">
-            {[
-              'Apply',
-              rc.auto_accept ? 'Instantly accepted' : 'Get accepted',
-              'Pay the conference',
-              'Manage in Gavelling',
-            ].map((label, i) => (
-              <Fragment key={label}>
-                {i > 0 && <div style={{ flex: 1, height: 1, backgroundColor: 'rgba(27,56,40,0.18)', marginTop: 15 }} />}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 74 }}>
-                  <div
-                    style={{
-                      width: 30, height: 30, borderRadius: '50%',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      backgroundColor: 'rgba(27,56,40,0.09)', border: '1px solid rgba(27,56,40,0.2)',
-                    }}
-                  >
-                    <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 12, color: NEU.forest }}>{i + 1}</span>
-                  </div>
-                  <span style={{ fontSize: 10.5, marginTop: 6, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>
-                    {label}
-                  </span>
-                </div>
-              </Fragment>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Credit note, same coverage logic as the Overview step's gate ── */}
-        <div className="flex items-center gap-2 mb-6 px-1">
-          <Coins size={14} strokeWidth={2.2} style={{ color: NEU.deepGold, flexShrink: 0 }} />
-          <p style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.muted }}>
-            {isExemptRole
-              ? 'No credit needed for this role.'
-              : hasUnlimited
-              ? 'Applying uses 1 Gavelling credit — included with Unlimited'
-              : poolCovered
-              ? 'Applying uses 1 Gavelling credit — covered by your delegation'
-              : 'Applying uses 1 Gavelling credit'}
-          </p>
-        </div>
-
-        {/* ── Gavin upsell, only when no waiver is active; dismissable; never blocks ── */}
-        {showUpsell && (
-          <div
-            className="relative rounded-2xl mb-4 flex items-center gap-4 overflow-hidden"
-            style={{
-              padding: '16px 18px',
-              backgroundColor: NEU.surface,
-              boxShadow: NEU.out,
-            }}
-          >
-            <button
-              onClick={dismissUpsell}
-              aria-label="Dismiss"
-              className="absolute top-2.5 right-2.5 flex items-center justify-center rounded-full focus:outline-none"
-              style={{ width: 24, height: 24, border: 'none', background: 'transparent', cursor: 'pointer', color: NEU.muted }}
-            >
-              <X size={14} strokeWidth={2.4} />
-            </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/Otter.Tutorial.Intro.webp"
-              alt="Gavin the otter"
-              className="flex-shrink-0"
-              style={{ width: 76, height: 76, objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(27,56,40,0.25))' }}
+        ) : (
+          <div className="flex items-stretch gap-2" style={{ marginBottom: voucherError ? 4 : 10 }}>
+            <input
+              type="text"
+              value={voucherCode}
+              onChange={(e) => { setVoucherCode(e.target.value.toUpperCase()); setVoucherError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleApplyVoucher(); }}
+              placeholder="Voucher code"
+              aria-label="Voucher code"
+              className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-sm focus:outline-none"
+              style={{
+                border: voucherError ? '1.5px solid #8B2020' : '1.5px solid #DDD4C0',
+                backgroundColor: '#FAF8F3', color: NEU.ink, fontFamily: OUTFIT,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+              }}
             />
-            <div className="min-w-0 flex-1">
-              <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, lineHeight: 1.35 }}>
-                You could be saving {localizedApproxSavings(10, geoCountry)}/month with Gavelling Unlimited
-              </p>
-              <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, lineHeight: 1.6 }}>
-                Unlimited Gavelling credits · Gavelling Points for merchandise · Full Premium features
-              </p>
-              <Link
-                href="/account/points"
-                className="inline-flex items-center gap-1 mt-2 text-xs font-extrabold"
-                style={{ color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
-              >
-                MEET GAVELLING UNLIMITED <ArrowRight size={13} strokeWidth={2.6} />
-              </Link>
-            </div>
+            <button
+              onClick={handleApplyVoucher}
+              disabled={voucherChecking || !voucherCode.trim()}
+              className="rounded-full px-4 text-xs font-extrabold focus:outline-none"
+              style={{
+                border: 'none', fontFamily: OUTFIT, letterSpacing: '0.1em',
+                background: voucherChecking || !voucherCode.trim() ? 'rgba(27,56,40,0.14)' : NEU.forest,
+                color: voucherChecking || !voucherCode.trim() ? NEU.muted : NEU.gold,
+                cursor: voucherChecking || !voucherCode.trim() ? 'default' : 'pointer',
+                boxShadow: NEU.outSm,
+              }}
+            >
+              {voucherChecking ? 'CHECKING…' : 'APPLY'}
+            </button>
           </div>
         )}
+        {voucherError && !appliedVoucher && (
+          <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, marginBottom: 10 }}>
+            {voucherError}
+          </p>
+        )}
 
-        <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1.5px solid rgba(238,217,138,0.28)' }}>
-          <p className="text-xs leading-relaxed" style={{ color: 'rgba(28,20,16,0.7)', fontFamily: "'Outfit', sans-serif" }}>
-            By applying you confirm you meet the requirements for this role. Your application will be reviewed by the conference organizing team.
+        {/* Conference fee, no service fee shown — payment happens later,
+            direct to the conference, once the applicant is accepted. */}
+        <div style={{ borderTop: '1.5px solid rgba(27,56,40,0.14)', paddingTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.18em', color: NEU.muted }}>CONFERENCE FEE</span>
+            <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 28, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+              {formatFee(breakdown.postDiscount, breakdown.currency)}
+            </span>
+          </div>
+          <p className="text-right mt-1" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
+            Paid to the conference after you&apos;re accepted.
           </p>
         </div>
-
-        <button
-          onClick={() => setStep(2)}
-          className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors flex items-center justify-center gap-2"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em', boxShadow: '0 6px 18px rgba(27,56,40,0.22)' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-        >
-          CONTINUE <ArrowRight size={16} strokeWidth={2.4} />
-        </button>
-      </>
+      </NeuInset>
     );
   }
 
   function renderStep2() {
     const showSociety = !isObserver;
+    const takenMsg = 'This delegation has already applied — ask its head delegate or faculty advisor to invite you.';
     return (
       <>
         <StepHeading
@@ -1936,42 +1842,48 @@ function ConferenceApplyInner() {
 
         {showSociety && (
           <>
-            {/* Toggle */}
+            {/* ── Big two-card choice (onboarding wizard parity): Independent vs
+                Delegation, each a large glassy image card. Invoicing roles are
+                always with a society, so they skip straight to the picker. ── */}
             {!isInvoicingRole && (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                {(['independent', 'society'] as const).map(type => {
-                  const selected = type === 'independent' ? isIndependent : !isIndependent;
-                  const hovered = societyHover === type;
-                  const TileIcon = type === 'independent' ? User : Building2;
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setIsIndependent(type === 'independent')}
-                      onMouseEnter={() => setSocietyHover(type)}
-                      onMouseLeave={() => setSocietyHover(null)}
-                      className="flex flex-col items-center justify-center gap-3.5 focus:outline-none"
-                      style={{ ...glassCardStyle(selected, hovered, reducedMotion), minHeight: 172, padding: '30px 20px' }}
-                    >
-                      <GlassCheck visible={selected} />
-                      <span
-                        className="flex items-center justify-center"
-                        style={{
-                          width: 54, height: 54, borderRadius: 16,
-                          background: selected ? 'linear-gradient(150deg, #16301F, #2A5A3C)' : 'rgba(27,56,40,0.06)',
-                          border: selected ? '1px solid rgba(238,217,138,0.4)' : '1px solid rgba(27,56,40,0.12)',
-                          boxShadow: selected ? '0 6px 16px rgba(27,56,40,0.28)' : 'none',
-                          transition: reducedMotion ? 'none' : `all 260ms ${EASE}`,
-                        }}
-                      >
-                        <TileIcon size={24} strokeWidth={2.1} style={{ color: selected ? NEU.gold : NEU.forest }} />
-                      </span>
-                      <p className="font-bold text-[15px]" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                        {type === 'independent' ? 'Independent' : 'With a society'}
-                      </p>
-                    </button>
-                  );
-                })}
+              <div className="mb-6">
+                <TwoTabPick
+                  value={isIndependent ? 'independent' : 'society'}
+                  onChange={(key) => { setIsIndependent(key === 'independent'); setSocietyError(''); }}
+                  options={[
+                    {
+                      key: 'independent',
+                      label: 'Independent',
+                      image: '/onboarding/podium-01.jpg',
+                      sub: 'Applying on your own',
+                    },
+                    {
+                      key: 'society',
+                      label: 'With a delegation',
+                      image: '/onboarding/handshake-01.jpg',
+                      sub: 'Part of a society or high school',
+                    },
+                  ]}
+                />
+              </div>
+            )}
+
+            {/* Invite banner — the applicant arrived via a delegation invite. */}
+            {!isIndependent && invitedSocietyId && (
+              <div
+                className="flex items-center gap-3 rounded-2xl p-4 mb-5"
+                style={{ background: 'linear-gradient(135deg, rgba(238,217,138,0.28), rgba(27,56,40,0.05))', border: '1.5px solid rgba(238,217,138,0.55)' }}
+              >
+                <span
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, #2A5A3C)' }}
+                >
+                  <Users size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
+                </span>
+                <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.4 }}>
+                  You&apos;ve been invited to join{' '}
+                  <span className="font-bold">{inviteSocietyName ?? 'this delegation'}</span>.
+                </p>
               </div>
             )}
 
@@ -1985,6 +1897,7 @@ function ConferenceApplyInner() {
                   <input
                     type="text"
                     value={societyInput}
+                    disabled={!!invitedSocietyId}
                     onChange={(e) => {
                       setSocietyInput(e.target.value);
                       setSelectedSocietyId(null);
@@ -1996,32 +1909,58 @@ function ConferenceApplyInner() {
                     className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
                     style={{
                       border: societyError ? '1.5px solid #8B2020' : '1.5px solid #DDD4C0',
-                      backgroundColor: '#FAF8F3',
+                      backgroundColor: invitedSocietyId ? 'rgba(27,56,40,0.05)' : '#FAF8F3',
                       color: '#1C1410',
                       fontFamily: "'Outfit', sans-serif",
+                      cursor: invitedSocietyId ? 'not-allowed' : 'text',
                     }}
                   />
-                  {societyDropdownOpen && societyInput.trim() && (
+                  {!invitedSocietyId && societyDropdownOpen && societyInput.trim() && (
                     <div
                       className="absolute left-0 right-0 rounded-xl shadow-lg overflow-y-auto"
                       style={{ top: 'calc(100% + 4px)', maxHeight: '200px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', zIndex: 20 }}
                     >
-                      {societySuggestions.map(s => (
-                        <button
-                          key={s.id}
-                          className="w-full text-left px-4 py-2.5 text-sm focus:outline-none"
-                          style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                          onMouseDown={() => {
-                            setSocietyInput(s.name);
-                            setSelectedSocietyId(s.id);
-                            setSocietyDropdownOpen(false);
-                          }}
-                        >
-                          {s.name}
-                        </button>
-                      ))}
+                      {societySuggestions.map(s => {
+                        // A delegation that already has a head/advisor application
+                        // for this conference — grayed out and non-selectable.
+                        const taken = takenSocietyIds.has(s.id) && s.id !== invitedSocietyId;
+                        return (
+                          <button
+                            key={s.id}
+                            disabled={taken}
+                            className="w-full flex items-center justify-between gap-2 text-left px-4 py-2.5 text-sm focus:outline-none"
+                            style={{
+                              color: taken ? '#B4A992' : '#1C1410',
+                              fontFamily: "'Outfit', sans-serif",
+                              cursor: taken ? 'not-allowed' : 'pointer',
+                              opacity: taken ? 0.7 : 1,
+                            }}
+                            onMouseEnter={(e) => { if (!taken) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                            onMouseDown={(e) => {
+                              if (taken) {
+                                e.preventDefault();
+                                setSocietyError(takenMsg);
+                                return;
+                              }
+                              setSocietyInput(s.name);
+                              setSelectedSocietyId(s.id);
+                              setSocietyError('');
+                              setSocietyDropdownOpen(false);
+                            }}
+                          >
+                            <span className="truncate">{s.name}</span>
+                            {taken && (
+                              <span
+                                className="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                                style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', letterSpacing: '0.04em' }}
+                              >
+                                ALREADY APPLIED
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                       {isInvoicingRole ? (
                         !societySuggestions.some(s => s.name.toLowerCase() === societyInput.toLowerCase()) && (
                           <button
@@ -2031,6 +1970,7 @@ function ConferenceApplyInner() {
                             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                             onMouseDown={() => {
                               setSelectedSocietyId(null);
+                              setSocietyError('');
                               setSocietyDropdownOpen(false);
                             }}
                           >
@@ -2060,16 +2000,18 @@ function ConferenceApplyInner() {
           </>
         )}
 
-        <div className="flex justify-between mt-6">
-          <button
-            onClick={() => setStep(1)}
-            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex items-center gap-1.5"
-            style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            <ArrowLeft size={15} strokeWidth={2.4} /> BACK
-          </button>
+        <div className="flex justify-between items-center mt-6">
+          {step > 1 ? (
+            <button
+              onClick={() => setStep(s => s - 1)}
+              className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex items-center gap-1.5"
+              style={{ border: '1.5px solid #C8BEA8', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <ArrowLeft size={15} strokeWidth={2.4} /> BACK
+            </button>
+          ) : <span />}
           <button
             onClick={handleContinue}
             className="rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none transition-colors flex items-center gap-2"
@@ -2430,9 +2372,12 @@ function ConferenceApplyInner() {
     const isFirstPage = questionPage === 0;
     const isLastPage = questionPage === pages.length - 1;
 
+    // Experience can be the very first step for roles with no society/
+    // preference steps (chair, observer) — there's nowhere to go back to then.
+    const canGoBack = !isFirstPage || step > 1;
     function handleBackExperience() {
       if (!isFirstPage) { setQuestionPage(p => p - 1); return; }
-      setStep(s => s - 1);
+      if (step > 1) setStep(s => s - 1);
     }
 
     function handleContinueExperience() {
@@ -2448,57 +2393,152 @@ function ConferenceApplyInner() {
 
     return (
       <>
-        {isFirstPage && (
+        {isFirstPage && (() => {
+          // Derived experience slider — its position is DRIVEN by how many
+          // conferences the applicant has on their MUN CV (cvEntryCount →
+          // experienceProgress), not a free manual choice. The thumb sits
+          // between the four band stops proportionally to real experience.
+          const bands = EXPERIENCE_BANDS;
+          const n = bands.length;
+          const bandIdx = Math.max(0, bands.findIndex(b => b.level === rank.level));
+          const frac = rank.nextLabel ? rank.progress : 0;
+          const pct = Math.min(100, Math.max(0, ((bandIdx + frac) / (n - 1)) * 100));
+          const accent = EXPERIENCE_ACCENT[rank.level] ?? NEU.deepGold;
+          const RankIcon = EXPERIENCE_ICON[rank.level] ?? GraduationCap;
+          return (
           <>
-            <h2 className="font-semibold text-base mb-6" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-base mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               About You
             </h2>
+            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+              Your MUN experience level is set automatically from your MUN CV — the organiser sees it with your application and uses it for allocations.
+            </p>
 
             <div className="mb-6">
-              <label className="block font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                Your MUN Rank
-              </label>
-
-              {/* Read-only rank card — auto-derived from the applicant's MUN CV. */}
-              <div
-                className="rounded-xl p-4"
-                style={{ border: '1.5px solid #DDD4C0', backgroundColor: 'rgba(27,56,40,0.04)' }}
-              >
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <LevelBadge level={rank.level} size="md" />
-                  <span className="text-xs font-semibold" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                    {cvEntryCount} conference{cvEntryCount === 1 ? '' : 's'} on your CV
-                  </span>
-                </div>
-
-                {/* Progress toward the next band (mirrors the CV page copy). */}
-                <div className="mt-3 rounded-full overflow-hidden" style={{ height: 6, backgroundColor: 'rgba(27,56,40,0.1)' }}>
-                  <div style={{ width: `${Math.round(rank.progress * 100)}%`, height: '100%', background: 'linear-gradient(90deg, #B6871F, #EED98A)', transition: 'width 400ms ease' }} />
-                </div>
-                <p className="text-xs mt-2" style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
-                  {rank.nextLabel
-                    ? `You're ${rank.label}. Add ${rank.remaining} more conference${rank.remaining === 1 ? '' : 's'} to your MUN CV to reach ${rank.nextLabel}.`
-                    : `You're ${rank.label} — the top rank. Nicely done.`}
-                </p>
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <LevelBadge level={rank.level} size="md" />
+                <span className="text-xs font-semibold" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                  {cvEntryCount} conference{cvEntryCount === 1 ? '' : 's'} on your MUN CV
+                </span>
               </div>
 
-              {/* Prompt: rank is drawn from the CV — nudge to add missing entries. */}
-              <p className="text-xs mt-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
-                This rank is drawn automatically from your MUN CV — the organiser sees it with your application. Attended conferences that aren&apos;t on your profile yet?{' '}
-                <Link
-                  href="/account/cv"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold underline"
-                  style={{ color: '#1B3828' }}
+              {/* Derived level slider (read-only, position from CV count). */}
+              <div className="relative select-none" style={{ height: 34 }}>
+                {/* Inset neu track */}
+                <div
+                  className="absolute left-0 right-0"
+                  style={{ top: '50%', transform: 'translateY(-50%)', height: 8, borderRadius: 9999, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
+                />
+                {/* Filled portion */}
+                <div
+                  className="absolute"
+                  style={{ top: '50%', transform: 'translateY(-50%)', left: 0, width: `${pct}%`, height: 8, borderRadius: 9999, background: `linear-gradient(90deg, ${accent}CC, ${accent})`, transition: 'width 320ms cubic-bezier(0.22,1,0.36,1)' }}
+                />
+                {/* Band stops */}
+                {bands.map((b, i) => {
+                  const on = i <= bandIdx;
+                  return (
+                    <span
+                      key={b.level}
+                      aria-hidden
+                      className="absolute"
+                      style={{
+                        left: `${(i / (n - 1)) * 100}%`, top: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: 13, height: 13, borderRadius: 9999,
+                        background: on ? accent : NEU.surface,
+                        border: `2px solid ${on ? '#FAF8F3' : '#DDD4C0'}`,
+                        boxShadow: NEU.outSm,
+                      }}
+                    />
+                  );
+                })}
+                {/* Thumb, carries the current rank insignia */}
+                <span
+                  aria-hidden
+                  className="absolute flex items-center justify-center"
+                  style={{
+                    left: `${pct}%`, top: '50%', transform: 'translate(-50%, -50%)',
+                    width: 30, height: 30, borderRadius: 9999,
+                    background: `radial-gradient(120% 120% at 30% 25%, ${accent} 0%, ${accent}CC 70%)`,
+                    border: '3px solid #FAF8F3', boxShadow: `0 3px 9px ${accent}66, ${NEU.outSm}`,
+                    transition: 'left 320ms cubic-bezier(0.22,1,0.36,1)',
+                  }}
                 >
-                  Add them to your MUN CV
-                </Link>{' '}
-                so your rank reflects them.
+                  <RankIcon size={14} strokeWidth={2.4} style={{ color: '#FAF8F3' }} />
+                </span>
+              </div>
+              {/* Stop labels */}
+              <div className="flex justify-between mt-2">
+                {bands.map((b, i) => (
+                  <span
+                    key={b.level}
+                    style={{
+                      fontFamily: OUTFIT, fontSize: 10.5,
+                      fontWeight: i === bandIdx ? 800 : 600,
+                      color: i === bandIdx ? accent : '#9A8A78',
+                      flex: '1 1 0',
+                      textAlign: i === 0 ? 'left' : i === n - 1 ? 'right' : 'center',
+                    }}
+                  >
+                    {b.label}
+                  </span>
+                ))}
+              </div>
+
+              <p className="text-xs mt-3" style={{ color: '#6E5F4E', fontFamily: OUTFIT, lineHeight: 1.5 }}>
+                {rank.nextLabel
+                  ? `You're ${rank.label}. Add ${rank.remaining} more conference${rank.remaining === 1 ? '' : 's'} to your MUN CV to reach ${rank.nextLabel}.`
+                  : `You're ${rank.label} — the top rank. Nicely done.`}
               </p>
+
+              {/* ── CV actions: import (re-pull count) + add a conference inline.
+                  Colourful 3D emoji, neumorphic 3D buttons. ── */}
+              <div className="flex flex-wrap gap-3 mt-5">
+                <button
+                  type="button"
+                  onClick={refreshCvCount}
+                  disabled={cvRefreshing}
+                  className="flex-1 min-w-[180px] flex items-center justify-center gap-2.5 rounded-2xl px-5 py-3.5 focus:outline-none"
+                  style={{
+                    backgroundColor: NEU.surface,
+                    boxShadow: cvRefreshing ? NEU.inSm : NEU.out,
+                    border: '1.5px solid rgba(182,135,31,0.4)',
+                    cursor: cvRefreshing ? 'default' : 'pointer',
+                    transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
+                  }}
+                  onMouseEnter={(e) => { if (!cvRefreshing) { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outHover; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; } }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = cvRefreshing ? NEU.inSm : NEU.out; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+                >
+                  <Emoji3D name="Counterclockwise arrows button" size={26} fallback={Sparkles} fallbackColor={NEU.deepGold} />
+                  <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink }}>
+                    {cvRefreshing ? 'Importing…' : 'Import from my MUN CV'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCvModalOpen(true)}
+                  className="flex-1 min-w-[180px] flex items-center justify-center gap-2.5 rounded-2xl px-5 py-3.5 focus:outline-none"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(238,217,138,0.35), rgba(182,135,31,0.16))',
+                    boxShadow: NEU.out,
+                    border: '1.5px solid rgba(182,135,31,0.5)',
+                    cursor: 'pointer',
+                    transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outHover; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.out; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+                >
+                  <Emoji3D name="Graduation cap" size={26} fallback={GraduationCap} fallbackColor={NEU.deepGold} />
+                  <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: NEU.ink }}>
+                    Add a conference
+                  </span>
+                </button>
+              </div>
             </div>
           </>
-        )}
+          );
+        })()}
 
         {pages.length > 1 && (
           <p className="mb-3" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted }}>
@@ -2536,15 +2576,17 @@ function ConferenceApplyInner() {
         )}
 
         <div className="flex justify-between mt-2 gap-4">
-          <button
-            onClick={handleBackExperience}
-            className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            ← BACK
-          </button>
+          {canGoBack ? (
+            <button
+              onClick={handleBackExperience}
+              className="rounded-xl py-2.5 px-5 text-sm font-bold focus:outline-none transition-colors flex-shrink-0"
+              style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              ← BACK
+            </button>
+          ) : <span />}
           <button
             onClick={handleContinueExperience}
             className="flex-1 rounded-xl py-3 px-8 text-sm font-bold focus:outline-none transition-colors flex items-center justify-center gap-2"
@@ -2656,6 +2698,10 @@ function ConferenceApplyInner() {
             </div>
           </NeuInset>
         )}
+
+        {/* ── Registration fee + voucher, surfaced here (final review) instead
+            of a leading price step. Null for free/edit-mode. ── */}
+        {renderOrderSummary()}
 
         {/* ── Cost card — sponsored conferences never gate or charge a credit,
             so the balance/plan/buy-more UI is replaced entirely by a single
@@ -2878,8 +2924,8 @@ function ConferenceApplyInner() {
   // application) bypasses both the "already applied" wall and the
   // applications-closed wall below — they're editing an application that
   // already exists, not creating a new one. Requires roleConfig to still
-  // exist (renderStep1 reads it non-null) — is_enabled doesn't matter here,
-  // an existing applicant can still edit while applications are paused.
+  // exist (the submit path + order summary read it non-null) — is_enabled
+  // doesn't matter here, an existing applicant can still edit while paused.
   const canEdit = isEditMode && !!existingApp && !!roleConfig
     && (existingApp.status === 'rejected' || existingApp.status === 'submitted');
 
@@ -3111,7 +3157,6 @@ function ConferenceApplyInner() {
 
         {/* Form card */}
         <div className="rounded-2xl p-6 md:p-8" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #C8BEA8', boxShadow: '0 2px 6px rgba(27,56,40,0.05), 0 16px 40px rgba(27,56,40,0.08)' }}>
-          {currentStepKind === 'role' && renderStep1()}
           {currentStepKind === 'society' && renderStep2()}
           {currentStepKind === 'invoicing' && renderStepInvoicing()}
           {currentStepKind === 'preferences' && renderStep3Preferences()}
@@ -3125,6 +3170,18 @@ function ConferenceApplyInner() {
           </p>
         )}
       </div>
+
+      {/* Inline "add a conference to my MUN CV" — the shared modal. Saving
+          re-pulls the CV count so the derived experience slider updates live. */}
+      {cvModalOpen && user && (
+        <CVEntryModal
+          existing={null}
+          userId={user.id}
+          onClose={() => setCvModalOpen(false)}
+          onSaved={refreshCvCount}
+          onDelete={handleDeleteCvEntry}
+        />
+      )}
     </div>
   );
 }

@@ -24,7 +24,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Users, User, Check, ChevronDown, ChevronLeft, UserPlus, X, ArrowLeft, Layers, Flag,
+  Users, User, Check, ChevronDown, ChevronLeft, UserPlus, X, ArrowLeft, Layers, Flag, Link2,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -68,6 +68,7 @@ interface Member {
 interface SocietyInfo {
   id: string;
   name: string;
+  conferenceId: string;
   conferenceName: string;
 }
 
@@ -400,6 +401,53 @@ export default function DelegationPortalClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const loadSeq = useRef(0);
 
+  // ── Delegation invite link ──────────────────────────────────────────────────
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const inviteUrl = inviteToken
+    ? `${typeof window !== 'undefined' ? window.location.origin : 'https://gavelling.com'}/invites/delegation/${inviteToken}`
+    : '';
+
+  // Idempotent server-side: returns a stable token per (society, conference),
+  // so generating again always yields the same shareable link.
+  const generateInvite = useCallback(async () => {
+    if (!session || !society || inviteBusy) return;
+    setInviteBusy(true);
+    setInviteError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.rpc('create_delegation_invite', {
+      p_society_id: society.id,
+      p_conference_id: society.conferenceId,
+    });
+    setInviteBusy(false);
+    const result = data as { ok: boolean; error?: string; token?: string } | null;
+    if (error || !result?.ok || !result.token) {
+      setInviteError(result?.error ?? error?.message ?? 'Could not create an invite link.');
+      return;
+    }
+    setInviteToken(result.token);
+  }, [session, society, inviteBusy]);
+
+  const copyInvite = useCallback(async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+    } catch {
+      // Clipboard API unavailable (http / permissions) — fall back silently.
+      const ta = document.createElement('textarea');
+      ta.value = inviteUrl;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [inviteUrl]);
+
   // ── Auth gate ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
@@ -426,7 +474,7 @@ export default function DelegationPortalClient() {
         .limit(1),
       supabase
         .from('societies')
-        .select('id, name, conferences (full_name, acronym)')
+        .select('id, name, conference_id, conferences (full_name, acronym)')
         .eq('id', societyId)
         .maybeSingle(),
       supabase
@@ -445,10 +493,10 @@ export default function DelegationPortalClient() {
     const leader = ((leaderRes.data as { id: string }[] | null) ?? []).length > 0;
     setIsLeader(leader);
 
-    const socRow = socRes.data as { id: string; name: string; conferences: { full_name: string; acronym: string } | { full_name: string; acronym: string }[] | null } | null;
+    const socRow = socRes.data as { id: string; name: string; conference_id: string; conferences: { full_name: string; acronym: string } | { full_name: string; acronym: string }[] | null } | null;
     if (socRow) {
       const conf = Array.isArray(socRow.conferences) ? socRow.conferences[0] : socRow.conferences;
-      setSociety({ id: socRow.id, name: socRow.name, conferenceName: conf?.full_name ?? conf?.acronym ?? '' });
+      setSociety({ id: socRow.id, name: socRow.name, conferenceId: socRow.conference_id, conferenceName: conf?.full_name ?? conf?.acronym ?? '' });
     }
 
     const rawSeats = ((allocRes.data as unknown as (Omit<Seat, 'conference_committees'> & { conference_committees: CommitteeLite | CommitteeLite[] | null })[] | null) ?? []).map((s) => ({
@@ -609,6 +657,71 @@ export default function DelegationPortalClient() {
         <SummaryStat icon={Flag} value={seats.length} label={seats.length === 1 ? 'Seat' : 'Seats'} gradient={NEU_GRADIENTS.gold} />
         <SummaryStat icon={Layers} value={assignedCount} label="Assigned" gradient={NEU_GRADIENTS.green} />
       </div>
+
+      {/* Invite delegates */}
+      <NeuCard style={{ padding: '18px 20px', marginBottom: 28 }}>
+        <div className="flex items-start gap-3">
+          <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={UserPlus} size={40} />
+          <div className="min-w-0 flex-1">
+            <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em' }}>
+              Invite your delegates
+            </p>
+            <p className="text-sm mt-0.5 mb-3.5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.5 }}>
+              Share one link. Anyone who opens it applies to
+              {society?.conferenceName ? <> <strong style={{ color: NEU.ink }}>{society.conferenceName}</strong></> : ' this conference'}
+              {' '}and joins <strong style={{ color: NEU.ink }}>{society?.name ?? 'your delegation'}</strong> automatically.
+            </p>
+
+            {inviteToken ? (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 flex items-center gap-2" style={{ padding: '9px 13px', borderRadius: 12, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                  <Link2 size={14} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
+                  <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.ink }}>
+                    {inviteUrl}
+                  </p>
+                </div>
+                <button
+                  onClick={copyInvite}
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 focus:outline-none"
+                  style={{
+                    padding: '9px 16px', borderRadius: 12,
+                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.05em',
+                    color: NEU.gold,
+                    background: copied ? `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})` : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+                    boxShadow: NEU.outSm, border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  {copied ? <Check size={13} strokeWidth={2.8} /> : <Link2 size={13} strokeWidth={2.6} />}
+                  {copied ? 'COPIED' : 'COPY'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={generateInvite}
+                disabled={inviteBusy || !society}
+                className="inline-flex items-center gap-2 focus:outline-none"
+                style={{
+                  padding: '9px 18px', borderRadius: 999,
+                  fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                  color: NEU.gold,
+                  background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+                  boxShadow: `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}`,
+                  border: 'none', cursor: inviteBusy || !society ? 'default' : 'pointer', opacity: inviteBusy || !society ? 0.55 : 1,
+                }}
+              >
+                <UserPlus size={14} strokeWidth={2.6} />
+                {inviteBusy ? 'GENERATING…' : 'CREATE INVITE LINK'}
+              </button>
+            )}
+
+            {inviteError && (
+              <p className="text-xs mt-2.5" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                {inviteError}
+              </p>
+            )}
+          </div>
+        </div>
+      </NeuCard>
 
       {/* Seats */}
       {seats.length === 0 ? (

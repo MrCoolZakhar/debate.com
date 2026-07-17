@@ -20,6 +20,7 @@ import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
+import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -1201,50 +1202,50 @@ export default function ConferenceDetailClient() {
           )}
         </div>
 
-        {/* ── Glass stat strip, overlaps the hero ───────────────────── */}
+        {/* ── Neu stat strip, three soft tiles overlapping the hero ──── */}
         <div className="relative z-20 px-6 md:px-14" style={{ marginTop: '-44px' }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            <div
-              className="grid grid-cols-3"
-              style={{
-                backgroundColor: 'rgba(250,248,243,0.94)',
-                backdropFilter: 'blur(14px)',
-                WebkitBackdropFilter: 'blur(14px)',
-                border: '1px solid rgba(221,212,192,0.95)',
-                borderRadius: '20px',
-                boxShadow: '0 16px 40px rgba(16,28,21,0.14)',
-                overflow: 'hidden',
-              }}
-            >
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               {/* Dates + location live in the hero overlay (flag, city, date
-                  range), only facts NOT already shown above appear here. */}
+                  range), only facts NOT already shown above appear here.
+                  Each fact is its own extruded neu tile: a bigger gradient
+                  icon disc + stacked label/value, tight paddings so the row
+                  reads compact and intentional (values wrap, never truncate). */}
               {[
-                { icon: Monitor, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
-                { icon: GraduationCap, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
-                { icon: Users, label: 'Delegates', value: conference.expected_delegates.toLocaleString() },
-              ].map((cell, i) => {
-                const Icon = cell.icon;
-                return (
-                  <div
-                    key={cell.label}
-                    title={cell.label}
-                    className="flex items-center gap-3 px-5 py-4"
-                    style={{
-                      borderLeft: i > 0 ? '1px solid rgba(221,212,192,0.7)' : 'none',
-                    }}
-                  >
-                    <span
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(182,135,31,0.12)' }}
+                { icon: Monitor, gradient: NEU_GRADIENTS.forest, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
+                { icon: GraduationCap, gradient: NEU_GRADIENTS.amber, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
+                { icon: Users, gradient: NEU_GRADIENTS.green, label: 'Delegates', value: conference.expected_delegates.toLocaleString() },
+              ].map((cell) => (
+                <div
+                  key={cell.label}
+                  className="flex items-center gap-3.5"
+                  style={{
+                    backgroundColor: NEU.surface,
+                    borderRadius: 18,
+                    boxShadow: NEU.outSm,
+                    padding: '14px 16px',
+                    minWidth: 0,
+                  }}
+                >
+                  <NeuIconDisc gradient={cell.gradient} icon={cell.icon} size={46} />
+                  <div className="min-w-0">
+                    <p
+                      style={{
+                        fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9.5px',
+                        letterSpacing: '0.14em', textTransform: 'uppercase', color: NEU.muted, margin: '0 0 3px 0',
+                      }}
                     >
-                      <Icon size={16} strokeWidth={2} style={{ color: '#B6871F' }} />
-                    </span>
-                    <p className="text-[15px] font-bold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                      {cell.label}
+                    </p>
+                    <p
+                      className="text-[16px] font-extrabold leading-tight"
+                      style={{ color: NEU.ink, fontFamily: "'Outfit', sans-serif", margin: 0 }}
+                    >
                       {cell.value}
                     </p>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -1400,7 +1401,10 @@ export default function ConferenceDetailClient() {
                   <p className="mb-3" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
                     ORGANISED BY
                   </p>
-                  <div className="flex items-center gap-4">
+                  <div
+                    className="flex items-center gap-4"
+                    style={{ backgroundColor: NEU.base, borderRadius: 16, boxShadow: NEU.inSm, padding: '14px 16px' }}
+                  >
                     {conference.logo_url && (
                       <LogoDisc
                         src={conference.logo_url}
@@ -1433,10 +1437,10 @@ export default function ConferenceDetailClient() {
                           href={normalizeSocialUrl(conference.instagram_url, 'instagram') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center rounded-full transition-colors"
-                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
+                          className="flex items-center justify-center rounded-full"
+                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
@@ -1450,10 +1454,10 @@ export default function ConferenceDetailClient() {
                           href={normalizeSocialUrl(conference.facebook_url, 'facebook') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center rounded-full transition-colors"
-                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
+                          className="flex items-center justify-center rounded-full"
+                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <Globe size={15} />
                         </a>
@@ -1463,10 +1467,10 @@ export default function ConferenceDetailClient() {
                           href={normalizeSocialUrl(conference.tiktok_url, 'tiktok') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center rounded-full transition-colors"
-                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
+                          className="flex items-center justify-center rounded-full"
+                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <Music size={15} />
                         </a>
@@ -1476,10 +1480,10 @@ export default function ConferenceDetailClient() {
                           href={normalizeSocialUrl(conference.whatsapp_url, 'whatsapp') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center rounded-full transition-colors"
-                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
+                          className="flex items-center justify-center rounded-full"
+                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <MessageCircle size={15} />
                         </a>
@@ -1489,10 +1493,10 @@ export default function ConferenceDetailClient() {
                           href={normalizeSocialUrl(conference.website_url) ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center rounded-full transition-colors"
-                          style={{ width: '34px', height: '34px', border: '1px solid #DDD4C0', color: '#9A8A78' }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#EED98A'; el.style.backgroundColor = '#1B3828'; el.style.borderColor = '#1B3828'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.backgroundColor = 'transparent'; el.style.borderColor = '#DDD4C0'; }}
+                          className="flex items-center justify-center rounded-full"
+                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <Globe size={15} />
                         </a>
