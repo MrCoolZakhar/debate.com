@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock,
+  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal, ConfirmModal } from '@/components/ConfirmModal';
+import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { DatePicker } from '@/components/DatePicker';
@@ -239,6 +240,88 @@ function PartnerDisc({ logoUrl, acronym, size = 40 }: {
   size?: number;
 }) {
   return <LogoDisc src={logoUrl} alt={acronym} size={size} fallbackText={acronym?.[0] ?? '?'} />;
+}
+
+/** "Copy form to another role…" trigger + portaled role picker. The row card
+ *  above doesn't clip (no overflow:hidden here), but this still portals at
+ *  fixed viewport coordinates to match the rest of the app's popover rule. */
+function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const MENU_W = 200;
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const left = Math.min(Math.max(8, r.left), window.innerWidth - MENU_W - 8);
+    setPos({ top: r.bottom + 6, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
+
+  if (roles.length === 0) return null;
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        ref={btnRef}
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-xs font-semibold focus:outline-none hover:underline"
+        style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
+      >
+        <Copy size={13} /> COPY FORM TO ANOTHER ROLE…
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: MENU_W,
+              backgroundColor: '#FAF8F3', borderRadius: 14, border: '1px solid #DDD4C0',
+              boxShadow: '0 12px 32px rgba(27,56,40,0.18)', padding: 6,
+            }}
+          >
+            <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-bold" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}>
+              COPY TO
+            </p>
+            {roles.map(role => (
+              <button
+                key={role}
+                onClick={() => { setOpen(false); onPick(role); }}
+                className="w-full text-left px-2.5 py-2 rounded-lg text-sm focus:outline-none transition-colors"
+                style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", background: 'transparent' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {roleLabel(role)}
+              </button>
+            ))}
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
 }
 
 // ── Settings page ──────────────────────────────────────────────────────────
@@ -1139,9 +1222,37 @@ export default function SettingsPage() {
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
   const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
   const enabledRoles = ROLES.filter(r => roleConfigs.find(rc => rc.role === r)?.is_enabled);
+  const otherRoles = ROLES.filter(r => r !== selectedRole);
+  const [copyNotice, setCopyNotice] = useState('');
 
   function handleBlocksChange(next: FormBlock[]) {
     void saveRoleConfig(selectedRole, { custom_questions: next });
+  }
+
+  // Deep-copies a block with a fresh id, so the copy is fully independent of
+  // the source (including its options array, the only nested mutable field).
+  function cloneBlockWithNewId(block: FormBlock): FormBlock {
+    if (block.kind === 'question') {
+      return { ...block, id: crypto.randomUUID(), options: block.options ? [...block.options] : block.options };
+    }
+    return { ...block, id: crypto.randomUUID() };
+  }
+
+  async function handleCopyFormTo(targetRole: string) {
+    const targetBlocks = normalizeBlocks(roleConfigs.find(rc => rc.role === targetRole)?.custom_questions ?? []);
+    if (targetBlocks.length > 0) {
+      const { confirmed } = await confirm({
+        title: `Overwrite ${roleLabel(targetRole)}'s questions?`,
+        body: `${roleLabel(targetRole)} already has custom questions. Copying will replace them with a copy of ${roleLabel(selectedRole)}'s form.`,
+        confirmLabel: 'Overwrite',
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
+    const copiedBlocks = currentBlocks.map(cloneBlockWithNewId);
+    await saveRoleConfig(targetRole, { custom_questions: copiedBlocks });
+    setCopyNotice(`Copied to ${roleLabel(targetRole)}`);
+    setTimeout(() => setCopyNotice(''), 2500);
   }
 
   async function handleBannerUpload(file: File) {
@@ -2481,7 +2592,17 @@ export default function SettingsPage() {
         </div>
 
         {enabledRoles.length > 0 && (
-          <QuestionBuilder value={currentBlocks} onChange={handleBlocksChange} />
+          <>
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
+              {copyNotice && (
+                <p className="text-xs font-semibold" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                  {copyNotice} ✓
+                </p>
+              )}
+            </div>
+            <QuestionBuilder value={currentBlocks} onChange={handleBlocksChange} />
+          </>
         )}
       </div>}
 
