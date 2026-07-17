@@ -50,6 +50,7 @@ interface Conference {
   min_age: number | null;
   logo_url: string | null;
   delegate_preference_mode: PreferenceMode;
+  credits_sponsored: boolean;
 }
 
 interface RoleConfig {
@@ -789,7 +790,11 @@ function ConferenceApplyInner() {
   const hasUnlimited = financeProfile.has_active_subscription;
   const previewSocietyId = !isIndependent && !isObserver ? selectedSocietyId : null;
   const poolCovered = !!previewSocietyId && (poolBalance ?? 0) > 0;
-  const canApply = isExemptRole || hasUnlimited || poolCovered || (creditBalance ?? 0) >= 1;
+  // Gavelling-sponsored conferences: consume_credit_for_application always
+  // succeeds without consuming a credit (reason:'sponsored') — never gate or
+  // charge here, regardless of the applicant's own balance.
+  const creditsSponsored = conference?.credits_sponsored ?? false;
+  const canApply = creditsSponsored || isExemptRole || hasUnlimited || poolCovered || (creditBalance ?? 0) >= 1;
 
   const stepSequence = [
     'role',
@@ -908,7 +913,7 @@ function ConferenceApplyInner() {
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, logo_url, delegate_preference_mode')
+      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, logo_url, delegate_preference_mode, credits_sponsored')
       .eq('slug', slug)
       .single();
 
@@ -1456,7 +1461,10 @@ function ConferenceApplyInner() {
         p_application_id: existingApp.id,
       });
       const creditResult = credit as { ok?: boolean; consumed?: boolean; need_credit?: boolean } | null;
-      if (creditResult?.need_credit) {
+      // Sponsored conferences never need a credit — consume_credit_for_application
+      // already returns ok without need_credit, but guard defensively so this
+      // prompt can never surface here regardless.
+      if (creditResult?.need_credit && !creditsSponsored) {
         setResubmitNeedsCredit(true);
         setSubmitting(false);
         return;
@@ -2516,69 +2524,90 @@ function ConferenceApplyInner() {
           </NeuInset>
         )}
 
-        {/* ── Cost card ── */}
-        <div className="relative rounded-2xl p-5 mb-4" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}>
-          <div className="absolute top-3.5 right-3.5">
-            <CreditInfoTip />
-          </div>
-
-          <div className="flex items-center gap-3 mb-3 pr-8">
+        {/* ── Cost card — sponsored conferences never gate or charge a credit,
+            so the balance/plan/buy-more UI is replaced entirely by a single
+            celebratory banner. ── */}
+        {creditsSponsored ? (
+          <div
+            className="relative rounded-2xl p-5 mb-4 flex items-center gap-3"
+            style={{ background: 'linear-gradient(135deg, rgba(238,217,138,0.28), rgba(27,56,40,0.06))', border: '1.5px solid rgba(238,217,138,0.55)' }}
+          >
             <span
               className="flex items-center justify-center flex-shrink-0"
               style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, #2A5A3C)' }}
             >
-              <Coins size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
+              <Sparkles size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
             </span>
             <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-              {costLabel}
+              Credits for this conference have been sponsored by Gavelling!
             </p>
           </div>
+        ) : (
+          <>
+            <div className="relative rounded-2xl p-5 mb-4" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}>
+              <div className="absolute top-3.5 right-3.5">
+                <CreditInfoTip />
+              </div>
 
-          {!isExemptRole && !hasUnlimited && !poolCovered && (
-            <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-              You have {creditBalanceLoading || creditBalance === null ? '—' : creditBalance} credit{creditBalance === 1 ? '' : 's'}.
-            </p>
-          )}
+              <div className="flex items-center gap-3 mb-3 pr-8">
+                <span
+                  className="flex items-center justify-center flex-shrink-0"
+                  style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, #2A5A3C)' }}
+                >
+                  <Coins size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
+                </span>
+                <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  {costLabel}
+                </p>
+              </div>
 
-          {/* Subscription placard */}
-          <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid rgba(27,56,40,0.1)' }}>
-            <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11.5, color: NEU.muted }}>Your plan</span>
-            <Pill tone={hasUnlimited ? 'gold' : 'neutral'} icon={hasUnlimited ? <InfinityIcon size={12} strokeWidth={2.4} /> : undefined}>
-              {tierLabel}
-            </Pill>
-          </div>
-        </div>
+              {!isExemptRole && !hasUnlimited && !poolCovered && (
+                <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                  You have {creditBalanceLoading || creditBalance === null ? '—' : creditBalance} credit{creditBalance === 1 ? '' : 's'}.
+                </p>
+              )}
 
-        {gated && (
-          <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
-            <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-              Out of credits?{' '}
-              <button
-                type="button"
-                onClick={goBuyCredits}
-                className="focus:outline-none"
-                style={{ color: '#8B2020', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
-              >
-                Buy more or upgrade your subscription!
-              </button>
-            </p>
-          </div>
-        )}
+              {/* Subscription placard */}
+              <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid rgba(27,56,40,0.1)' }}>
+                <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11.5, color: NEU.muted }}>Your plan</span>
+                <Pill tone={hasUnlimited ? 'gold' : 'neutral'} icon={hasUnlimited ? <InfinityIcon size={12} strokeWidth={2.4} /> : undefined}>
+                  {tierLabel}
+                </Pill>
+              </div>
+            </div>
 
-        {resubmitNeedsCredit && (
-          <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
-            <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-              You need a credit to resubmit.{' '}
-              <button
-                type="button"
-                onClick={goBuyCredits}
-                className="focus:outline-none"
-                style={{ color: '#8B2020', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
-              >
-                Buy more or upgrade your subscription!
-              </button>
-            </p>
-          </div>
+            {gated && (
+              <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
+                <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                  Out of credits?{' '}
+                  <button
+                    type="button"
+                    onClick={goBuyCredits}
+                    className="focus:outline-none"
+                    style={{ color: '#8B2020', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
+                  >
+                    Buy more or upgrade your subscription!
+                  </button>
+                </p>
+              </div>
+            )}
+
+            {resubmitNeedsCredit && (
+              <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(139,32,32,0.06)', border: '1.5px solid rgba(139,32,32,0.22)' }}>
+                <p className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                  You need a credit to resubmit.{' '}
+                  <button
+                    type="button"
+                    onClick={goBuyCredits}
+                    className="focus:outline-none"
+                    style={{ color: '#8B2020', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
+                  >
+                    Buy more or upgrade your subscription!
+                  </button>
+                </p>
+              </div>
+            )}
+          </>
         )}
 
         {submitError && (
