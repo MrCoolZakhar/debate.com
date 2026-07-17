@@ -30,6 +30,8 @@ import {
   useFinancialsCurrency,
 } from '../shared';
 import VouchersSection from '../VouchersSection';
+import ApplicationFeeSection from '../ApplicationFeeSection';
+import AddonsSection from '../AddonsSection';
 
 const stepLabelStyle: React.CSSProperties = {
   fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.12em',
@@ -732,6 +734,10 @@ export default function FinancialsSettingsPage() {
 
       {/* ── Vouchers ── */}
       <VouchersSection conference={conference} displayCurrency={displayCurrency} />
+
+      {/* ── Conference Application Fee + Add-ons ── */}
+      <ApplicationFeeSection conference={conference} />
+      <AddonsSection conference={conference} />
     </>
   );
 }
