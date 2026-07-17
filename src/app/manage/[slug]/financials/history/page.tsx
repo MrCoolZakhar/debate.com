@@ -1,36 +1,99 @@
 'use client';
 
 /**
- * Financials History — the exact transaction log: every paid/waived
- * application, newest first, dated by paid_at when recorded else the
- * application date.
+ * Financials History — the payments ledger for this conference: every row
+ * in `payments` whose invoice belongs here, newest first. This is the money
+ * log (who paid what, how, and when) as opposed to /financials/invoices,
+ * which is the current state of what's owed.
  */
 
-import { BadgePercent, Receipt } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CreditCard, Receipt } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
+import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import { invoiceLabel, centsToFee } from '@/lib/invoices';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc } from '@/components/neu';
-import {
-  useFinancialsData, useFinancialsCurrency,
-  rowAmount, committeeAbbr, CountryFlag, chipStyle, formatRowDate, paymentMethod,
-  mutedCaption,
-} from '../shared';
+import { inputStyle, mutedCaption, chipStyle, formatRowDate, roleLabel } from '../shared';
+
+interface PaymentInvoice {
+  id: string;
+  kind: string;
+  label: string | null;
+  application: { role: string; invited_name: string | null; profiles: { display_name: string } | null } | { role: string; invited_name: string | null; profiles: { display_name: string } | null }[] | null;
+}
+
+interface PaymentRow {
+  id: string;
+  invoice_id: string;
+  amount_cents: number;
+  currency: string;
+  type: string;
+  method: string | null;
+  status: string;
+  created_at: string;
+  invoice: PaymentInvoice | PaymentInvoice[] | null;
+}
+
+const first = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+
+const TYPE_LABEL: Record<string, string> = {
+  payment: 'PAYMENT',
+  manual_paid: 'MANUAL',
+  waiver: 'WAIVER',
+  refund: 'REFUND',
+};
+
+function typeLabel(type: string): string {
+  return TYPE_LABEL[type] ?? type.replace(/_/g, ' ').toUpperCase();
+}
+
+const TYPE_STYLE: Record<string, { bg: string; color: string }> = {
+  payment: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
+  manual_paid: { bg: 'rgba(154,138,120,0.16)', color: '#6B5E4E' },
+  waiver: { bg: 'rgba(184,132,74,0.16)', color: '#9A6B2F' },
+  refund: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
+};
 
 export default function FinancialsHistoryPage() {
   const { conference } = useManage();
-  const { fin, loading } = useFinancialsData();
-  const { disp } = useFinancialsCurrency();
+  const { session } = useAuth();
+
+  const [payments, setPayments] = useState<PaymentRow[] | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [methodFilter, setMethodFilter] = useState<string>('all');
+
+  useEffect(() => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { data } = await supabase
+        .from('payments')
+        .select(`
+          id, invoice_id, amount_cents, currency, type, method, status, created_at,
+          invoice:invoices!inner (
+            id, kind, label, conference_id,
+            application:applications!invoices_application_id_fkey (role, invited_name, profiles (display_name))
+          )
+        `)
+        .eq('invoice.conference_id', conference.id)
+        .order('created_at', { ascending: false });
+      setPayments((data ?? []) as unknown as PaymentRow[]);
+    })();
+  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!conference) return null;
 
-  const fee = conference.fee_amount ?? 0;
+  const loading = payments === null;
+  const rows = payments ?? [];
+  const availableTypes = Array.from(new Set(rows.map(r => r.type))).sort();
+  const availableMethods = Array.from(new Set(rows.map(r => r.method).filter((m): m is string => !!m))).sort();
 
-  // History, the exact transaction log: every paid/waived application, newest
-  // first, dated by paid_at when recorded else the application date.
-  const historyRows = fin.live
-    .filter(r => r.payment_status === 'paid' || r.payment_status === 'waived')
-    .slice()
-    .sort((a, b) =>
-      new Date(b.paid_at ?? b.submitted_at).getTime() - new Date(a.paid_at ?? a.submitted_at).getTime());
+  const filtered = rows.filter(r => {
+    if (typeFilter !== 'all' && r.type !== typeFilter) return false;
+    if (methodFilter !== 'all' && r.method !== methodFilter) return false;
+    return true;
+  });
 
   return (
     <section>
@@ -41,49 +104,61 @@ export default function FinancialsHistoryPage() {
             Transaction history
           </h2>
           <p style={mutedCaption}>
-            Every collected and waived fee, newest first. Dated by payment when recorded, otherwise the application date.
+            Every payment recorded against this conference&apos;s invoices, newest first — the money log.
           </p>
         </div>
       </div>
 
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
+            <option value="all">All types</option>
+            {availableTypes.map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}
+          </select>
+          {availableMethods.length > 0 && (
+            <select value={methodFilter} onChange={e => setMethodFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
+              <option value="all">All methods</option>
+              {availableMethods.map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="rounded-[22px] animate-pulse" style={{ height: 180, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
-      ) : historyRows.length === 0 ? (
+      ) : rows.length === 0 ? (
         <NeuInset className="flex flex-col items-center text-center px-6 py-10">
           <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink }}>
             No transactions yet
           </p>
           <p className="mt-1 max-w-sm" style={{ ...mutedCaption, fontSize: 11.5 }}>
-            Paid and waived fees appear here as a detailed chronological log.
+            Payments appear here — checkout, manual mark-paid, waivers, and refunds — as a detailed chronological log.
           </p>
+        </NeuInset>
+      ) : filtered.length === 0 ? (
+        <NeuInset small className="text-center px-6 py-8">
+          <p style={{ ...mutedCaption, fontSize: 12 }}>No transactions match these filters.</p>
         </NeuInset>
       ) : (
         <NeuCard style={{ padding: '6px 0', overflow: 'hidden' }}>
-          {historyRows.map((r, i) => {
-            const waived = r.payment_status === 'waived';
-            const amount = rowAmount(fee, r);
-            const discount = Number(r.voucher_discount) || 0;
-            const discounted = discount > 0;
-            const hasPaidAt = !waived && !!r.paid_at;
-            const method = paymentMethod(r);
-            const dateIso = r.paid_at ?? r.submitted_at;
+          {filtered.map((p, i) => {
+            const inv = first(p.invoice);
+            const app = inv ? first(inv.application) : null;
+            const name = app?.profiles?.display_name ?? app?.invited_name ?? 'Unknown';
+            const typeStyle = TYPE_STYLE[p.type] ?? { bg: 'rgba(154,138,120,0.13)', color: '#6B5E4E' };
             return (
               <div
-                key={r.id}
+                key={p.id}
                 className="flex items-center gap-3 flex-wrap px-5 py-2.5"
                 style={i > 0 ? { borderTop: '1px solid rgba(221,212,192,0.55)' } : undefined}
               >
-                {/* Date, leads the log */}
+                {/* Date */}
                 <span
                   className="inline-flex items-baseline gap-1.5 flex-shrink-0"
-                  title={hasPaidAt ? 'Payment recorded on this date' : waived ? 'Fee waived (application date)' : 'Application date, no payment date recorded'}
-                  style={{ minWidth: 118 }}
+                  style={{ minWidth: 100 }}
                 >
-                  <span style={{ fontFamily: OUTFIT, fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, opacity: 0.85 }}>
-                    {hasPaidAt ? 'PAID' : waived ? 'WAIVED' : 'APPLIED'}
-                  </span>
                   <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatRowDate(dateIso)}
+                    {formatRowDate(p.created_at)}
                   </span>
                 </span>
 
@@ -92,56 +167,47 @@ export default function FinancialsHistoryPage() {
                   className="truncate"
                   style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, flex: '1 1 140px', minWidth: 120 }}
                 >
-                  {r.profiles?.display_name ?? 'Unknown'}
+                  {name}
                 </span>
 
-                {/* Committee + flag */}
+                {/* What (invoice label/kind + role) */}
                 <span
-                  className="inline-flex items-center gap-1.5"
-                  title={r.assigned_committee?.name ?? undefined}
-                  style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, minWidth: 64 }}
+                  className="truncate"
+                  style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.muted, flex: '1 1 140px', minWidth: 120 }}
                 >
-                  {committeeAbbr(r.assigned_committee)}
-                  <CountryFlag name={r.assigned_country_name} code={r.assigned_country_code} />
+                  {inv ? invoiceLabel(inv) : 'Unknown invoice'}
+                  {app?.role ? ` · ${roleLabel(app.role)}` : ''}
                 </span>
-
-                {/* Voucher discount, when applied */}
-                {discounted && (
-                  <span
-                    className="inline-flex items-center gap-1"
-                    title={`Voucher discount of ${disp(discount)} applied`}
-                    style={{ ...chipStyle, fontSize: 8.5, backgroundColor: 'rgba(182,135,31,0.14)', color: NEU.deepGold, border: '1px solid rgba(182,135,31,0.36)' }}
-                  >
-                    <BadgePercent size={10} strokeWidth={2.5} />
-                    −{disp(discount)}
-                  </span>
-                )}
 
                 {/* Amount */}
                 <span
                   style={{
-                    fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900,
-                    color: waived ? NEU.muted : NEU.ink,
-                    textDecoration: waived ? 'line-through' : 'none',
-                    textDecorationColor: 'rgba(154,138,120,0.55)',
-                    fontVariantNumeric: 'tabular-nums',
-                    minWidth: 64, textAlign: 'right', marginLeft: 'auto',
+                    fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink,
+                    fontVariantNumeric: 'tabular-nums', minWidth: 64, textAlign: 'right', marginLeft: 'auto',
                   }}
                 >
-                  {disp(waived ? fee : amount)}
+                  {centsToFee(p.amount_cents, p.currency)}
                 </span>
 
-                {/* Method chip, STRIPE / SELF-PAID / DELEGATION / MANUAL / AMBASSADOR / UNLIMITED */}
-                {method && (
+                {/* Type chip */}
+                <span
+                  className="inline-flex items-center gap-1"
+                  style={{ ...chipStyle, backgroundColor: typeStyle.bg, color: typeStyle.color, border: `1px solid ${typeStyle.color}55` }}
+                >
+                  <CreditCard size={10} strokeWidth={2.5} />
+                  {typeLabel(p.type)}
+                </span>
+
+                {/* Method chip */}
+                {p.method && (
                   <span
-                    title={method.title}
                     style={{
                       ...chipStyle, fontSize: 8.5,
                       backgroundColor: 'rgba(154,138,120,0.13)', color: '#6B5E4E',
                       border: '1px solid rgba(154,138,120,0.35)',
                     }}
                   >
-                    {method.label}
+                    {p.method.toUpperCase()}
                   </span>
                 )}
               </div>
