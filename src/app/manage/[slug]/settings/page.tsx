@@ -1533,7 +1533,7 @@ export default function SettingsPage() {
             Set up how your conference gets paid before you can configure and open applications. Even free conferences must choose a method, so if yours is free, pick Manual and note &quot;This conference is free.&quot;
           </p>
           <button
-            onClick={() => router.push(`/manage/${conference.slug}/financials`)}
+            onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
             className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors"
             style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em', cursor: 'pointer' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
