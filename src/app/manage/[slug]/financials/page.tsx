@@ -21,7 +21,7 @@ import {
   NeuCard, NeuInset, NeuStatTile, NeuProgress, NeuPill, NeuIconDisc,
 } from '@/components/neu';
 import {
-  useFinancialsData, useFinancialsCurrency,
+  useFinancialsData, useFinancialsCurrency, useInvoiceTotals,
   rowAmount, roleLabel, RoleIcon, roleTone, committeeAbbr, CountryFlag,
   cumulativeSpark, chipStyle, formatRowDate, paymentMethod,
   PIPELINE_FILTERS, type PipelineFilter, mutedCaption,
@@ -30,6 +30,10 @@ import {
 export default function FinancialsOverviewPage() {
   const { conference } = useManage();
   const { rows, fin, loading } = useFinancialsData();
+  // Stat tiles reconcile against the invoices/payments ledger (PART 6); the
+  // delegate estimate block and payment pipeline below stay on the
+  // applications-derived `fin` — they're about acceptance/role mix, not money.
+  const { totals: invTotals, loading: invLoading } = useInvoiceTotals();
   const { disp } = useFinancialsCurrency();
   const [filter, setFilter] = useState<PipelineFilter>('all');
 
@@ -47,8 +51,8 @@ export default function FinancialsOverviewPage() {
 
   return (
     <>
-      {/* ── 2 · Revenue overview ── */}
-      {loading ? (
+      {/* ── 2 · Revenue overview — reconciled from the invoices/payments ledger ── */}
+      {loading || invLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="rounded-[22px] animate-pulse" style={{ height: 118, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
@@ -60,7 +64,7 @@ export default function FinancialsOverviewPage() {
             emoji="Money bag"
             icon={PiggyBank}
             gradient={NEU_GRADIENTS.green}
-            value={disp(fin.collected)}
+            value={disp(invTotals?.collected ?? 0)}
             label={`Collected · ${fin.paidRows.length} paid`}
             spark={cumulativeSpark(rows ?? [], r => r.payment_status === 'paid')}
           />
@@ -68,7 +72,7 @@ export default function FinancialsOverviewPage() {
             emoji="Hourglass not done"
             icon={Hourglass}
             gradient={NEU_GRADIENTS.amber}
-            value={disp(fin.pending)}
+            value={disp(invTotals?.pending ?? 0)}
             label={`Pending · ${fin.pendingRows.length} accepted unpaid`}
             spark={cumulativeSpark(rows ?? [], r => (r.status === 'accepted' || r.status === 'assigned') && r.payment_status === 'unpaid')}
           />
@@ -76,7 +80,7 @@ export default function FinancialsOverviewPage() {
             emoji="Money with wings"
             icon={HandCoins}
             gradient={NEU_GRADIENTS.sage}
-            value={disp(fin.waived)}
+            value={disp(invTotals?.waived ?? 0)}
             label={`Waived · ${fin.waivedRows.length} fee${fin.waivedRows.length === 1 ? '' : 's'} forgone`}
             style={{ opacity: 0.72 }}
           />
@@ -84,7 +88,7 @@ export default function FinancialsOverviewPage() {
             emoji="Chart increasing"
             icon={TrendingUp}
             gradient={NEU_GRADIENTS.gold}
-            value={disp(fin.expectedTotal)}
+            value={disp(invTotals?.expectedTotal ?? 0)}
             label="Expected total · collected + pending"
             spark={cumulativeSpark(rows ?? [], r =>
               r.payment_status === 'paid'

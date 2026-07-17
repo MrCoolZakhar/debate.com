@@ -266,6 +266,55 @@ export function useFinancialsData() {
   return { rows, fin, loading };
 }
 
+// ── useInvoiceTotals ─────────────────────────────────────────────────────────
+// Reconciles the Overview stat tiles against the invoices/payments ledger
+// (PART 6) rather than the legacy applications.payment_status estimate above.
+// Collected is summed from amount_paid_cents across every invoice (captures
+// both fully settled AND partially-paid invoices — equivalent to summing
+// succeeded payments, one query instead of two). Pending is the outstanding
+// balance on open/partial invoices; waived is the full amount of waived
+// invoices, when any exist. Only invoices in the conference's own currency
+// are summed — disp()/the stat tiles assume one currency throughout, same as
+// the legacy `fin` figures, and mixed-currency add-ons are rare enough that
+// silently adding raw cents across currencies would be actively wrong.
+
+export interface InvoiceTotals {
+  collected: number;
+  pending: number;
+  waived: number;
+  expectedTotal: number;
+}
+
+export function useInvoiceTotals() {
+  const { conference } = useManage();
+  const { session } = useAuth();
+  const [totals, setTotals] = useState<InvoiceTotals | null>(null);
+
+  useEffect(() => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const conferenceCurrency = (conference.fee_currency ?? 'USD').toUpperCase();
+    (async () => {
+      await supabase.rpc('sync_conference_invoices', { p_conference_id: conference.id });
+      const { data } = await supabase
+        .from('invoices')
+        .select('amount_cents, amount_paid_cents, status, currency')
+        .eq('conference_id', conference.id)
+        .neq('status', 'void');
+      const rows = ((data ?? []) as { amount_cents: number; amount_paid_cents: number; status: string; currency: string }[])
+        .filter(r => r.currency.toUpperCase() === conferenceCurrency);
+      const collected = roundMoney(rows.reduce((s, r) => s + r.amount_paid_cents, 0) / 100);
+      const pending = roundMoney(rows
+        .filter(r => r.status === 'open' || r.status === 'partial')
+        .reduce((s, r) => s + Math.max(0, r.amount_cents - r.amount_paid_cents), 0) / 100);
+      const waived = roundMoney(rows.filter(r => r.status === 'waived').reduce((s, r) => s + r.amount_cents, 0) / 100);
+      setTotals({ collected, pending, waived, expectedTotal: roundMoney(collected + pending) });
+    })();
+  }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { totals, loading: totals === null };
+}
+
 // ── FinancialsCurrencyContext ────────────────────────────────────────────────
 // All figures can be re-displayed in another currency via the header
 // switcher, a static approximate FX table (see VouchersSection.tsx, which
