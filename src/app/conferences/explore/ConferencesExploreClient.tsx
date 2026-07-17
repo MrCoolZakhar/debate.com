@@ -358,7 +358,8 @@ function RegionControl({
 // ── List row (myMUN-style directory row) ──────────────────────────────────
 
 // Two-line date range: "Jul 13 – Jul 17" over "2026".
-function splitDateRange(start: string, end: string): { range: string; year: string } {
+function splitDateRange(start: string | null, end: string | null): { range: string; year: string } {
+  if (!start || !end) return { range: 'TBD', year: '' };
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

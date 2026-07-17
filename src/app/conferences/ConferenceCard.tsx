@@ -60,8 +60,8 @@ export interface CardConference {
   acronym: string;
   country: string;
   city: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   expected_delegates: number;
   fee_amount: number;
   fee_currency: string;
@@ -84,7 +84,8 @@ export function gradientFor(acronym: string): [string, string] {
   return CARD_GRADIENTS[h % CARD_GRADIENTS.length];
 }
 
-function formatDateRange(start: string, end: string): string {
+function formatDateRange(start: string | null, end: string | null): string {
+  if (!start || !end) return 'TBD';
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -117,7 +118,7 @@ export function ConferenceCard({
   const countryObj = getCountryByName(conf.country);
   // "Oxford, GB", ISO country code instead of the full country name (or flag)
   const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
-  const editionYear = conf.start_date.slice(0, 4);
+  const editionYear = conf.start_date ? conf.start_date.slice(0, 4) : null;
   const initials = conf.acronym.slice(0, 3).toUpperCase();
   const [g0, g1] = gradientFor(conf.acronym);
   // heroCompact reuses compact's tighter horizontal padding.

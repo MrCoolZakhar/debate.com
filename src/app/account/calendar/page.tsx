@@ -187,11 +187,11 @@ export default function CalendarPage() {
     const up: CalendarEntry[] = [];
     const pa: CalendarEntry[] = [];
     for (const e of entries) {
-      const end = new Date(e.conference.end_date + 'T00:00:00').getTime();
+      const end = e.conference.end_date ? new Date(e.conference.end_date + 'T00:00:00').getTime() : Infinity;
       if (end >= today) up.push(e); else pa.push(e);
     }
-    up.sort((a, b) => new Date(a.conference.start_date).getTime() - new Date(b.conference.start_date).getTime());
-    pa.sort((a, b) => new Date(b.conference.end_date).getTime() - new Date(a.conference.end_date).getTime());
+    up.sort((a, b) => (a.conference.start_date ? new Date(a.conference.start_date).getTime() : Infinity) - (b.conference.start_date ? new Date(b.conference.start_date).getTime() : Infinity));
+    pa.sort((a, b) => (b.conference.end_date ? new Date(b.conference.end_date).getTime() : 0) - (a.conference.end_date ? new Date(a.conference.end_date).getTime() : 0));
     return { upcoming: up, past: pa };
   }, [entries]);
 

@@ -25,8 +25,8 @@ export interface CardConference {
   slug: string;
   full_name: string;
   acronym: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   city: string | null;
   country: string | null;
   logo_url: string | null;
@@ -67,7 +67,8 @@ export function startOfToday(): Date {
   return d;
 }
 
-export function formatDateRange(start: string, end: string): string {
+export function formatDateRange(start: string | null, end: string | null): string {
+  if (!start || !end) return 'TBD';
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -81,7 +82,8 @@ export function formatDateRange(start: string, end: string): string {
 }
 
 /** Human countdown chip text for upcoming conferences. Returns null when past. */
-export function countdown(start: string, end: string): { label: string; tone: PillTone } | null {
+export function countdown(start: string | null, end: string | null): { label: string; tone: PillTone } | null {
+  if (!start || !end) return null;
   const today = startOfToday().getTime();
   const s = new Date(start + 'T00:00:00').getTime();
   const e = new Date(end + 'T00:00:00').getTime();

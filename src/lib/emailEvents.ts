@@ -194,12 +194,13 @@ function paymentStatusLabel(status: string | null): string | null {
   return map[status] ?? status;
 }
 
-function formatDate(d: string): string {
+function formatDate(d: string | null): string {
+  if (!d) return 'TBD';
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function formatDateRange(start: string, end: string): string {
-  if (!start || !end) return '';
+function formatDateRange(start: string | null, end: string | null): string {
+  if (!start || !end) return 'TBD';
   if (start === end) return formatDate(start);
   const s = new Date(start);
   const e = new Date(end);
@@ -236,8 +237,8 @@ interface ConferenceRow {
   slug: string;
   acronym: string;
   full_name: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   fee_amount: number;
   fee_currency: string;
   banner_url: string | null;

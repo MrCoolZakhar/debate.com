@@ -18,8 +18,8 @@ interface FeaturedConf {
   acronym: string;
   city: string;
   country: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   fee_amount: number;
   fee_currency: string;
   logo_url: string | null;
@@ -27,7 +27,8 @@ interface FeaturedConf {
   banner_url: string | null;
 }
 
-function formatDateRange(start: string, end: string): string {
+function formatDateRange(start: string | null, end: string | null): string {
+  if (!start || !end) return 'TBD';
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

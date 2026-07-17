@@ -399,8 +399,8 @@ export default function NewConferencePage() {
           acronym: acronym.toUpperCase(),
           contact_email: contactEmail,
           student_level: studentLevel,
-          start_date: startDate,
-          end_date: endDate,
+          start_date: startDate || null,
+          end_date: endDate || null,
           country,
           city,
           format,
@@ -472,8 +472,7 @@ export default function NewConferencePage() {
   }
 
   function continueStep5() {
-    if (!startDate || !endDate) { setStepError('Pick both a start and an end date.'); return; }
-    if (endDate < startDate) { setStepError('The end date cannot be before the start date.'); return; }
+    if (startDate && endDate && endDate < startDate) { setStepError('The end date cannot be before the start date.'); return; }
     advance(5);
   }
 
@@ -502,7 +501,7 @@ export default function NewConferencePage() {
 
   const readyToCreate =
     fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
-    studentLevel && startDate && endDate && country && city.trim() && format &&
+    studentLevel && country && city.trim() && format &&
     expectedDelegates && parseInt(expectedDelegates) > 0 &&
     (feeKind === 'free' || (feeKind === 'paid' && parseFloat(feeAmount) > 0)) &&
     logoUrl;
@@ -703,7 +702,7 @@ export default function NewConferencePage() {
                   </div>
                 </NeuInset>
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
-                <ContinueButton onClick={continueStep5} disabled={!startDate || !endDate} />
+                <ContinueButton onClick={continueStep5} />
               </WizardShell>
             )}
 

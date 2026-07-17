@@ -10,12 +10,13 @@ export interface FocusCard {
   acronym: string;
   city: string;
   country: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   banner_url: string | null;
 }
 
-function formatDate(d: string): string {
+function formatDate(d: string | null): string {
+  if (!d) return 'TBD';
   const date = new Date(d + 'T00:00:00');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return months[date.getMonth()] + ' ' + date.getDate() + ', ' + date.getFullYear();
