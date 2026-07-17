@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmount } from '@/lib/utils';
+import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { ConferenceCard } from '../ConferenceCard';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
@@ -659,17 +660,19 @@ export default function ConferencesExploreClient() {
       const { data: delegateFees } = ids.length > 0
         ? await supabase
             .from('application_role_configs')
-            .select('conference_id, fee_amount, fee_currency')
+            .select('conference_id, fee_amount, fee_currency, fee_phases')
             .eq('role', 'delegate')
             .in('conference_id', ids)
-        : { data: [] as { conference_id: string; fee_amount: number | null; fee_currency: string | null }[] };
+        : { data: [] as { conference_id: string; fee_amount: number | null; fee_currency: string | null; fee_phases: FeePhase[] | null }[] };
       const feeByConference = new Map((delegateFees ?? []).map(r => [r.conference_id, r]));
 
       setConferences(confs.map(c => {
         const df = feeByConference.get(c.id);
-        return df
-          ? { ...c, fee_amount: df.fee_amount ?? 0, fee_currency: df.fee_currency ?? c.fee_currency }
-          : c;
+        if (!df) return c;
+        // Phase-aware: show the ACTIVE fee-phase price today (falls back to the
+        // flat fee when no phase covers today) — matches the detail hero.
+        const { amount } = activePhaseFee({ fee_amount: df.fee_amount, fee_phases: df.fee_phases }, new Date());
+        return { ...c, fee_amount: amount, fee_currency: df.fee_currency ?? c.fee_currency };
       }));
       setLoading(false);
     }
