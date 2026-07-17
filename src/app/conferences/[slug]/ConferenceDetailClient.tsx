@@ -17,7 +17,7 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFee } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
-import { normalizeQuestions } from '@/lib/customQuestions';
+import { normalizeBlocks } from '@/lib/customQuestions';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import {
@@ -101,7 +101,7 @@ interface Conference {
   external_payment_url: string | null;
   external_payment_note: string | null;
   financial_aid_enabled: boolean;
-  aid_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
+  aid_questions: unknown[];
   aid_intro: string | null;
 }
 
@@ -1581,7 +1581,7 @@ export default function ConferenceDetailClient() {
                   externalPaymentNote={conference.external_payment_note}
                   manualActive={conference.payment_method === 'manual'}
                   financialAidEnabled={conference.financial_aid_enabled}
-                  aidQuestions={normalizeQuestions(conference.aid_questions)}
+                  aidBlocks={normalizeBlocks(conference.aid_questions)}
                   aidIntro={conference.aid_intro}
                 />
                 </>

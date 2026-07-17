@@ -12,7 +12,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { PillToggle } from '@/app/account/accountUi';
 import QuestionBuilder from '@/components/QuestionBuilder';
-import { type CustomQuestion, normalizeQuestions } from '@/lib/customQuestions';
+import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import { NEU, OUTFIT, NeuCard } from '@/components/neu';
 
 const inputStyle: React.CSSProperties = {
@@ -39,21 +39,21 @@ export interface AidFormEditorProps {
   conferenceId: string;
   initialEnabled: boolean;
   initialIntro: string | null;
-  initialQuestions: CustomQuestion[];
+  initialBlocks: unknown[];
 }
 
-export default function AidFormEditor({ conferenceId, initialEnabled, initialIntro, initialQuestions }: AidFormEditorProps) {
+export default function AidFormEditor({ conferenceId, initialEnabled, initialIntro, initialBlocks }: AidFormEditorProps) {
   const { session } = useAuth();
   const { refreshConferenceQuiet } = useManage();
   const [enabled, setEnabled] = useState(initialEnabled);
   const [intro, setIntro] = useState(initialIntro ?? '');
-  const [questions, setQuestions] = useState<CustomQuestion[]>(() => normalizeQuestions(initialQuestions));
+  const [blocks, setBlocks] = useState<FormBlock[]>(() => normalizeBlocks(initialBlocks));
   const [toggleSaving, setToggleSaving] = useState(false);
   const [introSaving, setIntroSaving] = useState(false);
   const [introSaved, setIntroSaved] = useState(false);
   const [error, setError] = useState('');
 
-  async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: CustomQuestion[] }>): Promise<boolean> {
+  async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: FormBlock[] }>): Promise<boolean> {
     if (!session) {
       setError('Your session has expired, please refresh and sign in again.');
       return false;
@@ -94,10 +94,10 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
     }
   }
 
-  function handleQuestionsChange(next: CustomQuestion[]) {
-    const previous = questions;
-    setQuestions(next);
-    void saveAidConfig({ aid_questions: next }).then(ok => { if (!ok) setQuestions(previous); });
+  function handleBlocksChange(next: FormBlock[]) {
+    const previous = blocks;
+    setBlocks(next);
+    void saveAidConfig({ aid_questions: next }).then(ok => { if (!ok) setBlocks(previous); });
   }
 
   return (
@@ -154,7 +154,7 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
           <p className="block text-xs font-semibold mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Aid questions
           </p>
-          <QuestionBuilder questions={questions} onChange={handleQuestionsChange} />
+          <QuestionBuilder value={blocks} onChange={handleBlocksChange} />
         </>
       )}
     </NeuCard>

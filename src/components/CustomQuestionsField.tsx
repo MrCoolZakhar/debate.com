@@ -1,6 +1,6 @@
 'use client';
 
-import { type CustomQuestion, type CustomAnswers, type CustomAnswerValue } from '@/lib/customQuestions';
+import { type FormBlock, type CustomQuestion, type CustomAnswers, type CustomAnswerValue } from '@/lib/customQuestions';
 import { DatePicker } from '@/components/DatePicker';
 
 const inputStyle: React.CSSProperties = {
@@ -13,8 +13,12 @@ function errorStyle(hasError: boolean): React.CSSProperties {
   return hasError ? { borderColor: '#8B2020' } : {};
 }
 
-export default function CustomQuestionsField({ questions, answers, onChange, missingIds = [] }: {
-  questions: CustomQuestion[];
+/** Renders a Google-Forms-style block list inline: Section blocks as a
+ *  header/divider, Title blocks as static content, Question blocks as the
+ *  actual inputs. One page for now — pagination on Section breaks comes in a
+ *  later pass (see splitIntoSections in lib/customQuestions). */
+export default function CustomQuestionsField({ blocks, answers, onChange, missingIds = [] }: {
+  blocks: FormBlock[];
   answers: CustomAnswers;
   onChange: (next: CustomAnswers) => void;
   missingIds?: string[];
@@ -32,7 +36,36 @@ export default function CustomQuestionsField({ questions, answers, onChange, mis
 
   return (
     <div className="flex flex-col gap-4">
-      {questions.map(q => {
+      {blocks.map(block => {
+        if (block.kind === 'section') {
+          return (
+            <div key={block.id} className="pt-1 pb-0.5" style={{ borderTop: '1px solid rgba(27,56,40,0.12)' }}>
+              <p className="font-black text-base mt-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                {block.title}
+              </p>
+              {block.description && (
+                <p className="text-sm mt-1" style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif" }}>
+                  {block.description}
+                </p>
+              )}
+            </div>
+          );
+        }
+        if (block.kind === 'title') {
+          return (
+            <div key={block.id}>
+              <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                {block.title}
+              </p>
+              {block.description && (
+                <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  {block.description}
+                </p>
+              )}
+            </div>
+          );
+        }
+        const q: CustomQuestion = block;
         const hasError = missingIds.includes(q.id);
         const value = answers[q.id];
         return (

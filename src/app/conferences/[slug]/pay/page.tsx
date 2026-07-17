@@ -21,7 +21,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { formatFee, formatFeeAmount } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { createCheckout } from '@/lib/payments';
-import { normalizeQuestions, type CustomQuestion } from '@/lib/customQuestions';
+import { normalizeBlocks, type FormBlock } from '@/lib/customQuestions';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuIconDisc, type NeuGradient,
@@ -323,7 +323,7 @@ function PayInvoiceAndActions({
   onAidSubmitted: () => void;
 }) {
   const { session } = useAuth();
-  const aidQuestions: CustomQuestion[] = normalizeQuestions(conference.aid_questions);
+  const aidBlocks: FormBlock[] = normalizeBlocks(conference.aid_questions);
   const currency = roleConfig?.fee_currency ?? conference.fee_currency;
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: roleConfig?.fee_amount ?? 0, fee_phases: roleConfig?.fee_phases ?? null });
   const fee = resolvedFee ?? 0;
@@ -629,7 +629,7 @@ function PayInvoiceAndActions({
                 externalPaymentNote={conference.external_payment_note}
                 manualActive={manualActive}
                 financialAidEnabled={conference.financial_aid_enabled}
-                aidQuestions={aidQuestions}
+                aidBlocks={aidBlocks}
                 aidIntro={conference.aid_intro}
               />
             )}
@@ -682,7 +682,7 @@ function PayInvoiceAndActions({
       <AidRequestModal
         applicationId={application.id}
         conferenceId={conference.id}
-        aidQuestions={aidQuestions}
+        aidBlocks={aidBlocks}
         aidIntro={conference.aid_intro}
         currency={currency}
         open={aidModalOpen}

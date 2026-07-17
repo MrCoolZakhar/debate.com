@@ -53,6 +53,82 @@ export function normalizeQuestions(raw: unknown[] | null | undefined): CustomQue
   return (raw ?? []).map(normalizeQuestion);
 }
 
+// ── Form blocks ──────────────────────────────────────────────────────────────
+// A Google-Forms-style block list: questions, plus non-input Title and
+// Section blocks. Section blocks additionally mark a page break (see
+// splitIntoSections). Shared by conference application forms and financial
+// aid forms — one model, one builder, one renderer.
+
+export type QuestionBlock = CustomQuestion & { kind: 'question' };
+
+export interface TitleBlock {
+  kind: 'title';
+  id: string;
+  title: string;
+  description?: string;
+}
+
+export interface SectionBlock {
+  kind: 'section';
+  id: string;
+  title: string;
+  description?: string;
+}
+
+export type FormBlock = QuestionBlock | TitleBlock | SectionBlock;
+
+/** Backward compatible: items with no `kind` (legacy CustomQuestion rows) or
+ *  kind==='question' normalize as question blocks; kind==='title'/'section'
+ *  normalize as those. Order is preserved. */
+export function normalizeBlocks(raw: unknown): FormBlock[] {
+  const arr = Array.isArray(raw) ? raw : [];
+  return arr.map((item): FormBlock => {
+    const r = (item ?? {}) as Record<string, unknown>;
+    const description = typeof r.description === 'string' && r.description.trim() ? r.description : undefined;
+    if (r.kind === 'title') {
+      return {
+        kind: 'title',
+        id: typeof r.id === 'string' ? r.id : crypto.randomUUID(),
+        title: typeof r.title === 'string' ? r.title : '',
+        description,
+      };
+    }
+    if (r.kind === 'section') {
+      return {
+        kind: 'section',
+        id: typeof r.id === 'string' ? r.id : crypto.randomUUID(),
+        title: typeof r.title === 'string' ? r.title : '',
+        description,
+      };
+    }
+    return { ...normalizeQuestion(item), kind: 'question' };
+  });
+}
+
+/** Question blocks only, in order — for validation and answer views. */
+export function questionsOf(blocks: FormBlock[]): CustomQuestion[] {
+  return blocks.filter((b): b is QuestionBlock => b.kind === 'question');
+}
+
+/** Splits a flat block list into pages at each Section block. A Section
+ *  block starts a new page and becomes that page's header (its own title
+ *  block-ness is excluded from page.blocks); everything before the first
+ *  section is the first page with section=null. */
+export function splitIntoSections(blocks: FormBlock[]): Array<{ section: { title: string; description?: string } | null; blocks: FormBlock[] }> {
+  const pages: Array<{ section: { title: string; description?: string } | null; blocks: FormBlock[] }> = [];
+  let current: { section: { title: string; description?: string } | null; blocks: FormBlock[] } = { section: null, blocks: [] };
+  for (const block of blocks) {
+    if (block.kind === 'section') {
+      pages.push(current);
+      current = { section: { title: block.title, description: block.description }, blocks: [] };
+    } else {
+      current.blocks.push(block);
+    }
+  }
+  pages.push(current);
+  return pages;
+}
+
 export function isChoiceType(t: QuestionType): boolean {
   return t === 'dropdown' || t === 'multiple_choice' || t === 'checkboxes';
 }

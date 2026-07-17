@@ -12,14 +12,14 @@ import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { currencySymbol } from '@/lib/utils';
-import { type CustomQuestion, type CustomAnswers, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
+import { type FormBlock, type CustomAnswers, questionsOf, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { OUTFIT } from './shared';
 
 export interface AidRequestModalProps {
   applicationId: string;
   conferenceId: string;
-  aidQuestions: CustomQuestion[];
+  aidBlocks: FormBlock[];
   aidIntro: string | null;
   currency: string;
   /** Set when requesting aid for a whole delegation pool rather than a single applicant. */
@@ -31,7 +31,7 @@ export interface AidRequestModalProps {
 }
 
 export default function AidRequestModal({
-  applicationId, aidQuestions, aidIntro, currency, societyId, open, onClose, onSubmitted,
+  applicationId, aidBlocks, aidIntro, currency, societyId, open, onClose, onSubmitted,
 }: AidRequestModalProps) {
   const { session } = useAuth();
   const [requestedAmount, setRequestedAmount] = useState('');
@@ -44,7 +44,7 @@ export default function AidRequestModal({
 
   async function handleSubmit() {
     if (submitting || !session) return;
-    const questionCheck = validateAnswers(aidQuestions, customAnswers);
+    const questionCheck = validateAnswers(questionsOf(aidBlocks), customAnswers);
     if (!questionCheck.valid) {
       setMissingIds(questionCheck.missingIds);
       setSubmitError('Please answer all required questions.');
@@ -91,9 +91,9 @@ export default function AidRequestModal({
           </p>
         )}
 
-        {aidQuestions.length > 0 && (
+        {aidBlocks.length > 0 && (
           <CustomQuestionsField
-            questions={aidQuestions}
+            blocks={aidBlocks}
             answers={customAnswers}
             onChange={(next) => {
               setCustomAnswers(next);

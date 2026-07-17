@@ -13,7 +13,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { createCheckout } from '@/lib/payments';
 import { formatFee, currencySymbol } from '@/lib/utils';
-import { type CustomQuestion, type CustomAnswers, normalizeQuestions, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
+import { type FormBlock, type CustomAnswers, questionsOf, validateAnswers, answerIsEmpty } from '@/lib/customQuestions';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
 import { SectionCard, OUTFIT } from './shared';
 
@@ -52,12 +52,12 @@ export interface PledgeInvoicingCardProps {
   manualActive: boolean;
   /** Conference-level financial aid config (separate application, financial_aid_requests table). */
   financialAidEnabled: boolean;
-  aidQuestions: CustomQuestion[];
+  aidBlocks: FormBlock[];
   aidIntro: string | null;
 }
 
 export default function PledgeInvoicingCard({
-  applicationId, conferenceId, societyId, amountPaid, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, delegateFeeCurrency, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidQuestions, aidIntro,
+  applicationId, conferenceId, societyId, amountPaid, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, delegateFeeCurrency, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidBlocks, aidIntro,
 }: PledgeInvoicingCardProps) {
   const { session } = useAuth();
   const [invoices, setInvoices] = useState<PledgeSpotInvoice[]>([]);
@@ -110,7 +110,7 @@ export default function PledgeInvoicingCard({
 
   async function handleSubmitDelegationAid() {
     if (aidSubmitting || !session) return;
-    const questionCheck = validateAnswers(normalizeQuestions(aidQuestions), aidCustomAnswers);
+    const questionCheck = validateAnswers(questionsOf(aidBlocks), aidCustomAnswers);
     if (!questionCheck.valid) {
       setAidMissingIds(questionCheck.missingIds);
       setAidSubmitError('Please answer all required questions.');
@@ -448,9 +448,9 @@ export default function PledgeInvoicingCard({
               </p>
             )}
 
-            {aidQuestions.length > 0 && (
+            {aidBlocks.length > 0 && (
               <CustomQuestionsField
-                questions={normalizeQuestions(aidQuestions)}
+                blocks={aidBlocks}
                 answers={aidCustomAnswers}
                 onChange={(next) => {
                   setAidCustomAnswers(next);

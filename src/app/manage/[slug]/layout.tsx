@@ -56,7 +56,7 @@ export interface Conference {
   allocation_swap_mode: string;
   email_theme: EmailTheme;
   financial_aid_enabled: boolean;
-  aid_questions: Array<{ id: string; label: string; required: boolean; type: string }>;
+  aid_questions: unknown[];
   aid_intro: string | null;
 }
 

@@ -20,7 +20,7 @@ import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite
 import { activeFeePhase, type FeePhase } from '@/lib/finance';
 import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
-import { type CustomQuestion, normalizeQuestions } from '@/lib/customQuestions';
+import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ interface RoleConfig {
   fee_currency: string;
   auto_accept: boolean;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime';
-  custom_questions: CustomQuestion[];
+  custom_questions: unknown[];
   fee_phases: FeePhase[] | null;
   allow_resubmission: boolean;
 }
@@ -1137,10 +1137,10 @@ export default function SettingsPage() {
   // ── Custom questions ────────────────────────────────────────────────────
 
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
-  const currentQuestions: CustomQuestion[] = normalizeQuestions(selectedConfig?.custom_questions ?? []);
+  const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
   const enabledRoles = ROLES.filter(r => roleConfigs.find(rc => rc.role === r)?.is_enabled);
 
-  function handleQuestionsChange(next: CustomQuestion[]) {
+  function handleBlocksChange(next: FormBlock[]) {
     void saveRoleConfig(selectedRole, { custom_questions: next });
   }
 
@@ -2481,7 +2481,7 @@ export default function SettingsPage() {
         </div>
 
         {enabledRoles.length > 0 && (
-          <QuestionBuilder questions={currentQuestions} onChange={handleQuestionsChange} />
+          <QuestionBuilder value={currentBlocks} onChange={handleBlocksChange} />
         )}
       </div>}
 

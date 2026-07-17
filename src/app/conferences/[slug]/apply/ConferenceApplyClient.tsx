@@ -19,7 +19,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
-import { type CustomQuestion, type CustomAnswers, normalizeQuestions, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
+import { type CustomAnswers, normalizeBlocks, questionsOf, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import {
   Gavel, Mic, Users, Eye, Building2, User, ListOrdered, Sprout,
   GraduationCap, Trophy, Crown, ClipboardList, BadgeCheck, Sparkles,
@@ -62,7 +62,7 @@ interface RoleConfig {
   auto_accept: boolean;
   pay_at_application: boolean;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
-  custom_questions: CustomQuestion[];
+  custom_questions: unknown[];
   fee_phases: FeePhase[] | null;
 }
 
@@ -1156,7 +1156,7 @@ function ConferenceApplyInner() {
   }
 
   async function handleSubmit() {
-    const questionCheck = validateAnswers(normalizeQuestions(roleConfig?.custom_questions ?? []), customAnswers);
+    const questionCheck = validateAnswers(questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? [])), customAnswers);
     if (!questionCheck.valid) {
       setCustomMissingIds(questionCheck.missingIds);
       // Submit now happens from the Overview step, but the answers themselves
@@ -1359,7 +1359,7 @@ function ConferenceApplyInner() {
   // aren't touched here either, resubmitting only edits the whitelisted
   // fields, it never re-runs checkout.
   async function handleResubmit() {
-    const questionCheck = validateAnswers(normalizeQuestions(roleConfig?.custom_questions ?? []), customAnswers);
+    const questionCheck = validateAnswers(questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? [])), customAnswers);
     if (!questionCheck.valid) {
       setCustomMissingIds(questionCheck.missingIds);
       return;
@@ -2281,7 +2281,7 @@ function ConferenceApplyInner() {
       { value: 'advanced', label: 'ADVANCED', sub: '10–20 conferences' },
       { value: 'expert', label: 'EXPERT', sub: '20+ conferences or chairing experience' },
     ];
-    const questions = normalizeQuestions(roleConfig?.custom_questions ?? []);
+    const blocks = normalizeBlocks(roleConfig?.custom_questions ?? []);
 
     return (
       <>
@@ -2311,10 +2311,10 @@ function ConferenceApplyInner() {
           </div>
         </div>
 
-        {questions.length > 0 && (
+        {blocks.length > 0 && (
           <div className="mb-6">
             <CustomQuestionsField
-              questions={questions}
+              blocks={blocks}
               answers={customAnswers}
               onChange={(next) => {
                 setCustomAnswers(next);
@@ -2357,7 +2357,7 @@ function ConferenceApplyInner() {
    * 'overview' is always last in stepSequence.
    */
   function renderStepOverview() {
-    const questions = normalizeQuestions(roleConfig?.custom_questions ?? []);
+    const questions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? []));
     const societyLabel = isObserver ? null : isIndependent ? 'Independent' : (societyInput.trim() || '—');
     const tierLabel = hasUnlimited ? 'Unlimited' : 'Free';
     const costLabel = isExemptRole

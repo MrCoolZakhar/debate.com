@@ -11,7 +11,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Pencil } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { type CustomQuestion } from '@/lib/customQuestions';
+import { type FormBlock } from '@/lib/customQuestions';
 import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './shared';
 import { PayGate, RejectedCard } from './PayGate';
 import DelegateParticipant from './DelegateParticipant';
@@ -67,12 +67,12 @@ export interface ParticipantViewProps {
   manualActive: boolean;
   /** Conference-level financial aid config (separate application, financial_aid_requests table). */
   financialAidEnabled: boolean;
-  aidQuestions: CustomQuestion[];
+  aidBlocks: FormBlock[];
   aidIntro: string | null;
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, contactEmail, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidQuestions, aidIntro,
+  conferenceId, conferenceSlug, contactEmail, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidBlocks, aidIntro,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -169,7 +169,7 @@ export default function ParticipantView({
                 externalPaymentNote={externalPaymentNote}
                 manualActive={manualActive}
                 financialAidEnabled={financialAidEnabled}
-                aidQuestions={aidQuestions}
+                aidBlocks={aidBlocks}
                 aidIntro={aidIntro}
               />
             ) : selected.role === 'chair' ? (

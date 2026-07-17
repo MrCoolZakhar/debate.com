@@ -9,9 +9,9 @@ import DelegationCreditsCard from './DelegationCreditsCard';
 import PledgeInvoicingCard from './PledgeInvoicingCard';
 import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantApplication, ParticipantRoleConfig } from './types';
-import { type CustomQuestion } from '@/lib/customQuestions';
+import { type FormBlock } from '@/lib/customQuestions';
 
-export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidQuestions, aidIntro }: {
+export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidBlocks, aidIntro }: {
   conferenceId: string;
   application: ParticipantApplication;
   allocationSwapMode: string;
@@ -22,7 +22,7 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
   externalPaymentNote: string | null;
   manualActive: boolean;
   financialAidEnabled: boolean;
-  aidQuestions: CustomQuestion[];
+  aidBlocks: FormBlock[];
   aidIntro: string | null;
 }) {
   if (!application.society_id) {
@@ -61,7 +61,7 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
         externalPaymentNote={externalPaymentNote}
         manualActive={manualActive}
         financialAidEnabled={financialAidEnabled}
-        aidQuestions={aidQuestions}
+        aidBlocks={aidBlocks}
         aidIntro={aidIntro}
       />
     </div>

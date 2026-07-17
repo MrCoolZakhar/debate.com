@@ -29,7 +29,7 @@ import {
   poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
-import { type CustomQuestion, type CustomAnswers, normalizeQuestions, displayAnswer } from '@/lib/customQuestions';
+import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ interface AppPreference {
 interface RoleConfigLite {
   role: string;
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
-  custom_questions: CustomQuestion[];
+  custom_questions: unknown[];
   fee_amount: number | null;
   fee_currency: string | null;
   allow_resubmission: boolean;
@@ -2082,7 +2082,7 @@ export default function ApplicationsPage() {
             // No recorded level → treat as the lowest tier "beginner" (#11).
             const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
             const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
-            const rowQuestions = normalizeQuestions(roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? []);
+            const rowQuestions = questionsOf(normalizeBlocks(roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? []));
             const age = ageForApp(app, rowQuestions);
             const nationality = app.profiles?.nationality ?? null;
             const natCode = resolveRealCountryCode(nationality);
@@ -2536,7 +2536,7 @@ export default function ApplicationsPage() {
         const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
         const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
-        const questions = normalizeQuestions(roleConfig?.custom_questions ?? []);
+        const questions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? []));
         const answers = app.custom_answers ?? {};
         const closeReview = () => { setReviewId(null); setRejectingId(null); setRejectNote(''); };
         // Double-click guard, the row's controls grey out while its write is in flight.

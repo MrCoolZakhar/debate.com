@@ -16,7 +16,7 @@ import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { NEU, OUTFIT } from '@/components/neu';
-import { type CustomQuestion, type CustomAnswers, normalizeQuestions, displayAnswer } from '@/lib/customQuestions';
+import { type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 
 interface AidRequestRow {
   id: string;
@@ -91,14 +91,14 @@ function DelegationChip() {
   );
 }
 
-export default function AidRequestsSection({ conferenceId, conferenceSlug, aidQuestions }: { conferenceId: string; conferenceSlug: string; aidQuestions: CustomQuestion[] }) {
+export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBlocks }: { conferenceId: string; conferenceSlug: string; aidBlocks: unknown[] }) {
   const { session } = useAuth();
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
-  // Defensive re-normalization: aidQuestions is already normalized by the
-  // caller, but this keeps the component correct for any future caller that
-  // passes the raw legacy shape straight from the DB.
-  const normalizedAidQuestions = normalizeQuestions(aidQuestions);
+  // Normalizes the raw jsonb block list (backward compatible with legacy
+  // flat CustomQuestion arrays) and keeps only question blocks — Title and
+  // Section blocks never render as blank questions here.
+  const normalizedAidQuestions = questionsOf(normalizeBlocks(aidBlocks));
 
   const [requests, setRequests] = useState<AidRequestRow[]>([]);
   const [roleFees, setRoleFees] = useState<RoleFee[]>([]);
