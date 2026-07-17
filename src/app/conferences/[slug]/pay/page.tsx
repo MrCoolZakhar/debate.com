@@ -6,26 +6,32 @@
 // ConferenceDetailClient). LEFT column is the real invoices list synced from
 // sync_participant_invoices (role_fee/app_fee/addon; pledge_spot stays out —
 // it has its own dedicated "Buy Delegation Spots" flow on the right, unchanged).
-// role_fee keeps its own rich voucher/partial-amount panel (the same
-// applicationId+kind checkout as before — it's the only kind whose charge
-// needs a live aid/voucher recompute the invoiceId path doesn't do); app_fee
-// and addon are generic cards paid via create-checkout's invoiceId path
-// (payInvoiceCheckout). RIGHT column is unchanged financial aid + leader-gated
-// delegation credits/spots actions.
+// role_fee keeps its own rich voucher/partial-amount panel (its dedicated PAY
+// button still goes through the applicationId+kind checkout, the only path
+// that applies a freshly-typed voucher code); role_fee is ALSO selectable for
+// the combined "Pay Selected" flow, which charges via create-checkout's
+// invoiceIds path — that path recomputes role_fee's aid/voucher server-side
+// at charge time (v16), so a combined payment never overcharges an aid/
+// voucher recipient, it just can't pick up a voucher typed but never
+// submitted through the panel's own button. app_fee/addon are generic cards,
+// each individually payable via the invoiceId path (payInvoiceCheckout) or
+// selectable into the combined batch. RIGHT column action buttons are always
+// visible now — unavailable ones dim and explain why on click, instead of
+// disappearing.
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, ChevronDown, ChevronUp, Coins, CreditCard, HandCoins, Loader2,
-  Lock, Mail, Receipt, Users2, Wallet,
+  Lock, Mail, Minus, Plus, Receipt, ShoppingBag, Users2, Wallet, X,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { formatFee, formatFeeAmount } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
-import { createCheckout, payInvoiceCheckout } from '@/lib/payments';
+import { createCheckout, payInvoiceCheckout, payInvoicesCheckout } from '@/lib/payments';
 import { normalizeBlocks, type FormBlock } from '@/lib/customQuestions';
 import {
   type InvoiceRow, invoiceLabel, invoiceDueCents, centsToFee, isInvoicePayable, isInvoiceSettled,
@@ -79,6 +85,14 @@ interface PayRoleConfig {
 interface AidRequestRow {
   status: 'pending' | 'approved' | 'denied';
   granted_amount: number | null;
+}
+
+interface ActiveAddon {
+  id: string;
+  label: string;
+  description: string | null;
+  amount_cents: number;
+  currency: string;
 }
 
 type Badge = 'PAID' | 'WAIVED' | 'PARTIAL' | 'UNPAID' | 'REFUNDED';
@@ -144,20 +158,23 @@ function Note({ tone, children }: { tone: keyof typeof NOTE_TONES; children: Rea
 type ActionIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
 function ActionRow({
-  icon: Icon, gradient, title, subtitle, disabled = false, onClick,
+  icon: Icon, gradient, title, subtitle, dimmed = false, onClick,
 }: {
   icon: ActionIcon;
   gradient: NeuGradient;
   title: string;
   subtitle?: string;
-  disabled?: boolean;
+  /** Visually dimmed (unavailable), but still clickable — the click shows an
+   *  explanatory message instead of opening the feature. Right-column
+   *  buttons are never hidden, only dimmed. */
+  dimmed?: boolean;
   onClick?: () => void;
 }) {
   return (
     <NeuCard
-      hover={!disabled}
-      onClick={disabled ? undefined : onClick}
-      style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, opacity: disabled ? 0.55 : 1 }}
+      hover
+      onClick={onClick}
+      style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, opacity: dimmed ? 0.55 : 1 }}
     >
       <NeuIconDisc gradient={gradient} icon={Icon} size={38} />
       <div className="flex-1 min-w-0">
@@ -184,6 +201,7 @@ export default function PayPage() {
   const [aidRequest, setAidRequest] = useState<AidRequestRow | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [configDescriptions, setConfigDescriptions] = useState<Record<string, string>>({});
+  const [activeAddons, setActiveAddons] = useState<ActiveAddon[]>([]);
 
   async function fetchAidRequest(applicationId: string, accessToken: string): Promise<AidRequestRow | null> {
     const { data } = await getAuthedClient(accessToken)
@@ -209,12 +227,36 @@ export default function PayPage() {
       : `application_id.eq.${app.id}`;
     const { data } = await supabase
       .from('invoices')
-      .select('id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, created_at')
+      .select('id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at')
       .eq('conference_id', conferenceId)
       .or(orFilter)
       .neq('status', 'void')
       .order('created_at', { ascending: true });
     return (data ?? []) as InvoiceRow[];
+  }
+
+  async function fetchConfigDescriptions(accessToken: string, invs: InvoiceRow[]): Promise<Record<string, string>> {
+    const supabase = getAuthedClient(accessToken);
+    // Descriptions live on the config row (application_surcharges / addons),
+    // not on the invoice itself — batch-fetch by kind.
+    const surchargeIds = Array.from(new Set(invs.filter(i => i.kind === 'app_fee' && i.config_id).map(i => i.config_id!)));
+    const addonIds = Array.from(new Set(invs.filter(i => i.kind === 'addon' && i.config_id).map(i => i.config_id!)));
+    const [surchargeRes, addonRes] = await Promise.all([
+      surchargeIds.length > 0
+        ? supabase.from('application_surcharges').select('id, description').in('id', surchargeIds)
+        : Promise.resolve({ data: [] }),
+      addonIds.length > 0
+        ? supabase.from('addons').select('id, description').in('id', addonIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const descMap: Record<string, string> = {};
+    for (const row of ((surchargeRes.data ?? []) as { id: string; description: string | null }[])) {
+      if (row.description) descMap[row.id] = row.description;
+    }
+    for (const row of ((addonRes.data ?? []) as { id: string; description: string | null }[])) {
+      if (row.description) descMap[row.id] = row.description;
+    }
+    return descMap;
   }
 
   useEffect(() => {
@@ -251,12 +293,20 @@ export default function PayPage() {
         : null;
       setApplication(primary);
 
-      const { data: roleConfigsData } = await supabase
-        .from('application_role_configs')
-        .select('role, fee_amount, fee_currency, fee_phases, payment_timing, allow_partial_payments')
-        .eq('conference_id', conf.id);
+      const [roleConfigsRes, addonsRes] = await Promise.all([
+        supabase
+          .from('application_role_configs')
+          .select('role, fee_amount, fee_currency, fee_phases, payment_timing, allow_partial_payments')
+          .eq('conference_id', conf.id),
+        supabase
+          .from('addons')
+          .select('id, label, description, amount_cents, currency')
+          .eq('conference_id', conf.id)
+          .eq('active', true),
+      ]);
       if (cancelled) return;
-      setRoleConfigs((roleConfigsData as PayRoleConfig[]) ?? []);
+      setRoleConfigs((roleConfigsRes.data as PayRoleConfig[]) ?? []);
+      setActiveAddons((addonsRes.data as ActiveAddon[]) ?? []);
 
       if (primary) {
         const [aid, invs] = await Promise.all([
@@ -266,28 +316,7 @@ export default function PayPage() {
         if (cancelled) return;
         setAidRequest(aid);
         setInvoices(invs);
-
-        // Descriptions live on the config row (application_surcharges /
-        // addons), not on the invoice itself — batch-fetch by kind.
-        const surchargeIds = Array.from(new Set(invs.filter(i => i.kind === 'app_fee' && i.config_id).map(i => i.config_id!)));
-        const addonIds = Array.from(new Set(invs.filter(i => i.kind === 'addon' && i.config_id).map(i => i.config_id!)));
-        const [surchargeRes, addonRes] = await Promise.all([
-          surchargeIds.length > 0
-            ? supabase.from('application_surcharges').select('id, description').in('id', surchargeIds)
-            : Promise.resolve({ data: [] }),
-          addonIds.length > 0
-            ? supabase.from('addons').select('id, description').in('id', addonIds)
-            : Promise.resolve({ data: [] }),
-        ]);
-        if (cancelled) return;
-        const descMap: Record<string, string> = {};
-        for (const row of ((surchargeRes.data ?? []) as { id: string; description: string | null }[])) {
-          if (row.description) descMap[row.id] = row.description;
-        }
-        for (const row of ((addonRes.data ?? []) as { id: string; description: string | null }[])) {
-          if (row.description) descMap[row.id] = row.description;
-        }
-        setConfigDescriptions(descMap);
+        setConfigDescriptions(await fetchConfigDescriptions(session.access_token, invs));
       }
 
       setLoading(false);
@@ -299,6 +328,13 @@ export default function PayPage() {
   async function refetchAid() {
     if (!application || !session) return;
     setAidRequest(await fetchAidRequest(application.id, session.access_token));
+  }
+
+  async function refetchInvoices() {
+    if (!application || !conference || !session) return;
+    const invs = await fetchInvoices(application, conference.id, session.access_token);
+    setInvoices(invs);
+    setConfigDescriptions(await fetchConfigDescriptions(session.access_token, invs));
   }
 
   return (
@@ -367,6 +403,8 @@ export default function PayPage() {
               onAidSubmitted={refetchAid}
               invoices={invoices}
               configDescriptions={configDescriptions}
+              activeAddons={activeAddons}
+              onInvoicesChanged={refetchInvoices}
             />
           </>
         )}
@@ -400,13 +438,14 @@ function GenericInvoiceCard({
   const settled = isInvoiceSettled(inv);
   const due = invoiceDueCents(inv);
   const badge = invoiceBadge(inv);
+  const label = invoiceLabel(inv) + (inv.quantity > 1 ? ` ×${inv.quantity}` : '');
 
   if (!payable) {
     return (
       <NeuCard style={{ padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14, opacity: 0.6 }}>
         <NeuIconDisc gradient={NEU_GRADIENTS.sage} icon={Lock} size={38} />
         <div className="flex-1 min-w-0">
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, margin: 0 }}>{invoiceLabel(inv)}</p>
+          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, margin: 0 }}>{label}</p>
           <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0' }}>
             Available once you&apos;re accepted
           </p>
@@ -428,7 +467,7 @@ function GenericInvoiceCard({
             onChange={onToggleSelect}
             className="flex-shrink-0"
             style={{ width: 16, height: 16, accentColor: NEU.forest, cursor: 'pointer' }}
-            aria-label={`Select ${invoiceLabel(inv)}`}
+            aria-label={`Select ${label}`}
           />
         )}
         <button
@@ -442,7 +481,7 @@ function GenericInvoiceCard({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, margin: 0 }}>
-                  {invoiceLabel(inv)}
+                  {label}
                 </p>
                 {inv.kind === 'addon' && (
                   <span
@@ -541,11 +580,228 @@ function GenericInvoiceCard({
   );
 }
 
+// ── Buy Add-ons modal ────────────────────────────────────────────────────────
+// Opt-in selection: checkbox + quantity stepper per active addon, pre-filled
+// from the applicant's existing UNPAID addon invoices. Already-purchased
+// (settled) addons show read-only. Save reconciles via set_addon_selection —
+// paid invoices are never touched by that RPC, so purchased rows are simply
+// excluded from the payload entirely.
+
+interface AddonSelection {
+  checked: boolean;
+  quantity: number;
+}
+
+function AddonsModal({
+  open, onClose, addons, invoices, applicationId, accessToken, onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  addons: ActiveAddon[];
+  invoices: InvoiceRow[];
+  applicationId: string;
+  accessToken: string | undefined;
+  onSaved: () => void;
+}) {
+  const [selections, setSelections] = useState<Record<string, AddonSelection>>({});
+  const [purchased, setPurchased] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  // Re-seeds from `invoices` every time the modal opens — a state-adjustment-
+  // during-render (compared against a `prevOpen` snapshot) rather than a
+  // useEffect, same fix as AidRequestModal's page reset: this modal stays
+  // mounted across opens (the caller just flips `open`), so an effect here
+  // would fire a render late and cascade.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setError('');
+      const nextSelections: Record<string, AddonSelection> = {};
+      const nextPurchased = new Set<string>();
+      for (const addon of addons) {
+        const existing = invoices.find(inv => inv.kind === 'addon' && inv.config_id === addon.id);
+        if (existing && isInvoiceSettled(existing)) {
+          nextPurchased.add(addon.id);
+          nextSelections[addon.id] = { checked: true, quantity: existing.quantity || 1 };
+        } else {
+          nextSelections[addon.id] = { checked: !!existing, quantity: existing?.quantity || 1 };
+        }
+      }
+      setSelections(nextSelections);
+      setPurchased(nextPurchased);
+    }
+  }
+
+  if (!open) return null;
+
+  function toggleChecked(addonId: string) {
+    if (purchased.has(addonId)) return;
+    setSelections(prev => ({ ...prev, [addonId]: { ...prev[addonId], checked: !prev[addonId]?.checked } }));
+  }
+
+  function setQuantity(addonId: string, quantity: number) {
+    if (purchased.has(addonId)) return;
+    setSelections(prev => ({ ...prev, [addonId]: { ...prev[addonId], quantity: Math.max(1, quantity) } }));
+  }
+
+  async function handleSave() {
+    if (saving || !accessToken) return;
+    setSaving(true);
+    setError('');
+    const supabase = getAuthedClient(accessToken);
+    const p_selections = Object.entries(selections)
+      .filter(([addonId, sel]) => sel.checked && !purchased.has(addonId))
+      .map(([addonId, sel]) => ({ addon_id: addonId, quantity: sel.quantity }));
+    const { data, error: rpcError } = await supabase.rpc('set_addon_selection', {
+      p_application_id: applicationId,
+      p_selections,
+    });
+    const result = data as { ok?: boolean; error?: string } | null;
+    setSaving(false);
+    if (rpcError || !result?.ok) {
+      setError(result?.error || rpcError?.message || 'Could not save your add-ons. Please try again.');
+      return;
+    }
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <ModalOverlay onClose={() => { if (!saving) onClose(); }}>
+      <div
+        className="rounded-2xl p-6 flex flex-col gap-4"
+        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Buy Add-ons</p>
+          <button
+            onClick={() => { if (!saving) onClose(); }}
+            className="flex-shrink-0 focus:outline-none"
+            style={{ color: '#9A8A78', border: 'none', background: 'none', cursor: saving ? 'default' : 'pointer' }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {addons.length === 0 ? (
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#6E5F4E' }}>
+            This conference hasn&apos;t added any add-ons yet.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {addons.map(addon => {
+              const sel = selections[addon.id] ?? { checked: false, quantity: 1 };
+              const isPurchased = purchased.has(addon.id);
+              return (
+                <div
+                  key={addon.id}
+                  className="rounded-xl px-4 py-3"
+                  style={{ border: '1px solid #DDD4C0', backgroundColor: sel.checked || isPurchased ? 'rgba(27,56,40,0.03)' : '#FFFFFF' }}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={sel.checked}
+                      disabled={isPurchased}
+                      onChange={() => toggleChecked(addon.id)}
+                      className="flex-shrink-0 mt-0.5"
+                      style={{ width: 16, height: 16, accentColor: '#1B3828', cursor: isPurchased ? 'default' : 'pointer' }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: '#1C1410' }}>{addon.label}</p>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#1C1410', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                          {centsToFee(addon.amount_cents, addon.currency)}
+                          <span style={{ color: '#9A8A78', fontWeight: 600 }}> ea.</span>
+                        </span>
+                      </div>
+                      {addon.description && (
+                        <p className="mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', lineHeight: 1.5 }}>
+                          {addon.description}
+                        </p>
+                      )}
+
+                      {isPurchased ? (
+                        <p className="mt-2 inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: '#2A5A3C' }}>
+                          Purchased ✓
+                        </p>
+                      ) : sel.checked && (
+                        <div className="mt-2.5 flex items-center gap-2.5">
+                          <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: '#9A8A78', letterSpacing: '0.06em' }}>
+                            QTY
+                          </span>
+                          <div className="inline-flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => setQuantity(addon.id, sel.quantity - 1)}
+                              disabled={sel.quantity <= 1}
+                              className="flex items-center justify-center rounded-full focus:outline-none"
+                              style={{ width: 24, height: 24, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: sel.quantity <= 1 ? '#DDD4C0' : '#1B3828', cursor: sel.quantity <= 1 ? 'default' : 'pointer' }}
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: '#1C1410', minWidth: 16, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                              {sel.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setQuantity(addon.id, sel.quantity + 1)}
+                              className="flex items-center justify-center rounded-full focus:outline-none"
+                              style={{ width: 24, height: 24, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1B3828', cursor: 'pointer' }}
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {error && (
+          <div><Note tone="red">{error}</Note></div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => { if (!saving) onClose(); }}
+            disabled={saving}
+            className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
+            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: saving ? 'default' : 'pointer' }}
+          >
+            CANCEL
+          </button>
+          {addons.length > 0 && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
+              style={{
+                backgroundColor: saving ? '#DDD4C0' : '#1B3828',
+                color: saving ? '#9A8A78' : '#EED98A',
+                fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: saving ? 'default' : 'pointer',
+              }}
+            >
+              {saving ? 'SAVING…' : 'SAVE'}
+            </button>
+          )}
+        </div>
+      </div>
+    </ModalOverlay>
+  );
+}
+
 // ── Invoice + actions (only mounted once real data is loaded, so its money
 // math hooks initialize against real values) ────────────────────────────────
 
 function PayInvoiceAndActions({
   conference, application, roleConfig, delegateRoleConfig, aidRequest, onAidSubmitted, invoices, configDescriptions,
+  activeAddons, onInvoicesChanged,
 }: {
   conference: PayConference;
   application: PayApplication;
@@ -555,6 +811,8 @@ function PayInvoiceAndActions({
   onAidSubmitted: () => void;
   invoices: InvoiceRow[];
   configDescriptions: Record<string, string>;
+  activeAddons: ActiveAddon[];
+  onInvoicesChanged: () => void;
 }) {
   const { session } = useAuth();
   const aidBlocks: FormBlock[] = normalizeBlocks(conference.aid_questions);
@@ -583,16 +841,24 @@ function PayInvoiceAndActions({
   const [payError, setPayError] = useState<string | null>(null);
   const [stubMessage, setStubMessage] = useState<string | null>(null);
   const [aidModalOpen, setAidModalOpen] = useState(false);
+  const [addonsModalOpen, setAddonsModalOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [spotsOpen, setSpotsOpen] = useState(false);
 
-  // Generic (app_fee / addon) invoice cards — role_fee and pledge_spot render
-  // through their own dedicated panels below/right, never as generic cards.
+  // The registration invoice, when it exists — selectable into the combined
+  // batch alongside app_fee/addon cards, only while genuinely owed.
+  const roleFeeInvoice = invoices.find(inv => inv.kind === 'role_fee');
+  const roleFeeSelectable = !!roleFeeInvoice && !isInvoiceSettled(roleFeeInvoice) && invoiceDueCents(roleFeeInvoice) > 0;
+
+  // Generic (app_fee / addon) invoice cards — pledge_spot renders through its
+  // own dedicated panel on the right, never as a generic card.
   const genericInvoices = invoices.filter(inv => inv.kind === 'app_fee' || inv.kind === 'addon');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [genericPayingId, setGenericPayingId] = useState<string | null>(null);
   const [genericPayError, setGenericPayError] = useState<Record<string, string>>({});
+  const [selectedPaying, setSelectedPaying] = useState(false);
+  const [selectedPayError, setSelectedPayError] = useState<string | null>(null);
 
   function toggleExpanded(id: string) {
     setExpandedIds(prev => {
@@ -653,63 +919,77 @@ function PayInvoiceAndActions({
     }
   }
 
-  // "Pay selected" charges the first selected, still-owed invoice — Stripe
-  // Checkout is one redirect per session, so multi-invoice checkout isn't
-  // possible here; picking the first keeps this predictable and simple.
-  function handlePaySelected() {
-    const first = genericInvoices.find(inv => selectedIds.has(inv.id) && !isInvoiceSettled(inv));
-    if (first) void handlePayInvoice(first.id);
+  // Selected invoices, including the registration invoice when checked — the
+  // Total row and combined payment both work off this same set.
+  const selectedInvoices = invoices.filter(inv => selectedIds.has(inv.id) && !isInvoiceSettled(inv));
+  const selectedTotalCents = selectedInvoices.reduce((sum, inv) => sum + invoiceDueCents(inv), 0);
+
+  // Pays every selected, still-owed invoice in ONE Stripe Checkout session.
+  // role_fee (if selected) has its aid/voucher recomputed server-side at
+  // charge time — see create-checkout v16 — so this never overcharges an aid
+  // recipient; it just can't pick up a voucher that was typed but never
+  // submitted through the registration panel's own PAY button.
+  async function handlePaySelected() {
+    if (selectedPaying || !session || selectedInvoices.length === 0) return;
+    setSelectedPaying(true);
+    setSelectedPayError(null);
+    const result = await payInvoicesCheckout({
+      invoiceIds: selectedInvoices.map(inv => inv.id),
+      accessToken: session.access_token,
+    });
+    if (result.status === 'redirect' && result.redirectUrl) {
+      window.location.assign(result.redirectUrl);
+      return;
+    }
+    setSelectedPaying(false);
+    if (result.status === 'error') setSelectedPayError(result.message ?? 'Something went wrong. Please try again.');
   }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
       {/* LEFT — Current Invoices */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <p style={eyebrowStyle}>Current Invoices</p>
-          {selectedIds.size > 0 && (
-            <button
-              onClick={handlePaySelected}
-              disabled={genericPayingId !== null}
-              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 focus:outline-none"
-              style={{
-                backgroundColor: NEU.forest, color: NEU.gold, border: 'none',
-                fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-                cursor: genericPayingId !== null ? 'default' : 'pointer', opacity: genericPayingId !== null ? 0.7 : 1,
-              }}
-            >
-              <CreditCard size={13} />
-              PAY SELECTED ({selectedIds.size})
-            </button>
-          )}
-        </div>
+        <p style={eyebrowStyle}>Current Invoices</p>
 
         {/* Registration fee — its own panel (voucher + partial-amount UI),
-            same live aid/voucher computation as before. */}
+            same live aid/voucher computation as before, now with a header
+            checkbox so it can join the combined "Pay Selected" batch too. */}
         {fee > 0 && (
           <NeuCard style={{ padding: 0, overflow: 'hidden' }}>
-            <button
-              type="button"
-              onClick={() => setInvoiceOpen(v => !v)}
-              className="w-full flex items-center justify-between gap-3 focus:outline-none"
-              style={{ padding: '18px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Wallet} size={40} />
-                <div className="min-w-0">
-                  <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: NEU.ink, margin: 0 }}>
-                    {roleLabel(application.role)} fee
-                  </p>
-                  <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: '2px 0 0 0' }}>
-                    {fee > 0 ? `${formatFee(fee, currency)} · balance due ${formatFee(remaining, currency)}` : 'Free'}
-                  </p>
+            <div className="w-full flex items-center gap-3" style={{ padding: '18px 20px' }}>
+              {roleFeeSelectable && (
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(roleFeeInvoice!.id)}
+                  onChange={() => toggleSelected(roleFeeInvoice!.id)}
+                  className="flex-shrink-0"
+                  style={{ width: 16, height: 16, accentColor: NEU.forest, cursor: 'pointer' }}
+                  aria-label="Select registration fee"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => setInvoiceOpen(v => !v)}
+                className="flex-1 flex items-center justify-between gap-3 min-w-0 focus:outline-none"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Wallet} size={40} />
+                  <div className="min-w-0">
+                    <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: NEU.ink, margin: 0 }}>
+                      {roleLabel(application.role)} fee
+                    </p>
+                    <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: '2px 0 0 0' }}>
+                      {fee > 0 ? `${formatFee(fee, currency)} · balance due ${formatFee(remaining, currency)}` : 'Free'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <BadgePill badge={badge} />
-                {invoiceOpen ? <ChevronUp size={16} style={{ color: NEU.muted }} /> : <ChevronDown size={16} style={{ color: NEU.muted }} />}
-              </div>
-            </button>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <BadgePill badge={badge} />
+                  {invoiceOpen ? <ChevronUp size={16} style={{ color: NEU.muted }} /> : <ChevronDown size={16} style={{ color: NEU.muted }} />}
+                </div>
+              </button>
+            </div>
 
             {invoiceOpen && (
               <div style={{ padding: '0 20px 20px 20px', borderTop: '1px solid rgba(27,56,40,0.08)' }}>
@@ -903,9 +1183,65 @@ function PayInvoiceAndActions({
             </p>
           </NeuCard>
         )}
+
+        {/* Total + Pay Selected — below the list, only while something's picked */}
+        {selectedInvoices.length > 0 && (
+          <div className="flex flex-col gap-3 pt-1">
+            <div className="flex items-center justify-between px-1">
+              <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
+                Total ({selectedInvoices.length} selected)
+              </span>
+              <span style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+                {centsToFee(selectedTotalCents, currency)}
+              </span>
+            </div>
+
+            {manualActive ? (
+              externalPaymentUrl ? (
+                <a
+                  href={externalPaymentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
+                  style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', textDecoration: 'none' }}
+                >
+                  <CreditCard size={15} />
+                  PAY VIA THE ORGANIZING TEAM&apos;S PAYMENT PAGE
+                </a>
+              ) : (
+                <Note tone="amber">The organizing team collects this directly and will confirm your payment here.</Note>
+              )
+            ) : !paymentsEnabled ? (
+              <div className="rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}>
+                <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#B8844A' }}>Payments coming soon</p>
+                <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4, lineHeight: 1.6 }}>
+                  The organizing team is finishing payment setup — you&apos;ll be able to pay here shortly.
+                </p>
+              </div>
+            ) : (
+              <>
+                {selectedPayError && <Note tone="red">{selectedPayError}</Note>}
+                <button
+                  onClick={handlePaySelected}
+                  disabled={selectedPaying}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
+                  style={{
+                    backgroundColor: selectedPaying ? '#DDD4C0' : NEU.forest,
+                    color: selectedPaying ? '#9A8A78' : NEU.gold,
+                    fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: selectedPaying ? 'default' : 'pointer',
+                  }}
+                >
+                  <CreditCard size={15} />
+                  {selectedPaying ? 'OPENING CHECKOUT...' : `PAY SELECTED (${selectedInvoices.length})`}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* RIGHT — action buttons */}
+      {/* RIGHT — action buttons, always visible; unavailable ones dim and
+          explain why on click instead of disappearing. */}
       <div className="flex flex-col gap-3">
         {conference.financial_aid_enabled && (
           !aidRequest ? (
@@ -931,47 +1267,63 @@ function PayInvoiceAndActions({
           )
         )}
 
-        {canBuyDelegationStuff && (
-          <>
-            <ActionRow
-              icon={Users2}
-              gradient={NEU_GRADIENTS.forest}
-              title="Buy Delegation Spots"
-              subtitle={spotsOpen ? 'Hide' : 'Pay for pledged spots'}
-              onClick={() => setSpotsOpen(v => !v)}
-            />
-            {spotsOpen && (
-              <PledgeInvoicingCard
-                applicationId={application.id}
-                conferenceId={conference.id}
-                societyId={application.society_id as string}
-                amountPaid={application.amount_paid}
-                pledgeType={application.pledge_type}
-                spotsPledged={application.spots_pledged}
-                pledgeConfirmedAt={application.pledge_confirmed_at}
-                delegateFeeAmount={delegateRoleConfig?.fee_amount ?? null}
-                delegateFeeCurrency={delegateRoleConfig?.fee_currency ?? null}
-                contactEmail={conference.contact_email}
-                paymentsEnabled={paymentsEnabled}
-                externalPaymentUrl={externalPaymentUrl}
-                externalPaymentNote={conference.external_payment_note}
-                manualActive={manualActive}
-                financialAidEnabled={conference.financial_aid_enabled}
-                aidBlocks={aidBlocks}
-                aidIntro={conference.aid_intro}
-              />
-            )}
+        <ActionRow
+          icon={ShoppingBag}
+          gradient={NEU_GRADIENTS.sage}
+          title="Buy Add-ons"
+          subtitle={activeAddons.length > 0 ? 'Optional extras' : 'None available'}
+          dimmed={activeAddons.length === 0}
+          onClick={() => {
+            if (activeAddons.length === 0) { setStubMessage("This conference hasn't added any add-ons yet."); return; }
+            setAddonsModalOpen(true);
+          }}
+        />
 
-            <ActionRow
-              icon={Coins}
-              gradient={NEU_GRADIENTS.gold}
-              title="Buy Delegation Credits"
-              subtitle={creditsOpen ? 'Hide' : 'Fund your delegation pool'}
-              onClick={() => setCreditsOpen(v => !v)}
-            />
-            {creditsOpen && <DelegationCreditsCard societyId={application.society_id as string} />}
-          </>
+        <ActionRow
+          icon={Users2}
+          gradient={NEU_GRADIENTS.forest}
+          title="Buy Delegation Spots"
+          subtitle={canBuyDelegationStuff ? (spotsOpen ? 'Hide' : 'Pay for pledged spots') : 'Delegation leaders only'}
+          dimmed={!canBuyDelegationStuff}
+          onClick={() => {
+            if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can buy spots or credits.'); return; }
+            setSpotsOpen(v => !v);
+          }}
+        />
+        {canBuyDelegationStuff && spotsOpen && (
+          <PledgeInvoicingCard
+            applicationId={application.id}
+            conferenceId={conference.id}
+            societyId={application.society_id as string}
+            amountPaid={application.amount_paid}
+            pledgeType={application.pledge_type}
+            spotsPledged={application.spots_pledged}
+            pledgeConfirmedAt={application.pledge_confirmed_at}
+            delegateFeeAmount={delegateRoleConfig?.fee_amount ?? null}
+            delegateFeeCurrency={delegateRoleConfig?.fee_currency ?? null}
+            contactEmail={conference.contact_email}
+            paymentsEnabled={paymentsEnabled}
+            externalPaymentUrl={externalPaymentUrl}
+            externalPaymentNote={conference.external_payment_note}
+            manualActive={manualActive}
+            financialAidEnabled={conference.financial_aid_enabled}
+            aidBlocks={aidBlocks}
+            aidIntro={conference.aid_intro}
+          />
         )}
+
+        <ActionRow
+          icon={Coins}
+          gradient={NEU_GRADIENTS.gold}
+          title="Buy Delegation Credits"
+          subtitle={canBuyDelegationStuff ? (creditsOpen ? 'Hide' : 'Fund your delegation pool') : 'Delegation leaders only'}
+          dimmed={!canBuyDelegationStuff}
+          onClick={() => {
+            if (!canBuyDelegationStuff) { setStubMessage('Only delegation leaders can buy spots or credits.'); return; }
+            setCreditsOpen(v => !v);
+          }}
+        />
+        {canBuyDelegationStuff && creditsOpen && <DelegationCreditsCard societyId={application.society_id as string} />}
       </div>
 
       {stubMessage && (
@@ -1016,6 +1368,16 @@ function PayInvoiceAndActions({
         open={aidModalOpen}
         onClose={() => setAidModalOpen(false)}
         onSubmitted={onAidSubmitted}
+      />
+
+      <AddonsModal
+        open={addonsModalOpen}
+        onClose={() => setAddonsModalOpen(false)}
+        addons={activeAddons}
+        invoices={invoices}
+        applicationId={application.id}
+        accessToken={session?.access_token}
+        onSaved={onInvoicesChanged}
       />
     </div>
   );

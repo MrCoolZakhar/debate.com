@@ -24,6 +24,7 @@ export interface InvoiceRow {
   society_id: string | null;
   config_id: string | null;
   aid_applied_cents: number;
+  quantity: number;
   created_at: string;
 }
 
@@ -76,8 +77,10 @@ export const INVOICE_STATUS_STYLE: Record<InvoiceStatus, { bg: string; color: st
   void: { bg: 'rgba(154,138,120,0.16)', color: '#6B5E4E' },
 };
 
-/** Applies gates acceptance for an UNPAID app-fee invoice — the acceptance-
- *  block rule shared by applications/page.tsx (PART 7). */
-export function isUnpaidGatingInvoice(inv: Pick<InvoiceRow, 'kind' | 'gates_acceptance' | 'status'>): boolean {
-  return inv.kind === 'app_fee' && inv.gates_acceptance && inv.status !== 'settled' && inv.status !== 'waived' && inv.status !== 'void';
+/** Applies gates acceptance for an UNPAID invoice, any kind — the
+ *  acceptance-block rule shared by applications/page.tsx. Widened from
+ *  app_fee-only now that a role_fee (registration) can also gate acceptance
+ *  via application_role_configs.fee_gates_acceptance. */
+export function isUnpaidGatingInvoice(inv: Pick<InvoiceRow, 'gates_acceptance' | 'status'>): boolean {
+  return inv.gates_acceptance && inv.status !== 'settled' && inv.status !== 'waived' && inv.status !== 'void';
 }

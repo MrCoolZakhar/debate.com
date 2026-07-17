@@ -237,6 +237,36 @@ export async function payInvoiceCheckout(args: PayInvoiceArgs): Promise<PaymentR
   return { status: 'redirect', redirectUrl: result.url };
 }
 
+// ── Pay-by-invoices (create-checkout, the invoiceIds path) ─────────────────
+// Charges several invoice rows in ONE Stripe Checkout session (registration +
+// app fee + add-ons together, say). Every kind except role_fee charges its
+// stored amount_cents as-is (same as payInvoiceCheckout); a role_fee in the
+// set gets its aid/voucher recomputed server-side at charge time (v16), so
+// combining it never overcharges an aid recipient. Manual-mode conferences
+// never call this either; the /pay page falls back to its manual guidance
+// for a multi-select.
+
+export interface PayInvoicesArgs {
+  invoiceIds: string[];
+  /** The caller's session access token — create-checkout reads the user off it. */
+  accessToken: string;
+}
+
+export async function payInvoicesCheckout(args: PayInvoicesArgs): Promise<PaymentResult> {
+  const supabase = getAuthedClient(args.accessToken);
+  const { data, error } = await supabase.functions.invoke('create-checkout', {
+    body: { invoiceIds: args.invoiceIds },
+  });
+  if (error) {
+    return { status: 'error', message: await extractFunctionErrorMessage(error) };
+  }
+  const result = data as { ok?: boolean; url?: string; error?: string } | null;
+  if (!result?.ok || !result.url) {
+    return { status: 'error', message: result?.error || 'Could not start checkout. Please try again.' };
+  }
+  return { status: 'redirect', redirectUrl: result.url };
+}
+
 /** supabase.functions.invoke surfaces non-2xx responses as an error whose
  *  original JSON body (our { ok:false, error } shape) lives on error.context.
  *  Exported for reuse by other edge-function call sites (e.g. connect-onboard). */

@@ -1003,8 +1003,9 @@ export default function ApplicationsPage() {
   const { session } = useAuth();
   const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
   const [applications, setApplications] = useState<Application[]>([]);
-  // Unpaid gating app-fee invoices (kind='app_fee', gates_acceptance=true,
-  // status not settled/waived/void), fetched alongside the applications list.
+  // Unpaid gating invoices, any kind (gates_acceptance=true, status not
+  // settled/waived/void) — role_fee and app_fee can both gate acceptance now.
+  // Fetched alongside the applications list.
   const [gatingInvoices, setGatingInvoices] = useState<{ application_id: string | null; society_id: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   // Empty role set = no constraint, so a fresh page shows every role
@@ -1084,12 +1085,13 @@ export default function ApplicationsPage() {
         .from('application_role_configs')
         .select('role, payment_timing, custom_questions, fee_amount, fee_currency, allow_resubmission')
         .eq('conference_id', conference.id),
-      // Unpaid gating app-fee invoices — blocks Accept until paid (PART 7).
+      // Unpaid gating invoices — any kind — blocks Accept until paid. Widened
+      // from app_fee-only now that a role_fee (registration) can also gate
+      // acceptance via application_role_configs.fee_gates_acceptance.
       supabase
         .from('invoices')
         .select('application_id, society_id')
         .eq('conference_id', conference.id)
-        .eq('kind', 'app_fee')
         .eq('gates_acceptance', true)
         .not('status', 'in', '(settled,waived,void)'),
     ]);
@@ -1925,7 +1927,7 @@ export default function ApplicationsPage() {
   const gatingSocietyIds = new Set(gatingInvoices.map(i => i.society_id).filter((id): id is string => !!id));
   const isAcceptBlockedByFee = (a: Application) =>
     gatingAppIds.has(a.id) || (!!a.society_id && gatingSocietyIds.has(a.society_id));
-  const ACCEPT_BLOCKED_MESSAGE = "Conference Application Fee unpaid — they can be accepted once it's paid.";
+  const ACCEPT_BLOCKED_MESSAGE = "A required fee is unpaid — they can be accepted once it's paid.";
   const bulkAcceptable = selectedApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
   const bulkRejectable = selectedApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
   const bulkCheckInable = selectedApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
