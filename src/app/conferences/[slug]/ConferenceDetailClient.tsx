@@ -17,7 +17,6 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { formatFee } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
-import { SUPPORTED_PAYOUT_COUNTRIES } from '@/lib/payments';
 import { normalizeQuestions } from '@/lib/customQuestions';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
@@ -96,6 +95,9 @@ interface Conference {
   allocation_swap_mode: string;
   display_secretariat: SecretariatMember[] | null;
   connect_onboarding_status: string;
+  /** The ACTIVE payout method ('stripe' | 'manual' | null) — mutually
+   *  exclusive, but each keeps its own setup dormant while inactive. */
+  payment_method: string | null;
   external_payment_url: string | null;
   external_payment_note: string | null;
   financial_aid_enabled: boolean;
@@ -544,7 +546,7 @@ export default function ConferenceDetailClient() {
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
         contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
-        connect_onboarding_status, external_payment_url, external_payment_note,
+        connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
         financial_aid_enabled, aid_questions, aid_intro
       `)
       .eq('slug', slug)
@@ -562,7 +564,7 @@ export default function ConferenceDetailClient() {
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
             contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
-            connect_onboarding_status, external_payment_url, external_payment_note,
+            connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
             financial_aid_enabled, aid_questions, aid_intro
           `)
           .eq('slug', slug)
@@ -930,7 +932,6 @@ export default function ConferenceDetailClient() {
   // Derived
   const isOrganizer = user?.id === conference.organizer_id;
   const countryObj = getCountryByName(conference.country);
-  const countrySupported = !countryObj?.code || SUPPORTED_PAYOUT_COUNTRIES.has(countryObj.code);
   const flagUrl = countryObj ? getFlagUrl(countryObj.code) : null;
   const enabledRoles = roleConfigs.filter(r => r.is_enabled);
   const now = new Date();
@@ -1575,9 +1576,10 @@ export default function ConferenceDetailClient() {
                   myAllocation={myAllocation}
                   committees={committees}
                   allocationSwapMode={conference.allocation_swap_mode}
-                  paymentsEnabled={conference.connect_onboarding_status === 'complete'}
-                  externalPaymentUrl={countrySupported ? null : conference.external_payment_url}
-                  externalPaymentNote={countrySupported ? null : conference.external_payment_note}
+                  paymentsEnabled={conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete'}
+                  externalPaymentUrl={conference.payment_method === 'manual' ? conference.external_payment_url : null}
+                  externalPaymentNote={conference.external_payment_note}
+                  manualActive={conference.payment_method === 'manual'}
                   financialAidEnabled={conference.financial_aid_enabled}
                   aidQuestions={normalizeQuestions(conference.aid_questions)}
                   aidIntro={conference.aid_intro}

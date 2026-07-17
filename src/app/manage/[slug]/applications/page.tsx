@@ -1001,7 +1001,7 @@ function FilterPanel({
 export default function ApplicationsPage() {
   const { conference } = useManage();
   const { session } = useAuth();
-  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status);
+  const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   // Empty role set = no constraint, so a fresh page shows every role

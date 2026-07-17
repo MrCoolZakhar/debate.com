@@ -10,7 +10,7 @@ import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantApplication, ParticipantRoleConfig } from './types';
 import { type CustomQuestion } from '@/lib/customQuestions';
 
-export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, financialAidEnabled, aidQuestions, aidIntro }: {
+export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidQuestions, aidIntro }: {
   conferenceId: string;
   application: ParticipantApplication;
   allocationSwapMode: string;
@@ -19,6 +19,7 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
   paymentsEnabled: boolean;
   externalPaymentUrl: string | null;
   externalPaymentNote: string | null;
+  manualActive: boolean;
   financialAidEnabled: boolean;
   aidQuestions: CustomQuestion[];
   aidIntro: string | null;
@@ -56,6 +57,7 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
         paymentsEnabled={paymentsEnabled}
         externalPaymentUrl={externalPaymentUrl}
         externalPaymentNote={externalPaymentNote}
+        manualActive={manualActive}
         financialAidEnabled={financialAidEnabled}
         aidQuestions={aidQuestions}
         aidIntro={aidIntro}

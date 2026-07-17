@@ -42,11 +42,14 @@ export interface PledgeInvoicingCardProps {
   delegateFeeAmount: number | null;
   delegateFeeCurrency: string | null;
   contactEmail: string | null;
-  /** True once the conference's Stripe Connect onboarding is complete. */
+  /** True once the conference's Stripe Connect onboarding is complete AND
+   *  Stripe is the active payment_method. */
   paymentsEnabled: boolean;
-  /** Organizer-provided payment page, shown as a fallback when paymentsEnabled is false. */
+  /** Organizer-provided payment page, shown when manual is the active method. */
   externalPaymentUrl: string | null;
   externalPaymentNote: string | null;
+  /** True when 'manual' is the conference's active payment_method. */
+  manualActive: boolean;
   /** Conference-level financial aid config (separate application, financial_aid_requests table). */
   financialAidEnabled: boolean;
   aidQuestions: CustomQuestion[];
@@ -54,7 +57,7 @@ export interface PledgeInvoicingCardProps {
 }
 
 export default function PledgeInvoicingCard({
-  applicationId, conferenceId, societyId, amountPaid, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, delegateFeeCurrency, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, financialAidEnabled, aidQuestions, aidIntro,
+  applicationId, conferenceId, societyId, amountPaid, pledgeType, spotsPledged, pledgeConfirmedAt, delegateFeeAmount, delegateFeeCurrency, contactEmail, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidQuestions, aidIntro,
 }: PledgeInvoicingCardProps) {
   const { session } = useAuth();
   const [invoices, setInvoices] = useState<PledgeSpotInvoice[]>([]);
@@ -241,7 +244,7 @@ export default function PledgeInvoicingCard({
             </div>
           ))}
 
-          {!fullyCovered && remaining > 0 && !paymentsEnabled && externalPaymentUrl && (
+          {!fullyCovered && remaining > 0 && manualActive && externalPaymentUrl && (
             <div
               className="rounded-xl px-4 py-3"
               style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}
@@ -272,12 +275,31 @@ export default function PledgeInvoicingCard({
             </div>
           )}
 
-          {!fullyCovered && remaining > 0 && !paymentsEnabled && !externalPaymentUrl && (
+          {!fullyCovered && remaining > 0 && manualActive && !externalPaymentUrl && (
+            <div
+              className="rounded-xl px-4 py-3"
+              style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}
+            >
+              <p className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: '0 0 4px 0' }}>
+                {remaining} delegation spot{remaining === 1 ? '' : 's'} remaining
+              </p>
+              {externalPaymentNote && (
+                <p className="text-xs mb-2" style={{ color: '#6E5F4E', fontFamily: OUTFIT, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                  {externalPaymentNote}
+                </p>
+              )}
+              <p className="text-[13px] rounded-xl px-3 py-2.5" style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}>
+                The organizing team collects this fee directly and will confirm your payment here.
+              </p>
+            </div>
+          )}
+
+          {!fullyCovered && remaining > 0 && !manualActive && !paymentsEnabled && (
             <p
               className="text-[13px] rounded-xl px-4 py-3"
               style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
             >
-              The organizing team has not enabled online payments yet. You will be able to pay here once they do.
+              Online payment isn&apos;t set up for this conference yet.
             </p>
           )}
 

@@ -111,10 +111,18 @@ export function proPricing(countryCode: string | null): { monthly: number; curre
  *  When `connectOnboardingStatus` is passed, payments are only live once the
  *  conference's own Stripe Connect onboarding is 'complete' — unconnected
  *  conferences fall back to manual controls even while Stripe is the active
- *  provider globally. */
-export function isPaymentsLive(conferenceId?: string | null, connectOnboardingStatus?: string | null): boolean {
+ *  provider globally. When `paymentMethod` is passed too, Stripe must also
+ *  be the conference's ACTIVE payout method — a conference that switched to
+ *  manual keeps its dormant Stripe account 'complete', but organizers still
+ *  need manual mark-paid controls while manual is active. */
+export function isPaymentsLive(
+  conferenceId?: string | null,
+  connectOnboardingStatus?: string | null,
+  paymentMethod?: string | null,
+): boolean {
   if (ACTIVE_PROVIDER !== 'stripe') return false;
   if (conferenceId && MANUAL_MODE_CONFERENCE_IDS.has(conferenceId)) return false;
+  if (paymentMethod !== undefined && paymentMethod !== null && paymentMethod !== 'stripe') return false;
   if (connectOnboardingStatus !== undefined && connectOnboardingStatus !== null) {
     return connectOnboardingStatus === 'complete';
   }

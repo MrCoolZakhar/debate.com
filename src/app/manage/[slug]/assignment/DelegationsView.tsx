@@ -177,7 +177,7 @@ interface DelegationsViewProps {
 
 export default function DelegationsView({ conference, showFlash }: DelegationsViewProps) {
   const { session } = useAuth();
-  const paymentsLive = isPaymentsLive(conference.id, conference.connect_onboarding_status);
+  const paymentsLive = isPaymentsLive(conference.id, conference.connect_onboarding_status, conference.payment_method);
   const [societies, setSocieties] = useState<Society[]>([]);
   const [members, setMembers] = useState<PoolMember[]>([]);
   const [searchPool, setSearchPool] = useState<SearchApp[]>([]);

@@ -58,11 +58,14 @@ export interface ParticipantViewProps {
   myAllocation: ParticipantAllocation | null;
   committees: ParticipantCommittee[];
   allocationSwapMode: string;
-  /** True once the conference's Stripe Connect onboarding is complete. */
+  /** True once the conference's Stripe Connect onboarding is complete AND
+   *  Stripe is the active payment_method. */
   paymentsEnabled: boolean;
-  /** Organizer-provided payment page, shown as a fallback when paymentsEnabled is false. */
+  /** Organizer-provided payment page, shown when manual is the active method. */
   externalPaymentUrl: string | null;
   externalPaymentNote: string | null;
+  /** True when 'manual' is the conference's active payment_method. */
+  manualActive: boolean;
   /** Conference-level financial aid config (separate application, financial_aid_requests table). */
   financialAidEnabled: boolean;
   aidQuestions: CustomQuestion[];
@@ -70,7 +73,7 @@ export interface ParticipantViewProps {
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote, financialAidEnabled, aidQuestions, aidIntro,
+  conferenceId, conferenceSlug, contactEmail, defaultFeeCurrency, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive, financialAidEnabled, aidQuestions, aidIntro,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -165,6 +168,7 @@ export default function ParticipantView({
             paymentsEnabled={paymentsEnabled}
             externalPaymentUrl={externalPaymentUrl}
             externalPaymentNote={externalPaymentNote}
+            manualActive={manualActive}
           />
 
           <PayGate gateState={gateState}>
@@ -186,6 +190,7 @@ export default function ParticipantView({
                 paymentsEnabled={paymentsEnabled}
                 externalPaymentUrl={externalPaymentUrl}
                 externalPaymentNote={externalPaymentNote}
+                manualActive={manualActive}
                 financialAidEnabled={financialAidEnabled}
                 aidQuestions={aidQuestions}
                 aidIntro={aidIntro}

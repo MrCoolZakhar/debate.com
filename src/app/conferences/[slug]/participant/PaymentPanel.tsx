@@ -58,15 +58,18 @@ export interface PaymentPanelProps {
   financialAidEnabled: boolean;
   aidQuestions: CustomQuestion[];
   aidIntro: string | null;
-  /** True once the conference's Stripe Connect onboarding is complete. */
+  /** True once the conference's Stripe Connect onboarding is complete AND
+   *  Stripe is the active payment_method. */
   paymentsEnabled: boolean;
-  /** Organizer-provided payment page, shown as a fallback when paymentsEnabled is false. */
+  /** Organizer-provided payment page, shown when manual is the active method. */
   externalPaymentUrl: string | null;
   externalPaymentNote: string | null;
+  /** True when 'manual' is the conference's active payment_method. */
+  manualActive: boolean;
 }
 
 export default function PaymentPanel({
-  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, financialAidEnabled, aidQuestions, aidIntro, paymentsEnabled, externalPaymentUrl, externalPaymentNote,
+  applicationId, conferenceId, feeAmount, feeCurrency, feePhases, allowPartial, paymentStatus, amountPaid, payableNow, contactEmail, financialAidEnabled, aidQuestions, aidIntro, paymentsEnabled, externalPaymentUrl, externalPaymentNote, manualActive,
 }: PaymentPanelProps) {
   const { user, session } = useAuth();
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: feeAmount, fee_phases: feePhases });
@@ -256,7 +259,7 @@ export default function PaymentPanel({
         <p className="text-[13px]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           There&apos;s no fee for this role, nothing to pay.
         </p>
-      ) : owesSomething && !paymentsEnabled && externalPaymentUrl ? (
+      ) : owesSomething && manualActive && externalPaymentUrl ? (
         <>
           <a
             href={externalPaymentUrl}
@@ -282,12 +285,26 @@ export default function PaymentPanel({
             After you pay, the organizing team will confirm your payment here.
           </p>
         </>
+      ) : owesSomething && manualActive ? (
+        <>
+          {externalPaymentNote && (
+            <p className="text-[12.5px] mb-3" style={{ color: '#6E5F4E', fontFamily: OUTFIT, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {externalPaymentNote}
+            </p>
+          )}
+          <p
+            className="text-[13px] rounded-xl px-4 py-3"
+            style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
+          >
+            The organizing team collects this fee directly and will confirm your payment here.
+          </p>
+        </>
       ) : owesSomething && !paymentsEnabled ? (
         <p
           className="text-[13px] rounded-xl px-4 py-3"
           style={{ color: '#B8844A', fontFamily: OUTFIT, backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)', lineHeight: 1.6 }}
         >
-          The organizing team has not enabled online payments yet. You will be able to pay here once they do.
+          Online payment isn&apos;t set up for this conference yet.
         </p>
       ) : owesSomething ? (
         <>
