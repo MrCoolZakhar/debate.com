@@ -29,9 +29,9 @@ import {
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { formatFee, formatFeeAmount } from '@/lib/utils';
+import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
-import { createCheckout, payInvoiceCheckout, payInvoicesCheckout } from '@/lib/payments';
+import { payInvoiceCheckout, payInvoicesCheckout } from '@/lib/payments';
 import { normalizeBlocks, type FormBlock } from '@/lib/customQuestions';
 import {
   type InvoiceRow, invoiceLabel, invoiceDueCents, centsToFee, isInvoicePayable, isInvoiceSettled,
@@ -79,7 +79,6 @@ interface PayRoleConfig {
   fee_currency: string | null;
   fee_phases: FeePhase[] | null;
   payment_timing: string;
-  allow_partial_payments: boolean;
 }
 
 interface AidRequestRow {
@@ -296,7 +295,7 @@ export default function PayPage() {
       const [roleConfigsRes, addonsRes] = await Promise.all([
         supabase
           .from('application_role_configs')
-          .select('role, fee_amount, fee_currency, fee_phases, payment_timing, allow_partial_payments')
+          .select('role, fee_amount, fee_currency, fee_phases, payment_timing')
           .eq('conference_id', conf.id),
         supabase
           .from('addons')
@@ -820,12 +819,20 @@ function PayInvoiceAndActions({
   const { amount: resolvedFee, phase } = activePhaseFee({ fee_amount: roleConfig?.fee_amount ?? 0, fee_phases: roleConfig?.fee_phases ?? null });
   const fee = resolvedFee ?? 0;
   const grantedAmount = aidRequest?.status === 'approved' ? (aidRequest.granted_amount ?? 0) : 0;
-  const effectiveFee = Math.max(0, fee - grantedAmount);
-  const remaining = Math.max(0, effectiveFee - application.amount_paid);
-  const badge = deriveBadge(application.payment_status, application.amount_paid);
+
+  // The registration invoice, when it exists — its amount_cents is now ALWAYS
+  // the net owed (fee − aid − voucher), auto-saved server-side the moment a
+  // voucher is applied/removed (apply_voucher), so it's the source of truth
+  // for Total/due rather than a live fee-minus-aid computation. Before it
+  // exists (not yet payable/synced), fall back to fee − aid with no voucher.
+  const roleFeeInvoice = invoices.find(inv => inv.kind === 'role_fee');
+  const preVoucherCents = Math.round(Math.max(0, fee - grantedAmount) * 100);
+  const netCents = roleFeeInvoice ? roleFeeInvoice.amount_cents : preVoucherCents;
+  const dueCents = roleFeeInvoice ? invoiceDueCents(roleFeeInvoice) : Math.max(0, netCents - Math.round(application.amount_paid * 100));
+  const voucherDiscountCents = Math.max(0, preVoucherCents - netCents);
+  const badge = roleFeeInvoice ? invoiceBadge(roleFeeInvoice) : deriveBadge(application.payment_status, application.amount_paid);
   const owesSomething = badge === 'UNPAID' || badge === 'PARTIAL';
-  const allowPartial = roleConfig?.allow_partial_payments ?? false;
-  const showAmountSelector = allowPartial && owesSomething && remaining > 0;
+  const roleFeeSelectable = !!roleFeeInvoice && !isInvoiceSettled(roleFeeInvoice) && dueCents > 0;
   const gateState = getGateState(roleConfig?.payment_timing ?? 'anytime', application.status, application.payment_status);
   const payableNow = gateState !== 'under_review';
   const paymentsEnabled = conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete';
@@ -834,9 +841,10 @@ function PayInvoiceAndActions({
   const canBuyDelegationStuff = (application.role === 'head-delegate' || application.role === 'faculty-advisor') && !!application.society_id;
 
   const [invoiceOpen, setInvoiceOpen] = useState(false);
-  const [customAmount, setCustomAmount] = useState<string>(() => formatFeeAmount(remaining));
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [voucherCode, setVoucherCode] = useState('');
+  const [voucherApplying, setVoucherApplying] = useState(false);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [stubMessage, setStubMessage] = useState<string | null>(null);
@@ -844,11 +852,6 @@ function PayInvoiceAndActions({
   const [addonsModalOpen, setAddonsModalOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [spotsOpen, setSpotsOpen] = useState(false);
-
-  // The registration invoice, when it exists — selectable into the combined
-  // batch alongside app_fee/addon cards, only while genuinely owed.
-  const roleFeeInvoice = invoices.find(inv => inv.kind === 'role_fee');
-  const roleFeeSelectable = !!roleFeeInvoice && !isInvoiceSettled(roleFeeInvoice) && invoiceDueCents(roleFeeInvoice) > 0;
 
   // Generic (app_fee / addon) invoice cards — pledge_spot renders through its
   // own dedicated panel on the right, never as a generic card.
@@ -876,34 +879,49 @@ function PayInvoiceAndActions({
     });
   }
 
-  const amountToCharge = showAmountSelector ? Math.min(Math.max(parseFloat(customAmount) || 1, 1), Math.max(remaining, 1)) : remaining;
-
+  // Registration is paid in full, net of aid/voucher — no partial-amount
+  // selector. Vouchers apply upfront (apply_voucher, below) and re-net the
+  // invoice immediately, so by the time this fires the invoice's own
+  // amount_cents is already correct — same invoiceId checkout path as any
+  // other card.
   async function handlePay() {
-    if (paying || amountToCharge <= 0 || !session) return;
+    if (paying || dueCents <= 0 || !session || !roleFeeInvoice) return;
     setPaying(true);
     setPayError(null);
-    const result = await createCheckout({
-      applicationId: application.id,
-      conferenceId: conference.id,
-      accessToken: session.access_token,
-      kind: 'role_fee',
-      ...(showAmountSelector ? { amount: amountToCharge } : {}),
-      ...(voucherCode.trim() ? { voucherCode: voucherCode.trim().toUpperCase() } : {}),
-      feeAmount: fee,
-      feeCurrency: currency,
-    });
+    const result = await payInvoiceCheckout({ invoiceId: roleFeeInvoice.id, accessToken: session.access_token });
     if (result.status === 'redirect' && result.redirectUrl) {
       window.location.assign(result.redirectUrl);
       return;
     }
     setPaying(false);
     if (result.status === 'error') setPayError(result.message ?? 'Something went wrong. Please try again.');
-    else setStubMessage(result.message ?? null);
   }
 
-  // Any invoice kind other than role_fee pays through create-checkout's
-  // invoiceId path — its amount_cents is already final (config-set, no
-  // aid/voucher recompute needed the way role_fee's does).
+  // Applies (or, with an empty code, removes) a registration voucher upfront
+  // — apply_voucher stamps the role_fee invoice and re-nets its amount_cents
+  // immediately, so a re-fetch is all that's needed to show the new Total.
+  // Unstackable: a new code replaces whatever was applied before.
+  async function applyVoucher(code: string) {
+    if (voucherApplying || !session) return;
+    setVoucherApplying(true);
+    setVoucherError(null);
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.rpc('apply_voucher', {
+      p_application_id: application.id,
+      p_code: code,
+    });
+    const result = data as { ok?: boolean; error?: string } | null;
+    setVoucherApplying(false);
+    if (error || !result?.ok) {
+      setVoucherError(result?.error || error?.message || 'Could not apply that code. Please try again.');
+      return;
+    }
+    if (!code) setVoucherCode('');
+    await onInvoicesChanged();
+  }
+
+  // Any generic (app_fee/addon) invoice pays through create-checkout's
+  // invoiceId path — its amount_cents is already final (config-set).
   async function handlePayInvoice(invoiceId: string) {
     if (genericPayingId || !session) return;
     setGenericPayingId(invoiceId);
@@ -925,10 +943,8 @@ function PayInvoiceAndActions({
   const selectedTotalCents = selectedInvoices.reduce((sum, inv) => sum + invoiceDueCents(inv), 0);
 
   // Pays every selected, still-owed invoice in ONE Stripe Checkout session.
-  // role_fee (if selected) has its aid/voucher recomputed server-side at
-  // charge time — see create-checkout v16 — so this never overcharges an aid
-  // recipient; it just can't pick up a voucher that was typed but never
-  // submitted through the registration panel's own PAY button.
+  // Every invoice's amount_cents (role_fee included, now that apply_voucher
+  // keeps it net) is already correct — no server-side recompute needed.
   async function handlePaySelected() {
     if (selectedPaying || !session || selectedInvoices.length === 0) return;
     setSelectedPaying(true);
@@ -951,9 +967,10 @@ function PayInvoiceAndActions({
       <div className="flex flex-col gap-3">
         <p style={eyebrowStyle}>Current Invoices</p>
 
-        {/* Registration fee — its own panel (voucher + partial-amount UI),
-            same live aid/voucher computation as before, now with a header
-            checkbox so it can join the combined "Pay Selected" batch too. */}
+        {/* Registration fee — its own panel. Paid in full, net of aid/voucher
+            (no partial amounts); the voucher box applies upfront via
+            apply_voucher rather than at checkout. Header checkbox lets it
+            join the combined "Pay Selected" batch too. */}
         {fee > 0 && (
           <NeuCard style={{ padding: 0, overflow: 'hidden' }}>
             <div className="w-full flex items-center gap-3" style={{ padding: '18px 20px' }}>
@@ -980,7 +997,7 @@ function PayInvoiceAndActions({
                       {roleLabel(application.role)} fee
                     </p>
                     <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, margin: '2px 0 0 0' }}>
-                      {fee > 0 ? `${formatFee(fee, currency)} · balance due ${formatFee(remaining, currency)}` : 'Free'}
+                      {fee > 0 ? `${formatFee(fee, currency)} · balance due ${centsToFee(dueCents, currency)}` : 'Free'}
                     </p>
                   </div>
                 </div>
@@ -1004,9 +1021,15 @@ function PayInvoiceAndActions({
                       <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.green, fontWeight: 600 }}>−{formatFee(grantedAmount, currency)}</span>
                     </div>
                   )}
+                  {voucherDiscountCents > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>− Voucher</span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.green, fontWeight: 600 }}>−{centsToFee(voucherDiscountCents, currency)}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between pt-1.5 mt-0.5" style={{ borderTop: '1px dashed rgba(27,56,40,0.16)' }}>
                     <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>Total</span>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{formatFee(effectiveFee, currency)}</span>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{centsToFee(netCents, currency)}</span>
                   </div>
                   {fee > 0 && phase && (
                     <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.deepGold, letterSpacing: '0.04em', margin: '2px 0 0 0' }}>
@@ -1021,6 +1044,73 @@ function PayInvoiceAndActions({
                 {aidRequest?.status === 'denied' && (
                   <div className="mb-3"><Note tone="muted">Your financial aid request was not approved. The standard fee applies.</Note></div>
                 )}
+
+                {/* Voucher — always available (manual or Stripe), applies
+                    upfront via apply_voucher rather than at checkout. */}
+                <div className="mb-4">
+                  {!voucherOpen && voucherDiscountCents === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setVoucherOpen(true)}
+                      className="text-xs font-bold focus:outline-none"
+                      style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    >
+                      Have a voucher?
+                    </button>
+                  ) : (
+                    <div>
+                      <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                        VOUCHER CODE
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={voucherCode}
+                          onChange={e => setVoucherCode(e.target.value)}
+                          placeholder="e.g. EARLYBIRD10"
+                          className="flex-1 rounded-xl px-3.5 py-2.5 text-sm uppercase focus:outline-none"
+                          style={{ border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => applyVoucher(voucherCode.trim())}
+                          disabled={voucherApplying || !voucherCode.trim()}
+                          className="rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none"
+                          style={{
+                            border: 'none', backgroundColor: voucherApplying || !voucherCode.trim() ? '#DDD4C0' : NEU.forest,
+                            color: voucherApplying || !voucherCode.trim() ? '#9A8A78' : NEU.gold,
+                            fontFamily: OUTFIT, whiteSpace: 'nowrap', cursor: voucherApplying || !voucherCode.trim() ? 'default' : 'pointer',
+                          }}
+                        >
+                          {voucherApplying ? '...' : 'APPLY'}
+                        </button>
+                      </div>
+                      {voucherDiscountCents > 0 ? (
+                        <div className="flex items-center justify-between mt-1.5">
+                          <span style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.green, fontWeight: 700 }}>
+                            Voucher applied: −{centsToFee(voucherDiscountCents, currency)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => applyVoucher('')}
+                            disabled={voucherApplying}
+                            className="text-xs font-bold focus:outline-none"
+                            style={{ color: '#8B2020', fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: voucherApplying ? 'default' : 'pointer', padding: 0 }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
+                          Applied immediately, before you check out.
+                        </p>
+                      )}
+                      {voucherError && (
+                        <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020' }}>{voucherError}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {!payableNow ? (
                   <Note tone="amber">Payment becomes available once your application is accepted.</Note>
@@ -1067,68 +1157,6 @@ function PayInvoiceAndActions({
                   </div>
                 ) : owesSomething ? (
                   <>
-                    {showAmountSelector && (
-                      <div className="mb-4">
-                        <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                          AMOUNT TO PAY
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            max={remaining}
-                            step="0.01"
-                            value={customAmount}
-                            onChange={e => setCustomAmount(e.target.value)}
-                            onBlur={() => setCustomAmount(formatFeeAmount(amountToCharge))}
-                            className="flex-1 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                            style={{ border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setCustomAmount(formatFeeAmount(remaining))}
-                            className="rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none"
-                            style={{ border: `1px solid ${NEU.muted}55`, color: NEU.forest, backgroundColor: 'transparent', fontFamily: OUTFIT, whiteSpace: 'nowrap' }}
-                          >
-                            FULL AMOUNT
-                          </button>
-                        </div>
-                        <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
-                          Pay any amount from 1 up to the remaining balance.
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="mb-4">
-                      {!voucherOpen ? (
-                        <button
-                          type="button"
-                          onClick={() => setVoucherOpen(true)}
-                          className="text-xs font-bold focus:outline-none"
-                          style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        >
-                          Have a voucher?
-                        </button>
-                      ) : (
-                        <div>
-                          <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                            VOUCHER CODE
-                          </label>
-                          <input
-                            type="text"
-                            value={voucherCode}
-                            onChange={e => setVoucherCode(e.target.value)}
-                            placeholder="e.g. EARLYBIRD10"
-                            className="w-full rounded-xl px-3.5 py-2.5 text-sm uppercase focus:outline-none"
-                            style={{ border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT }}
-                          />
-                          <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
-                            Checked and applied when you continue to checkout.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
                     {payError && (
                       <div className="mb-3"><Note tone="red">{payError}</Note></div>
                     )}
@@ -1144,7 +1172,7 @@ function PayInvoiceAndActions({
                       }}
                     >
                       <CreditCard size={15} />
-                      {paying ? 'OPENING CHECKOUT...' : `PAY ${formatFee(amountToCharge, currency)}`}
+                      {paying ? 'OPENING CHECKOUT...' : `PAY ${centsToFee(dueCents, currency)}`}
                     </button>
                   </>
                 ) : (
