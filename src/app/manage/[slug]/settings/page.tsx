@@ -324,6 +324,17 @@ function CopyFormMenu({ roles, onPick }: { roles: string[]; onPick: (role: strin
   );
 }
 
+/** Subtle status line for an autosaving section, replaces a manual save button. */
+function AutoSaveStatus({ saving, saved }: { saving: boolean; saved: boolean }) {
+  const text = saving ? 'Saving…' : saved ? 'Saved ✓' : 'Changes save automatically';
+  return (
+    <p className="text-xs mt-2 flex items-center gap-1.5" style={{ color: saved ? '#3D7A52' : '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+      {saving && <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#9A8A78', borderTopColor: 'transparent' }} />}
+      {text}
+    </p>
+  );
+}
+
 // ── Settings page ──────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -434,6 +445,19 @@ export default function SettingsPage() {
   const [swapModeSaving, setSwapModeSaving] = useState(false);
   const [publicToggleSaving, setPublicToggleSaving] = useState(false);
   const [withdrawingClaim, setWithdrawingClaim] = useState(false);
+
+  // Autosave baselines for the three manual-input sections below (details,
+  // visual, min age). Each baseline is the last-persisted raw input
+  // snapshot, null until hydrated from `conference` — a debounced effect
+  // compares the live snapshot against it and saves only on a real diff, so
+  // a freshly-loaded form (or a save's own re-render) never re-triggers.
+  const snap = (o: Record<string, unknown>) => JSON.stringify(o);
+  const detailsBaseline = useRef<string | null>(null);
+  const visualBaseline = useRef<string | null>(null);
+  const minAgeBaseline = useRef<string | null>(null);
+  const detailsSnap = () => snap({ fullName, acronym, contactEmail, studentLevel, startDate, endDate, country, city, format, expectedDelegates });
+  const visualSnap = () => snap({ description, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
+  const minAgeSnap = () => snap({ minAge });
 
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
@@ -600,6 +624,23 @@ export default function SettingsPage() {
     setCity(conference.city ?? '');
     setFormat((conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '');
     setExpectedDelegates(conference.expected_delegates != null ? String(conference.expected_delegates) : '');
+    // Baselines mirror the values just hydrated above, so the autosave
+    // effects see no diff (and thus don't fire) right after a fresh load.
+    detailsBaseline.current = snap({
+      fullName: conference.full_name ?? '', acronym: conference.acronym ?? '',
+      contactEmail: conference.contact_email ?? '',
+      studentLevel: (conference.student_level as 'school' | 'university' | 'both' | '') ?? '',
+      startDate: conference.start_date ?? '', endDate: conference.end_date ?? '',
+      country: conference.country ?? '', city: conference.city ?? '',
+      format: (conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '',
+      expectedDelegates: conference.expected_delegates != null ? String(conference.expected_delegates) : '',
+    });
+    visualBaseline.current = snap({
+      description: conference.description ?? '', instagramUrl: conference.instagram_url ?? '',
+      facebookUrl: conference.facebook_url ?? '', tiktokUrl: conference.tiktok_url ?? '',
+      whatsappUrl: conference.whatsapp_url ?? '', websiteUrl: conference.website_url ?? '',
+    });
+    minAgeBaseline.current = snap({ minAge: conference.min_age != null ? String(conference.min_age) : '' });
   }, [conference?.id, loadRoleConfigs, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
 
   // Partner typeahead: debounced authed search over public conferences,
@@ -1382,6 +1423,7 @@ export default function SettingsPage() {
     // Success is only declared once the DB write is verified AND the UI has
     // re-synced to DB truth, never before.
     await refreshConferenceQuiet();
+    minAgeBaseline.current = minAgeSnap();
     setMinAgeSaving(false);
     setMinAgeSaved(true);
     setTimeout(() => setMinAgeSaved(false), 2500);
@@ -1415,6 +1457,7 @@ export default function SettingsPage() {
       return;
     }
     await refreshConferenceQuiet();
+    visualBaseline.current = visualSnap();
     setVisualSaving(false);
     setVisualSaved(true);
     setTimeout(() => setVisualSaved(false), 2500);
@@ -1461,10 +1504,40 @@ export default function SettingsPage() {
       return;
     }
     await refreshConferenceQuiet();
+    detailsBaseline.current = detailsSnap();
     setDetailsSaving(false);
     setDetailsSaved(true);
     setTimeout(() => setDetailsSaved(false), 2500);
   }
+
+  // Debounced autosave for the three manual-input sections above: bail while
+  // unhydrated (baseline still null) or a save is already in flight, bail if
+  // nothing actually changed since the baseline, else save after 800ms of
+  // quiet. The cleanup clears any pending timer, which is what cancels the
+  // transient empty-form save on first mount/every re-render before it fires.
+  useEffect(() => {
+    if (!conference || minAgeBaseline.current === null || minAgeSaving) return;
+    if (minAgeSnap() === minAgeBaseline.current) return;
+    const t = setTimeout(() => { void handleSaveMinAge(); }, 800);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minAge, minAgeSaving, conference]);
+
+  useEffect(() => {
+    if (!conference || visualBaseline.current === null || visualSaving) return;
+    if (visualSnap() === visualBaseline.current) return;
+    const t = setTimeout(() => { void handleSaveVisual(); }, 800);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl, visualSaving, conference]);
+
+  useEffect(() => {
+    if (!conference || detailsBaseline.current === null || detailsSaving) return;
+    if (detailsSnap() === detailsBaseline.current) return;
+    const t = setTimeout(() => { void handleSaveDetails(); }, 800);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullName, acronym, contactEmail, studentLevel, startDate, endDate, country, city, format, expectedDelegates, detailsSaving, conference]);
 
   if (!conference) return null;
 
@@ -2257,26 +2330,7 @@ export default function SettingsPage() {
               />
             </div>
 
-            <button
-              onClick={handleSaveDetails}
-              disabled={detailsSaving || detailsSaved}
-              className="w-full rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none flex items-center justify-center gap-2"
-              style={{
-                backgroundColor: detailsSaved ? '#3D7A52' : '#1B3828',
-                color: '#EED98A',
-                fontFamily: "'Outfit', sans-serif",
-                letterSpacing: '0.08em',
-                opacity: detailsSaving ? 0.75 : 1,
-                cursor: detailsSaving ? 'wait' : 'pointer',
-              }}
-              onMouseEnter={(e) => { if (!detailsSaved && !detailsSaving) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { if (!detailsSaved && !detailsSaving) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-            >
-              {detailsSaving && (
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
-              )}
-              {detailsSaving ? 'SAVING…' : detailsSaved ? 'SAVED ✓' : 'SAVE CHANGES'}
-            </button>
+            <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
             {detailsError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{detailsError}</p>
             )}
@@ -2470,26 +2524,7 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            <button
-              onClick={handleSaveVisual}
-              disabled={visualSaving || visualSaved}
-              className="w-full mt-6 rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none flex items-center justify-center gap-2"
-              style={{
-                backgroundColor: visualSaved ? '#3D7A52' : '#1B3828',
-                color: '#EED98A',
-                fontFamily: "'Outfit', sans-serif",
-                letterSpacing: '0.08em',
-                opacity: visualSaving ? 0.75 : 1,
-                cursor: visualSaving ? 'wait' : 'pointer',
-              }}
-              onMouseEnter={(e) => { if (!visualSaved && !visualSaving) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { if (!visualSaved && !visualSaving) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-            >
-              {visualSaving && (
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
-              )}
-              {visualSaving ? 'SAVING…' : visualSaved ? 'SAVED ✓' : 'SAVE CHANGES'}
-            </button>
+            <AutoSaveStatus saving={visualSaving} saved={visualSaved} />
             {visualError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visualError}</p>
             )}
@@ -2523,27 +2558,8 @@ export default function SettingsPage() {
               onBlur={bgInput}
             />
           </div>
-          <button
-            onClick={handleSaveMinAge}
-            disabled={minAgeSaving || minAgeSaved}
-            className="rounded-xl py-2.5 px-5 font-bold text-xs tracking-widest transition-colors focus:outline-none flex-shrink-0 flex items-center justify-center gap-2"
-            style={{
-              backgroundColor: minAgeSaved ? '#3D7A52' : '#1B3828',
-              color: '#EED98A',
-              fontFamily: "'Outfit', sans-serif",
-              letterSpacing: '0.07em',
-              opacity: minAgeSaving ? 0.75 : 1,
-              cursor: minAgeSaving ? 'wait' : 'pointer',
-            }}
-            onMouseEnter={(e) => { if (!minAgeSaved && !minAgeSaving) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { if (!minAgeSaved && !minAgeSaving) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            {minAgeSaving && (
-              <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#EED98A', borderTopColor: 'transparent' }} />
-            )}
-            {minAgeSaving ? 'SAVING…' : minAgeSaved ? 'SAVED ✓' : 'SAVE'}
-          </button>
         </div>
+        <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />
         {minAgeError && (
           <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{minAgeError}</p>
         )}
