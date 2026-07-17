@@ -8,7 +8,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
-import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, LevelInsignia, OUTFIT } from '../accountUi';
+import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, LevelInsignia, OUTFIT, MONO } from '../accountUi';
 import { NEU, NeuIconDisc, NEU_GRADIENTS } from '@/components/neu';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { DatePicker } from '@/components/DatePicker';
@@ -27,6 +27,72 @@ const NOTIFICATION_ROWS = [
   { field: 'notify_email_documents'    as const, Icon: FileText,       label: 'Document Notifications', desc: 'Study guide releases and position paper feedback' },
   { field: 'notify_email_reminders'    as const, Icon: BellRing,       label: 'Conference Reminders',   desc: 'Reminders before conferences you\'re attending' },
 ];
+
+// ── Welcome-token pop-up ─────────────────────────────────────────────────────
+// Shown once, on the first profile visit after signup. A friendly, minimal
+// reminder that the delegate has one free token (a granted credit_lot) covering
+// the fee to apply to a single conference. One heading, one line, one image.
+function WelcomeTokenModal({ onClose }: { onClose: () => void }) {
+  return (
+    <Portal>
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-[2147483000] flex items-center justify-center px-4"
+        style={{ backgroundColor: 'rgba(28,20,16,0.42)', backdropFilter: 'blur(7px)', WebkitBackdropFilter: 'blur(7px)', animation: 'gvWelcomeFade 220ms ease' }}
+      >
+        <style>{`@keyframes gvWelcomeFade{from{opacity:0}to{opacity:1}}@keyframes gvWelcomePop{from{opacity:0;transform:translateY(10px) scale(0.97)}to{opacity:1;transform:none}}`}</style>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="relative w-full text-center"
+          style={{ maxWidth: 420, borderRadius: 26, backgroundColor: NEU.surface, boxShadow: NEU.out, padding: '0 30px 30px', animation: 'gvWelcomePop 260ms cubic-bezier(0.2,0.7,0.2,1)' }}
+        >
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute flex items-center justify-center"
+            style={{ top: 14, right: 14, width: 30, height: 30, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', color: NEU.muted, cursor: 'pointer' }}
+          >
+            <X size={15} strokeWidth={2.4} />
+          </button>
+
+          {/* Gavin, arms wide open — overlapping the top edge for delight */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/Otter.Tutorial.Intro.png"
+            alt=""
+            aria-hidden
+            style={{ width: 190, height: 'auto', display: 'block', margin: '-46px auto -4px', filter: 'drop-shadow(0 10px 22px rgba(27,56,40,0.24))' }}
+          />
+
+          <p style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.18em', color: '#B6871F', margin: '0 0 8px' }}>
+            A TOKEN OF OUR APPRECIATION
+          </p>
+          <h2 style={{ fontFamily: OUTFIT, fontSize: 25, fontWeight: 900, color: NEU.ink, lineHeight: 1.12, letterSpacing: '-0.01em', margin: '0 0 12px' }}>
+            You&apos;ve got 1 free token 🎉
+          </h2>
+          <p style={{ fontFamily: OUTFIT, fontSize: 14.5, lineHeight: 1.6, color: NEU.muted, margin: '0 0 22px' }}>
+            It&apos;s on us — your token covers the fee to apply to any one conference. Go find your first committee.
+          </p>
+
+          <Link
+            href="/conferences/explore"
+            onClick={onClose}
+            className="inline-flex items-center justify-center gap-2 w-full"
+            style={{ borderRadius: 14, padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, letterSpacing: '0.04em', textDecoration: 'none', boxShadow: NEU.outSm }}
+          >
+            Explore conferences <ArrowRight size={16} strokeWidth={2.4} />
+          </Link>
+          <button
+            onClick={onClose}
+            style={{ marginTop: 12, background: 'none', border: 'none', color: NEU.muted, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Maybe later
+          </button>
+        </div>
+      </div>
+    </Portal>
+  );
+}
 
 type NotifFields = {
   notify_email_marketing:    boolean;
@@ -65,6 +131,7 @@ export default function ProfilePage() {
     notify_email_reminders:    true,
   });
   const [educationLevel, setEducationLevel] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
   const [cvCount, setCvCount]         = useState<number | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving]           = useState(false);
@@ -123,7 +190,7 @@ export default function ProfilePage() {
 
     supabase
       .from('profiles')
-      .select('display_name, nationality, date_of_birth, education_level, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
+      .select('display_name, nationality, date_of_birth, education_level, mun_experience_level, welcome_token_seen, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -132,6 +199,8 @@ export default function ProfilePage() {
           setNationality(data.nationality ?? '');
           setDateOfBirth(data.date_of_birth ?? '');
           setEducationLevel(data.education_level ?? null);
+          // First profile visit after signup → the one-time welcome-token pop-up.
+          if ((data as { welcome_token_seen?: boolean }).welcome_token_seen === false) setShowWelcome(true);
           setNotifications({
             notify_email_marketing:    data.notify_email_marketing    ?? true,
             notify_email_applications: data.notify_email_applications ?? true,
@@ -417,7 +486,17 @@ export default function ProfilePage() {
     return a !== null && a >= 0 && a <= 120 ? a : null;
   })();
 
+  function dismissWelcome() {
+    setShowWelcome(false);
+    if (user && session) {
+      getAuthedClient(session.access_token)
+        .from('profiles').update({ welcome_token_seen: true }).eq('id', user.id).then(() => {});
+    }
+  }
+
   return (
+    <>
+    {showWelcome && <WelcomeTokenModal onClose={dismissWelcome} />}
     <div
       className="relative rounded-[24px] p-5 md:p-7"
       style={{
@@ -1196,5 +1275,6 @@ export default function ProfilePage() {
         />
       )}
     </div>
+    </>
   );
 }
