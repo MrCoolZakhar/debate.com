@@ -57,7 +57,7 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
   return (
     <div
       onClick={() => { if (swapMode && swapSelectable) onToggleSwap(); }}
-      className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors"
+      className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors"
       style={{
         backgroundColor: swapSelected ? 'rgba(61,122,82,0.08)' : '#FAF8F3',
         border: `1.5px solid ${swapSelected ? '#1B3828' : '#DDD4C0'}`,
@@ -66,17 +66,17 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
       }}
       title={swapMode && !swapSelectable ? 'No allocation yet, not swappable' : undefined}
     >
+      {covered && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src="/gavel-mark.png"
+          alt=""
+          title="Gavelling Credit Covered"
+          style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, objectFit: 'contain' }}
+        />
+      )}
       <div className="relative flex-shrink-0">
         <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} size={28} />
-        {covered && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src="/gavel-mark.png"
-            alt=""
-            title="Covered by delegation credits"
-            style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, objectFit: 'contain' }}
-          />
-        )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
