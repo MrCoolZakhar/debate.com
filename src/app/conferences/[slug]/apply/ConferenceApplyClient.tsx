@@ -1872,6 +1872,10 @@ function ConferenceApplyInner() {
     if (!rc || isEditMode) return null;
     const { amount: resolvedFee, phase: currentPhase } = activePhaseFee(rc);
     if (!(resolvedFee > 0)) return null;
+    // The voucher is only useful when the fee is paid AT application. When the
+    // conference doesn't require payment to submit (pay after acceptance), the
+    // voucher is applied later on /pay — so hide it here, it's useless.
+    const showVoucher = rc.pay_at_application === true;
     const breakdown = computeCheckout({
       feeAmount: resolvedFee,
       feeCurrency: rc.fee_currency,
@@ -1900,8 +1904,9 @@ function ConferenceApplyInner() {
           <span style={amountStyle}>{formatFee(breakdown.baseFee, breakdown.currency)}</span>
         </div>
 
-        {/* Voucher, single field + APPLY chip, or the applied green line */}
-        {appliedVoucher ? (
+        {/* Voucher, single field + APPLY chip, or the applied green line.
+            Hidden when payment isn't taken at application (pay-after-acceptance). */}
+        {showVoucher && (appliedVoucher ? (
           <div style={{ ...summaryRow, marginBottom: 10 }}>
             <span className="inline-flex items-center gap-1.5" style={{ color: NEU.green, fontWeight: 600 }}>
               <Ticket size={14} strokeWidth={2.2} />
@@ -1950,8 +1955,8 @@ function ConferenceApplyInner() {
               {voucherChecking ? 'CHECKING…' : 'APPLY'}
             </button>
           </div>
-        )}
-        {voucherError && !appliedVoucher && (
+        ))}
+        {showVoucher && voucherError && !appliedVoucher && (
           <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, marginBottom: 10 }}>
             {voucherError}
           </p>
