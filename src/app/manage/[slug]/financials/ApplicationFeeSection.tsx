@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * Conference Application Fee — editor for the ONE application_surcharges row
+ * Conference Registration Fee — editor for the ONE application_surcharges row
  * per conference (kind='app_fee' on the invoices it seeds via
- * sync_participant_invoices). Always payable pre-acceptance and gates
- * acceptance until paid (see PART 7, applications/page.tsx). Creates the row
- * on first save if none exists yet; every later save updates it in place.
+ * sync_participant_invoices). Always payable pre-acceptance; gates_acceptance
+ * (default off) controls whether it blocks acceptance until paid (see PART 7,
+ * applications/page.tsx). Creates the row on first save if none exists yet;
+ * every later save updates it in place.
  */
 
 import { useState, useEffect } from 'react';
@@ -30,6 +31,7 @@ interface SurchargeRow {
   currency: string;
   applies_to: 'per_delegation' | 'per_delegate';
   active: boolean;
+  gates_acceptance: boolean;
 }
 
 export default function ApplicationFeeSection({ conference }: { conference: Conference }) {
@@ -40,12 +42,13 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
-  const [label, setLabel] = useState('Conference Application Fee');
-  const [description, setDescription] = useState('A charge paid before acceptance, extra to conference fees.');
+  const [label, setLabel] = useState('Conference Registration Fee');
+  const [description, setDescription] = useState('A registration charge, collected in addition to any conference fees.');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState(conference.fee_currency ?? 'USD');
   const [appliesTo, setAppliesTo] = useState<'per_delegation' | 'per_delegate'>('per_delegation');
   const [active, setActive] = useState(true);
+  const [gatesAcceptance, setGatesAcceptance] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -53,7 +56,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
     (async () => {
       const { data } = await supabase
         .from('application_surcharges')
-        .select('id, label, description, amount_cents, currency, applies_to, active')
+        .select('id, label, description, amount_cents, currency, applies_to, active, gates_acceptance')
         .eq('conference_id', conference.id)
         .maybeSingle();
       const row = data as SurchargeRow | null;
@@ -65,6 +68,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
         setCurrency(row.currency);
         setAppliesTo(row.applies_to);
         setActive(row.active);
+        setGatesAcceptance(row.gates_acceptance);
       }
       setLoading(false);
     })();
@@ -86,6 +90,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
       currency: currency.toUpperCase(),
       applies_to: appliesTo,
       active,
+      gates_acceptance: gatesAcceptance,
     };
     const { data, error: writeError } = existing
       ? await supabase.from('application_surcharges').update(payload).eq('id', existing.id).select('id').single()
@@ -106,10 +111,10 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
         <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={ShieldAlert} emoji="Locked" size={36} />
         <div>
           <h2 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 18, color: NEU.ink, lineHeight: 1.15 }}>
-            Conference Application Fee
+            Conference Registration Fee
           </h2>
           <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
-            An optional charge collected before acceptance — applicants must pay it before you can accept them.
+            A registration charge collected alongside conference fees — set whether it must be paid before you can accept an applicant.
           </p>
         </div>
       </div>
@@ -130,7 +135,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
                 type="text"
                 value={label}
                 onChange={e => setLabel(e.target.value)}
-                placeholder="Conference Application Fee"
+                placeholder="Conference Registration Fee"
                 style={inputStyle}
               />
             </div>
@@ -184,11 +189,24 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
               </div>
             </div>
 
+            <div>
+              <span style={fieldLabelStyle}>Acceptance gating</span>
+              <div className="flex items-center gap-3" style={{ paddingTop: 3 }}>
+                <PillToggle value={gatesAcceptance} onChange={setGatesAcceptance} size="sm" />
+                <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>
+                  {gatesAcceptance ? 'Must be paid before acceptance' : "Collected as a normal invoice (doesn't block acceptance)"}
+                </span>
+              </div>
+              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 4 }}>
+                When on, applicants can&apos;t be accepted until this fee is paid.
+              </p>
+            </div>
+
             <div className="sm:col-span-2 flex items-center justify-between gap-3 flex-wrap pt-1">
               <div className="flex items-center gap-3">
                 <PillToggle value={active} onChange={setActive} size="sm" />
                 <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>
-                  {active ? 'Active — collected on new applications' : 'Inactive — no fee charged'}
+                  {active ? 'Active — charged on applications' : 'Inactive — no fee charged'}
                 </span>
               </div>
               <NeuButton onClick={handleSave} disabled={saving} gradient={saved ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest}>
