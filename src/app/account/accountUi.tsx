@@ -645,22 +645,26 @@ export function AwardArtwork({ name, size = 20 }: { name: string; size?: number 
   );
 }
 
-/** Award chip, tier-themed (gold / silver / bronze) with artwork thumbnail. */
+/** Award chip, tier-themed (gold / silver / bronze) with artwork thumbnail.
+ *  A slightly raised medallion: larger artwork, bolder/bigger label, a soft
+ *  tier-tinted gradient and drop shadow so an award reads as an honour. */
 export function AwardChip({ name }: { name: string }) {
   const tier = AWARD_TIER_STYLE[awardTier(name)];
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-2.5 py-[3px]"
+      className="inline-flex items-center gap-2 rounded-full pl-1 pr-3.5 py-1"
       style={{
-        backgroundColor: tier.bg,
+        background: `linear-gradient(145deg, ${tier.bg}, ${tier.from})`,
         border: `1px solid ${tier.border}`,
         color: tier.text,
         fontFamily: OUTFIT,
-        fontSize: '11px',
-        fontWeight: 600,
+        fontSize: '13px',
+        fontWeight: 800,
+        letterSpacing: '-0.005em',
+        boxShadow: `0 2px 7px rgba(27,56,40,0.12), inset 0 1px 0 rgba(255,255,255,0.5)`,
       }}
     >
-      <AwardArtwork name={name} size={18} />
+      <AwardArtwork name={name} size={24} />
       {name}
     </span>
   );

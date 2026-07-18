@@ -534,6 +534,7 @@ export function CVEntryModal({
   const [conferenceId, setConferenceId]     = useState<string | null>(existing?.conference_id ?? null);
   const [submitting, setSubmitting]         = useState(false);
   const [uploading, setUploading]           = useState(false);
+  const [uploadingLogo, setUploadingLogo]   = useState(false);
   const [error, setError]                   = useState('');
 
   const activeType     = ENTRY_TYPE_MAP[entryType] ?? ENTRY_TYPE_MAP.delegate;
@@ -548,6 +549,7 @@ export function CVEntryModal({
   const [suggestOpen, setSuggestOpen]       = useState(false);
   const suppressSuggest = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
   const suggestAnchorRef = useRef<HTMLDivElement>(null);
   const suggestMenuOpen = suggestOpen && suggestions.length > 0;
   const suggestPos = useAnchoredDropdown(suggestMenuOpen, suggestAnchorRef, 320);
@@ -725,6 +727,31 @@ export function CVEntryModal({
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
+  // Upload a custom conference logo for this entry (independent of the
+  // name-match auto-import). Lets a delegate add or change the logo directly.
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !session) return;
+    if (!file.type.startsWith('image/')) { setError('Logo must be an image.'); return; }
+    if (file.size > MAX_PHOTO_BYTES) { setError('Logo must be under 5 MB.'); return; }
+    setUploadingLogo(true);
+    setError('');
+    const supabase = getAuthedClient(session.access_token);
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const path = `cv-logos/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from('conference-assets')
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (upErr) {
+      setError('The logo could not be uploaded. Please try again.');
+    } else {
+      const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
+      if (data?.publicUrl) setLogoUrl(data.publicUrl);
+    }
+    setUploadingLogo(false);
+    if (logoInputRef.current) logoInputRef.current.value = '';
+  }
+
   function removePhoto(url: string) {
     setPhotos((prev) => prev.filter((p) => p !== url));
     if (!session) return;
@@ -899,8 +926,34 @@ export function CVEntryModal({
               Conference Name
             </label>
             <div ref={suggestAnchorRef} className="flex items-center gap-2.5">
-              {logoUrl && (
-                <LogoDisc src={logoUrl} size={34} fallbackText={monogramFor(conferenceName)} />
+              {isVerified ? (
+                logoUrl && <LogoDisc src={logoUrl} size={40} fallbackText={monogramFor(conferenceName)} />
+              ) : (
+                <>
+                  <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    title={logoUrl ? 'Change logo' : 'Add a logo'}
+                    aria-label={logoUrl ? 'Change conference logo' : 'Add a conference logo'}
+                    className="relative flex-shrink-0 rounded-full focus:outline-none"
+                    style={{ width: 40, height: 40, padding: 0, border: 'none', background: 'none', cursor: uploadingLogo ? 'wait' : 'pointer', lineHeight: 0 }}
+                  >
+                    <LogoDisc src={logoUrl} size={40} fallbackText={monogramFor(conferenceName)} />
+                    <span
+                      className="absolute flex items-center justify-center rounded-full"
+                      style={{
+                        right: -3, bottom: -3, width: 19, height: 19,
+                        background: 'radial-gradient(120% 120% at 30% 25%, #2A5A3C 0%, #1B3828 70%)',
+                        color: '#EED98A', border: '1.5px solid #FAF8F3', boxShadow: '0 2px 6px rgba(27,56,40,0.3)',
+                      }}
+                    >
+                      {uploadingLogo
+                        ? <span className="rounded-full animate-spin" style={{ width: 9, height: 9, border: '1.5px solid #EED98A', borderTopColor: 'transparent' }} />
+                        : <ImagePlus size={11} strokeWidth={2.4} />}
+                    </span>
+                  </button>
+                </>
               )}
               <input
                 type="text"
