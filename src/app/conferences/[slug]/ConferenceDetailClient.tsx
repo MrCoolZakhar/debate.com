@@ -659,6 +659,13 @@ export default function ConferenceDetailClient() {
     setCommittees((committeesRes.data as Committee[]) ?? []);
     setRoleConfigs((roleConfigsRes.data as RoleConfig[]) ?? []);
 
+    // Paint NOW. The hero, stat strip, committees and apply CTA only need the
+    // conference + committees + role configs above. Everything below (partner
+    // conferences, reviews, previous edition, live occupancy, and the viewer's
+    // own applications) streams in afterward via its own state — no reason to
+    // hold a full-page spinner on ~6 more sequential round-trips.
+    setLoading(false);
+
     // Partner conferences, anon reads; RLS only exposes approved links on
     // public conferences, and private partners drop out of the details select.
     const { data: partnerLinks } = await supabase
@@ -802,8 +809,7 @@ export default function ConferenceDetailClient() {
       setMyApplications([]);
       setMyAllocation(null);
     }
-
-    setLoading(false);
+    // loading was already cleared right after the essentials loaded above.
   }
 
   async function refreshReviews(conferenceId: string) {

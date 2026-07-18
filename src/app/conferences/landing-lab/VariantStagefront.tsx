@@ -834,7 +834,7 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-          onFocus={() => setFocused(true)}
+          onFocus={() => { setFocused(true); router.prefetch('/conferences/explore'); }}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
           placeholder="Search by conference name or city…"
           aria-label="Search conferences by name or city"
@@ -894,10 +894,12 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
             <Link
               key={c.id}
               href={`/conferences/${c.slug}`}
+              prefetch
               onMouseDown={(e) => e.preventDefault()}
               className="flex items-center gap-3 px-4 py-2.5"
               style={{ textDecoration: 'none' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; router.prefetch(`/conferences/${c.slug}`); }}
+              onFocus={() => router.prefetch(`/conferences/${c.slug}`)}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
             >
               <span
