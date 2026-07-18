@@ -2831,6 +2831,7 @@ function CommunicationsPageInner() {
           previewCandidates={previewCandidates}
           accessToken={session?.access_token ?? null}
           organizerEmail={profile?.email ?? null}
+          testSendContext={testSendContext}
           onClose={() => setPreviewDefaultKey(null)}
         />
       )}

@@ -29,11 +29,12 @@ export interface DefaultEmailPreviewModalProps {
   previewCandidates: PreviewCandidate[];
   accessToken: string | null;
   organizerEmail: string | null;
+  testSendContext: EmailTokenContext;
   onClose: () => void;
 }
 
 export default function DefaultEmailPreviewModal({
-  eventKey, eventLabel, conference, conferenceId, previewCandidates, accessToken, organizerEmail, onClose,
+  eventKey, eventLabel, conference, conferenceId, previewCandidates, accessToken, organizerEmail, testSendContext, onClose,
 }: DefaultEmailPreviewModalProps) {
   const [search, setSearch] = useState('');
   const [candidateId, setCandidateId] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export default function DefaultEmailPreviewModal({
     return previewCandidates.filter(c => c.label.toLowerCase().includes(q)).slice(0, 6);
   }, [previewCandidates, search]);
   const candidate = candidateId ? previewCandidates.find(c => c.id === candidateId) ?? null : null;
-  const ctx: EmailTokenContext = candidate?.ctx ?? {};
+  const ctx: EmailTokenContext = candidate?.ctx ?? testSendContext;
 
   const html = useMemo(
     () => (def ? renderEmailHtml({ blocks: def.blocks, conference, ctx }) : ''),
