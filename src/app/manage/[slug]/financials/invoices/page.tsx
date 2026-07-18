@@ -45,7 +45,7 @@ const first = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v)
  *  row's primary label already shows the specific add-on name via
  *  invoiceLabel(). The kind FILTER dropdown is built separately, per-addon. */
 const KIND_LABEL: Record<string, string> = {
-  role_fee: 'Registration', app_fee: 'Application Fee', addon: 'Add-on', pledge_spot: 'Delegation Spot',
+  role_fee: 'Registration', app_fee: 'Registration Fee', addon: 'Add-on', pledge_spot: 'Delegation Spot',
 };
 
 const INDEPENDENT_DELEGATION = '__independent__';
@@ -153,7 +153,7 @@ export default function FinancialsInvoicesPage() {
   ).map(([configId, label]) => ({ value: `addon:${configId}`, label }));
   const kindOptions = [
     { value: 'role_fee', label: 'Registration' },
-    { value: 'app_fee', label: 'Application Fee' },
+    { value: 'app_fee', label: 'Registration Fee' },
     ...addonKindOptions,
     { value: 'pledge_spot', label: 'Delegation Spot' },
   ];

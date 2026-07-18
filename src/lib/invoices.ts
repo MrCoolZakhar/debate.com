@@ -31,7 +31,7 @@ export interface InvoiceRow {
 const KIND_FALLBACK_LABEL: Record<string, string> = {
   role_fee: 'Registration',
   pledge_spot: 'Delegation spot',
-  app_fee: 'Conference Application Fee',
+  app_fee: 'Conference Registration Fee',
   addon: 'Add-on',
 };
 
