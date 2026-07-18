@@ -130,6 +130,7 @@ export function WizardShell({
                 color: NEU.muted,
                 marginTop: 8,
                 lineHeight: 1.55,
+                whiteSpace: 'pre-wrap',
               }}
             >
               {sub}

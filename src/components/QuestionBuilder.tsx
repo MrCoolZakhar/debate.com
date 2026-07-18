@@ -430,7 +430,7 @@ function BlockCard({ block, locked, onEdit, onDuplicate, onDelete }: {
                 {block.title || (block.kind === 'section' ? 'Untitled section' : 'Untitled title')}
               </p>
               {block.description && (
-                <p className="text-xs mb-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-xs mb-1.5 whitespace-pre-wrap" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                   {block.description}
                 </p>
               )}

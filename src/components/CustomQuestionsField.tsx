@@ -44,7 +44,7 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                 {block.title}
               </p>
               {block.description && (
-                <p className="text-sm mt-1" style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-sm mt-1 whitespace-pre-wrap" style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif" }}>
                   {block.description}
                 </p>
               )}
@@ -58,7 +58,7 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                 {block.title}
               </p>
               {block.description && (
-                <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                <p className="text-xs mt-1 whitespace-pre-wrap" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                   {block.description}
                 </p>
               )}
@@ -70,12 +70,12 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
         const value = answers[q.id];
         return (
           <div key={q.id}>
-            <label className="block font-semibold text-sm mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <label className="block font-semibold text-sm mb-1 whitespace-pre-wrap" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               {q.label}
               {q.required && <span className="ml-1" style={{ color: '#8B2020' }}>*</span>}
             </label>
             {q.help && (
-              <p className="text-xs mb-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{q.help}</p>
+              <p className="text-xs mb-1.5 whitespace-pre-wrap" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{q.help}</p>
             )}
 
             {q.type === 'short_text' && (
