@@ -916,6 +916,7 @@ export default function SettingsPage() {
 
   function handleRemoveOrganizer(organizerId: string) {
     if (!session) return;
+    if (!isOwner) return;
     const idx = organizers.findIndex(o => o.id === organizerId);
     if (idx === -1) return;
     const removed = organizers[idx];
@@ -2727,7 +2728,7 @@ export default function SettingsPage() {
                     </Pill>
                   </span>
 
-                  {!orgIsOwner && (
+                  {isOwner && !orgIsOwner && (
                     <button
                       onClick={() => handleRemoveOrganizer(org.id)}
                       className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
