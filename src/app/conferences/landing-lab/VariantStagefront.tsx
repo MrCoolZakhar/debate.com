@@ -175,15 +175,20 @@ export default function VariantStagefront({
     return () => { cancelled = true; };
   }, [authLoading, user, session]);
 
-  // The three soonest upcoming conferences take the hero's "up next" rail.
-  const upcomingTrio = useMemo(
-    () =>
-      conferences
-        .filter(c => !isConcluded(c))
-        .sort((a, b) => a.start_date.localeCompare(b.start_date))
-        .slice(0, 3),
-    [conferences],
-  );
+  // The hero's "up next" rail shows the three BIGGEST upcoming conferences
+  // (by expected delegate count), with Harvard WorldMUN always pinned to the
+  // top slot when it is live.
+  const upcomingTrio = useMemo(() => {
+    const active = conferences.filter(c => !isConcluded(c));
+    const isWorldMun = (c: LabConference) =>
+      (c.acronym ?? '').toUpperCase() === 'WORLDMUN' || /worldmun/i.test(c.full_name);
+    const worldMun = active.find(isWorldMun);
+    const rest = active
+      .filter(c => !(worldMun && c.id === worldMun.id))
+      .sort((a, b) => (b.expected_delegates || 0) - (a.expected_delegates || 0));
+    const ordered = worldMun ? [worldMun, ...rest] : rest;
+    return ordered.slice(0, 3);
+  }, [conferences]);
 
   // ── Geolocation ────────────────────────────────────────────────────────────
   // Fetch /api/geo (Vercel edge headers). If it yields nothing (local dev, or a
@@ -385,7 +390,7 @@ export default function VariantStagefront({
               </p>
 
               <div className="flex flex-col gap-3" style={{ marginTop: '32px', maxWidth: 'clamp(460px, 40vw, 640px)' }}>
-                <HeroSearchBar />
+                <HeroSearchBar conferences={conferences} />
                 <div className="flex justify-end">
                   <HeroTextLink href="/conferences/new" label="Organising one? List it free" />
                 </div>
@@ -779,79 +784,153 @@ export default function VariantStagefront({
 // way the Explore directory does — on submit it navigates to /conferences/explore
 // with the query as `?search=`, which the Explore client reads to pre-fill and
 // filter (name · acronym · city · country). Empty query just opens Explore.
-function HeroSearchBar() {
+function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
 
+  const q = query.trim();
+  // Live typeahead: match conference name, acronym, city or country.
+  const matches = useMemo(() => {
+    if (!q) return [];
+    const n = q.toLowerCase();
+    return conferences
+      .filter(c =>
+        c.full_name.toLowerCase().includes(n) ||
+        (c.acronym ?? '').toLowerCase().includes(n) ||
+        (c.city ?? '').toLowerCase().includes(n) ||
+        (c.country ?? '').toLowerCase().includes(n),
+      )
+      .slice(0, 6);
+  }, [q, conferences]);
+
+  const open = focused && q.length > 0;
+
+  // Empty → "Discover all" (browse everything); typed → search that query.
   const submit = () => {
-    const q = query.trim();
     router.push(q ? `/conferences/explore?search=${encodeURIComponent(q)}` : '/conferences/explore');
   };
 
   return (
-    <div
-      className="flex items-center gap-2"
-      style={{
-        backgroundColor: focused ? 'rgba(237,231,216,0.20)' : 'rgba(237,231,216,0.13)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
-        border: `1px solid ${focused ? 'rgba(238,217,138,0.60)' : 'rgba(237,231,216,0.30)'}`,
-        borderRadius: '9999px',
-        padding: '7px 8px 7px clamp(16px, 1.4vw, 22px)',
-        boxShadow: focused
-          ? '0 18px 44px rgba(0,0,0,0.42), 0 0 0 3px rgba(238,217,138,0.16)'
-          : '0 14px 36px rgba(0,0,0,0.34)',
-        transition: 'border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease',
-      }}
-    >
-      <Search size={20} strokeWidth={2.25} style={{ color: 'rgba(237,231,216,0.72)', flexShrink: 0 }} aria-hidden="true" />
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder="Search by conference name or city…"
-        aria-label="Search conferences by name or city"
-        className="sf-hero-search-input"
+    <div className="relative">
+      <div
+        className="flex items-center gap-2"
         style={{
-          flex: 1,
-          minWidth: 0,
-          background: 'transparent',
-          border: 'none',
-          outline: 'none',
-          fontFamily: SANS,
-          fontSize: 'clamp(15px, 1.05vw, 17px)',
-          fontWeight: 500,
-          color: CREAM,
-        }}
-      />
-      <button
-        type="button"
-        onClick={submit}
-        aria-label="Search conferences"
-        className="inline-flex items-center justify-center gap-2 flex-shrink-0"
-        style={{
-          fontFamily: SANS,
-          fontSize: 'clamp(14px, 1vw, 16px)',
-          fontWeight: 800,
-          letterSpacing: '0.03em',
-          color: '#14100B',
-          backgroundColor: PALE_GOLD,
-          border: 'none',
-          cursor: 'pointer',
+          backgroundColor: focused ? 'rgba(237,231,216,0.20)' : 'rgba(237,231,216,0.13)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          border: `1px solid ${focused ? 'rgba(238,217,138,0.60)' : 'rgba(237,231,216,0.30)'}`,
           borderRadius: '9999px',
-          padding: 'clamp(11px, 0.9vw, 14px) clamp(18px, 1.5vw, 26px)',
-          transition: 'transform 160ms ease, background-color 160ms ease',
+          padding: '7px 8px 7px clamp(16px, 1.4vw, 22px)',
+          boxShadow: focused
+            ? '0 18px 44px rgba(0,0,0,0.42), 0 0 0 3px rgba(238,217,138,0.16)'
+            : '0 14px 36px rgba(0,0,0,0.34)',
+          transition: 'border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
       >
-        <Search size={16} strokeWidth={2.75} className="sm:hidden" aria-hidden="true" />
-        <span className="hidden sm:inline">Search</span>
-      </button>
+        <Search size={20} strokeWidth={2.25} style={{ color: 'rgba(237,231,216,0.72)', flexShrink: 0 }} aria-hidden="true" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          placeholder="Search by conference name or city…"
+          aria-label="Search conferences by name or city"
+          className="sf-hero-search-input"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontFamily: SANS,
+            fontSize: 'clamp(15px, 1.05vw, 17px)',
+            fontWeight: 500,
+            color: CREAM,
+          }}
+        />
+        <button
+          type="button"
+          onClick={submit}
+          aria-label={q ? 'Search conferences' : 'Discover all conferences'}
+          className="inline-flex items-center justify-center gap-2 flex-shrink-0"
+          style={{
+            fontFamily: SANS,
+            fontSize: 'clamp(14px, 1vw, 16px)',
+            fontWeight: 800,
+            letterSpacing: '0.03em',
+            color: '#14100B',
+            backgroundColor: PALE_GOLD,
+            border: 'none',
+            cursor: 'pointer',
+            borderRadius: '9999px',
+            padding: 'clamp(11px, 0.9vw, 14px) clamp(18px, 1.5vw, 26px)',
+            whiteSpace: 'nowrap',
+            transition: 'transform 160ms ease, background-color 160ms ease',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.backgroundColor = '#F3E3A1'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.backgroundColor = PALE_GOLD; }}
+        >
+          <Search size={16} strokeWidth={2.75} className="sm:hidden" aria-hidden="true" />
+          <span className="hidden sm:inline">{q ? 'Search' : 'Discover all'}</span>
+        </button>
+      </div>
+
+      {/* Typeahead dropdown — light card floating below the field */}
+      {open && (
+        <div
+          className="absolute left-0 right-0 z-50 overflow-hidden"
+          style={{
+            top: 'calc(100% + 8px)',
+            backgroundColor: 'rgba(250,248,243,0.98)',
+            border: '1px solid rgba(221,212,192,0.9)',
+            borderRadius: 18,
+            boxShadow: '0 22px 54px rgba(0,0,0,0.42)',
+          }}
+        >
+          {matches.length > 0 ? matches.map((c) => (
+            <Link
+              key={c.id}
+              href={`/conferences/${c.slug}`}
+              onMouseDown={(e) => e.preventDefault()}
+              className="flex items-center gap-3 px-4 py-2.5"
+              style={{ textDecoration: 'none' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <span
+                className="flex items-center justify-center flex-shrink-0 overflow-hidden"
+                style={{ width: 34, height: 34, borderRadius: 9999, backgroundColor: c.logo_url ? '#FFFFFF' : FOREST, border: '1px solid rgba(0,0,0,0.08)' }}
+              >
+                {c.logo_url
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  ? <img src={c.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 3 }} />
+                  : <span style={{ color: GOLD, fontFamily: SANS, fontWeight: 800, fontSize: 11 }}>{(c.acronym || c.full_name).slice(0, 3).toUpperCase()}</span>}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate" style={{ fontFamily: SANS, fontWeight: 700, fontSize: 14.5, color: INK }}>
+                  {c.acronym || c.full_name}
+                </span>
+                <span className="block truncate" style={{ fontFamily: SANS, fontWeight: 500, fontSize: 12.5, color: INK_55 }}>
+                  {[c.city, c.country].filter(Boolean).join(', ')}
+                </span>
+              </span>
+              <ArrowRight size={15} strokeWidth={2.2} style={{ color: INK_55, flexShrink: 0 }} aria-hidden="true" />
+            </Link>
+          )) : (
+            <Link
+              href={`/conferences/explore?search=${encodeURIComponent(q)}`}
+              onMouseDown={(e) => e.preventDefault()}
+              className="block px-4 py-3.5"
+              style={{ fontFamily: SANS, fontSize: 13.5, color: INK_55, textDecoration: 'none' }}
+            >
+              No conferences match &ldquo;{q}&rdquo; — <span style={{ color: FOREST, fontWeight: 700 }}>browse all &rarr;</span>
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }
