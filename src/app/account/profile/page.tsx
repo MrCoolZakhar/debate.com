@@ -19,6 +19,8 @@ interface ReviewableConference {
   slug: string;
   acronym: string;
   full_name: string;
+  end_date: string | null;
+  start_date: string | null;
 }
 
 const NOTIFICATION_ROWS = [
@@ -132,6 +134,10 @@ export default function ProfilePage() {
   });
   const [educationLevel, setEducationLevel] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  // The welcome pop-up is auto-shown at most once per mount. Without this guard
+  // a token refresh re-runs the profile fetch, and a late resolve re-opens the
+  // modal after it was dismissed — forcing a second click to close it.
+  const welcomeHandledRef = useRef(false);
   const [cvCount, setCvCount]         = useState<number | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving]           = useState(false);
@@ -200,7 +206,10 @@ export default function ProfilePage() {
           setDateOfBirth(data.date_of_birth ?? '');
           setEducationLevel(data.education_level ?? null);
           // First profile visit after signup → the one-time welcome-token pop-up.
-          if ((data as { welcome_token_seen?: boolean }).welcome_token_seen === false) setShowWelcome(true);
+          if ((data as { welcome_token_seen?: boolean }).welcome_token_seen === false && !welcomeHandledRef.current) {
+            welcomeHandledRef.current = true;
+            setShowWelcome(true);
+          }
           setNotifications({
             notify_email_marketing:    data.notify_email_marketing    ?? true,
             notify_email_applications: data.notify_email_applications ?? true,
@@ -260,15 +269,24 @@ export default function ProfilePage() {
     // Attended = application with status assigned or checked-in
     const { data: apps } = await supabase
       .from('applications')
-      .select('conference_id, status, conferences ( id, slug, acronym, full_name )')
+      .select('conference_id, status, conferences ( id, slug, acronym, full_name, end_date, start_date )')
       .eq('user_id', user.id)
       .in('status', ['assigned', 'checked-in']);
+    // Only prompt for conferences that have actually taken place. A conference
+    // has concluded once its end_date (or start_date, if it has no end) is in
+    // the past — never before the event.
+    const today = new Date().toISOString().slice(0, 10);
+    const hasConcluded = (c: ReviewableConference) => {
+      const done = c.end_date ?? c.start_date;
+      return !!done && done < today;
+    };
     const attendedConfs: ReviewableConference[] = [];
     const seen = new Set<string>();
     for (const row of ((apps ?? []) as unknown as { conference_id: string; conferences: ReviewableConference | ReviewableConference[] | null }[])) {
       const conf = Array.isArray(row.conferences) ? row.conferences[0] : row.conferences;
       if (!conf || seen.has(conf.id)) continue;
       seen.add(conf.id);
+      if (!hasConcluded(conf)) continue;
       attendedConfs.push(conf);
     }
     if (attendedConfs.length === 0) { setReviewable([]); return; }
@@ -487,6 +505,7 @@ export default function ProfilePage() {
   })();
 
   function dismissWelcome() {
+    welcomeHandledRef.current = true;
     setShowWelcome(false);
     if (user && session) {
       getAuthedClient(session.access_token)
