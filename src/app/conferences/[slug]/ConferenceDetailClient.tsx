@@ -498,10 +498,9 @@ export default function ConferenceDetailClient() {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentReturn, authLoading, loading, user, session, conference]);
-  // Committee roster / occupancy / chair-recruitment (public reads)
+  // Committee roster / occupancy (public reads)
   const [committeeSlots, setCommitteeSlots] = useState<Record<string, CommitteeSlot[]>>({});
   const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, string[]>>({});
-  const [chairJobs, setChairJobs] = useState<Record<string, string>>({});
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
   // Committee carousel + sorting (click: asc -> desc -> reset)
@@ -727,22 +726,16 @@ export default function ConferenceDetailClient() {
       setReviewPromptDismissed(false);
     }
 
-    // Public committee extras: full rosters, live occupancy, open chair postings
+    // Public committee extras: full rosters, live occupancy
     const ccIds = ((committeesRes.data as Committee[]) ?? []).map(c => c.id);
     if (ccIds.length > 0) {
-      const [slotsRes, occRes, jobsRes] = await Promise.all([
+      const [slotsRes, occRes] = await Promise.all([
         supabase
           .from('committee_country_slots')
           .select('conference_committee_id, country_code, country_name')
           .in('conference_committee_id', ccIds)
           .order('country_name', { ascending: true }),
         supabase.rpc('get_committee_occupancy', { p_committee_ids: ccIds }),
-        supabase
-          .from('job_postings')
-          .select('id, committee_id')
-          .eq('conference_id', conf.id)
-          .eq('category', 'chairs')
-          .eq('is_open', true),
       ]);
       const slotsMap: Record<string, CommitteeSlot[]> = {};
       for (const row of ((slotsRes.data ?? []) as (CommitteeSlot & { conference_committee_id: string })[])) {
@@ -752,13 +745,8 @@ export default function ConferenceDetailClient() {
       for (const row of ((occRes.data ?? []) as { conference_committee_id: string; country_code: string }[])) {
         (occMap[row.conference_committee_id] ??= []).push(row.country_code);
       }
-      const jobsMap: Record<string, string> = {};
-      for (const row of ((jobsRes.data ?? []) as { id: string; committee_id: string | null }[])) {
-        if (row.committee_id) jobsMap[row.committee_id] = row.id;
-      }
       setCommitteeSlots(slotsMap);
       setCommitteeOccupied(occMap);
-      setChairJobs(jobsMap);
     }
 
     if (user && session) {
@@ -2294,7 +2282,6 @@ export default function ConferenceDetailClient() {
                             const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
                             const chairs = c.display_chairs ?? [];
                             const { capacity, taken, pct } = committeeStats(c);
-                            const chairSeatOpen = chairs.length < 2 || !!chairJobs[c.id];
 
                             return (
                               <article
@@ -2398,8 +2385,9 @@ export default function ConferenceDetailClient() {
                                     </div>
                                   )}
 
-                                  {/* Dais + capacity, pinned to the card bottom */}
+                                  {/* Dais, pinned to the card bottom — shown only when chairs are assigned */}
                                   <div className="w-full mt-auto">
+                                  {chairs.length > 0 && (
                                   <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                                     <div className="flex items-start justify-center gap-6">
                                       {chairs.map(ch => (
@@ -2431,32 +2419,9 @@ export default function ConferenceDetailClient() {
                                           </span>
                                         </div>
                                       ))}
-                                      {chairSeatOpen && (
-                                        <Link
-                                          href="/conferences/roles"
-                                          className="flex flex-col items-center text-center group"
-                                          style={{ width: '96px', textDecoration: 'none' }}
-                                        >
-                                          <span
-                                            className="flex items-center justify-center transition-all"
-                                            style={{
-                                              width: '52px', height: '52px', borderRadius: '9999px',
-                                              border: '1.5px dashed rgba(27,56,40,0.4)',
-                                              color: '#1B3828',
-                                              backgroundColor: 'rgba(27,56,40,0.04)',
-                                            }}
-                                            onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
-                                            onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
-                                          >
-                                            <Plus size={20} strokeWidth={2.2} />
-                                          </span>
-                                          <span className="text-[10px] font-bold mt-2" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
-                                            APPLY NOW
-                                          </span>
-                                        </Link>
-                                      )}
                                     </div>
                                   </div>
+                                  )}
 
                                   {/* Capacity */}
                                   <div className="w-full mt-4">
