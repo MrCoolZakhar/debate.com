@@ -450,7 +450,7 @@ function GenericInvoiceCard({
         <div className="flex-1 min-w-0">
           <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14, color: NEU.ink, margin: 0 }}>{label}</p>
           <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0' }}>
-            Available once you&apos;re accepted
+            Payment becomes available once your application is accepted.
           </p>
         </div>
         <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
