@@ -1200,12 +1200,13 @@ export default function ConferenceDetailClient() {
         {/* ── Neu stat strip, three soft tiles overlapping the hero ──── */}
         <div className="relative z-20 px-6 md:px-14" style={{ marginTop: '-44px' }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {/* Dates + location live in the hero overlay (flag, city, date
                   range), only facts NOT already shown above appear here.
-                  Each fact is its own extruded neu tile: a bigger gradient
-                  icon disc + stacked label/value, tight paddings so the row
-                  reads compact and intentional (values wrap, never truncate). */}
+                  Each fact is its own extruded neu tile. On phones the tiles
+                  shrink to compact icon+value bubbles (label hidden, stacked)
+                  so the three markers fit one tight row instead of three tall
+                  stacked cards; on ≥sm they open into the full label/value row. */}
               {[
                 { icon: Monitor, gradient: NEU_GRADIENTS.forest, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
                 { icon: GraduationCap, gradient: NEU_GRADIENTS.amber, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
@@ -1213,18 +1214,23 @@ export default function ConferenceDetailClient() {
               ].map((cell) => (
                 <div
                   key={cell.label}
-                  className="flex items-center gap-3.5"
+                  className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-3.5 text-center sm:text-left px-1.5 py-2.5 sm:px-4 sm:py-3.5"
                   style={{
                     backgroundColor: NEU.surface,
                     borderRadius: 18,
                     boxShadow: NEU.outSm,
-                    padding: '14px 16px',
                     minWidth: 0,
                   }}
                 >
-                  <NeuIconDisc gradient={cell.gradient} icon={cell.icon} size={46} />
+                  <span className="sm:hidden">
+                    <NeuIconDisc gradient={cell.gradient} icon={cell.icon} size={30} />
+                  </span>
+                  <span className="hidden sm:block">
+                    <NeuIconDisc gradient={cell.gradient} icon={cell.icon} size={46} />
+                  </span>
                   <div className="min-w-0">
                     <p
+                      className="hidden sm:block"
                       style={{
                         fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9.5px',
                         letterSpacing: '0.14em', textTransform: 'uppercase', color: NEU.muted, margin: '0 0 3px 0',
@@ -1233,7 +1239,7 @@ export default function ConferenceDetailClient() {
                       {cell.label}
                     </p>
                     <p
-                      className="text-[16px] font-extrabold leading-tight"
+                      className="text-[12px] sm:text-[16px] font-extrabold leading-tight"
                       style={{ color: NEU.ink, fontFamily: "'Outfit', sans-serif", margin: 0 }}
                     >
                       {cell.value}
@@ -1746,8 +1752,9 @@ export default function ConferenceDetailClient() {
 
             </div>
 
-            {/* Right column, sticky rail */}
-            <div className="w-full md:w-[340px] md:flex-shrink-0">
+            {/* Right column, sticky rail — on mobile it jumps to the very top so
+                the Apply CTA is the first thing a delegate reaches. */}
+            <div className="w-full md:w-[340px] md:flex-shrink-0 order-first md:order-none">
               <div className="flex flex-col gap-4 md:sticky" style={{ top: '12px' }}>
 
                 {/* Apply CTA, always first */}
