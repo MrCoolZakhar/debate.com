@@ -141,14 +141,14 @@ export default function OnboardingPage() {
   // callback forwards Google signups here with their intended destination — e.g.
   // an in-progress conference application to continue), but only same-origin
   // relative paths, and never back into onboarding (no loop). With no `next`,
-  // a fresh delegate lands on their own profile by default.
+  // a fresh delegate lands on the home page, where CreditsWelcomeGate greets them.
   function postOnboardingDest(): string {
-    if (typeof window === 'undefined') return '/account/profile';
+    if (typeof window === 'undefined') return '/';
     const next = new URLSearchParams(window.location.search).get('next');
     if (next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/auth/onboarding')) {
       return next;
     }
-    return '/account/profile';
+    return '/';
   }
 
   async function finish() {

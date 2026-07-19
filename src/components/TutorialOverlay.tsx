@@ -430,7 +430,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
 
   // ── Spotlight / Action steps ──────────────────────────────────────────────
   return (
-    <>
+    <Portal>
       {/* SVG mask, one hole per spotlight target */}
       {vw > 0 && (
         <svg
@@ -541,7 +541,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Portal>
   );
 }
 
