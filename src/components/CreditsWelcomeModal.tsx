@@ -1,7 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { X, ArrowRight, TicketCheck, BadgePercent, RotateCcw, Coins } from 'lucide-react';
+import { X, ArrowRight, TicketCheck, BadgePercent, RotateCcw } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import Portal from '@/components/Portal';
 
@@ -11,19 +12,98 @@ const WELL_ROWS = [
   { Icon: RotateCcw, bold: 'Refunded', muted: 'if your application is not accepted' },
 ];
 
+// Expansion around the measured navbar credits chip before it's punched out
+// of the backdrop, so the spotlight hole reads as breathing room around the
+// chip rather than a tight outline traced right on its edge.
+const CHIP_HOLE_PADDING = 6;
+
+interface Rect { top: number; left: number; width: number; height: number; }
+
 // ── "Introducing Credits" onboarding modal ──────────────────────────────────
 // Richer successor to the old one-time welcome-token pop-up, mounted globally
 // (see CreditsWelcomeGate) rather than only on the profile page, so it can
 // greet a fresh signup wherever postOnboardingDest sends them.
 export default function CreditsWelcomeModal({ onClose }: { onClose: () => void }) {
+  // Spotlight hole over the navbar credits chip (data-credits-chip in
+  // SiteNav.tsx), so it stays crisp and unblurred while the rest of the page
+  // dims. Null when the chip isn't in the DOM, or is hidden below the
+  // desktop breakpoint (a display:none element measures a 0×0 rect).
+  const [hole, setHole] = useState<Rect | null>(null);
+
+  useEffect(() => {
+    function measure() {
+      const el = document.querySelector('[data-credits-chip]');
+      if (!el) { setHole(null); return; }
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) { setHole(null); return; }
+      setHole({
+        top: r.top - CHIP_HOLE_PADDING,
+        left: r.left - CHIP_HOLE_PADDING,
+        width: r.width + CHIP_HOLE_PADDING * 2,
+        height: r.height + CHIP_HOLE_PADDING * 2,
+      });
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  const holeRadius = hole ? hole.height / 2 : 0;
+  // A pill-shaped SVG rect as the second mask layer: mask-composite: exclude
+  // (xor in the legacy -webkit- syntax) subtracts its opaque area from the
+  // full-page layer, cutting a real hole through both the dim color and the
+  // backdrop-filter blur so the chip underneath shows through untouched.
+  const holeMaskLayer = hole
+    ? `url("data:image/svg+xml,${encodeURIComponent(
+        `<svg xmlns='http://www.w3.org/2000/svg' width='${hole.width}' height='${hole.height}'><rect width='${hole.width}' height='${hole.height}' rx='${holeRadius}' ry='${holeRadius}' fill='#000'/></svg>`
+      )}")`
+    : null;
+
+  const holeMaskStyle: React.CSSProperties = hole
+    ? {
+        WebkitMaskImage: `linear-gradient(#000,#000), ${holeMaskLayer}`,
+        maskImage: `linear-gradient(#000,#000), ${holeMaskLayer}`,
+        WebkitMaskSize: `100% 100%, ${hole.width}px ${hole.height}px`,
+        maskSize: `100% 100%, ${hole.width}px ${hole.height}px`,
+        WebkitMaskPosition: `0 0, ${hole.left}px ${hole.top}px`,
+        maskPosition: `0 0, ${hole.left}px ${hole.top}px`,
+        WebkitMaskRepeat: 'no-repeat, no-repeat',
+        maskRepeat: 'no-repeat, no-repeat',
+        WebkitMaskComposite: 'xor',
+        maskComposite: 'exclude',
+      }
+    : {};
+
   return (
     <Portal>
       <div
         onClick={onClose}
         className="fixed inset-0 z-[2147483000] flex items-center justify-center px-4"
-        style={{ backgroundColor: 'rgba(28,20,16,0.42)', backdropFilter: 'blur(7px)', WebkitBackdropFilter: 'blur(7px)', animation: 'gvWelcomeFade 220ms ease' }}
+        style={{
+          backgroundColor: 'rgba(28,20,16,0.42)',
+          backdropFilter: 'blur(3px)',
+          WebkitBackdropFilter: 'blur(3px)',
+          animation: 'gvWelcomeFade 220ms ease',
+          ...holeMaskStyle,
+        }}
       >
-        <style>{`@keyframes gvWelcomeFade{from{opacity:0}to{opacity:1}}@keyframes gvWelcomePop{from{opacity:0;transform:translateY(10px) scale(0.97)}to{opacity:1;transform:none}}`}</style>
+        <style>{`@keyframes gvWelcomeFade{from{opacity:0}to{opacity:1}}@keyframes gvWelcomePop{from{opacity:0;transform:translateY(10px) scale(0.97)}to{opacity:1;transform:none}}@keyframes gvChipRingPulse{0%,100%{box-shadow:0 0 0 2px #EED98A, 0 0 8px rgba(238,217,138,0.25)}50%{box-shadow:0 0 0 4px rgba(238,217,138,0.6), 0 0 20px rgba(238,217,138,0.35)}}`}</style>
+
+        {hole && (
+          <div
+            aria-hidden
+            className="fixed pointer-events-none"
+            style={{
+              top: hole.top,
+              left: hole.left,
+              width: hole.width,
+              height: hole.height,
+              borderRadius: holeRadius,
+              animation: 'gvChipRingPulse 1.6s ease-in-out infinite',
+            }}
+          />
+        )}
+
         <div
           onClick={(e) => e.stopPropagation()}
           className="relative w-full text-center"
@@ -76,13 +156,10 @@ export default function CreditsWelcomeModal({ onClose }: { onClose: () => void }
             ))}
           </div>
 
-          <span
-            className="inline-flex items-center justify-center gap-2"
-            style={{ borderRadius: 999, padding: '6px 14px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 20 }}
-          >
-            <Coins size={13} strokeWidth={2.4} />
-            1 credit added to your account
-          </span>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13.5, marginBottom: 20 }}>
+            <span style={{ fontWeight: 800, color: NEU.ink }}>The first credit is on us.</span>{' '}
+            <span style={{ fontWeight: 700, color: NEU.deepGold }}>Apply to a conference today!</span>
+          </p>
 
           <Link
             href="/conferences/explore"

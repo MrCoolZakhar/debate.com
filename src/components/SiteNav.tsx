@@ -235,6 +235,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
           {user && (
             <Link
               href="/account/unlimited"
+              data-credits-chip
               className="relative flex items-center gap-1.5 focus:outline-none"
               style={{
                 backgroundColor: '#1B3828',
