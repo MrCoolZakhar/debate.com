@@ -17,18 +17,31 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { FlagImg } from '@/components/FlagImg';
 import { useConfirmModal } from '@/components/ConfirmModal';
+import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { queueEventEmail } from '@/lib/emailEvents';
 import {
   POOL_MEMBER_SELECT, pledgeSatisfied, pledgeText, MemberAvatar,
   type PoolMember,
 } from '@/app/manage/[slug]/assignment/delegationShared';
-import { SectionCard, OUTFIT, CHIP_STYLES, derivePaymentChip } from './shared';
+import { SectionCard, OUTFIT, CHIP_STYLES, derivePaymentChip, formatReleaseDate } from './shared';
 
 interface Society {
   id: string;
   name: string;
   spots_purchased: number;
 }
+
+// A swap_request or swap_notice row on conference_requests, the shape both
+// the pending banner and the recent-notice line read from.
+interface SwapActivityRow {
+  id: string;
+  user_id: string;
+  created_at: string;
+  metadata: { society_id?: string; member_a?: string; member_b?: string };
+}
+
+// "A few days" window for the quiet completed-swap notice.
+const RECENT_SWAP_NOTICE_MS = 3 * 24 * 60 * 60 * 1000;
 
 function allocationLabel(m: PoolMember): string | null {
   if (!m.assigned_committee_id) return null;
@@ -126,6 +139,45 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
   );
 }
 
+// ── Swap result modal ───────────────────────────────────────────────────────
+// One-button acknowledgement, same ivory/forest card recipe as the shared
+// ConfirmModal, used after both a self-serve swap and a swap request so the
+// leader gets visible confirmation instead of the panel just quietly
+// resetting (self-serve swaps do execute, but with no on-screen feedback the
+// action reads as a no-op).
+
+interface SwapResultInfo {
+  title: string;
+  body: string;
+  detail?: string;
+}
+
+function SwapResultModal({ info, onClose }: { info: SwapResultInfo; onClose: () => void }) {
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        className="rounded-2xl p-6 flex flex-col gap-4"
+        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400, maxWidth: '90vw' }}
+      >
+        <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{info.title}</p>
+        <div style={{ color: '#4A4238', fontFamily: OUTFIT, lineHeight: 1.55 }}>
+          <p className="text-sm">{info.body}</p>
+          {info.detail && <p className="text-sm mt-1.5">{info.detail}</p>}
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-xl py-2.5 font-bold text-sm focus:outline-none"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: OUTFIT, cursor: 'pointer' }}
+        >
+          DONE
+        </button>
+      </div>
+    </ModalOverlay>
+  );
+}
+
 // ── Panel ────────────────────────────────────────────────────────────────────
 
 export interface DelegationPanelProps {
@@ -146,7 +198,9 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
   const [swapSelection, setSwapSelection] = useState<string[]>([]);
   const [swapError, setSwapError] = useState('');
   const [swapping, setSwapping] = useState(false);
-  const [myPendingSwapRequest, setMyPendingSwapRequest] = useState<{ id: string; subject: string } | null>(null);
+  const [swapResult, setSwapResult] = useState<SwapResultInfo | null>(null);
+  const [pendingSwapRequest, setPendingSwapRequest] = useState<SwapActivityRow | null>(null);
+  const [recentSwapNotice, setRecentSwapNotice] = useState<SwapActivityRow | null>(null);
 
   const load = useCallback(async () => {
     if (!societyId || !session) return;
@@ -165,26 +219,43 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
 
   useEffect(() => { load(); }, [load]);
 
-  // Own pending swap_request, conference_requests RLS only lets a
-  // participant read rows they created themselves, so a co-leader's request
-  // isn't visible here; each leader sees their own.
-  const loadMyPendingSwap = useCallback(async () => {
-    if (!user || !session) return;
+  // The delegation's swap activity, an open swap_request plus the most recent
+  // swap_notice. RLS now lets any leader of this society read
+  // conference_requests rows (and their messages) of kind 'swap_request' or
+  // 'swap_notice' whose metadata->>'society_id' matches their society, so
+  // every leader sees the same state, not just whoever sent it.
+  const loadSwapActivity = useCallback(async () => {
+    if (!societyId || !session) return;
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
-      .from('conference_requests')
-      .select('id, subject, status, metadata')
-      .eq('user_id', user.id)
-      .eq('kind', 'swap_request')
-      .eq('status', 'open')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const row = data as { id: string; subject: string; metadata: { society_id?: string } } | null;
-    setMyPendingSwapRequest(row && row.metadata?.society_id === societyId ? { id: row.id, subject: row.subject } : null);
-  }, [user, session, societyId]);
+    const [{ data: reqData }, { data: noticeData }] = await Promise.all([
+      supabase
+        .from('conference_requests')
+        .select('id, user_id, created_at, metadata')
+        .eq('conference_id', conferenceId)
+        .eq('kind', 'swap_request')
+        .eq('status', 'open')
+        .eq('metadata->>society_id', societyId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('conference_requests')
+        .select('id, user_id, created_at, metadata')
+        .eq('conference_id', conferenceId)
+        .eq('kind', 'swap_notice')
+        .eq('metadata->>society_id', societyId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    setPendingSwapRequest((reqData as SwapActivityRow | null) ?? null);
+    const notice = (noticeData as SwapActivityRow | null) ?? null;
+    setRecentSwapNotice(
+      notice && Date.now() - new Date(notice.created_at).getTime() < RECENT_SWAP_NOTICE_MS ? notice : null
+    );
+  }, [societyId, conferenceId, session]);
 
-  useEffect(() => { loadMyPendingSwap(); }, [loadMyPendingSwap]);
+  useEffect(() => { loadSwapActivity(); }, [loadSwapActivity]);
 
   const advisors = useMemo(() => members.filter(m => m.role === 'faculty-advisor'), [members]);
   const headDelegates = useMemo(() => members.filter(m => m.role === 'head-delegate'), [members]);
@@ -256,10 +327,14 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       // for society leaders.
       await queueEventEmail(supabase, conferenceId, 'delegation_swap', [swapA.id, swapB.id]);
 
-      setSwapping(false);
       setSwapMode(false);
       setSwapSelection([]);
-      await load();
+      // Refresh the allocation list and swap activity BEFORE showing the
+      // confirmation, so dismissing the modal reveals the already-updated
+      // state rather than the old one flashing in behind it.
+      await Promise.all([load(), loadSwapActivity()]);
+      setSwapping(false);
+      setSwapResult({ title: 'Allocations swapped', body: `${nameA} is now ${allocB}, and ${nameB} is now ${allocA}.` });
     } else {
       const { data: reqRow, error } = await supabase.from('conference_requests').insert({
         conference_id: conferenceId, user_id: user.id, kind: 'swap_request', subject, metadata,
@@ -272,12 +347,21 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       // See NOTE above, same organizer-only RLS gap applies to request mode.
       await queueEventEmail(supabase, conferenceId, 'delegation_swap', [swapA.id, swapB.id]);
 
-      setSwapping(false);
       setSwapMode(false);
       setSwapSelection([]);
-      await loadMyPendingSwap();
+      await loadSwapActivity();
+      setSwapping(false);
+      setSwapResult({
+        title: 'Swap requested',
+        body: "An allocation swap has been requested to the conference's organizers.",
+        detail: `${nameA} and ${nameB}.`,
+      });
     }
   }
+
+  const pendingRequesterName = pendingSwapRequest
+    ? members.find(m => m.user_id === pendingSwapRequest.user_id)?.profiles?.display_name ?? 'A delegation leader'
+    : null;
 
   if (loading) {
     return (
@@ -303,13 +387,24 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
         {society?.name ?? 'Delegation'}
       </p>
 
-      {myPendingSwapRequest && (
-        <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ backgroundColor: 'rgba(238,217,138,0.16)', border: '1px solid rgba(182,135,31,0.3)' }}>
-          <ArrowLeftRight size={14} style={{ color: '#8A6614', flexShrink: 0 }} />
-          <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
-            Swap requested, awaiting the organizing team
-          </p>
+      {pendingSwapRequest && (
+        <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ backgroundColor: 'rgba(238,217,138,0.16)', border: '1px solid rgba(182,135,31,0.3)' }}>
+          <ArrowLeftRight size={14} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
+              A swap of {pendingSwapRequest.metadata.member_a ?? 'a delegate'} and {pendingSwapRequest.metadata.member_b ?? 'a delegate'} is awaiting the organizing team.
+            </p>
+            <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              Requested by {pendingRequesterName} on {formatReleaseDate(new Date(pendingSwapRequest.created_at).getTime())}.
+            </p>
+          </div>
         </div>
+      )}
+
+      {recentSwapNotice && (
+        <p className="text-xs mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          {recentSwapNotice.metadata.member_a ?? 'A delegate'} and {recentSwapNotice.metadata.member_b ?? 'a delegate'} swapped allocations on {formatReleaseDate(new Date(recentSwapNotice.created_at).getTime())}.
+        </p>
       )}
 
       {advisors.length > 0 && (
@@ -428,6 +523,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       )}
 
       {confirmModal}
+      {swapResult && <SwapResultModal info={swapResult} onClose={() => setSwapResult(null)} />}
     </SectionCard>
   );
 }
