@@ -5,7 +5,7 @@ import {
   ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
   MessageSquareText, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
-  Users, Wallet, X,
+  UserX, Users, Wallet, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -27,7 +27,7 @@ import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc,
 } from '@/components/neu';
 import {
-  poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar,
+  poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar, markNotAttending, undoNotAttending,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
@@ -247,6 +247,32 @@ function StatusPill({ status, size = 'md', awaitingResubmission = false }: { sta
     >
       <Icon size={iconSize} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
       {t.label.toUpperCase()}
+    </span>
+  );
+}
+
+/** Danger-muted pill for `attending === false`, layered independently of
+ *  status (an accepted/assigned/checked-in applicant can still be marked not
+ *  attending). Reuses the Withdrawn treatment's gradient for the same visual
+ *  family, distinct icon so the two states never look identical. */
+function NotAttendingBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const grad = STATUS_PILL.withdrawn.grad;
+  const iconSize = size === 'sm' ? 12 : 14;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5"
+      style={{
+        padding: size === 'sm' ? '4px 10px' : '5px 12px',
+        borderRadius: 999,
+        background: `linear-gradient(135deg, ${grad[0]}, ${grad[1]})`,
+        color: '#FFFFFF',
+        fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 800, letterSpacing: '0.03em',
+        boxShadow: `0 3px 8px ${grad[0]}55, ${NEU.outSm}`,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <UserX size={iconSize} strokeWidth={2.7} style={{ color: '#FFFFFF' }} />
+      NOT ATTENDING
     </span>
   );
 }
@@ -803,6 +829,10 @@ interface FilterState {
   payment: Set<string>;
   dateFrom: string;
   dateTo: string;
+  // Independent of `status` (an accepted/assigned/checked-in applicant can
+  // still be not-attending) — same baked-in default exclusion as withdrawn,
+  // only reachable by explicitly turning this chip on.
+  notAttending: boolean;
 }
 
 function toggleIn(set: Set<string>, value: string): Set<string> {
@@ -966,7 +996,7 @@ function FilterPanel({
             </div>
             {activeCount > 0 && (
               <button
-                onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '' })}
+                onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false })}
                 className="focus:outline-none"
                 style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
               >
@@ -982,6 +1012,17 @@ function FilterPanel({
               onAll={() => setFilters(f => ({ ...f, status: new Set(STATUS_OPTIONS.map(o => o.value)) }))}
               onNone={() => setFilters(f => ({ ...f, status: new Set() }))}
             />
+            {/* Not attending: a separate boolean dimension from status (an
+                accepted/assigned/checked-in applicant can still be not
+                attending), so it sits alongside the Status group as its own
+                chip rather than inside filters.status. */}
+            <div className="flex flex-wrap gap-1.5">
+              <CheckChip
+                label="Not Attending"
+                checked={filters.notAttending}
+                onClick={() => setFilters(f => ({ ...f, notAttending: !f.notAttending }))}
+              />
+            </div>
             <FilterGroup
               title="Participants" icon={Users} options={ROLE_OPTIONS} selected={filters.role}
               onToggle={v => setFilters(f => ({ ...f, role: toggleIn(f.role, v) }))}
@@ -1040,7 +1081,7 @@ export default function ApplicationsPage() {
   // Empty role set = no constraint, so a fresh page shows every role
   // (including chairs) in both the row list and the stat scope.
   const [filters, setFilters] = useState<FilterState>({
-    status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '',
+    status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false,
   });
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
@@ -1644,6 +1685,78 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
+  // ── Attendance ───────────────────────────────────────────────────────────
+  // Reuses the exact canonical write from delegationShared.tsx (coverage
+  // release, the not_attending/attendance_restored emails, spot handling) so
+  // a flip from here is byte-identical to one from the Delegations view —
+  // not reimplemented here.
+  async function openNotAttendingConfirm(app: Application) {
+    const name = app.profiles?.display_name ?? app.invited_name ?? 'this applicant';
+    const hasAllocation = !!app.assigned_committee_id;
+    const { confirmed } = await confirm({
+      title: `Mark ${name} as not attending?`,
+      body: hasAllocation
+        ? 'Their committee assignment will be removed. Their delegation spot, if any, stays with the delegation.'
+        : 'Their delegation spot, if any, stays with the delegation.',
+      confirmLabel: 'Mark Not Attending',
+      danger: true,
+    });
+    if (!confirmed) return;
+    handleNotAttending(app);
+  }
+
+  function handleNotAttending(app: Application) {
+    if (!session || !conference || busyIds.has(app.id)) return;
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+    const name = prevRow.profiles?.display_name ?? prevRow.invited_name ?? 'this applicant';
+
+    setActionError('');
+    markBusy(app.id, true);
+    // Optimistic: exactly what markNotAttending writes for this row.
+    applyRow(app.id, {
+      attending: false,
+      assigned_committee_id: null,
+      assigned_country_code: null,
+      assigned_country_name: null,
+      assigned_committee: null,
+      status: prevRow.status === 'assigned' ? 'accepted' : prevRow.status,
+    });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const result = await markNotAttending(supabase, conference.id, prevRow);
+      if (result.error) throw new Error(result.error);
+      notifyIfNeeded(result.result, pushDraftNotice);
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError(`Could not mark ${name} as not attending. Please try again.`);
+      })
+      .finally(() => markBusy(app.id, false));
+  }
+
+  function handleMarkAttending(app: Application) {
+    if (!session || !conference || busyIds.has(app.id)) return;
+    const prevRow = applications.find(a => a.id === app.id) ?? app;
+
+    setActionError('');
+    markBusy(app.id, true);
+    // Optimistic: exactly what undoNotAttending writes for this row.
+    applyRow(app.id, { attending: true, payment_status: 'unpaid' });
+
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const result = await undoNotAttending(supabase, conference.id, prevRow);
+      if (result.error) throw new Error(result.error);
+      notifyIfNeeded(result.result, pushDraftNotice);
+    })()
+      .catch(() => {
+        restoreRow(prevRow);
+        setActionError('Could not restore attendance. Please try again.');
+      })
+      .finally(() => markBusy(app.id, false));
+  }
+
   // ── Delete row (imported/unregistered applicants only) ─────────────────────
   // No account exists for these rows (user_id null, invited_* carries the
   // data), so a hard delete is safe: nothing else references them. Distinct
@@ -1921,19 +2034,28 @@ export default function ApplicationsPage() {
 
   if (!conference) return null;
 
-  // The default-view size (withdrawn/removed applicants excluded), used both
-  // to gate the "filters active" reminder and as its denominator — so the
-  // baked-in withdrawn exclusion is never mistaken for a user-applied filter.
-  const defaultScopeCount = applications.filter(a => a.status !== 'withdrawn').length;
+  // The default-view size (withdrawn/removed and not-attending applicants
+  // excluded), used both to gate the "filters active" reminder and as its
+  // denominator — so the baked-in exclusions are never mistaken for a
+  // user-applied filter.
+  const defaultScopeCount = applications.filter(a => a.status !== 'withdrawn' && a.attending).length;
 
   // Empty selection = no constraint on that dimension (fresh page shows all)
   // — EXCEPT withdrawn/removed applicants, who stay out of the default view
   // even with no status filter active; they're only reachable by explicitly
-  // adding the Withdrawn status filter.
+  // adding the Withdrawn status filter. Not-attending applicants follow the
+  // exact same rule via its own independent chip, since `attending` is a
+  // separate dimension from `status` (an accepted/assigned/checked-in
+  // applicant can still be not attending).
   const filtered = applications.filter(a => {
     if (filters.status.size > 0) {
       if (!filters.status.has(a.status)) return false;
     } else if (a.status === 'withdrawn') {
+      return false;
+    }
+    if (filters.notAttending) {
+      if (a.attending) return false;
+    } else if (!a.attending) {
       return false;
     }
     if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
@@ -1959,7 +2081,8 @@ export default function ApplicationsPage() {
     // DEFAULT_ROLES is empty, so any non-empty role selection counts as active.
     (!sameSet(filters.role, DEFAULT_ROLES) ? 1 : 0) +
     (filters.payment.size > 0 ? 1 : 0) +
-    (filters.dateFrom || filters.dateTo ? 1 : 0);
+    (filters.dateFrom || filters.dateTo ? 1 : 0) +
+    (filters.notAttending ? 1 : 0);
 
   // ── Selection-derived values for the bulk-action bar ──────────────────────
   // Act only on rows that are both selected AND currently visible, so a filter
@@ -2000,8 +2123,9 @@ export default function ApplicationsPage() {
   // (all roles by default, #10) but ignore the status / payment dimensions —
   // those are exactly what the tiles let you click into.
   const statScope = applications.filter(a => {
-    // Withdrawn/removed applicants never count toward the stat tiles.
+    // Withdrawn/removed and not-attending applicants never count toward the stat tiles.
     if (a.status === 'withdrawn') return false;
+    if (!a.attending) return false;
     if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
     if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
@@ -2022,9 +2146,9 @@ export default function ApplicationsPage() {
   const statusTileActive = (v: string) => filters.status.size === 1 && filters.status.has(v) && filters.payment.size === 0;
   const paymentTileActive = (v: string) => filters.payment.size === 1 && filters.payment.has(v) && filters.status.size === 0;
   const totalTileActive =
-    filters.status.size === 0 && filters.payment.size === 0 &&
+    filters.status.size === 0 && filters.payment.size === 0 && !filters.notAttending &&
     !filters.dateFrom && !filters.dateTo && sameSet(filters.role, DEFAULT_ROLES);
-  const clearToDefault = () => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '' });
+  const clearToDefault = () => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false });
   const toggleStatusTile = (v: string) => setFilters(f => ({ ...f, payment: new Set(), status: (f.status.size === 1 && f.status.has(v)) ? new Set() : new Set([v]) }));
   const togglePaymentTile = (v: string) => setFilters(f => ({ ...f, status: new Set(), payment: (f.payment.size === 1 && f.payment.has(v)) ? new Set() : new Set([v]) }));
 
@@ -2351,6 +2475,7 @@ export default function ApplicationsPage() {
                         status={app.status}
                         awaitingResubmission={app.status === 'rejected' && (roleConfigs.find(rc => rc.role === app.role)?.allow_resubmission ?? false)}
                       />
+                      {!app.attending && <NotAttendingBadge />}
                       {app.resubmitted_at && (
                         <span
                           className="inline-flex items-center gap-1"
@@ -2707,6 +2832,32 @@ export default function ApplicationsPage() {
           </button>
         );
 
+        // Not attending toggle: accepted/assigned/checked-in only, same pool
+        // this action applies to in the Delegations/Independents views.
+        const attendanceControls = app.attending ? (
+          <button
+            onClick={() => openNotAttendingConfirm(app)}
+            disabled={rowBusy}
+            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+            style={{ backgroundColor: 'rgba(154,138,120,0.1)', color: '#6B5F52', border: '1px solid rgba(154,138,120,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(154,138,120,0.18)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(154,138,120,0.1)'; }}
+          >
+            <UserX size={13} />
+            MARK NOT ATTENDING
+          </button>
+        ) : (
+          <button
+            onClick={() => handleMarkAttending(app)}
+            disabled={rowBusy}
+            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
+            style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#2F6644', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+          >
+            <Undo2 size={13} />
+            MARK ATTENDING
+          </button>
+        );
+
         // Check-in controls: mark on-site attendance (accepted/assigned) or
         // reverse it (checked-in). Same optimistic handlers as the row buttons.
         const checkInControls = (app.status === 'accepted' || app.status === 'assigned') ? (
@@ -2766,6 +2917,7 @@ export default function ApplicationsPage() {
                       size="sm"
                       awaitingResubmission={app.status === 'rejected' && (roleConfig?.allow_resubmission ?? false)}
                     />
+                    {!app.attending && <NotAttendingBadge size="sm" />}
                     {app.resubmitted_at && (
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
@@ -3041,6 +3193,7 @@ export default function ApplicationsPage() {
                     {paymentControls}
                     {rejectControls}
                     {withdrawControls}
+                    {attendanceControls}
                   </>
                 )}
 
@@ -3049,6 +3202,7 @@ export default function ApplicationsPage() {
                     {checkInControls}
                     {paymentControls}
                     {withdrawControls}
+                    {attendanceControls}
                   </>
                 )}
 
@@ -3057,6 +3211,7 @@ export default function ApplicationsPage() {
                     {checkInControls}
                     {paymentControls}
                     {withdrawControls}
+                    {attendanceControls}
                   </>
                 )}
 

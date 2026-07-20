@@ -1158,7 +1158,7 @@ function DropAllocateModal({ committee, app, onClose, onConflict, onAssigned }: 
     const seat = lowestOpenSeat(slot, byCountry);
     const sibling = siblingSeatAllocation(slot, byCountry);
     const siblingSoc = sibling ? allocationSocietyId(sibling) : null;
-    if (sibling && siblingSoc && siblingSoc !== app.society_id) {
+    if (sibling && siblingSoc !== (app.society_id ?? null)) {
       onConflict({ app, slot, seat, sibling });
       return;
     }
@@ -1379,7 +1379,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
     const seat = preSelectedSeat ?? lowestOpenSeat(selectedSlot, byCountry);
     const sibling = siblingSeatAllocation(selectedSlot, byCountry);
     const siblingSoc = sibling ? allocationSocietyId(sibling) : null;
-    if (sibling && siblingSoc && siblingSoc !== selectedApp.society_id) {
+    if (sibling && siblingSoc !== (selectedApp.society_id ?? null)) {
       onConflict({ app: selectedApp, slot: selectedSlot, seat, sibling });
       onClose();
       return;
@@ -1602,11 +1602,41 @@ function DelegationConflictModal({
   const [error, setError] = useState('');
 
   const siblingSocId = allocationSocietyId(sibling);
+  const incomingSocId = app.society_id ?? null;
   const siblingName = sibling.delegation?.name ?? sibling.applications?.societies?.name ?? 'that delegation';
   const siblingHolderName = sibling.society_id && !sibling.user_id
     ? (sibling.delegation?.name ?? 'The delegation')
     : (sibling.profiles?.display_name ?? sibling.applications?.invited_name ?? 'The other seat holder');
   const appName = app.profiles?.display_name ?? app.invited_name ?? 'This delegate';
+  const incomingDelegationName = app.societies?.name ?? 'their delegation';
+
+  // The purity rule is symmetric (never a mixed pair: one delegation member +
+  // one independent, or two different delegations), so the merge option's
+  // direction depends on which side (if either) actually holds a delegation.
+  // Both sides holding DIFFERENT delegations offers no merge at all — never
+  // silently combine two delegations.
+  const bothDifferentDelegations = !!siblingSocId && !!incomingSocId;
+  const canAddIncomingToSibling = !!siblingSocId && !incomingSocId;
+  const canAddSiblingToIncoming = !siblingSocId && !!incomingSocId;
+
+  const bodyText = canAddSiblingToIncoming ? (
+    <>
+      {slot.country_name}&apos;s other seat in {committeeLabels(committee).big} is held independently by{' '}
+      <strong style={{ color: NEU.ink, fontWeight: 800 }}>{siblingHolderName}</strong>, and {appName} belongs to{' '}
+      <strong style={{ color: NEU.ink, fontWeight: 800 }}>{incomingDelegationName}</strong>.
+    </>
+  ) : bothDifferentDelegations ? (
+    <>
+      {slot.country_name}&apos;s other seat in {committeeLabels(committee).big} belongs to{' '}
+      <strong style={{ color: NEU.ink, fontWeight: 800 }}>{siblingName}</strong>, and {appName} belongs to{' '}
+      <strong style={{ color: NEU.ink, fontWeight: 800 }}>{incomingDelegationName}</strong> — a different delegation.
+    </>
+  ) : (
+    <>
+      {slot.country_name}&apos;s other seat in {committeeLabels(committee).big} belongs to{' '}
+      <strong style={{ color: NEU.ink, fontWeight: 800 }}>{siblingName}</strong>, and {appName} isn&apos;t part of that delegation.
+    </>
+  );
 
   // Seat the incoming delegate FIRST in both resolutions below, before
   // touching the sibling's row or the incoming applicant's society_id — so a
@@ -1647,7 +1677,7 @@ function DelegationConflictModal({
     onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}. ${siblingHolderName} was removed from the other seat.`, sibling.id);
   }
 
-  async function handleAddToDelegation() {
+  async function handleAddIncomingToSibling() {
     if (!session || !conference || !siblingSocId || busy) return;
     setBusy('add');
     setError('');
@@ -1667,18 +1697,44 @@ function DelegationConflictModal({
     onResolved(`${appName} added to ${siblingName} and allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}.`);
   }
 
+  // Mirror of handleAddIncomingToSibling: the incoming delegate is the one
+  // with a delegation here, so it's the SIBLING's application that moves —
+  // the incoming delegate is seated with their own society_id untouched.
+  async function handleAddSiblingToIncoming() {
+    if (!session || !conference || !incomingSocId || busy) return;
+    if (sibling.id.startsWith('temp-') || !sibling.application_id) {
+      setError('The other seat is still saving. Try again in a moment.');
+      return;
+    }
+    setBusy('add');
+    setError('');
+    const supabase = getAuthedClient(session.access_token);
+    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat);
+    if (err) { setBusy(null); setError(err); return; }
+    const { data, error: socErr } = await supabase
+      .from('applications')
+      .update({ society_id: incomingSocId })
+      .eq('id', sibling.application_id)
+      .select('id');
+    setBusy(null);
+    if (socErr || !data || data.length !== 1) {
+      onResolved(`${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}, but ${siblingHolderName} could not be added to ${incomingDelegationName} — set their delegation manually.`);
+      return;
+    }
+    onResolved(`${siblingHolderName} added to ${incomingDelegationName} and ${appName} allocated to ${slot.country_name} (seat ${seat}) in ${committee.abbreviation ?? committee.name}.`);
+  }
+
   return (
     <ModalOverlay onClose={() => { if (!busy) onClose(); }}>
       <NeuModalCard width={440}>
         <div className="flex items-start justify-between gap-3 mb-3">
           <h2 className="font-black text-base" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-            Other seat belongs to a delegation
+            Mixed delegation seats
           </h2>
           <button onClick={onClose} disabled={!!busy} className="focus:outline-none flex-shrink-0" style={{ color: NEU.muted }}><X size={18} /></button>
         </div>
         <p className="text-sm mb-4" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.5 }}>
-          {slot.country_name}&apos;s other seat in {committeeLabels(committee).big} belongs to{' '}
-          <strong style={{ color: NEU.ink, fontWeight: 800 }}>{siblingName}</strong>, and {appName} isn&apos;t part of that delegation.
+          {bodyText}
         </p>
 
         {error && <ModalError msg={error} />}
@@ -1695,19 +1751,36 @@ function DelegationConflictModal({
           >
             PICK A DIFFERENT SEAT
           </button>
-          <div>
-            <NeuButton
-              onClick={handleAddToDelegation}
-              disabled={busy !== null || !siblingSocId}
-              gradient={NEU_GRADIENTS.gold}
-              style={{ width: '100%' }}
-            >
-              {busy === 'add' ? 'ADDING...' : 'ADD THEM TO THE DELEGATION'}
-            </NeuButton>
-            <p className="text-xs mt-1.5 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.4 }}>
-              This moves {appName} into {siblingName} for invoicing and coverage as well.
-            </p>
-          </div>
+          {canAddIncomingToSibling && (
+            <div>
+              <NeuButton
+                onClick={handleAddIncomingToSibling}
+                disabled={busy !== null || !siblingSocId}
+                gradient={NEU_GRADIENTS.gold}
+                style={{ width: '100%' }}
+              >
+                {busy === 'add' ? 'ADDING...' : 'ADD THEM TO THE DELEGATION'}
+              </NeuButton>
+              <p className="text-xs mt-1.5 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.4 }}>
+                This moves {appName} into {siblingName} for invoicing and coverage as well.
+              </p>
+            </div>
+          )}
+          {canAddSiblingToIncoming && (
+            <div>
+              <NeuButton
+                onClick={handleAddSiblingToIncoming}
+                disabled={busy !== null || !incomingSocId}
+                gradient={NEU_GRADIENTS.gold}
+                style={{ width: '100%' }}
+              >
+                {busy === 'add' ? 'ADDING...' : `ADD ${siblingHolderName.toUpperCase()} TO ${incomingDelegationName.toUpperCase()}`}
+              </NeuButton>
+              <p className="text-xs mt-1.5 text-center" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.4 }}>
+                This moves {siblingHolderName} into {incomingDelegationName} for invoicing and coverage as well.
+              </p>
+            </div>
+          )}
         </div>
       </NeuModalCard>
     </ModalOverlay>
@@ -2819,7 +2892,7 @@ export default function AssignmentPage() {
     const seat = lowestOpenSeat(sug.slot, byCountry);
     const sibling = siblingSeatAllocation(sug.slot, byCountry);
     const siblingSoc = sibling ? allocationSocietyId(sibling) : null;
-    if (sibling && siblingSoc && siblingSoc !== sug.app.society_id) {
+    if (sibling && siblingSoc !== (sug.app.society_id ?? null)) {
       setConflict({ committee: sug.committee, app: sug.app, slot: sug.slot, seat, sibling });
       return;
     }

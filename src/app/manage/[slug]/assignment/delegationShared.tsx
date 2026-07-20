@@ -303,10 +303,14 @@ export async function performSwap(
   return { incoming, outgoing, error: firstError };
 }
 
+// Narrowed to exactly the fields this write touches (not the full PoolMember
+// shape) so callers with a differently-typed user_id — e.g. applications/page.tsx's
+// Application, where user_id can be null for unclaimed/imported rows — can
+// pass their row straight through without an adapter.
 export async function markNotAttending(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
-  member: PoolMember
+  member: Pick<PoolMember, 'id' | 'assigned_committee_id' | 'status'>
 ): Promise<{ result: QueueEventEmailResult; error: string | null }> {
   const hasAllocation = !!member.assigned_committee_id;
   const { error: updateErr } = await supabase.from('applications').update({
@@ -328,7 +332,7 @@ export async function markNotAttending(
 export async function undoNotAttending(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
-  member: PoolMember
+  member: Pick<PoolMember, 'id'>
 ): Promise<{ result: QueueEventEmailResult; error: string | null }> {
   const { error } = await supabase.from('applications').update({ attending: true, payment_status: 'unpaid' }).eq('id', member.id);
   const result = await queueEventEmail(supabase, conferenceId, 'attendance_restored', [member.id]);
