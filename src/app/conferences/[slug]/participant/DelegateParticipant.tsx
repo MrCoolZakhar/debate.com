@@ -10,8 +10,9 @@ import DelegationPlacard from './DelegationPlacard';
 import DelegationPanel from './DelegationPanel';
 import type { ParticipantApplication, ParticipantAllocation, ParticipantCommittee } from './types';
 
-export default function DelegateParticipant({ conferenceId, application, myAllocation, committees, allocationSwapMode }: {
+export default function DelegateParticipant({ conferenceId, conferenceStartDate, application, myAllocation, committees, allocationSwapMode }: {
   conferenceId: string;
+  conferenceStartDate: string | null;
   application: ParticipantApplication;
   myAllocation: ParticipantAllocation | null;
   committees: ParticipantCommittee[];
@@ -23,8 +24,8 @@ export default function DelegateParticipant({ conferenceId, application, myAlloc
     <div className="flex flex-col gap-6">
       <AllocationCard
         committee={committee}
-        countryCode={myAllocation?.country_code ?? null}
-        countryName={myAllocation?.country_name ?? null}
+        myAllocation={myAllocation}
+        conferenceStartDate={conferenceStartDate}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

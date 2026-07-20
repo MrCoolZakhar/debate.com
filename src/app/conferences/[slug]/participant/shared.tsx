@@ -1,7 +1,13 @@
+'use client';
+
 // Shared primitives for the participant view (person tab). Small and
 // self-contained on purpose, duplicated from ConferenceDetailClient's own
 // SectionCard rather than imported, since ConferenceDetailClient imports
 // ParticipantView and an import back the other way would cycle.
+
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient } from '@/lib/supabase-auth';
 
 export const OUTFIT = "'Outfit', sans-serif";
 
@@ -89,4 +95,69 @@ export function derivePaymentChip(paymentStatus: string, selfPaid: boolean, amou
   if (paymentStatus === 'waived') return 'WAIVED';
   if (paymentStatus === 'refunded') return 'REFUNDED';
   return amountPaid > 0 ? 'PARTIAL' : 'UNPAID';
+}
+
+// ── Allocation partner lookup ─────────────────────────────────────────────
+// A double-delegation country seats two users. Given the viewer's own
+// allocation row, finds the OTHER seat-holder of the same committee +
+// country (RLS lets seatmates read each other's allocation rows). Returns
+// null when the country is single-seat (today's default) or the other seat
+// isn't filled yet. Shared by AllocationCard ("Representing together with")
+// and PositionPaperCard (paper-submitter attribution) so both resolve the
+// same partner the same way.
+
+export interface AllocationPartner {
+  userId: string | null;
+  name: string | null;
+}
+
+export function useAllocationPartner(
+  myAllocation: { id: string; conference_committee_id: string; country_code: string } | null
+): AllocationPartner | null {
+  const { session } = useAuth();
+  const [partner, setPartner] = useState<AllocationPartner | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!myAllocation || !session) { setPartner(null); return; }
+    (async () => {
+      const supabase = getAuthedClient(session.access_token);
+      const { data } = await supabase
+        .from('conference_allocations')
+        .select('user_id, profiles (display_name), applications:application_id (invited_name)')
+        .eq('conference_committee_id', myAllocation.conference_committee_id)
+        .eq('country_code', myAllocation.country_code)
+        .neq('id', myAllocation.id);
+      if (cancelled) return;
+      const row = ((data ?? []) as unknown as {
+        user_id: string | null;
+        profiles: { display_name: string } | null;
+        applications: { invited_name: string | null } | null;
+      }[])[0] ?? null;
+      setPartner(row ? { userId: row.user_id, name: row.profiles?.display_name ?? row.applications?.invited_name ?? null } : null);
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myAllocation?.id, myAllocation?.conference_committee_id, myAllocation?.country_code, session?.access_token]);
+
+  return partner;
+}
+
+// ── Session release time ────────────────────────────────────────────────
+// A session "opens" at its own release timestamp if set, otherwise the
+// conference's start date at midnight. Shared by the delegate release gate
+// (conference_committees.released_to_delegates_at) and the advisor/observer
+// one (conferences.session_release_advisors_at) — same fallback rule,
+// different source column.
+
+export function effectiveReleaseTime(releaseAt: string | null, conferenceStartDate: string | null): number | null {
+  if (releaseAt) return new Date(releaseAt).getTime();
+  if (conferenceStartDate) return new Date(conferenceStartDate + 'T00:00:00').getTime();
+  return null;
+}
+
+const RELEASE_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function formatReleaseDate(ms: number): string {
+  const d = new Date(ms);
+  return `${RELEASE_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }

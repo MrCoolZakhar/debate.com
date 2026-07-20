@@ -51,6 +51,7 @@ function pickDefault(apps: ParticipantApplication[]): ParticipantApplication {
 export interface ParticipantViewProps {
   conferenceId: string;
   conferenceSlug: string;
+  conferenceStartDate: string | null;
   myApplications: ParticipantApplication[];
   roleConfigs: ParticipantRoleConfig[];
   myAllocation: ParticipantAllocation | null;
@@ -63,7 +64,7 @@ export interface ParticipantViewProps {
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, financialAidEnabled, aidBlocks, aidIntro,
+  conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, financialAidEnabled, aidBlocks, aidIntro,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -143,6 +144,7 @@ export default function ParticipantView({
             {DELEGATE_ROLES.has(selected.role) ? (
               <DelegateParticipant
                 conferenceId={conferenceId}
+                conferenceStartDate={conferenceStartDate}
                 application={selected}
                 myAllocation={myAllocation}
                 committees={committees}
@@ -151,6 +153,7 @@ export default function ParticipantView({
             ) : selected.role === 'faculty-advisor' ? (
               <AdvisorParticipant
                 conferenceId={conferenceId}
+                conferenceStartDate={conferenceStartDate}
                 application={selected}
                 allocationSwapMode={allocationSwapMode}
                 roleConfigs={roleConfigs}
@@ -161,7 +164,7 @@ export default function ParticipantView({
             ) : selected.role === 'chair' ? (
               <ChairParticipant conferenceId={conferenceId} />
             ) : selected.role === 'observer' ? (
-              <ObserverParticipant />
+              <ObserverParticipant conferenceId={conferenceId} conferenceStartDate={conferenceStartDate} />
             ) : (
               <RolePlaceholder role={selected.role} />
             )}

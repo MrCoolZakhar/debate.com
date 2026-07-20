@@ -33,7 +33,12 @@ export interface ParticipantAllocation {
   country_code: string;
   country_name: string;
   conference_committee_id: string;
-  conference_committees: { name: string; position_paper_deadline: string | null } | null;
+  conference_committees: {
+    name: string;
+    position_paper_deadline: string | null;
+    session_code: string | null;
+    released_to_delegates_at: string | null;
+  } | null;
 }
 
 export interface ParticipantCommittee {

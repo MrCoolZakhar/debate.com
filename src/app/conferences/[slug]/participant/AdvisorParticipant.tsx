@@ -7,12 +7,14 @@
 import DelegationPanel from './DelegationPanel';
 import DelegationCreditsCard from './DelegationCreditsCard';
 import PledgeInvoicingCard from './PledgeInvoicingCard';
+import CommitteesSessionsCard from './CommitteesSessionsCard';
 import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantApplication, ParticipantRoleConfig } from './types';
 import { type FormBlock } from '@/lib/customQuestions';
 
-export default function AdvisorParticipant({ conferenceId, application, allocationSwapMode, roleConfigs, financialAidEnabled, aidBlocks, aidIntro }: {
+export default function AdvisorParticipant({ conferenceId, conferenceStartDate, application, allocationSwapMode, roleConfigs, financialAidEnabled, aidBlocks, aidIntro }: {
   conferenceId: string;
+  conferenceStartDate: string | null;
   application: ParticipantApplication;
   allocationSwapMode: string;
   roleConfigs: ParticipantRoleConfig[];
@@ -22,11 +24,14 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
 }) {
   if (!application.society_id) {
     return (
-      <SectionCard>
-        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          No delegation on file for this application.
-        </p>
-      </SectionCard>
+      <div className="flex flex-col gap-6">
+        <SectionCard>
+          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            No delegation on file for this application.
+          </p>
+        </SectionCard>
+        <CommitteesSessionsCard conferenceId={conferenceId} conferenceStartDate={conferenceStartDate} />
+      </div>
     );
   }
 
@@ -48,6 +53,7 @@ export default function AdvisorParticipant({ conferenceId, application, allocati
         aidBlocks={aidBlocks}
         aidIntro={aidIntro}
       />
+      <CommitteesSessionsCard conferenceId={conferenceId} conferenceStartDate={conferenceStartDate} />
     </div>
   );
 }

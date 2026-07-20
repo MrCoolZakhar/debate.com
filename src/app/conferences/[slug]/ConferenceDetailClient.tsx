@@ -136,6 +136,7 @@ interface Committee {
   difficulty: string;
   committee_type: string;
   total_slots: number | null;
+  delegation_size: number;
   display_chairs: DisplayChair[] | null;
   logo_url: string | null;
 }
@@ -647,7 +648,7 @@ export default function ConferenceDetailClient() {
     const [committeesRes, roleConfigsRes] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, display_chairs, logo_url')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, display_chairs, logo_url')
         .eq('conference_id', conf.id)
         .order('name', { ascending: true }),
       supabase
@@ -798,7 +799,7 @@ export default function ConferenceDetailClient() {
       if (committeeIds.length > 0) {
         const { data: allocData } = await authedSupabase
           .from('conference_allocations')
-          .select('id, country_code, country_name, conference_committee_id, conference_committees (name, position_paper_deadline)')
+          .select('id, country_code, country_name, conference_committee_id, conference_committees (name, position_paper_deadline, session_code, released_to_delegates_at)')
           .eq('user_id', user.id)
           .in('conference_committee_id', committeeIds)
           .maybeSingle();
@@ -1623,6 +1624,7 @@ export default function ConferenceDetailClient() {
                 <ParticipantView
                   conferenceId={conference.id}
                   conferenceSlug={conference.slug}
+                  conferenceStartDate={conference.start_date}
                   myApplications={myApplications}
                   roleConfigs={roleConfigs}
                   myAllocation={myAllocation}
@@ -2367,7 +2369,7 @@ export default function ConferenceDetailClient() {
                                     )}
                                     <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
                                     <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
-                                      {capacity} {isCrisis ? 'roles' : 'seats'}
+                                      {!isCrisis && c.delegation_size >= 2 ? `${capacity} countries · 2 delegates each` : `${capacity} ${isCrisis ? 'roles' : 'seats'}`}
                                     </span>
                                     {isCrisis && (
                                       <>

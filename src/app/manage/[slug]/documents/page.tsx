@@ -7,6 +7,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getFlagUrl } from '@/lib/countries';
+import { queueEventEmail } from '@/lib/emailEvents';
 import Portal from '@/components/Portal';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ interface StudyGuide {
 
 interface PositionPaper {
   id: string;
+  conference_committee_id: string;
   country_code: string;
   country_name: string;
   file_url: string;
@@ -412,7 +414,7 @@ export default function DocumentsPage() {
     const { data } = await supabase
       .from('position_papers')
       .select(`
-        id, country_code, country_name, file_url, file_name, file_size_bytes,
+        id, conference_committee_id, country_code, country_name, file_url, file_name, file_size_bytes,
         status, chair_feedback, reviewed_at, notify_on_feedback, submitted_at,
         profiles (display_name, email)
       `)
@@ -493,8 +495,9 @@ export default function DocumentsPage() {
   }
 
   function saveFeedback(paperId: string) {
-    if (!user || !session) return;
+    if (!user || !session || !conference) return;
     const previous = positionPapers;
+    const paper = positionPapers.find(p => p.id === paperId);
     const feedback = feedbackTexts[paperId] ?? '';
     const reviewedAt = new Date().toISOString();
     setPositionPapers(prev => prev.map(p => p.id === paperId ? { ...p, chair_feedback: feedback, reviewed_at: reviewedAt } : p));
@@ -505,11 +508,26 @@ export default function DocumentsPage() {
       chair_feedback: feedback,
       reviewed_by: user.id,
       reviewed_at: reviewedAt,
-    }).eq('id', paperId).then(({ error }) => {
+    }).eq('id', paperId).then(async ({ error }) => {
       if (error) {
         setPositionPapers(previous);
         setFeedbackEditing(prev => ({ ...prev, [paperId]: true }));
         setActionError("Couldn't save the feedback. Please try again.");
+        return;
+      }
+      // Notify every seat-holder of this paper's country, not just the
+      // submitter — a double-delegation country shares one paper between
+      // its two delegates.
+      if (!paper) return;
+      const { data: seatRows } = await supabase
+        .from('conference_allocations')
+        .select('application_id')
+        .eq('conference_committee_id', paper.conference_committee_id)
+        .eq('country_code', paper.country_code)
+        .not('application_id', 'is', null);
+      const applicationIds = ((seatRows ?? []) as { application_id: string }[]).map(r => r.application_id);
+      if (applicationIds.length > 0) {
+        await queueEventEmail(supabase, conference.id, 'position_paper_feedback', applicationIds);
       }
     });
   }

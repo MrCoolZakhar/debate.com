@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { SectionCard, OUTFIT } from './shared';
+import { SectionCard, OUTFIT, useAllocationPartner } from './shared';
 import type { ParticipantAllocation } from './types';
 
 interface PositionPaper {
@@ -19,6 +19,7 @@ interface PositionPaper {
   chair_feedback: string | null;
   submitted_at: string;
   file_name: string;
+  user_id: string;
 }
 
 const ppStatusMap: Record<string, { bg: string; color: string }> = {
@@ -66,20 +67,24 @@ export default function PositionPaperCard({ conferenceId, myAllocation }: {
 
   useEffect(() => { loadPpEnabled(); }, [loadPpEnabled]);
 
+  // Fetched by COUNTRY, not user — a double-delegation country shares one
+  // paper between its two seat-holders, whoever submitted it.
   const loadMyPositionPaper = useCallback(async () => {
     if (!user || !myAllocation || !session) return;
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('position_papers')
-      .select('id, status, chair_feedback, submitted_at, file_name')
+      .select('id, status, chair_feedback, submitted_at, file_name, user_id')
       .eq('conference_committee_id', myAllocation.conference_committee_id)
-      .eq('user_id', user.id)
+      .eq('country_code', myAllocation.country_code)
       .maybeSingle();
     setMyPositionPaper((data as PositionPaper | null) ?? null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, myAllocation?.conference_committee_id, session?.access_token]);
+  }, [user?.id, myAllocation?.conference_committee_id, myAllocation?.country_code, session?.access_token]);
 
   useEffect(() => { loadMyPositionPaper(); }, [loadMyPositionPaper]);
+
+  const partner = useAllocationPartner(myAllocation);
 
   function handlePPFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -223,9 +228,14 @@ export default function PositionPaperCard({ conferenceId, myAllocation }: {
                   {myPositionPaper!.file_name}
                 </span>
               </div>
-              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', marginBottom: 10 }}>
+              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', marginBottom: myPositionPaper!.user_id !== user?.id ? 2 : 10 }}>
                 Submitted {fmtDate(myPositionPaper!.submitted_at)}
               </p>
+              {myPositionPaper!.user_id !== user?.id && (
+                <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', marginBottom: 10 }}>
+                  Submitted by {partner?.name ?? 'your co-delegate'}
+                </p>
+              )}
               <button
                 onClick={() => setShowPPWarning(true)}
                 className="focus:outline-none"

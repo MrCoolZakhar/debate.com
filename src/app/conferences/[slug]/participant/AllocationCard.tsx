@@ -3,13 +3,16 @@
 // Allocation card, the centerpiece of the delegate participant view. Mirrors
 // the public committee card language (monogram/logo, name, difficulty pill,
 // roman-numeral topics) from ConferenceDetailClient's committee carousel,
-// plus a large flag + country ribbon for the delegate's own allocation.
+// plus a large flag + country ribbon for the delegate's own allocation, a
+// co-delegate line on a double-delegation country, and the ENTER SESSION
+// gate once the committee's live session has opened.
 
-import { Compass } from 'lucide-react';
+import { Compass, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 import { FlagImg } from '@/components/FlagImg';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
-import { SectionCard, OUTFIT, capitalize } from './shared';
-import type { ParticipantCommittee } from './types';
+import { SectionCard, OUTFIT, capitalize, useAllocationPartner, effectiveReleaseTime, formatReleaseDate } from './shared';
+import type { ParticipantCommittee, ParticipantAllocation } from './types';
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
   beginner: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
@@ -20,12 +23,14 @@ const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
 
 const ROMAN = ['I', 'II', 'III'];
 
-export default function AllocationCard({ committee, countryCode, countryName }: {
+export default function AllocationCard({ committee, myAllocation, conferenceStartDate }: {
   committee: ParticipantCommittee | null;
-  countryCode: string | null;
-  countryName: string | null;
+  myAllocation: ParticipantAllocation | null;
+  conferenceStartDate: string | null;
 }) {
-  if (!committee || !countryName) {
+  const partner = useAllocationPartner(myAllocation);
+
+  if (!committee || !myAllocation) {
     return (
       <SectionCard>
         <div className="flex flex-col items-center text-center py-10">
@@ -47,6 +52,10 @@ export default function AllocationCard({ committee, countryCode, countryName }: 
   const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
   const isCrisis = committee.committee_type === 'crisis';
   const topics = committee.topics ?? [];
+
+  const sessionCode = myAllocation.conference_committees?.session_code ?? null;
+  const releaseMs = effectiveReleaseTime(myAllocation.conference_committees?.released_to_delegates_at ?? null, conferenceStartDate);
+  const released = releaseMs !== null && releaseMs <= Date.now();
 
   return (
     <SectionCard>
@@ -107,11 +116,39 @@ export default function AllocationCard({ committee, countryCode, countryName }: 
           <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 12px 0' }}>
             YOUR COUNTRY
           </p>
-          {countryCode && <FlagImg code={countryCode} size={56} className="rounded-lg shadow-lg" />}
+          <FlagImg code={myAllocation.country_code} size={56} className="rounded-lg shadow-lg" />
           <p className="font-black text-xl mt-3" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            {countryName}
+            {myAllocation.country_name}
           </p>
+          {partner?.name && (
+            <p className="text-[12px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              Representing together with {partner.name}
+            </p>
+          )}
         </div>
+
+        {/* Live session gate */}
+        {sessionCode && (
+          <div className="w-full mt-6 pt-6" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+            {released ? (
+              <Link
+                href={`/delegate/${sessionCode}?country=${encodeURIComponent(myAllocation.country_name)}&locked=1`}
+                className="inline-flex items-center justify-center gap-2 w-full rounded-xl focus:outline-none"
+                style={{
+                  padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A',
+                  fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, letterSpacing: '0.06em',
+                  textTransform: 'uppercase', textDecoration: 'none',
+                }}
+              >
+                Enter Session <ArrowRight size={15} strokeWidth={2.4} />
+              </Link>
+            ) : releaseMs !== null ? (
+              <p className="text-[12.5px]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                Session opens {formatReleaseDate(releaseMs)}
+              </p>
+            ) : null}
+          </div>
+        )}
       </div>
     </SectionCard>
   );
