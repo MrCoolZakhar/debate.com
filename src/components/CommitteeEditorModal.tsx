@@ -19,7 +19,7 @@ import {
   type RosterEntry,
 } from '@/components/ConferenceRosterPicker';
 import { matchPresetEmblem, committeeDisplayName } from '@/lib/presetNames';
-import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+import { LevelInsignia, LEVEL_ACCENT, PillToggle } from '@/app/account/accountUi';
 import { LogoDisc } from '@/components/LogoDisc';
 import { sendChairInvite } from '@/lib/chairInvites';
 import Portal from '@/components/Portal';
@@ -369,11 +369,12 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
 
 // ── CommitteeEditor (create + edit) ───────────────────────────────────────────
 
-function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster, onClose, onSaved }: {
+function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster, initialDelegationSize = 1, onClose, onSaved }: {
   conferenceId: string;
   committeeType: CommitteeType;
   existing?: EditableCommittee | null;
   initialRoster?: RosterEntry[];
+  initialDelegationSize?: number;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -387,7 +388,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
   const [roster, setRoster] = useState<RosterEntry[]>(initialRoster ?? []);
   const [baselineRoster] = useState<RosterEntry[]>(initialRoster ?? []);
+  // Committee-level toggle: off = every country/character seats one delegate
+  // (delegation_size 1, today's behavior), on = every slot seats two. No
+  // per-country control — this single toggle drives every slot's size.
+  const [doubleDelegation, setDoubleDelegation] = useState<boolean>(initialDelegationSize === 2);
   const [pendingRemovalCount, setPendingRemovalCount] = useState<number | null>(null);
+  // Turning double delegation OFF is destructive when second seats are
+  // occupied — count of affected delegates, shown in the danger confirm modal.
+  const [pendingDoubleOffCount, setPendingDoubleOffCount] = useState<number | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logo_url ?? null);
   const [logoUploading, setLogoUploading] = useState(false);
   // Once the organiser uploads, clears, or picks an emblem, we stop auto-filling
@@ -435,6 +443,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   }
 
   async function doCreate(supabase: ReturnType<typeof getAuthedClient>): Promise<boolean> {
+    const delegationSize = doubleDelegation ? 2 : 1;
     const { data: created, error: err } = await supabase.from('conference_committees').insert({
       conference_id: conferenceId,
       name: name.trim(),
@@ -445,6 +454,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       total_slots: roster.length,
       notification_email: null,
       logo_url: logoUrl,
+      delegation_size: delegationSize,
     }).select('id').single();
     if (err || !created) { setError(err?.message ?? 'Failed to create committee.'); return false; }
     await supabase.from('committee_country_slots').insert(
@@ -452,7 +462,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         conference_committee_id: created.id,
         country_code: getCountryByName(r.name)?.code ?? r.name,
         country_name: r.name,
-        delegation_size: 1,
+        delegation_size: delegationSize,
         importance: r.importance,
         is_observer: !!r.isObserver,
       }))
@@ -465,7 +475,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     return true;
   }
 
-  async function doEdit(supabase: ReturnType<typeof getAuthedClient>, force: boolean): Promise<'ok' | 'needs_confirm' | 'fail'> {
+  async function doEdit(supabase: ReturnType<typeof getAuthedClient>, forceRemoval: boolean, forceDoubleOff = false): Promise<'ok' | 'needs_confirm_removal' | 'needs_confirm_double_off' | 'fail'> {
     const ex = existing!;
     const baseNames = baselineRoster.map(r => r.name);
     const nextNames = roster.map(r => r.name);
@@ -477,8 +487,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     const retiered = roster.filter(r => baseTier.has(r.name) && baseTier.get(r.name) !== r.importance);
     // Rows kept across the edit whose observer flag the organiser toggled.
     const reobserved = roster.filter(r => baseObs.has(r.name) && baseObs.get(r.name) !== !!r.isObserver);
+    const turnedDoubleOn = initialDelegationSize === 1 && doubleDelegation;
+    const turnedDoubleOff = initialDelegationSize === 2 && !doubleDelegation;
 
-    if (removed.length > 0 && !force) {
+    if (removed.length > 0 && !forceRemoval) {
       const { data: allocs } = await supabase
         .from('conference_allocations')
         .select('id')
@@ -486,7 +498,22 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         .in('country_name', removed);
       if ((allocs?.length ?? 0) > 0) {
         setPendingRemovalCount(allocs!.length);
-        return 'needs_confirm';
+        return 'needs_confirm_removal';
+      }
+    }
+
+    // Turning double delegation OFF is destructive when second seats are
+    // occupied — count and gate BEFORE any write, exactly like the removal
+    // check above. Turning it ON only opens second seats, always safe.
+    if (turnedDoubleOff && !forceDoubleOff) {
+      const { data: seat2 } = await supabase
+        .from('conference_allocations')
+        .select('id')
+        .eq('conference_committee_id', ex.id)
+        .eq('seat', 2);
+      if ((seat2?.length ?? 0) > 0) {
+        setPendingDoubleOffCount(seat2!.length);
+        return 'needs_confirm_double_off';
       }
     }
 
@@ -498,12 +525,13 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       }
     }
     if (added.length > 0) {
+      // Newly added countries always insert at the committee's current size.
       await supabase.from('committee_country_slots').insert(
         added.map((r) => ({
           conference_committee_id: ex.id,
           country_code: getCountryByName(r.name)?.code ?? r.name,
           country_name: r.name,
-          delegation_size: 1,
+          delegation_size: doubleDelegation ? 2 : 1,
           importance: r.importance,
           is_observer: !!r.isObserver,
         }))
@@ -535,6 +563,80 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           .eq('country', r.name);
       }
     }
+
+    // Double delegation direction change, verified writes throughout.
+    if (turnedDoubleOn) {
+      const { data: cUpd, error: cErr } = await supabase.from('conference_committees')
+        .update({ delegation_size: 2 })
+        .eq('id', ex.id)
+        .select('id');
+      if (cErr || !cUpd || cUpd.length !== 1) {
+        setDoubleDelegation(false);
+        setError('Could not enable double delegation. Please try again.');
+        return 'fail';
+      }
+      const { data: sUpd, error: sErr } = await supabase.from('committee_country_slots')
+        .update({ delegation_size: 2 })
+        .eq('conference_committee_id', ex.id)
+        .select('id');
+      if (sErr || !sUpd || sUpd.length !== nextNames.length) {
+        setError('Double delegation was enabled, but some slots may not have updated. Please refresh and try again.');
+        return 'fail';
+      }
+    } else if (turnedDoubleOff) {
+      const { data: seat2Rows, error: fetchErr } = await supabase
+        .from('conference_allocations')
+        .select('id, application_id')
+        .eq('conference_committee_id', ex.id)
+        .eq('seat', 2);
+      if (fetchErr) {
+        setDoubleDelegation(true);
+        setError('Could not turn off double delegation. Please try again.');
+        return 'fail';
+      }
+      // Revert any linked application from 'assigned' back to 'accepted' before
+      // the seat is removed, so it returns to the allocation pool.
+      const appIds = (seat2Rows ?? []).map(r => r.application_id).filter((id): id is string => !!id);
+      if (appIds.length > 0) {
+        const { error: appErr } = await supabase.from('applications')
+          .update({ status: 'accepted', assigned_committee_id: null, assigned_country_code: null, assigned_country_name: null })
+          .in('id', appIds)
+          .eq('status', 'assigned');
+        if (appErr) {
+          setDoubleDelegation(true);
+          setError('Could not revert affected applications. Please try again.');
+          return 'fail';
+        }
+      }
+      const { error: delErr } = await supabase.from('conference_allocations')
+        .delete()
+        .eq('conference_committee_id', ex.id)
+        .eq('seat', 2)
+        .select('id');
+      if (delErr) {
+        setDoubleDelegation(true);
+        setError('Could not remove second-seat allocations. Please try again.');
+        return 'fail';
+      }
+      const { data: cUpd, error: cErr } = await supabase.from('conference_committees')
+        .update({ delegation_size: 1 })
+        .eq('id', ex.id)
+        .select('id');
+      if (cErr || !cUpd || cUpd.length !== 1) {
+        setDoubleDelegation(true);
+        setError('Could not turn off double delegation. Please try again.');
+        return 'fail';
+      }
+      const { data: sUpd, error: sErr } = await supabase.from('committee_country_slots')
+        .update({ delegation_size: 1 })
+        .eq('conference_committee_id', ex.id)
+        .select('id');
+      if (sErr || !sUpd || sUpd.length !== nextNames.length) {
+        setError('Double delegation was turned off, but some slots may not have updated. Please refresh and try again.');
+        return 'fail';
+      }
+    }
+
     await supabase.from('conference_committees').update({
       name: name.trim(),
       abbreviation: abbreviation.trim() || null,
@@ -549,16 +651,16 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     return 'ok';
   }
 
-  async function handleSave(force = false) {
+  async function handleSave(forceRemoval = false, forceDoubleOff = false) {
     if (!name.trim()) { setError('Committee name is required.'); return; }
     if (roster.length === 0) { setError(isCharacterRoster ? 'Add at least one character.' : 'Add at least one country.'); return; }
     if (!session) return;
     setSaving(true); setError('');
     const supabase = getAuthedClient(session.access_token);
     if (isEdit) {
-      const res = await doEdit(supabase, force);
+      const res = await doEdit(supabase, forceRemoval, forceDoubleOff);
       setSaving(false);
-      if (res === 'needs_confirm') return;
+      if (res === 'needs_confirm_removal' || res === 'needs_confirm_double_off') return;
       if (res !== 'ok') return;
     } else {
       const ok = await doCreate(supabase);
@@ -631,6 +733,15 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                     );
                   })}
                 </div>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
+                <div className="min-w-0">
+                  <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#1C1410' }}>Double delegation</p>
+                  <p style={{ margin: '2px 0 0', fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', lineHeight: 1.4 }}>
+                    Every {isCharacterRoster ? 'character' : 'country'} seats two delegates instead of one.
+                  </p>
+                </div>
+                <PillToggle value={doubleDelegation} onChange={setDoubleDelegation} />
               </div>
             </div>
             {/* Emblem — auto-derived from the committee NAME (matchPresetEmblem), with
@@ -734,6 +845,19 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
         </div>
       </ModalOverlay>
     )}
+    {pendingDoubleOffCount !== null && (
+      <ModalOverlay onClose={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }}>
+        <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380 }}>
+          <p className="text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+            This action will affect the allocations of {pendingDoubleOffCount} delegates. It is irreversible. Are you sure you wish to continue?
+          </p>
+          <div className="flex gap-3">
+            <button onClick={() => { setPendingDoubleOffCount(null); setDoubleDelegation(true); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
+            <button onClick={() => { setPendingDoubleOffCount(null); handleSave(true, true); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>PROCEED</button>
+          </div>
+        </div>
+      </ModalOverlay>
+    )}
     </>
   );
 }
@@ -811,24 +935,34 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
   );
   // Edit flow: null until the committee's current slots are fetched.
   const [initialRoster, setInitialRoster] = useState<RosterEntry[] | null>(committee ? null : []);
+  // Edit flow: null until the committee's current delegation_size is fetched.
+  const [initialDelegationSize, setInitialDelegationSize] = useState<number | null>(committee ? null : 1);
 
   useEffect(() => {
     if (!committee || !session) return;
     let cancelled = false;
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { data } = await supabase
-        .from('committee_country_slots')
-        .select('country_name, importance, is_observer')
-        .eq('conference_committee_id', committee.id);
+      const [{ data: slots }, { data: committeeRow }] = await Promise.all([
+        supabase
+          .from('committee_country_slots')
+          .select('country_name, importance, is_observer')
+          .eq('conference_committee_id', committee.id),
+        supabase
+          .from('conference_committees')
+          .select('delegation_size')
+          .eq('id', committee.id)
+          .single(),
+      ]);
       if (!cancelled) {
         setInitialRoster(
-          (data ?? []).map((r: { country_name: string; importance: string | null; is_observer: boolean | null }) => ({
+          (slots ?? []).map((r: { country_name: string; importance: string | null; is_observer: boolean | null }) => ({
             name: r.country_name,
             importance: (r.importance as RosterEntry['importance']) ?? 'standard',
             isObserver: r.is_observer ?? false,
           }))
         );
+        setInitialDelegationSize((committeeRow?.delegation_size as number | null) ?? 1);
       }
     })();
     return () => { cancelled = true; };
@@ -854,7 +988,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
   }
 
   // Edit flow, brief spinner while the current slots load.
-  if (isEdit && initialRoster === null) {
+  if (isEdit && (initialRoster === null || initialDelegationSize === null)) {
     return (
       <ModalOverlay onClose={onClose}>
         <div className="rounded-2xl p-10 flex items-center justify-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 200 }}>
@@ -870,6 +1004,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
       committeeType={pendingType ?? 'general-assembly'}
       existing={committee}
       initialRoster={initialRoster ?? []}
+      initialDelegationSize={initialDelegationSize ?? 1}
       onClose={onClose}
       onSaved={onSaved}
     />
