@@ -262,7 +262,7 @@ export async function queueEventEmail(
   eventKey: string,
   applicationIds: string[],
   extraCtx?: EmailTokenContext,
-  opts?: { suppressIds?: Set<string> | string[] }
+  opts?: { suppressIds?: Set<string> | string[]; sendAfter?: string }
 ): Promise<QueueEventEmailResult> {
   const eventLabel = getEventLabel(eventKey);
   const suppress = opts?.suppressIds instanceof Set ? opts.suppressIds : new Set(opts?.suppressIds ?? []);
@@ -346,13 +346,19 @@ export async function queueEventEmail(
       body: resolveTokens(flatBody, ctx),
       body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
       status: 'pending' as const,
+      ...(opts?.sendAfter ? { send_after: opts.sendAfter } : {}),
     };
   });
 
   const { error } = await supabase.from('email_outbox').insert(rows);
   if (error) return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel };
 
-  triggerEmailDelivery(supabase);
+  // A scheduled row (send_after set) is left for the server-side cron to
+  // drain when its time arrives; only an immediate queue kicks the
+  // client-triggered delivery.
+  if (!opts?.sendAfter) {
+    triggerEmailDelivery(supabase);
+  }
 
   return {
     outcome,

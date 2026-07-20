@@ -9,6 +9,8 @@ import { sendChairInvite } from '@/lib/chairInvites';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
+import { PillToggle } from '@/app/account/accountUi';
+import { DatePicker } from '@/components/DatePicker';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -40,6 +42,7 @@ interface CommitteeRow {
   chair_user_ids: string[] | null;
   display_chairs: DisplayChair[] | null;
   released_to_chairs_at: string | null;
+  released_to_delegates_at: string | null;
 }
 
 interface Committee extends CommitteeRow {
@@ -94,6 +97,188 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
       ) : (
         <ArrowUpDown size={12} strokeWidth={2} style={{ opacity: 0.5 }} />
       )}
+    </button>
+  );
+}
+
+// ── Session release helpers ──────────────────────────────────────────────────
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 11, fontWeight: 700, color: '#6E5F4E',
+  fontFamily: "'Outfit', sans-serif", letterSpacing: '0.01em', marginBottom: 6,
+};
+
+function fmtReleaseDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function fmtConferenceStart(startDate: string): string {
+  return new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// This is the organizer's "have I sent the invite" action tracker, a
+// different question from the participant-side access gate (ChairParticipant
+// SessionCard), which additionally falls back to the conference's start_date
+// when the stamp is null. A null stamp here always means "never sent", full
+// stop — the button to actually send/queue the email must stay available even
+// once the conference's default release date has quietly passed on its own.
+type ReleaseState = 'unreleased' | 'scheduled' | 'released';
+function releaseStatus(releasedAt: string | null): ReleaseState {
+  if (!releasedAt) return 'unreleased';
+  return new Date(releasedAt).getTime() > Date.now() ? 'scheduled' : 'released';
+}
+
+// Splits an ISO timestamp into the local YYYY-MM-DD / HH:MM pair the picker
+// below edits independently (a DatePicker for the date, a plain time input
+// for the time — never a native date input per house rule).
+function isoToDatePart(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+function isoToTimePart(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// One release-time field: a DatePicker + time input, committing a verified
+// write on every change (no optimistic display — a failed save reverts the
+// shown value). Clearing the date nulls the whole timestamp.
+function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
+  value: string | null;
+  onSave: (iso: string | null) => Promise<boolean>;
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  const [datePart, setDatePart] = useState(isoToDatePart(value));
+  const [timePart, setTimePart] = useState(isoToTimePart(value));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setDatePart(isoToDatePart(value));
+    setTimePart(isoToTimePart(value));
+  }, [value]);
+
+  async function commit(nextDate: string, nextTime: string) {
+    const prevDate = datePart, prevTime = timePart;
+    setDatePart(nextDate);
+    setTimePart(nextTime);
+    let iso: string | null = null;
+    if (nextDate) {
+      const [y, mo, da] = nextDate.split('-').map(Number);
+      const [h, m] = (nextTime || '00:00').split(':').map(Number);
+      iso = new Date(y, mo - 1, da, h, m).toISOString();
+    }
+    setSaving(true);
+    setError('');
+    const ok = await onSave(iso);
+    setSaving(false);
+    if (!ok) {
+      setDatePart(prevDate);
+      setTimePart(prevTime);
+      setError("Couldn't save, please try again.");
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2 items-center">
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <DatePicker
+            value={datePart}
+            onChange={iso => commit(iso, timePart || '00:00')}
+            placeholder={placeholder}
+            disabled={disabled || saving}
+          />
+        </div>
+        <input
+          type="time"
+          value={timePart}
+          onChange={e => commit(datePart, e.target.value)}
+          disabled={disabled || saving || !datePart}
+          className="focus:outline-none"
+          style={{
+            border: '1px solid #DDD4C0', borderRadius: 12, padding: '11px 12px',
+            fontFamily: "'Outfit', sans-serif", fontSize: 14,
+            color: datePart ? '#1C1410' : '#9A8A78', backgroundColor: '#FAF8F3',
+          }}
+        />
+        {datePart && (
+          <button
+            type="button"
+            onClick={() => commit('', '')}
+            disabled={disabled || saving}
+            title="Clear, falls back to the default"
+            className="flex-shrink-0 focus:outline-none"
+            style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+      {error && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginTop: 4 }}>{error}</p>}
+    </div>
+  );
+}
+
+// The SEND / SCHEDULED / SENT+RESEND affordance, shared by the chairs and
+// participants release actions on a committee card.
+function ReleaseStatusBlock({ label, releasedAt, busy, onSend }: {
+  label: string;
+  releasedAt: string | null;
+  busy: boolean;
+  onSend: () => void;
+}) {
+  const status = releaseStatus(releasedAt);
+
+  if (status === 'scheduled') {
+    return (
+      <span
+        className="inline-flex items-center px-2.5 py-1 rounded-full"
+        style={{ fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', backgroundColor: 'rgba(238,217,138,0.3)' }}
+      >
+        SCHEDULED {fmtReleaseDate(releasedAt!)}
+      </span>
+    );
+  }
+
+  if (status === 'released') {
+    return (
+      <div className="flex items-center justify-between gap-2">
+        <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', color: '#3D7A52' }}>
+          SENT TO {label} {fmtReleaseDate(releasedAt!)}
+        </span>
+        <button
+          onClick={onSend}
+          disabled={busy}
+          className="flex-shrink-0 rounded-lg py-1.5 px-3 font-bold text-[10px] focus:outline-none"
+          style={{ border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer' }}
+        >
+          {busy ? '...' : 'RESEND'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={onSend}
+      disabled={busy}
+      className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
+      style={{
+        backgroundColor: busy ? '#DDD4C0' : '#1B3828', color: busy ? '#9A8A78' : '#EED98A',
+        fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
+        transition: `background-color 300ms ${EASE}`,
+      }}
+      onMouseEnter={e => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+      onMouseLeave={e => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+    >
+      <Send size={12} />
+      {busy ? 'SENDING...' : `SEND TO ${label}`}
     </button>
   );
 }
@@ -305,12 +490,21 @@ export default function CommitteesPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
   const [sendingToChairs, setSendingToChairs] = useState<string | null>(null);
+  const [sendingToParticipants, setSendingToParticipants] = useState<string | null>(null);
+  const [sendingAllToParticipants, setSendingAllToParticipants] = useState(false);
   // Ids with a write in flight, disables only that control (double-click guard).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   // Stale-response guard for background (silent) reloads.
   const loadSeq = useRef(0);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
+
+  // ── Session release settings (conferences-level toggles + advisor gate) ────
+  const [releaseSameTime, setReleaseSameTime] = useState(true);
+  const [releaseAllAtOnce, setReleaseAllAtOnce] = useState(true);
+  const [releaseAdvisorsAt, setReleaseAdvisorsAt] = useState<string | null>(null);
+  const [releaseSettingsLoaded, setReleaseSettingsLoaded] = useState(false);
+  const [savingToggle, setSavingToggle] = useState<'sameTime' | 'allAtOnce' | null>(null);
 
   function showFlash(msg: string) {
     setFlash(msg);
@@ -334,7 +528,7 @@ export default function CommitteesPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
-      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at')
+      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at, released_to_delegates_at')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
     if (seq !== loadSeq.current) return; // stale, a newer load superseded this one
@@ -357,6 +551,235 @@ export default function CommitteesPage() {
   }, [conference]);
 
   useEffect(() => { loadCommittees(); }, [loadCommittees]);
+
+  const loadReleaseSettings = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('conferences')
+      .select('session_release_same_time, session_release_all_at_once, session_release_advisors_at')
+      .eq('id', conference.id)
+      .single();
+    const row = data as { session_release_same_time?: boolean | null; session_release_all_at_once?: boolean | null; session_release_advisors_at?: string | null } | null;
+    setReleaseSameTime(row?.session_release_same_time ?? true);
+    setReleaseAllAtOnce(row?.session_release_all_at_once ?? true);
+    setReleaseAdvisorsAt(row?.session_release_advisors_at ?? null);
+    setReleaseSettingsLoaded(true);
+  }, [conference, session]);
+
+  useEffect(() => { loadReleaseSettings(); }, [loadReleaseSettings]);
+
+  async function saveSameTime(value: boolean) {
+    if (!session || !conference || savingToggle) return;
+    setSavingToggle('sameTime');
+    setActionError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.from('conferences').update({ session_release_same_time: value }).eq('id', conference.id).select('id');
+    setSavingToggle(null);
+    if (error || !data || data.length !== 1) { setActionError("Couldn't save, please try again."); return; }
+    setReleaseSameTime(value);
+  }
+
+  async function saveAllAtOnce(value: boolean) {
+    if (!session || !conference || savingToggle) return;
+    setSavingToggle('allAtOnce');
+    setActionError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.from('conferences').update({ session_release_all_at_once: value }).eq('id', conference.id).select('id');
+    setSavingToggle(null);
+    if (error || !data || data.length !== 1) { setActionError("Couldn't save, please try again."); return; }
+    setReleaseAllAtOnce(value);
+  }
+
+  async function saveAdvisorsAt(iso: string | null): Promise<boolean> {
+    if (!session || !conference) return false;
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.from('conferences').update({ session_release_advisors_at: iso }).eq('id', conference.id).select('id');
+    if (error || !data || data.length !== 1) return false;
+    setReleaseAdvisorsAt(iso);
+    return true;
+  }
+
+  // Deletes any still-unsent SCHEDULED rows (status pending, send_after set)
+  // for this event + these exact recipients, so re-saving a schedule never
+  // leaves a stale duplicate behind to fire alongside the new one.
+  async function clearStaleScheduled(
+    supabase: ReturnType<typeof getAuthedClient>,
+    conferenceId: string,
+    eventKey: string,
+    applicationIds: string[],
+  ) {
+    if (applicationIds.length === 0) return;
+    const { data: templateRow } = await supabase
+      .from('email_templates')
+      .select('id')
+      .eq('conference_id', conferenceId)
+      .eq('event_key', eventKey)
+      .maybeSingle();
+    if (!templateRow) return;
+    await supabase
+      .from('email_outbox')
+      .delete()
+      .eq('conference_id', conferenceId)
+      .eq('template_id', (templateRow as { id: string }).id)
+      .eq('status', 'pending')
+      .not('send_after', 'is', null)
+      .in('recipient_application_id', applicationIds);
+  }
+
+  // The recipients for a release invite event: chairs -> that committee's
+  // chair applications, delegates -> every allocated delegate's application
+  // in that committee.
+  async function releaseRecipientIds(
+    supabase: ReturnType<typeof getAuthedClient>,
+    committeeId: string,
+    chairUserIds: string[],
+    eventKey: 'session_chair_invite' | 'session_join_invite',
+  ): Promise<string[]> {
+    if (!conference) return [];
+    if (eventKey === 'session_chair_invite') {
+      if (chairUserIds.length === 0) return [];
+      const { data } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('conference_id', conference.id)
+        .eq('role', 'chair')
+        .in('user_id', chairUserIds);
+      return ((data ?? []) as { id: string }[]).map(a => a.id);
+    }
+    const { data } = await supabase
+      .from('conference_allocations')
+      .select('application_id')
+      .eq('conference_committee_id', committeeId)
+      .not('application_id', 'is', null);
+    return Array.from(new Set(((data ?? []) as { application_id: string }[]).map(a => a.application_id)));
+  }
+
+  // Writes one or both release columns to every committee in `targets`,
+  // verified. Any change first clears a previously scheduled invite for that
+  // committee/event (a fresh future value, an immediate past value, or
+  // clearing back to null all invalidate an old schedule the same way — the
+  // point is never leaving a stale queued row to fire later). A future value
+  // then pre-queues the matching invite email per affected committee; a null
+  // or past value never pre-queues (immediate sending is the Send Now
+  // actions' job).
+  async function saveReleaseTimestamp(
+    fields: ('released_to_chairs_at' | 'released_to_delegates_at')[],
+    targets: Committee[],
+    isoValue: string | null,
+  ): Promise<boolean> {
+    if (!session || !conference || targets.length === 0) return false;
+    const supabase = getAuthedClient(session.access_token);
+    const ids = targets.map(t => t.id);
+    const patch: Record<string, string | null> = {};
+    for (const f of fields) patch[f] = isoValue;
+    const { data, error } = await supabase.from('conference_committees').update(patch).in('id', ids).select('id');
+    if (error || !data || data.length !== ids.length) return false;
+
+    setCommittees(prev => prev.map(c => (ids.includes(c.id) ? { ...c, ...patch } : c)));
+
+    const isFuture = isoValue !== null && new Date(isoValue).getTime() > Date.now();
+    for (const f of fields) {
+      const eventKey = f === 'released_to_chairs_at' ? 'session_chair_invite' : 'session_join_invite';
+      for (const t of targets) {
+        const applicationIds = await releaseRecipientIds(supabase, t.id, t.chair_user_ids ?? [], eventKey);
+        if (applicationIds.length === 0) continue;
+        await clearStaleScheduled(supabase, conference.id, eventKey, applicationIds);
+        if (isFuture) {
+          await queueEventEmail(supabase, conference.id, eventKey, applicationIds, undefined, { sendAfter: isoValue! });
+        }
+      }
+    }
+    return true;
+  }
+
+  // Sibling of handleSendToChairs (below): stamps released_to_delegates_at =
+  // now() on one committee and queues session_join_invite immediately to
+  // every allocated delegate's application.
+  async function handleSendToParticipants(c: Committee) {
+    if (!session || !conference) return;
+    const status = releaseStatus(c.released_to_delegates_at);
+    const { confirmed } = await confirm({
+      title: status === 'released' ? 'Resend to participants?' : 'Send to participants?',
+      body: 'This notifies every delegate allocated to this committee.',
+      confirmLabel: status === 'released' ? 'Resend' : 'Send',
+    });
+    if (!confirmed) return;
+
+    const prevReleasedAt = c.released_to_delegates_at;
+    const releasedAt = new Date().toISOString();
+    setCommittees(prev => prev.map(x => (x.id === c.id ? { ...x, released_to_delegates_at: releasedAt } : x)));
+    setActionError('');
+    setSendingToParticipants(c.id);
+    showFlash('Sent to participants.');
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error: primaryError } = await supabase.from('conference_committees').update({ released_to_delegates_at: releasedAt }).eq('id', c.id);
+      if (primaryError) {
+        setCommittees(prev => prev.map(x => (x.id === c.id ? { ...x, released_to_delegates_at: prevReleasedAt } : x)));
+        setFlash(null);
+        setActionError("Couldn't send to participants. The release was reverted.");
+        return;
+      }
+      try {
+        const { data: allocRows } = await supabase
+          .from('conference_allocations')
+          .select('application_id')
+          .eq('conference_committee_id', c.id)
+          .not('application_id', 'is', null);
+        const appIds = Array.from(new Set(((allocRows ?? []) as { application_id: string }[]).map(a => a.application_id)));
+        if (appIds.length > 0) {
+          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds);
+          notifyIfNeeded(result, pushDraftNotice);
+        }
+      } catch {
+        setActionError('Released to participants, but the invite emails could not be queued.');
+      }
+    })().finally(() => setSendingToParticipants(cur => (cur === c.id ? null : cur)));
+  }
+
+  // Bulk variant of handleSendToParticipants, every committee at once.
+  async function handleSendAllToParticipants() {
+    if (!session || !conference || committees.length === 0 || sendingAllToParticipants) return;
+    const { confirmed } = await confirm({
+      title: 'Send all committee sessions to participants?',
+      body: 'This notifies every delegate allocated across every committee.',
+      confirmLabel: 'Send All',
+    });
+    if (!confirmed) return;
+
+    const ids = committees.map(c => c.id);
+    const prevReleasedAts = new Map(committees.map(c => [c.id, c.released_to_delegates_at]));
+    const releasedAt = new Date().toISOString();
+    setCommittees(prev => prev.map(c => ({ ...c, released_to_delegates_at: releasedAt })));
+    setActionError('');
+    setSendingAllToParticipants(true);
+    showFlash('Sent to all participants.');
+    const supabase = getAuthedClient(session.access_token);
+    (async () => {
+      const { error: primaryError } = await supabase.from('conference_committees').update({ released_to_delegates_at: releasedAt }).in('id', ids);
+      if (primaryError) {
+        setCommittees(prev => prev.map(c => ({ ...c, released_to_delegates_at: prevReleasedAts.get(c.id) ?? null })));
+        setFlash(null);
+        setActionError("Couldn't send to all participants. The release was reverted.");
+        return;
+      }
+      try {
+        const { data: allocRows } = await supabase
+          .from('conference_allocations')
+          .select('application_id')
+          .in('conference_committee_id', ids)
+          .not('application_id', 'is', null);
+        const appIds = Array.from(new Set(((allocRows ?? []) as { application_id: string }[]).map(a => a.application_id)));
+        if (appIds.length > 0) {
+          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds);
+          notifyIfNeeded(result, pushDraftNotice);
+        }
+      } catch {
+        setActionError('Released to all participants, but the invite emails could not be queued.');
+      }
+    })().finally(() => setSendingAllToParticipants(false));
+  }
 
   // The session code is minted server-side, so this keeps its await, but the
   // busy state is scoped to this one button; the rest of the page stays live.
@@ -691,6 +1114,128 @@ export default function CommitteesPage() {
 
       {!loading && committees.length > 0 && (
         <>
+          {/* Session release settings */}
+          {releaseSettingsLoaded && (
+            <div
+              className="rounded-2xl p-6 mb-6"
+              style={{ backgroundColor: 'rgba(250,248,243,0.82)', border: '1px solid rgba(221,212,192,0.95)', boxShadow: '0 10px 30px rgba(27,56,40,0.08)' }}
+            >
+              <p style={{ margin: '0 0 16px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.16em', color: '#B6871F' }}>
+                SESSION RELEASE
+              </p>
+
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                    Chairs and delegates receive session codes at the same time
+                  </span>
+                  <PillToggle value={releaseSameTime} onChange={saveSameTime} />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                    Release all committee sessions at once
+                  </span>
+                  <PillToggle value={releaseAllAtOnce} onChange={saveAllAtOnce} />
+                </div>
+              </div>
+
+              <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+                {releaseAllAtOnce ? (
+                  releaseSameTime ? (
+                    <div>
+                      <label style={labelStyle}>Release sessions at</label>
+                      <ReleaseTimePicker
+                        value={committees[0]?.released_to_chairs_at ?? null}
+                        onSave={iso => saveReleaseTimestamp(['released_to_chairs_at', 'released_to_delegates_at'], committees, iso)}
+                        placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label style={labelStyle}>Release to chairs at</label>
+                        <ReleaseTimePicker
+                          value={committees[0]?.released_to_chairs_at ?? null}
+                          onSave={iso => saveReleaseTimestamp(['released_to_chairs_at'], committees, iso)}
+                          placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Release to delegates at</label>
+                        <ReleaseTimePicker
+                          value={committees[0]?.released_to_delegates_at ?? null}
+                          onSave={iso => saveReleaseTimestamp(['released_to_delegates_at'], committees, iso)}
+                          placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
+                        />
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {committees.map(c => (
+                      <div key={c.id} className="flex items-center gap-3 flex-wrap">
+                        <span className="truncate" style={{ width: 150, flexShrink: 0, fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, color: '#1C1410' }}>
+                          {c.abbreviation || c.name}
+                        </span>
+                        {releaseSameTime ? (
+                          <div style={{ flex: 1, minWidth: 220 }}>
+                            <ReleaseTimePicker
+                              value={c.released_to_chairs_at}
+                              onSave={iso => saveReleaseTimestamp(['released_to_chairs_at', 'released_to_delegates_at'], [c], iso)}
+                              placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ flex: 1, minWidth: 200 }}>
+                              <ReleaseTimePicker
+                                value={c.released_to_chairs_at}
+                                onSave={iso => saveReleaseTimestamp(['released_to_chairs_at'], [c], iso)}
+                                placeholder={`Chairs, defaults to ${fmtConferenceStart(conference.start_date)}`}
+                              />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 200 }}>
+                              <ReleaseTimePicker
+                                value={c.released_to_delegates_at}
+                                onSave={iso => saveReleaseTimestamp(['released_to_delegates_at'], [c], iso)}
+                                placeholder={`Delegates, defaults to ${fmtConferenceStart(conference.start_date)}`}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+                <label style={labelStyle}>Observer and advisor access</label>
+                <ReleaseTimePicker
+                  value={releaseAdvisorsAt}
+                  onSave={saveAdvisorsAt}
+                  placeholder={`Defaults to ${fmtConferenceStart(conference.start_date)}`}
+                />
+              </div>
+
+              <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+                <button
+                  onClick={handleSendAllToParticipants}
+                  disabled={sendingAllToParticipants}
+                  className="flex items-center justify-center gap-2 rounded-xl py-2.5 px-5 text-[11px] font-bold focus:outline-none"
+                  style={{
+                    backgroundColor: sendingAllToParticipants ? '#DDD4C0' : '#1B3828',
+                    color: sendingAllToParticipants ? '#9A8A78' : '#EED98A',
+                    fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
+                  }}
+                >
+                  <Send size={12} />
+                  {sendingAllToParticipants ? 'SENDING...' : 'SEND ALL TO PARTICIPANTS'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Sort bar, glass pill, same recipe as the public conference page */}
           {committees.length > 1 && (
             <div className="mb-5">
@@ -890,43 +1435,24 @@ export default function CommitteesPage() {
                       {/* Send to chairs, release the roster/session/study-guide cards on their person tab */}
                       {(c.chair_user_ids?.length ?? 0) > 0 && (
                         <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                          {c.released_to_chairs_at ? (
-                            <div className="flex items-center justify-between gap-2">
-                              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', color: '#3D7A52' }}>
-                                SENT TO CHAIRS {new Date(c.released_to_chairs_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              </span>
-                              <button
-                                onClick={() => handleSendToChairs(c)}
-                                disabled={sendingToChairs === c.id}
-                                className="flex-shrink-0 rounded-lg py-1.5 px-3 font-bold text-[10px] focus:outline-none"
-                                style={{
-                                  border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828', backgroundColor: 'transparent',
-                                  fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
-                                }}
-                              >
-                                {sendingToChairs === c.id ? '...' : 'RESEND'}
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleSendToChairs(c)}
-                              disabled={sendingToChairs === c.id}
-                              className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
-                              style={{
-                                backgroundColor: sendingToChairs === c.id ? '#DDD4C0' : '#1B3828',
-                                color: sendingToChairs === c.id ? '#9A8A78' : '#EED98A',
-                                fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
-                                transition: `background-color 300ms ${EASE}`,
-                              }}
-                              onMouseEnter={e => { if (sendingToChairs !== c.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                              onMouseLeave={e => { if (sendingToChairs !== c.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                            >
-                              <Send size={12} />
-                              {sendingToChairs === c.id ? 'SENDING...' : 'SEND TO CHAIRS'}
-                            </button>
-                          )}
+                          <ReleaseStatusBlock
+                            label="CHAIRS"
+                            releasedAt={c.released_to_chairs_at}
+                            busy={sendingToChairs === c.id}
+                            onSend={() => handleSendToChairs(c)}
+                          />
                         </div>
                       )}
+
+                      {/* Send to participants, release the delegate's ENTER SESSION gate */}
+                      <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                        <ReleaseStatusBlock
+                          label="PARTICIPANTS"
+                          releasedAt={c.released_to_delegates_at}
+                          busy={sendingToParticipants === c.id}
+                          onSend={() => handleSendToParticipants(c)}
+                        />
+                      </div>
 
                       <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                         {c.session_code ? (

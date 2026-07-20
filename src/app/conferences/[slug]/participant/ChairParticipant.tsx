@@ -15,7 +15,7 @@ import { MonogramMedallion } from '@/components/CommitteeEditorModal';
 import { queueEventEmail } from '@/lib/emailEvents';
 import { getSiteUrl } from '@/lib/emailBlocks';
 import StudyGuideCard from './StudyGuideCard';
-import { SectionCard, OUTFIT, capitalize } from './shared';
+import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
   beginner: { bg: 'rgba(61,122,82,0.13)', color: '#2A5A3C' },
@@ -124,7 +124,11 @@ function CommitteeHeaderCard({ committee }: { committee: ChairCommittee }) {
 
 // ── Session card (item 2) ───────────────────────────────────────────────────
 
-function SessionCard({ committee, chairDisplayName }: { committee: ChairCommittee; chairDisplayName: string }) {
+function SessionCard({ committee, chairDisplayName, conferenceStartDate }: {
+  committee: ChairCommittee;
+  chairDisplayName: string;
+  conferenceStartDate: string | null;
+}) {
   const [copied, setCopied] = useState(false);
 
   function handleCopy() {
@@ -134,12 +138,19 @@ function SessionCard({ committee, chairDisplayName }: { committee: ChairCommitte
     setTimeout(() => setCopied(false), 2000);
   }
 
+  // "Released" now means the timestamp is non-null and in the past, OR it's
+  // null and the conference's start_date has arrived (the default release
+  // moment) — not just "a stamp exists at all", since a future stamp is a
+  // schedule, not a release yet.
+  const releaseMs = effectiveReleaseTime(committee.released_to_chairs_at, conferenceStartDate);
+  const released = releaseMs !== null && releaseMs <= Date.now();
+
   return (
     <SectionCard>
       <p className="mb-3" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
         SESSION
       </p>
-      {!committee.released_to_chairs_at ? (
+      {!released ? (
         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
           Your committee&apos;s session will be shared by the organizing team.
         </p>
@@ -334,10 +345,11 @@ function RosterRow({ member, paper, conferenceId, onFeedbackSaved }: {
 
 // ── One committee's full block ──────────────────────────────────────────────
 
-function ChairCommitteeBlock({ conferenceId, committee, chairDisplayName }: {
+function ChairCommitteeBlock({ conferenceId, committee, chairDisplayName, conferenceStartDate }: {
   conferenceId: string;
   committee: ChairCommittee;
   chairDisplayName: string;
+  conferenceStartDate: string | null;
 }) {
   const { session } = useAuth();
   const [roster, setRoster] = useState<RosterMember[]>([]);
@@ -375,7 +387,7 @@ function ChairCommitteeBlock({ conferenceId, committee, chairDisplayName }: {
   return (
     <div className="flex flex-col gap-6">
       <CommitteeHeaderCard committee={committee} />
-      <SessionCard committee={committee} chairDisplayName={chairDisplayName} />
+      <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} />
 
       <SectionCard>
         <p className="mb-4" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 16px 0' }}>
@@ -406,19 +418,28 @@ function ChairCommitteeBlock({ conferenceId, committee, chairDisplayName }: {
 export default function ChairParticipant({ conferenceId }: { conferenceId: string }) {
   const { user, session, profile } = useAuth();
   const [committees, setCommittees] = useState<ChairCommittee[]>([]);
+  const [conferenceStartDate, setConferenceStartDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!user || !session) return;
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
-      .from('conference_committees')
-      .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, released_to_chairs_at')
-      .eq('conference_id', conferenceId)
-      .contains('chair_user_ids', [user.id])
-      .order('name', { ascending: true });
+    const [{ data }, { data: confData }] = await Promise.all([
+      supabase
+        .from('conference_committees')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, released_to_chairs_at')
+        .eq('conference_id', conferenceId)
+        .contains('chair_user_ids', [user.id])
+        .order('name', { ascending: true }),
+      supabase
+        .from('conferences')
+        .select('start_date')
+        .eq('id', conferenceId)
+        .maybeSingle(),
+    ]);
     setCommittees((data ?? []) as ChairCommittee[]);
+    setConferenceStartDate((confData as { start_date?: string | null } | null)?.start_date ?? null);
     setLoading(false);
   }, [user, session, conferenceId]);
 
@@ -447,7 +468,7 @@ export default function ChairParticipant({ conferenceId }: { conferenceId: strin
   return (
     <div className="flex flex-col gap-10">
       {committees.map(c => (
-        <ChairCommitteeBlock key={c.id} conferenceId={conferenceId} committee={c} chairDisplayName={profile?.display_name ?? 'Chair'} />
+        <ChairCommitteeBlock key={c.id} conferenceId={conferenceId} committee={c} chairDisplayName={profile?.display_name ?? 'Chair'} conferenceStartDate={conferenceStartDate} />
       ))}
     </div>
   );
