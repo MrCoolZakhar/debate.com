@@ -908,19 +908,28 @@ function ImportanceDashes({ tier, barHeight = 11 }: { tier: ImportanceTier; barH
 
 function TierBadge({ tier, onCycle }: { tier: ImportanceTier; onCycle?: () => void }) {
   const meta = TIER_META[tier];
+  const title = `Country importance: ${meta.label}.${onCycle ? ' Click to cycle: standard, low, medium, high.' : ''}`;
+  const style: React.CSSProperties = {
+    padding: '4px 8px',
+    borderRadius: 8,
+    backgroundColor: NEU.surface,
+    boxShadow: NEU.outSm,
+    cursor: onCycle ? 'pointer' : 'default',
+  };
+  if (!onCycle) {
+    return (
+      <span title={title} aria-label={`Importance: ${meta.label}`} className="inline-flex items-center" style={style}>
+        <ImportanceDashes tier={tier} />
+      </span>
+    );
+  }
   return (
     <button
-      onClick={e => { e.stopPropagation(); onCycle?.(); }}
-      title={`Country importance: ${meta.label}.${onCycle ? ' Click to cycle: standard, low, medium, high.' : ''}`}
+      onClick={e => { e.stopPropagation(); onCycle(); }}
+      title={title}
       aria-label={`Importance: ${meta.label}`}
       className="focus:outline-none inline-flex items-center"
-      style={{
-        padding: '4px 8px',
-        borderRadius: 8,
-        backgroundColor: NEU.surface,
-        boxShadow: NEU.outSm,
-        cursor: onCycle ? 'pointer' : 'default',
-      }}
+      style={style}
     >
       <ImportanceDashes tier={tier} />
     </button>

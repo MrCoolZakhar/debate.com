@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, Settings } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -11,6 +11,7 @@ import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { PillToggle } from '@/app/account/accountUi';
 import { DatePicker } from '@/components/DatePicker';
+import { NeuButton, NeuPill } from '@/components/neu';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -33,6 +34,7 @@ interface CommitteeRow {
   difficulty: string;
   committee_type: string;
   total_slots: number;
+  delegation_size: number;
   session_code: string | null;
   session_id: string | null;
   pp_submissions_enabled: boolean;
@@ -485,6 +487,7 @@ export default function CommitteesPage() {
   const [addChairTarget, setAddChairTarget] = useState<Committee | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CommitteeRow | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'name' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [flash, setFlash] = useState<string | null>(null);
@@ -528,7 +531,7 @@ export default function CommitteesPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
-      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at, released_to_delegates_at')
+      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at, released_to_delegates_at')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
     if (seq !== loadSeq.current) return; // stale, a newer load superseded this one
@@ -1018,16 +1021,9 @@ export default function CommitteesPage() {
             Committees
           </h1>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-        >
-          <Plus size={15} />
+        <NeuButton icon={Plus} onClick={() => setShowAdd(true)}>
           ADD COMMITTEE
-        </button>
+        </NeuButton>
       </div>
 
       <DraftNoticeList
@@ -1114,8 +1110,20 @@ export default function CommitteesPage() {
 
       {!loading && committees.length > 0 && (
         <>
+          {/* Tab switcher, same neumorphic pill pattern as Financials' sub-nav */}
+          <div className="flex items-center gap-2 mb-6 flex-wrap">
+            <NeuPill active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
+              <LayoutGrid size={12} strokeWidth={2.5} />
+              OVERVIEW
+            </NeuPill>
+            <NeuPill active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
+              <Settings size={12} strokeWidth={2.5} />
+              SETTINGS
+            </NeuPill>
+          </div>
+
           {/* Session release settings */}
-          {releaseSettingsLoaded && (
+          {activeTab === 'settings' && releaseSettingsLoaded && (
             <div
               className="rounded-2xl p-6 mb-6"
               style={{ backgroundColor: 'rgba(250,248,243,0.82)', border: '1px solid rgba(221,212,192,0.95)', boxShadow: '0 10px 30px rgba(27,56,40,0.08)' }}
@@ -1236,6 +1244,8 @@ export default function CommitteesPage() {
             </div>
           )}
 
+          {activeTab === 'overview' && (
+          <>
           {/* Sort bar, glass pill, same recipe as the public conference page */}
           {committees.length > 1 && (
             <div className="mb-5">
@@ -1323,7 +1333,9 @@ export default function CommitteesPage() {
                       )}
                       <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
                       <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                        {seats} {isCrisis ? (seats === 1 ? 'role' : 'roles') : (seats === 1 ? 'seat' : 'seats')}
+                        {!isCrisis && c.delegation_size === 2
+                          ? `${seats} countries · ${seats * 2} seats`
+                          : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : (seats === 1 ? 'seat' : 'seats')}`}
                       </span>
                       {isCrisis && (
                         <>
@@ -1557,6 +1569,8 @@ export default function CommitteesPage() {
               );
             })}
           </div>
+          </>
+          )}
         </>
       )}
 
