@@ -796,6 +796,14 @@ function CommunicationsPageInner() {
     return list && list.length > 0 ? list[list.length - 1] : null;
   }
 
+  // Last activity = the greater of the thread's own created_at and its
+  // newest message's created_at — a new message from either side bumps the
+  // thread to the top; a status-only change with no message never moves it.
+  function lastActivityOf(r: InboxRequest): string {
+    const last = lastMessageOf(r.id);
+    return last && last.created_at > r.created_at ? last.created_at : r.created_at;
+  }
+
   // Unread = messages from the participant side (is_organizer false) newer
   // than organizer_seen_at; every message counts when the stamp is null
   // (never opened). Independent of `status` — a closed thread can still
@@ -813,10 +821,10 @@ function CommunicationsPageInner() {
       .filter(r => (q ? r.subject.toLowerCase().includes(q) : true))
       .filter(r => (inboxDateFrom ? r.created_at.slice(0, 10) >= inboxDateFrom : true))
       .filter(r => (inboxDateTo ? r.created_at.slice(0, 10) <= inboxDateTo : true))
-      // Strictly newest-first by created_at — a status change (approved,
-      // denied, closed) never reorders the list.
-      .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  }, [inboxRequests, inboxStatusFilter, inboxKindFilter, inboxSearch, inboxDateFrom, inboxDateTo]);
+      // Last-activity-wins (see lastActivityOf) — a status change alone
+      // (approved, denied, closed) never reorders the list.
+      .sort((a, b) => lastActivityOf(b).localeCompare(lastActivityOf(a)));
+  }, [inboxRequests, inboxStatusFilter, inboxKindFilter, inboxSearch, inboxDateFrom, inboxDateTo, inboxMessagesByRequest]);
 
   // Changing any filter resets to page one.
   useEffect(() => { setInboxPage(1); }, [inboxStatusFilter, inboxKindFilter, inboxSearch, inboxDateFrom, inboxDateTo]);

@@ -567,6 +567,7 @@ export function CVEntryModal({
           anonClient
             .from('conferences')
             .select('id, full_name, acronym, logo_url, city, country')
+            .eq('is_public', true)
             .or(`full_name.ilike.${like},acronym.ilike.${like}`)
             .limit(5),
           anonClient
@@ -639,6 +640,7 @@ export function CVEntryModal({
       const { data: confs } = await anonClient
         .from('conferences')
         .select('full_name, acronym, logo_url, city, country, start_date')
+        .eq('is_public', true)
         .or(`full_name.ilike.${like},acronym.ilike.${like}`)
         .not('logo_url', 'is', null)
         .order('start_date', { ascending: false }) // newest edition's logo first

@@ -2376,11 +2376,31 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
   onInvited: (name: string) => void;
 }) {
   const { session } = useAuth();
-  const { confirm, modal: confirmModal } = useConfirmModal();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState('');
+  // Two-roles warning, a bespoke neumorphic dialog (matches the invite card
+  // above it) rather than the shared (flat) ConfirmModal.
+  const [roleConflict, setRoleConflict] = useState<{ displayName: string; role: string; email: string; name: string } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
+  async function doSend(em: string, nm: string) {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const result = await sendChairInvite(supabase, {
+      conferenceId,
+      committeeId: committee.id,
+      committeeName: committee.name,
+      email: em,
+      name: nm,
+    });
+    if (!result.ok) {
+      setError(result.error ?? 'Could not invite that chair.');
+      return;
+    }
+    onInvited(result.invitedName ?? em);
+  }
 
   async function handleInvite() {
     const em = email.trim();
@@ -2390,40 +2410,26 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
     setError('');
     const supabase = getAuthedClient(session.access_token);
 
-    async function doSend() {
-      const result = await sendChairInvite(supabase, {
-        conferenceId,
-        committeeId: committee.id,
-        committeeName: committee.name,
-        email: em,
-        name: nm,
-      });
-      if (!result.ok) {
-        setError(result.error ?? 'Could not invite that chair.');
-        return;
-      }
-      onInvited(result.invitedName ?? em);
-    }
-
     // Two-roles warning: this email already belongs to a registered user
     // with an active application in another role, confirm before giving
-    // them a second one. The confirm dialog's own loading state (onConfirm)
-    // is the busy-state guard on PROCEED, so `inviting` can drop immediately.
+    // them a second one.
     const conflict = await findChairInviteRoleConflict(supabase, conferenceId, em);
     if (conflict) {
       setInviting(false);
-      await confirm({
-        title: 'This person already holds a role',
-        body: `${conflict.displayName} already has an active ${conflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.`,
-        confirmLabel: 'Proceed',
-        cancelLabel: 'Cancel',
-        onConfirm: doSend,
-      });
+      setRoleConflict({ ...conflict, email: em, name: nm });
       return;
     }
 
-    await doSend();
+    await doSend(em, nm);
     setInviting(false);
+  }
+
+  async function handleProceedRoleConflict() {
+    if (!roleConflict || confirmBusy) return;
+    setConfirmBusy(true);
+    await doSend(roleConflict.email, roleConflict.name);
+    setConfirmBusy(false);
+    setRoleConflict(null);
   }
 
   return (
@@ -2481,7 +2487,34 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
         </div>
         {error && <div className="mt-2"><ModalError msg={error} /></div>}
       </NeuModalCard>
-      {confirmModal}
+      {roleConflict && (
+        <ModalOverlay onClose={() => { if (!confirmBusy) setRoleConflict(null); }}>
+          <NeuModalCard width={420}>
+            <p className="text-base mb-2" style={{ color: NEU.ink, fontWeight: 800, fontFamily: OUTFIT }}>
+              This person already holds a role
+            </p>
+            <p className="text-sm mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
+              {roleConflict.displayName} already has an active {roleConflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRoleConflict(null)}
+                disabled={confirmBusy}
+                className="flex-1 rounded-full py-2.5 font-bold text-sm focus:outline-none"
+                style={{
+                  border: 'none', color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+                  fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: confirmBusy ? 'default' : 'pointer',
+                }}
+              >
+                CANCEL
+              </button>
+              <NeuButton onClick={handleProceedRoleConflict} disabled={confirmBusy} style={{ flex: 1 }}>
+                {confirmBusy ? 'PROCEEDING...' : 'PROCEED'}
+              </NeuButton>
+            </div>
+          </NeuModalCard>
+        </ModalOverlay>
+      )}
     </ModalOverlay>
   );
 }

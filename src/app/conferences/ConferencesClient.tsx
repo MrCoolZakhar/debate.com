@@ -55,6 +55,7 @@ function FeaturedSection() {
       const { data } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, city, country, start_date, end_date, banner_url')
+        .eq('is_public', true)
         .ilike('full_name', '%' + search.trim() + '%')
         .limit(5);
       setSearchResults((data as FocusCard[]) ?? []);

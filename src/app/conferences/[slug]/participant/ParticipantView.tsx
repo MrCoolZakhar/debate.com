@@ -7,7 +7,8 @@
 // Deliberately has no conference summary card: the page around this tab
 // already is one.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Pencil } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -67,7 +68,29 @@ export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode,
 }: ParticipantViewProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Deep-link the active role via ?role=head-delegate (alongside the
+  // ?tab=participant param ConferenceDetailClient already reads the same
+  // way), so a refresh or a shared link lands on the role that was showing
+  // rather than always the default pick. Read post-mount from
+  // window.location.search rather than useSearchParams(), same reason
+  // ConferenceDetailClient avoids it: no Suspense boundary requirement.
+  useEffect(() => {
+    const role = new URLSearchParams(window.location.search).get('role');
+    if (!role) return;
+    const match = myApplications.find(a => a.role === role);
+    if (match) setSelectedId(match.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function selectApplication(app: ParticipantApplication) {
+    setSelectedId(app.id);
+    const url = new URL(window.location.href);
+    url.searchParams.set('role', app.role);
+    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+  }
 
   if (!user) {
     return <ApplyPointer conferenceSlug={conferenceSlug} signedOut />;
@@ -91,7 +114,7 @@ export default function ParticipantView({
               return (
                 <button
                   key={app.id}
-                  onClick={() => setSelectedId(app.id)}
+                  onClick={() => selectApplication(app)}
                   className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold focus:outline-none transition-colors"
                   style={{
                     backgroundColor: active ? '#1B3828' : 'transparent',

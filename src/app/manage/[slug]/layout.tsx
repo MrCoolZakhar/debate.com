@@ -573,20 +573,34 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [inboxBadge, setInboxBadge] = useState(0);
 
-  // Nav badge, cheap count-only query. seen_by_organizer flips to false on
-  // every participant-side write (new request, reply, swap request/notice)
-  // and back to true on every organizer-side write, so this alone already
-  // captures "unseen or last message from the participant" for open threads.
+  // Nav badge — same unread definition as the communications inbox
+  // (unreadCountOf there): a thread counts as unread when it has a
+  // participant-side message (is_organizer false) newer than
+  // organizer_seen_at, or every message counts when that stamp is null.
+  // Independent of `status` — a closed thread can still carry unread
+  // messages. seen_by_organizer is a separate legacy flag (still read by
+  // DelegationsView's unseen-society tracking) and is NOT this definition.
   const loadInboxBadge = useCallback(async () => {
     if (!conference || !session) return;
     const supabase = getAuthedClient(session.access_token);
-    const { count } = await supabase
+    const { data: reqData } = await supabase
       .from('conference_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('conference_id', conference.id)
-      .eq('status', 'open')
-      .eq('seen_by_organizer', false);
-    setInboxBadge(count ?? 0);
+      .select('id, organizer_seen_at')
+      .eq('conference_id', conference.id);
+    const requests = (reqData ?? []) as { id: string; organizer_seen_at: string | null }[];
+    if (requests.length === 0) { setInboxBadge(0); return; }
+
+    const { data: msgData } = await supabase
+      .from('conference_request_messages')
+      .select('request_id, is_organizer, created_at')
+      .in('request_id', requests.map(r => r.id))
+      .eq('is_organizer', false);
+    const messages = (msgData ?? []) as { request_id: string; is_organizer: boolean; created_at: string }[];
+
+    const unreadCount = requests.filter(r =>
+      messages.some(m => m.request_id === r.id && (!r.organizer_seen_at || m.created_at > r.organizer_seen_at))
+    ).length;
+    setInboxBadge(unreadCount);
   }, [conference?.id, session?.access_token]);
 
   useEffect(() => { loadInboxBadge(); }, [loadInboxBadge]);

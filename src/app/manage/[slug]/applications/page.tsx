@@ -2301,9 +2301,13 @@ export default function ApplicationsPage() {
             const rowBusy = busyIds.has(app.id);
             const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
             // Not attending reads as inactive: everything but the NOT
-            // ATTENDING badge itself fades to ~45%, buttons stay clickable
-            // (an organizer may still preview or flip them back).
+            // ATTENDING badge and the PREVIEW button (still needed to flip
+            // attendance back via the review modal) fades to ~45% AND is
+            // hard-locked (no pointer events, no handlers firing) — not just
+            // dimmed, genuinely disabled, restored the moment they're marked
+            // attending again.
             const notAttendingFade: React.CSSProperties = !app.attending ? { opacity: 0.45 } : {};
+            const notAttendingLock: React.CSSProperties = !app.attending ? { opacity: 0.45, pointerEvents: 'none' } : {};
             const hasAllocation = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in');
             const canCheckIn = app.status === 'accepted' || app.status === 'assigned';
             const isSubmitted = app.status === 'submitted';
@@ -2436,7 +2440,9 @@ export default function ApplicationsPage() {
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-center gap-2">
                           <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>Preferences</p>
-                          <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                          <span style={notAttendingLock}>
+                            <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                          </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {prefs.slice(0, 3).map(p => (
@@ -2456,7 +2462,9 @@ export default function ApplicationsPage() {
                     ) : isDelegate ? (
                       <span className="inline-flex items-center gap-2">
                         <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.muted }}>Not yet assigned</span>
-                        <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                        <span style={notAttendingLock}>
+                          <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                        </span>
                       </span>
                     ) : (
                       <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.muted }}>—</span>
@@ -2481,8 +2489,8 @@ export default function ApplicationsPage() {
                         <NotAttendingBadge />
                       </div>
                     )}
-                    <div className="flex flex-col lg:items-end gap-2.5" style={{ width: '100%', ...notAttendingFade }}>
-                    <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
+                    <div className="flex flex-col lg:items-end gap-2.5" style={{ width: '100%' }}>
+                    <div className="flex items-center gap-1.5 flex-wrap lg:justify-end" style={notAttendingFade}>
                       <StatusPill
                         status={app.status}
                         awaitingResubmission={app.status === 'rejected' && (roleConfigs.find(rc => rc.role === app.role)?.allow_resubmission ?? false)}
@@ -2500,18 +2508,20 @@ export default function ApplicationsPage() {
                     </div>
 
                     {app.status === 'checked-in' && app.checked_in_at && (
-                      <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#1F6E52', fontVariantNumeric: 'tabular-nums' }}>
+                      <span className="inline-flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#1F6E52', fontVariantNumeric: 'tabular-nums', ...notAttendingFade }}>
                         <UserRoundCheck size={12} strokeWidth={2.5} />
                         Checked in {formatDateTime(app.checked_in_at)}
                       </span>
                     )}
 
-                    {/* Inline accept / reject for submitted applicants */}
+                    {/* Inline accept / reject for submitted applicants — a
+                        status control, locked (not just dimmed) while not
+                        attending. */}
                     {isSubmitted && (
-                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
+                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end" style={notAttendingLock}>
                         <button
                           onClick={() => handleAccept(app.id)}
-                          disabled={rowBusy || isAcceptBlockedByFee(app)}
+                          disabled={rowBusy || isAcceptBlockedByFee(app) || !app.attending}
                           title={isAcceptBlockedByFee(app) ? ACCEPT_BLOCKED_MESSAGE : undefined}
                           className="inline-flex items-center gap-1.5 focus:outline-none"
                           style={{
@@ -2533,12 +2543,13 @@ export default function ApplicationsPage() {
 
                     {/* Reinstate for rejected / awaiting-resubmission applicants —
                         undo a rejection in one click, right where REJECT sits
-                        for submitted applicants. */}
+                        for submitted applicants. Also a status control, locked
+                        while not attending. */}
                     {app.status === 'rejected' && (
-                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
+                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end" style={notAttendingLock}>
                         <button
                           onClick={() => openReinstateConfirm(app)}
-                          disabled={rowBusy}
+                          disabled={rowBusy || !app.attending}
                           className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
                           style={{
                             padding: '7px 14px', borderRadius: 999,
@@ -2554,14 +2565,18 @@ export default function ApplicationsPage() {
                       </div>
                     )}
 
-                    {/* Check-in stacked ABOVE a wider Preview button */}
+                    {/* Check-in stacked ABOVE a wider Preview button. CHECK
+                        IN / UNDO CHECK-IN / PAID menu lock while not
+                        attending; PREVIEW (and, for unregistered rows,
+                        DELETE stays paired with it visually but locks too)
+                        never does — it's how an organizer flips them back. */}
                     <div className="flex flex-col items-stretch gap-1.5" style={{ minWidth: 176, width: '100%' }}>
                       {canCheckIn && (
                         /* Cream / neutral until checked in — it turns green only
                            once they have actually checked in (#9). */
                         <button
                           onClick={() => handleCheckIn(app)}
-                          disabled={rowBusy}
+                          disabled={rowBusy || !app.attending}
                           className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
                           style={{
                             padding: '8px 14px', borderRadius: 999,
@@ -2569,7 +2584,7 @@ export default function ApplicationsPage() {
                             color: NEU.ink,
                             backgroundColor: NEU.surface,
                             boxShadow: NEU.outSm,
-                            border: 'none', cursor: 'pointer', ...busyStyle,
+                            border: 'none', cursor: 'pointer', ...busyStyle, ...notAttendingLock,
                           }}
                         >
                           <UserRoundCheck size={13} strokeWidth={2.6} style={{ color: NEU.green }} />
@@ -2579,12 +2594,12 @@ export default function ApplicationsPage() {
                       {app.status === 'checked-in' && (
                         <button
                           onClick={() => handleUndoCheckIn(app)}
-                          disabled={rowBusy}
+                          disabled={rowBusy || !app.attending}
                           className="inline-flex items-center justify-center gap-1.5 focus:outline-none"
                           style={{
                             padding: '8px 14px', borderRadius: 999,
                             fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-                            color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer', ...busyStyle,
+                            color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer', ...busyStyle, ...notAttendingLock,
                           }}
                         >
                           <Undo2 size={12} strokeWidth={2.5} />
@@ -2593,16 +2608,18 @@ export default function ApplicationsPage() {
                       )}
                       <div className="flex items-center gap-1.5">
                         {showPayControl && (
-                          <PaymentMenu
-                            app={app}
-                            disabled={rowBusy}
-                            paymentsLive={paymentsLive}
-                            align="right"
-                            onMarkPaid={() => handleMarkPaid(app)}
-                            onRemind={() => handleRemindPay(app)}
-                            onMarkUnpaid={() => handleMarkUnpaid(app)}
-                            onUndoWaive={() => handleUndoWaive(app)}
-                          />
+                          <span style={notAttendingLock}>
+                            <PaymentMenu
+                              app={app}
+                              disabled={rowBusy || !app.attending}
+                              paymentsLive={paymentsLive}
+                              align="right"
+                              onMarkPaid={() => handleMarkPaid(app)}
+                              onRemind={() => handleRemindPay(app)}
+                              onMarkUnpaid={() => handleMarkUnpaid(app)}
+                              onUndoWaive={() => handleUndoWaive(app)}
+                            />
+                          </span>
                         )}
                         <button
                           onClick={() => setReviewId(app.id)}
@@ -2617,19 +2634,21 @@ export default function ApplicationsPage() {
                           PREVIEW
                         </button>
                         {!app.user_id && (
-                          <button
-                            onClick={() => openDeleteRowConfirm(app)}
-                            disabled={rowBusy}
-                            title="Delete this unregistered applicant's row"
-                            className="inline-flex items-center justify-center focus:outline-none flex-shrink-0"
-                            style={{
-                              width: 34, height: 34, borderRadius: 999,
-                              color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)',
-                              cursor: rowBusy ? 'default' : 'pointer', ...busyStyle,
-                            }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <span style={notAttendingLock}>
+                            <button
+                              onClick={() => openDeleteRowConfirm(app)}
+                              disabled={rowBusy || !app.attending}
+                              title="Delete this unregistered applicant's row"
+                              className="inline-flex items-center justify-center focus:outline-none flex-shrink-0"
+                              style={{
+                                width: 34, height: 34, borderRadius: 999,
+                                color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)',
+                                cursor: rowBusy ? 'default' : 'pointer', ...busyStyle,
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </span>
                         )}
                       </div>
                     </div>
