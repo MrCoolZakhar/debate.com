@@ -1469,11 +1469,19 @@ export default function ApplicationsPage() {
   // there is exactly one reject UI and one behavior: idle REJECT button →
   // expands in place into a feedback textarea + CONFIRM/CANCEL. CONFIRM
   // calls handleReject directly — no second native confirm dialog on top.
-  function renderRejectControls(app: Application) {
+  // `locked` (the review modal's not-attending guard) takes priority over
+  // busy — a not-attending row's REJECT is hard-disabled regardless of any
+  // in-flight write. The row-card caller never passes it (that caller wraps
+  // ACCEPT+REJECT together in its own outer lock instead), so this stays a
+  // no-op there.
+  function renderRejectControls(app: Application, locked = false) {
     const isRejecting = rejectingId === app.id;
     const roleConfig = roleConfigs.find(rc => rc.role === app.role);
     const rowBusy = busyIds.has(app.id);
-    const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
+    const disabledNow = rowBusy || locked;
+    const busyStyle: React.CSSProperties = locked
+      ? { opacity: 0.45, pointerEvents: 'none' }
+      : rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
     const pool = poolForRole(app.role);
     const releasesSpot = app.payment_status === 'paid' && !app.self_paid && !!app.society_id && !!pool;
 
@@ -1481,7 +1489,7 @@ export default function ApplicationsPage() {
       return (
         <button
           onClick={() => setRejectingId(app.id)}
-          disabled={rowBusy}
+          disabled={disabledNow}
           className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
           style={{ backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
         >
@@ -1502,14 +1510,15 @@ export default function ApplicationsPage() {
           <textarea
             value={rejectNote}
             onChange={e => setRejectNote(e.target.value)}
+            disabled={disabledNow}
             rows={2}
             placeholder={roleConfig?.allow_resubmission ? 'What should they fix before resubmitting?' : 'Optional note to delegate...'}
             className="flex-1 rounded-lg px-3 py-2 text-xs outline-none resize-none"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif" }}
+            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
           />
           <button
             onClick={() => handleReject(app.id)}
-            disabled={rowBusy}
+            disabled={disabledNow}
             className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
             style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
           >
@@ -2089,6 +2098,12 @@ export default function ApplicationsPage() {
   // change can never cause a hidden row to be swept up in a bulk action.
   const selectedApps = filtered.filter(a => selectedIds.has(a.id));
   const allVisibleSelected = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
+  // Not-attending rows never enter a bulk status/payment operation — every
+  // bulkXxxable derivation and the suggestion below is computed off this
+  // eligible-only set, not selectedApps directly. The skipped count drives
+  // the inline note in the bulk bar rather than silently dropping them.
+  const notAttendingSelectedCount = selectedApps.filter(a => !a.attending).length;
+  const bulkEligibleApps = selectedApps.filter(a => a.attending);
   // Chairs are always free, so bulk mark-paid / waive skip them entirely (#5).
   // When Stripe checkout is live for this conference, manual mark-paid is not
   // offered at all (bulk or single) — checkout + webhook own that state.
@@ -2106,17 +2121,17 @@ export default function ApplicationsPage() {
   const isAcceptBlockedByFee = (a: Application) =>
     gatingAppIds.has(a.id) || (!!a.society_id && gatingSocietyIds.has(a.society_id));
   const ACCEPT_BLOCKED_MESSAGE = "A required fee is unpaid — they can be accepted once it's paid.";
-  const bulkAcceptable = selectedApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
-  const bulkRejectable = selectedApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
-  const bulkCheckInable = selectedApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
-  const bulkPayable = selectedApps.filter(payEligible);
+  const bulkAcceptable = bulkEligibleApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
+  const bulkRejectable = bulkEligibleApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
+  const bulkCheckInable = bulkEligibleApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
+  const bulkPayable = bulkEligibleApps.filter(payEligible);
   // Suggested action from the selection composition. Starts pulsing the moment a
   // selection is made, nudging the organiser toward the obvious next step.
   const suggestion: 'accept' | 'pay' | 'checkin' | null =
-    selectedApps.length === 0 ? null
-    : selectedApps.every(a => a.status === 'submitted') ? 'accept'
-    : selectedApps.every(a => (a.status === 'accepted' || a.status === 'assigned') && payEligible(a)) ? 'pay'
-    : selectedApps.every(a => a.status === 'accepted' || a.status === 'assigned') ? 'checkin'
+    bulkEligibleApps.length === 0 ? null
+    : bulkEligibleApps.every(a => a.status === 'submitted') ? 'accept'
+    : bulkEligibleApps.every(a => (a.status === 'accepted' || a.status === 'assigned') && payEligible(a)) ? 'pay'
+    : bulkEligibleApps.every(a => a.status === 'accepted' || a.status === 'assigned') ? 'checkin'
     : null;
 
   // Stat tiles count over the SAME population the list shows by role/date/aid
@@ -2687,10 +2702,19 @@ export default function ApplicationsPage() {
               </span>
               selected
             </span>
+            {notAttendingSelectedCount > 0 && (
+              <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: '#9A6B2F', fontStyle: 'italic' }}>
+                {notAttendingSelectedCount} not-attending selection{notAttendingSelectedCount === 1 ? '' : 's'} were skipped.
+              </span>
+            )}
             <span style={{ width: 1, height: 22, background: 'rgba(154,138,120,0.3)' }} />
 
             {(() => {
-              const submittedSelected = selectedApps.filter(a => a.status === 'submitted');
+              // Attendance-filtered too (bulkEligibleApps), so blockedCount
+              // below reflects fee-blocked exclusions only — a not-attending
+              // submitted row is accounted for by the skipped-selection note,
+              // not miscounted here as "unpaid".
+              const submittedSelected = bulkEligibleApps.filter(a => a.status === 'submitted');
               const blockedCount = submittedSelected.length - bulkAcceptable.length;
               if (submittedSelected.length === 0) return null;
               return bulkAcceptable.length > 0 ? (
@@ -2820,6 +2844,12 @@ export default function ApplicationsPage() {
         // Double-click guard, the row's controls grey out while its write is in flight.
         const rowBusy = busyIds.has(app.id);
         const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
+        // Not attending: every status-changing action in this modal fades AND
+        // hard-locks (disabled attribute + no pointer events) — only MARK
+        // ATTENDING (attendanceControls flips to that label automatically)
+        // and REMOVE FROM CONFERENCE (its own payment guard, untouched) stay
+        // fully active. Restores the moment they're marked attending again.
+        const notAttendingLock: React.CSSProperties = !app.attending ? { opacity: 0.45, pointerEvents: 'none' } : {};
 
         // Chairs are always free — no payment control in the review modal (#5).
         const showPaymentControls = app.role !== 'chair'
@@ -2827,18 +2857,20 @@ export default function ApplicationsPage() {
         // Unified payment control (F: merge mark-paid vs waive). One menu, both
         // underlying states still reachable.
         const paymentControls = showPaymentControls ? (
-          <PaymentMenu
-            app={app}
-            disabled={rowBusy}
-            paymentsLive={paymentsLive}
-            onMarkPaid={() => handleMarkPaid(app)}
-            onRemind={() => handleRemindPay(app)}
-            onMarkUnpaid={() => handleMarkUnpaid(app)}
-            onUndoWaive={() => handleUndoWaive(app)}
-          />
+          <span style={notAttendingLock}>
+            <PaymentMenu
+              app={app}
+              disabled={rowBusy || !app.attending}
+              paymentsLive={paymentsLive}
+              onMarkPaid={() => handleMarkPaid(app)}
+              onRemind={() => handleRemindPay(app)}
+              onMarkUnpaid={() => handleMarkUnpaid(app)}
+              onUndoWaive={() => handleUndoWaive(app)}
+            />
+          </span>
         ) : null;
 
-        const rejectControls = renderRejectControls(app);
+        const rejectControls = renderRejectControls(app, !app.attending);
 
         // Withdraw (F: PART 2 item 1): accepted/assigned only, and only when
         // payment_status is 'unpaid' or 'waived'. Paid applicants must have
@@ -2894,9 +2926,9 @@ export default function ApplicationsPage() {
         const checkInControls = (app.status === 'accepted' || app.status === 'assigned') ? (
           <button
             onClick={() => handleCheckIn(app)}
-            disabled={rowBusy}
+            disabled={rowBusy || !app.attending}
             className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#2F6644', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+            style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#2F6644', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle, ...notAttendingLock }}
           >
             <UserRoundCheck size={13} />
             CHECK IN
@@ -2904,9 +2936,9 @@ export default function ApplicationsPage() {
         ) : app.status === 'checked-in' ? (
           <button
             onClick={() => handleUndoCheckIn(app)}
-            disabled={rowBusy}
+            disabled={rowBusy || !app.attending}
             className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle, ...notAttendingLock }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
@@ -3190,14 +3222,14 @@ export default function ApplicationsPage() {
                   <>
                     <button
                       onClick={() => handleAccept(app.id)}
-                      disabled={rowBusy || isAcceptBlockedByFee(app)}
+                      disabled={rowBusy || isAcceptBlockedByFee(app) || !app.attending}
                       title={isAcceptBlockedByFee(app) ? ACCEPT_BLOCKED_MESSAGE : undefined}
                       className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
                       style={{
                         backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif",
                         cursor: isAcceptBlockedByFee(app) ? 'not-allowed' : 'pointer',
                         opacity: isAcceptBlockedByFee(app) ? 0.5 : 1,
-                        ...busyStyle,
+                        ...busyStyle, ...notAttendingLock,
                       }}
                     >
                       <Check size={13} />
@@ -3211,14 +3243,16 @@ export default function ApplicationsPage() {
                 {app.status === 'accepted' && (
                   <>
                     {isDelegate && (
-                      <Link
-                        href={`/manage/${conference.slug}/assignment`}
-                        className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
-                        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
-                      >
-                        ASSIGN
-                        <ArrowRight size={13} />
-                      </Link>
+                      <span style={notAttendingLock}>
+                        <Link
+                          href={`/manage/${conference.slug}/assignment`}
+                          className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
+                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                        >
+                          ASSIGN
+                          <ArrowRight size={13} />
+                        </Link>
+                      </span>
                     )}
                     {checkInControls}
                     {paymentControls}
@@ -3249,9 +3283,9 @@ export default function ApplicationsPage() {
                 {app.status === 'rejected' && (
                   <button
                     onClick={() => openReinstateConfirm(app)}
-                    disabled={rowBusy}
+                    disabled={rowBusy || !app.attending}
                     className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle, ...notAttendingLock }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
@@ -3263,9 +3297,9 @@ export default function ApplicationsPage() {
                 {app.status === 'withdrawn' && (
                   <button
                     onClick={() => handleReinstateFromWithdrawn(app.id)}
-                    disabled={rowBusy}
+                    disabled={rowBusy || !app.attending}
                     className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle, ...notAttendingLock }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                   >
