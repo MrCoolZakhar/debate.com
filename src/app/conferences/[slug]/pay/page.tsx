@@ -448,6 +448,7 @@ export default function PayPage() {
               conference={conference}
               application={application}
               leaderApp={leaderApp}
+              allApps={allApps}
               roleConfig={roleConfigs.find(rc => rc.role === application.role) ?? null}
               delegateRoleConfig={roleConfigs.find(rc => rc.role === 'delegate') ?? null}
               aidRequest={aidRequest}
@@ -468,9 +469,13 @@ export default function PayPage() {
 
 function GenericInvoiceCard({
   inv, application, description, paymentsEnabled, manualActive, externalPaymentUrl, externalPaymentNote,
-  expanded, onToggleExpand, selected, onToggleSelect, onPay, paying, payError,
+  expanded, onToggleExpand, selected, onToggleSelect, onPay, paying, payError, labelOverride,
 }: {
   inv: InvoiceRow;
+  /** The invoice's OWNING application (whichever of the user's applications
+   *  this row's application_id points at) — not necessarily the page's
+   *  primary application, so payability (accepted/assigned/etc.) is judged
+   *  against the right application's own status. */
   application: PayApplication;
   description?: string;
   paymentsEnabled: boolean;
@@ -484,12 +489,16 @@ function GenericInvoiceCard({
   onPay: () => void;
   paying: boolean;
   payError: string | null;
+  /** Overrides invoiceLabel(inv) — used for another application's role_fee
+   *  invoice, labeled "{Role label} fee" so it reads distinctly from
+   *  role_fee's generic "Registration" fallback. */
+  labelOverride?: string;
 }) {
   const payable = isInvoicePayable(inv, application.status);
   const settled = isInvoiceSettled(inv);
   const due = invoiceDueCents(inv);
   const badge = invoiceBadge(inv);
-  const label = invoiceLabel(inv) + (inv.quantity > 1 ? ` ×${inv.quantity}` : '');
+  const label = (labelOverride ?? invoiceLabel(inv)) + (inv.quantity > 1 ? ` ×${inv.quantity}` : '');
 
   if (!payable) {
     return (
@@ -930,12 +939,17 @@ function AddSpotsPanel({
 // math hooks initialize against real values) ────────────────────────────────
 
 function PayInvoiceAndActions({
-  conference, application, leaderApp, roleConfig, delegateRoleConfig, aidRequest, onAidSubmitted, invoices, configDescriptions,
+  conference, application, leaderApp, allApps, roleConfig, delegateRoleConfig, aidRequest, onAidSubmitted, invoices, configDescriptions,
   activeAddons, onInvoicesChanged,
 }: {
   conference: PayConference;
   application: PayApplication;
   leaderApp: PayApplication | null;
+  /** Every application the signed-in user holds at this conference — used
+   *  strictly to look up the OWNING application of another application's
+   *  role_fee invoice (role label + status), never to source a field of the
+   *  primary role-fee card itself. */
+  allApps: PayApplication[];
   roleConfig: PayRoleConfig | null;
   delegateRoleConfig: PayRoleConfig | null;
   aidRequest: AidRequestRow | null;
@@ -961,6 +975,11 @@ function PayInvoiceAndActions({
   // covers a dual-role leaderApp's own rows, which can include its own
   // role_fee invoice, so kind alone is no longer a unique-enough filter.
   const roleFeeInvoice = invoices.find(inv => inv.kind === 'role_fee' && inv.application_id === application.id);
+  // Every OTHER application's own role_fee invoice never feeds a single
+  // field of the primary card above — it renders as its own card in the
+  // generic list instead (see genericInvoices below), keyed by its actual
+  // owning application so its role label and payability are its own.
+  const appById = new Map(allApps.map(a => [a.id, a] as const));
   const preVoucherCents = Math.round(Math.max(0, fee - grantedAmount) * 100);
   const netCents = roleFeeInvoice ? roleFeeInvoice.amount_cents : preVoucherCents;
   const dueCents = roleFeeInvoice ? invoiceDueCents(roleFeeInvoice) : Math.max(0, netCents - Math.round(application.amount_paid * 100));
@@ -992,10 +1011,15 @@ function PayInvoiceAndActions({
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [spotsOpen, setSpotsOpen] = useState(false);
 
-  // Generic invoice cards — app_fee, addon, and pledge_spot (owed delegation
-  // spots, materialized by add_pledged_spots). All three are individually
-  // payable or selectable into the combined "Pay Selected" batch.
-  const genericInvoices = invoices.filter(inv => inv.kind === 'app_fee' || inv.kind === 'addon' || inv.kind === 'pledge_spot');
+  // Generic invoice cards — app_fee, addon, pledge_spot (owed delegation
+  // spots, materialized by add_pledged_spots), plus any OTHER application's
+  // role_fee invoice (the primary card above only ever shows its own). All
+  // are individually payable or selectable into the combined "Pay Selected"
+  // batch.
+  const genericInvoices = invoices.filter(inv =>
+    inv.kind === 'app_fee' || inv.kind === 'addon' || inv.kind === 'pledge_spot'
+    || (inv.kind === 'role_fee' && inv.application_id !== application.id)
+  );
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [genericPayingId, setGenericPayingId] = useState<string | null>(null);
@@ -1337,26 +1361,31 @@ function PayInvoiceAndActions({
           </NeuCard>
         )}
 
-        {/* Conference application fee + add-ons — generic invoice cards */}
-        {genericInvoices.map(inv => (
-          <GenericInvoiceCard
-            key={inv.id}
-            inv={inv}
-            application={application}
-            description={inv.config_id ? configDescriptions[inv.config_id] : undefined}
-            paymentsEnabled={paymentsEnabled}
-            manualActive={manualActive}
-            externalPaymentUrl={externalPaymentUrl}
-            externalPaymentNote={conference.external_payment_note}
-            expanded={expandedIds.has(inv.id)}
-            onToggleExpand={() => toggleExpanded(inv.id)}
-            selected={selectedIds.has(inv.id)}
-            onToggleSelect={() => toggleSelected(inv.id)}
-            onPay={() => handlePayInvoice(inv.id)}
-            paying={genericPayingId === inv.id}
-            payError={genericPayError[inv.id] || null}
-          />
-        ))}
+        {/* Conference application fee + add-ons + any other application's
+            role_fee — generic invoice cards */}
+        {genericInvoices.map(inv => {
+          const owner = inv.kind === 'role_fee' ? (appById.get(inv.application_id ?? '') ?? application) : application;
+          return (
+            <GenericInvoiceCard
+              key={inv.id}
+              inv={inv}
+              application={owner}
+              labelOverride={inv.kind === 'role_fee' ? `${roleLabel(owner.role)} fee` : undefined}
+              description={inv.config_id ? configDescriptions[inv.config_id] : undefined}
+              paymentsEnabled={paymentsEnabled}
+              manualActive={manualActive}
+              externalPaymentUrl={externalPaymentUrl}
+              externalPaymentNote={conference.external_payment_note}
+              expanded={expandedIds.has(inv.id)}
+              onToggleExpand={() => toggleExpanded(inv.id)}
+              selected={selectedIds.has(inv.id)}
+              onToggleSelect={() => toggleSelected(inv.id)}
+              onPay={() => handlePayInvoice(inv.id)}
+              paying={genericPayingId === inv.id}
+              payError={genericPayError[inv.id] || null}
+            />
+          );
+        })}
 
         {fee <= 0 && genericInvoices.length === 0 && (
           <NeuCard style={{ padding: '24px', textAlign: 'center' }}>

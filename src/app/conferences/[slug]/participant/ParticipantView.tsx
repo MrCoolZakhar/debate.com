@@ -168,7 +168,7 @@ export default function ParticipantView({
         </>
       )}
 
-      <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} myApplications={myApplications} />
+      <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} myApplications={myApplications} activeRole={selected.role} />
     </div>
   );
 }

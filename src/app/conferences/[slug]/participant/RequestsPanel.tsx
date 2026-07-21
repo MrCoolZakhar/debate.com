@@ -133,24 +133,25 @@ function Pager({ page, totalPages, onPrev, onNext }: { page: number; totalPages:
   );
 }
 
-export default function RequestsPanel({ conferenceId, applicationId, myApplications }: {
+export default function RequestsPanel({ conferenceId, applicationId, myApplications, activeRole }: {
   conferenceId: string;
   applicationId: string | null;
   myApplications: ParticipantApplication[];
+  /** The role of the currently active application in ParticipantView's role
+   *  switcher. Society swap threads (leader-only under RLS) only belong in
+   *  this panel while that active view is itself a leader role — a dual-role
+   *  account viewing as Delegate must not see them just because one of their
+   *  OTHER applications happens to be a leader. */
+  activeRole: string;
 }) {
   const { user, session } = useAuth();
 
-  // Delegation leader = any of the user's own applications here that's a
-  // non-rejected/withdrawn head-delegate/faculty-advisor with a society —
-  // same rule the pay page and DelegationPanel use for leader capabilities.
   const leaderSocietyId = useMemo(() => {
-    const leader = myApplications.find(a =>
-      a.status !== 'rejected' && a.status !== 'withdrawn'
-      && (a.role === 'head-delegate' || a.role === 'faculty-advisor')
-      && !!a.society_id
-    );
-    return leader?.society_id ?? null;
-  }, [myApplications]);
+    if (activeRole !== 'head-delegate' && activeRole !== 'faculty-advisor') return null;
+    const activeApp = myApplications.find(a => a.id === applicationId);
+    if (!activeApp || activeApp.status === 'rejected' || activeApp.status === 'withdrawn' || !activeApp.society_id) return null;
+    return activeApp.society_id;
+  }, [myApplications, applicationId, activeRole]);
 
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [messagesByRequest, setMessagesByRequest] = useState<Map<string, RequestMessageRow[]>>(new Map());
@@ -232,6 +233,15 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
   }, [conferenceId, session, user, leaderSocietyId]);
 
   useEffect(() => { loadRequests(); }, [loadRequests]);
+
+  // A swap request from DelegationPanel or a question from the form below
+  // both land in this same table — refetch so a newly created thread shows
+  // up without waiting for the next visit.
+  useEffect(() => {
+    function onRequestsChanged() { loadRequests(); }
+    window.addEventListener('gv-requests-changed', onRequestsChanged);
+    return () => window.removeEventListener('gv-requests-changed', onRequestsChanged);
+  }, [loadRequests]);
 
   const loadMessages = useCallback(async (requestId: string) => {
     if (!session) return;
@@ -339,6 +349,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
     setCreating(false);
     await loadRequests();
     setSelectedId((reqRow as { id: string }).id);
+    window.dispatchEvent(new CustomEvent('gv-requests-changed'));
   }
 
   async function handleReply() {

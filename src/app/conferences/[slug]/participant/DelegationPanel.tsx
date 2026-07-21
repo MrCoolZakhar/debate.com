@@ -18,6 +18,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { FlagImg } from '@/components/FlagImg';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
+import { NEU, NeuButton } from '@/components/neu';
 import { queueEventEmail } from '@/lib/emailEvents';
 import {
   POOL_MEMBER_SELECT, pledgeSatisfied, pledgeText, MemberAvatar,
@@ -151,11 +152,11 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
 }
 
 // ── Swap result modal ───────────────────────────────────────────────────────
-// One-button acknowledgement, same ivory/forest card recipe as the shared
-// ConfirmModal, used after both a self-serve swap and a swap request so the
-// leader gets visible confirmation instead of the panel just quietly
-// resetting (self-serve swaps do execute, but with no on-screen feedback the
-// action reads as a no-op).
+// One-button acknowledgement, neumorphic dialog language matching the rest
+// of the participant side, used after both a self-serve swap and a swap
+// request so the leader gets visible confirmation instead of the panel just
+// quietly resetting (self-serve swaps do execute, but with no on-screen
+// feedback the action reads as a no-op).
 
 interface SwapResultInfo {
   title: string;
@@ -169,21 +170,20 @@ function SwapResultModal({ info, onClose }: { info: SwapResultInfo; onClose: () 
       <div
         role="alertdialog"
         aria-modal="true"
-        className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400, maxWidth: '90vw' }}
+        className="p-6 flex flex-col gap-4"
+        style={{
+          width: 400, maxWidth: '90vw',
+          backgroundColor: NEU.surface,
+          borderRadius: 24,
+          boxShadow: `${NEU.out}, 0 24px 60px rgba(27,56,40,0.28)`,
+        }}
       >
-        <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{info.title}</p>
-        <div style={{ color: '#4A4238', fontFamily: OUTFIT, lineHeight: 1.55 }}>
+        <p className="text-base" style={{ color: NEU.ink, fontWeight: 800, fontFamily: OUTFIT }}>{info.title}</p>
+        <div style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.55 }}>
           <p className="text-sm">{info.body}</p>
           {info.detail && <p className="text-sm mt-1.5">{info.detail}</p>}
         </div>
-        <button
-          onClick={onClose}
-          className="rounded-xl py-2.5 font-bold text-sm focus:outline-none"
-          style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: OUTFIT, cursor: 'pointer' }}
-        >
-          DONE
-        </button>
+        <NeuButton onClick={onClose}>DONE</NeuButton>
       </div>
     </ModalOverlay>
   );
@@ -351,6 +351,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       await Promise.all([load(), loadSwapActivity()]);
       setSwapping(false);
       setSwapResult({ title: 'Allocations swapped', body: `${swapSummary}.` });
+      window.dispatchEvent(new CustomEvent('gv-requests-changed'));
     } else {
       const { data: reqRow, error } = await supabase.from('conference_requests').insert({
         conference_id: conferenceId, user_id: user.id, kind: 'swap_request', subject, metadata,
@@ -372,6 +373,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
         body: "An allocation swap has been requested to the conference's organizers.",
         detail: `${nameA} and ${nameB}.`,
       });
+      window.dispatchEvent(new CustomEvent('gv-requests-changed'));
     }
   }
 
