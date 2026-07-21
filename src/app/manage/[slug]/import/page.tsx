@@ -144,6 +144,10 @@ export default function ImportPage() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [classifiedRows, setClassifiedRows] = useState<ClassifiedImportRow[]>([]);
+  // Kept alongside classifiedRows purely so the preview table can tell a
+  // double-delegation committee's allocations apart from a single's (same
+  // seat=1 value on both) without a second query.
+  const [contextCommittees, setContextCommittees] = useState<CommitteeLite[]>([]);
   const [resultRows, setResultRows] = useState<ResultRow[]>([]);
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   const [sendingInvites, setSendingInvites] = useState(false);
@@ -260,6 +264,7 @@ export default function ImportPage() {
       const ctx = await loadContext(supabase, conference.id);
       const classified = classifyImportRows(rows, ctx);
       setClassifiedRows(classified);
+      setContextCommittees(ctx.committees);
       setPhase('preview');
     } catch {
       setFileError('Could not read that file. Make sure it\'s a valid .csv or .xlsx.');
@@ -283,6 +288,7 @@ export default function ImportPage() {
   function resetToUpload() {
     setPhase('upload');
     setClassifiedRows([]);
+    setContextCommittees([]);
     setResultRows([]);
     setFileError(null);
     setFileName(null);
@@ -685,7 +691,7 @@ export default function ImportPage() {
             <SummaryStat label="Errors" value={summary.error} tone="error" />
           </div>
 
-          <RowTable rows={classifiedRows} />
+          <RowTable rows={classifiedRows} committees={contextCommittees} />
 
           <div className="flex items-center gap-3 mt-6">
             <button
@@ -774,7 +780,8 @@ function SummaryStat({ label, value, tone }: { label: string; value: number; ton
   );
 }
 
-function RowTable({ rows }: { rows: ClassifiedImportRow[] }) {
+function RowTable({ rows, committees }: { rows: ClassifiedImportRow[]; committees: CommitteeLite[] }) {
+  const doubleCommitteeIds = new Set(committees.filter(c => c.delegation_size === 2).map(c => c.id));
   return (
     <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
       <div className="overflow-x-auto" style={{ maxHeight: 520, overflowY: 'auto' }}>
@@ -789,7 +796,12 @@ function RowTable({ rows }: { rows: ClassifiedImportRow[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
+            {rows.map(r => {
+              // Both single- and double-delegation committees resolve a seat
+              // (singles always at 1), so only show it when it's actually
+              // meaningful — a double-delegation committee.
+              const showSeat = !!r.resolved.committeeId && doubleCommitteeIds.has(r.resolved.committeeId) && r.resolved.seat != null;
+              return (
               <tr key={r.rowNumber} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: '#FAF8F3' }}>
                 <td className="px-3 py-2.5 text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{r.rowNumber}</td>
                 <td className="px-3 py-2.5"><ClassPill cls={r.cls} /></td>
@@ -804,6 +816,7 @@ function RowTable({ rows }: { rows: ClassifiedImportRow[] }) {
                       <span className="font-semibold">{r.resolved.committeeLabel}</span>
                       <FlagImg code={r.resolved.countryCode} size={13} />
                       {r.resolved.countryName}
+                      {showSeat && <span style={{ color: '#9A8A78' }}>&middot; Seat {r.resolved.seat}</span>}
                     </span>
                   ) : r.raw.committee ? (
                     <span style={{ color: '#9A8A78' }}>{r.raw.committee}{r.raw.country ? `, ${r.raw.country}` : ''}</span>
@@ -819,7 +832,8 @@ function RowTable({ rows }: { rows: ClassifiedImportRow[] }) {
                   ) : <span className="text-xs" style={{ color: '#9A8A78' }}>—</span>}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

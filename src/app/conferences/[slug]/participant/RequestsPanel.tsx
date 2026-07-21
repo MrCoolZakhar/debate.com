@@ -50,6 +50,17 @@ interface RequestMessageRow {
   created_at: string;
 }
 
+// Last activity = the greater of the thread's own created_at and its newest
+// message's created_at — a new message from either side bumps a thread to
+// the top; a status-only change (no message) never moves it. Computed
+// client-side off the actually-loaded messages rather than trusted from
+// last_message_at, which isn't bumped on every insert path.
+function lastActivityOf(r: RequestRow, msgMap: Map<string, RequestMessageRow[]>): string {
+  const msgs = msgMap.get(r.id);
+  const latest = msgs && msgs.length > 0 ? msgs[msgs.length - 1].created_at : null;
+  return latest && latest > r.created_at ? latest : r.created_at;
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -201,33 +212,43 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
         : Promise.resolve({ data: [] as RequestRow[] }),
     ]);
 
+    // "Own threads" is filtered by user_id alone, so a dual-role account's
+    // OWN swap_request/swap_notice (created while acting as a leader on a
+    // DIFFERENT application) would otherwise leak into a non-leader active
+    // view — leaderSocietyId being null here means this view isn't a leader
+    // view, so drop swap-kind rows even from the user's own results.
+    const own = ((ownData ?? []) as unknown as RequestRow[])
+      .filter(r => leaderSocietyId || (r.kind !== 'swap_request' && r.kind !== 'swap_notice'));
+
     const merged = new Map<string, RequestRow>();
-    for (const row of ((ownData ?? []) as unknown as RequestRow[])) merged.set(row.id, row);
+    for (const row of own) merged.set(row.id, row);
     for (const row of ((societyData ?? []) as unknown as RequestRow[])) merged.set(row.id, row);
-    // Strictly newest-first by created_at — a status change never reorders.
-    const sorted = Array.from(merged.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
-    setRequests(sorted);
+    const mergedRows = Array.from(merged.values());
 
     // Every message per thread (not just the latest) — drives the row
-    // snippet and the unread count (organizer messages newer than
-    // participant_seen_at).
-    const ids = sorted.map(r => r.id);
+    // snippet, the unread count (organizer messages newer than
+    // participant_seen_at), AND the last-activity sort below, so it's
+    // fetched BEFORE sorting rather than after.
+    const ids = mergedRows.map(r => r.id);
+    const map = new Map<string, RequestMessageRow[]>();
     if (ids.length > 0) {
       const { data: msgData } = await supabase
         .from('conference_request_messages')
         .select('id, request_id, sender_user_id, is_organizer, body, created_at')
         .in('request_id', ids)
         .order('created_at', { ascending: true });
-      const map = new Map<string, RequestMessageRow[]>();
       for (const m of ((msgData ?? []) as RequestMessageRow[])) {
         const list = map.get(m.request_id) ?? [];
         list.push(m);
         map.set(m.request_id, list);
       }
-      setMessagesByRequest(map);
-    } else {
-      setMessagesByRequest(new Map());
     }
+    setMessagesByRequest(map);
+
+    // Last-activity-wins: a new message (either side) bumps the thread to
+    // the top; a status-only change with no message never moves it.
+    const sorted = mergedRows.sort((a, b) => lastActivityOf(b, map).localeCompare(lastActivityOf(a, map)));
+    setRequests(sorted);
 
     setLoading(false);
   }, [conferenceId, session, user, leaderSocietyId]);
@@ -269,10 +290,10 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
       .filter(r => (q ? r.subject.toLowerCase().includes(q) : true))
       .filter(r => (dateFrom ? r.created_at.slice(0, 10) >= dateFrom : true))
       .filter(r => (dateTo ? r.created_at.slice(0, 10) <= dateTo : true))
-      // Strictly newest-first by created_at — a status change (approved,
-      // denied, closed) never reorders the list.
-      .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  }, [requests, statusFilter, kindFilter, search, dateFrom, dateTo]);
+      // Last-activity-wins (see loadRequests) — a status change alone
+      // (approved, denied, closed) never reorders the list.
+      .sort((a, b) => lastActivityOf(b, messagesByRequest).localeCompare(lastActivityOf(a, messagesByRequest)));
+  }, [requests, statusFilter, kindFilter, search, dateFrom, dateTo, messagesByRequest]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
   const pagedRequests = filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

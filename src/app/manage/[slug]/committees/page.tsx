@@ -11,7 +11,7 @@ import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { PillToggle } from '@/app/account/accountUi';
 import { DatePicker } from '@/components/DatePicker';
-import { NeuButton, NeuPill } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuPill } from '@/components/neu';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -105,9 +105,11 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
 
 // ── Session release helpers ──────────────────────────────────────────────────
 
+// Small gold uppercase eyebrow, the house convention for a section/field
+// label (matches ADD CHAIR, ACCEPTED CHAIR APPLICANTS elsewhere in this file).
 const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 11, fontWeight: 700, color: '#6E5F4E',
-  fontFamily: "'Outfit', sans-serif", letterSpacing: '0.01em', marginBottom: 6,
+  display: 'block', fontSize: 10, fontWeight: 700, color: NEU.deepGold,
+  fontFamily: OUTFIT, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 8,
 };
 
 function fmtReleaseDate(iso: string): string {
@@ -204,9 +206,9 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
           disabled={disabled || saving || !datePart}
           className="focus:outline-none"
           style={{
-            border: '1px solid #DDD4C0', borderRadius: 12, padding: '11px 12px',
-            fontFamily: "'Outfit', sans-serif", fontSize: 14,
-            color: datePart ? '#1C1410' : '#9A8A78', backgroundColor: '#FAF8F3',
+            border: 'none', borderRadius: 12, padding: '11px 12px',
+            fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600,
+            color: datePart ? NEU.ink : NEU.muted, backgroundColor: NEU.base, boxShadow: NEU.inSm,
           }}
         />
         {datePart && (
@@ -216,13 +218,13 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
             disabled={disabled || saving}
             title="Clear, falls back to the default"
             className="flex-shrink-0 focus:outline-none"
-            style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{ color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}
           >
             <X size={16} />
           </button>
         )}
       </div>
-      {error && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginTop: 4 }}>{error}</p>}
+      {error && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{error}</p>}
     </div>
   );
 }
@@ -281,6 +283,75 @@ function ReleaseStatusBlock({ label, releasedAt, busy, onSend }: {
     >
       <Send size={12} />
       {busy ? 'SENDING...' : `SEND TO ${label}`}
+    </button>
+  );
+}
+
+// Compact right-of-row send action for the Settings tab's per-committee
+// release list — same three-state semantics as ReleaseStatusBlock's
+// PARTICIPANTS block above (confirm dialog lives in handleSendToParticipants
+// itself, same busy guard, same released/resend state), just sized to sit
+// at the end of a row instead of filling a card.
+function CompactSendButton({ releasedAt, busy, onSend }: {
+  releasedAt: string | null;
+  busy: boolean;
+  onSend: () => void;
+}) {
+  const status = releaseStatus(releasedAt);
+
+  if (status === 'scheduled') {
+    return (
+      <span
+        className="inline-flex items-center flex-shrink-0 px-2.5 py-1 rounded-full"
+        style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', color: NEU.deepGold, backgroundColor: 'rgba(238,217,138,0.28)' }}
+      >
+        SCHEDULED
+      </span>
+    );
+  }
+
+  if (status === 'released') {
+    return (
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <span
+          className="inline-flex items-center px-2.5 py-1 rounded-full"
+          style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.06em', color: NEU.green, backgroundColor: 'rgba(61,122,82,0.13)' }}
+        >
+          SENT
+        </span>
+        <button
+          onClick={onSend}
+          disabled={busy}
+          className="flex-shrink-0 rounded-full focus:outline-none"
+          style={{
+            padding: '6px 12px', border: 'none',
+            color: busy ? NEU.muted : NEU.ink, backgroundColor: NEU.surface, boxShadow: busy ? 'none' : NEU.outSm,
+            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+            cursor: busy ? 'default' : 'pointer',
+          }}
+        >
+          {busy ? '...' : 'RESEND'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={onSend}
+      disabled={busy}
+      className="inline-flex items-center gap-1.5 flex-shrink-0 rounded-full focus:outline-none"
+      style={{
+        padding: '7px 14px', border: 'none',
+        background: busy ? 'rgba(27,56,40,0.14)' : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+        color: busy ? NEU.muted : NEU.gold,
+        fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em',
+        cursor: busy ? 'default' : 'pointer',
+        boxShadow: busy ? 'none' : `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}`,
+      }}
+    >
+      <Send size={11} />
+      {busy ? '...' : 'SEND'}
     </button>
   );
 }
@@ -1146,32 +1217,31 @@ export default function CommitteesPage() {
             </NeuPill>
           </div>
 
-          {/* Session release settings */}
+          {/* Session release settings — neumorphic, matching Financials'
+              settings tab: NEU surface card, gold uppercase eyebrows,
+              inset wells for the time pickers, inset rows per committee. */}
           {activeTab === 'settings' && releaseSettingsLoaded && (
-            <div
-              className="rounded-2xl p-6 mb-6"
-              style={{ backgroundColor: 'rgba(250,248,243,0.82)', border: '1px solid rgba(221,212,192,0.95)', boxShadow: '0 10px 30px rgba(27,56,40,0.08)' }}
-            >
-              <p style={{ margin: '0 0 16px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.16em', color: '#B6871F' }}>
+            <NeuCard style={{ padding: '26px 28px', marginBottom: 24 }}>
+              <p style={{ margin: 0, fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.16em', color: NEU.deepGold, textTransform: 'uppercase' }}>
                 SESSION RELEASE
               </p>
 
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 mt-5">
                 <div className="flex items-center justify-between gap-3">
-                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink, fontWeight: 600 }}>
                     Chairs and delegates receive session codes at the same time
                   </span>
                   <PillToggle value={releaseSameTime} onChange={saveSameTime} />
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink, fontWeight: 600 }}>
                     Release all committee sessions at once
                   </span>
                   <PillToggle value={releaseAllAtOnce} onChange={saveAllAtOnce} />
                 </div>
               </div>
 
-              <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
                 {releaseAllAtOnce ? (
                   releaseSameTime ? (
                     <div>
@@ -1203,10 +1273,14 @@ export default function CommitteesPage() {
                     </div>
                   )
                 ) : (
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2.5">
                     {committees.map(c => (
-                      <div key={c.id} className="flex items-center gap-3 flex-wrap">
-                        <span className="truncate" style={{ width: 150, flexShrink: 0, fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, color: '#1C1410' }}>
+                      <div
+                        key={c.id}
+                        className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3"
+                        style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}
+                      >
+                        <span className="truncate" style={{ width: 150, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink }}>
                           {c.abbreviation || c.name}
                         </span>
                         {releaseSameTime ? (
@@ -1235,13 +1309,18 @@ export default function CommitteesPage() {
                             </div>
                           </>
                         )}
+                        <CompactSendButton
+                          releasedAt={c.released_to_delegates_at}
+                          busy={sendingToParticipants === c.id}
+                          onSend={() => handleSendToParticipants(c)}
+                        />
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
                 <label style={labelStyle}>Observer and advisor access</label>
                 <ReleaseTimePicker
                   value={releaseAdvisorsAt}
@@ -1250,22 +1329,17 @@ export default function CommitteesPage() {
                 />
               </div>
 
-              <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
-                <button
-                  onClick={handleSendAllToParticipants}
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                <NeuButton
+                  icon={Send}
+                  gradient={NEU_GRADIENTS.forest}
                   disabled={sendingAllToParticipants}
-                  className="flex items-center justify-center gap-2 rounded-xl py-2.5 px-5 text-[11px] font-bold focus:outline-none"
-                  style={{
-                    backgroundColor: sendingAllToParticipants ? '#DDD4C0' : '#1B3828',
-                    color: sendingAllToParticipants ? '#9A8A78' : '#EED98A',
-                    fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
-                  }}
+                  onClick={handleSendAllToParticipants}
                 >
-                  <Send size={12} />
                   {sendingAllToParticipants ? 'SENDING...' : 'SEND ALL TO PARTICIPANTS'}
-                </button>
+                </NeuButton>
               </div>
-            </div>
+            </NeuCard>
           )}
 
           {activeTab === 'overview' && (
