@@ -8,11 +8,14 @@
 // are read-only here, no attachments).
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquare, ChevronLeft, Plus, Send, ArrowLeftRight } from 'lucide-react';
+import { MessageSquare, ChevronLeft, ChevronRight, Plus, Send, ArrowLeftRight } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc, NeuButton } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc, NeuButton, NeuPill } from '@/components/neu';
 import type { ParticipantApplication } from './types';
+
+const MONO = "'DM Mono', monospace";
+const PAGE_SIZE = 5;
 
 interface SwapMetadata {
   society_id?: string;
@@ -65,6 +68,13 @@ const STATUS_CHIP: Record<string, { label: string; bg: string; color: string }> 
   closed: { label: 'CLOSED', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
 };
 
+const KIND_FILTER_OPTIONS = [
+  { value: 'all', label: 'All kinds' },
+  { value: 'question', label: 'Question' },
+  { value: 'swap_request', label: 'Swap request' },
+  { value: 'swap_notice', label: 'Swap' },
+] as const;
+
 const NOTE_TONES = {
   amber: { color: '#B8844A', bg: 'rgba(184,132,74,0.1)', border: 'rgba(184,132,74,0.24)' },
   muted: { color: '#6E5F4E', bg: 'rgba(154,138,120,0.1)', border: 'rgba(154,138,120,0.24)' },
@@ -88,6 +98,31 @@ function inputStyle(): React.CSSProperties {
     border: 'none', borderRadius: 12, backgroundColor: NEU.base, boxShadow: NEU.inSm,
     color: NEU.ink, fontFamily: OUTFIT, outline: 'none',
   };
+}
+
+// Compact pager, extruded arrows that press in (NEU.inSm) once disabled —
+// the same "pressed = inactive" idiom NeuChecklistRow uses for done rows.
+function Pager({ page, totalPages, onPrev, onNext }: { page: number; totalPages: number; onPrev: () => void; onNext: () => void }) {
+  const arrowStyle = (disabled: boolean): React.CSSProperties => ({
+    width: 28, height: 28, borderRadius: 999, border: 'none',
+    backgroundColor: NEU.surface,
+    boxShadow: disabled ? NEU.inSm : NEU.outSm,
+    color: disabled ? NEU.muted : NEU.ink,
+    cursor: disabled ? 'default' : 'pointer',
+  });
+  return (
+    <div className="flex items-center justify-center gap-3 mt-4">
+      <button onClick={onPrev} disabled={page <= 1} className="flex items-center justify-center focus:outline-none" style={arrowStyle(page <= 1)}>
+        <ChevronLeft size={14} />
+      </button>
+      <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: '0.04em', color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+        PAGE {page} OF {totalPages}
+      </span>
+      <button onClick={onNext} disabled={page >= totalPages} className="flex items-center justify-center focus:outline-none" style={arrowStyle(page >= totalPages)}>
+        <ChevronRight size={14} />
+      </button>
+    </div>
+  );
 }
 
 export default function RequestsPanel({ conferenceId, applicationId, myApplications }: {
@@ -120,6 +155,12 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
   const [submitting, setSubmitting] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replying, setReplying] = useState(false);
+
+  // Filters + pagination, same semantics as the organizer inbox.
+  const [statusFilter, setStatusFilter] = useState<'open' | 'closed' | 'all'>('open');
+  const [kindFilter, setKindFilter] = useState<'all' | 'question' | 'swap_request' | 'swap_notice'>('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   const loadRequests = useCallback(async () => {
     if (!session || !user) return;
@@ -186,6 +227,25 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
   useEffect(() => {
     if (selectedId) loadMessages(selectedId);
   }, [selectedId, loadMessages]);
+
+  // Changing any filter resets to page one.
+  useEffect(() => { setPage(1); }, [statusFilter, kindFilter, search]);
+
+  const filteredRequests = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return requests
+      .filter(r => (statusFilter === 'all' ? true : r.status === statusFilter))
+      .filter(r => (kindFilter === 'all' ? true : r.kind === kindFilter))
+      .filter(r => (q ? r.subject.toLowerCase().includes(q) : true))
+      .sort((a, b) => {
+        if (a.status === 'open' && b.status !== 'open') return -1;
+        if (a.status !== 'open' && b.status === 'open') return 1;
+        return b.last_message_at.localeCompare(a.last_message_at);
+      });
+  }, [requests, statusFilter, kindFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const pagedRequests = filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function needsAttention(r: RequestRow): boolean {
     if (r.status !== 'open') return false;
@@ -417,8 +477,38 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {requests.map(r => {
+        <>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="flex items-center gap-1.5">
+              {(['open', 'closed', 'all'] as const).map(s => (
+                <NeuPill key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
+                  {s.toUpperCase()}
+                </NeuPill>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {KIND_FILTER_OPTIONS.map(o => (
+                <NeuPill key={o.value} active={kindFilter === o.value} onClick={() => setKindFilter(o.value)}>
+                  {o.label.toUpperCase()}
+                </NeuPill>
+              ))}
+            </div>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search subjects..."
+              className="px-3.5 py-2 text-sm focus:outline-none"
+              style={{ ...inputStyle(), minWidth: 160, flex: '1 1 160px' }}
+            />
+          </div>
+
+          {filteredRequests.length === 0 ? (
+            <p className="text-sm text-center py-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              No threads match these filters.
+            </p>
+          ) : (
+          <div className="flex flex-col gap-2">
+          {pagedRequests.map(r => {
             const kindChip = KIND_CHIP[r.kind] ?? KIND_CHIP.question;
             const statusChip = STATUS_CHIP[r.status] ?? STATUS_CHIP.open;
             const last = lastMessages.get(r.id);
@@ -474,7 +564,18 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
               </NeuInset>
             );
           })}
-        </div>
+          </div>
+          )}
+
+          {filteredRequests.length > PAGE_SIZE && (
+            <Pager
+              page={page}
+              totalPages={totalPages}
+              onPrev={() => setPage(p => Math.max(1, p - 1))}
+              onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+            />
+          )}
+        </>
       )}
     </NeuCard>
   );

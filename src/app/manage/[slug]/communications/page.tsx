@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, Image as ImageIcon, Palette, Trash2 } from 'lucide-react';
+import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, Palette, Trash2 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -480,6 +480,7 @@ function CommunicationsPageInner() {
   const [inboxStatusFilter, setInboxStatusFilter] = useState<'open' | 'closed' | 'all'>('open');
   const [inboxKindFilter, setInboxKindFilter] = useState<'all' | 'question' | 'swap_request' | 'swap_notice'>('all');
   const [inboxSearch, setInboxSearch] = useState('');
+  const [inboxPage, setInboxPage] = useState(1);
   const [replyText, setReplyText] = useState('');
   const [replyError, setReplyError] = useState('');
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
@@ -771,6 +772,13 @@ function CommunicationsPageInner() {
         return b.last_message_at.localeCompare(a.last_message_at);
       });
   }, [inboxRequests, inboxStatusFilter, inboxKindFilter, inboxSearch]);
+
+  // Changing any filter resets to page one.
+  useEffect(() => { setInboxPage(1); }, [inboxStatusFilter, inboxKindFilter, inboxSearch]);
+
+  const INBOX_PAGE_SIZE = 15;
+  const inboxTotalPages = Math.max(1, Math.ceil(filteredInboxRequests.length / INBOX_PAGE_SIZE));
+  const pagedInboxRequests = filteredInboxRequests.slice((inboxPage - 1) * INBOX_PAGE_SIZE, inboxPage * INBOX_PAGE_SIZE);
 
   const selectedRequest = inboxRequests.find(r => r.id === selectedRequestId) ?? null;
   const selectedMessages = selectedRequestId ? inboxMessagesByRequest.get(selectedRequestId) ?? [] : [];
@@ -2287,7 +2295,7 @@ function CommunicationsPageInner() {
                   </p>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {filteredInboxRequests.map(r => {
+                    {pagedInboxRequests.map(r => {
                       const profile = inboxProfiles.get(r.user_id);
                       const role = inboxRoles.get(r.user_id);
                       const last = lastMessageOf(r.id);
@@ -2345,6 +2353,40 @@ function CommunicationsPageInner() {
                         </button>
                       );
                     })}
+                  </div>
+                )}
+
+                {filteredInboxRequests.length > INBOX_PAGE_SIZE && (
+                  <div className="flex items-center justify-center gap-3 mt-4">
+                    <button
+                      onClick={() => setInboxPage(p => Math.max(1, p - 1))}
+                      disabled={inboxPage <= 1}
+                      className="flex items-center justify-center rounded-full focus:outline-none"
+                      style={{
+                        width: 28, height: 28, border: `1px solid ${BORDER}`,
+                        backgroundColor: '#FAF8F3',
+                        color: inboxPage <= 1 ? '#C8BEA8' : '#1C1410',
+                        cursor: inboxPage <= 1 ? 'default' : 'pointer',
+                      }}
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: '#9A8A78', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                      PAGE {inboxPage} OF {inboxTotalPages}
+                    </span>
+                    <button
+                      onClick={() => setInboxPage(p => Math.min(inboxTotalPages, p + 1))}
+                      disabled={inboxPage >= inboxTotalPages}
+                      className="flex items-center justify-center rounded-full focus:outline-none"
+                      style={{
+                        width: 28, height: 28, border: `1px solid ${BORDER}`,
+                        backgroundColor: '#FAF8F3',
+                        color: inboxPage >= inboxTotalPages ? '#C8BEA8' : '#1C1410',
+                        cursor: inboxPage >= inboxTotalPages ? 'default' : 'pointer',
+                      }}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
                   </div>
                 )}
               </section>
