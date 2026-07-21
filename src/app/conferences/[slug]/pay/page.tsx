@@ -200,6 +200,13 @@ export default function PayPage() {
   const [loading, setLoading] = useState(true);
   const [conference, setConference] = useState<PayConference | null>(null);
   const [application, setApplication] = useState<PayApplication | null>(null);
+  // The user's own application with delegation-leader capabilities (adding
+  // spots, buying credits, delegation-wide invoices), independent of which
+  // application won the status-priority pick for `application` (primary) —
+  // a user can hold both a delegate application AND a head-delegate/advisor
+  // application at the same conference, and primary can land on either one.
+  const [leaderApp, setLeaderApp] = useState<PayApplication | null>(null);
+  const [allApps, setAllApps] = useState<PayApplication[]>([]);
   const [roleConfigs, setRoleConfigs] = useState<PayRoleConfig[]>([]);
   const [aidRequest, setAidRequest] = useState<AidRequestRow | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -217,25 +224,54 @@ export default function PayPage() {
     return (data as AidRequestRow | null) ?? null;
   }
 
-  async function fetchInvoices(app: PayApplication, conferenceId: string, accessToken: string): Promise<InvoiceRow[]> {
+  const INVOICE_SELECT = 'id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at';
+
+  async function fetchInvoices(
+    apps: PayApplication[],
+    primary: PayApplication,
+    leader: PayApplication | null,
+    conferenceId: string,
+    accessToken: string
+  ): Promise<InvoiceRow[]> {
     const supabase = getAuthedClient(accessToken);
     // sync_participant_invoices creates whatever this application newly owes
     // (registration once payable, the conference application fee, active
     // add-ons) — safe to call every load, it's a no-op once rows exist.
-    await supabase.rpc('sync_participant_invoices', { p_application_id: app.id });
+    // Also synced for leaderApp when it differs from primary, so a dual-role
+    // user's pledge_spot invoices (owed by their leader application) still
+    // materialize even when a different application won the primary pick.
+    await supabase.rpc('sync_participant_invoices', { p_application_id: primary.id });
+    if (leader && leader.id !== primary.id) {
+      await supabase.rpc('sync_participant_invoices', { p_application_id: leader.id });
+    }
 
-    const isLeader = app.role === 'head-delegate' || app.role === 'faculty-advisor';
-    const orFilter = isLeader && app.society_id
-      ? `application_id.eq.${app.id},society_id.eq.${app.society_id}`
-      : `application_id.eq.${app.id}`;
-    const { data } = await supabase
-      .from('invoices')
-      .select('id, conference_id, kind, label, amount_cents, amount_paid_cents, currency, status, gates_acceptance, payable_before_acceptance, application_id, society_id, config_id, aid_applied_cents, quantity, created_at')
-      .eq('conference_id', conferenceId)
-      .or(orFilter)
-      .neq('status', 'void')
-      .order('created_at', { ascending: true });
-    return (data ?? []) as InvoiceRow[];
+    // Two independent queries — every one of the user's applications at this
+    // conference, plus the delegation's society-owned invoices when they
+    // lead one — merged and deduped by id, since a pledge_spot invoice on
+    // the leader's own application_id matches both queries at once.
+    const [byAppRes, bySocietyRes] = await Promise.all([
+      supabase
+        .from('invoices')
+        .select(INVOICE_SELECT)
+        .eq('conference_id', conferenceId)
+        .in('application_id', apps.map(a => a.id))
+        .neq('status', 'void')
+        .order('created_at', { ascending: true }),
+      leader?.society_id
+        ? supabase
+            .from('invoices')
+            .select(INVOICE_SELECT)
+            .eq('conference_id', conferenceId)
+            .eq('society_id', leader.society_id)
+            .neq('status', 'void')
+            .order('created_at', { ascending: true })
+        : Promise.resolve({ data: [] as InvoiceRow[] }),
+    ]);
+
+    const merged = new Map<string, InvoiceRow>();
+    for (const row of ((byAppRes.data ?? []) as InvoiceRow[])) merged.set(row.id, row);
+    for (const row of ((bySocietyRes.data ?? []) as InvoiceRow[])) merged.set(row.id, row);
+    return Array.from(merged.values()).sort((a, b) => a.created_at.localeCompare(b.created_at));
   }
 
   async function fetchConfigDescriptions(accessToken: string, invs: InvoiceRow[]): Promise<Record<string, string>> {
@@ -294,7 +330,18 @@ export default function PayPage() {
       const primary = apps.length > 0
         ? [...apps].sort((a, b) => statusPriority(a.status) - statusPriority(b.status))[0]
         : null;
+      // Any non-rejected/withdrawn application of this user's that actually
+      // leads a delegation — separate from `primary`, since primary is
+      // picked by status priority alone and can land on a non-leader
+      // application even when the user also holds a leader one.
+      const leader = apps.find(a =>
+        a.status !== 'rejected' && a.status !== 'withdrawn'
+        && (a.role === 'head-delegate' || a.role === 'faculty-advisor')
+        && !!a.society_id
+      ) ?? null;
       setApplication(primary);
+      setLeaderApp(leader);
+      setAllApps(apps);
 
       const [roleConfigsRes, addonsRes] = await Promise.all([
         supabase
@@ -314,7 +361,7 @@ export default function PayPage() {
       if (primary) {
         const [aid, invs] = await Promise.all([
           fetchAidRequest(primary.id, session.access_token),
-          fetchInvoices(primary, conf.id, session.access_token),
+          fetchInvoices(apps, primary, leader, conf.id, session.access_token),
         ]);
         if (cancelled) return;
         setAidRequest(aid);
@@ -335,7 +382,7 @@ export default function PayPage() {
 
   async function refetchInvoices() {
     if (!application || !conference || !session) return;
-    const invs = await fetchInvoices(application, conference.id, session.access_token);
+    const invs = await fetchInvoices(allApps, application, leaderApp, conference.id, session.access_token);
     setInvoices(invs);
     setConfigDescriptions(await fetchConfigDescriptions(session.access_token, invs));
   }
@@ -400,6 +447,7 @@ export default function PayPage() {
             <PayInvoiceAndActions
               conference={conference}
               application={application}
+              leaderApp={leaderApp}
               roleConfig={roleConfigs.find(rc => rc.role === application.role) ?? null}
               delegateRoleConfig={roleConfigs.find(rc => rc.role === 'delegate') ?? null}
               aidRequest={aidRequest}
@@ -882,11 +930,12 @@ function AddSpotsPanel({
 // math hooks initialize against real values) ────────────────────────────────
 
 function PayInvoiceAndActions({
-  conference, application, roleConfig, delegateRoleConfig, aidRequest, onAidSubmitted, invoices, configDescriptions,
+  conference, application, leaderApp, roleConfig, delegateRoleConfig, aidRequest, onAidSubmitted, invoices, configDescriptions,
   activeAddons, onInvoicesChanged,
 }: {
   conference: PayConference;
   application: PayApplication;
+  leaderApp: PayApplication | null;
   roleConfig: PayRoleConfig | null;
   delegateRoleConfig: PayRoleConfig | null;
   aidRequest: AidRequestRow | null;
@@ -908,7 +957,10 @@ function PayInvoiceAndActions({
   // voucher is applied/removed (apply_voucher), so it's the source of truth
   // for Total/due rather than a live fee-minus-aid computation. Before it
   // exists (not yet payable/synced), fall back to fee − aid with no voucher.
-  const roleFeeInvoice = invoices.find(inv => inv.kind === 'role_fee');
+  // Bound to primary specifically (application_id match) — invoices now also
+  // covers a dual-role leaderApp's own rows, which can include its own
+  // role_fee invoice, so kind alone is no longer a unique-enough filter.
+  const roleFeeInvoice = invoices.find(inv => inv.kind === 'role_fee' && inv.application_id === application.id);
   const preVoucherCents = Math.round(Math.max(0, fee - grantedAmount) * 100);
   const netCents = roleFeeInvoice ? roleFeeInvoice.amount_cents : preVoucherCents;
   const dueCents = roleFeeInvoice ? invoiceDueCents(roleFeeInvoice) : Math.max(0, netCents - Math.round(application.amount_paid * 100));
@@ -922,7 +974,10 @@ function PayInvoiceAndActions({
   const paymentsEnabled = conference.payment_method === 'stripe' && conference.connect_onboarding_status === 'complete';
   const externalPaymentUrl = conference.payment_method === 'manual' ? conference.external_payment_url : null;
   const manualActive = conference.payment_method === 'manual';
-  const canBuyDelegationStuff = (application.role === 'head-delegate' || application.role === 'faculty-advisor') && !!application.society_id;
+  // Gated on leaderApp, not primary — a dual-role user's primary application
+  // can be a plain delegate app even while they lead a delegation through a
+  // separate head-delegate/advisor application.
+  const canBuyDelegationStuff = leaderApp !== null;
 
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
@@ -1417,16 +1472,16 @@ function PayInvoiceAndActions({
             setSpotsOpen(v => !v);
           }}
         />
-        {canBuyDelegationStuff && spotsOpen && (
+        {canBuyDelegationStuff && leaderApp && spotsOpen && (
           <>
             <AddSpotsPanel
-              applicationId={application.id}
+              applicationId={leaderApp.id}
               accessToken={session?.access_token}
               onAdded={onInvoicesChanged}
             />
             <PledgeInvoicingCard
-              applicationId={application.id}
-              societyId={application.society_id as string}
+              applicationId={leaderApp.id}
+              societyId={leaderApp.society_id as string}
               currency={delegateRoleConfig?.fee_currency ?? currency}
               financialAidEnabled={conference.financial_aid_enabled}
               aidBlocks={aidBlocks}
@@ -1446,7 +1501,7 @@ function PayInvoiceAndActions({
             setCreditsOpen(v => !v);
           }}
         />
-        {canBuyDelegationStuff && creditsOpen && <DelegationCreditsCard societyId={application.society_id as string} />}
+        {canBuyDelegationStuff && leaderApp && creditsOpen && <DelegationCreditsCard societyId={leaderApp.society_id as string} />}
       </div>
 
       {stubMessage && (
