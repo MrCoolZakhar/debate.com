@@ -31,6 +31,17 @@ interface Society {
   spots_purchased: number;
 }
 
+// perform_delegation_swap's return, the authoritative post-swap state for
+// each seat (application_id here refers to p_app_a/p_app_b respectively).
+interface SwapSeatResult {
+  application_id: string;
+  name: string;
+  new_committee: string;
+  new_country: string;
+}
+
+type SwapRpcResult = { ok: true; a: SwapSeatResult; b: SwapSeatResult } | { ok: false; error?: string };
+
 // A swap_request or swap_notice row on conference_requests, the shape both
 // the pending banner and the recent-notice line read from.
 interface SwapActivityRow {
@@ -305,8 +316,13 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
     if (allocationSwapMode === 'self_serve') {
       const { data, error } = await supabase.rpc('perform_delegation_swap', { p_app_a: swapA.id, p_app_b: swapB.id });
       if (error) { setSwapError(error.message || 'Could not swap allocations.'); setSwapping(false); return; }
-      const result = data as { ok: boolean; error?: string };
+      const result = data as SwapRpcResult;
       if (!result.ok) { setSwapError(result.error ?? 'Could not swap allocations.'); setSwapping(false); return; }
+      // The RPC's own return is the authoritative post-swap state, the
+      // panel's locally-fetched allocation labels (allocA/allocB above) can
+      // be stale by the time this resolves.
+      const { a, b } = result;
+      const swapSummary = `${a.name} is now ${a.new_committee}: ${a.new_country}, ${b.name} is now ${b.new_committee}: ${b.new_country}`;
 
       const { data: reqRow } = await supabase.from('conference_requests').insert({
         conference_id: conferenceId, user_id: user.id, kind: 'swap_notice', subject, metadata,
@@ -314,7 +330,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       if (reqRow) {
         await supabase.from('conference_request_messages').insert({
           request_id: (reqRow as { id: string }).id, sender_user_id: user.id, is_organizer: false,
-          body: `${nameA} and ${nameB} swapped allocations: ${nameA} is now ${allocB}, ${nameB} is now ${allocA}.`,
+          body: `${a.name} and ${b.name} swapped allocations: ${swapSummary}.`,
         });
       }
       // NOTE: queueEventEmail reads email_templates and writes email_outbox,
@@ -334,7 +350,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       // state rather than the old one flashing in behind it.
       await Promise.all([load(), loadSwapActivity()]);
       setSwapping(false);
-      setSwapResult({ title: 'Allocations swapped', body: `${nameA} is now ${allocB}, and ${nameB} is now ${allocA}.` });
+      setSwapResult({ title: 'Allocations swapped', body: `${swapSummary}.` });
     } else {
       const { data: reqRow, error } = await supabase.from('conference_requests').insert({
         conference_id: conferenceId, user_id: user.id, kind: 'swap_request', subject, metadata,
