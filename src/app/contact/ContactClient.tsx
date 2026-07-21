@@ -404,8 +404,10 @@ export default function ContactClient() {
         <footer className="relative z-10 border-t border-[#DDD4C0] bg-[#EDE7D8] px-6 py-4">
           <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
             <img
-              src="/GavellingLogo.png"
+              src="/GavellingLogo.webp"
               alt="Gavelling"
+              loading="lazy"
+              decoding="async"
               className="h-7 w-auto"
               style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

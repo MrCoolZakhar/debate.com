@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
@@ -271,6 +272,7 @@ function DocumentsCard() {
         </div>
         <iframe
           src={pdfUrl}
+          loading="lazy"
           className="flex-1 w-full border-none"
           title="UNSC Resolution 2819 (2026)"
           style={{ minHeight: '380px' }}
@@ -418,6 +420,20 @@ function FeatureCarousel({
   setActiveFeature: (id: string) => void;
 }) {
   const featureIds = ['roll-call', 'motions', 'speakers', 'documents', 'chat', 'archive'];
+  // Lazy-mount: only render a card once its tab has been activated. Inactive,
+  // never-visited cards used to mount upfront — including the Documents card's
+  // PDF <iframe> and two setInterval timers — making the page pay for all six
+  // panels (and their image/PDF decode) on first load. Visited cards stay
+  // mounted so the opacity crossfade between tabs is unchanged.
+  const [visited, setVisited] = useState<Set<string>>(() => new Set([activeFeature]));
+  useEffect(() => {
+    setVisited((prev) => {
+      if (prev.has(activeFeature)) return prev;
+      const next = new Set(prev);
+      next.add(activeFeature);
+      return next;
+    });
+  }, [activeFeature]);
   return (
     <div className="relative" style={{ height: '520px' }}>
       {featureIds.map((id) => (
@@ -431,7 +447,7 @@ function FeatureCarousel({
             pointerEvents: id === activeFeature ? 'auto' : 'none',
           }}
         >
-          <FeatureCard id={id} />
+          {visited.has(id) && <FeatureCard id={id} />}
         </div>
       ))}
     </div>
@@ -811,8 +827,10 @@ export default function HomeClient() {
           >
             <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
               <img
-                src="/GavellingLogo.png"
+                src="/GavellingLogo.webp"
                 alt="Gavelling"
+                loading="lazy"
+                decoding="async"
                 className="h-7 w-auto"
                 style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -835,7 +853,7 @@ export default function HomeClient() {
               </div>
               <div className="flex flex-col items-center gap-1 md:items-end">
                 <p className="text-xs font-semibold text-[#1B3828]">{t('home_footer_copy').replace('{year}', String(new Date().getFullYear()))}</p>
-                <a href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</a>
+                <Link href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</Link>
               </div>
             </div>
           </footer>

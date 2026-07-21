@@ -61,7 +61,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/my-conferences', '/invites'];
   const inConferencesArea =
     !logoOverride && (pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname?.startsWith(p)));
-  const logoSrc = logoOverride?.src ?? '/GavellingLogo.png';
+  const logoSrc = logoOverride?.src ?? '/GavellingLogo.webp';
   const logoAlt = logoOverride?.alt ?? 'Gavelling';
 
   const avatarInitial = profile?.display_name
@@ -151,8 +151,9 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
           <Link href="/" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
             {inConferencesArea ? (
               <img
-                src="/Conferences.png"
+                src="/Conferences.webp"
                 alt="Gavelling Conferences"
+                decoding="async"
                 style={{
                   height: 36,
                   width: 'auto',
@@ -165,6 +166,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               <img
                 src={logoSrc}
                 alt={logoAlt}
+                decoding="async"
                 className="h-8 md:h-10 w-auto object-contain"
                 style={
                   overlay
@@ -269,7 +271,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                 }}
               >✨ NEW</span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/gavel-mark.png" alt="" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+              <img src="/gavel-mark.webp" alt="" decoding="async" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
               <span>{creditsLoading || creditBalance === null ? '—' : creditBalance}</span>
             </Link>
           )}
@@ -458,7 +460,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/gavel-mark.png" alt="" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+                <img src="/gavel-mark.webp" alt="" decoding="async" loading="lazy" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
                 <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
                   {creditsLoading || creditBalance === null ? '—' : creditBalance}
                 </span>
