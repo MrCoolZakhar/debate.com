@@ -21,7 +21,8 @@ import {
 import { matchPresetEmblem, committeeDisplayName } from '@/lib/presetNames';
 import { LevelInsignia, LEVEL_ACCENT, PillToggle } from '@/app/account/accountUi';
 import { LogoDisc } from '@/components/LogoDisc';
-import { sendChairInvite } from '@/lib/chairInvites';
+import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import Portal from '@/components/Portal';
 
 // ── Design constants ──────────────────────────────────────────────────────────
@@ -194,6 +195,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
   committeeName: string;
 }) {
   const { session } = useAuth();
+  const { confirm, modal: confirmModal } = useConfirmModal();
   const [chairs, setChairs] = useState<DisplayChair[] | null>(null);
   const [chairIds, setChairIds] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
@@ -238,12 +240,34 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
     if (!em || !session) return;
     setBusy(true); setErr(''); setNote('');
     const supabase = getAuthedClient(session.access_token);
-    const res = await sendChairInvite(supabase, { conferenceId, committeeId, committeeName, email: em });
+
+    async function doSend() {
+      const res = await sendChairInvite(supabase, { conferenceId, committeeId, committeeName, email: em });
+      if (!res.ok) { setErr(res.error ?? 'Could not invite that chair.'); return; }
+      setNote(`Invited ${res.invitedName ?? em}.`);
+      setEmail('');
+      load();
+    }
+
+    // Two-roles warning: this email already holds an active application in
+    // another role, confirm before giving them a second one. The confirm
+    // dialog's own loading state (onConfirm) is the busy-state guard on
+    // PROCEED here, so the outer `busy` flag can drop immediately.
+    const conflict = await findChairInviteRoleConflict(supabase, conferenceId, em);
+    if (conflict) {
+      setBusy(false);
+      await confirm({
+        title: 'This person already holds a role',
+        body: `${conflict.displayName} already has an active ${conflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.`,
+        confirmLabel: 'Proceed',
+        cancelLabel: 'Cancel',
+        onConfirm: doSend,
+      });
+      return;
+    }
+
+    await doSend();
     setBusy(false);
-    if (!res.ok) { setErr(res.error ?? 'Could not invite that chair.'); return; }
-    setNote(`Invited ${res.invitedName ?? em}.`);
-    setEmail('');
-    load();
   }
 
   async function assign(app: ChairApplicant) {
@@ -363,6 +387,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
         {note && <p className="text-[10.5px] mt-2" style={{ color: '#2A5A3C', fontFamily: OUTFIT }}>{note}</p>}
         {err && <p className="text-[10.5px] mt-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{err}</p>}
       </div>
+      {confirmModal}
     </div>
   );
 }

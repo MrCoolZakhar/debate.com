@@ -15,7 +15,7 @@ import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
-import { sendChairInvite } from '@/lib/chairInvites';
+import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
@@ -2376,6 +2376,7 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
   onInvited: (name: string) => void;
 }) {
   const { session } = useAuth();
+  const { confirm, modal: confirmModal } = useConfirmModal();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -2388,19 +2389,41 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
     setInviting(true);
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const result = await sendChairInvite(supabase, {
-      conferenceId,
-      committeeId: committee.id,
-      committeeName: committee.name,
-      email: em,
-      name: nm,
-    });
-    setInviting(false);
-    if (!result.ok) {
-      setError(result.error ?? 'Could not invite that chair.');
+
+    async function doSend() {
+      const result = await sendChairInvite(supabase, {
+        conferenceId,
+        committeeId: committee.id,
+        committeeName: committee.name,
+        email: em,
+        name: nm,
+      });
+      if (!result.ok) {
+        setError(result.error ?? 'Could not invite that chair.');
+        return;
+      }
+      onInvited(result.invitedName ?? em);
+    }
+
+    // Two-roles warning: this email already belongs to a registered user
+    // with an active application in another role, confirm before giving
+    // them a second one. The confirm dialog's own loading state (onConfirm)
+    // is the busy-state guard on PROCEED, so `inviting` can drop immediately.
+    const conflict = await findChairInviteRoleConflict(supabase, conferenceId, em);
+    if (conflict) {
+      setInviting(false);
+      await confirm({
+        title: 'This person already holds a role',
+        body: `${conflict.displayName} already has an active ${conflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.`,
+        confirmLabel: 'Proceed',
+        cancelLabel: 'Cancel',
+        onConfirm: doSend,
+      });
       return;
     }
-    onInvited(result.invitedName ?? em);
+
+    await doSend();
+    setInviting(false);
   }
 
   return (
@@ -2458,6 +2481,7 @@ function InviteChairModal({ conferenceId, committee, onClose, onInvited }: {
         </div>
         {error && <div className="mt-2"><ModalError msg={error} /></div>}
       </NeuModalCard>
+      {confirmModal}
     </ModalOverlay>
   );
 }

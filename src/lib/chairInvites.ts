@@ -32,6 +32,39 @@ interface CreateChairInviteRpcResult {
   invited_email?: string;
 }
 
+export interface ChairInviteRoleConflict {
+  displayName: string;
+  role: string;
+}
+
+/**
+ * Two-roles warning lookup: does `email` belong to a registered user who
+ * already holds an active (submitted/accepted/assigned/checked-in)
+ * application at this conference, in a role other than chair? Resolves
+ * null for an unregistered email or one with no such application — both
+ * send the invite immediately, no warning. Goes through the same
+ * applications+profiles join every /manage/ page already reads under
+ * organizer RLS, rather than a cold profiles-by-email lookup (profiles
+ * has no policy for that).
+ */
+export async function findChairInviteRoleConflict(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  email: string
+): Promise<ChairInviteRoleConflict | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  const { data } = await supabase
+    .from('applications')
+    .select('role, profiles (display_name, email)')
+    .eq('conference_id', conferenceId)
+    .neq('role', 'chair')
+    .in('status', ['submitted', 'accepted', 'assigned', 'checked-in']);
+  const rows = (data ?? []) as unknown as { role: string; profiles: { display_name: string; email: string } | null }[];
+  const match = rows.find(r => r.profiles?.email?.toLowerCase() === normalized);
+  return match?.profiles ? { displayName: match.profiles.display_name, role: match.role } : null;
+}
+
 export async function sendChairInvite(
   supabase: ReturnType<typeof getAuthedClient>,
   args: SendChairInviteArgs

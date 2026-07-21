@@ -114,6 +114,15 @@ interface ExistingApp {
   spots_pledged: number | null;
 }
 
+/** An active (submitted/accepted/assigned/checked-in) application the user
+ *  holds at this SAME conference under a DIFFERENT role — the one-active-
+ *  application-per-conference gate. Rejected/withdrawn never populate this. */
+interface OtherActiveApp {
+  id: string;
+  role: string;
+  status: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 type IconType = typeof Gavel;
@@ -720,6 +729,7 @@ function ConferenceApplyInner() {
   const [committees, setCommittees] = useState<CommitteeOption[]>([]);
   const [societies, setSocieties] = useState<Society[]>([]);
   const [existingApp, setExistingApp] = useState<ExistingApp | null | undefined>(undefined);
+  const [otherRoleApp, setOtherRoleApp] = useState<OtherActiveApp | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -1051,7 +1061,7 @@ function ConferenceApplyInner() {
 
     setConference(confData as Conference);
 
-    const [roleRes, committeesRes, societiesRes, appRes, profileRes, subRes, cvCountRes] = await Promise.all([
+    const [roleRes, committeesRes, societiesRes, appRes, otherAppRes, profileRes, subRes, cvCountRes] = await Promise.all([
       supabase
         .from('application_role_configs')
         .select('*')
@@ -1075,6 +1085,20 @@ function ConferenceApplyInner() {
         .eq('user_id', user!.id)
         .eq('role', role)
         .maybeSingle(),
+      // One-active-application-per-conference check: any OTHER role this
+      // user already holds an active application under, at this same
+      // conference. Rejected/withdrawn are excluded on purpose (#1 — they
+      // don't count, so a rejected applicant can still apply fresh under a
+      // different role). Not .maybeSingle(): nothing here guarantees a
+      // single row today, and this must never throw.
+      supabase
+        .from('applications')
+        .select('id, role, status')
+        .eq('conference_id', confData.id)
+        .eq('user_id', user!.id)
+        .neq('role', role)
+        .in('status', ['submitted', 'accepted', 'assigned', 'checked-in'])
+        .limit(1),
       supabase
         .from('profiles')
         .select('date_of_birth, is_ambassador, unlimited_conferences_remaining, mun_experience_level')
@@ -1106,11 +1130,13 @@ function ConferenceApplyInner() {
     const committeesData = (committeesRes.data as CommitteeOption[]) ?? [];
     const societiesData = (societiesRes.data as Society[]) ?? [];
     const appData = (appRes.data as ExistingApp) ?? null;
+    const otherAppData = ((otherAppRes.data as OtherActiveApp[]) ?? [])[0] ?? null;
 
     setRoleConfig((roleRes.data as RoleConfig) ?? null);
     setCommittees(committeesData);
     setSocieties(societiesData);
     setExistingApp(appData);
+    setOtherRoleApp(otherAppData);
     const prof = profileRes.data as { date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number; mun_experience_level: string | null } | null;
     setMyDob(prof?.date_of_birth ?? null);
     setFinanceProfile({
@@ -3236,6 +3262,37 @@ function ConferenceApplyInner() {
   // doesn't matter here, an existing applicant can still edit while paused.
   const canEdit = isEditMode && !!existingApp && !!roleConfig
     && (existingApp.status === 'rejected' || existingApp.status === 'submitted');
+
+  // One-active-application-per-conference: an active application under a
+  // different role blocks a fresh apply here, same wall treatment as
+  // "already applied". Checked BEFORE the same-role wall (and skipped
+  // entirely by canEdit) so editing/resubmitting one's own rejected or
+  // submitted application is never blocked by a second, unrelated role.
+  if (!canEdit && otherRoleApp) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+        <SiteNav />
+        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
+          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              You&apos;ve already applied
+            </h2>
+            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              You already have an active {otherRoleApp.role.replace(/-/g, ' ')} application to this conference. Withdraw it or contact the organizing team if you need to change roles.
+            </p>
+            <Link
+              href={`/conferences/${slug}`}
+              className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+            >
+              VIEW CONFERENCE →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (existingApp && !canEdit) {
     return (

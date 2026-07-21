@@ -5,7 +5,7 @@ import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, Arro
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { sendChairInvite } from '@/lib/chairInvites';
+import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
@@ -299,6 +299,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
   onAssign: (app: ChairApplicant) => void;
 }) {
   const { session } = useAuth();
+  const { confirm, modal: confirmModal } = useConfirmModal();
   const [applicants, setApplicants] = useState<ChairApplicant[] | null>(null);
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -335,20 +336,42 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
     if (!em || !session) return;
     setInviting(true); setError('');
     const supabase = getAuthedClient(session.access_token);
-    const result = await sendChairInvite(supabase, {
-      conferenceId,
-      committeeId: committee.id,
-      committeeName: committee.name,
-      email: em,
-    });
-    setInviting(false);
-    if (!result.ok) {
-      setError(result.error ?? 'Could not invite that chair.');
+
+    async function doSend() {
+      const result = await sendChairInvite(supabase, {
+        conferenceId,
+        committeeId: committee.id,
+        committeeName: committee.name,
+        email: em,
+      });
+      if (!result.ok) {
+        setError(result.error ?? 'Could not invite that chair.');
+        return;
+      }
+      onInvited(result.invitedName ?? em);
+      setEmail('');
+      onDone();
+    }
+
+    // Two-roles warning: this email already holds an active application in
+    // another role, confirm before giving them a second one. The confirm
+    // dialog's own loading state (onConfirm) is the busy-state guard on
+    // PROCEED here, so the outer `inviting` flag can drop immediately.
+    const conflict = await findChairInviteRoleConflict(supabase, conferenceId, em);
+    if (conflict) {
+      setInviting(false);
+      await confirm({
+        title: 'This person already holds a role',
+        body: `${conflict.displayName} already has an active ${conflict.role.replace(/-/g, ' ')} application at this conference. Accepting this chair invite will give them two roles.`,
+        confirmLabel: 'Proceed',
+        cancelLabel: 'Cancel',
+        onConfirm: doSend,
+      });
       return;
     }
-    onInvited(result.invitedName ?? em);
-    setEmail('');
-    onDone();
+
+    await doSend();
+    setInviting(false);
   }
 
   return (
@@ -471,6 +494,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
           {error && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
         </div>
       </div>
+      {confirmModal}
     </ModalOverlay>
   );
 }
