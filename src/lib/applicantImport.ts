@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 
 // ── Canonical columns ────────────────────────────────────────────────────────
 
-export const CANONICAL_HEADERS = ['email', 'name', 'role', 'delegation', 'payment', 'committee', 'country'] as const;
+export const CANONICAL_HEADERS = ['email', 'name', 'role', 'delegation', 'payment', 'committee', 'country', 'seat'] as const;
 export type CanonicalHeader = (typeof CANONICAL_HEADERS)[number];
 
 export type ImportableRole = 'delegate' | 'head-delegate' | 'faculty-advisor' | 'observer';
@@ -40,6 +40,7 @@ export function buildImportTemplateCSV(): string {
     'unpaid',
     'UNSC',
     'France',
+    '', // seat: left empty in the example, only meaningful for double-delegation committees
   ].map(v => `"${v.replace(/"/g, '""')}"`).join(',');
   return `${header}\n${example}\n`;
 }
@@ -55,6 +56,9 @@ export interface ParsedImportRow {
   payment: string;
   committee: string;
   country: string;
+  /** Raw text, "1", "2", or empty. Only meaningful for double-delegation
+   *  committees — validated against the target committee's delegation_size. */
+  seat: string;
 }
 
 export interface ParseFileResult {
@@ -93,9 +97,10 @@ function recordsToRows(records: Record<string, string>[]): ParseFileResult {
       payment: get('payment'),
       committee: get('committee'),
       country: get('country'),
+      seat: get('seat'),
     };
     // Skip fully-blank rows (trailing spreadsheet rows, etc).
-    if (!row.email && !row.name && !row.role && !row.delegation && !row.payment && !row.committee && !row.country) continue;
+    if (!row.email && !row.name && !row.role && !row.delegation && !row.payment && !row.committee && !row.country && !row.seat) continue;
     rowNumber += 1;
     row.rowNumber = rowNumber;
     rows.push(row);
@@ -141,6 +146,9 @@ export interface ClassifiedImportRow {
     committeeLabel: string | null;
     countryCode: string | null;
     countryName: string | null;
+    /** 1 or 2 in a double-delegation committee, 1 in a single-delegation
+     *  committee, null when no allocation resolved at all. */
+    seat: number | null;
   };
 }
 
@@ -148,6 +156,7 @@ export interface CommitteeLite {
   id: string;
   name: string;
   abbreviation: string | null;
+  delegation_size: number;
 }
 
 /** A single allocatable row from committee_country_slots — a country for a
@@ -163,7 +172,7 @@ export interface ClassifyContext {
   committees: CommitteeLite[];
   /** `${lowercased email}|${role}` for every application already on this conference (invited_email or profile email). */
   existingEmailRole: Set<string>;
-  /** `${committeeId}|${countryCode}` for every country already allocated in this conference. */
+  /** `${committeeId}|${countryCode}|${seat}` for every country already allocated in this conference — single-delegation allocations are keyed at seat 1. */
   existingAllocations: Set<string>;
   /** Every committee's roster (committee_country_slots), keyed by committee id — the single source of truth for what's assignable in that committee, standard or crisis alike. */
   committeeSlots: Map<string, RosterSlot[]>;
@@ -244,6 +253,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
     let committeeLabel: string | null = null;
     let countryCode: string | null = null;
     let countryName: string | null = null;
+    let seat: number | null = null;
 
     if (raw.committee.trim()) {
       const committee = matchCommittee(ctx.committees, raw.committee);
@@ -261,18 +271,37 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
           if (!slot) {
             reasons.push({ severity: 'warning', message: `'${raw.country.trim()}' is not in ${committeeLabel}'s roster, so imported without allocation.` });
           } else {
-            const slotKey = `${committee.id}|${slot.country_code}`;
-            const occupied = ctx.existingAllocations.has(slotKey) || claimedInFile.has(slotKey);
-            if (occupied) {
-              reasons.push({ severity: 'warning', message: `${slot.country_name} is already allocated in ${committeeLabel}, so imported without allocation.` });
+            const isDouble = committee.delegation_size === 2;
+            const seatRaw = raw.seat.trim();
+            let seatValue: number | null = null;
+            if (isDouble) {
+              const n = Number(seatRaw);
+              if (seatRaw === '' || !(n === 1 || n === 2)) {
+                reasons.push({ severity: 'error', message: 'This committee is a double-delegation committee — every allocation needs a Seat of 1 or 2.' });
+              } else {
+                seatValue = n;
+              }
+            } else if (seatRaw !== '') {
+              reasons.push({ severity: 'error', message: 'This committee seats one delegate per country — leave the Seat column empty.' });
             } else {
-              claimedInFile.add(slotKey);
-              committeeId = committee.id;
-              // Copied verbatim from the matched slot row, no derivation —
-              // guarantees import-created allocations are byte-identical to
-              // UI-created ones.
-              countryCode = slot.country_code;
-              countryName = slot.country_name;
+              seatValue = 1;
+            }
+
+            if (seatValue !== null) {
+              const slotKey = `${committee.id}|${slot.country_code}|${seatValue}`;
+              const occupied = ctx.existingAllocations.has(slotKey) || claimedInFile.has(slotKey);
+              if (occupied) {
+                reasons.push({ severity: 'warning', message: `${slot.country_name}${isDouble ? ` seat ${seatValue}` : ''} is already allocated in ${committeeLabel}, so imported without allocation.` });
+              } else {
+                claimedInFile.add(slotKey);
+                committeeId = committee.id;
+                // Copied verbatim from the matched slot row, no derivation —
+                // guarantees import-created allocations are byte-identical to
+                // UI-created ones.
+                countryCode = slot.country_code;
+                countryName = slot.country_name;
+                seat = seatValue;
+              }
             }
           }
         }
@@ -305,6 +334,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
         committeeLabel,
         countryCode,
         countryName,
+        seat,
       },
     });
   }

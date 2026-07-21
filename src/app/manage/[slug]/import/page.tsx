@@ -75,9 +75,9 @@ interface DbContext {
 
 async function loadContext(supabase: ReturnType<typeof getAuthedClient>, conferenceId: string): Promise<DbContext> {
   const [{ data: committees }, { data: apps }, { data: allocs }] = await Promise.all([
-    supabase.from('conference_committees').select('id, name, abbreviation').eq('conference_id', conferenceId),
+    supabase.from('conference_committees').select('id, name, abbreviation, delegation_size').eq('conference_id', conferenceId),
     supabase.from('applications').select('role, invited_email, profiles(email)').eq('conference_id', conferenceId),
-    supabase.from('conference_allocations').select('conference_committee_id, country_code').eq('conference_id', conferenceId),
+    supabase.from('conference_allocations').select('conference_committee_id, country_code, seat').eq('conference_id', conferenceId),
   ]);
 
   const existingEmailRole = new Set<string>();
@@ -87,8 +87,8 @@ async function loadContext(supabase: ReturnType<typeof getAuthedClient>, confere
   }
 
   const existingAllocations = new Set<string>();
-  for (const al of (allocs ?? []) as { conference_committee_id: string; country_code: string }[]) {
-    existingAllocations.add(`${al.conference_committee_id}|${al.country_code}`);
+  for (const al of (allocs ?? []) as { conference_committee_id: string; country_code: string; seat: number | null }[]) {
+    existingAllocations.add(`${al.conference_committee_id}|${al.country_code}|${al.seat ?? 1}`);
   }
 
   // Every committee's roster, the sole source of truth for what's
@@ -211,6 +211,7 @@ export default function ImportPage() {
           country_code: row.assigned_country_code,
           country_name: row.assigned_country_name,
           application_id: row.id,
+          seat: 1,
         });
         if (error) {
           await supabase.from('applications').update({
@@ -404,6 +405,7 @@ export default function ImportPage() {
         country_code: r.resolved.countryCode,
         country_name: r.resolved.countryName,
         application_id: appId,
+        seat: r.resolved.seat ?? 1,
       });
       if (allocError) {
         results.push({
@@ -619,6 +621,7 @@ export default function ImportPage() {
                   <p><strong style={{ color: NEU.ink }}>payment</strong>: paid, unpaid, or waived. Defaults to unpaid.</p>
                   <p><strong style={{ color: NEU.ink }}>committee</strong>: an existing committee&apos;s name or abbreviation.</p>
                   <p><strong style={{ color: NEU.ink }}>country</strong>: a name from the committee&apos;s roster, a country (France) or, for crisis committees, a character (Fidel Castro).</p>
+                  <p><strong style={{ color: NEU.ink }}>seat</strong>: 1 or 2, only for committees marked double delegation. Leave empty for normal committees.</p>
                 </div>
               </div>
             </NeuCard>

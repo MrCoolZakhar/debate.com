@@ -2300,6 +2300,10 @@ export default function ApplicationsPage() {
               : null;
             const rowBusy = busyIds.has(app.id);
             const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
+            // Not attending reads as inactive: everything but the NOT
+            // ATTENDING badge itself fades to ~45%, buttons stay clickable
+            // (an organizer may still preview or flip them back).
+            const notAttendingFade: React.CSSProperties = !app.attending ? { opacity: 0.45 } : {};
             const hasAllocation = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in');
             const canCheckIn = app.status === 'accepted' || app.status === 'assigned';
             const isSubmitted = app.status === 'submitted';
@@ -2326,7 +2330,7 @@ export default function ApplicationsPage() {
                 <div className="flex flex-col lg:flex-row lg:items-stretch">
 
                   {/* LEFT · select + identity + facts */}
-                  <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1.1 1 320px', minWidth: 0 }}>
+                  <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1.1 1 320px', minWidth: 0, ...notAttendingFade }}>
                     <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
                     {/* Bigger avatar (#3) with the applicant's nationality flag
                         tucked into its bottom-right, slightly overlapping (#4). */}
@@ -2470,12 +2474,19 @@ export default function ApplicationsPage() {
                     className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l"
                     style={{ flex: '0 0 auto', minWidth: 200, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
+                    {/* NOT ATTENDING stays full-strength while everything else
+                        in this column fades, so it never gets lost in the dim. */}
+                    {!app.attending && (
+                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
+                        <NotAttendingBadge />
+                      </div>
+                    )}
+                    <div className="flex flex-col lg:items-end gap-2.5" style={{ width: '100%', ...notAttendingFade }}>
                     <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
                       <StatusPill
                         status={app.status}
                         awaitingResubmission={app.status === 'rejected' && (roleConfigs.find(rc => rc.role === app.role)?.allow_resubmission ?? false)}
                       />
-                      {!app.attending && <NotAttendingBadge />}
                       {app.resubmitted_at && (
                         <span
                           className="inline-flex items-center gap-1"
@@ -2621,6 +2632,7 @@ export default function ApplicationsPage() {
                           </button>
                         )}
                       </div>
+                    </div>
                     </div>
                   </div>
                 </div>
