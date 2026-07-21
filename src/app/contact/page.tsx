@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import ContactClient from './ContactClient';
 
 export const metadata: Metadata = {
-  title: 'Contact Gavelling',
+  title: 'Contact',
   description: 'Get in touch with the Gavelling team for partnership enquiries, feedback, or support.',
   alternates: { canonical: 'https://gavelling.com/contact' },
   openGraph: {

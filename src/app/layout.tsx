@@ -8,12 +8,18 @@ import CreditsWelcomeGate from '@/components/CreditsWelcomeGate';
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
   title: {
-    default: 'Gavelling: Modern MUN Committee Software',
+    default: 'Gavelling: MUN Conferences & Committee Software',
     template: '%s | Gavelling',
   },
   description:
-    'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting, all in one place.',
+    'Find and apply to Model UN conferences worldwide, organise your own with applications, allocations and payments, and run committee sessions live: roll call, speakers, motions, voting.',
   keywords: [
+    'Model UN conferences',
+    'MUN conference finder',
+    'find MUN conferences',
+    'MUN conference management',
+    'MUN conference registration',
+    'MUN delegate applications',
     'Model UN software',
     'MUN committee platform',
     'Model United Nations',
@@ -22,7 +28,6 @@ export const metadata: Metadata = {
     'GSL timer',
     'speakers list MUN',
     'MUN voting',
-    'conference management',
     'MUN roll call',
     'moderated caucus',
     'unmoderated caucus',
@@ -30,6 +35,7 @@ export const metadata: Metadata = {
     'Gavelling',
     'free MUN tool',
     'MUN delegate app',
+    'MUN CV',
   ],
   authors: [{ name: 'Gavelling', url: 'https://gavelling.com' }],
   creator: 'Gavelling',
@@ -44,9 +50,9 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: 'Gavelling: Modern MUN Committee Software',
+    title: 'Gavelling: MUN Conferences & Committee Software',
     description:
-      'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting, all in one place.',
+      'Find and apply to Model UN conferences worldwide, organise your own, and run committee sessions live: roll call, speakers, motions, voting.',
     url: 'https://gavelling.com',
     siteName: 'Gavelling',
     images: [
@@ -54,7 +60,7 @@ export const metadata: Metadata = {
         url: 'https://gavelling.com/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Gavelling: Modern MUN Committee Software',
+        alt: 'Gavelling: MUN Conferences & Committee Software',
       },
     ],
     locale: 'en_US',
@@ -62,21 +68,16 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Gavelling: Modern MUN Committee Software',
+    title: 'Gavelling: MUN Conferences & Committee Software',
     description:
-      'The modern platform for running Model UN sessions. Roll call, speakers lists, motions, and voting, all in one place.',
+      'Find and apply to Model UN conferences worldwide, organise your own, and run committee sessions live.',
     creator: '@wearegavelling',
     images: ['https://gavelling.com/og-image.png'],
   },
-  alternates: {
-    canonical: 'https://gavelling.com',
-    languages: {
-      'en-US': 'https://gavelling.com',
-      'es': 'https://gavelling.com?lang=es',
-      'fr': 'https://gavelling.com?lang=fr',
-      'ar': 'https://gavelling.com?lang=ar',
-    },
-  },
+  // NOTE: no root-level `alternates` here. A root canonical is inherited by
+  // every child page that doesn't define its own `alternates`, silently
+  // marking those pages as duplicates of the homepage and keeping them out of
+  // the index. Each indexable page declares its own canonical instead.
   // Favicon + apple-touch icon are served by the App Router file convention
   // (src/app/icon.png, src/app/apple-icon.png) — the gavel mark on a
   // transparent background, so no broken white square in the tab. We must NOT
