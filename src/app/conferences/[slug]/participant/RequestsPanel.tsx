@@ -8,10 +8,12 @@
 // are read-only here, no attachments).
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquare, ChevronLeft, ChevronRight, Plus, Send, ArrowLeftRight } from 'lucide-react';
+import { MessageSquare, ChevronLeft, ChevronRight, Plus, Send, ArrowLeftRight, BadgeCheck, CalendarDays, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc, NeuButton, NeuPill } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc, NeuButton } from '@/components/neu';
+import { FilterPopoverShell, FilterGroup, FilterHeading, toggleIn } from '@/components/FilterPopover';
+import { DatePicker } from '@/components/DatePicker';
 import type { ParticipantApplication } from './types';
 
 const MONO = "'DM Mono', monospace";
@@ -33,6 +35,7 @@ interface RequestRow {
   subject: string;
   status: string;
   last_message_at: string;
+  created_at: string;
   user_id: string;
   metadata: SwapMetadata;
 }
@@ -68,12 +71,16 @@ const STATUS_CHIP: Record<string, { label: string; bg: string; color: string }> 
   closed: { label: 'CLOSED', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
 };
 
+const STATE_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'closed', label: 'Closed' },
+];
+
 const KIND_FILTER_OPTIONS = [
-  { value: 'all', label: 'All kinds' },
   { value: 'question', label: 'Question' },
   { value: 'swap_request', label: 'Swap request' },
   { value: 'swap_notice', label: 'Swap' },
-] as const;
+];
 
 const NOTE_TONES = {
   amber: { color: '#B8844A', bg: 'rgba(184,132,74,0.1)', border: 'rgba(184,132,74,0.24)' },
@@ -156,9 +163,14 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
   const [replyText, setReplyText] = useState('');
   const [replying, setReplying] = useState(false);
 
-  // Filters + pagination, same semantics as the organizer inbox.
-  const [statusFilter, setStatusFilter] = useState<'open' | 'closed' | 'all'>('open');
-  const [kindFilter, setKindFilter] = useState<'all' | 'question' | 'swap_request' | 'swap_notice'>('all');
+  // Filters + pagination, same semantics as the Applications page's FILTERS
+  // popover: chips within a section OR together, sections AND together,
+  // empty section = no constraint on that dimension. Search stays outside
+  // the popover as a quick-access affordance, not counted in activeCount.
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [kindFilter, setKindFilter] = useState<Set<string>>(new Set());
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
@@ -166,7 +178,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
     if (!session || !user) return;
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const SELECT = 'id, kind, subject, status, last_message_at, user_id, metadata';
+    const SELECT = 'id, kind, subject, status, last_message_at, created_at, user_id, metadata';
 
     const [{ data: ownData }, { data: societyData }] = await Promise.all([
       supabase
@@ -229,23 +241,30 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
   }, [selectedId, loadMessages]);
 
   // Changing any filter resets to page one.
-  useEffect(() => { setPage(1); }, [statusFilter, kindFilter, search]);
+  useEffect(() => { setPage(1); }, [statusFilter, kindFilter, search, dateFrom, dateTo]);
 
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase();
     return requests
-      .filter(r => (statusFilter === 'all' ? true : r.status === statusFilter))
-      .filter(r => (kindFilter === 'all' ? true : r.kind === kindFilter))
+      .filter(r => (statusFilter.size === 0 ? true : statusFilter.has(r.status)))
+      .filter(r => (kindFilter.size === 0 ? true : kindFilter.has(r.kind)))
       .filter(r => (q ? r.subject.toLowerCase().includes(q) : true))
+      .filter(r => (dateFrom ? r.created_at.slice(0, 10) >= dateFrom : true))
+      .filter(r => (dateTo ? r.created_at.slice(0, 10) <= dateTo : true))
       .sort((a, b) => {
         if (a.status === 'open' && b.status !== 'open') return -1;
         if (a.status !== 'open' && b.status === 'open') return 1;
         return b.last_message_at.localeCompare(a.last_message_at);
       });
-  }, [requests, statusFilter, kindFilter, search]);
+  }, [requests, statusFilter, kindFilter, search, dateFrom, dateTo]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
   const pagedRequests = filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const activeFilterCount =
+    (statusFilter.size > 0 ? 1 : 0) +
+    (kindFilter.size > 0 ? 1 : 0) +
+    (dateFrom || dateTo ? 1 : 0);
 
   function needsAttention(r: RequestRow): boolean {
     if (r.status !== 'open') return false;
@@ -479,20 +498,38 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <div className="flex items-center gap-1.5">
-              {(['open', 'closed', 'all'] as const).map(s => (
-                <NeuPill key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-                  {s.toUpperCase()}
-                </NeuPill>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {KIND_FILTER_OPTIONS.map(o => (
-                <NeuPill key={o.value} active={kindFilter === o.value} onClick={() => setKindFilter(o.value)}>
-                  {o.label.toUpperCase()}
-                </NeuPill>
-              ))}
-            </div>
+            <FilterPopoverShell
+              title="Filter requests"
+              activeCount={activeFilterCount}
+              onClearAll={() => { setStatusFilter(new Set()); setKindFilter(new Set()); setDateFrom(''); setDateTo(''); }}
+            >
+              <FilterGroup
+                title="State" icon={BadgeCheck} options={STATE_OPTIONS} selected={statusFilter}
+                onToggle={v => setStatusFilter(s => toggleIn(s, v))}
+                onAll={() => setStatusFilter(new Set(STATE_OPTIONS.map(o => o.value)))}
+                onNone={() => setStatusFilter(new Set())}
+              />
+              <FilterGroup
+                title="Kind" icon={MessageSquare} options={KIND_FILTER_OPTIONS} selected={kindFilter}
+                onToggle={v => setKindFilter(s => toggleIn(s, v))}
+                onAll={() => setKindFilter(new Set(KIND_FILTER_OPTIONS.map(o => o.value)))}
+                onNone={() => setKindFilter(new Set())}
+              />
+              <div>
+                <div className="mb-2">
+                  <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div style={{ flex: 1 }}>
+                    <DatePicker value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} placeholder="From" />
+                  </div>
+                  <ArrowRight size={13} style={{ color: NEU.muted, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <DatePicker value={dateTo} min={dateFrom || undefined} onChange={setDateTo} placeholder="To" />
+                  </div>
+                </div>
+              </div>
+            </FilterPopoverShell>
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}

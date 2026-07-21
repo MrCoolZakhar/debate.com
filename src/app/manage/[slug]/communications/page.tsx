@@ -2,11 +2,16 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, Palette, Trash2 } from 'lucide-react';
+import {
+  Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, Palette, Trash2,
+  BadgeCheck, MessageSquare, CalendarDays, ArrowRight,
+} from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { ConfirmModal, useConfirmModal } from '@/components/ConfirmModal';
+import { FilterPopoverShell, FilterGroup, FilterHeading, toggleIn } from '@/components/FilterPopover';
+import { DatePicker } from '@/components/DatePicker';
 import {
   resolveTokens, EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
   type EmailTokenContext, type EmailTokenKey,
@@ -143,6 +148,17 @@ const KIND_CHIP: Record<string, { label: string; bg: string; color: string }> = 
   swap_request: { label: 'SWAP REQUEST', bg: 'rgba(182,135,31,0.16)', color: '#8A6614' },
   swap_notice: { label: 'SWAP', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
 };
+
+const INBOX_STATE_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'closed', label: 'Closed' },
+];
+
+const INBOX_KIND_OPTIONS = [
+  { value: 'question', label: 'Question' },
+  { value: 'swap_request', label: 'Swap request' },
+  { value: 'swap_notice', label: 'Swap' },
+];
 
 const INDEPENDENT_KEY = '__independent__';
 
@@ -477,8 +493,13 @@ function CommunicationsPageInner() {
   const [inboxProfiles, setInboxProfiles] = useState<Map<string, InboxProfile>>(new Map());
   const [inboxRoles, setInboxRoles] = useState<Map<string, string>>(new Map());
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
-  const [inboxStatusFilter, setInboxStatusFilter] = useState<'open' | 'closed' | 'all'>('open');
-  const [inboxKindFilter, setInboxKindFilter] = useState<'all' | 'question' | 'swap_request' | 'swap_notice'>('all');
+  // Filters, same semantics as the Applications page's FILTERS popover:
+  // chips within a section OR together, sections AND together, empty
+  // section = no constraint. Search stays outside the popover.
+  const [inboxStatusFilter, setInboxStatusFilter] = useState<Set<string>>(new Set());
+  const [inboxKindFilter, setInboxKindFilter] = useState<Set<string>>(new Set());
+  const [inboxDateFrom, setInboxDateFrom] = useState('');
+  const [inboxDateTo, setInboxDateTo] = useState('');
   const [inboxSearch, setInboxSearch] = useState('');
   const [inboxPage, setInboxPage] = useState(1);
   const [replyText, setReplyText] = useState('');
@@ -762,23 +783,29 @@ function CommunicationsPageInner() {
   const filteredInboxRequests = useMemo(() => {
     const q = inboxSearch.trim().toLowerCase();
     return inboxRequests
-      .filter(r => (inboxStatusFilter === 'all' ? true : r.status === inboxStatusFilter))
-      .filter(r => (inboxKindFilter === 'all' ? true : r.kind === inboxKindFilter))
+      .filter(r => (inboxStatusFilter.size === 0 ? true : inboxStatusFilter.has(r.status)))
+      .filter(r => (inboxKindFilter.size === 0 ? true : inboxKindFilter.has(r.kind)))
       .filter(r => (q ? r.subject.toLowerCase().includes(q) : true))
+      .filter(r => (inboxDateFrom ? r.created_at.slice(0, 10) >= inboxDateFrom : true))
+      .filter(r => (inboxDateTo ? r.created_at.slice(0, 10) <= inboxDateTo : true))
       .sort((a, b) => {
         // Open first, each group by last_message_at desc (already the query order).
         if (a.status === 'open' && b.status !== 'open') return -1;
         if (a.status !== 'open' && b.status === 'open') return 1;
         return b.last_message_at.localeCompare(a.last_message_at);
       });
-  }, [inboxRequests, inboxStatusFilter, inboxKindFilter, inboxSearch]);
+  }, [inboxRequests, inboxStatusFilter, inboxKindFilter, inboxSearch, inboxDateFrom, inboxDateTo]);
 
   // Changing any filter resets to page one.
-  useEffect(() => { setInboxPage(1); }, [inboxStatusFilter, inboxKindFilter, inboxSearch]);
+  useEffect(() => { setInboxPage(1); }, [inboxStatusFilter, inboxKindFilter, inboxSearch, inboxDateFrom, inboxDateTo]);
 
   const INBOX_PAGE_SIZE = 15;
   const inboxTotalPages = Math.max(1, Math.ceil(filteredInboxRequests.length / INBOX_PAGE_SIZE));
   const pagedInboxRequests = filteredInboxRequests.slice((inboxPage - 1) * INBOX_PAGE_SIZE, inboxPage * INBOX_PAGE_SIZE);
+  const inboxActiveFilterCount =
+    (inboxStatusFilter.size > 0 ? 1 : 0) +
+    (inboxKindFilter.size > 0 ? 1 : 0) +
+    (inboxDateFrom || inboxDateTo ? 1 : 0);
 
   const selectedRequest = inboxRequests.find(r => r.id === selectedRequestId) ?? null;
   const selectedMessages = selectedRequestId ? inboxMessagesByRequest.get(selectedRequestId) ?? [] : [];
@@ -2247,39 +2274,38 @@ function CommunicationsPageInner() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <div className="inline-flex rounded-xl p-1" style={{ border: `1px solid ${BORDER}`, backgroundColor: '#FAF8F3' }}>
-                    {(['open', 'closed', 'all'] as const).map(s => (
-                      <TabPill key={s} active={inboxStatusFilter === s} onClick={() => setInboxStatusFilter(s)}>
-                        {s.toUpperCase()}
-                      </TabPill>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {([
-                      { value: 'all', label: 'All kinds' },
-                      { value: 'question', label: 'Question' },
-                      { value: 'swap_request', label: 'Swap request' },
-                      { value: 'swap_notice', label: 'Swap' },
-                    ] as const).map(o => {
-                      const active = inboxKindFilter === o.value;
-                      return (
-                        <button
-                          key={o.value}
-                          type="button"
-                          onClick={() => setInboxKindFilter(o.value)}
-                          className="rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none transition-colors"
-                          style={{
-                            border: active ? '1px solid #1B3828' : `1px solid ${BORDER}`,
-                            backgroundColor: active ? '#1B3828' : 'transparent',
-                            color: active ? '#EED98A' : '#4A4238',
-                            fontFamily: OUTFIT,
-                          }}
-                        >
-                          {o.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <FilterPopoverShell
+                    title="Filter threads"
+                    activeCount={inboxActiveFilterCount}
+                    onClearAll={() => { setInboxStatusFilter(new Set()); setInboxKindFilter(new Set()); setInboxDateFrom(''); setInboxDateTo(''); }}
+                  >
+                    <FilterGroup
+                      title="State" icon={BadgeCheck} options={INBOX_STATE_OPTIONS} selected={inboxStatusFilter}
+                      onToggle={v => setInboxStatusFilter(s => toggleIn(s, v))}
+                      onAll={() => setInboxStatusFilter(new Set(INBOX_STATE_OPTIONS.map(o => o.value)))}
+                      onNone={() => setInboxStatusFilter(new Set())}
+                    />
+                    <FilterGroup
+                      title="Kind" icon={MessageSquare} options={INBOX_KIND_OPTIONS} selected={inboxKindFilter}
+                      onToggle={v => setInboxKindFilter(s => toggleIn(s, v))}
+                      onAll={() => setInboxKindFilter(new Set(INBOX_KIND_OPTIONS.map(o => o.value)))}
+                      onNone={() => setInboxKindFilter(new Set())}
+                    />
+                    <div>
+                      <div className="mb-2">
+                        <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div style={{ flex: 1 }}>
+                          <DatePicker value={inboxDateFrom} max={inboxDateTo || undefined} onChange={setInboxDateFrom} placeholder="From" />
+                        </div>
+                        <ArrowRight size={13} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <DatePicker value={inboxDateTo} min={inboxDateFrom || undefined} onChange={setInboxDateTo} placeholder="To" />
+                        </div>
+                      </div>
+                    </div>
+                  </FilterPopoverShell>
                   <input
                     value={inboxSearch}
                     onChange={e => setInboxSearch(e.target.value)}
