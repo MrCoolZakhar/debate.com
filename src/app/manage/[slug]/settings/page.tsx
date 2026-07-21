@@ -1036,6 +1036,15 @@ export default function SettingsPage() {
         setPrivacyError(saveFailMessage(error));
         return;
       }
+      if (next) {
+        // Fire-and-forget: ping search engines (IndexNow) so the newly public
+        // conference page gets crawled right away.
+        void fetch('/api/indexnow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: conference.slug }),
+        }).catch(() => {});
+      }
       await refreshConferenceQuiet();
       setPublicToggleSaving(false);
     })();

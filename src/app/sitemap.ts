@@ -13,12 +13,14 @@ async function conferenceEntries(): Promise<MetadataRoute.Sitemap> {
   try {
     const { data } = await supabase
       .from('conferences')
-      .select('slug')
+      .select('slug, updated_at')
       .eq('is_public', true);
     return (data ?? [])
-      .filter((c): c is { slug: string } => !!c.slug)
+      .filter((c): c is { slug: string; updated_at: string | null } => !!c.slug)
       .map((c) => ({
         url: `https://gavelling.com/conferences/${c.slug}`,
+        // Real lastmod: crawlers prioritise entries whose date actually moved.
+        ...(c.updated_at ? { lastModified: new Date(c.updated_at) } : {}),
         changeFrequency: 'weekly' as const,
         priority: 0.8,
       }));
