@@ -172,7 +172,7 @@ export default function ParticipantView({
         </>
       )}
 
-      <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} />
+      <RequestsPanel conferenceId={conferenceId} applicationId={selected.id} myApplications={myApplications} />
     </div>
   );
 }
