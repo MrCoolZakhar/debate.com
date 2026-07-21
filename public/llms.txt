@@ -25,6 +25,13 @@ MUN delegates looking for their next conference; organisers and secretariats run
 - Operative / Preambulatory clauses: Two sections of a MUN resolution
 - MUN CV: A delegate's verified record of conferences attended, roles held, and awards won
 
+## How Gavelling Compares to Other MUN Software
+
+- Gavelling vs MUN Command (MUNCommand, by mymun): both cover live committee sessions and conference administration. MUN Command's Conference App costs €1 per user per day and offers native iOS/Android apps and 20+ debate modes; Gavelling is free for both sessions and conference management, is web-based, and delegates join sessions by code with no account. Comparison: https://gavelling.com/blog/muncommand-alternative
+- Gavelling vs Muncoordinated (MUN Coordinated): both free and browser-based. Muncoordinated is an open-source, dais-focused committee tool with community support; Gavelling adds a live per-delegate view, faculty advisor view, delegate–chair chat, and a full conference layer (applications, allocations, payments, discovery). Comparison: https://gavelling.com/blog/muncoordinated-alternative
+- Gavelling vs wxMUN: wxMUN is a free open-source desktop program that runs offline on one machine; Gavelling is a real-time multi-device web platform.
+- Best-of roundup with pricing table: https://gavelling.com/blog/best-mun-software-2026
+
 ## Pricing
 
 Free to use. Listing a conference is free for organisers. No account required for delegates joining a live committee session.
