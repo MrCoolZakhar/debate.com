@@ -29,7 +29,7 @@ function PublishModal({
   onClose,
   onPublished,
 }: {
-  conference: { id: string; full_name: string };
+  conference: { id: string; slug: string; full_name: string };
   onClose: () => void;
   onPublished: () => void;
 }) {
@@ -44,6 +44,13 @@ function PublishModal({
       .from('conferences')
       .update({ is_public: true, status: 'public' })
       .eq('id', conference.id);
+    // Fire-and-forget: ping search engines (IndexNow) so the newly public
+    // conference page gets crawled right away.
+    void fetch('/api/indexnow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: conference.slug }),
+    }).catch(() => {});
     setPublishing(false);
     onPublished();
   }

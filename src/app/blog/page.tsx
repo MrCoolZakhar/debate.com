@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { articles } from './posts';
 
 export const metadata: Metadata = {
-  title: 'MUN Resources & Guides: Gavelling Blog',
+  title: 'MUN Resources & Guides',
   description: 'Practical guides for Model UN chairs and delegates: how to run a committee, manage the GSL, handle motions, and run great MUN sessions.',
   alternates: { canonical: 'https://gavelling.com/blog' },
   openGraph: {

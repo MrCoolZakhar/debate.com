@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cache } from 'react';
 import { supabase } from '@/lib/supabase';
 import ConferenceDetailClient from './ConferenceDetailClient';
 
@@ -12,9 +13,26 @@ interface ConfMeta {
   country: string | null;
   start_date: string | null;
   end_date: string | null;
+  is_public: boolean | null;
+  format: string | null;
 }
 
 const FALLBACK_IMAGE = 'https://gavelling.com/og-image.png';
+
+// One DB round-trip shared between generateMetadata and the page render
+// (React request-level cache), so adding the Event schema costs nothing extra.
+const getConference = cache(async (slug: string): Promise<ConfMeta | null> => {
+  try {
+    const { data } = await supabase
+      .from('conferences')
+      .select('full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date, is_public, format')
+      .eq('slug', slug)
+      .maybeSingle();
+    return (data as ConfMeta) ?? null;
+  } catch {
+    return null;
+  }
+});
 
 function formatRange(start: string | null, end: string | null): string | null {
   if (!start) return null;
@@ -32,17 +50,7 @@ function formatRange(start: string | null, end: string | null): string | null {
 // slugs fall through to a safe generic card (they 404 for outsiders anyway).
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  let conf: ConfMeta | null = null;
-  try {
-    const { data } = await supabase
-      .from('conferences')
-      .select('full_name, acronym, description, banner_url, logo_url, city, country, start_date, end_date')
-      .eq('slug', slug)
-      .maybeSingle();
-    conf = (data as ConfMeta) ?? null;
-  } catch {
-    /* fall through to generic card */
-  }
+  const conf = await getConference(slug);
 
   if (!conf) {
     return {
@@ -70,6 +78,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: name,
     description,
     alternates: { canonical: url },
+    // Private conferences stay reachable by link but out of search indexes.
+    robots: conf.is_public === false ? { index: false, follow: false } : undefined,
     openGraph: {
       title: name,
       description,
@@ -87,6 +97,63 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default function ConferenceDetailPage() {
-  return <ConferenceDetailClient />;
+// schema.org Event JSON-LD → Google event rich results for public conferences.
+// Only emitted when the conference is public and has a start date (Google's
+// minimum for the Event type).
+function eventSchema(slug: string, conf: ConfMeta): object | null {
+  if (conf.is_public === false || !conf.start_date) return null;
+  const name = conf.full_name || conf.acronym || 'Model UN Conference';
+  const rawDesc = (conf.description ?? '').replace(/\s+/g, ' ').trim();
+  const attendanceMode =
+    conf.format === 'online'
+      ? 'https://schema.org/OnlineEventAttendanceMode'
+      : conf.format === 'hybrid'
+        ? 'https://schema.org/MixedEventAttendanceMode'
+        : 'https://schema.org/OfflineEventAttendanceMode';
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name,
+    description: rawDesc || `${name} — a Model UN conference on Gavelling.`,
+    startDate: conf.start_date,
+    ...(conf.end_date ? { endDate: conf.end_date } : {}),
+    eventAttendanceMode: attendanceMode,
+    eventStatus: 'https://schema.org/EventScheduled',
+    url: `https://gavelling.com/conferences/${slug}`,
+    ...(conf.banner_url || conf.logo_url ? { image: [conf.banner_url || conf.logo_url] } : {}),
+    location:
+      conf.format === 'online'
+        ? { '@type': 'VirtualLocation', url: `https://gavelling.com/conferences/${slug}` }
+        : {
+            '@type': 'Place',
+            name: [conf.city, conf.country].filter(Boolean).join(', ') || name,
+            address: {
+              '@type': 'PostalAddress',
+              ...(conf.city ? { addressLocality: conf.city } : {}),
+              ...(conf.country ? { addressCountry: conf.country } : {}),
+            },
+          },
+    organizer: {
+      '@type': 'Organization',
+      name,
+      url: `https://gavelling.com/conferences/${slug}`,
+    },
+  };
+}
+
+export default async function ConferenceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const conf = await getConference(slug);
+  const schema = conf ? eventSchema(slug, conf) : null;
+  return (
+    <>
+      {schema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+        />
+      )}
+      <ConferenceDetailClient />
+    </>
+  );
 }

@@ -1,14 +1,51 @@
 import { MetadataRoute } from 'next';
+import { supabase } from '@/lib/supabase';
 
-export default function sitemap(): MetadataRoute.Sitemap {
+// Re-generate hourly so newly listed public conferences enter the sitemap
+// without waiting for a redeploy.
+export const revalidate = 3600;
+
+// Public conference pages are first-class SEO surfaces: each is_public
+// conference gets its own /conferences/[slug] entry so Google discovers new
+// listings without waiting for internal-link crawls. Failure here must never
+// break the sitemap, so the fetch degrades to the static list.
+async function conferenceEntries(): Promise<MetadataRoute.Sitemap> {
+  try {
+    const { data } = await supabase
+      .from('conferences')
+      .select('slug, updated_at')
+      .eq('is_public', true);
+    return (data ?? [])
+      .filter((c): c is { slug: string; updated_at: string | null } => !!c.slug)
+      .map((c) => ({
+        url: `https://gavelling.com/conferences/${c.slug}`,
+        // Real lastmod: crawlers prioritise entries whose date actually moved.
+        ...(c.updated_at ? { lastModified: new Date(c.updated_at) } : {}),
+        changeFrequency: 'weekly' as const,
+        priority: 0.8,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const conferences = await conferenceEntries();
   return [
-    { url: 'https://gavelling.com',             lastModified: new Date(), changeFrequency: 'weekly',  priority: 1   },
+    { url: 'https://gavelling.com',             lastModified: new Date(), changeFrequency: 'daily',   priority: 1   },
+    { url: 'https://gavelling.com/conferences/explore', lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
+    { url: 'https://gavelling.com/conferences/map',     lastModified: new Date(), changeFrequency: 'weekly', priority: 0.7 },
+    { url: 'https://gavelling.com/conferences/roles',   lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },
     { url: 'https://gavelling.com/sessions',     lastModified: new Date(), changeFrequency: 'weekly',  priority: 0.9 },
     { url: 'https://gavelling.com/about',        lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
     { url: 'https://gavelling.com/contact',      lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
+    { url: 'https://gavelling.com/privacy',      lastModified: new Date(), changeFrequency: 'yearly',  priority: 0.3 },
     { url: 'https://gavelling.com/blog',         lastModified: new Date(), changeFrequency: 'weekly',  priority: 0.9 },
+    ...conferences,
     { url: 'https://gavelling.com/blog/how-to-run-mun-committee',    lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },
-    { url: 'https://gavelling.com/blog/best-mun-software-2026',      lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.9 },
+    { url: 'https://gavelling.com/blog/best-mun-software-2026',      lastModified: new Date('2026-07-21'), changeFrequency: 'monthly', priority: 0.9 },
+    { url: 'https://gavelling.com/blog/muncommand-alternative',      lastModified: new Date('2026-07-21'), changeFrequency: 'monthly', priority: 0.9 },
+    { url: 'https://gavelling.com/blog/muncoordinated-alternative',  lastModified: new Date('2026-07-21'), changeFrequency: 'monthly', priority: 0.9 },
     { url: 'https://gavelling.com/blog/general-speakers-list-guide',  lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },
     { url: 'https://gavelling.com/blog/mun-motions-explained',        lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },
     { url: 'https://gavelling.com/blog/how-to-chair-first-mun',       lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },

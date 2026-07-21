@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import HomeClient from '../HomeClient';
 
 export const metadata: Metadata = {
-  title: 'Gavelling: Modern MUN Committee Software',
+  // absolute: opt out of the `%s | Gavelling` template — the brand is already
+  // in the title, and "… | Gavelling" would double it.
+  title: { absolute: 'Gavelling: Modern MUN Committee Software' },
   description:
     'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting, all in one place.',
   alternates: { canonical: 'https://gavelling.com/sessions' },
@@ -44,13 +46,6 @@ const softwareSchema = {
     name: 'Gavelling',
     url: 'https://gavelling.com',
   },
-};
-
-const websiteSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'WebSite',
-  name: 'Gavelling',
-  url: 'https://gavelling.com/sessions',
 };
 
 const faqSchema = {
@@ -102,7 +97,7 @@ const faqSchema = {
       name: 'What is Gavelling Conferences?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Gavelling Conferences is a separate product launching July 2026 that handles end-to-end MUN conference management: delegate applications, smart country allocations, study guide distribution, position paper review, financial tracking, and a public conference discovery layer.',
+        text: 'Gavelling Conferences handles end-to-end MUN conference management: delegate applications, smart country allocations, study guide distribution, position paper review, financial tracking, and a public conference discovery layer where delegates find and apply to conferences worldwide.',
       },
     },
   ],
@@ -111,10 +106,6 @@ const faqSchema = {
 export default function SessionsPage() {
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
-      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}

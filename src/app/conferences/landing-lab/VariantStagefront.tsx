@@ -80,7 +80,7 @@ const ROLE_SLIDES: RoleSlide[] = [
   {
     role: 'Chairs',
     blurb: 'Gavel in hand: scoring, motions and the speakers list, run live from one dashboard.',
-    image: '/roles/chair.webp',
+    image: '/roles/chair-card.webp',
     imageAlt: 'A chair presiding over committee from the dais',
     primary: { label: 'Explore chairing opportunities', href: '/conferences/roles' },
     secondary: { label: 'View your conferences', href: '/my-conferences?tab=chair' },
@@ -88,7 +88,7 @@ const ROLE_SLIDES: RoleSlide[] = [
   {
     role: 'Secretariat',
     blurb: 'The machine behind the weekend: applications, allocations and communications in one place.',
-    image: '/roles/secretariat.jpg',
+    image: '/roles/secretariat.webp',
     imageAlt: 'Secretariat staff coordinating a conference',
     primary: { label: 'See open roles', href: '/conferences/roles' },
   },
@@ -674,14 +674,7 @@ export default function VariantStagefront({
               pointerEvents: 'none',
             }}
           >
-            <video
-              src="/map/interactive_globe.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '30% center', display: 'block', opacity: 0.82 }}
-            />
+            <DeferredGlobeVideo />
             <div
               style={{
                 position: 'absolute',
@@ -779,6 +772,51 @@ export default function VariantStagefront({
 }
 
 // ── Local pieces ─────────────────────────────────────────────────────────────
+
+/**
+ * The globe section's looping video is ~14 MB. Loaded eagerly it started
+ * downloading on page load and saturated the connection, starving the hero
+ * image, the Supabase fetches and next/link route prefetches — the whole page
+ * (and navigating away from it) felt blocked. Defer it: render the <video>
+ * with no src and preload="none", and only attach the src once the section
+ * scrolls near the viewport (600px lookahead so it's usually already playing
+ * by the time it's visible). Visual output is identical.
+ */
+function DeferredGlobeVideo() {
+  const holder = useRef<HTMLDivElement>(null);
+  const [load, setLoad] = useState(false);
+
+  useEffect(() => {
+    const el = holder.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') { setLoad(true); return; }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '600px 0px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={holder} style={{ width: '100%', height: '100%' }}>
+      <video
+        src={load ? '/map/interactive_globe.mp4' : undefined}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="none"
+        style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '30% center', display: 'block', opacity: 0.82 }}
+      />
+    </div>
+  );
+}
 
 // Prominent hero search field. Finds conferences by NAME or LOCATION the same
 // way the Explore directory does — on submit it navigates to /conferences/explore
@@ -1040,10 +1078,16 @@ function RoleCarousel({ slides }: { slides: RoleSlide[] }) {
               onClick={() => { if (!isActive) goToSlide(i); }}
               aria-hidden={!isActive}
             >
+              {/* loading="eager": mounted slides sit off-viewport (translated
+                  ±78/156%), so the default lazy loading never fetched them —
+                  every arrow click then waited on a fresh image download+decode.
+                  Eagerly loading the (small, webp) slide images makes switching
+                  instant. */}
               <Image
                 src={slide.image}
                 alt={slide.imageAlt}
                 fill
+                loading="eager"
                 sizes="(min-width: 768px) 640px, 82vw"
                 style={{ objectFit: 'cover' }}
                 draggable={false}

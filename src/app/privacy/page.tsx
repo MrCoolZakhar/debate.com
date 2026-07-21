@@ -2,8 +2,9 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — Gavelling',
+  title: 'Privacy Policy',
   description: 'Learn how Gavelling collects, uses, and protects the information entered during your Model UN sessions.',
+  alternates: { canonical: 'https://gavelling.com/privacy' },
 };
 
 const EFFECTIVE_DATE = 'June 2, 2026';

@@ -15,7 +15,17 @@ export const articles: BlogPost[] = [
   {
     slug: 'best-mun-software-2026',
     title: 'Best MUN Software in 2026: Full Comparison for Chairs and Directors',
-    description: 'Comparing dedicated MUN tools, spreadsheets, and timer apps to help you pick the right setup for your conference.',
+    description: 'Gavelling, MUN Command, Muncoordinated, wxMUN, spreadsheets, and timer apps compared: features, pricing, and which fits your conference.',
+  },
+  {
+    slug: 'muncommand-alternative',
+    title: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2026)',
+    description: 'MUN Command charges €1 per user per day. Gavelling covers sessions and conference management free. Full side-by-side.',
+  },
+  {
+    slug: 'muncoordinated-alternative',
+    title: 'Muncoordinated vs Gavelling: Which Free MUN Software in 2026?',
+    description: 'Two free MUN tools, two very different scopes: open-source dais tool vs full conference platform. Honest comparison.',
   },
   {
     slug: 'general-speakers-list-guide',

@@ -1,16 +1,16 @@
 # Gavelling
 
-Gavelling is a web-based Model UN (MUN) committee management platform used by chairs, delegates, and faculty advisors at MUN conferences worldwide.
+Gavelling is a web platform for the global Model UN (MUN) community: a conference discovery and management layer (find, apply to, and organise MUN conferences) plus real-time committee session software used by chairs, delegates, and faculty advisors worldwide.
 
 ## What Gavelling Does
 
-Gavelling Sessions manages real-time MUN committee sessions: roll call with quorum tracking, General Speakers List (GSL) with timer, Moderated Caucus, Unmoderated Caucus, motions, voting, live delegate chat, and resolution document viewing.
+Gavelling Conferences (live since July 2026) is the conference layer: a public directory where delegates find and apply to real MUN conferences worldwide (browse by country, date, fee, and level, or on a world map), plus end-to-end management for organisers — delegate applications, smart country-role allocations, delegation management for schools and societies, study guide distribution, position paper review, payments and financial aid, chair and staff recruitment, awards, and a shareable MUN CV that records each delegate's conferences and awards.
 
-Gavelling Conferences (launching July 2026) handles end-to-end MUN conference management: delegate applications, smart country-role allocations, study guide distribution, position paper review portal, financial management, and a public conference discovery layer.
+Gavelling Sessions manages real-time MUN committee sessions: roll call with quorum tracking, General Speakers List (GSL) with timer, Moderated Caucus, Unmoderated Caucus, motions, voting, live delegate chat, and resolution document viewing.
 
 ## Who Uses It
 
-MUN chairs, co-chairs, faculty advisors, and delegates at high school and university conferences globally. Currently active in 18+ countries.
+MUN delegates looking for their next conference; organisers and secretariats running conferences; chairs, co-chairs, and faculty advisors running committee sessions — at high school and university level, active in 18+ countries.
 
 ## Key MUN Terms (for context)
 
@@ -23,10 +23,18 @@ MUN chairs, co-chairs, faculty advisors, and delegates at high school and univer
 - Quorum: Minimum number of delegates required to conduct official business
 - Working papers / Draft resolutions: Collaborative delegate documents proposed for committee adoption
 - Operative / Preambulatory clauses: Two sections of a MUN resolution
+- MUN CV: A delegate's verified record of conferences attended, roles held, and awards won
+
+## How Gavelling Compares to Other MUN Software
+
+- Gavelling vs MUN Command (MUNCommand, by mymun): both cover live committee sessions and conference administration. MUN Command's Conference App costs €1 per user per day and offers native iOS/Android apps and 20+ debate modes; Gavelling is free for both sessions and conference management, is web-based, and delegates join sessions by code with no account. Comparison: https://gavelling.com/blog/muncommand-alternative
+- Gavelling vs Muncoordinated (MUN Coordinated): both free and browser-based. Muncoordinated is an open-source, dais-focused committee tool with community support; Gavelling adds a live per-delegate view, faculty advisor view, delegate–chair chat, and a full conference layer (applications, allocations, payments, discovery). Comparison: https://gavelling.com/blog/muncoordinated-alternative
+- Gavelling vs wxMUN: wxMUN is a free open-source desktop program that runs offline on one machine; Gavelling is a real-time multi-device web platform.
+- Best-of roundup with pricing table: https://gavelling.com/blog/best-mun-software-2026
 
 ## Pricing
 
-Free to use. No account required for delegates.
+Free to use. Listing a conference is free for organisers. No account required for delegates joining a live committee session.
 
 ## Technology
 
@@ -44,7 +52,11 @@ Instagram: @wearegavelling
 
 ## Pages
 
-- https://gavelling.com — Home / Sessions product
+- https://gavelling.com — Home: find Model UN conferences
+- https://gavelling.com/conferences/explore — Browse and filter all listed MUN conferences
+- https://gavelling.com/conferences/map — MUN conferences on a world map
+- https://gavelling.com/conferences/roles — Chair, secretariat, and staff openings
+- https://gavelling.com/sessions — Committee session software for chairs and delegates
+- https://gavelling.com/blog — Guides on chairing, motions, resolutions, and MUN strategy
 - https://gavelling.com/about — About the team
-- https://gavelling.com/conferences — Conferences product (launching July 2026)
 - https://gavelling.com/contact — Contact
