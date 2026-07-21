@@ -125,6 +125,7 @@ interface InboxRequest {
   kind: string;
   metadata: SwapMetadata;
   seen_by_organizer: boolean;
+  organizer_seen_at: string | null;
   created_at: string;
   last_message_at: string;
 }
@@ -502,6 +503,7 @@ function CommunicationsPageInner() {
   const [inboxDateTo, setInboxDateTo] = useState('');
   const [inboxSearch, setInboxSearch] = useState('');
   const [inboxPage, setInboxPage] = useState(1);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replyError, setReplyError] = useState('');
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
@@ -685,9 +687,9 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data: reqData } = await supabase
       .from('conference_requests')
-      .select('id, user_id, application_id, subject, status, kind, metadata, seen_by_organizer, created_at, last_message_at')
+      .select('id, user_id, application_id, subject, status, kind, metadata, seen_by_organizer, organizer_seen_at, created_at, last_message_at')
       .eq('conference_id', conference.id)
-      .order('last_message_at', { ascending: false });
+      .order('created_at', { ascending: false });
     if (!fresh()) return;
     const requests = (reqData ?? []) as InboxRequest[];
     setInboxRequests(requests);
@@ -773,11 +775,13 @@ function CommunicationsPageInner() {
     return list && list.length > 0 ? list[list.length - 1] : null;
   }
 
-  function needsAttention(r: InboxRequest): boolean {
-    if (r.status !== 'open') return false;
-    if (!r.seen_by_organizer) return true;
-    const last = lastMessageOf(r.id);
-    return !!last && !last.is_organizer;
+  // Unread = messages from the participant side (is_organizer false) newer
+  // than organizer_seen_at; every message counts when the stamp is null
+  // (never opened). Independent of `status` — a closed thread can still
+  // carry unread messages.
+  function unreadCountOf(r: InboxRequest): number {
+    const msgs = inboxMessagesByRequest.get(r.id) ?? [];
+    return msgs.filter(m => !m.is_organizer && (!r.organizer_seen_at || m.created_at > r.organizer_seen_at)).length;
   }
 
   const filteredInboxRequests = useMemo(() => {
@@ -788,12 +792,9 @@ function CommunicationsPageInner() {
       .filter(r => (q ? r.subject.toLowerCase().includes(q) : true))
       .filter(r => (inboxDateFrom ? r.created_at.slice(0, 10) >= inboxDateFrom : true))
       .filter(r => (inboxDateTo ? r.created_at.slice(0, 10) <= inboxDateTo : true))
-      .sort((a, b) => {
-        // Open first, each group by last_message_at desc (already the query order).
-        if (a.status === 'open' && b.status !== 'open') return -1;
-        if (a.status !== 'open' && b.status === 'open') return 1;
-        return b.last_message_at.localeCompare(a.last_message_at);
-      });
+      // Strictly newest-first by created_at — a status change (approved,
+      // denied, closed) never reorders the list.
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }, [inboxRequests, inboxStatusFilter, inboxKindFilter, inboxSearch, inboxDateFrom, inboxDateTo]);
 
   // Changing any filter resets to page one.
@@ -806,6 +807,11 @@ function CommunicationsPageInner() {
     (inboxStatusFilter.size > 0 ? 1 : 0) +
     (inboxKindFilter.size > 0 ? 1 : 0) +
     (inboxDateFrom || inboxDateTo ? 1 : 0);
+  // Threads-with-unread count, over the whole inbox (unaffected by the
+  // active filters) — the INBOX tab badge and header count.
+  const inboxUnreadThreadCount = inboxRequests.filter(r => unreadCountOf(r) > 0).length;
+  // MARK ALL READ only ever acts on the current page ("currently visible").
+  const inboxVisibleUnreadCount = pagedInboxRequests.filter(r => unreadCountOf(r) > 0).length;
 
   const selectedRequest = inboxRequests.find(r => r.id === selectedRequestId) ?? null;
   const selectedMessages = selectedRequestId ? inboxMessagesByRequest.get(selectedRequestId) ?? [] : [];
@@ -1551,12 +1557,18 @@ function CommunicationsPageInner() {
     setReplyText('');
     setReplyError('');
     setSwapError('');
+    if (!session) return;
     const req = inboxRequests.find(r => r.id === id);
-    if (!req || req.seen_by_organizer || !session) return;
-    // Optimistic mark-read: the unread dot / badge clears instantly; the write
-    // persists in the background and rolls back this row's flag on failure.
-    setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, seen_by_organizer: true } : r)));
     const supabase = getAuthedClient(session.access_token);
+    // Optimistic mark-read: the unread badge clears instantly. mark_request_seen
+    // (SECURITY DEFINER) stamps organizer_seen_at, fire-and-forget, every open —
+    // separate from the legacy seen_by_organizer flag below, which other pages
+    // (DelegationsView's unseen-society tracking) still read, so it's kept in
+    // sync too rather than replaced.
+    setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, organizer_seen_at: new Date().toISOString() } : r)));
+    void supabase.rpc('mark_request_seen', { p_request_id: id });
+    if (!req || req.seen_by_organizer) return;
+    setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, seen_by_organizer: true } : r)));
     (async () => {
       const { error } = await supabase.from('conference_requests').update({ seen_by_organizer: true }).eq('id', id);
       if (error) throw error;
@@ -1564,6 +1576,18 @@ function CommunicationsPageInner() {
       setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, seen_by_organizer: false } : r)));
       showFlash('err', 'Could not mark this thread as read.');
     });
+  }
+
+  async function handleMarkAllInboxRead() {
+    if (!session || markingAllRead) return;
+    const unreadIds = pagedInboxRequests.filter(r => unreadCountOf(r) > 0).map(r => r.id);
+    if (unreadIds.length === 0) return;
+    setMarkingAllRead(true);
+    const supabase = getAuthedClient(session.access_token);
+    const nowIso = new Date().toISOString();
+    setInboxRequests(prev => prev.map(r => (unreadIds.includes(r.id) ? { ...r, organizer_seen_at: nowIso } : r)));
+    await Promise.all(unreadIds.map(id => supabase.rpc('mark_request_seen', { p_request_id: id })));
+    setMarkingAllRead(false);
   }
 
   // Reply posts regardless of whether the notification email drafts, a
@@ -1898,7 +1922,7 @@ function CommunicationsPageInner() {
             <TabPill active={activeTab === 'emails'} onClick={() => setActiveTab('emails')}>EMAILS</TabPill>
             <TabPill active={activeTab === 'notifications'} onClick={() => setActiveTab('notifications')}>NOTIFICATIONS</TabPill>
             <TabPill active={activeTab === 'inbox'} onClick={() => setActiveTab('inbox')}>
-              INBOX{inboxRequests.filter(needsAttention).length > 0 ? ` (${inboxRequests.filter(needsAttention).length})` : ''}
+              INBOX{inboxUnreadThreadCount > 0 ? ` (${inboxUnreadThreadCount})` : ''}
             </TabPill>
           </div>
 
@@ -2274,38 +2298,6 @@ function CommunicationsPageInner() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <FilterPopoverShell
-                    title="Filter threads"
-                    activeCount={inboxActiveFilterCount}
-                    onClearAll={() => { setInboxStatusFilter(new Set()); setInboxKindFilter(new Set()); setInboxDateFrom(''); setInboxDateTo(''); }}
-                  >
-                    <FilterGroup
-                      title="State" icon={BadgeCheck} options={INBOX_STATE_OPTIONS} selected={inboxStatusFilter}
-                      onToggle={v => setInboxStatusFilter(s => toggleIn(s, v))}
-                      onAll={() => setInboxStatusFilter(new Set(INBOX_STATE_OPTIONS.map(o => o.value)))}
-                      onNone={() => setInboxStatusFilter(new Set())}
-                    />
-                    <FilterGroup
-                      title="Kind" icon={MessageSquare} options={INBOX_KIND_OPTIONS} selected={inboxKindFilter}
-                      onToggle={v => setInboxKindFilter(s => toggleIn(s, v))}
-                      onAll={() => setInboxKindFilter(new Set(INBOX_KIND_OPTIONS.map(o => o.value)))}
-                      onNone={() => setInboxKindFilter(new Set())}
-                    />
-                    <div>
-                      <div className="mb-2">
-                        <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div style={{ flex: 1 }}>
-                          <DatePicker value={inboxDateFrom} max={inboxDateTo || undefined} onChange={setInboxDateFrom} placeholder="From" />
-                        </div>
-                        <ArrowRight size={13} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                        <div style={{ flex: 1 }}>
-                          <DatePicker value={inboxDateTo} min={inboxDateFrom || undefined} onChange={setInboxDateTo} placeholder="To" />
-                        </div>
-                      </div>
-                    </div>
-                  </FilterPopoverShell>
                   <input
                     value={inboxSearch}
                     onChange={e => setInboxSearch(e.target.value)}
@@ -2313,6 +2305,54 @@ function CommunicationsPageInner() {
                     className="rounded-xl px-3.5 py-2 text-sm focus:outline-none"
                     style={{ border: `1px solid ${BORDER}`, backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: OUTFIT, minWidth: 200 }}
                   />
+                  <div className="flex items-center gap-3 ml-auto">
+                    {inboxVisibleUnreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllInboxRead}
+                        disabled={markingAllRead}
+                        className="focus:outline-none"
+                        style={{
+                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                          color: markingAllRead ? '#9A8A78' : '#1B3828',
+                          background: 'none', border: 'none', cursor: markingAllRead ? 'default' : 'pointer',
+                        }}
+                      >
+                        {markingAllRead ? 'MARKING…' : 'MARK ALL READ'}
+                      </button>
+                    )}
+                    <FilterPopoverShell
+                      title="Filter threads"
+                      activeCount={inboxActiveFilterCount}
+                      onClearAll={() => { setInboxStatusFilter(new Set()); setInboxKindFilter(new Set()); setInboxDateFrom(''); setInboxDateTo(''); }}
+                    >
+                      <FilterGroup
+                        title="State" icon={BadgeCheck} options={INBOX_STATE_OPTIONS} selected={inboxStatusFilter}
+                        onToggle={v => setInboxStatusFilter(s => toggleIn(s, v))}
+                        onAll={() => setInboxStatusFilter(new Set(INBOX_STATE_OPTIONS.map(o => o.value)))}
+                        onNone={() => setInboxStatusFilter(new Set())}
+                      />
+                      <FilterGroup
+                        title="Kind" icon={MessageSquare} options={INBOX_KIND_OPTIONS} selected={inboxKindFilter}
+                        onToggle={v => setInboxKindFilter(s => toggleIn(s, v))}
+                        onAll={() => setInboxKindFilter(new Set(INBOX_KIND_OPTIONS.map(o => o.value)))}
+                        onNone={() => setInboxKindFilter(new Set())}
+                      />
+                      <div>
+                        <div className="mb-2">
+                          <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div style={{ flex: 1 }}>
+                            <DatePicker value={inboxDateFrom} max={inboxDateTo || undefined} onChange={setInboxDateFrom} placeholder="From" />
+                          </div>
+                          <ArrowRight size={13} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                          <div style={{ flex: 1 }}>
+                            <DatePicker value={inboxDateTo} min={inboxDateFrom || undefined} onChange={setInboxDateTo} placeholder="To" />
+                          </div>
+                        </div>
+                      </div>
+                    </FilterPopoverShell>
+                  </div>
                 </div>
 
                 {filteredInboxRequests.length === 0 ? (
@@ -2325,7 +2365,8 @@ function CommunicationsPageInner() {
                       const profile = inboxProfiles.get(r.user_id);
                       const role = inboxRoles.get(r.user_id);
                       const last = lastMessageOf(r.id);
-                      const attention = needsAttention(r);
+                      const unread = unreadCountOf(r);
+                      const attention = unread > 0;
                       const kindChip = KIND_CHIP[r.kind] ?? KIND_CHIP.question;
                       const name = profile?.display_name ?? 'Unknown';
                       return (
@@ -2354,7 +2395,14 @@ function CommunicationsPageInner() {
                               {role && (
                                 <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{roleLabel(role)}</span>
                               )}
-                              {attention && <span className="flex-shrink-0 rounded-full" style={{ width: 6, height: 6, backgroundColor: '#B6871F' }} />}
+                              {attention && (
+                                <span
+                                  className="inline-flex items-center justify-center flex-shrink-0"
+                                  style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, backgroundColor: '#EED98A', color: '#1B3828', fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
+                                >
+                                  {unread}
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: attention ? 700 : 500 }}>
                               {r.subject}

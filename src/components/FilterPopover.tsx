@@ -2,14 +2,17 @@
 
 // Shared neumorphic filter popover, the Applications page's FILTERS pattern
 // (src/app/manage/[slug]/applications/page.tsx) extracted so every
-// list-filtering surface gets the same hover-to-open/click-to-pin popover,
-// chip styling, and section layout. Each caller keeps its own filter state
-// shape and section composition (options, values, active-count math) —
-// only the generic shell/chip/heading/group primitives live here.
+// list-filtering surface gets the same popover, chip styling, and section
+// layout. Each caller keeps its own filter state shape and section
+// composition (options, values, active-count math) — only the generic
+// shell/chip/heading/group primitives live here. The shell portals its
+// panel at fixed viewport coordinates (mirrors PaymentMenu/QuickAllocate in
+// applications/page.tsx) so it's never clipped by an ancestor's overflow.
 
-import { useState, useRef, type ComponentType } from 'react';
+import { useState, useRef, useCallback, useEffect, type ComponentType } from 'react';
 import { SlidersHorizontal, Filter, Check } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuIconDisc } from '@/components/neu';
+import Portal from '@/components/Portal';
 
 export type LucideGlyph = ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
@@ -101,9 +104,18 @@ export function FilterGroup({
   );
 }
 
-/** The FILTERS button + floating popover shell. Hover opens, click pins
- *  open; sections are passed as children so each caller composes its own
- *  FilterGroup/date-range/etc content without this shell knowing its shape. */
+const PANEL_WIDTH = 340;
+const VIEWPORT_MARGIN = 12;
+
+/** The FILTERS button + floating popover shell, portaled at fixed viewport
+ *  coordinates so a clipping ancestor (a rounded overflow:hidden card, a
+ *  scrollable sidebar) can never cut it off. Click opens/closes, click
+ *  outside closes; position re-measures on resize AND scroll (stays open
+ *  and follows, rather than closing, since the trigger can live in a
+ *  scrollable toolbar). Right edge of the panel aligns with the right edge
+ *  of the button, clamped within the viewport. Sections are passed as
+ *  children so each caller composes its own FilterGroup/date-range/etc
+ *  content without this shell knowing its shape. */
 export function FilterPopoverShell({
   title, activeCount, onClearAll, children,
 }: {
@@ -113,29 +125,59 @@ export function FilterPopoverShell({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [pinned, setPinned] = useState(false);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
 
-  const show = open || pinned;
-  const clearTimer = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
-  const scheduleClose = () => { clearTimer(); closeTimer.current = setTimeout(() => setOpen(false), 160); };
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2);
+    let left = r.right - width; // panel's right edge matches the button's right edge
+    left = Math.max(VIEWPORT_MARGIN, Math.min(left, window.innerWidth - width - VIEWPORT_MARGIN));
+    const top = Math.min(r.bottom + 10, window.innerHeight - VIEWPORT_MARGIN);
+    const maxHeight = Math.max(160, window.innerHeight - top - VIEWPORT_MARGIN);
+    setPos({ top, left, width, maxHeight });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
+
+  const toggle = () => {
+    if (open) { setOpen(false); return; }
+    place();
+    setOpen(true);
+  };
 
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => { clearTimer(); setOpen(true); }}
-      onMouseLeave={scheduleClose}
-    >
+    <div style={{ display: 'inline-block' }}>
       <button
-        onClick={() => setPinned(p => !p)}
+        ref={btnRef}
+        onClick={toggle}
         className="inline-flex items-center gap-2 focus:outline-none"
         style={{
           padding: '9px 16px',
           borderRadius: 999,
           fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
-          color: show ? '#FFFFFF' : NEU.ink,
-          background: show ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
-          boxShadow: show ? `0 4px 10px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
+          color: open ? '#FFFFFF' : NEU.ink,
+          background: open ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
+          boxShadow: open ? `0 4px 10px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
           border: 'none', cursor: 'pointer',
           transition: `box-shadow 200ms ${EASE}`,
         }}
@@ -148,8 +190,8 @@ export function FilterPopoverShell({
             style={{
               minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
               fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
-              color: show ? NEU.forest : '#FFFFFF',
-              background: show ? NEU.gold : NEU.forest,
+              color: open ? NEU.forest : '#FFFFFF',
+              background: open ? NEU.gold : NEU.forest,
             }}
           >
             {activeCount}
@@ -157,39 +199,41 @@ export function FilterPopoverShell({
         )}
       </button>
 
-      {show && (
-        <div
-          className="absolute z-40"
-          style={{
-            top: 'calc(100% + 10px)', right: 0, left: 'auto',
-            width: 'min(340px, calc(100vw - 40px))',
-            maxHeight: 'calc(100vh - 150px)', overflowY: 'auto',
-            backgroundColor: NEU.surface, borderRadius: 20, boxShadow: NEU.out,
-            padding: 18,
-            animation: `neuFadeIn 200ms ${EASE}`,
-          }}
-        >
-          <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-          <div className="flex items-center justify-between mb-3.5">
-            <div className="flex items-center gap-2">
-              <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Filter} size={26} />
-              <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.ink }}>{title}</p>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={panelRef}
+            className="z-40"
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, width: pos.width,
+              maxHeight: pos.maxHeight, overflowY: 'auto',
+              backgroundColor: NEU.surface, borderRadius: 20, boxShadow: NEU.out,
+              padding: 18,
+              animation: `neuFadeIn 200ms ${EASE}`,
+            }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            <div className="flex items-center justify-between mb-3.5">
+              <div className="flex items-center gap-2">
+                <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Filter} size={26} />
+                <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.ink }}>{title}</p>
+              </div>
+              {activeCount > 0 && (
+                <button
+                  onClick={onClearAll}
+                  className="focus:outline-none"
+                  style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  CLEAR ALL
+                </button>
+              )}
             </div>
-            {activeCount > 0 && (
-              <button
-                onClick={onClearAll}
-                className="focus:outline-none"
-                style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                CLEAR ALL
-              </button>
-            )}
-          </div>
 
-          <div className="flex flex-col gap-4">
-            {children}
+            <div className="flex flex-col gap-4">
+              {children}
+            </div>
           </div>
-        </div>
+        </Portal>
       )}
     </div>
   );

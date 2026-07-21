@@ -64,7 +64,7 @@ export interface ParticipantViewProps {
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, financialAidEnabled, aidBlocks, aidIntro,
+  conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -156,10 +156,6 @@ export default function ParticipantView({
                 conferenceStartDate={conferenceStartDate}
                 application={selected}
                 allocationSwapMode={allocationSwapMode}
-                roleConfigs={roleConfigs}
-                financialAidEnabled={financialAidEnabled}
-                aidBlocks={aidBlocks}
-                aidIntro={aidIntro}
               />
             ) : selected.role === 'chair' ? (
               <ChairParticipant conferenceId={conferenceId} />

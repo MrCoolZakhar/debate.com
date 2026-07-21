@@ -38,6 +38,7 @@ interface RequestRow {
   created_at: string;
   user_id: string;
   metadata: SwapMetadata;
+  participant_seen_at: string | null;
 }
 
 interface RequestMessageRow {
@@ -152,8 +153,9 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
   }, [myApplications]);
 
   const [requests, setRequests] = useState<RequestRow[]>([]);
-  const [lastMessages, setLastMessages] = useState<Map<string, RequestMessageRow>>(new Map());
+  const [messagesByRequest, setMessagesByRequest] = useState<Map<string, RequestMessageRow[]>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<RequestMessageRow[]>([]);
   const [creating, setCreating] = useState(false);
@@ -178,7 +180,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
     if (!session || !user) return;
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const SELECT = 'id, kind, subject, status, last_message_at, created_at, user_id, metadata';
+    const SELECT = 'id, kind, subject, status, last_message_at, created_at, user_id, metadata, participant_seen_at';
 
     const [{ data: ownData }, { data: societyData }] = await Promise.all([
       supabase
@@ -186,7 +188,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
         .select(SELECT)
         .eq('conference_id', conferenceId)
         .eq('user_id', user.id)
-        .order('last_message_at', { ascending: false }),
+        .order('created_at', { ascending: false }),
       leaderSocietyId
         ? supabase
             .from('conference_requests')
@@ -194,18 +196,20 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
             .eq('conference_id', conferenceId)
             .in('kind', ['swap_request', 'swap_notice'])
             .eq('metadata->>society_id', leaderSocietyId)
-            .order('last_message_at', { ascending: false })
+            .order('created_at', { ascending: false })
         : Promise.resolve({ data: [] as RequestRow[] }),
     ]);
 
     const merged = new Map<string, RequestRow>();
     for (const row of ((ownData ?? []) as unknown as RequestRow[])) merged.set(row.id, row);
     for (const row of ((societyData ?? []) as unknown as RequestRow[])) merged.set(row.id, row);
-    const sorted = Array.from(merged.values()).sort((a, b) => b.last_message_at.localeCompare(a.last_message_at));
+    // Strictly newest-first by created_at — a status change never reorders.
+    const sorted = Array.from(merged.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
     setRequests(sorted);
 
-    // Latest message per thread, drives the row snippet + the needs-
-    // attention dot (organizer replied after the user's last message).
+    // Every message per thread (not just the latest) — drives the row
+    // snippet and the unread count (organizer messages newer than
+    // participant_seen_at).
     const ids = sorted.map(r => r.id);
     if (ids.length > 0) {
       const { data: msgData } = await supabase
@@ -213,11 +217,15 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
         .select('id, request_id, sender_user_id, is_organizer, body, created_at')
         .in('request_id', ids)
         .order('created_at', { ascending: true });
-      const map = new Map<string, RequestMessageRow>();
-      for (const m of ((msgData ?? []) as RequestMessageRow[])) map.set(m.request_id, m); // ascending order, last write wins = latest
-      setLastMessages(map);
+      const map = new Map<string, RequestMessageRow[]>();
+      for (const m of ((msgData ?? []) as RequestMessageRow[])) {
+        const list = map.get(m.request_id) ?? [];
+        list.push(m);
+        map.set(m.request_id, list);
+      }
+      setMessagesByRequest(map);
     } else {
-      setLastMessages(new Map());
+      setMessagesByRequest(new Map());
     }
 
     setLoading(false);
@@ -251,11 +259,9 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
       .filter(r => (q ? r.subject.toLowerCase().includes(q) : true))
       .filter(r => (dateFrom ? r.created_at.slice(0, 10) >= dateFrom : true))
       .filter(r => (dateTo ? r.created_at.slice(0, 10) <= dateTo : true))
-      .sort((a, b) => {
-        if (a.status === 'open' && b.status !== 'open') return -1;
-        if (a.status !== 'open' && b.status === 'open') return 1;
-        return b.last_message_at.localeCompare(a.last_message_at);
-      });
+      // Strictly newest-first by created_at — a status change (approved,
+      // denied, closed) never reorders the list.
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }, [requests, statusFilter, kindFilter, search, dateFrom, dateTo]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
@@ -266,10 +272,43 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
     (kindFilter.size > 0 ? 1 : 0) +
     (dateFrom || dateTo ? 1 : 0);
 
-  function needsAttention(r: RequestRow): boolean {
-    if (r.status !== 'open') return false;
-    const last = lastMessages.get(r.id);
-    return !!last && last.is_organizer;
+  function lastMessageOf(requestId: string): RequestMessageRow | null {
+    const list = messagesByRequest.get(requestId);
+    return list && list.length > 0 ? list[list.length - 1] : null;
+  }
+
+  // Unread = organizer messages newer than participant_seen_at; every
+  // message counts when the stamp is null (never opened).
+  function unreadCountOf(r: RequestRow): number {
+    const msgs = messagesByRequest.get(r.id) ?? [];
+    return msgs.filter(m => m.is_organizer && (!r.participant_seen_at || m.created_at > r.participant_seen_at)).length;
+  }
+
+  // Threads-with-unread count, over the whole list (unaffected by filters) —
+  // the section header count.
+  const unreadThreadCount = requests.filter(r => unreadCountOf(r) > 0).length;
+  // MARK ALL READ only ever acts on the current page ("currently visible").
+  const visibleUnreadCount = pagedRequests.filter(r => unreadCountOf(r) > 0).length;
+
+  function handleOpenThread(id: string) {
+    setSelectedId(id);
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    // Optimistic mark-read: the unread badge clears instantly.
+    setRequests(prev => prev.map(r => (r.id === id ? { ...r, participant_seen_at: new Date().toISOString() } : r)));
+    void supabase.rpc('mark_request_seen', { p_request_id: id });
+  }
+
+  async function handleMarkAllRead() {
+    if (!session || markingAllRead) return;
+    const unreadIds = pagedRequests.filter(r => unreadCountOf(r) > 0).map(r => r.id);
+    if (unreadIds.length === 0) return;
+    setMarkingAllRead(true);
+    const supabase = getAuthedClient(session.access_token);
+    const nowIso = new Date().toISOString();
+    setRequests(prev => prev.map(r => (unreadIds.includes(r.id) ? { ...r, participant_seen_at: nowIso } : r)));
+    await Promise.all(unreadIds.map(id => supabase.rpc('mark_request_seen', { p_request_id: id })));
+    setMarkingAllRead(false);
   }
 
   async function handleCreate() {
@@ -331,7 +370,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
     <NeuCard className="p-6 md:p-7">
       <div className="flex items-center justify-between gap-3 mb-4">
         <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: NEU.deepGold, margin: 0 }}>
-          QUESTIONS &amp; REQUESTS
+          QUESTIONS &amp; REQUESTS{unreadThreadCount > 0 ? ` (${unreadThreadCount})` : ''}
         </p>
         {!selectedId && !creating && (
           <NeuButton icon={Plus} onClick={() => setCreating(true)} style={{ padding: '7px 14px', fontSize: 11 }}>
@@ -498,38 +537,6 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <FilterPopoverShell
-              title="Filter requests"
-              activeCount={activeFilterCount}
-              onClearAll={() => { setStatusFilter(new Set()); setKindFilter(new Set()); setDateFrom(''); setDateTo(''); }}
-            >
-              <FilterGroup
-                title="State" icon={BadgeCheck} options={STATE_OPTIONS} selected={statusFilter}
-                onToggle={v => setStatusFilter(s => toggleIn(s, v))}
-                onAll={() => setStatusFilter(new Set(STATE_OPTIONS.map(o => o.value)))}
-                onNone={() => setStatusFilter(new Set())}
-              />
-              <FilterGroup
-                title="Kind" icon={MessageSquare} options={KIND_FILTER_OPTIONS} selected={kindFilter}
-                onToggle={v => setKindFilter(s => toggleIn(s, v))}
-                onAll={() => setKindFilter(new Set(KIND_FILTER_OPTIONS.map(o => o.value)))}
-                onNone={() => setKindFilter(new Set())}
-              />
-              <div>
-                <div className="mb-2">
-                  <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div style={{ flex: 1 }}>
-                    <DatePicker value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} placeholder="From" />
-                  </div>
-                  <ArrowRight size={13} style={{ color: NEU.muted, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <DatePicker value={dateTo} min={dateFrom || undefined} onChange={setDateTo} placeholder="To" />
-                  </div>
-                </div>
-              </div>
-            </FilterPopoverShell>
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -537,6 +544,54 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
               className="px-3.5 py-2 text-sm focus:outline-none"
               style={{ ...inputStyle(), minWidth: 160, flex: '1 1 160px' }}
             />
+            <div className="flex items-center gap-2 ml-auto">
+              {visibleUnreadCount > 0 && (
+                <button
+                  onClick={handleMarkAllRead}
+                  disabled={markingAllRead}
+                  className="focus:outline-none"
+                  style={{
+                    fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                    color: markingAllRead ? NEU.muted : NEU.forest,
+                    background: 'none', border: 'none', cursor: markingAllRead ? 'default' : 'pointer',
+                  }}
+                >
+                  {markingAllRead ? 'MARKING…' : 'MARK ALL READ'}
+                </button>
+              )}
+              <FilterPopoverShell
+                title="Filter requests"
+                activeCount={activeFilterCount}
+                onClearAll={() => { setStatusFilter(new Set()); setKindFilter(new Set()); setDateFrom(''); setDateTo(''); }}
+              >
+                <FilterGroup
+                  title="State" icon={BadgeCheck} options={STATE_OPTIONS} selected={statusFilter}
+                  onToggle={v => setStatusFilter(s => toggleIn(s, v))}
+                  onAll={() => setStatusFilter(new Set(STATE_OPTIONS.map(o => o.value)))}
+                  onNone={() => setStatusFilter(new Set())}
+                />
+                <FilterGroup
+                  title="Kind" icon={MessageSquare} options={KIND_FILTER_OPTIONS} selected={kindFilter}
+                  onToggle={v => setKindFilter(s => toggleIn(s, v))}
+                  onAll={() => setKindFilter(new Set(KIND_FILTER_OPTIONS.map(o => o.value)))}
+                  onNone={() => setKindFilter(new Set())}
+                />
+                <div>
+                  <div className="mb-2">
+                    <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div style={{ flex: 1 }}>
+                      <DatePicker value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} placeholder="From" />
+                    </div>
+                    <ArrowRight size={13} style={{ color: NEU.muted, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <DatePicker value={dateTo} min={dateFrom || undefined} onChange={setDateTo} placeholder="To" />
+                    </div>
+                  </div>
+                </div>
+              </FilterPopoverShell>
+            </div>
           </div>
 
           {filteredRequests.length === 0 ? (
@@ -548,8 +603,9 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
           {pagedRequests.map(r => {
             const kindChip = KIND_CHIP[r.kind] ?? KIND_CHIP.question;
             const statusChip = STATUS_CHIP[r.status] ?? STATUS_CHIP.open;
-            const last = lastMessages.get(r.id);
-            const attention = needsAttention(r);
+            const last = lastMessageOf(r.id);
+            const unread = unreadCountOf(r);
+            const attention = unread > 0;
             return (
               <NeuInset
                 key={r.id}
@@ -561,16 +617,23 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
                 }}
               >
                 <button
-                  onClick={() => setSelectedId(r.id)}
+                  onClick={() => handleOpenThread(r.id)}
                   className="flex-1 min-w-0 flex items-center gap-3 text-left focus:outline-none"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      {attention && <span className="flex-shrink-0 rounded-full" style={{ width: 6, height: 6, backgroundColor: NEU.deepGold }} />}
                       <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontWeight: attention ? 800 : 600, margin: 0 }}>
                         {r.subject}
                       </p>
+                      {attention && (
+                        <span
+                          className="inline-flex items-center justify-center flex-shrink-0"
+                          style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, backgroundColor: NEU.gold, color: NEU.forest, fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
+                        >
+                          {unread}
+                        </span>
+                      )}
                     </div>
                     {last && (
                       <p className="text-xs truncate mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT, margin: '2px 0 0 0' }}>
