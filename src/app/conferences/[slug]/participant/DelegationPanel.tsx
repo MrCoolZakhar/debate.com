@@ -19,7 +19,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { NEU, NeuButton } from '@/components/neu';
-import { queueEventEmail } from '@/lib/emailEvents';
+import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import {
   POOL_MEMBER_SELECT, pledgeSatisfied, pledgeText, MemberAvatar,
   type PoolMember,
@@ -333,15 +333,10 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
           body: `${a.name} and ${b.name} swapped allocations: ${swapSummary}.`,
         });
       }
-      // NOTE: queueEventEmail reads email_templates and writes email_outbox,
-      // both organizer-only under current RLS ("Organizers manage email
-      // templates/outbox"). Calling it here from a leader's (non-organizer)
-      // session will silently no-op (template lookup returns nothing, so it
-      // returns { drafted: false } without ever attempting the insert). This
-      // is a known, reported gap, not worked around, pending either a
-      // SECURITY DEFINER queue-email RPC or a scoped outbox insert policy
-      // for society leaders.
-      await queueEventEmail(supabase, conferenceId, 'delegation_swap', [swapA.id, swapB.id]);
+      // Queued through the participant-events route (server-side, service
+      // role) rather than queueEventEmail directly — email_outbox is
+      // organizer-only under RLS, a leader's own session can't insert rows.
+      await queueParticipantEventEmail(session.access_token, conferenceId, 'delegation_swap', [swapA.id, swapB.id]);
 
       setSwapMode(false);
       setSwapSelection([]);
@@ -362,7 +357,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
         body: `Requesting to swap allocations: ${nameA} (${allocA}) ↔ ${nameB} (${allocB}).`,
       });
       // See NOTE above, same organizer-only RLS gap applies to request mode.
-      await queueEventEmail(supabase, conferenceId, 'delegation_swap', [swapA.id, swapB.id]);
+      await queueParticipantEventEmail(session.access_token, conferenceId, 'delegation_swap', [swapA.id, swapB.id]);
 
       setSwapMode(false);
       setSwapSelection([]);

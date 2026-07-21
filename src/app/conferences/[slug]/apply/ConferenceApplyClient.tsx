@@ -15,7 +15,7 @@ import { Pill, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { experienceProgress, EXPERIENCE_BANDS } from '@/lib/munExperience';
 import { creditPricing, extractFunctionErrorMessage } from '@/lib/payments';
 import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
-import { queueEventEmail } from '@/lib/emailEvents';
+import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { WizardShell, TwoTabPick } from '@/components/wizard';
 import { CVEntryModal } from '@/components/CVEntryModal';
@@ -1630,6 +1630,10 @@ function ConferenceApplyInner() {
         await supabase.from('application_preferences').insert(prefRows);
       }
 
+      // Fire-and-forget: the confirmation redirect below must never wait on
+      // (or fail because of) the email queue.
+      if (session) void queueParticipantEventEmail(session.access_token, conference!.id, 'application_received', [newAppId]);
+
       try { localStorage.removeItem(resumeKey); } catch { /* ignore */ }
       const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
@@ -1746,9 +1750,8 @@ function ConferenceApplyInner() {
       // gated by the organizer's normal three-state template rules (drafted/
       // default/off/unconfigured) — no new event key, and this queues
       // nothing if the organizer hasn't configured anything for it.
-      try {
-        await queueEventEmail(supabase, conference!.id, 'application_received', [existingApp.id]);
-      } catch { /* non-fatal, the resubmission itself already succeeded */ }
+      // queueParticipantEventEmail never throws, so no try/catch needed here.
+      if (session) await queueParticipantEventEmail(session.access_token, conference!.id, 'application_received', [existingApp.id]);
 
       try { localStorage.removeItem(resumeKey); } catch { /* ignore */ }
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}&resubmitted=1`);

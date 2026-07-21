@@ -7,6 +7,7 @@ import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
 import { normalizeBlocks, flattenBlocksToPlainText, type EmailBlock } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference, type EmailTheme } from '@/lib/emailHtml';
 import { formatFee } from '@/lib/utils';
+import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
 
@@ -247,6 +248,31 @@ interface ConferenceRow {
   email_theme: EmailTheme | null;
 }
 
+interface RoleFeeConfigRow {
+  role: string;
+  fee_amount: number | null;
+  fee_currency: string | null;
+  fee_phases: FeePhase[] | null;
+}
+
+/** Role- and phase-aware fee token: the {{fee}} a recipient actually owes
+ *  today, not the retired conferences.fee_amount (frequently 0 now that the
+ *  real price lives per-role in application_role_configs, with an optional
+ *  phase window). Falls back to the old conference-level value only when
+ *  the recipient's role has no config row at all. */
+function resolveFeeToken(
+  role: string,
+  roleConfigs: RoleFeeConfigRow[],
+  conference: Pick<ConferenceRow, 'fee_amount' | 'fee_currency'> | null
+): string | null {
+  const config = roleConfigs.find(rc => rc.role === role);
+  if (config) {
+    const { amount } = activePhaseFee({ fee_amount: config.fee_amount, fee_phases: config.fee_phases });
+    return formatFee(amount, config.fee_currency ?? conference?.fee_currency ?? 'USD');
+  }
+  return conference?.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null;
+}
+
 /**
  * Loads the conference's template for eventKey and resolves the three-state
  * send outcome (see QueueOutcome above): enabled+drafted sends that draft,
@@ -284,7 +310,7 @@ export async function queueEventEmail(
   const fallback = useDraft ? null : getDefaultEventEmail(eventKey);
   const outcome: QueueOutcome = useDraft ? 'sent-custom' : 'sent-default';
 
-  const [{ data: confData }, { data: recipientsData }] = await Promise.all([
+  const [{ data: confData }, { data: recipientsData }, { data: roleConfigsData }] = await Promise.all([
     supabase
       .from('conferences')
       .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme')
@@ -301,9 +327,14 @@ export async function queueEventEmail(
         invited_email, invited_name
       `)
       .in('id', ids),
+    supabase
+      .from('application_role_configs')
+      .select('role, fee_amount, fee_currency, fee_phases')
+      .eq('conference_id', conferenceId),
   ]);
 
   const conference = confData as ConferenceRow | null;
+  const roleConfigs = (roleConfigsData ?? []) as RoleFeeConfigRow[];
   const allRecipients = (recipientsData ?? []) as unknown as RecipientRow[];
   // Preference gate: drop recipients who've opted out of this event's
   // category. Imported/unclaimed applicants and always-send functional
@@ -334,7 +365,7 @@ export async function queueEventEmail(
       payment_status: paymentStatusLabel(app.payment_status),
       conference_name: conference?.full_name ?? null,
       conference_dates: conference ? formatDateRange(conference.start_date, conference.end_date) : null,
-      fee: conference?.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null,
+      fee: resolveFeeToken(app.role, roleConfigs, conference),
       ...extraCtx,
     };
     return {
@@ -351,7 +382,10 @@ export async function queueEventEmail(
   });
 
   const { error } = await supabase.from('email_outbox').insert(rows);
-  if (error) return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel };
+  if (error) {
+    console.error(`[queueEventEmail] email_outbox insert failed for "${eventKey}" (${rows.length} row${rows.length === 1 ? '' : 's'}):`, error.message);
+    return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel };
+  }
 
   // A scheduled row (send_after set) is left for the server-side cron to
   // drain when its time arrives; only an immediate queue kicks the
@@ -654,4 +688,40 @@ export async function queueImportJoinInviteEmails(
   triggerEmailDelivery(supabase);
 
   return { queued: rows.length };
+}
+
+// ── Participant-triggered event queue (browser → server route) ─────────────
+// email_outbox has a single RLS policy, organizer-only writes, so a
+// participant's browser session calling queueEventEmail directly inserts
+// zero rows (the error is swallowed, see the "known, reported gap" NOTE
+// comments at each participant call site). This instead POSTs to
+// /api/emails/queue-participant, which re-authorizes the specific (event,
+// applicationIds) pair against the caller's own JWT server-side and then
+// queues with the service role, still through queueEventEmail's own
+// three-state template rules, just without a client-side RLS bypass.
+
+export async function queueParticipantEventEmail(
+  accessToken: string,
+  conferenceId: string,
+  eventKey: string,
+  applicationIds: string[],
+  extraCtx?: EmailTokenContext
+): Promise<QueueEventEmailResult> {
+  const eventLabel = getEventLabel(eventKey);
+  try {
+    const res = await fetch('/api/emails/queue-participant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ conferenceId, eventKey, applicationIds, extraCtx }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      console.error(`[queueParticipantEventEmail] "${eventKey}" rejected (${res.status}):`, body?.error);
+      return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
+    }
+    return await res.json() as QueueEventEmailResult;
+  } catch (err) {
+    console.error(`[queueParticipantEventEmail] "${eventKey}" request threw:`, err);
+    return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
+  }
 }

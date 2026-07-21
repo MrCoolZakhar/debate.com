@@ -23,6 +23,7 @@ import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/email
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import EmailComposer, { type PreviewCandidate } from '@/components/EmailComposer';
 import { formatFee } from '@/lib/utils';
+import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
 import DefaultEmailPreviewModal from '@/components/DefaultEmailPreviewModal';
 
@@ -82,6 +83,13 @@ interface Committee {
 interface Society {
   id: string;
   name: string;
+}
+
+interface RoleFeeConfig {
+  role: string;
+  fee_amount: number | null;
+  fee_currency: string | null;
+  fee_phases: FeePhase[] | null;
 }
 
 interface EmailSend {
@@ -476,6 +484,7 @@ function CommunicationsPageInner() {
   const [applications, setApplications] = useState<AppRow[]>([]);
   const [committees, setCommittees] = useState<Committee[]>([]);
   const [societies, setSocieties] = useState<Society[]>([]);
+  const [roleConfigs, setRoleConfigs] = useState<RoleFeeConfig[]>([]);
   const [emailSends, setEmailSends] = useState<EmailSend[]>([]);
   const [outboxPending, setOutboxPending] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -652,6 +661,18 @@ function CommunicationsPageInner() {
     setSocieties((data ?? []) as Society[]);
   }, [conference?.id, session?.access_token, beginLoad]);
 
+  const loadRoleConfigs = useCallback(async () => {
+    if (!conference || !session) return;
+    const fresh = beginLoad('roleConfigs');
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('application_role_configs')
+      .select('role, fee_amount, fee_currency, fee_phases')
+      .eq('conference_id', conference.id);
+    if (!fresh()) return;
+    setRoleConfigs((data ?? []) as unknown as RoleFeeConfig[]);
+  }, [conference?.id, session?.access_token, beginLoad]);
+
   const loadEmailSends = useCallback(async () => {
     if (!conference || !session) return;
     const fresh = beginLoad('emailSends');
@@ -725,13 +746,13 @@ function CommunicationsPageInner() {
   useEffect(() => {
     if (!conference) return;
     setLoading(true);
-    Promise.all([loadTemplates(), loadApplications(), loadCommittees(), loadSocieties(), loadEmailSends(), loadOutboxPending(), loadInbox()])
+    Promise.all([loadTemplates(), loadApplications(), loadCommittees(), loadSocieties(), loadRoleConfigs(), loadEmailSends(), loadOutboxPending(), loadInbox()])
       .finally(() => setLoading(false));
     // conference?.id, not conference: every load callback above is itself
     // keyed on conference?.id, so this only re-fires when the id genuinely
     // changes, a background refresh (quiet or otherwise) that swaps in a new
     // conference object with the same id must never restart the page load.
-  }, [conference?.id, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadEmailSends, loadOutboxPending, loadInbox]);
+  }, [conference?.id, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadRoleConfigs, loadEmailSends, loadOutboxPending, loadInbox]);
 
   // Seed the design draft from the conference's saved theme once (not on
   // every refreshConferenceQuiet(), that would clobber an in-progress edit).
@@ -925,6 +946,20 @@ function CommunicationsPageInner() {
       .slice(0, 8);
   }, [applications, manualSearch, matchedRecipients]);
 
+  // Role- and phase-aware {{fee}}, mirrors queueEventEmail's own resolution
+  // (src/lib/emailEvents.ts) so a preview/test-send never shows a different
+  // number than the real send that follows it. Falls back to the retired
+  // conference-level fee_amount only when the role has no config row.
+  function resolveFeeToken(role: string): string | null {
+    if (!conference) return null;
+    const config = roleConfigs.find(rc => rc.role === role);
+    if (config) {
+      const { amount } = activePhaseFee({ fee_amount: config.fee_amount, fee_phases: config.fee_phases });
+      return formatFee(amount, config.fee_currency ?? conference.fee_currency);
+    }
+    return conference.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null;
+  }
+
   function buildContext(app: AppRow): EmailTokenContext {
     if (!conference) return {};
     return {
@@ -936,25 +971,28 @@ function CommunicationsPageInner() {
       payment_status: paymentStatusLabel(app.payment_status),
       conference_name: conference.full_name,
       conference_dates: formatDateRange(conference.start_date, conference.end_date),
-      fee: conference.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null,
+      fee: resolveFeeToken(app.role),
     };
   }
 
   const previewCandidates: PreviewCandidate[] = useMemo(
     () => applications.map(a => ({ id: a.id, label: a.profiles?.display_name ?? a.invited_name ?? 'Unknown', ctx: buildContext(a) })),
-    [applications, conference] // eslint-disable-line react-hooks/exhaustive-deps
+    [applications, conference, roleConfigs] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Sample context for "Send test to me": organizer-derived values where we
   // have them (name, conference details), `[Label]` placeholders for tokens
   // that only make sense against a real applicant (role, committee, etc).
+  // No applicant is selected here, so {{fee}} resolves against the delegate
+  // role's config specifically (the most representative default), same
+  // role- and phase-aware resolution as buildContext/queueEventEmail.
   const testSendContext: EmailTokenContext = useMemo(() => {
     if (!conference) return {};
     const known: Partial<Record<EmailTokenKey, string | null>> = {
       delegate_name: profile?.display_name ?? null,
       conference_name: conference.full_name,
       conference_dates: formatDateRange(conference.start_date, conference.end_date),
-      fee: conference.fee_amount ? formatFee(conference.fee_amount, conference.fee_currency) : null,
+      fee: resolveFeeToken('delegate'),
     };
     const ctx: EmailTokenContext = {};
     for (const key of EMAIL_TOKEN_KEYS) {
@@ -962,7 +1000,7 @@ function CommunicationsPageInner() {
       ctx[key] = v && v.trim() ? v : `[${EMAIL_TOKEN_LABELS[key]}]`;
     }
     return ctx;
-  }, [conference, profile]);
+  }, [conference, profile, roleConfigs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live shell preview for the Design section, a representative sample
   // (allocation_assigned) rendered through the in-progress theme draft, not

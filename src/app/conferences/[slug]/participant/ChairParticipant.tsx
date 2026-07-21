@@ -12,7 +12,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { FlagImg } from '@/components/FlagImg';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
-import { queueEventEmail } from '@/lib/emailEvents';
+import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { getSiteUrl } from '@/lib/emailBlocks';
 import StudyGuideCard from './StudyGuideCard';
 import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
@@ -234,12 +234,10 @@ function RosterRow({ member, paper, conferenceId, onFeedbackSaved }: {
       setSaving(false);
       return;
     }
-    // NOTE: email_outbox/email_templates are organizer-only under current RLS
-    // ("Organizers manage email templates/outbox"). A chair session isn't an
-    // organizer, so this queue call silently no-ops (template lookup returns
-    // nothing), the same confirmed, reported gap as delegation_swap last
-    // round. Not worked around; flagged, not guessed around.
-    await queueEventEmail(supabase, conferenceId, 'position_paper_feedback', [member.id]);
+    // Queued through the participant-events route (server-side, service
+    // role) rather than queueEventEmail directly — email_outbox is
+    // organizer-only under RLS, a chair session can't insert rows itself.
+    await queueParticipantEventEmail(session.access_token, conferenceId, 'position_paper_feedback', [member.id]);
     setSaving(false);
     setSaved(true);
     onFeedbackSaved(paper.id, trimmed);
