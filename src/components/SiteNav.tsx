@@ -118,7 +118,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   color: active ? '#EED98A' : hl ? '#1B3828' : 'rgba(28, 20, 16, 0.55)',
                   textDecoration: 'none',
                   borderRadius: '9999px',
-                  transition: 'all 200ms ease',
+                  transition: 'color 200ms cubic-bezier(0.22,1,0.36,1), background-color 200ms cubic-bezier(0.22,1,0.36,1), transform 200ms cubic-bezier(0.22,1,0.36,1)',
                   backgroundColor: active ? '#1B3828' : hl ? 'rgba(27, 56, 40, 0.06)' : 'transparent',
                   transform: hl && !active ? 'translateY(-1px)' : 'translateY(0)',
                 }}
@@ -184,7 +184,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
             <div className="relative" suppressHydrationWarning>
               <button
                 onClick={() => setShowLangMenu((v) => !v)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all focus:outline-none"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl transition-colors focus:outline-none"
                 style={{ color: overlay ? '#EDE7D8' : '#1B3828', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textShadow: overlay ? '0 1px 4px rgba(0,0,0,0.35)' : undefined }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = overlay ? 'rgba(250,248,243,0.14)' : 'rgba(27,56,40,0.07)'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -272,7 +272,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               >✨ NEW</span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/gavel-mark.webp" alt="" decoding="async" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
-              <span>{creditsLoading || creditBalance === null ? '—' : creditBalance}</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '—' : creditBalance}</span>
             </Link>
           )}
 
@@ -343,21 +343,21 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
         >
           <span
-            className="block w-6 h-0.5 rounded-full transition-all duration-300 origin-center"
+            className="block w-6 h-0.5 rounded-full transition-[transform,background-color] duration-300 origin-center"
             style={{
               backgroundColor: overlay ? '#EDE7D8' : '#1B3828',
               transform: menuOpen ? 'translateY(4px) rotate(45deg)' : 'none',
             }}
           />
           <span
-            className="block w-6 h-0.5 rounded-full transition-all duration-300"
+            className="block w-6 h-0.5 rounded-full transition-[opacity,background-color] duration-300"
             style={{
               backgroundColor: overlay ? '#EDE7D8' : '#1B3828',
               opacity: menuOpen ? 0 : 1,
             }}
           />
           <span
-            className="block w-6 h-0.5 rounded-full transition-all duration-300 origin-center"
+            className="block w-6 h-0.5 rounded-full transition-[transform,background-color] duration-300 origin-center"
             style={{
               backgroundColor: overlay ? '#EDE7D8' : '#1B3828',
               transform: menuOpen ? 'translateY(-4px) rotate(-45deg)' : 'none',
@@ -372,7 +372,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
           floating logo/hamburger would sit on top of its first item (SESSIONS).
           Pin it just below the 72px nav bar so every tab is visible. */}
       <div
-        className={`md:hidden overflow-hidden transition-all duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
+        className={`md:hidden overflow-hidden transition-[max-height] duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
         style={{
           top: overlay ? '72px' : undefined,
           maxHeight: menuOpen ? '480px' : '0px',
@@ -399,7 +399,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   borderRadius: '10px',
                   backgroundColor: active ? 'rgba(27, 56, 40, 0.07)' : 'transparent',
                   borderLeft: active ? '3px solid #B6871F' : '3px solid transparent',
-                  transition: 'all 150ms ease',
+                  transition: 'color 150ms ease, background-color 150ms ease, border-left-color 150ms ease',
                 }}
               >
                 {link.label}
@@ -417,7 +417,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   <button
                     key={lang}
                     onClick={() => setLanguage(lang)}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-bold focus:outline-none transition-all"
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold focus:outline-none transition-colors"
                     style={{
                       backgroundColor: language === lang ? '#1B3828' : 'rgba(27,56,40,0.07)',
                       color: language === lang ? '#EED98A' : '#1B3828',
@@ -461,7 +461,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/gavel-mark.webp" alt="" decoding="async" loading="lazy" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                   {creditsLoading || creditBalance === null ? '—' : creditBalance}
                 </span>
                 <span style={{ marginLeft: 'auto', fontSize: '12px', fontWeight: 700, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}>

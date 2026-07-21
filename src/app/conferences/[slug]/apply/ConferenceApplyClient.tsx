@@ -172,6 +172,7 @@ function WizardFooter({
   disabled?: boolean;
 }) {
   const [hover, setHover] = useState(false);
+  const [pressed, setPressed] = useState(false);
   return (
     <div className="flex justify-center" style={{ marginTop: 26 }}>
       <button
@@ -180,6 +181,9 @@ function WizardFooter({
         disabled={disabled}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
+        onPointerDown={() => setPressed(true)}
+        onPointerUp={() => setPressed(false)}
+        onPointerLeave={() => setPressed(false)}
         className="inline-flex items-center gap-2 focus:outline-none"
         style={{
           fontFamily: OUTFIT,
@@ -196,8 +200,8 @@ function WizardFooter({
           textDecoration: primary ? 'none' : 'underline',
           textUnderlineOffset: 4,
           opacity: disabled ? 0.6 : 1,
-          transform: primary && hover && !disabled ? 'translateY(-1px)' : 'translateY(0)',
-          transition: `all 220ms ${EASE}`,
+          transform: `${primary && hover && !disabled ? 'translateY(-1px)' : 'translateY(0)'}${pressed && !disabled ? ' scale(0.96)' : ''}`,
+          transition: `background-color 220ms ${EASE}, box-shadow 220ms ${EASE}, transform 160ms ${EASE}, opacity 220ms ${EASE}`,
         }}
       >
         {nextLabel}
@@ -361,6 +365,7 @@ function CommitteeCard({
   reducedMotion: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
   const selected = rank != null || active;
   const monogram = (committee.abbreviation || committee.name).slice(0, 3).toUpperCase();
   const pct = totalCount > 0 ? Math.max(0, Math.min(1, openCount / totalCount)) : 0;
@@ -374,6 +379,9 @@ function CommitteeCard({
       aria-pressed={selected}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
       className="relative w-full text-left focus:outline-none"
       style={{
         display: 'flex',
@@ -386,7 +394,7 @@ function CommitteeCard({
         boxShadow: selected
           ? `0 0 0 1px rgba(182,135,31,0.25), ${NEU.out}`
           : disabled ? NEU.inSm : hovered ? NEU.outHover : NEU.out,
-        transform: !disabled && !reducedMotion && (hovered || selected) ? 'translateY(-2px)' : 'translateY(0)',
+        transform: `${!disabled && !reducedMotion && (hovered || selected) ? 'translateY(-2px)' : 'translateY(0)'}${pressed && !disabled && !reducedMotion ? ' scale(0.96)' : ''}`,
         opacity: disabled ? 0.6 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: reducedMotion ? 'none' : `box-shadow 240ms ${EASE}, transform 240ms ${EASE}, border-color 200ms ${EASE}`,
@@ -488,6 +496,7 @@ function CountryChip({
   reducedMotion: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
   const resolved = code || getCountryByName(name)?.code || '';
   return (
     <button
@@ -498,6 +507,9 @@ function CountryChip({
       title={taken ? `${name} — already taken` : name}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
       className="relative inline-flex items-center gap-2 focus:outline-none"
       style={{
         padding: '7px 12px 7px 9px',
@@ -507,7 +519,7 @@ function CountryChip({
         boxShadow: taken ? NEU.inSm : selected ? `0 3px 8px rgba(27,56,40,0.28), ${NEU.outSm}` : hovered ? NEU.outSmHover : NEU.outSm,
         opacity: taken ? 0.5 : 1,
         cursor: taken ? 'not-allowed' : 'pointer',
-        transform: !taken && !reducedMotion && hovered && !selected ? 'translateY(-1px)' : 'none',
+        transform: `${!taken && !reducedMotion && hovered && !selected ? 'translateY(-1px)' : 'translateY(0)'}${pressed && !taken && !reducedMotion ? ' scale(0.96)' : ''}`,
         transition: reducedMotion ? 'none' : `box-shadow 200ms ${EASE}, transform 200ms ${EASE}`,
         filter: taken ? 'grayscale(1)' : 'none',
       }}
@@ -2689,7 +2701,8 @@ function ConferenceApplyInner() {
                       style={{
                         left: `${(i / (n - 1)) * 100}%`, top: '50%',
                         transform: 'translate(-50%, -50%)',
-                        width: 18, height: 18, borderRadius: 9999,
+                        width: 40, height: 40, borderRadius: 9999,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
                         background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
                       }}
                     >
@@ -2716,6 +2729,7 @@ function ConferenceApplyInner() {
                     background: `radial-gradient(120% 120% at 30% 25%, ${accent} 0%, ${accent}CC 70%)`,
                     border: '3px solid #FAF8F3', boxShadow: `0 3px 9px ${accent}66, ${NEU.outSm}`,
                     transition: 'left 320ms cubic-bezier(0.22,1,0.36,1)',
+                    pointerEvents: 'none',
                   }}
                 >
                   <RankIcon size={14} strokeWidth={2.4} style={{ color: '#FAF8F3' }} />

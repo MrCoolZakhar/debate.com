@@ -363,7 +363,7 @@ function DescriptionField({ value, onChange, placeholder }: { value: string; onC
           Description
           <span className="font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>optional</span>
         </label>
-        <span style={{ fontFamily: MONO, fontSize: '10px', color: value.length > DESCRIPTION_MAX ? '#8B2020' : '#9A8A78' }}>
+        <span style={{ fontFamily: MONO, fontSize: '10px', fontVariantNumeric: 'tabular-nums', color: value.length > DESCRIPTION_MAX ? '#8B2020' : '#9A8A78' }}>
           {value.length}/{DESCRIPTION_MAX}
         </span>
       </div>
@@ -507,6 +507,13 @@ export function CVEntryModal({
   const { session } = useAuth();
   const isVerified = existing?.source === 'gavelling_verified';
   const [deleting, setDeleting] = useState(false);
+  // Enter/exit motion: play a brief reverse animation before really unmounting.
+  const [closing, setClosing] = useState(false);
+  const requestClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(() => onClose(), 170);
+  }, [closing, onClose]);
 
   async function handleDelete() {
     if (!existing || isVerified || deleting) return;
@@ -834,9 +841,10 @@ export function CVEntryModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 overflow-y-auto"
-      style={{ backgroundColor: 'rgba(28,20,16,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
-      onClick={onClose}
+      style={{ backgroundColor: 'rgba(28,20,16,0.45)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', animation: closing ? 'gvWelcomeFade 160ms ease reverse forwards' : 'gvWelcomeFade 180ms ease' }}
+      onClick={requestClose}
     >
+      <style>{`@keyframes gvWelcomeFade{from{opacity:0}to{opacity:1}}@keyframes gvWelcomePop{from{opacity:0;transform:translateY(10px) scale(0.97)}to{opacity:1;transform:none}}@keyframes gvWelcomePopOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(6px)}}`}</style>
       <div
         className="relative w-full max-w-lg rounded-[20px] p-6 md:p-7 my-auto"
         style={{
@@ -845,6 +853,7 @@ export function CVEntryModal({
           boxShadow: '0 24px 64px rgba(28,20,16,0.24)',
           maxHeight: 'calc(100vh - 48px)',
           overflowY: 'auto',
+          animation: closing ? 'gvWelcomePopOut 160ms cubic-bezier(0.2,0,0,1) forwards' : 'gvWelcomePop 220ms cubic-bezier(0.2,0,0,1)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1204,7 +1213,7 @@ export function CVEntryModal({
                   <img
                     src={url}
                     alt="Conference photo"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(221,212,192,0.9)' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.1)' }}
                   />
                   <button
                     type="button"
@@ -1255,7 +1264,7 @@ export function CVEntryModal({
           <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="flex-1 rounded-xl py-2.5 font-semibold text-[13px] focus:outline-none"
               style={{ color: '#6E5F4E', backgroundColor: NEU.surface, border: 'none', boxShadow: NEU.outSm, fontFamily: OUTFIT, cursor: 'pointer' }}
             >

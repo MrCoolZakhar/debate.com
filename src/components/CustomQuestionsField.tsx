@@ -86,6 +86,8 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                 onChange={(e) => setAnswer(q.id, e.target.value)}
                 className="focus:outline-none"
                 style={{ ...inputStyle, ...errorStyle(hasError) }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = hasError ? '#8B2020' : '#DDD4C0'; }}
               />
             )}
 
@@ -95,8 +97,10 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                 value={(value as string) ?? ''}
                 placeholder={q.placeholder}
                 onChange={(e) => setAnswer(q.id, e.target.value)}
-                className="focus:outline-none resize-none"
+                className="focus:outline-none resize-y"
                 style={{ ...inputStyle, ...errorStyle(hasError) }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = hasError ? '#8B2020' : '#DDD4C0'; }}
               />
             )}
 
@@ -108,6 +112,8 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                 onChange={(e) => setAnswer(q.id, e.target.value)}
                 className="focus:outline-none"
                 style={{ ...inputStyle, ...errorStyle(hasError) }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = hasError ? '#8B2020' : '#DDD4C0'; }}
               />
             )}
 
@@ -124,6 +130,8 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                 onChange={(e) => setAnswer(q.id, e.target.value)}
                 className="focus:outline-none"
                 style={{ ...inputStyle, ...errorStyle(hasError) }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = hasError ? '#8B2020' : '#DDD4C0'; }}
               >
                 <option value="">Select an option…</option>
                 {(q.options ?? []).map(opt => (

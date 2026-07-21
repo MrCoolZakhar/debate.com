@@ -347,7 +347,7 @@ export function ExperienceInfo({
                 onClick={() => setOpen(false)}
                 aria-label="Close"
                 className="flex items-center justify-center flex-shrink-0 focus:outline-none"
-                style={{ width: '20px', height: '20px', borderRadius: '9999px', border: 'none', background: 'none', color: '#9A8A78', cursor: 'pointer' }}
+                style={{ width: '32px', height: '32px', margin: '-6px', borderRadius: '9999px', border: 'none', background: 'none', color: '#9A8A78', cursor: 'pointer' }}
               >
                 <X size={13} strokeWidth={2.4} />
               </button>
@@ -479,7 +479,7 @@ export function PillToggle({ value, onChange, size = 'md' }: {
       }}
     >
       <span
-        className="absolute rounded-full transition-all duration-200"
+        className="absolute rounded-full transition-[left] duration-200"
         style={{
           width: `${thumb}px`, height: `${thumb}px`,
           backgroundColor: 'white',

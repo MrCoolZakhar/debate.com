@@ -52,11 +52,12 @@ function ConfirmationInner() {
         }}
       />
       <SiteNav />
+      <style>{`@keyframes gvRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }`}</style>
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 text-center py-20">
         {/* Celebratory gradient disc with gold ring */}
         <div
           className="relative flex items-center justify-center mb-7"
-          style={{ width: '104px', height: '104px' }}
+          style={{ width: '104px', height: '104px', animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '0ms' }}
         >
           {/* Gold radial glow behind the disc */}
           <div
@@ -83,13 +84,13 @@ function ConfirmationInner() {
 
         <p
           className="text-xs mb-3"
-          style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em' }}
+          style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em', animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '100ms' }}
         >
           {resubmitted ? 'APPLICATION RESUBMITTED' : 'APPLICATION SUBMITTED'}
         </p>
         <h1
           className="mb-2"
-          style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 900, fontSize: '32px', letterSpacing: '-0.01em' }}
+          style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 900, fontSize: '32px', letterSpacing: '-0.01em', textWrap: 'balance', animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '180ms' }}
         >
           {resubmitted ? "You're back in the queue!" : "You're in the queue!"}
         </h1>
@@ -143,7 +144,7 @@ function ConfirmationInner() {
                   : '1.5px solid #D8CDB6';
                 const iconColor = done ? '#EED98A' : active ? '#B6871F' : '#9A8A78';
                 return (
-                  <div key={t.label} className="flex items-start flex-1">
+                  <div key={t.label} className="flex items-start flex-1" style={{ animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: `${260 + i * 60}ms` }}>
                     <div className="flex flex-col items-center flex-1 min-w-0">
                       <span
                         className="flex items-center justify-center rounded-full flex-shrink-0"

@@ -108,7 +108,7 @@ export default function CVPage() {
             onClick={handleShare}
             aria-label="Copy a public link to your CV"
             title={copied ? 'Link copied' : 'Share your CV'}
-            className="inline-flex items-center gap-2 rounded-full focus:outline-none transition-all"
+            className="inline-flex items-center gap-2 rounded-full focus:outline-none"
             style={{
               height: '42px',
               padding: '0 16px',
@@ -121,9 +121,12 @@ export default function CVPage() {
               fontSize: '12.5px',
               letterSpacing: '0.02em',
               cursor: 'pointer',
+              transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+            onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
+            onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
           >
             {copied ? <Check size={16} strokeWidth={2.6} style={{ color: '#2A5A3C' }} /> : <Share2 size={15} strokeWidth={2.4} />}
             {copied ? 'Copied!' : 'Share'}
@@ -133,7 +136,7 @@ export default function CVPage() {
             onClick={() => { setModalEntry(null); setModalOpen(true); }}
             aria-label="Add a conference to your CV"
             title="Add conference"
-            className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-all"
+            className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none"
             style={{
               width: '58px',
               height: '58px',
@@ -142,9 +145,12 @@ export default function CVPage() {
               border: '1px solid rgba(238,217,138,0.4)',
               boxShadow: '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)',
               cursor: 'pointer',
+              transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1), box-shadow 220ms cubic-bezier(0.22,1,0.36,1)',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 30px rgba(27,56,40,0.34), inset 0 1px 0 rgba(238,217,138,0.3)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)'; }}
+            onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
+            onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; }}
           >
             <Plus size={26} strokeWidth={2.6} />
           </button>
@@ -167,7 +173,7 @@ export default function CVPage() {
           <button
             onClick={() => { setModalEntry(null); setModalOpen(true); }}
             aria-label="Add your first conference"
-            className="flex items-center justify-center rounded-full focus:outline-none transition-all mx-auto"
+            className="flex items-center justify-center rounded-full focus:outline-none mx-auto"
             style={{
               width: '58px',
               height: '58px',
@@ -176,9 +182,12 @@ export default function CVPage() {
               border: '1px solid rgba(238,217,138,0.4)',
               boxShadow: '0 8px 22px rgba(27,56,40,0.28), inset 0 1px 0 rgba(238,217,138,0.25)',
               cursor: 'pointer',
+              transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
+            onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
+            onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.07)'; }}
           >
             <Plus size={26} strokeWidth={2.6} />
           </button>

@@ -565,13 +565,16 @@ export function NeuButton({
   style?: React.CSSProperties;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
   const color = textColor ?? (gradient === NEU_GRADIENTS.gold ? NEU.forest : NEU.gold);
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
       className="inline-flex items-center justify-center gap-2 focus:outline-none"
       style={{
         padding: '11px 22px',
@@ -585,8 +588,9 @@ export function NeuButton({
         letterSpacing: '0.05em',
         cursor: disabled ? 'default' : 'pointer',
         boxShadow: disabled ? 'none' : hovered ? `0 6px 16px ${gradient[0]}66, ${NEU.outSmHover}` : `0 4px 10px ${gradient[0]}4D, ${NEU.outSm}`,
-        transform: hovered && !disabled ? 'translateY(-2px)' : 'translateY(0)',
-        transition: `box-shadow 260ms ${EASE}, transform 260ms ${EASE}`,
+        // Scale-on-press (0.96) for tactile feedback; hover lifts, press depresses.
+        transform: disabled ? 'none' : pressed ? 'scale(0.96)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `box-shadow 260ms ${EASE}, transform 160ms ${EASE}`,
         ...style,
       }}
     >

@@ -79,6 +79,7 @@ export default function PublicCVClient({ userId }: { userId: string }) {
 
   return (
     <div className="min-h-full">
+      <style>{`@keyframes gvRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }`}</style>
       {/* Slim public top bar */}
       <header
         className="sticky top-0 z-20 flex items-center justify-between px-4 md:px-6"
@@ -98,7 +99,7 @@ export default function PublicCVClient({ userId }: { userId: string }) {
 
       <main className="mx-auto w-full max-w-3xl px-4 md:px-6 pb-20">
         {/* Hero: avatar + name + nationality */}
-        <section className="flex items-center gap-4 md:gap-5 py-8">
+        <section className="flex items-center gap-4 md:gap-5 py-8" style={{ animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '0ms' }}>
           {profile.avatar_url ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -128,7 +129,7 @@ export default function PublicCVClient({ userId }: { userId: string }) {
             {country && (
               <div className="flex items-center gap-2 mt-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={getFlagUrl(country.code)} alt="" style={{ width: 22, height: 15, borderRadius: 3, objectFit: 'cover', border: '1px solid rgba(221,212,192,0.9)' }} />
+                <img src={getFlagUrl(country.code)} alt="" style={{ width: 22, height: 15, borderRadius: 3, objectFit: 'cover', border: '1px solid rgba(0,0,0,0.1)' }} />
                 <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 14, color: '#5C5140' }}>{country.name}</span>
               </div>
             )}
@@ -136,10 +137,13 @@ export default function PublicCVClient({ userId }: { userId: string }) {
         </section>
 
         {/* Stats row — same showcase counts + rank as the private CV */}
-        <CVStatsRow entries={entries} />
+        <div style={{ animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '90ms' }}>
+          <CVStatsRow entries={entries} />
+        </div>
         <div className="mb-8" />
 
         {/* Read-only timeline (no edit affordances) */}
+        <div style={{ animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '180ms' }}>
         {entries.length === 0 ? (
           <div
             className="text-center rounded-2xl"
@@ -159,6 +163,7 @@ export default function PublicCVClient({ userId }: { userId: string }) {
             ))}
           </div>
         )}
+        </div>
 
         {/* Footer CTA */}
         <div
