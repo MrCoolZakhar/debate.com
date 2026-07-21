@@ -591,6 +591,16 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => { loadInboxBadge(); }, [loadInboxBadge]);
 
+  // The communications page marks threads read locally (optimistic state,
+  // its own component tree) — this sidebar badge lives in the layout above
+  // it and only ever loaded once on mount, so it needs an explicit nudge to
+  // refetch whenever a mark (single open or MARK ALL READ) actually lands.
+  useEffect(() => {
+    function onInboxReadChanged() { loadInboxBadge(); }
+    window.addEventListener('gv-inbox-read-changed', onInboxReadChanged);
+    return () => window.removeEventListener('gv-inbox-read-changed', onInboxReadChanged);
+  }, [loadInboxBadge]);
+
   // Auth gate
   useEffect(() => {
     if (!authLoading && !user) {

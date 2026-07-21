@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MessageSquare, ChevronLeft, ChevronRight, Plus, Send, ArrowLeftRight, BadgeCheck, CalendarDays, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc, NeuButton } from '@/components/neu';
 import { FilterPopoverShell, FilterGroup, FilterHeading, toggleIn } from '@/components/FilterPopover';
 import { DatePicker } from '@/components/DatePicker';
@@ -302,11 +302,18 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
 
   function handleOpenThread(id: string) {
     setSelectedId(id);
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
-    // Optimistic mark-read: the unread badge clears instantly.
+    // Optimistic mark-read: the unread badge clears instantly. Persisted via
+    // a FRESH client (not a token captured in this closure at panel mount)
+    // since mark_request_seen must still land correctly however long the
+    // panel's been open; fire-and-forget, but a failed stamp means the badge
+    // silently returns on the next visit, worth logging.
     setRequests(prev => prev.map(r => (r.id === id ? { ...r, participant_seen_at: new Date().toISOString() } : r)));
-    void supabase.rpc('mark_request_seen', { p_request_id: id });
+    void (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) return;
+      const { error } = await supabase.rpc('mark_request_seen', { p_request_id: id });
+      if (error) console.error('[RequestsPanel] mark_request_seen failed:', error);
+    })();
   }
 
   async function handleMarkAllRead() {

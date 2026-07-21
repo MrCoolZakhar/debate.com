@@ -7,7 +7,7 @@ import {
   BadgeCheck, MessageSquare, CalendarDays, ArrowRight,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { ConfirmModal, useConfirmModal } from '@/components/ConfirmModal';
 import { FilterPopoverShell, FilterGroup, FilterHeading, toggleIn } from '@/components/FilterPopover';
@@ -1595,22 +1595,31 @@ function CommunicationsPageInner() {
     setReplyText('');
     setReplyError('');
     setSwapError('');
-    if (!session) return;
     const req = inboxRequests.find(r => r.id === id);
-    const supabase = getAuthedClient(session.access_token);
     // Optimistic mark-read: the unread badge clears instantly. mark_request_seen
-    // (SECURITY DEFINER) stamps organizer_seen_at, fire-and-forget, every open —
-    // separate from the legacy seen_by_organizer flag below, which other pages
-    // (DelegationsView's unseen-society tracking) still read, so it's kept in
-    // sync too rather than replaced.
+    // (SECURITY DEFINER) stamps organizer_seen_at, fire-and-forget on a FRESH
+    // client (not a token captured in this closure at page mount) — separate
+    // from the legacy seen_by_organizer flag below, which other pages
+    // (DelegationsView's unseen-society tracking) and the sidebar's inbox
+    // badge still read, so it's kept in sync too rather than replaced.
     setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, organizer_seen_at: new Date().toISOString() } : r)));
-    void supabase.rpc('mark_request_seen', { p_request_id: id });
-    if (!req || req.seen_by_organizer) return;
+    void (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) return;
+      const { error } = await supabase.rpc('mark_request_seen', { p_request_id: id });
+      if (error) console.error('[communications] mark_request_seen failed:', error);
+    })();
+    if (!req || req.seen_by_organizer || !session) return;
+    const supabase = getAuthedClient(session.access_token);
     setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, seen_by_organizer: true } : r)));
     (async () => {
       const { error } = await supabase.from('conference_requests').update({ seen_by_organizer: true }).eq('id', id);
       if (error) throw error;
-    })().catch(() => {
+    })().then(() => {
+      // The sidebar's inbox badge counts seen_by_organizer=false rows and
+      // only loads once on mount, so it needs an explicit nudge to refetch.
+      window.dispatchEvent(new CustomEvent('gv-inbox-read-changed'));
+    }).catch(() => {
       setInboxRequests(prev => prev.map(r => (r.id === id ? { ...r, seen_by_organizer: false } : r)));
       showFlash('err', 'Could not mark this thread as read.');
     });
@@ -1626,6 +1635,7 @@ function CommunicationsPageInner() {
     setInboxRequests(prev => prev.map(r => (unreadIds.includes(r.id) ? { ...r, organizer_seen_at: nowIso } : r)));
     await Promise.all(unreadIds.map(id => supabase.rpc('mark_request_seen', { p_request_id: id })));
     setMarkingAllRead(false);
+    window.dispatchEvent(new CustomEvent('gv-inbox-read-changed'));
   }
 
   // Reply posts regardless of whether the notification email drafts, a
