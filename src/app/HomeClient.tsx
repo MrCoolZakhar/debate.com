@@ -618,7 +618,7 @@ export default function HomeClient() {
 
           {/* Hero — pulled up 72px so the video sits behind the transparent nav: the heading
               overlays the video (and scrolls away with it), while the fixed pill stays pinned. */}
-          <section className="relative z-10 flex flex-col items-center justify-center overflow-hidden" style={{ height: '100vh', marginTop: '-72px' }}>
+          <section className="relative z-10 flex flex-col items-center overflow-hidden" style={{ minHeight: '100dvh', marginTop: '-72px' }}>
             <div className="absolute inset-0 z-0">
               <video autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.55 }}>
                 <source src="/hero_no_audio.webm" type="video/webm" />
@@ -630,7 +630,7 @@ export default function HomeClient() {
               <div className="absolute top-0 left-0 right-0 h-40" style={{ background: 'linear-gradient(to bottom, rgba(237,231,216,0.98) 0%, rgba(237,231,216,0.7) 50%, transparent 100%)' }} />
             </div>
 
-            <div className="relative z-10 flex items-center px-8 md:px-14">
+            <div className="relative z-10 my-auto w-full flex items-center px-8 md:px-14 py-10">
               <div className="flex flex-col justify-center items-center text-center w-full max-w-2xl mx-auto">
                 {/*
                   HERO HEADING — wrapper has a fixed height on md+ (195px = EN single line 165px×1.05 + buffer).

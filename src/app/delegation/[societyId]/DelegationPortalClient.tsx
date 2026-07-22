@@ -322,7 +322,7 @@ function SeatRow({
         </div>
 
         {/* Assignment + control */}
-        <div className="flex items-center gap-2.5 flex-shrink-0 ml-auto">
+        <div className="flex items-center gap-2.5 min-w-0 ml-auto">
           {assigned ? (
             <span
               className="inline-flex items-center gap-2 min-w-0"

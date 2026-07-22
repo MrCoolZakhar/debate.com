@@ -70,6 +70,16 @@ body {
 html, body {
   overflow-x: clip;
 }
+/* Fallback for Safari/iOS < 16, which drop `overflow: clip` as invalid — leaving
+   the whole app with NO horizontal-overflow backstop (stray wide elements then
+   produce a horizontal scroll / "content out of field"). `hidden` is universally
+   supported; scoped behind @supports so modern browsers keep `clip` (which never
+   breaks sticky). */
+@supports not (overflow: clip) {
+  html, body {
+    overflow-x: hidden;
+  }
+}
 
 ::-webkit-scrollbar {
   width: 6px;
