@@ -52,15 +52,18 @@ export function DatePicker({
   const [view, setView] = useState<Date>(() => selected ?? parseISO(initialView) ?? new Date());
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
   useEffect(() => { if (selected) setView(selected); }, [selected]);
 
   // The calendar is rendered through a Portal at fixed viewport coordinates so
   // it can never be clipped by an ancestor's overflow (e.g. a scrollable filter
   // popover or an overflow-hidden card) or run off the viewport. Opens below the
-  // trigger, flips above when there is not enough room, and clamps horizontally
-  // so it always stays on screen.
+  // trigger, flips to whichever side has more room, and clamps horizontally so
+  // it always stays on screen. On a viewport short enough that NEITHER side has
+  // full room for it (a real case on small screens with the field low on the
+  // page), it's also height-capped and made internally scrollable instead of
+  // hanging off the edge with rows no scroll can reach.
   const place = useCallback(() => {
     const b = btnRef.current;
     if (!b) return;
@@ -71,12 +74,13 @@ export function DatePicker({
     let left = r.left;
     if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width;
     left = Math.max(margin, left);
-    let top = r.bottom + 8;
-    if (top + height > window.innerHeight - margin && r.top - 8 - height > margin) {
-      top = r.top - 8 - height;
-    }
-    top = Math.max(margin, top);
-    setPos({ top, left });
+
+    const spaceBelow = window.innerHeight - margin - (r.bottom + 8);
+    const spaceAbove = r.top - 8 - margin;
+    const flip = height > spaceBelow && spaceAbove > spaceBelow;
+    const top = flip ? Math.max(margin, r.top - 8 - height) : r.bottom + 8;
+    const available = flip ? r.top - 8 - top : window.innerHeight - margin - top;
+    setPos({ top, left, maxHeight: Math.max(160, Math.min(height, available)) });
   }, []);
 
   useEffect(() => {
@@ -141,7 +145,8 @@ export function DatePicker({
           className="rounded-2xl p-3"
           style={{
             position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
-            width: 300, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0',
+            width: 300, maxHeight: pos.maxHeight, overflowY: 'auto',
+            backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0',
             boxShadow: '0 20px 48px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)',
           }}
         >

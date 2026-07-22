@@ -41,10 +41,12 @@ const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 
 
 const TOTAL_STEPS = 11;
 const REVIEW_STEP = TOTAL_STEPS;
-// 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates · 7 fee
-// · 8 logo (mandatory) · 9 banner (skippable) · 10 description + socials (skippable)
-// · 11 review. (The old "set up your committees" prompt was removed, committees
-// are added later in Manage, and the description/socials step took slot 10.)
+// 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates (skippable)
+// · 7 fee · 8 logo (skippable) · 9 banner (skippable) · 10 description + socials
+// (skippable) · 11 review. (The old "set up your committees" prompt was removed,
+// committees are added later in Manage, and the description/socials step took
+// slot 10.) Every skippable step's "Do this later" leaves it exactly as
+// editable from Settings afterwards as it already was.
 
 // Bundled banner artwork, mirrors settings' BANNER_PRESETS so the organiser
 // can set a banner during creation exactly as they would afterwards.
@@ -456,7 +458,7 @@ export default function NewConferencePage() {
           country,
           city,
           format,
-          expected_delegates: parseInt(expectedDelegates),
+          expected_delegates: expectedDelegates ? parseInt(expectedDelegates) : null,
           fee_amount: feeKind === 'paid' ? parseFloat(feeAmount) || 0 : 0,
           fee_currency: feeCurrency,
           description: description.trim() || null,
@@ -551,12 +553,15 @@ export default function NewConferencePage() {
     website.trim() && 'Website',
   ].filter(Boolean).join(', ');
 
+  // Logo and expected delegates are both skippable now (their steps carry a
+  // "Do this later" escape hatch) — neither gates creation. A non-empty
+  // expected-delegates value still has to be a real positive number, it's
+  // only the empty (skipped) case that's tolerated.
   const readyToCreate =
     fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
     studentLevel && country && city.trim() && format &&
-    expectedDelegates && parseInt(expectedDelegates) > 0 &&
-    (feeKind === 'free' || (feeKind === 'paid' && parseFloat(feeAmount) > 0)) &&
-    logoUrl;
+    (!expectedDelegates || parseInt(expectedDelegates) > 0) &&
+    (feeKind === 'free' || (feeKind === 'paid' && parseFloat(feeAmount) > 0));
 
   // Loading / auth spinner
   if (loading || !user) {
@@ -792,6 +797,9 @@ export default function NewConferencePage() {
                 </div>
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
                 <ContinueButton onClick={continueStep6} disabled={!expectedDelegates || parseInt(expectedDelegates) < 1} />
+                <div className="flex justify-center" style={{ marginTop: 12 }}>
+                  <SkipLink onClick={() => { setExpectedDelegates(''); setDelegateRange(''); advance(6); }} label="Do this later" />
+                </div>
               </WizardShell>
             )}
 
@@ -914,6 +922,9 @@ export default function NewConferencePage() {
                   onClick={() => (logoUrl ? advance(8) : setStepError('A logo is required to continue.'))}
                   disabled={!logoUrl || logoUploading}
                 />
+                <div className="flex justify-center" style={{ marginTop: 12 }}>
+                  <SkipLink onClick={() => advance(8)} label="Do this later" />
+                </div>
               </WizardShell>
             )}
 
@@ -975,7 +986,7 @@ export default function NewConferencePage() {
                 {bannerError && <ErrorNote>{bannerError}</ErrorNote>}
                 <ContinueButton onClick={() => advance(9)} />
                 <div className="flex justify-center" style={{ marginTop: 12 }}>
-                  <SkipLink onClick={() => { setBannerUrl(''); advance(9); }} label="Skip this question →" />
+                  <SkipLink onClick={() => { setBannerUrl(''); advance(9); }} label="Do this later" />
                 </div>
               </WizardShell>
             )}
@@ -1022,7 +1033,7 @@ export default function NewConferencePage() {
                       setInstagram(''); setFacebook(''); setTiktok(''); setWhatsapp(''); setWebsite('');
                       advance(10);
                     }}
-                    label="Skip this question →"
+                    label="Do this later"
                   />
                 </div>
               </WizardShell>
@@ -1042,13 +1053,13 @@ export default function NewConferencePage() {
                   <ReviewRow label="Level" value={studentLevel === 'school' ? 'High school' : studentLevel === 'university' ? 'University' : 'Both'} onEdit={() => editFromReview(3)} />
                   <ReviewRow label="Location" value={`${city}, ${country}`} onEdit={() => editFromReview(4)} />
                   <ReviewRow label="Dates" value={formatDateRange(startDate, endDate)} onEdit={() => editFromReview(5)} />
-                  <ReviewRow label="Expected delegates" value={expectedDelegates} onEdit={() => editFromReview(6)} />
+                  <ReviewRow label="Expected delegates" value={expectedDelegates || 'Skipped'} onEdit={() => editFromReview(6)} />
                   <ReviewRow
                     label="Fee"
                     value={feeKind === 'free' ? 'Free' : `${feeCurrency} ${parseFloat(feeAmount || '0').toFixed(2)} per delegate`}
                     onEdit={() => editFromReview(7)}
                   />
-                  <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Required'} onEdit={() => editFromReview(8)} />
+                  <ReviewRow label="Logo" value={logoUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(8)} />
                   <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(9)} />
                   <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(10)} />
                   <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(10)} />
