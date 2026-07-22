@@ -4,13 +4,15 @@
 // the public committee card language (monogram/logo, name, difficulty pill,
 // roman-numeral topics) from ConferenceDetailClient's committee carousel,
 // plus a large flag + country ribbon for the delegate's own allocation, a
-// co-delegate line on a double-delegation country, and the ENTER SESSION
+// co-delegate line on a double-delegation country, and the JOIN SESSION
 // gate once the committee's live session has opened.
 
-import { Compass, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { Compass, ArrowRight, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
 import { FlagImg } from '@/components/FlagImg';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
+import { NEU } from '@/components/neu';
 import { SectionCard, OUTFIT, capitalize, useAllocationPartner, effectiveReleaseTime, formatReleaseDate } from './shared';
 import type { ParticipantCommittee, ParticipantAllocation } from './types';
 
@@ -29,6 +31,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
   conferenceStartDate: string | null;
 }) {
   const partner = useAllocationPartner(myAllocation);
+  const [copied, setCopied] = useState(false);
 
   if (!committee || !myAllocation) {
     return (
@@ -131,17 +134,47 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
         {sessionCode && (
           <div className="w-full mt-6 pt-6" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
             {released ? (
-              <Link
-                href={`/delegate/${sessionCode}?country=${encodeURIComponent(myAllocation.country_name)}&locked=1`}
-                className="inline-flex items-center justify-center gap-2 w-full rounded-xl focus:outline-none"
-                style={{
-                  padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A',
-                  fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, letterSpacing: '0.06em',
-                  textTransform: 'uppercase', textDecoration: 'none',
-                }}
-              >
-                Enter Session <ArrowRight size={15} strokeWidth={2.4} />
-              </Link>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(sessionCode);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="flex items-center justify-center gap-2 w-full mb-3 focus:outline-none"
+                  style={{
+                    padding: '9px 14px', borderRadius: 16, border: 'none',
+                    backgroundColor: NEU.base, boxShadow: NEU.inSm, cursor: 'pointer',
+                  }}
+                >
+                  <span
+                    className="font-bold"
+                    style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, color: NEU.ink, letterSpacing: '0.1em' }}
+                  >
+                    {sessionCode}
+                  </span>
+                  {copied ? (
+                    <Check size={13} strokeWidth={2.6} style={{ color: '#3D7A52' }} />
+                  ) : (
+                    <Copy size={13} strokeWidth={2.4} style={{ color: NEU.muted }} />
+                  )}
+                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: copied ? '#3D7A52' : NEU.muted, letterSpacing: '0.04em', minWidth: 42, textAlign: 'left' }}>
+                    {copied ? 'Copied' : ''}
+                  </span>
+                </button>
+                <Link
+                  href={`/join?code=${sessionCode}`}
+                  className="inline-flex items-center justify-center gap-2 w-full rounded-xl focus:outline-none"
+                  style={{
+                    padding: '13px 18px', backgroundColor: '#1B3828', color: '#EED98A',
+                    fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, letterSpacing: '0.06em',
+                    textTransform: 'uppercase', textDecoration: 'none',
+                  }}
+                >
+                  Join Session <ArrowRight size={15} strokeWidth={2.4} />
+                </Link>
+              </>
             ) : releaseMs !== null ? (
               <p className="text-[12.5px]" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
                 Session opens {formatReleaseDate(releaseMs)}

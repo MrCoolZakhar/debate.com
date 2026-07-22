@@ -106,17 +106,27 @@ export default function PositionPaperCard({ conferenceId, myAllocation }: {
     const { error: storageError } = await supabase.storage.from('position-papers').upload(path, ppFile, { contentType: 'application/pdf' });
     if (storageError) { setPPError('Upload failed.'); setPPUploading(false); return; }
     const { data: { publicUrl } } = supabase.storage.from('position-papers').getPublicUrl(path);
-    await supabase.from('position_papers').insert({
+    // position_papers has no country_name column — that field used to make
+    // PostgREST reject the whole insert, and the ignored error let the paper
+    // silently vanish while the file sat orphaned in storage.
+    const { error: insertError } = await supabase.from('position_papers').insert({
+      conference_id: conferenceId,
       conference_committee_id: myAllocation.conference_committee_id,
       user_id: user.id,
       country_code: myAllocation.country_code,
-      country_name: myAllocation.country_name,
       file_url: publicUrl,
       file_name: ppFile.name,
       file_size_bytes: ppFile.size,
       status: 'submitted',
       notify_on_feedback: ppNotify,
     });
+    if (insertError) {
+      console.error('[PositionPaperCard] position_papers insert failed:', insertError);
+      await supabase.storage.from('position-papers').remove([path]);
+      setPPError('Your paper could not be submitted. Please try again.');
+      setPPUploading(false);
+      return;
+    }
     setPPUploading(false);
     setPPFile(null);
     setIsReplacing(false);

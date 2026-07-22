@@ -517,8 +517,10 @@ export default function DocumentsPage() {
       }
       // Notify every seat-holder of this paper's country, not just the
       // submitter — a double-delegation country shares one paper between
-      // its two delegates.
-      if (!paper) return;
+      // its two delegates. Only when the delegate opted into feedback
+      // notifications for this paper (notify_on_feedback) — the in-app
+      // feedback display itself is unaffected either way.
+      if (!paper || !paper.notify_on_feedback) return;
       const { data: seatRows } = await supabase
         .from('conference_allocations')
         .select('application_id')

@@ -184,7 +184,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   session_join_invite: {
     subject: 'Join your live committee — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} is live. You can join your committee room for {{committee}} using the session code in your account — see you on the floor." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} is live. Your session code for {{committee}} is {{session_code}}. Use it to join your committee room — see you on the floor." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },

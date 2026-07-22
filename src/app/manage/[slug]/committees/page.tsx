@@ -784,7 +784,8 @@ export default function CommitteesPage() {
         if (applicationIds.length === 0) continue;
         await clearStaleScheduled(supabase, conference.id, eventKey, applicationIds);
         if (isFuture) {
-          await queueEventEmail(supabase, conference.id, eventKey, applicationIds, undefined, { sendAfter: isoValue! });
+          const extraCtx = eventKey === 'session_join_invite' ? { session_code: t.session_code } : undefined;
+          await queueEventEmail(supabase, conference.id, eventKey, applicationIds, extraCtx, { sendAfter: isoValue! });
         }
       }
     }
@@ -827,7 +828,7 @@ export default function CommitteesPage() {
           .not('application_id', 'is', null);
         const appIds = Array.from(new Set(((allocRows ?? []) as { application_id: string }[]).map(a => a.application_id)));
         if (appIds.length > 0) {
-          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds);
+          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds, { session_code: c.session_code });
           notifyIfNeeded(result, pushDraftNotice);
         }
       } catch {
@@ -865,12 +866,22 @@ export default function CommitteesPage() {
       try {
         const { data: allocRows } = await supabase
           .from('conference_allocations')
-          .select('application_id')
+          .select('application_id, conference_committee_id')
           .in('conference_committee_id', ids)
           .not('application_id', 'is', null);
-        const appIds = Array.from(new Set(((allocRows ?? []) as { application_id: string }[]).map(a => a.application_id)));
-        if (appIds.length > 0) {
-          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds);
+        // Queued per committee (not one merged call across every recipient) —
+        // {{session_code}} has to resolve to THAT committee's own code, which
+        // differs across committees.
+        const appIdsByCommittee = new Map<string, Set<string>>();
+        for (const row of ((allocRows ?? []) as { application_id: string; conference_committee_id: string }[])) {
+          const set = appIdsByCommittee.get(row.conference_committee_id) ?? new Set<string>();
+          set.add(row.application_id);
+          appIdsByCommittee.set(row.conference_committee_id, set);
+        }
+        for (const c of committees) {
+          const appIds = Array.from(appIdsByCommittee.get(c.id) ?? []);
+          if (appIds.length === 0) continue;
+          const result = await queueEventEmail(supabase, conference.id, 'session_join_invite', appIds, { session_code: c.session_code });
           notifyIfNeeded(result, pushDraftNotice);
         }
       } catch {
