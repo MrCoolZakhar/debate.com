@@ -233,10 +233,20 @@ html, body {
 }
 
 /* Typography niceties, site-wide: balance headings so they don't leave a lone
-   short last line; pretty body text to avoid single-word orphans. */
-h1, h2, h3, h4 {
-  text-wrap: balance;
-}
-p, li {
-  text-wrap: pretty;
+   short last line; pretty body text to avoid single-word orphans.
+
+   MUST live in @layer base. Tailwind v4 puts utilities (whitespace-nowrap,
+   truncate) in @layer utilities, and unlayered rules beat ALL layered rules
+   regardless of specificity — so leaving these unlayered would override
+   whitespace-nowrap/truncate on every heading and force nowrap headings (e.g.
+   the /sessions hero, any `truncate` title) to wrap. Scoping to @layer base
+   keeps balance/pretty as the default while letting those utilities win where
+   explicitly applied. */
+@layer base {
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+  p, li {
+    text-wrap: pretty;
+  }
 }
