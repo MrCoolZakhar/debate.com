@@ -71,12 +71,17 @@ export function AuthLayout({
 }) {
   return (
     <div
-      className="min-h-dvh w-full flex flex-col lg:grid relative"
+      className="min-h-dvh w-full flex flex-col lg:grid lg:h-dvh relative"
       style={{ backgroundColor: '#EDE7D8', gridTemplateColumns: '46% 54%' }}
     >
       <BrandPanel eyebrow={eyebrow} headline={headline} sub={sub} />
 
-      <div className="relative flex items-center justify-center px-5 py-10 md:px-8 lg:py-12 flex-1" style={{ overflowX: 'clip' }}>
+      {/* Freeze-the-frame: on lg+ the shell is exactly one viewport tall and
+          THIS form column scrolls internally when the card is taller than the
+          screen (short laptops, projectors, keyboard open). Vertical centering
+          is done with my-auto on the card (below), NOT align-items:center —
+          align-items:center would clip and make the overflowed top unreachable. */}
+      <div className="relative flex justify-center px-5 py-10 md:px-8 lg:py-12 flex-1 lg:overflow-y-auto" style={{ overflowX: 'clip' }}>
         {/* Decorative-only layer: bleed icons, grain and the glow all sit in
             their own inset-0, overflow-clipped box. Clipping lives HERE, not
             on the flex-1 content wrapper, because the Sparkles bleed item
@@ -118,7 +123,7 @@ export function AuthLayout({
           />
         </div>
 
-        <div className="relative z-10 w-full max-w-md">
+        <div className="relative z-10 w-full max-w-md my-auto">
           <Link
             href="/"
             className="inline-flex items-center gap-1.5 text-sm font-semibold mb-5 focus:outline-none"
