@@ -2533,12 +2533,6 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Registration fee pointer, fees are configured per role now, not at the conference level (columns stay in the DB, just unused by this UI). */}
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Registration Fee</p>
-            <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Fees are configured per role in the Applications tab.</p>
-          </div>
-
           {/* Description + socials card */}
           <div style={cardStyle}>
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Description</p>
