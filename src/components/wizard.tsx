@@ -73,7 +73,7 @@ export function WizardShell({
                     ? NEU.forest
                     : 'rgba(27,56,40,0.16)',
                 boxShadow: active ? `0 2px 6px ${NEU.deepGold}55` : undefined,
-                transition: `all 320ms ${EASE}`,
+                transition: `width 320ms ${EASE}, background 320ms ${EASE}, box-shadow 320ms ${EASE}`,
               }}
             />
           );
@@ -93,15 +93,15 @@ export function WizardShell({
             style={{
               left: 0,
               top: 2,
-              width: 38,
-              height: 38,
+              width: 40,
+              height: 40,
               borderRadius: 999,
               border: 'none',
               backgroundColor: NEU.surface,
               color: backHover ? NEU.forest : NEU.muted,
               boxShadow: backHover ? NEU.outSmHover : NEU.outSm,
               transform: backHover ? 'translateY(-1px)' : 'translateY(0)',
-              transition: `all 220ms ${EASE}`,
+              transition: `background-color 220ms ${EASE}, color 220ms ${EASE}, box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
               cursor: 'pointer',
             }}
           >
@@ -160,8 +160,9 @@ function GoldCheck({ visible }: { visible: boolean }) {
         background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
         boxShadow: `0 2px 7px ${NEU.deepGold}66`,
         opacity: visible ? 1 : 0,
-        transform: visible ? 'scale(1)' : 'scale(0.5)',
-        transition: `all 260ms ${EASE}`,
+        transform: visible ? 'scale(1)' : 'scale(0.25)',
+        filter: visible ? 'blur(0px)' : 'blur(4px)',
+        transition: `opacity 260ms ${EASE}, transform 260ms ${EASE}, filter 260ms ${EASE}`,
         pointerEvents: 'none',
       }}
     >
@@ -180,7 +181,7 @@ const CARD_FLOAT = '-4px -5px 12px rgba(255,255,255,0.6), 6px 10px 24px rgba(27,
 const CARD_LIFT_GLASS =
   '-6px -7px 20px rgba(255,255,255,0.9), 12px 20px 46px rgba(27,56,40,0.22), 0 12px 44px rgba(182,135,31,0.24)';
 
-function cardBaseStyle(selected: boolean, hovered: boolean): React.CSSProperties {
+function cardBaseStyle(selected: boolean, hovered: boolean, pressed = false): React.CSSProperties {
   return {
     position: 'relative',
     // On hover the card turns glassy — a soft light border reads as a frosted
@@ -202,14 +203,23 @@ function cardBaseStyle(selected: boolean, hovered: boolean): React.CSSProperties
     backdropFilter: hovered ? 'blur(16px) saturate(1.2)' : undefined,
     WebkitBackdropFilter: hovered ? 'blur(16px) saturate(1.2)' : undefined,
     boxShadow: hovered ? CARD_LIFT_GLASS : selected ? NEU.out : CARD_FLOAT,
-    transform: hovered
-      ? 'translateY(-6px) scale(1.05)'
-      : selected
-        ? 'translateY(-2px) scale(1.01)'
-        : 'translateY(0) scale(1)',
-    transition: `transform 320ms ${EASE}, box-shadow 320ms ${EASE}, border-color 320ms ${EASE}, background-color 320ms ${EASE}`,
+    // Scale-on-press: a pressed card depresses (from its lifted hover state, or
+    // to 0.97 at rest) for tactile feedback — never below 0.95.
+    transform: pressed
+      ? hovered
+        ? 'translateY(-6px) scale(1.0)'
+        : selected
+          ? 'translateY(-2px) scale(0.99)'
+          : 'scale(0.97)'
+      : hovered
+        ? 'translateY(-6px) scale(1.05)'
+        : selected
+          ? 'translateY(-2px) scale(1.01)'
+          : 'translateY(0) scale(1)',
+    transition: `transform 200ms ${EASE}, box-shadow 320ms ${EASE}, border-color 320ms ${EASE}, background-color 320ms ${EASE}`,
     transformOrigin: 'center',
-    willChange: 'transform',
+    // will-change only while actually animating, not permanently on every card.
+    willChange: hovered || pressed ? 'transform' : 'auto',
     cursor: 'pointer',
     fontFamily: OUTFIT,
     textAlign: 'center',
@@ -230,6 +240,7 @@ export function TwoTabPick({
   onChange: (key: string) => void;
 }) {
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [pressKey, setPressKey] = useState<string | null>(null);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
   function onKeyDown(e: React.KeyboardEvent, idx: number) {
@@ -254,6 +265,7 @@ export function TwoTabPick({
       {options.map((opt, idx) => {
         const selected = value === opt.key;
         const hovered = hoverKey === opt.key;
+        const pressed = pressKey === opt.key;
         return (
           <button
             key={opt.key}
@@ -264,10 +276,12 @@ export function TwoTabPick({
             onClick={() => onChange(opt.key)}
             onKeyDown={(e) => onKeyDown(e, idx)}
             onMouseEnter={() => setHoverKey(opt.key)}
-            onMouseLeave={() => setHoverKey(null)}
+            onMouseLeave={() => { setHoverKey(null); setPressKey(null); }}
+            onPointerDown={() => setPressKey(opt.key)}
+            onPointerUp={() => setPressKey(null)}
             className="flex flex-col items-center justify-start focus-visible:ring-2"
             style={{
-              ...cardBaseStyle(selected, hovered),
+              ...cardBaseStyle(selected, hovered, pressed),
               minHeight: 400,
               padding: opt.image ? '0 0 34px' : '56px 26px 44px',
               overflow: 'hidden',
@@ -288,7 +302,7 @@ export function TwoTabPick({
                   backgroundPosition: 'center',
                   filter: selected ? 'saturate(1.05)' : 'saturate(0.82)',
                   opacity: selected ? 1 : 0.9,
-                  transition: `all 300ms ${EASE}`,
+                  transition: `filter 300ms ${EASE}, opacity 300ms ${EASE}`,
                 }}
               />
             ) : opt.icon ? (
@@ -365,6 +379,7 @@ export function CardSelect({
   const big = size === 'lg';
   const [query, setQuery] = useState('');
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [pressKey, setPressKey] = useState<string | null>(null);
   const [searchFocus, setSearchFocus] = useState(false);
 
   const selectedKeys = useMemo(
@@ -443,6 +458,7 @@ export function CardSelect({
         {shown.map((opt) => {
           const selected = selectedKeys.has(opt.key);
           const hovered = hoverKey === opt.key;
+          const pressed = pressKey === opt.key;
           return (
             <button
               key={opt.key}
@@ -451,10 +467,12 @@ export function CardSelect({
               aria-checked={selected}
               onClick={() => onChange(opt.key)}
               onMouseEnter={() => setHoverKey(opt.key)}
-              onMouseLeave={() => setHoverKey(null)}
+              onMouseLeave={() => { setHoverKey(null); setPressKey(null); }}
+              onPointerDown={() => setPressKey(opt.key)}
+              onPointerUp={() => setPressKey(null)}
               className="flex flex-col items-center justify-center"
               style={{
-                ...cardBaseStyle(selected, hovered),
+                ...cardBaseStyle(selected, hovered, pressed),
                 minHeight: big ? 218 : 156,
                 padding: opt.image
                   ? big ? '0 0 26px' : '0 0 18px'

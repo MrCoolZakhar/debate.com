@@ -231,3 +231,12 @@ html, body {
     transform: translateX(0);
   }
 }
+
+/* Typography niceties, site-wide: balance headings so they don't leave a lone
+   short last line; pretty body text to avoid single-word orphans. */
+h1, h2, h3, h4 {
+  text-wrap: balance;
+}
+p, li {
+  text-wrap: pretty;
+}

@@ -339,7 +339,7 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-all focus:outline-none"
+      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none"
       style={{
         backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
         color: active ? '#EED98A' : '#6B5F52',
@@ -368,7 +368,7 @@ function TypeFilterButton({ mode, onClick }: { mode: 'ga' | 'crisis' | null; onC
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-all focus:outline-none"
+      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none"
       style={{
         backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
         color: active ? '#EED98A' : '#6B5F52',
@@ -1240,7 +1240,7 @@ export default function ConferenceDetailClient() {
                     </p>
                     <p
                       className="text-[12px] sm:text-[16px] font-extrabold leading-tight"
-                      style={{ color: NEU.ink, fontFamily: "'Outfit', sans-serif", margin: 0 }}
+                      style={{ color: NEU.ink, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums', margin: 0 }}
                     >
                       {cell.value}
                     </p>
@@ -1338,11 +1338,11 @@ export default function ConferenceDetailClient() {
                       onClick={() => setActiveTab(key)}
                       aria-label={label}
                       title={label}
-                      className="relative flex items-center justify-center rounded-full transition-all focus:outline-none"
+                      className="relative flex items-center justify-center rounded-full focus:outline-none"
                       style={
                         activeTab === key
-                          ? { width: '72px', height: '46px', backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 10px rgba(27,56,40,0.32)' }
-                          : { width: '72px', height: '46px', backgroundColor: 'transparent', color: '#8A7D6C' }
+                          ? { width: '72px', height: '46px', backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 10px rgba(27,56,40,0.32)', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
+                          : { width: '72px', height: '46px', backgroundColor: 'transparent', color: '#8A7D6C', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
                       }
                     >
                       <TabIcon size={21} strokeWidth={1.9} />
@@ -1420,7 +1420,7 @@ export default function ConferenceDetailClient() {
                       {conference.contact_email && (
                         <a
                           href={`mailto:${conference.contact_email}`}
-                          className="flex items-center gap-1.5 text-xs mt-1 transition-all"
+                          className="flex items-center gap-1.5 text-xs mt-1 transition-colors"
                           style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
@@ -1524,6 +1524,7 @@ export default function ConferenceDetailClient() {
                               width: '72px', height: '72px', borderRadius: '9999px', objectFit: 'cover',
                               boxShadow: '0 6px 16px rgba(27,56,40,0.22)',
                               backgroundColor: '#EDE7D8',
+                              outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
                             }}
                           />
                         ) : (
@@ -1654,7 +1655,7 @@ export default function ConferenceDetailClient() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-5">
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '44px', color: '#1C1410', lineHeight: 1 }}>
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '44px', color: '#1C1410', lineHeight: 1 }}>
                           {avgRating.toFixed(1)}
                         </span>
                         <div className="flex flex-col gap-1">
@@ -1803,7 +1804,7 @@ export default function ConferenceDetailClient() {
                         )}
                         <Link
                           href={`/manage/${slug}`}
-                          className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
+                          className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-colors focus:outline-none"
                           style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
@@ -1856,7 +1857,7 @@ export default function ConferenceDetailClient() {
                             {payable && (
                               <Link
                                 href={`/conferences/${slug}/pay`}
-                                className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-all focus:outline-none"
+                                className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-colors focus:outline-none"
                                 style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
@@ -1905,10 +1906,13 @@ export default function ConferenceDetailClient() {
                         </p>
                         <button
                           onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
-                          className="w-full rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
-                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer' }}
+                          className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
+                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                          onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
+                          onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
+                          onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                         >
                           APPLY NOW →
                         </button>
@@ -1933,10 +1937,13 @@ export default function ConferenceDetailClient() {
                         <button
                           onClick={() => setRolePickerOpen(v => !v)}
                           aria-expanded={rolePickerOpen}
-                          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm transition-all focus:outline-none"
-                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer' }}
+                          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
+                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                          onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
+                          onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
+                          onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                         >
                           APPLY NOW
                           <ChevronDown
@@ -1969,7 +1976,7 @@ export default function ConferenceDetailClient() {
                                   key={r.role}
                                   disabled={!open}
                                   onClick={() => { if (open) router.push(`/conferences/${slug}/apply?role=${r.role}`); }}
-                                  className="w-full flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-left transition-all focus:outline-none"
+                                  className="w-full flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-left transition-colors focus:outline-none"
                                   style={{
                                     backgroundColor: open ? 'rgba(238,217,138,0.08)' : 'rgba(237,231,216,0.04)',
                                     border: open ? '1px solid rgba(238,217,138,0.22)' : '1px solid rgba(237,231,216,0.08)',
@@ -2026,7 +2033,7 @@ export default function ConferenceDetailClient() {
                         return headlineFee === 0 ? (
                           <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
                         ) : (
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
                             {formatFee(headlineFee, heroFeeCurrency)}
                           </span>
                         );
@@ -2408,6 +2415,7 @@ export default function ConferenceDetailClient() {
                                                 width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
                                                 boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
                                                 backgroundColor: '#EDE7D8',
+                                                outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
                                               }}
                                             />
                                           ) : (

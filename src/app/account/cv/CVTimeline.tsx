@@ -355,7 +355,7 @@ export function TimelineEntry({
                   <img
                     src={url}
                     alt="Conference photo"
-                    style={{ width: '84px', height: '60px', objectFit: 'cover', borderRadius: '10px', border: '1px solid rgba(221,212,192,0.9)', boxShadow: '0 2px 8px rgba(27,56,40,0.08)' }}
+                    style={{ width: '84px', height: '60px', objectFit: 'cover', borderRadius: '10px', border: '1px solid rgba(0,0,0,0.1)', boxShadow: '0 2px 8px rgba(27,56,40,0.08)' }}
                   />
                 </a>
               ))}
