@@ -635,13 +635,6 @@ export default function ConferenceDetailClient() {
     }
 
     const conf = confData as Conference;
-    const isOrganizer = user?.id === conf.organizer_id;
-
-    if (!conf.is_public && !isOrganizer) {
-      setNotFound(true);
-      setLoading(false);
-      return;
-    }
 
     setConference(conf);
 
