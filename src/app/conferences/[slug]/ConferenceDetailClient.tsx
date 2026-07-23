@@ -139,6 +139,7 @@ interface Committee {
   total_slots: number | null;
   delegation_size: number;
   display_chairs: DisplayChair[] | null;
+  chair_user_ids: string[] | null;
   logo_url: string | null;
 }
 
@@ -645,7 +646,7 @@ export default function ConferenceDetailClient() {
     const [committeesRes, roleConfigsRes] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, display_chairs, logo_url')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, display_chairs, chair_user_ids, logo_url')
         .eq('conference_id', conf.id)
         .order('name', { ascending: true }),
       supabase
@@ -1623,6 +1624,7 @@ export default function ConferenceDetailClient() {
                   conferenceId={conference.id}
                   conferenceSlug={conference.slug}
                   conferenceStartDate={conference.start_date}
+                  isOrganizer={isOrganizerViewer}
                   myApplications={myApplications}
                   roleConfigs={roleConfigs}
                   myAllocation={myAllocation}
@@ -2311,6 +2313,12 @@ export default function ConferenceDetailClient() {
                             const isCrisis = c.committee_type === 'crisis';
                             const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
                             const chairs = c.display_chairs ?? [];
+                            const chairIds = c.chair_user_ids ?? [];
+                            // Link a chair to their public MUN CV only when we can safely
+                            // correlate display_chairs[i] ↔ chair_user_ids[i] (equal lengths ⇒
+                            // same order from the sync trigger); mismatched ⇒ don't link, to
+                            // avoid ever pointing at the wrong person's CV.
+                            const chairsLinkable = chairIds.length === chairs.length;
                             const { countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles } = committeeStats(c);
 
                             return (
@@ -2420,36 +2428,55 @@ export default function ConferenceDetailClient() {
                                   {chairs.length > 0 && (
                                   <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                                     <div className="flex items-start justify-center gap-6">
-                                      {chairs.map(ch => (
-                                        <div key={ch.name} className="flex flex-col items-center text-center" style={{ width: '96px' }}>
-                                          {ch.avatar_url ? (
-                                            <img
-                                              src={ch.avatar_url}
-                                              alt={ch.name}
-                                              style={{
-                                                width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
-                                                boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
-                                                backgroundColor: '#EDE7D8',
-                                                outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
-                                              }}
-                                            />
-                                          ) : (
-                                            <span
-                                              className="flex items-center justify-center"
-                                              style={{
-                                                width: '52px', height: '52px', borderRadius: '9999px',
-                                                backgroundColor: '#1B3828', color: '#EED98A',
-                                                fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                                              }}
-                                            >
-                                              {ch.name.charAt(0)}
+                                      {chairs.map((ch, ci) => {
+                                        const uid = chairsLinkable ? chairIds[ci] : null;
+                                        const inner = (
+                                          <>
+                                            {ch.avatar_url ? (
+                                              /* eslint-disable-next-line @next/next/no-img-element */
+                                              <img
+                                                src={ch.avatar_url}
+                                                alt={ch.name}
+                                                style={{
+                                                  width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
+                                                  boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
+                                                  backgroundColor: '#EDE7D8',
+                                                  outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
+                                                }}
+                                              />
+                                            ) : (
+                                              <span
+                                                className="flex items-center justify-center"
+                                                style={{
+                                                  width: '52px', height: '52px', borderRadius: '9999px',
+                                                  backgroundColor: '#1B3828', color: '#EED98A',
+                                                  fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                                                }}
+                                              >
+                                                {ch.name.charAt(0)}
+                                              </span>
+                                            )}
+                                            <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                              {ch.name}
                                             </span>
-                                          )}
-                                          <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                                            {ch.name}
-                                          </span>
-                                        </div>
-                                      ))}
+                                          </>
+                                        );
+                                        return uid ? (
+                                          <Link
+                                            key={ch.name}
+                                            href={`/cv/${uid}`}
+                                            className="flex flex-col items-center text-center transition-transform hover:-translate-y-0.5"
+                                            style={{ width: '96px', textDecoration: 'none' }}
+                                            title={`View ${ch.name}'s MUN CV`}
+                                          >
+                                            {inner}
+                                          </Link>
+                                        ) : (
+                                          <div key={ch.name} className="flex flex-col items-center text-center" style={{ width: '96px' }}>
+                                            {inner}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                   )}

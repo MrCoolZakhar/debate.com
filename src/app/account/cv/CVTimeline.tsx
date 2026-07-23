@@ -164,7 +164,11 @@ export function TimelineEntry({
     ? new Date(`${entry.event_date}T00:00:00`).toLocaleDateString('en', { month: 'long', year: 'numeric' })
     : '—';
 
-  const displayAwards = entry.entry_type === 'delegate'
+  // Faculty advisors represent a DELEGATION, so their awards render as
+  // delegation awards (green disc + Users glyph via AwardChip's `delegation`
+  // flag). Delegate awards stay individual (per-award icons).
+  const isDelegation = entry.entry_type === 'faculty-advisor';
+  const displayAwards = (entry.entry_type === 'delegate' || isDelegation)
     ? (entry.awards.length > 0 ? entry.awards : (entry.award && entry.award !== 'None' ? [entry.award] : []))
     : [];
 
@@ -314,8 +318,9 @@ export function TimelineEntry({
             </div>
           )}
 
-          {/* Secretariat / other — just the role title */}
-          {(entry.entry_type === 'secretariat' || entry.entry_type === 'other') && entry.allocation && (
+          {/* Secretariat / other / faculty-advisor — just the role title
+              (a faculty advisor's title is the delegation / school advised) */}
+          {(entry.entry_type === 'secretariat' || entry.entry_type === 'other' || entry.entry_type === 'faculty-advisor') && entry.allocation && (
             <div className="flex items-center flex-wrap mt-2.5 text-[15px]" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 700 }}>
               <span>{entry.allocation}</span>
             </div>
@@ -331,7 +336,7 @@ export function TimelineEntry({
           {/* Awards + expertise (delegate only) */}
           {(displayAwards.length > 0 || (entry.entry_type === 'delegate' && entry.expertise_level)) && (
             <div className="flex gap-1.5 flex-wrap mt-3 items-center">
-              {displayAwards.map((a) => <AwardChip key={a} name={a} />)}
+              {displayAwards.map((a) => <AwardChip key={a} name={a} delegation={isDelegation} />)}
               {entry.entry_type === 'delegate' && entry.expertise_level && <LevelBadge level={entry.expertise_level} size="sm" />}
             </div>
           )}

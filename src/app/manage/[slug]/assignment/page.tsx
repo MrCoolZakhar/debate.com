@@ -279,10 +279,14 @@ interface UserHistory {
 // score(applicant, committee, slot) =
 //   preference:  1st choice committee +50, 2nd +30, 3rd +15
 //                +25 more if the slot is the exact country they asked for in that preference
-//   experience:  15 - 6 * |experience level - committee difficulty|  (floor 0),
-//                but ONLY when BOTH the applicant's experience level and the
-//                committee's difficulty are known — otherwise the term is
-//                dropped entirely (neutral, no bonus and no penalty).
+//   experience:  15 - 6 * |experience level - committee difficulty|  (floor 0).
+//                The term ALWAYS applies: a missing experience level or a
+//                missing committee difficulty falls back to 'intermediate'
+//                (the ladder's midpoint) so legacy/imported committees still
+//                get a sensible, non-punitive fit rather than being skipped.
+//   society:     (suggestions only) +35 to complete a valid same-society double
+//                delegation, −30 to spread a clumping delegation, and a hard
+//                skip for a cross-society sibling seat. See scoreSocietyFit.
 //   fullness:    12 * (1 - filled/total) , nudges suggestions toward emptier committees
 //   importance:  +18 / +10 / +4 / 0 for an open high / medium / low / standard
 //                seat, so the algorithm fills seats — and the committees that
@@ -291,11 +295,11 @@ interface UserHistory {
 // The canonical MUN skill ladder, shared by BOTH an applicant's experience
 // level and a committee's difficulty (they are graded on the same four rungs).
 // beginner→0, intermediate→1, advanced→2, expert→3. Returns `null` for a
-// missing/blank/unrecognised value so callers can treat it NEUTRALLY instead of
-// silently pretending it is 'intermediate'. Note: `difficulty` is the
-// organiser-set committee field — it is NEVER one of the committee_type values
-// (general-assembly / specialised / crisis), so those are (correctly) unknown
-// here and never map onto the ladder.
+// missing/blank/unrecognised value; the experience-fit caller then defaults it
+// to intermediate (index 1) so the term always applies. Note: `difficulty` is
+// the organiser-set committee field — it is NEVER one of the committee_type
+// values (general-assembly / specialised / crisis), so those never map onto the
+// ladder here (a GA committee is graded by its own `difficulty`, not its type).
 const LEVELS = ['beginner', 'intermediate', 'advanced', 'expert'];
 function levelIdx(s: string | null | undefined): number | null {
   const i = LEVELS.indexOf((s ?? '').toLowerCase().trim());
@@ -339,21 +343,18 @@ function scorePrefAndExp(app: AcceptedApp, committee: CommitteeData, slot: SlotR
     score += 25;
     reasons.push('COUNTRY PICK');
   }
-  // Experience fit is scored ONLY when we actually know both the applicant's
-  // experience level AND the committee's difficulty. The committee's difficulty
-  // is the organiser-set field (beginner/intermediate/advanced/expert) — we
-  // never infer it from committee_type. If either side is unset we award
-  // nothing and impose no penalty, so an un-graded committee stays neutral
-  // rather than being treated as 'intermediate' (which would arbitrarily favour
-  // or punish applicants based on a difficulty nobody actually chose).
-  const expL = levelIdx(app.experience_level);
-  const diffL = levelIdx(committee.difficulty);
-  if (expL !== null && diffL !== null) {
-    const gap = Math.abs(expL - diffL);
-    const expScore = Math.max(0, 15 - 6 * gap);
-    score += expScore;
-    if (gap === 0) reasons.push('EXP MATCH');
-  }
+  // Experience fit always applies. The committee's difficulty is the
+  // organiser-set field (beginner/intermediate/advanced/expert) — never inferred
+  // from committee_type. When either the applicant's experience level or the
+  // committee's difficulty is unset/unrecognised we fall back to 'intermediate'
+  // (index 1, the ladder midpoint) so legacy/imported committees still receive a
+  // sensible, non-punitive fit instead of being skipped.
+  const expL = levelIdx(app.experience_level) ?? 1;
+  const diffL = levelIdx(committee.difficulty) ?? 1;
+  const gap = Math.abs(expL - diffL);
+  const expScore = Math.max(0, 15 - 6 * gap);
+  score += expScore;
+  if (gap === 0) reasons.push('EXP MATCH');
   return { score, reasons };
 }
 
@@ -369,6 +370,65 @@ function scoreSlot(app: AcceptedApp, committee: CommitteeData, slot: SlotRow, fi
   if (slot.importance === 'high') base.reasons.push('HIGH PRIORITY');
   else if (slot.importance === 'medium') base.reasons.push('PRIORITY SEAT');
   return base;
+}
+
+// ── Society interaction (SUGGESTIONS only) ──────────────────────────────────
+// Extra terms layered onto a seat's base fit score in the suggestion BUILDER to
+// keep whole delegations coherent. Deliberately NOT applied in the manual
+// drop/assign modals: those surface every open seat and resolve a cross-society
+// sibling collision at drop time via siblingSeatAllocation → onConflict, so a
+// chair can still override. The three cases are mutually exclusive and resolved
+// in this strict priority order:
+//
+//   1. DISALLOWED (purity) — the seat is the empty half of a DOUBLE country
+//      whose other seat is already held by a DIFFERENT society. Because
+//      siblingSeatAllocation only returns a row when exactly one of the two
+//      seats is taken, `siblingSoc !== soc` catches both a different society AND
+//      an independent applicant (soc === null) sitting beside any society's
+//      occupant — exactly the allocations the drop modal rejects. Never suggest
+//      them.
+//   2. COMPLETES PAIR (+35) — the taken half belongs to the applicant's OWN
+//      society (both non-null and equal). Suggesting them here finishes a valid
+//      same-society double delegation, so it earns a strong positive comparable
+//      to a top preference tier. Returned BEFORE the concentration check, so a
+//      genuine pair completion is never also penalised for "clumping".
+//   3. CONCENTRATION (−30) — not a pair completion, but a delegate from the
+//      applicant's society is ALREADY allocated somewhere in this committee
+//      (a delegation block seat counts). Suggesting them here would clump the
+//      delegation, so we nudge them toward a different committee. No reason chip
+//      is added — it is a downrank, not a badge to celebrate.
+//
+// An independent applicant (society_id null) never gets the pair bonus or the
+// concentration penalty; only the purity skip can apply to them.
+const PAIR_BONUS = 35;
+const CONCENTRATION_PENALTY = 30;
+interface SocietyFit { delta: number; reasons: string[]; disallowed: boolean; }
+function scoreSocietyFit(
+  app: AcceptedApp,
+  committee: CommitteeData,
+  slot: SlotRow,
+  byCountry: Map<string, AllocationRow[]>,
+): SocietyFit {
+  const soc = app.society_id ?? null;
+  // Non-null only for a DOUBLE country with exactly ONE of its two seats taken —
+  // the one situation where a sibling-society rule can bite.
+  const sibling = siblingSeatAllocation(slot, byCountry);
+  const siblingSoc = sibling ? allocationSocietyId(sibling) : null;
+
+  // (1) Purity: cross-society (or independent-beside-a-society) sibling seat.
+  if (sibling && siblingSoc !== soc) {
+    return { delta: 0, reasons: [], disallowed: true };
+  }
+  // (2) Complete a valid same-society double delegation.
+  if (sibling && soc !== null && siblingSoc === soc) {
+    return { delta: PAIR_BONUS, reasons: ['COMPLETES PAIR'], disallowed: false };
+  }
+  // (3) Same delegation already in this committee, and this is not a pair
+  // completion → spread them out.
+  if (soc !== null && committee.conference_allocations.some(a => allocationSocietyId(a) === soc)) {
+    return { delta: -CONCENTRATION_PENALTY, reasons: [], disallowed: false };
+  }
+  return { delta: 0, reasons: [], disallowed: false };
 }
 
 function fitColor(score: number) {
@@ -720,9 +780,10 @@ function PointsInfo() {
             </span>
             {row('Committee preference  +50 / +30 / +15', 'Their 1st choice committee scores 50, 2nd choice 30, 3rd choice 15.')}
             {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
-            {row('Experience fit  up to +15', 'Full 15 when their level matches the committee difficulty, minus 6 for each level of gap, floored at 0. Skipped entirely — no bonus, no penalty — when the committee has no difficulty set.')}
+            {row('Experience fit  up to +15', 'Full 15 when their level matches the committee difficulty, minus 6 for each level of gap, floored at 0. A committee with no difficulty set counts as intermediate.')}
             {row('Committee fill  up to +12', 'Emptier committees score higher (12 x share still open), nudging suggestions to where seats are needed.')}
             {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
+            {row('Delegation coherence  +35 / −30', 'Completing a valid double delegation (their society already holds the country’s other seat) adds 35; placing them where a societymate is already seated but not as a pair subtracts 30 to spread the delegation. Cross-society double seats are never suggested.')}
             <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4, paddingTop: 2, borderTop: `1px solid ${NEU.base}` }}>
               Seat importance also orders the seats inside a committee overview, most urgent first.
             </span>
@@ -3377,8 +3438,19 @@ export default function AssignmentPage() {
           const filled = distinctCountryFilled(c.conference_allocations);
           for (const slot of c.committee_country_slots) {
             if (isSlotFull(slot, byCountry)) continue;
+            // Society-coherence terms (purity skip / pair bonus / concentration
+            // penalty) layer on top of the base fit. A disallowed cross-society
+            // sibling seat is dropped here so it never reaches the greedy or
+            // swap passes — keeping the whole builder consistent (an option that
+            // can't exist is never a fall-through target or a swap destination).
+            const soc = scoreSocietyFit(app, c, slot, byCountry);
+            if (soc.disallowed) continue;
             const r = scoreSlot(app, c, slot, filled, c.total_slots);
-            options.push({ app, committee: c, slot, score: r.score, reasons: r.reasons });
+            options.push({
+              app, committee: c, slot,
+              score: r.score + soc.delta,
+              reasons: [...r.reasons, ...soc.reasons],
+            });
           }
         }
         options.sort((a, b) => b.score - a.score);

@@ -58,6 +58,9 @@ export interface ParticipantViewProps {
   myAllocation: ParticipantAllocation | null;
   committees: ParticipantCommittee[];
   allocationSwapMode: string;
+  /** True when the viewer runs this conference — they never "apply", so the
+   *  empty state should say they're the organizer, not "you haven't applied". */
+  isOrganizer?: boolean;
   /** Conference-level financial aid config (separate application, financial_aid_requests table). */
   financialAidEnabled: boolean;
   aidBlocks: FormBlock[];
@@ -65,7 +68,7 @@ export interface ParticipantViewProps {
 }
 
 export default function ParticipantView({
-  conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode,
+  conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const router = useRouter();
@@ -94,6 +97,36 @@ export default function ParticipantView({
 
   if (!user) {
     return <ApplyPointer conferenceSlug={conferenceSlug} signedOut />;
+  }
+  // The organizer never "applies" to their own conference — don't nudge them
+  // to apply; tell them they run it and point to the manage dashboard.
+  if (isOrganizer && myApplications.length === 0) {
+    return (
+      <SectionCard>
+        <div className="flex flex-col items-center text-center py-8">
+          <div
+            className="flex items-center justify-center mb-4"
+            style={{ width: 56, height: 56, borderRadius: 9999, backgroundColor: 'rgba(42,90,60,0.12)', border: '1px solid rgba(42,90,60,0.28)' }}
+          >
+            <span aria-hidden style={{ fontSize: 26 }}>🪑</span>
+          </div>
+          <p className="text-[16px] font-extrabold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+            You&apos;re the organizer
+          </p>
+          <p className="text-[13.5px] mb-5 max-w-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+            You run this conference — there&apos;s nothing to apply for here. Manage applications,
+            committees and your public page from the organizer dashboard.
+          </p>
+          <Link
+            href={`/manage/${conferenceSlug}`}
+            className="inline-flex items-center gap-2 rounded-full"
+            style={{ padding: '11px 20px', backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, letterSpacing: '0.03em', textDecoration: 'none' }}
+          >
+            Manage conference →
+          </Link>
+        </div>
+      </SectionCard>
+    );
   }
   if (myApplications.length === 0) {
     return <ApplyPointer conferenceSlug={conferenceSlug} signedOut={false} />;

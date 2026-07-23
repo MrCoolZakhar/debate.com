@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ImagePlus, Trash2, X, Check, Star, MessageSquareText, User, UserRound, Gavel, Hammer, Briefcase, ClipboardList, Sparkles } from 'lucide-react';
+import { ImagePlus, Trash2, X, Check, Star, MessageSquareText, User, UserRound, Gavel, Hammer, Briefcase, ClipboardList, Sparkles, Users } from 'lucide-react';
 import { Emoji3D, NEU } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -31,7 +31,7 @@ import {
   monogramFor, OUTFIT, MONO,
 } from '@/app/account/accountUi';
 
-export type EntryType = 'delegate' | 'chair' | 'secretariat' | 'other';
+export type EntryType = 'delegate' | 'chair' | 'faculty-advisor' | 'secretariat' | 'other';
 
 export interface CVEntry {
   id: string;
@@ -74,6 +74,7 @@ export const ENTRY_TYPES: {
 }[] = [
   { key: 'delegate',    label: 'Delegate',    Icon: User,      emoji: 'Person raising hand', bleedIcon: UserRound,      bleedRotate: -6, accent: '#2A5A3C', border: '#C8BEA8',               discBg: 'linear-gradient(145deg, #2F6242 0%, #1B3828 100%)',              discGlyph: '#EED98A', chipInk: '#245234', chipBg: '#1B3828', chipText: '#EED98A', chipBorder: 'rgba(238,217,138,0.4)' },
   { key: 'chair',       label: 'Chair',       Icon: Gavel,     emoji: 'Hammer',              bleedIcon: Hammer,         bleedRotate: -10, accent: '#B6871F', border: 'rgba(182,135,31,0.6)',  discBg: 'linear-gradient(145deg, #F3E3A1 0%, #EED98A 45%, #C99A2A 100%)', discGlyph: '#4A3410', chipInk: '#7A5A20', chipBg: '#EED98A', chipText: '#5A4210', chipBorder: 'rgba(182,135,31,0.55)' },
+  { key: 'faculty-advisor', label: 'Faculty Advisor', Icon: Users, emoji: 'Busts in silhouette', bleedIcon: Users, bleedRotate: -6, accent: '#3B7C86', border: 'rgba(59,124,134,0.55)', discBg: 'linear-gradient(145deg, #5EA0AA 0%, #2C5E67 100%)', discGlyph: '#FAF8F3', chipInk: '#2C5E67', chipBg: '#3B7C86', chipText: '#FAF8F3', chipBorder: 'rgba(59,124,134,0.55)' },
   { key: 'secretariat', label: 'Secretariat', Icon: Briefcase, emoji: 'Clipboard',           bleedIcon: ClipboardList,  bleedRotate: -6, accent: '#8A6BA0', border: 'rgba(108,74,120,0.55)', discBg: 'linear-gradient(145deg, #9E7FB4 0%, #6C4A78 100%)',              discGlyph: '#FAF8F3', chipInk: '#5F4470', chipBg: '#8A6BA0', chipText: '#FAF8F3', chipBorder: 'rgba(108,74,120,0.55)' },
   { key: 'other',       label: 'Other',       Icon: Sparkles,  emoji: 'Sparkles',            bleedIcon: Sparkles,       bleedRotate: 0,  accent: '#6E5F4E', border: 'rgba(154,138,120,0.55)', discBg: 'linear-gradient(145deg, #A89880 0%, #7C6C58 100%)',             discGlyph: '#FAF8F3', chipInk: '#5C5140', chipBg: '#DDD4C0', chipText: '#5C5140', chipBorder: 'rgba(154,138,120,0.5)' },
 ];
@@ -533,9 +534,11 @@ export function CVEntryModal({
   const [committee, setCommittee]           = useState(existing?.committee ?? '');
   const [allocation, setAllocation]         = useState(existing?.allocation ?? '');
   const [roleTitle, setRoleTitle]           = useState(
-    // Secretariat/other store their free-text title in the `allocation` column
-    // (delegate=country, chair=n/a). Seed from allocation for those types.
-    (existing && (existing.entry_type === 'secretariat' || existing.entry_type === 'other')) ? existing.allocation : '',
+    // Secretariat/other/faculty-advisor store their free-text title in the
+    // `allocation` column (delegate=country, chair=n/a). For a faculty advisor
+    // that title is the delegation / school they represent. Seed from allocation
+    // for those types.
+    (existing && (existing.entry_type === 'secretariat' || existing.entry_type === 'other' || existing.entry_type === 'faculty-advisor')) ? existing.allocation : '',
   );
   const [expertiseLevel, setExpertiseLevel] = useState(existing?.expertise_level ?? '');
   const [eventDate, setEventDate]           = useState(existing?.event_date ?? '');
@@ -553,9 +556,13 @@ export function CVEntryModal({
   const activeType     = ENTRY_TYPE_MAP[entryType] ?? ENTRY_TYPE_MAP.delegate;
   const showCommittee  = entryType === 'delegate' || entryType === 'chair';
   const showAllocation = entryType === 'delegate';
-  const showAwards     = entryType === 'delegate';
+  // Faculty advisors record DELEGATION awards — the awards section shows, but
+  // scoped to custom free-text honours only (no individual-delegate presets).
+  const isDelegationAwards = entryType === 'faculty-advisor';
+  const showPresetAwards = entryType === 'delegate';
+  const showAwards     = entryType === 'delegate' || entryType === 'faculty-advisor';
   const showExpertise  = entryType === 'delegate';
-  const showRoleTitle  = entryType === 'secretariat' || entryType === 'other';
+  const showRoleTitle  = entryType === 'secretariat' || entryType === 'other' || entryType === 'faculty-advisor';
 
   // Conference suggestions
   const [suggestions, setSuggestions]       = useState<ConferenceSuggestion[]>([]);
@@ -799,7 +806,11 @@ export function CVEntryModal({
       return;
     }
     if (showRoleTitle && !roleTitle.trim()) {
-      setError(entryType === 'secretariat' ? 'Please add your Secretariat position.' : 'Please add your role title.');
+      setError(
+        entryType === 'secretariat' ? 'Please add your Secretariat position.' :
+        entryType === 'faculty-advisor' ? 'Please add the delegation you advised.' :
+        'Please add your role title.',
+      );
       return;
     }
     if (!session) return;
@@ -911,7 +922,7 @@ export function CVEntryModal({
             <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               Experience Type
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-2">
               {ENTRY_TYPES.map((t) => {
                 const active = entryType === t.key;
                 return (
@@ -1073,14 +1084,22 @@ export function CVEntryModal({
           {/* Role title — secretariat + other. For "other", this is the actual
               name of the role (stored in the allocation column, shown on the card). */}
           {showRoleTitle && (
-            <Field label={entryType === 'secretariat' ? 'Position / Title' : 'What was your role?'}>
+            <Field label={
+              entryType === 'secretariat' ? 'Position / Title' :
+              entryType === 'faculty-advisor' ? 'Delegation / School' :
+              'What was your role?'
+            }>
               <input
                 type="text"
                 required
                 disabled={isVerified}
                 value={roleTitle}
                 onChange={(e) => setRoleTitle(e.target.value)}
-                placeholder={entryType === 'secretariat' ? 'e.g. Under-Secretary-General for Committees' : 'e.g. Press Corps, Photographer, Tech Team, Volunteer'}
+                placeholder={
+                  entryType === 'secretariat' ? 'e.g. Under-Secretary-General for Committees' :
+                  entryType === 'faculty-advisor' ? 'e.g. Springfield High School, Team Canada' :
+                  'e.g. Press Corps, Photographer, Tech Team, Volunteer'
+                }
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
                 style={{ ...inputStyle, opacity: isVerified ? 0.55 : 1, cursor: isVerified ? 'not-allowed' : 'text' }}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
@@ -1107,6 +1126,7 @@ export function CVEntryModal({
             onChange={setDescription}
             placeholder={
               entryType === 'chair'   ? 'What did your committee debate? Any standout moments?' :
+              entryType === 'faculty-advisor' ? 'How did your delegation do? Any standout moments?' :
               entryType === 'secretariat' ? 'What did you organise or oversee?' :
               entryType === 'other'   ? 'Describe what you did in this role.' :
               'Describe your role, the topic, and how you did.'
@@ -1126,13 +1146,17 @@ export function CVEntryModal({
             </div>
           )}
 
-          {/* Awards multi-select — delegate only (chairs award, not awarded) */}
+          {/* Awards — delegate (individual presets + custom) OR faculty advisor
+              (custom DELEGATION awards only; chairs/secretariat award, not awarded) */}
           {showAwards && (
             <div>
               <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                Awards
-                <span className="ml-2 font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>select all that apply</span>
+                {isDelegationAwards ? 'Delegation Awards' : 'Awards'}
+                <span className="ml-2 font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>
+                  {isDelegationAwards ? 'the honours your delegation earned' : 'select all that apply'}
+                </span>
               </label>
+              {showPresetAwards && (
               <div className="flex gap-2 flex-wrap">
                 {AWARD_LIST.map((name) => {
                   const active = awards.includes(name);
@@ -1157,21 +1181,32 @@ export function CVEntryModal({
                   );
                 })}
               </div>
+              )}
 
-              {/* Special award — free-text, rendered in the green special tier */}
-              <div className="mt-3">
-                <label className="flex items-center gap-1.5 text-[12px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  <Star size={12} strokeWidth={2.4} fill="#2A5A3C" style={{ color: '#2A5A3C' }} />
-                  Special award
-                  <span className="font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>a custom honour not listed above</span>
-                </label>
+              {/* Custom honour — free-text, rendered in the green special tier.
+                  For a faculty advisor this IS the award input (delegation
+                  awards are always custom); for a delegate it is the "special"
+                  award beyond the presets above. */}
+              <div className={showPresetAwards ? 'mt-3' : ''}>
+                {showPresetAwards ? (
+                  <label className="flex items-center gap-1.5 text-[12px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    <Star size={12} strokeWidth={2.4} fill="#2A5A3C" style={{ color: '#2A5A3C' }} />
+                    Special award
+                    <span className="font-normal" style={{ color: '#9A8A78', fontSize: '11px' }}>a custom honour not listed above</span>
+                  </label>
+                ) : (
+                  <label className="flex items-center gap-1.5 text-[12px] font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    <Users size={12} strokeWidth={2.4} style={{ color: '#2A5A3C' }} />
+                    Add a delegation award
+                  </label>
+                )}
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={specialDraft}
                     onChange={(e) => setSpecialDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSpecialAward(); } }}
-                    placeholder="e.g. Best Speaker, Spirit of the Committee"
+                    placeholder={isDelegationAwards ? 'e.g. Best Delegation, Outstanding Delegation' : 'e.g. Best Speaker, Spirit of the Committee'}
                     className="flex-1 rounded-xl px-4 py-2.5 text-sm focus:outline-none"
                     style={inputStyle}
                     onFocus={(e) => { e.currentTarget.style.borderColor = '#2A5A3C'; }}
@@ -1201,7 +1236,7 @@ export function CVEntryModal({
                         className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-1.5 py-[3px]"
                         style={{ backgroundColor: 'rgba(27,56,40,0.10)', border: '1px solid rgba(42,90,60,0.4)', color: '#1B3828', fontFamily: OUTFIT, fontSize: '11px', fontWeight: 600 }}
                       >
-                        <AwardArtwork name={a} size={18} />
+                        <AwardArtwork name={a} size={18} delegation={isDelegationAwards} />
                         {a}
                         <button
                           type="button"

@@ -5,7 +5,7 @@
 // Outfit eyebrows, Outfit for UI text, lucide icons only.
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Medal, Award, Info, X, Star, Trophy, Handshake, Megaphone, ScrollText, type LucideIcon } from 'lucide-react';
+import { Medal, Award, Info, X, Star, Trophy, Handshake, Megaphone, ScrollText, Users, type LucideIcon } from 'lucide-react';
 import { EXPERIENCE_BANDS } from '@/lib/munExperience';
 import Portal from '@/components/Portal';
 import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
@@ -607,13 +607,19 @@ function awardIcon(name: string): LucideIcon {
 /**
  * Small icon tile for an award: a tier-coloured disc (gold / silver / bronze /
  * green) with a per-award lucide glyph tinted in the tier's medal colour.
+ *
+ * `delegation` marks a DELEGATION honour (e.g. a faculty advisor's "Best
+ * Delegation"): it forces the forest-green "special" tier disc and swaps the
+ * per-award glyph for a multiple-people `Users` mark. Default false → the
+ * existing per-award behaviour is unchanged (drop-in for every current caller).
  */
-export function AwardArtwork({ name, size = 20 }: { name: string; size?: number }) {
-  const t = awardTier(name);
+export function AwardArtwork({ name, size = 20, delegation = false }: { name: string; size?: number; delegation?: boolean }) {
+  const t: AwardTier = delegation ? 'special' : awardTier(name);
   const tier = AWARD_TIER_STYLE[t];
-  const Icon = awardIcon(name);
-  // "Special" honours use a light glyph on the deep-green disc; the Star reads
-  // best filled. Metal tiers keep a crisp stroked glyph in the medal colour.
+  const Icon = delegation ? Users : awardIcon(name);
+  // "Special" honours use a light glyph on the deep-green disc; the Star (or the
+  // delegation Users mark) reads best filled. Metal tiers keep a crisp stroked
+  // glyph in the medal colour.
   const filled = t === 'special';
   return (
     <span
@@ -638,8 +644,8 @@ export function AwardArtwork({ name, size = 20 }: { name: string; size?: number 
 /** Award chip, tier-themed (gold / silver / bronze) with artwork thumbnail.
  *  A slightly raised medallion: larger artwork, bolder/bigger label, a soft
  *  tier-tinted gradient and drop shadow so an award reads as an honour. */
-export function AwardChip({ name }: { name: string }) {
-  const tier = AWARD_TIER_STYLE[awardTier(name)];
+export function AwardChip({ name, delegation = false }: { name: string; delegation?: boolean }) {
+  const tier = AWARD_TIER_STYLE[delegation ? 'special' : awardTier(name)];
   return (
     <span
       className="inline-flex items-center gap-2 rounded-full pl-1 pr-3.5 py-1"
@@ -654,7 +660,7 @@ export function AwardChip({ name }: { name: string }) {
         boxShadow: `0 2px 7px rgba(27,56,40,0.12), inset 0 1px 0 rgba(255,255,255,0.5)`,
       }}
     >
-      <AwardArtwork name={name} size={24} />
+      <AwardArtwork name={name} size={24} delegation={delegation} />
       {name}
     </span>
   );
