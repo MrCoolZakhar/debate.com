@@ -226,6 +226,22 @@ function distinctCountryFilled(allocations: AllocationRow[]): number {
   return new Set(allocations.map(a => a.country_code)).size;
 }
 
+// The display NAME for an occupied (delegate) allocation row. A profile can
+// carry a blank/whitespace display_name (a real occurrence when the row exists
+// but the name was never set), and `??` would let that empty string through and
+// render a nameless chip — so every source is trimmed and skipped when empty,
+// falling back display_name → application invited_name → email → a neutral
+// 'Assigned', never blank.
+function allocateeName(alloc: AllocationRow): string {
+  const dn = alloc.profiles?.display_name?.trim();
+  if (dn) return dn;
+  const inv = alloc.applications?.invited_name?.trim();
+  if (inv) return inv;
+  const email = alloc.profiles?.email?.trim();
+  if (email) return email;
+  return 'Assigned';
+}
+
 // A delegation (society) as a draggable allocation SOURCE in the left rail.
 interface DelegationSource {
   id: string;
@@ -1838,8 +1854,8 @@ function OpenTierChip({ tier, count, onClick }: { tier: ImportanceTier; count: n
 function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow; onRemoveAllocation?: (a: AllocationRow) => void }) {
   const isSociety = !!alloc.society_id && !alloc.user_id;
   const name = isSociety
-    ? (alloc.delegation?.name ?? 'Delegation')
-    : (alloc.profiles?.display_name ?? alloc.applications?.invited_name ?? 'Assigned');
+    ? (alloc.delegation?.name?.trim() || 'Delegation')
+    : allocateeName(alloc);
   const removable = !!onRemoveAllocation && !alloc.id.startsWith('temp-');
   return (
     <span
@@ -1939,10 +1955,23 @@ function CountrySlotGrid({
           );
         }
 
-        // Single slot, exactly today's behavior.
+        // Single slot: show the country flag BESIDE the occupant chip (mirrors
+        // the double-slot layout above) so an assigned country keeps its flag.
+        // Previously an occupied single seat rendered a name-only chip with no
+        // flag, so committees whose seats were mostly filled read as a column of
+        // names with no flags at all.
         const alloc = rows[0] ?? null;
         if (alloc) {
-          return <span key={slot.id}><OccupiedSeatChip alloc={alloc} onRemoveAllocation={onRemoveAllocation} /></span>;
+          return (
+            <span
+              key={slot.id}
+              className="inline-flex items-center gap-1"
+              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 9999, padding: 2 }}
+            >
+              {flag}
+              <OccupiedSeatChip alloc={alloc} onRemoveAllocation={onRemoveAllocation} />
+            </span>
+          );
         }
         if (onAssignSlot) {
           return (
@@ -2302,7 +2331,7 @@ function CommitteeOverviewModal({
               }
 
               const app = allocationToApp(alloc);
-              const name = alloc.profiles?.display_name ?? alloc.applications?.invited_name ?? 'Assigned';
+              const name = allocateeName(alloc);
               const age = ageOf(app);
               const userHistory = alloc.user_id ? history[alloc.user_id] : undefined;
               const expanded = expandedSeatKey === seatKey;
@@ -3308,39 +3337,59 @@ export default function AssignmentPage() {
   // by committee fill-need, the seat-importance signal and their experience /
   // difficulty skill match, so they are never skipped here.
   const suggestions = useMemo<Suggestion[]>(() => {
-    const candidates: Suggestion[] = [];
-    for (const app of accepted) {
-      let best: Suggestion | null = null;
-      for (const c of committees) {
-        const byCountry = groupAllocationsByCountry(c.conference_allocations);
-        const filled = distinctCountryFilled(c.conference_allocations);
-        for (const slot of c.committee_country_slots) {
-          if (isSlotFull(slot, byCountry)) continue;
-          const r = scoreSlot(app, c, slot, filled, c.total_slots);
-          if (!best || r.score > best.score) {
-            best = { app, committee: c, slot, score: r.score, reasons: r.reasons };
+    // For every candidate, rank ALL their open-seat options best-first (not just
+    // their single best). Keeping the full ranked list is what lets the greedy
+    // pass below fall through to a candidate's NEXT-best seat when their top pick
+    // is claimed by someone else — instead of dropping them entirely. The old
+    // code kept only each applicant's one best option, then discarded any whose
+    // slot was already taken by a higher scorer, so several applicants sharing a
+    // single best seat collapsed to one suggestion and the strip could show
+    // fewer than 3 even with plenty of unassigned applicants and open seats.
+    const ranked = accepted
+      .map(app => {
+        const options: Suggestion[] = [];
+        for (const c of committees) {
+          const byCountry = groupAllocationsByCountry(c.conference_allocations);
+          const filled = distinctCountryFilled(c.conference_allocations);
+          for (const slot of c.committee_country_slots) {
+            if (isSlotFull(slot, byCountry)) continue;
+            const r = scoreSlot(app, c, slot, filled, c.total_slots);
+            options.push({ app, committee: c, slot, score: r.score, reasons: r.reasons });
           }
         }
-      }
-      if (best) candidates.push(best);
-    }
-    candidates.sort((a, b) => b.score - a.score);
-    // Greedy dedupe: never suggest more candidates for a slot than it has
-    // open seats — a double slot with one seat still open can be suggested
-    // once, with both seats open it can be suggested twice.
+        options.sort((a, b) => b.score - a.score);
+        return options;
+      })
+      .filter(options => options.length > 0)
+      // Process the strongest candidates first (by their best available score).
+      .sort((a, b) => b[0].score - a[0].score);
+
+    // Greedy: each candidate takes their highest-scoring seat that still has an
+    // open seat left in this suggestion set — one suggestion per candidate, and
+    // never more suggestions for a slot than its open seats. Because a candidate
+    // whose top pick is gone falls through to their next-best seat, this yields
+    // as many suggestions as there are open seats: at least 3 whenever there are
+    // ≥3 unassigned candidates with a reachable committee and ≥3 open seats, and
+    // simply what exists when there are genuinely fewer.
     const openSeatsLeft = new Map<string, number>();
     const out: Suggestion[] = [];
-    for (const s of candidates) {
-      if (!openSeatsLeft.has(s.slot.id)) {
-        const byCountry = groupAllocationsByCountry(s.committee.conference_allocations);
-        openSeatsLeft.set(s.slot.id, s.slot.delegation_size - (byCountry.get(s.slot.country_code)?.length ?? 0));
+    for (const options of ranked) {
+      for (const s of options) {
+        if (!openSeatsLeft.has(s.slot.id)) {
+          const byCountry = groupAllocationsByCountry(s.committee.conference_allocations);
+          openSeatsLeft.set(s.slot.id, s.slot.delegation_size - (byCountry.get(s.slot.country_code)?.length ?? 0));
+        }
+        const remaining = openSeatsLeft.get(s.slot.id)!;
+        if (remaining <= 0) continue;
+        openSeatsLeft.set(s.slot.id, remaining - 1);
+        out.push(s);
+        break;
       }
-      const remaining = openSeatsLeft.get(s.slot.id)!;
-      if (remaining <= 0) continue;
-      openSeatsLeft.set(s.slot.id, remaining - 1);
-      out.push(s);
       if (out.length >= 6) break;
     }
+    // Display strongest-first: greedy insertion mostly follows score order, but a
+    // fall-through pick can land lower, so re-sort the cards high → low.
+    out.sort((a, b) => b.score - a.score);
     return out;
   }, [accepted, committees]);
 
@@ -3768,9 +3817,11 @@ export default function AssignmentPage() {
                 )}
               </div>
 
-              {/* Board, every committee visible at once */}
+              {/* Board, every committee visible at once. items-start so each
+                  panel sizes to its own content (a 3-allocation committee stays
+                  short) instead of stretching to match the tallest in its row. */}
               <div className="flex-1 min-w-0 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
                   {sortedCommittees.map(c => (
                     <CommitteeBoardPanel
                       key={c.id}
@@ -3797,8 +3848,9 @@ export default function AssignmentPage() {
           {mode === 'chairs' && (
             <div className="w-full">
               {/* No unassigned-chairs rail: chairs are invited per committee by
-                  name + email. The board shows every committee at once. */}
-              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                  name + email. The board shows every committee at once.
+                  items-start keeps each dais card at its natural height. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
                 {sortedCommittees.map(c => (
                   <ChairBoardPanel
                     key={c.id}

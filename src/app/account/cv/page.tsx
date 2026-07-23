@@ -12,7 +12,7 @@ import { TimelineEntry, CVStatsRow } from './CVTimeline';
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function CVPage() {
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, profile, loading: authLoading } = useAuth();
   const [entries, setEntries]       = useState<CVEntry[]>([]);
   const [loading, setLoading]       = useState(true);
   const [modalEntry, setModalEntry] = useState<CVEntry | null>(null);
@@ -64,7 +64,16 @@ export default function CVPage() {
 
   function handleShare() {
     if (!user) return;
-    const url = `${window.location.origin}/cv/${user.id}`;
+    // Human-readable share link: name slug + first 8 chars of the UUID, e.g.
+    // /cv/hrehaan-vora-8f0376f2. Old raw-UUID links keep working (page resolves
+    // both forms). Fall back to the bare short id if there's no display name.
+    const slug = (profile?.display_name ?? '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const shortId = user.id.slice(0, 8);
+    const path = slug ? `${slug}-${shortId}` : shortId;
+    const url = `${window.location.origin}/cv/${path}`;
     const done = () => { setCopied(true); setTimeout(() => setCopied(false), 2200); };
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).then(done).catch(() => {

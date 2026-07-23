@@ -2542,10 +2542,14 @@ export default function SettingsPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
+              maxLength={1500}
               style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
               onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
             />
+            <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "'Outfit', sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>
+              {description.length} / 1500
+            </div>
           </div>
 
           <div style={cardStyle}>

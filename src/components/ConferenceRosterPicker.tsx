@@ -11,8 +11,8 @@
 //     country bundles, no flags, no country matching.
 // Reuses shared logic (findCountryFlexible, UN_COUNTRIES) rather than copying.
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Globe, Users, PenLine, Megaphone } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible } from '@/lib/countries';
 import {
@@ -71,6 +71,97 @@ function ImportanceDashes({ tier, onClick }: { tier: ImportanceTier; onClick: ()
         <span key={i} style={{ width: 2, height: 11, borderRadius: 1, backgroundColor: meta.color, display: 'inline-block' }} />
       ))}
     </button>
+  );
+}
+
+// ── Hover-info explainer ──────────────────────────────────────────────────────
+// A small "i" affordance that reveals an on-brand infographic panel on HOVER
+// (house rule — never click-to-toggle for read-only explainers). Keyboard/focus
+// accessible, and portaled at fixed viewport coordinates so the panel is never
+// clipped by the editor modal's `overflow-y:auto` body. Right-aligns to the
+// trigger, clamps to the viewport, and flips above when short on room below.
+function HoverInfo({ children, ariaLabel = 'What do these controls mean?' }: { children: React.ReactNode; ariaLabel?: string }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; flip: boolean } | null>(null);
+  const PANEL_W = 288;
+  const EST_H = 250;
+
+  const place = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const margin = 10;
+    let left = r.right - PANEL_W;
+    left = Math.max(margin, Math.min(left, window.innerWidth - PANEL_W - margin));
+    const flip = r.bottom + 8 + EST_H > window.innerHeight - margin && r.top - 8 - EST_H > margin;
+    const top = flip ? r.top - 8 : r.bottom + 8;
+    setPos({ top, left, flip });
+  }, []);
+
+  const show = () => { if (closeTimer.current) clearTimeout(closeTimer.current); place(); setOpen(true); };
+  const hide = () => { closeTimer.current = setTimeout(() => setOpen(false), 160); };
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
+
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={ariaLabel}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        onClick={(e) => e.preventDefault()}
+        className="inline-flex items-center justify-center rounded-full focus:outline-none transition-colors"
+        style={{ width: 15, height: 15, color: open ? '#1B3828' : '#9A8A78', cursor: 'help' }}
+      >
+        <Info size={13} strokeWidth={2} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            onMouseEnter={show}
+            onMouseLeave={hide}
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, width: PANEL_W, zIndex: 10000,
+              transform: pos.flip ? 'translateY(-100%)' : undefined,
+              backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 14,
+              boxShadow: '0 12px 34px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)',
+              padding: '14px 15px', fontFamily: "'Outfit', sans-serif",
+            }}
+          >
+            {children}
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
+
+// A miniature static dash stack for the explainer legend (non-interactive).
+function DashLegend({ tier }: { tier: ImportanceTier }) {
+  const meta = TIER_META[tier];
+  return (
+    <span className="inline-flex items-end gap-[2px]" style={{ height: 12 }}>
+      {Array.from({ length: meta.dashes }).map((_, i) => (
+        <span key={i} style={{ width: 2, height: 11, borderRadius: 1, backgroundColor: meta.color, display: 'inline-block' }} />
+      ))}
+    </span>
   );
 }
 
@@ -304,6 +395,11 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
   const [review, setReview] = useState<ReviewRow[] | null>(null);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  // Display-only ordering of the selected list. 'entered' keeps insertion order;
+  // 'az' sorts alphabetically; 'importance' ranks by tier (high → standard).
+  // This never mutates `value` — handlers below always resolve the ORIGINAL
+  // index — so parent state/observer/tier semantics are untouched.
+  const [orderMode, setOrderMode] = useState<'entered' | 'az' | 'importance'>('entered');
 
   const names = value.map((r) => r.name);
   const nameSet = new Set(names.map((n) => n.toLowerCase()));
@@ -350,7 +446,17 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
     setEditingIdx(null);
   };
 
-  const sortAZ = () => onChange([...value].sort((a, b) => a.name.localeCompare(b.name)));
+  // Rows to render, paired with their original index so every handler mutates
+  // the correct `value` entry regardless of display order.
+  const displayRows = useMemo(() => {
+    const rows = value.map((r, i) => ({ r, i }));
+    if (orderMode === 'az') {
+      rows.sort((a, b) => a.r.name.localeCompare(b.r.name));
+    } else if (orderMode === 'importance') {
+      rows.sort((a, b) => (TIER_META[b.r.importance].dashes - TIER_META[a.r.importance].dashes) || a.r.name.localeCompare(b.r.name));
+    }
+    return rows;
+  }, [value, orderMode]);
 
   // Paste. Countries → fuzzy-match + review/rename step. Characters → add all
   // pasted lines verbatim (no country matching), deduped case-insensitively.
@@ -409,7 +515,7 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
   };
 
   return (
-    <div className="flex gap-4" style={{ minHeight: 300 }}>
+    <div className="flex gap-5" style={{ minHeight: 340 }}>
       {/* Left: add controls */}
       <div className="flex flex-col gap-3 flex-1 min-w-0">
         {/* Search & Add */}
@@ -525,26 +631,38 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
       </div>
 
       {/* Right: selected list */}
-      <div className="flex flex-col" style={{ width: 232, flexShrink: 0 }}>
-        <div className="flex items-center justify-between mb-1">
+      <div className="flex flex-col" style={{ width: 280, flexShrink: 0 }}>
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
             <label style={{ ...labelStyle, marginBottom: 0 }}>Selected</label>
             <span style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.3)', padding: '1px 6px', borderRadius: 999, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
               {value.length}
             </span>
+            <HoverInfo>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#B6871F' }}>Reading this list</p>
+              <div className="mt-2.5 flex gap-2.5">
+                <span className="shrink-0 mt-0.5"><Megaphone size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} /></span>
+                <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
+                  <b style={{ color: '#1C1410' }}>Observer</b> (megaphone) marks a seat as a non-voting observer — they can speak but hold no vote. Click to toggle; lit gold = observer.
+                </p>
+              </div>
+              <div className="mt-2.5 flex gap-2.5">
+                <span className="shrink-0 mt-1"><DashLegend tier="high" /></span>
+                <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
+                  <b style={{ color: '#1C1410' }}>Importance dashes</b> rank how sought-after a seat is. They steer allocation &amp; assignment — higher tiers are offered to stronger applicants and surface first in suggestions.
+                </p>
+              </div>
+              <div className="mt-2.5 flex items-center gap-3" style={{ borderTop: '1px solid #EDE7D8', paddingTop: 10 }}>
+                {(['standard', 'low', 'medium', 'high'] as const).map((t) => (
+                  <span key={t} className="inline-flex items-center gap-1">
+                    <DashLegend tier={t} />
+                    <span style={{ fontSize: 9.5, color: '#9A8A78', fontWeight: 600 }}>{TIER_META[t].label}</span>
+                  </span>
+                ))}
+              </div>
+            </HoverInfo>
           </div>
           <div className="flex items-center gap-2">
-            {!isCharacter && value.length > 1 && (
-              <button
-                onClick={sortAZ}
-                className="text-xs font-bold uppercase tracking-wide transition-colors focus:outline-none"
-                style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-              >
-                A–Z
-              </button>
-            )}
             {value.length > 0 && (
               <button
                 onClick={() => onChange([])}
@@ -558,14 +676,45 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
             )}
           </div>
         </div>
-        <div className="flex-1 rounded-xl overflow-hidden" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', maxHeight: 260, overflowY: 'auto' }}>
+        {/* Order toggle — A–Z ↔ Importance (country mode only). Display-only. */}
+        {!isCharacter && value.length > 1 && (
+          <div className="flex items-center gap-1 mb-2 rounded-lg p-0.5 self-start" style={{ backgroundColor: '#EFE9DB', border: '1px solid #E1D9C6' }}>
+            {([
+              { key: 'az', label: 'A–Z', icon: <ArrowDownAZ size={11} strokeWidth={2} /> },
+              { key: 'importance', label: 'Importance', icon: <DashLegend tier="high" /> },
+            ] as const).map((opt) => {
+              const active = orderMode === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setOrderMode((cur) => (cur === opt.key ? 'entered' : opt.key))}
+                  aria-pressed={active}
+                  title={active ? 'Sorted — click to restore added order' : `Sort by ${opt.label === 'A–Z' ? 'name' : 'importance'}`}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition-colors focus:outline-none"
+                  style={{
+                    fontFamily: "'Outfit', sans-serif", fontSize: 9.5, fontWeight: 700,
+                    textTransform: 'uppercase', letterSpacing: '0.05em',
+                    color: active ? '#EED98A' : '#6E5F4E',
+                    backgroundColor: active ? '#1B3828' : 'transparent',
+                    boxShadow: active ? '0 1px 3px rgba(27,56,40,0.22)' : undefined,
+                  }}
+                >
+                  {opt.icon}
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex-1 rounded-xl overflow-hidden" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', maxHeight: 320, overflowY: 'auto' }}>
           {value.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-3 py-8">
               <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'NO CHARACTERS' : 'NO COUNTRIES'}</p>
               <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'Type or paste names to add' : 'Search, use bundles, or paste'}</p>
             </div>
           ) : (
-            value.map((row, idx) => {
+            displayRows.map(({ r: row, i: idx }) => {
               const found = isCharacter ? undefined : getCountryByName(row.name);
               const isCustom = !found;
               const isEditing = editingIdx === idx;
@@ -573,16 +722,16 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
               return (
                 <div
                   key={`${row.name}-${idx}`}
-                  className="flex items-center gap-2 px-3 py-2 group transition-colors"
+                  className="flex items-center gap-2.5 px-3.5 py-2.5 group transition-colors"
                   style={{ borderBottom: '1px solid #F0EDE6' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}
                 >
                   {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: 18, height: 13, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: 22, height: 16, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                     : (isCharacter
-                        ? <Users size={13} strokeWidth={1.5} style={{ color: '#B6871F', flexShrink: 0 }} />
-                        : <Globe size={13} strokeWidth={1.5} style={{ color: '#9A8A78', flexShrink: 0 }} />)
+                        ? <Users size={15} strokeWidth={1.5} style={{ color: '#B6871F', flexShrink: 0 }} />
+                        : <Globe size={15} strokeWidth={1.5} style={{ color: '#9A8A78', flexShrink: 0 }} />)
                   }
                   {isEditing ? (
                     <input
@@ -591,11 +740,11 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
                       onChange={(e) => setEditDraft(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') commitRename(idx, editDraft); else if (e.key === 'Escape') setEditingIdx(null); }}
                       onBlur={() => commitRename(idx, editDraft)}
-                      className="flex-1 text-xs bg-transparent outline-none"
+                      className="flex-1 text-[13px] bg-transparent outline-none"
                       style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
                     />
                   ) : (
-                    <span className="flex-1 text-xs truncate min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                    <span className="flex-1 text-[13px] truncate min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                       <span className="truncate">{row.name}</span>
                     </span>
                   )}

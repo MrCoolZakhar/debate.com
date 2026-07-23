@@ -7,7 +7,7 @@
 // backdrop) and mintConferenceSession (session minting for conference committees).
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Globe, Users, Landmark, Scale, Zap, UserPlus, Mail } from 'lucide-react';
+import { X, Globe, Users, Landmark, Scale, Zap, UserPlus, Mail, User } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, type NeuGradient } from '@/components/neu';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -19,7 +19,7 @@ import {
   type RosterEntry,
 } from '@/components/ConferenceRosterPicker';
 import { matchPresetEmblem, committeeDisplayName } from '@/lib/presetNames';
-import { LevelInsignia, LEVEL_ACCENT, PillToggle } from '@/app/account/accountUi';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { LogoDisc } from '@/components/LogoDisc';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import Portal from '@/components/Portal';
@@ -798,15 +798,6 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                   })}
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
-                <div className="min-w-0">
-                  <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#1C1410' }}>Double delegation</p>
-                  <p style={{ margin: '2px 0 0', fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', lineHeight: 1.4 }}>
-                    Every {isCharacterRoster ? 'character' : 'country'} seats two delegates instead of one.
-                  </p>
-                </div>
-                <PillToggle value={doubleDelegation} onChange={setDoubleDelegation} />
-              </div>
             </div>
             {/* Emblem — auto-derived from the committee NAME (matchPresetEmblem), with
                 an upload override. No manual preset swatches. */}
@@ -880,6 +871,53 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
               {isCharacterRoster ? <Users size={15} style={{ color: '#B6871F' }} /> : <Globe size={15} style={{ color: '#B6871F' }} />}
               {isCharacterRoster ? 'Committee Characters' : 'Committee Countries'}
             </p>
+          </div>
+          {/* Delegation size — chosen BEFORE picking the roster so the organiser
+              knows whether each seat holds one or two delegates. Two person-glyph
+              cards (single User vs paired Users) drive the same doubleDelegation
+              boolean the save flow reads; turning it off when second seats are
+              filled is still gated by the destructive confirm in doEdit. */}
+          <div className="mb-4">
+            <label style={labelStyle}>Delegation size</label>
+            <div className="flex gap-2.5">
+              {([
+                { val: false, Icon: User, title: 'Single delegate', desc: `One delegate per ${isCharacterRoster ? 'character' : 'country'}.` },
+                { val: true, Icon: Users, title: 'Double delegation', desc: `Two delegates share each ${isCharacterRoster ? 'character' : 'country'}.` },
+              ] as const).map(({ val, Icon, title, desc }) => {
+                const active = doubleDelegation === val;
+                const accent = '#1B3828';
+                return (
+                  <button
+                    key={title}
+                    type="button"
+                    onClick={() => setDoubleDelegation(val)}
+                    aria-pressed={active}
+                    className="flex-1 flex items-center gap-3 rounded-xl px-3.5 py-3 text-left focus:outline-none"
+                    style={{
+                      border: active ? `1.5px solid ${accent}` : '1px solid #DDD4C0',
+                      backgroundColor: active ? 'rgba(27,56,40,0.06)' : '#FAF8F3',
+                      cursor: 'pointer', transition: `all 180ms ${EASE}`,
+                    }}
+                  >
+                    <span
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: 42, height: 42, borderRadius: 13,
+                        background: active ? 'linear-gradient(135deg, #16301F, #2A5A3C)' : '#EFE9DB',
+                        border: active ? '1px solid rgba(27,56,40,0.3)' : '1px solid #E1D9C6',
+                        boxShadow: active ? '0 4px 10px rgba(27,56,40,0.22)' : undefined,
+                      }}
+                    >
+                      <Icon size={20} strokeWidth={2} style={{ color: active ? '#EED98A' : '#9A8A78' }} />
+                    </span>
+                    <span className="flex flex-col min-w-0">
+                      <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: active ? accent : '#1C1410', letterSpacing: '0.01em' }}>{title}</span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 500, color: '#9A8A78', lineHeight: 1.35, marginTop: 2 }}>{desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <ConferenceRosterPicker mode={isCharacterRoster ? 'character' : 'country'} value={roster} onChange={setRoster} />
         </div>

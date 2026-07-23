@@ -6,7 +6,7 @@
 // Shown when an organiser picks a logo file, BEFORE the upload happens. The
 // image is draggable inside a large circular preview (the exact LogoDisc look:
 // near-white backdrop, soft forest shadow) with a zoom slider and a dashed
-// safe-margin ring at the 12%-inset boundary, whatever sits inside the ring
+// safe-margin ring at the 6%-inset boundary, whatever sits inside the ring
 // is what ships.
 //
 // SMART AUTO-FIT: on load the image is scanned on a small offscreen canvas to
@@ -24,7 +24,7 @@
 //
 // On SAVE the chosen offset/scale is composited client-side onto a 512×512
 // TRANSPARENT canvas (clipped to the circle, so artwork can never poke past
-// LogoDisc's rim at render time, the disc backdrop itself is applied by
+// LogoDisc's rim at render time (with a slim 6% margin), the disc backdrop is applied by
 // LogoDisc, never baked into the asset) and handed back via onSave(blob).
 // No schema changes, the crop is flattened into the uploaded asset.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ZoomIn, ZoomOut, Move } from 'lucide-react';
 
 const DISC = 280;              // preview disc diameter (px)
-const SAFE = DISC * 0.76;      // safe-area diameter, 12% margin each side
+const SAFE = DISC * 0.88;      // safe-area diameter, 6% margin each side (crop less)
 const OUT = 512;               // exported square canvas (px)
 const MIN_ZOOM = 0.5;
 const BASE_MAX_ZOOM = 3;       // slider ceiling; extended when content box is small
@@ -272,7 +272,7 @@ export function LogoCropModal({
     const ctx = canvas.getContext('2d');
     if (!ctx) { setSaving(false); return; }
     // Map the preview's SAFE circle onto the full canvas: LogoDisc re-applies
-    // the 12% margin at render time, so what's inside the ring lands exactly
+    // the 6% margin at render time, so what's inside the ring lands exactly
     // where the preview shows it. Clip to the circle so no corner of the
     // artwork can ever reach the disc rim.
     const k = OUT / SAFE;
@@ -337,7 +337,7 @@ export function LogoCropModal({
               height: `${DISC}px`,
               borderRadius: '9999px',
               backgroundColor: '#FDFCF9',
-              border: '1px solid rgba(221,212,192,0.8)',
+              border: '1px solid rgba(221,212,192,0.6)',
               boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
               overflow: 'hidden',
               touchAction: 'none',
@@ -363,14 +363,14 @@ export function LogoCropModal({
                 opacity: natural ? 1 : 0,
               }}
             />
-            {/* Safe-margin ring, the 12%-inset boundary the artwork ships inside */}
+            {/* Safe-margin ring, the 6%-inset boundary the artwork ships inside */}
             <div
               aria-hidden
               style={{
                 position: 'absolute',
-                inset: '12%',
+                inset: '6%',
                 borderRadius: '9999px',
-                border: '1.5px dashed rgba(27,56,40,0.35)',
+                border: '1px dashed rgba(27,56,40,0.28)',
                 pointerEvents: 'none',
               }}
             />

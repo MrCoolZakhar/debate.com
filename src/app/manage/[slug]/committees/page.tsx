@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, Settings } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
@@ -9,9 +9,9 @@ import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { PillToggle } from '@/app/account/accountUi';
+import { PillToggle, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { DatePicker } from '@/components/DatePicker';
-import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuPill } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset, NeuPill } from '@/components/neu';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -62,13 +62,6 @@ interface ChairApplicant {
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
-const DIFFICULTY_STYLES: Record<string, { backgroundColor: string; color: string }> = {
-  beginner:     { backgroundColor: 'rgba(61,122,82,0.13)',   color: '#2A5A3C' },
-  intermediate: { backgroundColor: 'rgba(238,217,138,0.35)', color: '#8A6614' },
-  advanced:     { backgroundColor: 'rgba(184,132,74,0.16)',  color: '#B8844A' },
-  expert:       { backgroundColor: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
-};
-
 const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
 
 const ROMAN = ['I', 'II', 'III'];
@@ -103,6 +96,88 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   );
 }
 
+// The canonical rank insignia (same glyph the CV + profile use), seated on a
+// small neu tile tinted with the tier accent — replaces the old flat difficulty
+// pill so the level reads as a real rank marker, not a coloured chip.
+function DifficultyTile({ level, size = 'md' }: { level: string; size?: 'sm' | 'md' }) {
+  const key = (level ?? '').toLowerCase();
+  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : '';
+  if (!label) return null;
+  const accent = LEVEL_ACCENT[key] ?? NEU.muted;
+  const disc = size === 'sm' ? 20 : 23;
+  const glyph = size === 'sm' ? 14 : 16;
+  return (
+    <span
+      className="inline-flex items-center flex-shrink-0"
+      style={{
+        gap: size === 'sm' ? 6 : 7,
+        padding: size === 'sm' ? '3px 10px 3px 3px' : '3px 11px 3px 3px',
+        borderRadius: 9,
+        backgroundColor: NEU.surface,
+        boxShadow: NEU.outSm,
+      }}
+    >
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{
+          width: disc, height: disc, borderRadius: 9999,
+          background: `linear-gradient(150deg, ${accent}26, ${accent}12)`,
+          border: `1px solid ${accent}55`,
+        }}
+      >
+        <LevelInsignia level={key} size={glyph} />
+      </span>
+      <span style={{ fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 700, color: NEU.ink, letterSpacing: '0.01em' }}>
+        {label}
+      </span>
+    </span>
+  );
+}
+
+// Segmented cards / list view switch — an inset track holding two pill options,
+// the active one lifting on the neu surface (concentric radii, soft shadows).
+function ViewToggle({ value, onChange }: { value: 'cards' | 'list'; onChange: (v: 'cards' | 'list') => void }) {
+  const opts: { key: 'cards' | 'list'; label: string; Icon: typeof LayoutGrid }[] = [
+    { key: 'cards', label: 'CARDS', Icon: LayoutGrid },
+    { key: 'list', label: 'LIST', Icon: LayoutList },
+  ];
+  return (
+    <div
+      className="inline-flex items-center gap-1 flex-shrink-0"
+      style={{ padding: 4, borderRadius: 9999, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
+    >
+      {opts.map(({ key, label, Icon }) => {
+        const active = value === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(key)}
+            className="inline-flex items-center gap-1.5 focus:outline-none"
+            style={{
+              padding: '6px 13px',
+              borderRadius: 9999,
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: OUTFIT,
+              fontSize: 10.5,
+              fontWeight: 800,
+              letterSpacing: '0.09em',
+              backgroundColor: active ? NEU.surface : 'transparent',
+              color: active ? NEU.forest : NEU.muted,
+              boxShadow: active ? NEU.outSm : 'none',
+              transition: `color 200ms ${EASE}, box-shadow 200ms ${EASE}`,
+            }}
+          >
+            <Icon size={13} strokeWidth={2.4} />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Session release helpers ──────────────────────────────────────────────────
 
 // Small gold uppercase eyebrow, the house convention for a section/field
@@ -111,10 +186,6 @@ const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 10, fontWeight: 700, color: NEU.deepGold,
   fontFamily: OUTFIT, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 8,
 };
-
-function fmtReleaseDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
 
 function fmtConferenceStart(startDate: string): string {
   return new Date(startDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -229,69 +300,11 @@ function ReleaseTimePicker({ value, onSave, placeholder, disabled }: {
   );
 }
 
-// The SEND / SCHEDULED / SENT+RESEND affordance, shared by the chairs and
-// participants release actions on a committee card.
-function ReleaseStatusBlock({ label, releasedAt, busy, onSend }: {
-  label: string;
-  releasedAt: string | null;
-  busy: boolean;
-  onSend: () => void;
-}) {
-  const status = releaseStatus(releasedAt);
-
-  if (status === 'scheduled') {
-    return (
-      <span
-        className="inline-flex items-center px-2.5 py-1 rounded-full"
-        style={{ fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', backgroundColor: 'rgba(238,217,138,0.3)' }}
-      >
-        SCHEDULED {fmtReleaseDate(releasedAt!)}
-      </span>
-    );
-  }
-
-  if (status === 'released') {
-    return (
-      <div className="flex items-center justify-between gap-2">
-        <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', color: '#3D7A52' }}>
-          SENT TO {label} {fmtReleaseDate(releasedAt!)}
-        </span>
-        <button
-          onClick={onSend}
-          disabled={busy}
-          className="flex-shrink-0 rounded-lg py-1.5 px-3 font-bold text-[10px] focus:outline-none"
-          style={{ border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer' }}
-        >
-          {busy ? '...' : 'RESEND'}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={onSend}
-      disabled={busy}
-      className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
-      style={{
-        backgroundColor: busy ? '#DDD4C0' : '#1B3828', color: busy ? '#9A8A78' : '#EED98A',
-        fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
-        transition: `background-color 300ms ${EASE}`,
-      }}
-      onMouseEnter={e => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-      onMouseLeave={e => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-    >
-      <Send size={12} />
-      {busy ? 'SENDING...' : `SEND TO ${label}`}
-    </button>
-  );
-}
-
-// Compact right-of-row send action for the Settings tab's per-committee
-// release list — same three-state semantics as ReleaseStatusBlock's
-// PARTICIPANTS block above (confirm dialog lives in handleSendToParticipants
-// itself, same busy guard, same released/resend state), just sized to sit
-// at the end of a row instead of filling a card.
+// Compact right-of-row send action, used by the Settings tab's per-committee
+// release list AND the overview card / list release affordances — three-state
+// semantics: SEND (unreleased) / SCHEDULED / SENT+RESEND. The confirm dialog
+// lives in handleSendToChairs / handleSendToParticipants themselves (same busy
+// guard, same released/resend state).
 function CompactSendButton({ releasedAt, busy, onSend }: {
   releasedAt: string | null;
   busy: boolean;
@@ -583,6 +596,16 @@ export default function CommitteesPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CommitteeRow | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  // Cards (default) vs compact list view for the overview grid, remembered locally.
+  const [view, setView] = useState<'cards' | 'list'>('cards');
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem('committees-view') : null;
+    if (saved === 'cards' || saved === 'list') setView(saved);
+  }, []);
+  const changeView = useCallback((v: 'cards' | 'list') => {
+    setView(v);
+    try { window.localStorage.setItem('committees-view', v); } catch { /* private mode */ }
+  }, []);
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'name' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [flash, setFlash] = useState<string | null>(null);
@@ -1355,9 +1378,9 @@ export default function CommitteesPage() {
 
           {activeTab === 'overview' && (
           <>
-          {/* Sort bar, glass pill, same recipe as the public conference page */}
-          {committees.length > 1 && (
-            <div className="mb-5">
+          {/* Sort bar + cards/list view toggle */}
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
+            {committees.length > 1 ? (
               <div
                 className="inline-flex flex-wrap items-center gap-1.5 rounded-full px-2 py-1.5"
                 style={{
@@ -1372,14 +1395,178 @@ export default function CommitteesPage() {
                 <SortButton label="NAME" dir={sortKey === 'name' ? sortDir : null} onClick={() => cycleSort('name')} />
                 <SortButton label="GA / CRISIS" dir={sortKey === 'type' ? sortDir : null} onClick={() => cycleSort('type')} />
               </div>
-            </div>
-          )}
+            ) : <span />}
+            <ViewToggle value={view} onChange={changeView} />
+          </div>
 
+          {view === 'list' ? (
+          /* ── Compact list view: one committee per row ─────────────────── */
+          <div className="flex flex-col gap-2.5">
+            {sortedCommittees.map(c => {
+              const isCrisis = c.committee_type === 'crisis';
+              const topics = c.topics ?? [];
+              const seats = c.slotCount || c.total_slots;
+              const copied = copiedCode === c.session_code && !!c.session_code;
+              const dais = c.display_chairs ?? [];
+              const minting = busyIds.has(`mint-${c.id}`);
+              const seatLabel = !isCrisis && c.delegation_size === 2
+                ? `${seats} countries · ${seats * 2} seats`
+                : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : (seats === 1 ? 'seat' : 'seats')}`;
+              return (
+                <NeuCard key={c.id} hover style={{ padding: '13px 16px', borderRadius: 18 }}>
+                  <div className="flex items-center gap-3.5 flex-wrap">
+                    {/* Emblem */}
+                    {c.logo_url ? (
+                      <img
+                        src={c.logo_url}
+                        alt={c.abbreviation ?? c.name}
+                        style={{ width: 46, height: 46, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 5px 10px rgba(27,56,40,0.24))' }}
+                      />
+                    ) : (
+                      <MonogramMedallion text={c.abbreviation || c.name} isCrisis={isCrisis} size={46} />
+                    )}
+
+                    {/* Name + meta */}
+                    <div className="min-w-0" style={{ flex: '1 1 240px' }}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {c.abbreviation && (
+                          <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.16em', color: NEU.deepGold, fontVariantNumeric: 'tabular-nums' }}>
+                            {c.abbreviation.toUpperCase()}
+                          </span>
+                        )}
+                        {isCrisis && (
+                          <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: '#8B2020' }}>CRISIS</span>
+                        )}
+                      </div>
+                      <h3 className="truncate font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 14.5, lineHeight: 1.25, margin: '1px 0 0 0' }}>
+                        {c.name}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <DifficultyTile level={c.difficulty} size="sm" />
+                        <span className="text-[11.5px] font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                          {seatLabel}
+                        </span>
+                        {topics.length > 0 && (
+                          <span className="text-[11.5px] font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                            · {topics.length} topic{topics.length === 1 ? '' : 's'}
+                          </span>
+                        )}
+                        {c.position_paper_deadline && (
+                          <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.muted }}>
+                            <CalendarClock size={11} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+                            {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Dais cluster */}
+                    <div className="flex items-center flex-shrink-0" style={{ paddingLeft: 6 }}>
+                      {dais.map((ch, chIdx) => (
+                        <div key={`${ch.name}-${chIdx}`} className="group relative" style={{ marginLeft: chIdx === 0 ? 0 : -8 }} title={ch.name}>
+                          {ch.avatar_url ? (
+                            <img src={ch.avatar_url} alt={ch.name} style={{ width: 30, height: 30, borderRadius: 9999, objectFit: 'cover', border: '2px solid #F0EBDD', backgroundColor: '#EDE7D8' }} />
+                          ) : (
+                            <span className="flex items-center justify-center" style={{ width: 30, height: 30, borderRadius: 9999, border: '2px solid #F0EBDD', backgroundColor: NEU.forest, color: NEU.gold, fontSize: 12, fontWeight: 700, fontFamily: OUTFIT }}>
+                              {ch.name.charAt(0)}
+                            </span>
+                          )}
+                          <button
+                            onClick={() => handleRemoveChair(c, chIdx, ch.name)}
+                            title={`Remove ${ch.name} from the dais`}
+                            className="absolute opacity-0 group-hover:opacity-100 flex items-center justify-center focus:outline-none"
+                            style={{ top: -4, right: -4, width: 16, height: 16, borderRadius: 9999, backgroundColor: '#FAF8F3', border: '1px solid rgba(139,32,32,0.45)', color: '#8B2020', cursor: 'pointer', boxShadow: '0 2px 5px rgba(27,56,40,0.18)', transition: `opacity 200ms ${EASE}` }}
+                          >
+                            <X size={9} strokeWidth={2.6} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => setAddChairTarget(c)}
+                        title="Add chair"
+                        className="flex items-center justify-center focus:outline-none"
+                        style={{ width: 30, height: 30, marginLeft: dais.length ? -8 : 0, borderRadius: 9999, border: '1.5px dashed rgba(27,56,40,0.4)', color: NEU.forest, backgroundColor: '#F0EBDD', cursor: 'pointer', transition: `background-color 220ms ${EASE}, color 220ms ${EASE}` }}
+                        onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = NEU.forest; el.style.color = NEU.gold; el.style.borderStyle = 'solid'; }}
+                        onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#F0EBDD'; el.style.color = NEU.forest; el.style.borderStyle = 'dashed'; }}
+                      >
+                        <Plus size={15} strokeWidth={2.3} />
+                      </button>
+                    </div>
+
+                    {/* Session code */}
+                    {c.session_code ? (
+                      <button
+                        onClick={() => handleCopyCode(c.session_code!)}
+                        title="Copy session code"
+                        className="inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none"
+                        style={{ padding: '6px 12px', borderRadius: 9999, backgroundColor: copied ? 'rgba(61,122,82,0.12)' : NEU.surface, boxShadow: copied ? 'none' : NEU.outSm, cursor: 'pointer', transition: `background-color 250ms ${EASE}` }}
+                      >
+                        {copied ? (
+                          <>
+                            <Check size={12} style={{ color: NEU.green }} />
+                            <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: NEU.green }}>COPIED</span>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.12em', color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>{c.session_code}</span>
+                            <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)' }} />
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => generateSessionCode(c)}
+                        disabled={minting}
+                        className="inline-flex items-center flex-shrink-0 focus:outline-none"
+                        style={{ padding: '6px 13px', borderRadius: 9999, border: '1.5px dashed rgba(27,56,40,0.35)', color: minting ? NEU.muted : NEU.forest, backgroundColor: 'transparent', fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', cursor: minting ? 'default' : 'pointer' }}
+                      >
+                        {minting ? 'GENERATING…' : 'GENERATE CODE'}
+                      </button>
+                    )}
+
+                    {/* Release actions */}
+                    <div className="flex items-center gap-2.5 flex-shrink-0">
+                      {(c.chair_user_ids?.length ?? 0) > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>CHAIRS</span>
+                          <CompactSendButton releasedAt={c.released_to_chairs_at} busy={sendingToChairs === c.id} onSend={() => handleSendToChairs(c)} />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>DELEGATES</span>
+                        <CompactSendButton releasedAt={c.released_to_delegates_at} busy={sendingToParticipants === c.id} onSend={() => handleSendToParticipants(c)} />
+                      </div>
+                    </div>
+
+                    {/* Edit / delete */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => setEditTarget(c)}
+                        className="focus:outline-none"
+                        style={{ padding: '7px 14px', borderRadius: 9999, backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: NEU.forest, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', cursor: 'pointer' }}
+                      >
+                        EDIT
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(c)}
+                        title="Delete committee"
+                        className="flex items-center justify-center focus:outline-none"
+                        style={{ width: 32, height: 32, borderRadius: 9999, backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: '#8B2020', cursor: 'pointer', transition: `background-color 250ms ${EASE}, color 250ms ${EASE}` }}
+                        onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#8B2020'; el.style.color = '#FFFFFF'; el.style.boxShadow = 'none'; }}
+                        onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = NEU.surface; el.style.color = '#8B2020'; el.style.boxShadow = NEU.outSm; }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </NeuCard>
+              );
+            })}
+          </div>
+          ) : (
+          /* ── Cards view (default) ─────────────────────────────────────── */
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
             {sortedCommittees.map(c => {
-              const diff = (c.difficulty ?? '').toLowerCase();
-              const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
-              const diffLabel = diff ? diff.charAt(0).toUpperCase() + diff.slice(1) : '';
               const isCrisis = c.committee_type === 'crisis';
               const topics = c.topics ?? [];
               const seats = c.slotCount || c.total_slots;
@@ -1388,59 +1575,49 @@ export default function CommitteesPage() {
               return (
                 <article
                   key={c.id}
-                  className="flex flex-col rounded-[24px]"
+                  className="flex flex-col"
                   style={{
-                    backgroundColor: 'rgba(250,248,243,0.82)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(221,212,192,0.95)',
-                    boxShadow: '0 10px 30px rgba(27,56,40,0.08)',
-                    transition: `transform 350ms ${EASE}, box-shadow 350ms ${EASE}`,
+                    backgroundColor: NEU.surface,
+                    borderRadius: 22,
+                    boxShadow: NEU.out,
+                    transition: `transform 300ms ${EASE}, box-shadow 300ms ${EASE}`,
                   }}
-                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-3px)'; el.style.boxShadow = '0 16px 40px rgba(27,56,40,0.13)'; }}
-                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 10px 30px rgba(27,56,40,0.08)'; }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = NEU.outHover; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = NEU.out; }}
                 >
-                  <div className="flex flex-col items-center px-5 pt-7 flex-1">
+                  <div className="flex flex-col items-center px-4 pt-5 flex-1">
                     {/* Emblem, uploaded art or monogram medallion */}
                     {c.logo_url ? (
                       <img
                         src={c.logo_url}
                         alt={c.abbreviation ?? c.name}
                         style={{
-                          width: '104px', height: '104px', objectFit: 'contain', flexShrink: 0,
-                          filter: 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))',
+                          width: '84px', height: '84px', objectFit: 'contain', flexShrink: 0,
+                          filter: 'drop-shadow(0 8px 15px rgba(27,56,40,0.26))',
                         }}
                       />
                     ) : (
-                      <MonogramMedallion text={c.abbreviation || c.name} isCrisis={isCrisis} size={96} />
+                      <MonogramMedallion text={c.abbreviation || c.name} isCrisis={isCrisis} size={78} />
                     )}
 
                     {/* Abbreviation eyebrow (when art carries the emblem, the monogram moves up here) */}
                     {c.abbreviation && (
-                      <p style={{ margin: '16px 0 0 0', fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.18em', color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
+                      <p style={{ margin: '12px 0 0 0', fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.18em', color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
                         {c.abbreviation.toUpperCase()}
                       </p>
                     )}
 
                     {/* Name */}
                     <h3
-                      className="text-center font-bold text-[15.5px] leading-snug"
-                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: c.abbreviation ? '4px 0 0 0' : '18px 0 0 0', minHeight: '2.6em' }}
+                      className="text-center font-bold text-[14.5px] leading-snug"
+                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: c.abbreviation ? '4px 0 0 0' : '14px 0 0 0', minHeight: '2.4em' }}
                     >
                       {c.name}
                     </h3>
 
-                    {/* Meta row */}
-                    <div className="flex items-center gap-2 mt-1.5">
-                      {diffLabel && (
-                        <span
-                          className="px-2.5 py-0.5 rounded-full"
-                          style={{ ...diffStyle, fontSize: '10px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', fontWeight: 700 }}
-                        >
-                          {diffLabel}
-                        </span>
-                      )}
-                      <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                    {/* Meta row — canonical rank insignia + seats */}
+                    <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                      <DifficultyTile level={c.difficulty} />
                       <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                         {!isCrisis && c.delegation_size === 2
                           ? `${seats} countries · ${seats * 2} seats`
@@ -1458,7 +1635,7 @@ export default function CommitteesPage() {
 
                     {/* Topics, roman numerals */}
                     {topics.length > 0 && (
-                      <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                      <div className="w-full mt-4 pt-3.5" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                         {topics.map((topic, ti) => (
                           <div key={topic} className="flex items-start gap-2.5 py-1">
                             <span
@@ -1478,21 +1655,21 @@ export default function CommitteesPage() {
                     {/* Dais + session code ticket + PP deadline, pinned to the card bottom */}
                     <div className="w-full mt-auto">
                       {/* Dais, the committee's chairs, editable in place */}
-                      <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                        <p className="text-center" style={{ margin: '0 0 10px 0', fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#B6871F' }}>
+                      <div className="w-full mt-4 pt-3.5" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                        <p className="text-center" style={{ margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#B6871F' }}>
                           DAIS
                         </p>
-                        <div className="flex flex-wrap items-start justify-center gap-x-5 gap-y-3">
+                        <div className="flex flex-wrap items-start justify-center gap-x-4 gap-y-3">
                           {dais.map((ch, chIdx) => (
-                            <div key={`${ch.name}-${chIdx}`} className="group relative flex flex-col items-center text-center" style={{ width: 84 }}>
+                            <div key={`${ch.name}-${chIdx}`} className="group relative flex flex-col items-center text-center" style={{ width: 72 }}>
                               <div className="relative">
                                 {ch.avatar_url ? (
                                   <img
                                     src={ch.avatar_url}
                                     alt={ch.name}
                                     style={{
-                                      width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
-                                      boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
+                                      width: '44px', height: '44px', borderRadius: '9999px', objectFit: 'cover',
+                                      boxShadow: '0 4px 10px rgba(27,56,40,0.2)',
                                       backgroundColor: '#EDE7D8',
                                     }}
                                   />
@@ -1500,9 +1677,9 @@ export default function CommitteesPage() {
                                   <span
                                     className="flex items-center justify-center"
                                     style={{
-                                      width: '52px', height: '52px', borderRadius: '9999px',
+                                      width: '44px', height: '44px', borderRadius: '9999px',
                                       backgroundColor: '#1B3828', color: '#EED98A',
-                                      fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                                      fontSize: '15px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
                                     }}
                                   >
                                     {ch.name.charAt(0)}
@@ -1513,16 +1690,16 @@ export default function CommitteesPage() {
                                   title={`Remove ${ch.name} from the dais`}
                                   className="absolute opacity-0 group-hover:opacity-100 flex items-center justify-center focus:outline-none"
                                   style={{
-                                    top: -4, right: -4, width: 18, height: 18, borderRadius: '9999px',
+                                    top: -4, right: -4, width: 16, height: 16, borderRadius: '9999px',
                                     backgroundColor: '#FAF8F3', border: '1px solid rgba(139,32,32,0.45)', color: '#8B2020',
                                     cursor: 'pointer', boxShadow: '0 2px 6px rgba(27,56,40,0.18)',
                                     transition: `opacity 200ms ${EASE}`,
                                   }}
                                 >
-                                  <X size={10} strokeWidth={2.6} />
+                                  <X size={9} strokeWidth={2.6} />
                                 </button>
                               </div>
-                              <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              <span className="text-[11px] font-semibold mt-1.5 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                                 {ch.name}
                               </span>
                             </div>
@@ -1530,12 +1707,12 @@ export default function CommitteesPage() {
                           <button
                             onClick={() => setAddChairTarget(c)}
                             className="flex flex-col items-center text-center focus:outline-none"
-                            style={{ width: 84, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                            style={{ width: 72, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
                           >
                             <span
                               className="flex items-center justify-center"
                               style={{
-                                width: '52px', height: '52px', borderRadius: '9999px',
+                                width: '44px', height: '44px', borderRadius: '9999px',
                                 border: '1.5px dashed rgba(27,56,40,0.4)',
                                 color: '#1B3828',
                                 backgroundColor: 'rgba(27,56,40,0.04)',
@@ -1544,107 +1721,97 @@ export default function CommitteesPage() {
                               onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
                               onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
                             >
-                              <Plus size={20} strokeWidth={2.2} />
+                              <Plus size={18} strokeWidth={2.2} />
                             </span>
-                            <span className="text-[10px] font-bold mt-2" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                            <span className="text-[10px] font-bold mt-1.5" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
                               ADD CHAIR
                             </span>
                           </button>
                         </div>
                       </div>
 
-                      {/* Send to chairs, release the roster/session/study-guide cards on their person tab */}
-                      {(c.chair_user_ids?.length ?? 0) > 0 && (
-                        <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                          <ReleaseStatusBlock
-                            label="CHAIRS"
-                            releasedAt={c.released_to_chairs_at}
-                            busy={sendingToChairs === c.id}
-                            onSend={() => handleSendToChairs(c)}
-                          />
-                        </div>
-                      )}
-
-                      {/* Send to participants, release the delegate's ENTER SESSION gate */}
-                      <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                        <ReleaseStatusBlock
-                          label="PARTICIPANTS"
-                          releasedAt={c.released_to_delegates_at}
-                          busy={sendingToParticipants === c.id}
-                          onSend={() => handleSendToParticipants(c)}
-                        />
-                      </div>
-
-                      <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                        {c.session_code ? (
-                          <button
-                            onClick={() => handleCopyCode(c.session_code!)}
-                            title="Copy session code"
-                            className="w-full flex items-stretch overflow-hidden rounded-xl focus:outline-none"
-                            style={{
-                              border: copied ? '1px solid rgba(61,122,82,0.45)' : '1px solid rgba(27,56,40,0.22)',
-                              backgroundColor: copied ? 'rgba(61,122,82,0.10)' : 'rgba(27,56,40,0.045)',
-                              cursor: 'pointer',
-                              transition: `background-color 300ms ${EASE}, border-color 300ms ${EASE}`,
-                            }}
-                          >
-                            <span className="flex items-center justify-center py-2.5 px-3" style={{ width: '45%' }}>
-                              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#6B5F52' }}>
+                      {/* Combined session control — code + chair/participant
+                          release + PP deadline, all in one pressed-in well
+                          (replaces the three separate top-bordered chips). */}
+                      <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                        <NeuInset small style={{ padding: 12 }}>
+                          {/* Session code */}
+                          {c.session_code ? (
+                            <button
+                              onClick={() => handleCopyCode(c.session_code!)}
+                              title="Copy session code"
+                              className="w-full flex items-center justify-between gap-2 rounded-[11px] px-3 py-2 focus:outline-none"
+                              style={{
+                                backgroundColor: copied ? 'rgba(61,122,82,0.12)' : NEU.surface,
+                                boxShadow: copied ? 'none' : NEU.outSm,
+                                cursor: 'pointer',
+                                transition: `background-color 300ms ${EASE}`,
+                              }}
+                            >
+                              <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: NEU.muted }}>
                                 SESSION CODE
                               </span>
-                            </span>
-                            {/* Ticket perforation seam */}
-                            <span aria-hidden style={{ borderLeft: '1px dashed rgba(27,56,40,0.35)', margin: '5px 0' }} />
-                            <span className="flex-1 flex items-center justify-center gap-1.5 py-2.5">
                               {copied ? (
-                                <>
-                                  <Check size={12} style={{ color: '#3D7A52' }} />
-                                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', color: '#3D7A52' }}>COPIED</span>
-                                </>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Check size={12} style={{ color: NEU.green }} />
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: NEU.green }}>COPIED</span>
+                                </span>
                               ) : (
-                                <>
-                                  <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 700, letterSpacing: '0.14em', color: '#1B3828', fontVariantNumeric: 'tabular-nums' }}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.13em', color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
                                     {c.session_code}
                                   </span>
                                   <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)' }} />
-                                </>
+                                </span>
                               )}
-                            </span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => generateSessionCode(c)}
-                            disabled={busyIds.has(`mint-${c.id}`)}
-                            className="w-full rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
-                            style={{
-                              border: '1.5px dashed rgba(27,56,40,0.35)',
-                              color: busyIds.has(`mint-${c.id}`) ? '#9A8A78' : '#1B3828',
-                              backgroundColor: 'transparent',
-                              fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em',
-                              cursor: busyIds.has(`mint-${c.id}`) ? 'default' : 'pointer',
-                              transition: `background-color 300ms ${EASE}, color 300ms ${EASE}, border-color 300ms ${EASE}`,
-                            }}
-                            onMouseEnter={e => { if (busyIds.has(`mint-${c.id}`)) return; const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
-                            onMouseLeave={e => { if (busyIds.has(`mint-${c.id}`)) return; const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
-                          >
-                            {busyIds.has(`mint-${c.id}`) ? 'GENERATING…' : 'GENERATE SESSION CODE'}
-                          </button>
-                        )}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => generateSessionCode(c)}
+                              disabled={busyIds.has(`mint-${c.id}`)}
+                              className="w-full rounded-[11px] py-2 text-[10.5px] font-bold focus:outline-none"
+                              style={{
+                                border: '1.5px dashed rgba(27,56,40,0.35)',
+                                color: busyIds.has(`mint-${c.id}`) ? NEU.muted : NEU.forest,
+                                backgroundColor: 'transparent',
+                                fontFamily: OUTFIT, letterSpacing: '0.09em',
+                                cursor: busyIds.has(`mint-${c.id}`) ? 'default' : 'pointer',
+                              }}
+                            >
+                              {busyIds.has(`mint-${c.id}`) ? 'GENERATING…' : 'GENERATE SESSION CODE'}
+                            </button>
+                          )}
 
-                        {c.position_paper_deadline && (
-                          <div className="flex items-center justify-center gap-1.5 mt-3">
-                            <CalendarClock size={11} style={{ color: '#B6871F', flexShrink: 0 }} />
-                            <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 600, color: '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>
-                              Position papers due {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </span>
+                          {/* Release affordances */}
+                          <div className="mt-2.5 pt-2.5 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                            {(c.chair_user_ids?.length ?? 0) > 0 && (
+                              <div className="flex items-center justify-between gap-2">
+                                <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>CHAIRS</span>
+                                <CompactSendButton releasedAt={c.released_to_chairs_at} busy={sendingToChairs === c.id} onSend={() => handleSendToChairs(c)} />
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between gap-2">
+                              <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>DELEGATES</span>
+                              <CompactSendButton releasedAt={c.released_to_delegates_at} busy={sendingToParticipants === c.id} onSend={() => handleSendToParticipants(c)} />
+                            </div>
                           </div>
-                        )}
+
+                          {/* Position-paper deadline */}
+                          {c.position_paper_deadline && (
+                            <div className="flex items-center gap-1.5 mt-2.5 pt-2.5" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                              <CalendarClock size={11} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+                              <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>
+                                Position papers due {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                          )}
+                        </NeuInset>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="px-5 pb-5 pt-4 flex gap-2">
+                  <div className="px-4 pb-4 pt-3.5 flex gap-2">
                     <button
                       onClick={() => setEditTarget(c)}
                       className="flex-1 rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
@@ -1678,6 +1845,7 @@ export default function CommitteesPage() {
               );
             })}
           </div>
+          )}
           </>
           )}
         </>

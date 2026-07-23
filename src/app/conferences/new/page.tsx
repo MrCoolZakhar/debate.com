@@ -821,7 +821,13 @@ export default function NewConferencePage() {
                 />
                 {feeKind === 'paid' && (
                   <NeuInset style={{ padding: '18px 20px', borderRadius: 20, marginTop: 18 }}>
-                    <FieldLabel>Delegate fee</FieldLabel>
+                    <FieldLabel>Base delegate fee</FieldLabel>
+                    <p style={{ fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.55, color: NEU.muted, margin: '2px 0 12px' }}>
+                      Just your <strong style={{ color: NEU.ink }}>lowest / earliest</strong> delegate price for now. After you create the
+                      conference, Settings&nbsp;→&nbsp;Financials lets you add phased pricing (early-bird through later
+                      deadlines) and separate fees for <strong style={{ color: NEU.ink }}>delegations</strong> and
+                      <strong style={{ color: NEU.ink }}> faculty advisors</strong>.
+                    </p>
                     <div className="flex gap-3">
                       <select
                         value={feeCurrency}
@@ -1007,10 +1013,14 @@ export default function NewConferencePage() {
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="What makes your conference special? Themes, committees, the experience delegates can expect…"
                       rows={4}
+                      maxLength={1500}
                       style={{ ...bigInputStyle, resize: 'vertical', lineHeight: 1.55, minHeight: 108 }}
                       onFocus={(e) => { e.currentTarget.style.borderColor = NEU.forest; }}
                       onBlur={(e) => { e.currentTarget.style.borderColor = 'transparent'; }}
                     />
+                    <div style={{ textAlign: 'right', marginTop: 6, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                      {description.length} / 1500
+                    </div>
                   </div>
 
                   <NeuInset style={{ padding: '18px 20px', borderRadius: 20 }}>

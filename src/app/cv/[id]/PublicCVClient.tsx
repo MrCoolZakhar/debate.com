@@ -1,15 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ScrollText } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import type { CVEntry } from '@/components/CVEntryModal';
 import { CVStatsRow, TimelineEntry } from '../../account/cv/CVTimeline';
 import { Eyebrow, OUTFIT, MONO } from '../../account/accountUi';
 
-interface PublicProfile {
+export interface PublicProfile {
   id: string;
   display_name: string | null;
   nationality: string | null;
@@ -19,40 +17,10 @@ interface PublicProfile {
   bio: string | null;
 }
 
-export default function PublicCVClient({ userId }: { userId: string }) {
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
-  const [entries, setEntries] = useState<CVEntry[]>([]);
-  const [state, setState] = useState<'loading' | 'ready' | 'notfound'>('loading');
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const { data, error } = await supabase.rpc('get_public_cv', { p_user_id: userId });
-      if (!alive) return;
-      const payload = data as { profile: PublicProfile | null; entries: CVEntry[] } | null;
-      if (error || !payload || !payload.profile) { setState('notfound'); return; }
-      const rows = ((payload.entries as CVEntry[]) ?? []).map((r) => ({
-        ...r,
-        entry_type: r.entry_type ?? 'delegate',
-        awards: r.awards ?? [],
-        photos: r.photos ?? [],
-      }));
-      setProfile(payload.profile);
-      setEntries(rows);
-      setState('ready');
-    })();
-    return () => { alive = false; };
-  }, [userId]);
-
-  if (state === 'loading') {
-    return (
-      <div className="flex items-center justify-center" style={{ minHeight: '60vh' }}>
-        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-      </div>
-    );
-  }
-
-  if (state === 'notfound' || !profile) {
+// Data is resolved server-side (see page.tsx) and passed in as props, so the
+// CV renders fully on first paint — no client RPC round-trip, no spinner.
+export default function PublicCVClient({ profile, entries }: { profile: PublicProfile | null; entries: CVEntry[] }) {
+  if (!profile) {
     return (
       <div className="flex flex-col items-center justify-center text-center px-6" style={{ minHeight: '70vh' }}>
         <ScrollText size={44} strokeWidth={1.4} style={{ color: '#B6A88E' }} />
