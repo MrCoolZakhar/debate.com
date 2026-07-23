@@ -144,6 +144,7 @@ interface Committee {
 interface CommitteeSlot {
   country_code: string;
   country_name: string;
+  delegation_size: number;
 }
 
 interface RoleConfig {
@@ -501,7 +502,9 @@ export default function ConferenceDetailClient() {
   }, [paymentReturn, authLoading, loading, user, session, conference]);
   // Committee roster / occupancy (public reads)
   const [committeeSlots, setCommitteeSlots] = useState<Record<string, CommitteeSlot[]>>({});
-  const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, string[]>>({});
+  // Per committee, country_code -> seats_taken (1 or 2) — a double country
+  // can be half-filled, so this needs the count, not just membership.
+  const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, Record<string, number>>>({});
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
   // Committee carousel + sorting (click: asc -> desc -> reset)
@@ -733,18 +736,18 @@ export default function ConferenceDetailClient() {
       const [slotsRes, occRes] = await Promise.all([
         supabase
           .from('committee_country_slots')
-          .select('conference_committee_id, country_code, country_name')
+          .select('conference_committee_id, country_code, country_name, delegation_size')
           .in('conference_committee_id', ccIds)
           .order('country_name', { ascending: true }),
         supabase.rpc('get_committee_occupancy', { p_committee_ids: ccIds }),
       ]);
       const slotsMap: Record<string, CommitteeSlot[]> = {};
       for (const row of ((slotsRes.data ?? []) as (CommitteeSlot & { conference_committee_id: string })[])) {
-        (slotsMap[row.conference_committee_id] ??= []).push({ country_code: row.country_code, country_name: row.country_name });
+        (slotsMap[row.conference_committee_id] ??= []).push({ country_code: row.country_code, country_name: row.country_name, delegation_size: row.delegation_size });
       }
-      const occMap: Record<string, string[]> = {};
-      for (const row of ((occRes.data ?? []) as { conference_committee_id: string; country_code: string }[])) {
-        (occMap[row.conference_committee_id] ??= []).push(row.country_code);
+      const occMap: Record<string, Record<string, number>> = {};
+      for (const row of ((occRes.data ?? []) as { conference_committee_id: string; country_code: string; seats_taken: number }[])) {
+        (occMap[row.conference_committee_id] ??= {})[row.country_code] = row.seats_taken;
       }
       setCommitteeSlots(slotsMap);
       setCommitteeOccupied(occMap);
@@ -2143,9 +2146,20 @@ export default function ConferenceDetailClient() {
               {activeTab === 'overview' && (() => {
                 const committeeStats = (c: Committee) => {
                   const slots = committeeSlots[c.id] ?? [];
-                  const capacity = slots.length || c.total_slots || 0;
-                  const taken = new Set(committeeOccupied[c.id] ?? []).size;
-                  return { slots, capacity, taken, pct: capacity > 0 ? Math.min(100, Math.round((taken / capacity) * 100)) : 0 };
+                  const occ = committeeOccupied[c.id] ?? {};
+                  const isCrisis = c.committee_type === 'crisis';
+                  const countryCapacity = slots.length || c.total_slots || 0;
+                  const countriesTaken = Object.values(occ).filter(n => n > 0).length;
+                  const seatsTaken = Object.values(occ).reduce((sum, n) => sum + n, 0);
+                  // Crisis committees are always 1 seat per role regardless of what a
+                  // slot's delegation_size happens to hold.
+                  const seatCapacity = slots.length > 0
+                    ? slots.reduce((sum, s) => sum + (isCrisis ? 1 : (s.delegation_size || 1)), 0)
+                    : countryCapacity;
+                  // Seats and countries coincide when nothing is a double, so this pct
+                  // is already correct for single-seat committees too.
+                  const pct = seatCapacity > 0 ? Math.min(100, Math.round((seatsTaken / seatCapacity) * 100)) : 0;
+                  return { slots, countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles: seatCapacity !== countryCapacity };
                 };
                 const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
                 let sortedCommittees = [...committees];
@@ -2161,11 +2175,11 @@ export default function ConferenceDetailClient() {
                       va = DIFF_ORDER[(a.difficulty ?? '').toLowerCase()] ?? 99;
                       vb = DIFF_ORDER[(b.difficulty ?? '').toLowerCase()] ?? 99;
                     } else {
-                      // Availability = open seats (capacity minus taken).
+                      // Availability = open seats (seatCapacity minus seatsTaken).
                       const sa = committeeStats(a);
                       const sb = committeeStats(b);
-                      va = sa.capacity - sa.taken;
-                      vb = sb.capacity - sb.taken;
+                      va = sa.seatCapacity - sa.seatsTaken;
+                      vb = sb.seatCapacity - sb.seatsTaken;
                     }
                     return sortDir === 'asc' ? va - vb : vb - va;
                   });
@@ -2296,7 +2310,7 @@ export default function ConferenceDetailClient() {
                             const isCrisis = c.committee_type === 'crisis';
                             const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
                             const chairs = c.display_chairs ?? [];
-                            const { capacity, taken, pct } = committeeStats(c);
+                            const { countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles } = committeeStats(c);
 
                             return (
                               <article
@@ -2369,7 +2383,7 @@ export default function ConferenceDetailClient() {
                                     )}
                                     <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
                                     <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
-                                      {!isCrisis && c.delegation_size >= 2 ? `${capacity} countries · 2 delegates each` : `${capacity} ${isCrisis ? 'roles' : 'seats'}`}
+                                      {!isCrisis && c.delegation_size >= 2 ? `${countryCapacity} countries · 2 delegates each` : `${countryCapacity} ${isCrisis ? 'roles' : 'seats'}`}
                                     </span>
                                     {isCrisis && (
                                       <>
@@ -2443,7 +2457,9 @@ export default function ConferenceDetailClient() {
                                   <div className="w-full mt-4">
                                     <div className="flex items-center justify-between mb-1.5">
                                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
-                                        {taken}/{capacity} FILLED
+                                        {hasDoubles
+                                          ? `${countriesTaken}/${countryCapacity} · ${seatsTaken}/${seatCapacity} seats`
+                                          : `${countriesTaken}/${countryCapacity} FILLED`}
                                       </span>
                                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', color: '#9A8A78' }}>
                                         {pct}%
@@ -2527,8 +2543,8 @@ export default function ConferenceDetailClient() {
                     {rosterCommittee && (() => {
                       const c = rosterCommittee;
                       const isCrisis = c.committee_type === 'crisis';
-                      const { slots, capacity, taken, pct } = committeeStats(c);
-                      const occupied = new Set(committeeOccupied[c.id] ?? []);
+                      const { slots, countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles } = committeeStats(c);
+                      const occ = committeeOccupied[c.id] ?? {};
                       return (
                         <div
                           className="fixed inset-0 z-50 flex items-center justify-center px-6"
@@ -2547,7 +2563,9 @@ export default function ConferenceDetailClient() {
                                     {c.name}
                                   </p>
                                   <p className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', margin: '4px 0 0 0' }}>
-                                    {taken}/{capacity} {isCrisis ? 'ROLES' : 'SEATS'} FILLED
+                                    {hasDoubles
+                                      ? `${seatsTaken}/${seatCapacity} SEATS FILLED`
+                                      : `${countriesTaken}/${countryCapacity} ${isCrisis ? 'ROLES' : 'SEATS'} FILLED`}
                                   </p>
                                 </div>
                                 <button
@@ -2572,7 +2590,13 @@ export default function ConferenceDetailClient() {
                                 </p>
                               ) : (
                                 slots.map((s, i) => {
-                                  const isTaken = occupied.has(s.country_code);
+                                  // Crisis roles are always 1 per slot regardless of what
+                                  // delegation_size holds, same rule as committeeStats.
+                                  const seatSize = isCrisis ? 1 : (s.delegation_size || 1);
+                                  // Bad data could have seats_taken exceed delegation_size;
+                                  // never render more TAKEN chips than the slot actually has.
+                                  const seatsTakenHere = Math.min(occ[s.country_code] ?? 0, seatSize);
+                                  const openHere = seatSize - seatsTakenHere;
                                   const co = getCountryByName(s.country_name);
                                   const flag = co ? getFlagUrl(co.code) : null;
                                   return (
@@ -2601,22 +2625,27 @@ export default function ConferenceDetailClient() {
                                       >
                                         {s.country_name}
                                       </span>
-                                      {isTaken ? (
-                                        <span
-                                          className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
-                                        >
-                                          <Check size={10} strokeWidth={2.6} />
-                                          TAKEN
-                                        </span>
-                                      ) : (
-                                        <span
-                                          className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                          style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.25)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
-                                        >
-                                          OPEN
-                                        </span>
-                                      )}
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        {Array.from({ length: seatsTakenHere }, (_, ti) => (
+                                          <span
+                                            key={`taken-${ti}`}
+                                            className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full"
+                                            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+                                          >
+                                            <Check size={10} strokeWidth={2.6} />
+                                            TAKEN
+                                          </span>
+                                        ))}
+                                        {Array.from({ length: openHere }, (_, oi) => (
+                                          <span
+                                            key={`open-${oi}`}
+                                            className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+                                            style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.25)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+                                          >
+                                            OPEN
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
                                   );
                                 })
