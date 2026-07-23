@@ -19,6 +19,17 @@ export interface RosterAllocation {
   country_code: string;
   user_id: string | null;
   display_name: string | null;
+  /** From the seat's application row, when the seat hasn't been claimed by
+   *  a user yet (an imported invite waiting to be accepted). */
+  invited_name: string | null;
+}
+
+/** Claimed seat shows the delegate's name; an unclaimed import invite shows
+ *  its invited name with a note; a bare reserved seat says so plainly. */
+function seatLabel(seat: RosterAllocation): string {
+  if (seat.display_name) return seat.display_name;
+  if (seat.invited_name) return `${seat.invited_name} · invite not claimed`;
+  return 'Seat not claimed';
 }
 
 export interface RosterPaper {
@@ -92,7 +103,12 @@ export default function PositionPaperRoster({
       {countries.map(code => {
         const cName = getCountryByCode(code)?.name ?? code;
         const seats = byCountry.get(code) ?? [];
-        const names = seats.map(s => s.display_name).filter(Boolean).join(' & ') || null;
+        // Dedup repeated "Seat not claimed" placeholders (an unclaimed
+        // double-delegation country would otherwise read as the phrase
+        // twice), keeping every distinct claimed or invited name.
+        const labels = seats.map(seatLabel);
+        const firstUnclaimed = labels.indexOf('Seat not claimed');
+        const names = labels.filter((label, i) => label !== 'Seat not claimed' || i === firstUnclaimed).join(' & ');
         const paper = papers.find(p => p.country_code === code) ?? null;
         const late = paper ? isPaperLate(paper.submitted_at, deadline) : false;
         const unread = paper ? countUnread(messagesByPaper[paper.id] ?? [], paper.reviewer_seen_at, currentUserId) : 0;

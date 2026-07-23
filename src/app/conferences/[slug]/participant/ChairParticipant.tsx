@@ -42,6 +42,7 @@ interface RosterAllocationRow {
   country_code: string;
   user_id: string | null;
   profiles: { display_name: string } | null;
+  applications: { invited_name: string | null } | null;
 }
 
 // ── Committee header card (item 1), mirrors the public committee card ─────
@@ -201,7 +202,7 @@ function ChairCommitteeBlock({ conferenceSlug, committee, chairDisplayName, conf
     const [{ data: allocData }, { data: paperData }] = await Promise.all([
       supabase
         .from('conference_allocations')
-        .select('country_code, user_id, profiles (display_name)')
+        .select('country_code, user_id, profiles (display_name), applications:application_id (invited_name)')
         .eq('conference_committee_id', committee.id),
       supabase
         .from('position_papers')
@@ -244,7 +245,9 @@ function ChairCommitteeBlock({ conferenceSlug, committee, chairDisplayName, conf
   }
 
   const rosterAllocations: RosterAllocation[] = allocations.map(a => ({
-    country_code: a.country_code, user_id: a.user_id, display_name: a.profiles?.display_name ?? null,
+    country_code: a.country_code, user_id: a.user_id,
+    display_name: a.profiles?.display_name ?? null,
+    invited_name: a.applications?.invited_name ?? null,
   }));
 
   return (

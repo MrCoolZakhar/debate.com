@@ -45,6 +45,7 @@ interface RosterAllocationRow {
   country_code: string;
   user_id: string | null;
   profiles: { display_name: string } | null;
+  applications: { invited_name: string | null } | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -306,6 +307,9 @@ function DateTimeField({ value, onSave, placeholder }: {
 }
 
 // ── Vertical committee rail ─────────────────────────────────────────────────────
+// Text is the primary identifier here, a small logo or monogram is only a
+// leading accent, since committees sharing the default UN logo are
+// otherwise indistinguishable by icon alone. Full name available on hover.
 
 function CommitteeRail({ committees, selectedId, onSelect }: {
   committees: CommitteeTab[];
@@ -313,31 +317,49 @@ function CommitteeRail({ committees, selectedId, onSelect }: {
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="flex md:flex-col gap-2.5 overflow-x-auto md:overflow-visible flex-shrink-0 pb-1 md:pb-0">
+    <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible flex-shrink-0 md:w-[220px] pb-1 md:pb-0">
       {committees.map(c => {
         const active = c.id === selectedId;
+        const label = c.abbreviation || c.name;
         return (
           <button
             key={c.id}
             type="button"
             onClick={() => onSelect(c.id)}
             title={c.name}
-            className="flex items-center justify-center flex-shrink-0 focus:outline-none"
+            className="flex items-center gap-2.5 flex-shrink-0 md:w-full focus:outline-none text-left"
             style={{
-              width: 52, height: 52, borderRadius: 16, padding: 0, border: 'none', cursor: 'pointer',
+              padding: '8px 12px', borderRadius: 14, border: 'none', cursor: 'pointer',
               backgroundColor: active ? NEU.base : NEU.surface,
               boxShadow: active ? `0 0 0 2px ${NEU.deepGold}, ${NEU.in}` : NEU.outSm,
               transition: `box-shadow 200ms ${EASE}`,
+              minWidth: 0,
             }}
           >
-            {c.logo_url ? (
-              <img src={c.logo_url} alt={c.name} style={{ width: 34, height: 34, objectFit: 'contain', borderRadius: 8 }} />
-            ) : (
-              <MonogramMedallion text={c.abbreviation || c.name} isCrisis={c.committee_type === 'crisis'} size={40} />
-            )}
+            <span className="flex-shrink-0 flex items-center justify-center overflow-hidden" style={{ width: 28, height: 28, borderRadius: 8 }}>
+              {c.logo_url ? (
+                <img src={c.logo_url} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 8 }} />
+              ) : (
+                <MonogramMedallion text={label} isCrisis={c.committee_type === 'crisis'} size={28} />
+              )}
+            </span>
+            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink }}>
+              {label}
+            </span>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// A small subheading plus one clarifying sentence, ahead of a settings
+// control block so its purpose reads before its switches do.
+function SectionIntro({ title, description }: { title: string; description: string }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: '#1C1410', margin: '0 0 3px 0' }}>{title}</p>
+      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#9A8A78', margin: 0, lineHeight: 1.5 }}>{description}</p>
     </div>
   );
 }
@@ -453,7 +475,7 @@ export default function DocumentsPage() {
     const [{ data: allocData, error: allocError }, { data: paperData, error: paperError }] = await Promise.all([
       supabase
         .from('conference_allocations')
-        .select('country_code, user_id, profiles (display_name)')
+        .select('country_code, user_id, profiles (display_name), applications:application_id (invited_name)')
         .eq('conference_committee_id', selectedCommitteeId),
       supabase
         .from('position_papers')
@@ -655,7 +677,9 @@ export default function DocumentsPage() {
   const rejectedCount = papers.filter(p => p.status === 'rejected').length;
 
   const rosterAllocations: RosterAllocation[] = allocations.map(a => ({
-    country_code: a.country_code, user_id: a.user_id, display_name: a.profiles?.display_name ?? null,
+    country_code: a.country_code, user_id: a.user_id,
+    display_name: a.profiles?.display_name ?? null,
+    invited_name: a.applications?.invited_name ?? null,
   }));
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -903,40 +927,49 @@ export default function DocumentsPage() {
                   Position Papers
                 </p>
 
+                <SectionIntro title="Submissions" description="Choose which committees delegates can submit position papers for." />
                 <div className="flex flex-col gap-2.5 mb-6">
                   {committees.map(c => (
                     <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                      <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.ink }}>
-                        {c.abbreviation || c.name}
-                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.ink, margin: 0 }}>
+                          {c.abbreviation || c.name}
+                        </p>
+                        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0' }}>
+                          {c.pp_submissions_enabled ? 'Submissions open' : 'Submissions closed'}
+                        </p>
+                      </div>
                       <PillToggle value={c.pp_submissions_enabled} onChange={v => togglePpEnabled(c.id, v)} />
                     </div>
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between gap-3 mb-4 pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
-                    Different Position Paper Deadline per Committee
-                  </span>
-                  <PillToggle value={ppPerCommittee} onChange={togglePpPerCommittee} />
-                </div>
-
-                {ppPerCommittee ? (
-                  <div className="flex flex-col gap-2.5">
-                    {committees.map(c => (
-                      <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
-                        <span className="truncate" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
-                          {c.abbreviation || c.name}
-                        </span>
-                        <div style={{ flex: 1, minWidth: 220 }}>
-                          <DateTimeField value={c.position_paper_deadline} onSave={iso => savePerCommitteePpDeadline(c.id, iso)} placeholder="No deadline" />
-                        </div>
-                      </div>
-                    ))}
+                <div className="pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                  <SectionIntro title="Deadline" description="Set when position paper submissions are due, the same time for every committee or a different one for each." />
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                      Different Position Paper Deadline per Committee
+                    </span>
+                    <PillToggle value={ppPerCommittee} onChange={togglePpPerCommittee} />
                   </div>
-                ) : (
-                  <DateTimeField value={ppGlobalDeadline} onSave={saveGlobalPpDeadline} placeholder="No deadline" />
-                )}
+
+                  {ppPerCommittee ? (
+                    <div className="flex flex-col gap-2.5">
+                      {committees.map(c => (
+                        <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                          <span className="truncate" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
+                            {c.abbreviation || c.name}
+                          </span>
+                          <div style={{ flex: 1, minWidth: 220 }}>
+                            <DateTimeField value={c.position_paper_deadline} onSave={iso => savePerCommitteePpDeadline(c.id, iso)} placeholder="No deadline" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <DateTimeField value={ppGlobalDeadline} onSave={saveGlobalPpDeadline} placeholder="No deadline" />
+                  )}
+                </div>
               </div>
 
               {/* Study Guides settings */}
@@ -945,6 +978,7 @@ export default function DocumentsPage() {
                   Study Guides
                 </p>
 
+                <SectionIntro title="Release" description="Choose when study guides become visible to delegates, the same time for every committee or a different one for each." />
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
                     Different Study Guide Release per Committee
