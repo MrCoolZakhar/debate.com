@@ -5,13 +5,17 @@
 // Documents Overview tab so both reviewer surfaces render the exact same
 // row: flag + country, delegate name(s), status badge, LATE badge when the
 // paper was submitted after the deadline, an unread badge for the reviewer
-// side, and inline Approve/Reject. Countries without a paper show a quiet
-// "No submission" state and aren't clickable.
+// side, and inline Approve/Reject. A row with a paper is a raised
+// neumorphic card (clickable, chevron on the right); a country with no
+// submission stays a flat, quiet row, the contrast itself signals which
+// rows invite a click.
 
 import { useRouter } from 'next/navigation';
+import { ChevronRight } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByCode } from '@/lib/countries';
 import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionPapers';
+import { NEU, NeuCard } from '@/components/neu';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -114,19 +118,8 @@ export default function PositionPaperRoster({
         const unread = paper ? countUnread(messagesByPaper[paper.id] ?? [], paper.reviewer_seen_at, currentUserId) : 0;
         const busy = paper ? busyIds.has(paper.id) : false;
 
-        return (
-          <div
-            key={code}
-            onClick={paper ? () => router.push(`/conferences/${conferenceSlug}/papers/${paper.id}`) : undefined}
-            style={{
-              backgroundColor: paper ? 'rgba(27,56,40,0.02)' : 'rgba(154,138,120,0.05)',
-              border: '1px solid #DDD4C0', borderRadius: 12, padding: 14,
-              cursor: paper ? 'pointer' : 'default',
-              transition: 'background-color 150ms',
-            }}
-            onMouseEnter={paper ? e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; } : undefined}
-            onMouseLeave={paper ? e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.02)'; } : undefined}
-          >
+        const rowBody = (
+          <>
             <div className="flex items-center gap-3 flex-wrap">
               <FlagImg code={code} size={22} />
               <div style={{ minWidth: 0 }}>
@@ -158,6 +151,7 @@ export default function PositionPaperRoster({
                       </span>
                     )}
                     <StatusBadge status={paper.status} />
+                    <ChevronRight size={16} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
                   </>
                 )}
               </div>
@@ -187,6 +181,24 @@ export default function PositionPaperRoster({
                 )}
               </div>
             )}
+          </>
+        );
+
+        // Clickable rows get the raised neumorphic treatment (lift + deeper
+        // shadow on hover, via NeuCard) so a submission obviously invites a
+        // click; a country with nothing to review stays flat and quiet.
+        return paper ? (
+          <NeuCard
+            key={code}
+            hover
+            onClick={() => router.push(`/conferences/${conferenceSlug}/papers/${paper.id}`)}
+            style={{ padding: 14, borderRadius: 16 }}
+          >
+            {rowBody}
+          </NeuCard>
+        ) : (
+          <div key={code} style={{ backgroundColor: 'rgba(154,138,120,0.06)', borderRadius: 16, padding: 14 }}>
+            {rowBody}
           </div>
         );
       })}
