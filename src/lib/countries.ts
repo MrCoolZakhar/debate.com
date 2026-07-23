@@ -240,6 +240,10 @@ export function getCountryByName(name: string): Country | undefined {
   return UN_COUNTRIES.find((c) => c.name.toLowerCase() === name.toLowerCase());
 }
 
+export function getCountryByCode(code: string): Country | undefined {
+  return UN_COUNTRIES.find((c) => c.code.toUpperCase() === code.toUpperCase());
+}
+
 export const COUNTRY_NAMES_ES: Record<string, string> = {
   AF: 'Afganistán', AL: 'Albania', DZ: 'Argelia', AD: 'Andorra', AO: 'Angola',
   AG: 'Antigua y Barbuda', AR: 'Argentina', AM: 'Armenia', AU: 'Australia',

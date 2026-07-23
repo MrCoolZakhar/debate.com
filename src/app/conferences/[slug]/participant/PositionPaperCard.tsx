@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import PositionPaperViewerModal from '@/components/PositionPaperViewerModal';
 import { SectionCard, OUTFIT, useAllocationPartner } from './shared';
 import type { ParticipantAllocation } from './types';
 
@@ -19,6 +20,7 @@ interface PositionPaper {
   chair_feedback: string | null;
   submitted_at: string;
   file_name: string;
+  file_url: string;
   user_id: string;
 }
 
@@ -51,6 +53,7 @@ export default function PositionPaperCard({ conferenceId, myAllocation }: {
   const [ppNotify, setPPNotify] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
   const [showPPWarning, setShowPPWarning] = useState(false);
+  const [showViewer, setShowViewer] = useState(false);
   const ppFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadPpEnabled = useCallback(async () => {
@@ -74,7 +77,7 @@ export default function PositionPaperCard({ conferenceId, myAllocation }: {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('position_papers')
-      .select('id, status, chair_feedback, submitted_at, file_name, user_id')
+      .select('id, status, chair_feedback, submitted_at, file_name, file_url, user_id')
       .eq('conference_committee_id', myAllocation.conference_committee_id)
       .eq('country_code', myAllocation.country_code)
       .maybeSingle();
@@ -234,9 +237,13 @@ export default function PositionPaperCard({ conferenceId, myAllocation }: {
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 11, color: '#9A8A78', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <button
+                  onClick={() => setShowViewer(true)}
+                  className="focus:outline-none"
+                  style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 11, color: '#1B3828', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, cursor: 'pointer', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}
+                >
                   {myPositionPaper!.file_name}
-                </span>
+                </button>
               </div>
               <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', marginBottom: myPositionPaper!.user_id !== user?.id ? 2 : 10 }}>
                 Submitted {fmtDate(myPositionPaper!.submitted_at)}
@@ -306,6 +313,14 @@ export default function PositionPaperCard({ conferenceId, myAllocation }: {
             </div>
           </div>
         </div>
+      )}
+
+      {showViewer && myPositionPaper && (
+        <PositionPaperViewerModal
+          fileUrl={myPositionPaper.file_url}
+          fileName={myPositionPaper.file_name}
+          onClose={() => setShowViewer(false)}
+        />
       )}
     </SectionCard>
   );

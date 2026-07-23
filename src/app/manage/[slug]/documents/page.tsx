@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { getFlagUrl } from '@/lib/countries';
+import { getFlagUrl, getCountryByCode } from '@/lib/countries';
 import { queueEventEmail } from '@/lib/emailEvents';
 import Portal from '@/components/Portal';
+import PositionPaperViewerModal from '@/components/PositionPaperViewerModal';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -37,7 +38,6 @@ interface PositionPaper {
   id: string;
   conference_committee_id: string;
   country_code: string;
-  country_name: string;
   file_url: string;
   file_name: string;
   file_size_bytes: number;
@@ -60,6 +60,12 @@ function formatDate(iso: string): string {
   const d = new Date(iso);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+// position_papers has no country_name column, only country_code — derive the
+// display name from the canonical list, falling back to the raw code.
+function countryName(code: string): string {
+  return getCountryByCode(code)?.name ?? code;
 }
 
 // Shared card language, thick 1.5px border + layered warm shadow (rulebook F6).
@@ -350,6 +356,8 @@ export default function DocumentsPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDeadlineModal, setShowDeadlineModal] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [papersError, setPapersError] = useState(false);
+  const [viewerPaper, setViewerPaper] = useState<{ fileUrl: string; fileName: string } | null>(null);
   // Ids with a write in flight, disables that row's controls (double-click guard).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const didSetInitialTab = useRef(false);
@@ -411,16 +419,23 @@ export default function DocumentsPage() {
     if (!session) return;
     const seq = ++paperReqSeq.current;
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('position_papers')
       .select(`
-        id, conference_committee_id, country_code, country_name, file_url, file_name, file_size_bytes,
+        id, conference_committee_id, country_code, file_url, file_name, file_size_bytes,
         status, chair_feedback, reviewed_at, notify_on_feedback, submitted_at,
         profiles (display_name, email)
       `)
       .eq('conference_committee_id', selectedCommitteeId)
       .order('submitted_at', { ascending: false });
     if (seq !== paperReqSeq.current) return; // stale response
+    if (error) {
+      console.error('[DocumentsPage] position_papers load failed:', error);
+      setPapersError(true);
+      setPositionPapers([]);
+      return;
+    }
+    setPapersError(false);
     setPositionPapers((data ?? []) as unknown as PositionPaper[]);
   }, [selectedCommitteeId]);
 
@@ -782,18 +797,24 @@ export default function DocumentsPage() {
             </div>
 
             {/* Papers */}
-            {filteredPapers.length === 0 ? (
+            {papersError ? (
+              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#8B2020', textAlign: 'center', padding: '32px 0' }}>
+                Couldn&apos;t load position papers.
+              </p>
+            ) : filteredPapers.length === 0 ? (
               <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#9A8A78', textAlign: 'center', padding: '32px 0' }}>
                 No position papers submitted yet.
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {filteredPapers.map(paper => (
+                {filteredPapers.map(paper => {
+                  const cName = countryName(paper.country_code);
+                  return (
                   <div key={paper.id} style={{ backgroundColor: 'rgba(27,56,40,0.02)', border: '1px solid #DDD4C0', borderRadius: 12, padding: 16 }}>
                     {/* Row 1 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <img src={getFlagUrl(paper.country_code)} style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} alt={paper.country_name} />
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 13, color: '#1C1410' }}>{paper.country_name}</span>
+                      <img src={getFlagUrl(paper.country_code)} style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} alt={cName} />
+                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 13, color: '#1C1410' }}>{cName}</span>
                       {paper.profiles?.display_name && (
                         <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#9A8A78' }}>{paper.profiles.display_name}</span>
                       )}
@@ -802,11 +823,18 @@ export default function DocumentsPage() {
 
                     {/* Row 2 */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: 11, color: '#9A8A78' }}>{paper.file_name}</span>
+                      <button
+                        onClick={() => setViewerPaper({ fileUrl: paper.file_url, fileName: paper.file_name })}
+                        className="focus:outline-none"
+                        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 11, color: '#1B3828', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        {paper.file_name}
+                      </button>
                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>{formatFileSize(paper.file_size_bytes)}</span>
                       <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78' }}>Submitted {formatDate(paper.submitted_at)}</span>
                       <a
                         href={paper.file_url}
+                        download={paper.file_name}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600, color: '#1B3828', textDecoration: 'none' }}
@@ -901,7 +929,8 @@ export default function DocumentsPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -925,6 +954,13 @@ export default function DocumentsPage() {
           currentEnabled={selectedCommittee.pp_submissions_enabled}
           onClose={() => setShowDeadlineModal(false)}
           onSave={updates => savePaperSettings(selectedCommitteeId, updates)}
+        />
+      )}
+      {viewerPaper && (
+        <PositionPaperViewerModal
+          fileUrl={viewerPaper.fileUrl}
+          fileName={viewerPaper.fileName}
+          onClose={() => setViewerPaper(null)}
         />
       )}
     </div>
