@@ -10,8 +10,9 @@ import DelegationPlacard from './DelegationPlacard';
 import DelegationPanel from './DelegationPanel';
 import type { ParticipantApplication, ParticipantAllocation, ParticipantCommittee } from './types';
 
-export default function DelegateParticipant({ conferenceId, conferenceStartDate, application, myAllocation, committees, allocationSwapMode }: {
+export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode }: {
   conferenceId: string;
+  conferenceSlug: string;
   conferenceStartDate: string | null;
   application: ParticipantApplication;
   myAllocation: ParticipantAllocation | null;
@@ -30,7 +31,7 @@ export default function DelegateParticipant({ conferenceId, conferenceStartDate,
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <StudyGuideCard committeeId={myAllocation?.conference_committee_id ?? null} />
-        <PositionPaperCard conferenceId={conferenceId} myAllocation={myAllocation} />
+        <PositionPaperCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
       </div>
 
       <DelegationPlacard

@@ -202,13 +202,6 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
-  position_paper_feedback: {
-    subject: 'Feedback on your position paper — {{conference_name}}',
-    blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour chair has left feedback on your position paper for {{committee}} at {{conference_name}}. Sign in to read their notes before the conference." },
-      VIEW_CONFERENCE_BUTTON,
-    ],
-  },
   import_join_invite: {
     subject: '{{conference_name}} now runs on Gavelling',
     blocks: [

@@ -7,13 +7,13 @@
 // committees they actually chair) and stacks a full block per committee.
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronUp, Copy, Check, ExternalLink, FileText, Mail, Radio } from 'lucide-react';
+import { Copy, Check, Radio } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { FlagImg } from '@/components/FlagImg';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
-import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { getSiteUrl } from '@/lib/emailBlocks';
+import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
+import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
 import StudyGuideCard from './StudyGuideCard';
 import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
 
@@ -25,20 +25,6 @@ const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
 };
 const ROMAN = ['I', 'II', 'III'];
 
-const PP_STATUS_STYLES: Record<string, { bg: string; color: string }> = {
-  submitted: { bg: 'rgba(238,217,138,0.2)', color: '#B8844A' },
-  reviewed: { bg: 'rgba(154,138,120,0.15)', color: '#9A8A78' },
-  approved: { bg: 'rgba(61,122,82,0.12)', color: '#3D7A52' },
-  rejected: { bg: 'rgba(139,32,32,0.1)', color: '#8B2020' },
-};
-const NOT_SUBMITTED_STYLE = { bg: 'rgba(154,138,120,0.14)', color: '#6B5F52' };
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function fmtDate(iso: string): string {
-  const d = new Date(iso);
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
-
 interface ChairCommittee {
   id: string;
   name: string;
@@ -49,24 +35,13 @@ interface ChairCommittee {
   logo_url: string | null;
   session_code: string | null;
   released_to_chairs_at: string | null;
+  position_paper_deadline: string | null;
 }
 
-interface RosterMember {
-  id: string;
-  user_id: string;
-  assigned_country_code: string | null;
-  assigned_country_name: string | null;
-  profiles: { display_name: string; avatar_url: string | null; email: string } | null;
-}
-
-interface PositionPaperRow {
-  id: string;
-  user_id: string;
-  file_url: string;
-  file_name: string;
-  status: string;
-  chair_feedback: string | null;
-  submitted_at: string;
+interface RosterAllocationRow {
+  country_code: string;
+  user_id: string | null;
+  profiles: { display_name: string } | null;
 }
 
 // ── Committee header card (item 1), mirrors the public committee card ─────
@@ -203,184 +178,74 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate }: {
   );
 }
 
-// ── Roster row (item 3), expandable, feedback authoring ───────────────────
-
-function RosterRow({ member, paper, conferenceId, onFeedbackSaved }: {
-  member: RosterMember;
-  paper: PositionPaperRow | null;
-  conferenceId: string;
-  onFeedbackSaved: (paperId: string, feedback: string) => void;
-}) {
-  const { session } = useAuth();
-  const [expanded, setExpanded] = useState(false);
-  const [feedbackText, setFeedbackText] = useState(paper?.chair_feedback ?? '');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
-
-  const name = member.profiles?.display_name ?? 'Unknown';
-  const statusStyle = paper ? (PP_STATUS_STYLES[paper.status] ?? PP_STATUS_STYLES.submitted) : NOT_SUBMITTED_STYLE;
-  const statusLabel = paper ? paper.status.toUpperCase() : 'NOT SUBMITTED';
-
-  async function handleSaveFeedback() {
-    if (!paper || !session || saving) return;
-    setSaving(true);
-    setError('');
-    const supabase = getAuthedClient(session.access_token);
-    const trimmed = feedbackText.trim();
-    const { error: updateErr } = await supabase.from('position_papers').update({ chair_feedback: trimmed || null }).eq('id', paper.id);
-    if (updateErr) {
-      setError(updateErr.message || 'Could not save feedback.');
-      setSaving(false);
-      return;
-    }
-    // Queued through the participant-events route (server-side, service
-    // role) rather than queueEventEmail directly — email_outbox is
-    // organizer-only under RLS, a chair session can't insert rows itself.
-    await queueParticipantEventEmail(session.access_token, conferenceId, 'position_paper_feedback', [member.id]);
-    setSaving(false);
-    setSaved(true);
-    onFeedbackSaved(paper.id, trimmed);
-    setTimeout(() => setSaved(false), 2500);
-  }
-
-  return (
-    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(221,212,192,0.7)' }}>
-      <button
-        onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left focus:outline-none"
-        style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-      >
-        {member.profiles?.avatar_url ? (
-          <img src={member.profiles.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 32, height: 32 }} />
-        ) : (
-          <span className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 32, height: 32, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 13, fontWeight: 700, fontFamily: OUTFIT }}>
-            {name.charAt(0)}
-          </span>
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>{name}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            {member.assigned_country_code && <FlagImg code={member.assigned_country_code} size={14} />}
-            <span className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{member.assigned_country_name ?? 'Unassigned'}</span>
-          </div>
-        </div>
-        <span
-          className="px-2.5 py-0.5 rounded-full flex-shrink-0"
-          style={{ ...statusStyle, fontSize: '9px', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.06em' }}
-        >
-          {statusLabel}
-        </span>
-        {expanded ? <ChevronUp size={15} style={{ color: '#9A8A78', flexShrink: 0 }} /> : <ChevronDown size={15} style={{ color: '#9A8A78', flexShrink: 0 }} />}
-      </button>
-
-      {expanded && (
-        <div className="px-4 pb-4 pt-1" style={{ borderTop: '1px solid rgba(221,212,192,0.5)' }}>
-          {member.profiles?.email && (
-            <a
-              href={`mailto:${member.profiles.email}`}
-              className="flex items-center gap-1.5 mt-3 text-xs focus:outline-none"
-              style={{ color: '#9A8A78', fontFamily: OUTFIT, textDecoration: 'none' }}
-            >
-              <Mail size={12} /> {member.profiles.email}
-            </a>
-          )}
-
-          {!paper ? (
-            <p className="text-sm mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-              No position paper submitted yet.
-            </p>
-          ) : (
-            <>
-              <a
-                href={paper.file_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mt-3 transition-colors"
-                style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)', textDecoration: 'none' }}
-              >
-                <FileText size={14} style={{ color: '#1B3828', flexShrink: 0 }} />
-                <span className="text-xs font-semibold flex-1 min-w-0 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{paper.file_name}</span>
-                <ExternalLink size={12} style={{ color: '#9A8A78', flexShrink: 0 }} />
-              </a>
-              <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Submitted {fmtDate(paper.submitted_at)}</p>
-
-              <div className="mt-4">
-                <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: '#6E5F4E', fontFamily: OUTFIT }}>
-                  WRITE FEEDBACK
-                </label>
-                <textarea
-                  value={feedbackText}
-                  onChange={e => setFeedbackText(e.target.value)}
-                  rows={3}
-                  placeholder="Notes for this delegate..."
-                  className="w-full rounded-xl px-3.5 py-2.5 text-sm focus:outline-none resize-none"
-                  style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
-                />
-                <div className="flex items-center gap-3 mt-2">
-                  <button
-                    onClick={handleSaveFeedback}
-                    disabled={saving}
-                    className="rounded-lg px-4 py-2 text-xs font-bold focus:outline-none"
-                    style={{
-                      backgroundColor: saving ? '#DDD4C0' : '#1B3828', color: saving ? '#9A8A78' : '#EED98A',
-                      border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em', cursor: saving ? 'default' : 'pointer',
-                    }}
-                  >
-                    {saving ? 'SAVING...' : 'SAVE'}
-                  </button>
-                  {saved && <span style={{ fontSize: 11, fontWeight: 700, color: '#3D7A52', fontFamily: OUTFIT }}>Saved ✓</span>}
-                  {error && <span style={{ fontSize: 11, color: '#8B2020', fontFamily: OUTFIT }}>{error}</span>}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── One committee's full block ──────────────────────────────────────────────
 
-function ChairCommitteeBlock({ conferenceId, committee, chairDisplayName, conferenceStartDate }: {
-  conferenceId: string;
+function ChairCommitteeBlock({ conferenceSlug, committee, chairDisplayName, conferenceStartDate }: {
+  conferenceSlug: string;
   committee: ChairCommittee;
   chairDisplayName: string;
   conferenceStartDate: string | null;
 }) {
-  const { session } = useAuth();
-  const [roster, setRoster] = useState<RosterMember[]>([]);
-  const [papers, setPapers] = useState<PositionPaperRow[]>([]);
+  const { user, session } = useAuth();
+  const [allocations, setAllocations] = useState<RosterAllocationRow[]>([]);
+  const [papers, setPapers] = useState<RosterPaper[]>([]);
+  const [messagesByPaper, setMessagesByPaper] = useState<Record<string, PaperMessageStub[]>>({});
   const [loading, setLoading] = useState(true);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState('');
 
   const load = useCallback(async () => {
     if (!session) return;
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const [{ data: rosterData }, { data: paperData }] = await Promise.all([
+    const [{ data: allocData }, { data: paperData }] = await Promise.all([
       supabase
-        .from('applications')
-        .select('id, user_id, assigned_country_code, assigned_country_name, profiles (display_name, avatar_url, email)')
-        .eq('assigned_committee_id', committee.id)
-        .in('status', ['accepted', 'assigned']),
+        .from('conference_allocations')
+        .select('country_code, user_id, profiles (display_name)')
+        .eq('conference_committee_id', committee.id),
       supabase
         .from('position_papers')
-        .select('id, user_id, file_url, file_name, status, chair_feedback, submitted_at')
+        .select('id, country_code, status, submitted_at, reviewer_seen_at')
         .eq('conference_committee_id', committee.id),
     ]);
-    setRoster(((rosterData ?? []) as unknown as RosterMember[]).sort((a, b) => (a.profiles?.display_name ?? '').localeCompare(b.profiles?.display_name ?? '')));
-    setPapers((paperData ?? []) as PositionPaperRow[]);
+    setAllocations((allocData ?? []) as unknown as RosterAllocationRow[]);
+    const paperRows = (paperData ?? []) as RosterPaper[];
+    setPapers(paperRows);
+    setMessagesByPaper(await fetchMessageStubsForPapers(supabase, paperRows.map(p => p.id)));
     setLoading(false);
   }, [session, committee.id]);
 
   useEffect(() => { load(); }, [load]);
 
-  function handleFeedbackSaved(paperId: string, feedback: string) {
-    setPapers(prev => prev.map(p => (p.id === paperId ? { ...p, chair_feedback: feedback || null } : p)));
+  function markBusy(id: string, busy: boolean) {
+    setBusyIds(prev => {
+      const next = new Set(prev);
+      if (busy) next.add(id); else next.delete(id);
+      return next;
+    });
   }
 
-  const paperByUser = new Map(papers.map(p => [p.user_id, p]));
+  function updateStatus(paperId: string, status: string) {
+    if (!user || !session || busyIds.has(paperId)) return;
+    const previous = papers;
+    setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status } : p));
+    setActionError('');
+    markBusy(paperId, true);
+    const supabase = getAuthedClient(session.access_token);
+    supabase.from('position_papers').update({
+      status, reviewed_by: user.id, reviewed_at: new Date().toISOString(),
+    }).eq('id', paperId).then(({ error }) => {
+      markBusy(paperId, false);
+      if (error) {
+        setPapers(previous);
+        setActionError("Couldn't update the paper status. The change was reverted.");
+      }
+    });
+  }
+
+  const rosterAllocations: RosterAllocation[] = allocations.map(a => ({
+    country_code: a.country_code, user_id: a.user_id, display_name: a.profiles?.display_name ?? null,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -395,14 +260,21 @@ function ChairCommitteeBlock({ conferenceId, committee, chairDisplayName, confer
           <div className="flex justify-center py-6">
             <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
           </div>
-        ) : roster.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>No delegates allocated to this committee yet.</p>
         ) : (
-          <div className="flex flex-col gap-2">
-            {roster.map(m => (
-              <RosterRow key={m.id} member={m} paper={paperByUser.get(m.user_id) ?? null} conferenceId={conferenceId} onFeedbackSaved={handleFeedbackSaved} />
-            ))}
-          </div>
+          <PositionPaperRoster
+            conferenceSlug={conferenceSlug}
+            currentUserId={user?.id ?? ''}
+            deadline={committee.position_paper_deadline}
+            allocations={rosterAllocations}
+            papers={papers}
+            messagesByPaper={messagesByPaper}
+            busyIds={busyIds}
+            onApprove={id => updateStatus(id, 'approved')}
+            onReject={id => updateStatus(id, 'rejected')}
+          />
+        )}
+        {actionError && (
+          <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#8B2020', marginTop: 10 }}>{actionError}</p>
         )}
       </SectionCard>
 
@@ -413,7 +285,7 @@ function ChairCommitteeBlock({ conferenceId, committee, chairDisplayName, confer
 
 // ── ChairParticipant ─────────────────────────────────────────────────────────
 
-export default function ChairParticipant({ conferenceId }: { conferenceId: string }) {
+export default function ChairParticipant({ conferenceId, conferenceSlug }: { conferenceId: string; conferenceSlug: string }) {
   const { user, session, profile } = useAuth();
   const [committees, setCommittees] = useState<ChairCommittee[]>([]);
   const [conferenceStartDate, setConferenceStartDate] = useState<string | null>(null);
@@ -426,7 +298,7 @@ export default function ChairParticipant({ conferenceId }: { conferenceId: strin
     const [{ data }, { data: confData }] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, released_to_chairs_at')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, released_to_chairs_at, position_paper_deadline')
         .eq('conference_id', conferenceId)
         .contains('chair_user_ids', [user.id])
         .order('name', { ascending: true }),
@@ -466,7 +338,7 @@ export default function ChairParticipant({ conferenceId }: { conferenceId: strin
   return (
     <div className="flex flex-col gap-10">
       {committees.map(c => (
-        <ChairCommitteeBlock key={c.id} conferenceId={conferenceId} committee={c} chairDisplayName={profile?.display_name ?? 'Chair'} conferenceStartDate={conferenceStartDate} />
+        <ChairCommitteeBlock key={c.id} conferenceSlug={conferenceSlug} committee={c} chairDisplayName={profile?.display_name ?? 'Chair'} conferenceStartDate={conferenceStartDate} />
       ))}
     </div>
   );

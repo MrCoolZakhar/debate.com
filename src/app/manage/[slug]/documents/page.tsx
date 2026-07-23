@@ -1,15 +1,20 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FileText, Upload, X, Check, Inbox } from 'lucide-react';
+import { FileText, Upload, X, Check, LayoutGrid, Settings as SettingsIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { getFlagUrl, getCountryByCode } from '@/lib/countries';
-import { queueEventEmail } from '@/lib/emailEvents';
 import Portal from '@/components/Portal';
-import PositionPaperViewerModal from '@/components/PositionPaperViewerModal';
+import { DatePicker } from '@/components/DatePicker';
+import { PillToggle } from '@/app/account/accountUi';
+import { MonogramMedallion } from '@/components/CommitteeEditorModal';
+import { NEU, EASE, NeuPill } from '@/components/neu';
+import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
+import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
+
+const OUTFIT = "'Outfit', sans-serif";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -17,9 +22,11 @@ interface CommitteeTab {
   id: string;
   name: string;
   abbreviation: string | null;
+  logo_url: string | null;
+  committee_type: string;
   position_paper_deadline: string | null;
-  position_paper_label: string | null;
   pp_submissions_enabled: boolean;
+  study_guides_publish_at: string | null;
   notification_email: string | null;
 }
 
@@ -34,19 +41,10 @@ interface StudyGuide {
   created_at: string;
 }
 
-interface PositionPaper {
-  id: string;
-  conference_committee_id: string;
+interface RosterAllocationRow {
   country_code: string;
-  file_url: string;
-  file_name: string;
-  file_size_bytes: number;
-  status: string;
-  chair_feedback: string | null;
-  reviewed_at: string | null;
-  notify_on_feedback: boolean;
-  submitted_at: string;
-  profiles: { display_name: string; email: string } | null;
+  user_id: string | null;
+  profiles: { display_name: string } | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -62,30 +60,21 @@ function formatDate(iso: string): string {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-// position_papers has no country_name column, only country_code — derive the
-// display name from the canonical list, falling back to the raw code.
-function countryName(code: string): string {
-  return getCountryByCode(code)?.name ?? code;
+function isoToDatePart(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+function isoToTimePart(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 // Shared card language, thick 1.5px border + layered warm shadow (rulebook F6).
 const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
-
-// Red PDF file-type tile, a saturated square glyph, not the meek grey icon.
-function PdfTile({ size = 40 }: { size?: number }) {
-  return (
-    <span
-      className="flex items-center justify-center flex-shrink-0"
-      style={{
-        width: size, height: size, borderRadius: 10,
-        background: 'linear-gradient(150deg, rgba(139,32,32,0.16), rgba(139,32,32,0.07))',
-        border: '1px solid rgba(139,32,32,0.28)',
-      }}
-    >
-      <FileText size={Math.round(size * 0.5)} strokeWidth={2} style={{ color: '#8B2020' }} />
-    </span>
-  );
-}
 
 // ── Modal overlay ──────────────────────────────────────────────────────────────
 
@@ -105,28 +94,7 @@ function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClos
   );
 }
 
-// ── Paper status badge ─────────────────────────────────────────────────────────
-
-function PaperStatusBadge({ status }: { status: string }) {
-  const map: Record<string, { bg: string; color: string; border: string }> = {
-    submitted: { bg: 'rgba(238,217,138,0.2)',  color: '#B8844A', border: 'rgba(184,132,74,0.42)' },
-    reviewed:  { bg: 'rgba(154,138,120,0.15)', color: '#6E5F4E', border: 'rgba(154,138,120,0.42)' },
-    approved:  { bg: 'rgba(61,122,82,0.12)',   color: '#3D7A52', border: 'rgba(61,122,82,0.4)' },
-    rejected:  { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020', border: 'rgba(139,32,32,0.35)' },
-  };
-  const s = map[status.toLowerCase()] ?? map.submitted;
-  return (
-    <span style={{
-      backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}`,
-      fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 700,
-      padding: '2px 9px', borderRadius: 7,
-    }}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  );
-}
-
-// ── UploadStudyGuideModal ──────────────────────────────────────────────────────
+// ── UploadStudyGuideModal (unchanged) ───────────────────────────────────────────
 
 function UploadStudyGuideModal({
   conferenceId, selectedCommitteeId, userId, onClose, onUploaded,
@@ -188,24 +156,24 @@ function UploadStudyGuideModal({
     <ModalOverlay onClose={onClose}>
       <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 448, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Upload Study Guide</h2>
+          <h2 style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Upload Study Guide</h2>
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em', marginBottom: 6 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: OUTFIT, letterSpacing: '0.02em', marginBottom: 6 }}>
             Title *
           </label>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="e.g. UNHRC Background Guide 2026"
-            style={{ width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px', fontSize: 14, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: "'Outfit', sans-serif", boxSizing: 'border-box' }}
+            style={{ width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px', fontSize: 14, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: OUTFIT, boxSizing: 'border-box' }}
           />
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em', marginBottom: 6 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: OUTFIT, letterSpacing: '0.02em', marginBottom: 6 }}>
             File (PDF · max 5MB)
           </label>
           <input type="file" accept="application/pdf" onChange={handleFileSelect} className="hidden" ref={fileInputRef} />
@@ -219,35 +187,35 @@ function UploadStudyGuideModal({
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
                 <Upload size={24} style={{ color: '#9A8A78' }} />
               </div>
-              <p style={{ fontSize: 13, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to select PDF</p>
-              <p style={{ fontSize: 11, color: '#C8BFB0', fontFamily: "'Outfit', sans-serif" }}>Max 5MB</p>
+              <p style={{ fontSize: 13, color: '#9A8A78', fontFamily: OUTFIT, marginBottom: 4 }}>Click to select PDF</p>
+              <p style={{ fontSize: 11, color: '#C8BFB0', fontFamily: OUTFIT }}>Max 5MB</p>
             </div>
           ) : (
             <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 12, padding: '12px 16px', backgroundColor: 'rgba(61,122,82,0.04)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <Check size={16} style={{ color: '#3D7A52', flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 13, color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile.name}</p>
-                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{formatFileSize(selectedFile.size)}</p>
+                <p style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile.name}</p>
+                <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{formatFileSize(selectedFile.size)}</p>
               </div>
-              <button onClick={() => fileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
+              <button onClick={() => fileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
                 Change file
               </button>
             </div>
           )}
-          {fileError && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginTop: 4 }}>{fileError}</p>}
+          {fileError && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{fileError}</p>}
         </div>
 
-        {uploadError && <p style={{ fontSize: 12, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 12 }}>{uploadError}</p>}
+        {uploadError && <p style={{ fontSize: 12, color: '#8B2020', fontFamily: OUTFIT, marginBottom: 12 }}>{uploadError}</p>}
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} className="focus:outline-none" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
+          <button onClick={onClose} className="focus:outline-none" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
             CANCEL
           </button>
           <button
             onClick={handleUpload}
             disabled={disabled}
             className="focus:outline-none"
-            style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, backgroundColor: disabled ? '#DDD4C0' : '#1B3828', color: disabled ? '#9A8A78' : '#EED98A', cursor: disabled ? 'default' : 'pointer' }}
+            style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, backgroundColor: disabled ? '#DDD4C0' : '#1B3828', color: disabled ? '#9A8A78' : '#EED98A', cursor: disabled ? 'default' : 'pointer' }}
           >
             {uploading ? 'UPLOADING...' : 'UPLOAD'}
           </button>
@@ -257,85 +225,120 @@ function UploadStudyGuideModal({
   );
 }
 
-// ── SetDeadlineModal ───────────────────────────────────────────────────────────
+// ── DateTimeField, a DatePicker + time input committing a verified write ───────
+// on every change, same recipe as the committees page's ReleaseTimePicker.
 
-function SetDeadlineModal({
-  currentDeadline, currentLabel, currentEnabled, onClose, onSave,
-}: {
-  currentDeadline: string | null;
-  currentLabel: string | null;
-  currentEnabled: boolean;
-  onClose: () => void;
-  onSave: (updates: { position_paper_label: string; pp_submissions_enabled: boolean; position_paper_deadline: string | null }) => void;
+function DateTimeField({ value, onSave, placeholder }: {
+  value: string | null;
+  onSave: (iso: string | null) => Promise<boolean>;
+  placeholder: string;
 }) {
-  const [value, setValue] = useState(currentDeadline ? currentDeadline.slice(0, 16) : '');
-  const [label, setLabel] = useState(currentLabel ?? 'Position Paper');
-  const [enabled, setEnabled] = useState(currentEnabled);
+  const [datePart, setDatePart] = useState(isoToDatePart(value));
+  const [timePart, setTimePart] = useState(isoToTimePart(value));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  // Optimistic: hand the values to the parent (which patches local state and
-  // persists in the background) and close immediately, no modal spinner.
-  function handleSave() {
-    onSave({
-      position_paper_label: label.trim() || 'Position Paper',
-      pp_submissions_enabled: enabled,
-      position_paper_deadline: enabled ? (value || null) : null,
-    });
-    onClose();
+  useEffect(() => {
+    setDatePart(isoToDatePart(value));
+    setTimePart(isoToTimePart(value));
+  }, [value]);
+
+  async function commit(nextDate: string, nextTime: string) {
+    const prevDate = datePart, prevTime = timePart;
+    setDatePart(nextDate);
+    setTimePart(nextTime);
+    let iso: string | null = null;
+    if (nextDate) {
+      const [y, mo, da] = nextDate.split('-').map(Number);
+      const [h, m] = (nextTime || '00:00').split(':').map(Number);
+      iso = new Date(y, mo - 1, da, h, m).toISOString();
+    }
+    setSaving(true);
+    setError('');
+    const ok = await onSave(iso);
+    setSaving(false);
+    if (!ok) {
+      setDatePart(prevDate);
+      setTimePart(prevTime);
+      setError("Couldn't save, please try again.");
+    }
   }
 
   return (
-    <ModalOverlay onClose={onClose}>
-      <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', boxShadow: '0 20px 60px rgba(27,56,40,0.18)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 16, color: '#1C1410' }}>Position Paper Settings</h2>
-          <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
+    <div>
+      <div className="flex gap-2 items-center">
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <DatePicker
+            value={datePart}
+            onChange={iso => commit(iso, timePart || '00:00')}
+            placeholder={placeholder}
+            disabled={saving}
+          />
         </div>
-        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em', marginBottom: 6 }}>
-          Name of Document
-        </label>
         <input
-          type="text"
-          value={label}
-          onChange={e => setLabel(e.target.value)}
-          placeholder="Position Paper"
-          style={{ width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px', fontSize: 14, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: "'Outfit', sans-serif", marginBottom: 16, boxSizing: 'border-box' }}
+          type="time"
+          value={timePart}
+          onChange={e => commit(datePart, e.target.value)}
+          disabled={saving || !datePart}
+          className="focus:outline-none"
+          style={{
+            border: 'none', borderRadius: 12, padding: '11px 12px',
+            fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 600,
+            color: datePart ? NEU.ink : NEU.muted, backgroundColor: NEU.base, boxShadow: NEU.inSm,
+          }}
         />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Allow {label.trim() || 'position paper'} submissions</p>
-            <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Let delegates submit through their portal</p>
-          </div>
+        {datePart && (
           <button
-            onClick={() => setEnabled(v => !v)}
-            className="focus:outline-none flex-shrink-0"
-            style={{ width: 40, height: 22, borderRadius: 9999, border: 'none', cursor: 'pointer', backgroundColor: enabled ? '#1B3828' : '#DDD4C0', position: 'relative', transition: 'background-color 0.2s', marginLeft: 12 }}
+            type="button"
+            onClick={() => commit('', '')}
+            disabled={saving}
+            title="Clear"
+            className="flex-shrink-0 focus:outline-none"
+            style={{ color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer' }}
           >
-            <span style={{ position: 'absolute', top: 3, left: enabled ? 21 : 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#FAF8F3', transition: 'left 0.2s' }} />
+            <X size={16} />
           </button>
-        </div>
-        {enabled && (
-          <>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em', marginBottom: 6 }}>
-              Submission Deadline (optional)
-            </label>
-            <input
-              type="datetime-local"
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              style={{ width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 12px', fontSize: 14, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: "'Outfit', sans-serif", marginBottom: 16, boxSizing: 'border-box' }}
-            />
-          </>
         )}
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} className="focus:outline-none" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
-            CANCEL
-          </button>
-          <button onClick={handleSave} className="focus:outline-none" style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, backgroundColor: '#1B3828', color: '#EED98A', cursor: 'pointer' }}>
-            SAVE
-          </button>
-        </div>
       </div>
-    </ModalOverlay>
+      {error && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: OUTFIT, marginTop: 4 }}>{error}</p>}
+    </div>
+  );
+}
+
+// ── Vertical committee rail ─────────────────────────────────────────────────────
+
+function CommitteeRail({ committees, selectedId, onSelect }: {
+  committees: CommitteeTab[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="flex md:flex-col gap-2.5 overflow-x-auto md:overflow-visible flex-shrink-0 pb-1 md:pb-0">
+      {committees.map(c => {
+        const active = c.id === selectedId;
+        return (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => onSelect(c.id)}
+            title={c.name}
+            className="flex items-center justify-center flex-shrink-0 focus:outline-none"
+            style={{
+              width: 52, height: 52, borderRadius: 16, padding: 0, border: 'none', cursor: 'pointer',
+              backgroundColor: active ? NEU.base : NEU.surface,
+              boxShadow: active ? `0 0 0 2px ${NEU.deepGold}, ${NEU.in}` : NEU.outSm,
+              transition: `box-shadow 200ms ${EASE}`,
+            }}
+          >
+            {c.logo_url ? (
+              <img src={c.logo_url} alt={c.name} style={{ width: 34, height: 34, objectFit: 'contain', borderRadius: 8 }} />
+            ) : (
+              <MonogramMedallion text={c.abbreviation || c.name} isCrisis={c.committee_type === 'crisis'} size={40} />
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -345,19 +348,18 @@ export default function DocumentsPage() {
   const { conference } = useManage();
   const { user, session } = useAuth();
 
+  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [committees, setCommittees] = useState<CommitteeTab[]>([]);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string | null>(null);
   const [studyGuides, setStudyGuides] = useState<StudyGuide[]>([]);
-  const [positionPapers, setPositionPapers] = useState<PositionPaper[]>([]);
+  const [allocations, setAllocations] = useState<RosterAllocationRow[]>([]);
+  const [papers, setPapers] = useState<RosterPaper[]>([]);
+  const [messagesByPaper, setMessagesByPaper] = useState<Record<string, PaperMessageStub[]>>({});
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [feedbackEditing, setFeedbackEditing] = useState<Record<string, boolean>>({});
-  const [feedbackTexts, setFeedbackTexts] = useState<Record<string, string>>({});
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showDeadlineModal, setShowDeadlineModal] = useState(false);
   const [actionError, setActionError] = useState('');
   const [papersError, setPapersError] = useState(false);
-  const [viewerPaper, setViewerPaper] = useState<{ fileUrl: string; fileName: string } | null>(null);
   // Ids with a write in flight, disables that row's controls (double-click guard).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const didSetInitialTab = useRef(false);
@@ -365,6 +367,14 @@ export default function DocumentsPage() {
   // older tab are dropped instead of clobbering the current one.
   const paperReqSeq = useRef(0);
   const guideReqSeq = useRef(0);
+
+  // ── Settings tab state (Position Papers + Study Guides sections) ───────────
+  const [ppPerCommittee, setPpPerCommittee] = useState(false);
+  const [ppGlobalDeadline, setPpGlobalDeadline] = useState<string | null>(null);
+  const [sgPerCommittee, setSgPerCommittee] = useState(false);
+  const [sgGlobalPublishAt, setSgGlobalPublishAt] = useState<string | null>(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -382,7 +392,7 @@ export default function DocumentsPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('conference_committees')
-      .select('id, name, abbreviation, position_paper_deadline, position_paper_label, pp_submissions_enabled, notification_email')
+      .select('id, name, abbreviation, logo_url, committee_type, position_paper_deadline, pp_submissions_enabled, study_guides_publish_at, notification_email')
       .eq('conference_id', conference.id)
       .order('name', { ascending: true });
     const rows = (data ?? []) as CommitteeTab[];
@@ -400,6 +410,27 @@ export default function DocumentsPage() {
     });
   }, [loadCommittees]);
 
+  const loadConferenceSettings = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('conferences')
+      .select('pp_deadline_per_committee, position_paper_deadline, sg_publish_per_committee, study_guides_publish_at')
+      .eq('id', conference.id)
+      .maybeSingle();
+    const row = data as {
+      pp_deadline_per_committee: boolean | null; position_paper_deadline: string | null;
+      sg_publish_per_committee: boolean | null; study_guides_publish_at: string | null;
+    } | null;
+    setPpPerCommittee(row?.pp_deadline_per_committee ?? false);
+    setPpGlobalDeadline(row?.position_paper_deadline ?? null);
+    setSgPerCommittee(row?.sg_publish_per_committee ?? false);
+    setSgGlobalPublishAt(row?.study_guides_publish_at ?? null);
+    setSettingsLoaded(true);
+  }, [conference, session?.access_token]);
+
+  useEffect(() => { loadConferenceSettings(); }, [loadConferenceSettings]);
+
   const loadStudyGuides = useCallback(async () => {
     if (!selectedCommitteeId) return;
     if (!session) return;
@@ -414,38 +445,42 @@ export default function DocumentsPage() {
     setStudyGuides((data ?? []) as StudyGuide[]);
   }, [selectedCommitteeId]);
 
-  const loadPositionPapers = useCallback(async () => {
+  const loadPapers = useCallback(async () => {
     if (!selectedCommitteeId) return;
     if (!session) return;
     const seq = ++paperReqSeq.current;
     const supabase = getAuthedClient(session.access_token);
-    const { data, error } = await supabase
-      .from('position_papers')
-      .select(`
-        id, conference_committee_id, country_code, file_url, file_name, file_size_bytes,
-        status, chair_feedback, reviewed_at, notify_on_feedback, submitted_at,
-        profiles (display_name, email)
-      `)
-      .eq('conference_committee_id', selectedCommitteeId)
-      .order('submitted_at', { ascending: false });
+    const [{ data: allocData, error: allocError }, { data: paperData, error: paperError }] = await Promise.all([
+      supabase
+        .from('conference_allocations')
+        .select('country_code, user_id, profiles (display_name)')
+        .eq('conference_committee_id', selectedCommitteeId),
+      supabase
+        .from('position_papers')
+        .select('id, country_code, status, submitted_at, reviewer_seen_at')
+        .eq('conference_committee_id', selectedCommitteeId),
+    ]);
     if (seq !== paperReqSeq.current) return; // stale response
-    if (error) {
-      console.error('[DocumentsPage] position_papers load failed:', error);
+    if (allocError || paperError) {
+      console.error('[DocumentsPage] roster load failed:', allocError || paperError);
       setPapersError(true);
-      setPositionPapers([]);
+      setAllocations([]);
+      setPapers([]);
+      setMessagesByPaper({});
       return;
     }
     setPapersError(false);
-    setPositionPapers((data ?? []) as unknown as PositionPaper[]);
+    setAllocations((allocData ?? []) as unknown as RosterAllocationRow[]);
+    const paperRows = (paperData ?? []) as RosterPaper[];
+    setPapers(paperRows);
+    setMessagesByPaper(await fetchMessageStubsForPapers(supabase, paperRows.map(p => p.id)));
   }, [selectedCommitteeId]);
 
   useEffect(() => {
     loadStudyGuides();
-    loadPositionPapers();
+    loadPapers();
     setFilterStatus('ALL');
-    setFeedbackEditing({});
-    setFeedbackTexts({});
-  }, [loadStudyGuides, loadPositionPapers]);
+  }, [loadStudyGuides, loadPapers]);
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -490,86 +525,123 @@ export default function DocumentsPage() {
 
   function updatePaperStatus(paperId: string, status: string) {
     if (!user || !session || busyIds.has(paperId)) return;
-    const previous = positionPapers;
-    const reviewedAt = new Date().toISOString();
-    setPositionPapers(prev => prev.map(p => p.id === paperId ? { ...p, status, reviewed_at: reviewedAt } : p));
+    const previous = papers;
+    setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status } : p));
     setActionError('');
     markBusy(paperId, true);
     const supabase = getAuthedClient(session.access_token);
     supabase.from('position_papers').update({
       status,
       reviewed_by: user.id,
-      reviewed_at: reviewedAt,
+      reviewed_at: new Date().toISOString(),
     }).eq('id', paperId).then(({ error }) => {
       markBusy(paperId, false);
       if (error) {
-        setPositionPapers(previous);
+        setPapers(previous);
         setActionError("Couldn't update the paper status. The change was reverted.");
       }
     });
   }
 
-  function saveFeedback(paperId: string) {
-    if (!user || !session || !conference) return;
-    const previous = positionPapers;
-    const paper = positionPapers.find(p => p.id === paperId);
-    const feedback = feedbackTexts[paperId] ?? '';
-    const reviewedAt = new Date().toISOString();
-    setPositionPapers(prev => prev.map(p => p.id === paperId ? { ...p, chair_feedback: feedback, reviewed_at: reviewedAt } : p));
-    setFeedbackEditing(prev => ({ ...prev, [paperId]: false }));
-    setActionError('');
-    const supabase = getAuthedClient(session.access_token);
-    supabase.from('position_papers').update({
-      chair_feedback: feedback,
-      reviewed_by: user.id,
-      reviewed_at: reviewedAt,
-    }).eq('id', paperId).then(async ({ error }) => {
-      if (error) {
-        setPositionPapers(previous);
-        setFeedbackEditing(prev => ({ ...prev, [paperId]: true }));
-        setActionError("Couldn't save the feedback. Please try again.");
-        return;
-      }
-      // Notify every seat-holder of this paper's country, not just the
-      // submitter — a double-delegation country shares one paper between
-      // its two delegates. Only when the delegate opted into feedback
-      // notifications for this paper (notify_on_feedback) — the in-app
-      // feedback display itself is unaffected either way.
-      if (!paper || !paper.notify_on_feedback) return;
-      const { data: seatRows } = await supabase
-        .from('conference_allocations')
-        .select('application_id')
-        .eq('conference_committee_id', paper.conference_committee_id)
-        .eq('country_code', paper.country_code)
-        .not('application_id', 'is', null);
-      const applicationIds = ((seatRows ?? []) as { application_id: string }[]).map(r => r.application_id);
-      if (applicationIds.length > 0) {
-        await queueEventEmail(supabase, conference.id, 'position_paper_feedback', applicationIds);
-      }
-    });
-  }
-
-  // Position-paper settings: optimistic patch of the committees list, write in
-  // the background, roll back on failure.
-  function savePaperSettings(committeeId: string, updates: { position_paper_label: string; pp_submissions_enabled: boolean; position_paper_deadline: string | null }) {
+  // Per-committee pp_submissions_enabled toggle, optimistic.
+  function togglePpEnabled(committeeId: string, enabled: boolean) {
     if (!session) return;
     const previous = committees;
-    setCommittees(prev => prev.map(c => c.id === committeeId ? { ...c, ...updates } : c));
-    setActionError('');
+    setCommittees(prev => prev.map(c => c.id === committeeId ? { ...c, pp_submissions_enabled: enabled } : c));
+    setSettingsError('');
     const supabase = getAuthedClient(session.access_token);
-    supabase.from('conference_committees').update(updates).eq('id', committeeId).then(({ error }) => {
+    supabase.from('conference_committees').update({ pp_submissions_enabled: enabled }).eq('id', committeeId).then(({ error }) => {
       if (error) {
         setCommittees(previous);
-        setActionError("Couldn't save the position paper settings. The change was reverted.");
+        setSettingsError("Couldn't save that toggle. Please try again.");
       }
     });
   }
 
-  function toggleFeedbackEditor(paperId: string, existingFeedback: string | null) {
-    if (!feedbackEditing[paperId]) {
-      setFeedbackTexts(prev => ({ ...prev, [paperId]: existingFeedback ?? '' }));
+  async function togglePpPerCommittee(next: boolean) {
+    if (!session || !conference) return;
+    const previous = ppPerCommittee;
+    setPpPerCommittee(next);
+    setSettingsError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.rpc('set_conference_pp_deadline', {
+      p_conference_id: conference.id,
+      p_per_committee: next,
+      p_deadline: next ? null : ppGlobalDeadline,
+    });
+    if (error) {
+      setPpPerCommittee(previous);
+      setSettingsError("Couldn't save that setting. Please try again.");
+      return;
     }
-    setFeedbackEditing(prev => ({ ...prev, [paperId]: !prev[paperId] }));
+    if (!next) await loadCommittees();
+  }
+
+  async function saveGlobalPpDeadline(iso: string | null): Promise<boolean> {
+    if (!session || !conference) return false;
+    setPpGlobalDeadline(iso);
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.rpc('set_conference_pp_deadline', {
+      p_conference_id: conference.id,
+      p_per_committee: false,
+      p_deadline: iso,
+    });
+    if (error) return false;
+    await loadCommittees();
+    return true;
+  }
+
+  async function savePerCommitteePpDeadline(committeeId: string, iso: string | null): Promise<boolean> {
+    if (!session) return false;
+    const previous = committees;
+    setCommittees(prev => prev.map(c => c.id === committeeId ? { ...c, position_paper_deadline: iso } : c));
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('conference_committees').update({ position_paper_deadline: iso }).eq('id', committeeId);
+    if (error) { setCommittees(previous); return false; }
+    return true;
+  }
+
+  async function toggleSgPerCommittee(next: boolean) {
+    if (!session || !conference) return;
+    const previous = sgPerCommittee;
+    setSgPerCommittee(next);
+    setSettingsError('');
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.rpc('set_conference_sg_publish', {
+      p_conference_id: conference.id,
+      p_per_committee: next,
+      p_publish_at: next ? null : sgGlobalPublishAt,
+    });
+    if (error) {
+      setSgPerCommittee(previous);
+      setSettingsError("Couldn't save that setting. Please try again.");
+      return;
+    }
+    if (!next) await loadCommittees();
+  }
+
+  async function saveGlobalSgPublishAt(iso: string | null): Promise<boolean> {
+    if (!session || !conference) return false;
+    setSgGlobalPublishAt(iso);
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.rpc('set_conference_sg_publish', {
+      p_conference_id: conference.id,
+      p_per_committee: false,
+      p_publish_at: iso,
+    });
+    if (error) return false;
+    await loadCommittees();
+    return true;
+  }
+
+  async function savePerCommitteeSgPublishAt(committeeId: string, iso: string | null): Promise<boolean> {
+    if (!session) return false;
+    const previous = committees;
+    setCommittees(prev => prev.map(c => c.id === committeeId ? { ...c, study_guides_publish_at: iso } : c));
+    const supabase = getAuthedClient(session.access_token);
+    const { error } = await supabase.from('conference_committees').update({ study_guides_publish_at: iso }).eq('id', committeeId);
+    if (error) { setCommittees(previous); return false; }
+    return true;
   }
 
   if (!conference) return null;
@@ -577,34 +649,29 @@ export default function DocumentsPage() {
   // ── Derived ───────────────────────────────────────────────────────────────────
 
   const selectedCommittee = committees.find(c => c.id === selectedCommitteeId) ?? null;
-  const totalCount = positionPapers.length;
-  const approvedCount = positionPapers.filter(p => p.status === 'approved').length;
-  const pendingCount = positionPapers.filter(p => p.status === 'submitted').length;
-  const rejectedCount = positionPapers.filter(p => p.status === 'rejected').length;
-  const filteredPapers = filterStatus === 'ALL'
-    ? positionPapers
-    : positionPapers.filter(p => p.status.toUpperCase() === filterStatus);
+  const totalCount = papers.length;
+  const approvedCount = papers.filter(p => p.status === 'approved').length;
+  const pendingCount = papers.filter(p => p.status === 'submitted').length;
+  const rejectedCount = papers.filter(p => p.status === 'rejected').length;
 
-  const ghostBtn: React.CSSProperties = {
-    border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 12px',
-    fontSize: 11, fontFamily: "'Outfit', sans-serif", fontWeight: 700,
-    color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer',
-  };
+  const rosterAllocations: RosterAllocation[] = allocations.map(a => ({
+    country_code: a.country_code, user_id: a.user_id, display_name: a.profiles?.display_name ?? null,
+  }));
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="px-6 md:px-10 py-8">
       {/* Header */}
-      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11, color: '#9A8A78', letterSpacing: '0.12em', marginBottom: 4 }}>
+      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#9A8A78', letterSpacing: '0.12em', marginBottom: 4 }}>
         {conference.acronym} / Documents
       </p>
-      <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: 24, color: '#1C1410', marginBottom: 24 }}>
+      <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 24, color: '#1C1410', marginBottom: 24 }}>
         Documents
       </h1>
 
       {actionError && (
-        <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 16 }}>
+        <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 16 }}>
           {actionError}
         </p>
       )}
@@ -620,11 +687,11 @@ export default function DocumentsPage() {
           <span className="inline-flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(150deg, rgba(27,56,40,0.1), rgba(27,56,40,0.04))', border: '1px solid rgba(27,56,40,0.18)', marginBottom: 16 }}>
             <FileText size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
           </span>
-          <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, fontWeight: 600, color: '#1C1410', marginBottom: 6 }}>No committees yet</p>
-          <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#9A8A78', marginBottom: 20 }}>Add committees before managing documents.</p>
+          <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 600, color: '#1C1410', marginBottom: 6 }}>No committees yet</p>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78', marginBottom: 20 }}>Add committees before managing documents.</p>
           <Link
             href={`/manage/${conference.slug}/committees`}
-            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 13, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 10, padding: '8px 20px', textDecoration: 'none', display: 'inline-block' }}
+            style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 10, padding: '8px 20px', textDecoration: 'none', display: 'inline-block' }}
           >
             ADD COMMITTEES →
           </Link>
@@ -633,307 +700,280 @@ export default function DocumentsPage() {
 
       {!loading && committees.length > 0 && (
         <>
-          {/* Committee tabs */}
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 24 }}>
-            {committees.map(c => {
-              const isActive = c.id === selectedCommitteeId;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedCommitteeId(c.id)}
-                  className="focus:outline-none flex-shrink-0"
-                  style={{
-                    fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: '0.01em',
-                    padding: '8px 16px', borderRadius: 9999, whiteSpace: 'nowrap', cursor: 'pointer',
-                    border: isActive ? '1.5px solid #1B3828' : '1.5px solid #D8CDB6',
-                    backgroundColor: isActive ? '#1B3828' : 'transparent',
-                    color: isActive ? '#EED98A' : '#6E5F4E',
-                    transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                  onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  {c.abbreviation ?? c.name}
-                </button>
-              );
-            })}
+          {/* Tab switcher, same neumorphic pill pattern as the committees page */}
+          <div className="flex items-center gap-2 mb-6 flex-wrap">
+            <NeuPill active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
+              <LayoutGrid size={12} strokeWidth={2.5} />
+              OVERVIEW
+            </NeuPill>
+            <NeuPill active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
+              <SettingsIcon size={12} strokeWidth={2.5} />
+              SETTINGS
+            </NeuPill>
           </div>
 
-          {/* ── Section A: Study Guides ─────────────────────────────────────────── */}
-          <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, marginBottom: 24, boxShadow: CARD_SHADOW }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Study Guides</p>
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="focus:outline-none"
-                style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 12, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}
-              >
-                UPLOAD STUDY GUIDE
-              </button>
-            </div>
+          {activeTab === 'overview' && (
+            <div className="flex flex-col md:flex-row gap-6 items-start">
+              <CommitteeRail committees={committees} selectedId={selectedCommitteeId} onSelect={setSelectedCommitteeId} />
 
-            {studyGuides.length === 0 ? (
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#9A8A78', textAlign: 'center', padding: '32px 0' }}>No study guides yet.</p>
-            ) : (
-              <div>
-                {studyGuides.map((guide, i) => (
-                  <div
-                    key={guide.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
-                      borderBottom: i < studyGuides.length - 1 ? '1px solid #F0EDE6' : 'none',
-                    }}
-                  >
-                    <FileText size={18} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 13, color: '#1C1410' }}>{guide.title}</p>
-                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78', marginTop: 2 }}>
-                        {guide.file_name} · {formatFileSize(guide.file_size_bytes)}
-                      </p>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      {guide.is_published ? (
-                        <>
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', letterSpacing: '0.08em' }}>
-                            PUBLISHED
-                          </span>
-                          {guide.published_at && (
-                            <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78' }}>
-                              {formatDate(guide.published_at)}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => handlePublishGuide(guide.id, false)}
-                            className="focus:outline-none"
-                            style={ghostBtn}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                          >
-                            UNPUBLISH
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(238,217,138,0.15)', color: '#B8844A', letterSpacing: '0.08em' }}>
-                            DRAFT
-                          </span>
-                          <button
-                            onClick={() => handlePublishGuide(guide.id, true)}
-                            className="focus:outline-none"
-                            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
-                          >
-                            PUBLISH
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={() => handleDeleteGuide(guide.id)}
-                        className="focus:outline-none"
-                        style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'none', border: 'none', cursor: 'pointer' }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-                      >
-                        DELETE
-                      </button>
-                    </div>
+              <div className="flex-1 min-w-0 w-full flex flex-col gap-6">
+                {/* ── Section A: Study Guides ─────────────────────────────── */}
+                <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Study Guides</p>
+                    <button
+                      onClick={() => setShowUploadModal(true)}
+                      className="focus:outline-none"
+                      style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}
+                    >
+                      UPLOAD STUDY GUIDE
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* ── Section B: Position Papers (the protagonist) ────────────────────── */}
-          <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderTop: '2.5px solid #1B3828', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Position Papers</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>
-                  {selectedCommittee?.position_paper_deadline
-                    ? `Due ${formatDate(selectedCommittee.position_paper_deadline)}`
-                    : 'No deadline set'}
-                </span>
-                <button
-                  onClick={() => setShowDeadlineModal(true)}
-                  className="focus:outline-none"
-                  style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11, color: '#1C1410', backgroundColor: 'transparent', border: '1px solid #DDD4C0', borderRadius: 8, padding: '5px 10px', cursor: 'pointer' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  SETTINGS
-                </button>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>{totalCount} submitted</span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#3D7A52' }}>{approvedCount} approved</span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#B8844A' }}>{pendingCount} awaiting review</span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#8B2020' }}>{rejectedCount} rejected</span>
-            </div>
-
-            {/* Filter pills */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-              {['ALL', 'SUBMITTED', 'REVIEWED', 'APPROVED', 'REJECTED'].map(f => {
-                const isActive = filterStatus === f;
-                return (
-                  <button
-                    key={f}
-                    onClick={() => setFilterStatus(f)}
-                    className="focus:outline-none"
-                    style={{
-                      fontFamily: "'Outfit', sans-serif", fontSize: 10, fontWeight: 700,
-                      padding: '5px 12px', borderRadius: 9999, cursor: 'pointer', letterSpacing: '0.06em',
-                      border: isActive ? '1px solid #1B3828' : '1px solid #DDD4C0',
-                      backgroundColor: isActive ? '#1B3828' : 'transparent',
-                      color: isActive ? '#EED98A' : '#9A8A78',
-                    }}
-                  >
-                    {f}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Papers */}
-            {papersError ? (
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#8B2020', textAlign: 'center', padding: '32px 0' }}>
-                Couldn&apos;t load position papers.
-              </p>
-            ) : filteredPapers.length === 0 ? (
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#9A8A78', textAlign: 'center', padding: '32px 0' }}>
-                No position papers submitted yet.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {filteredPapers.map(paper => {
-                  const cName = countryName(paper.country_code);
-                  return (
-                  <div key={paper.id} style={{ backgroundColor: 'rgba(27,56,40,0.02)', border: '1px solid #DDD4C0', borderRadius: 12, padding: 16 }}>
-                    {/* Row 1 */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <img src={getFlagUrl(paper.country_code)} style={{ width: 24, height: 17, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }} alt={cName} />
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 13, color: '#1C1410' }}>{cName}</span>
-                      {paper.profiles?.display_name && (
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#9A8A78' }}>{paper.profiles.display_name}</span>
-                      )}
-                      <span style={{ marginLeft: 'auto' }}><PaperStatusBadge status={paper.status} /></span>
-                    </div>
-
-                    {/* Row 2 */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                      <button
-                        onClick={() => setViewerPaper({ fileUrl: paper.file_url, fileName: paper.file_name })}
-                        className="focus:outline-none"
-                        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: 11, color: '#1B3828', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
-                      >
-                        {paper.file_name}
-                      </button>
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>{formatFileSize(paper.file_size_bytes)}</span>
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, color: '#9A8A78' }}>Submitted {formatDate(paper.submitted_at)}</span>
-                      <a
-                        href={paper.file_url}
-                        download={paper.file_name}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600, color: '#1B3828', textDecoration: 'none' }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-                      >
-                        Download
-                      </a>
-                    </div>
-
-                    {/* Row 3: actions */}
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #F0EDE6' }}>
-                      {/* Status buttons */}
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                        {paper.status !== 'approved' && (
-                          <button
-                            onClick={() => updatePaperStatus(paper.id, 'approved')}
-                            className="focus:outline-none"
-                            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11, color: '#3D7A52', backgroundColor: 'rgba(61,122,82,0.12)', border: '1px solid rgba(61,122,82,0.3)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
-                          >
-                            APPROVE
-                          </button>
-                        )}
-                        {paper.status !== 'rejected' && (
-                          <button
-                            onClick={() => updatePaperStatus(paper.id, 'rejected')}
-                            className="focus:outline-none"
-                            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
-                          >
-                            REJECT
-                          </button>
-                        )}
-                        {paper.status === 'submitted' && (
-                          <button
-                            onClick={() => updatePaperStatus(paper.id, 'reviewed')}
-                            className="focus:outline-none"
-                            style={ghostBtn}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                          >
-                            MARK REVIEWED
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Feedback */}
-                      <div>
-                        {paper.chair_feedback && !feedbackEditing[paper.id] && (
-                          <div style={{ backgroundColor: 'rgba(27,56,40,0.04)', borderLeft: '3px solid #DDD4C0', padding: '8px 12px', borderRadius: '0 6px 6px 0', marginBottom: 6 }}>
-                            <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, color: '#1C1410', fontStyle: 'italic' }}>{paper.chair_feedback}</p>
+                  {studyGuides.length === 0 ? (
+                    <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78', textAlign: 'center', padding: '32px 0' }}>No study guides yet.</p>
+                  ) : (
+                    <div>
+                      {studyGuides.map((guide, i) => {
+                        const releaseAt = selectedCommittee?.study_guides_publish_at ?? null;
+                        const released = !guide.is_published && !!releaseAt && new Date(releaseAt).getTime() <= Date.now();
+                        const scheduled = !guide.is_published && !!releaseAt && new Date(releaseAt).getTime() > Date.now();
+                        return (
+                        <div
+                          key={guide.id}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
+                            borderBottom: i < studyGuides.length - 1 ? '1px solid #F0EDE6' : 'none',
+                          }}
+                        >
+                          <FileText size={18} style={{ color: '#9A8A78', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410' }}>{guide.title}</p>
+                            <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78', marginTop: 2 }}>
+                              {guide.file_name} · {formatFileSize(guide.file_size_bytes)}
+                            </p>
                           </div>
-                        )}
-                        {feedbackEditing[paper.id] ? (
-                          <div>
-                            <textarea
-                              rows={3}
-                              value={feedbackTexts[paper.id] ?? ''}
-                              onChange={e => setFeedbackTexts(prev => ({ ...prev, [paper.id]: e.target.value }))}
-                              placeholder="Write feedback for this delegate..."
-                              style={{ width: '100%', border: '1px solid #DDD4C0', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#1C1410', backgroundColor: '#FAF8F3', outline: 'none', fontFamily: "'Outfit', sans-serif", resize: 'vertical', boxSizing: 'border-box', marginBottom: 6 }}
-                            />
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button
-                                onClick={() => saveFeedback(paper.id)}
-                                className="focus:outline-none"
-                                style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 11, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
-                              >
-                                SAVE FEEDBACK
-                              </button>
-                              <button
-                                onClick={() => setFeedbackEditing(prev => ({ ...prev, [paper.id]: false }))}
-                                className="focus:outline-none"
-                                style={ghostBtn}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                              >
-                                CANCEL
-                              </button>
-                            </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            {guide.is_published ? (
+                              <>
+                                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', letterSpacing: '0.08em' }}>
+                                  PUBLISHED
+                                </span>
+                                {guide.published_at && (
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78' }}>
+                                    {formatDate(guide.published_at)}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => handlePublishGuide(guide.id, false)}
+                                  title={releaseAt && new Date(releaseAt).getTime() <= Date.now() ? "Won't hide it, the schedule already released it. Clear the schedule in Settings to fully unpublish." : undefined}
+                                  className="focus:outline-none"
+                                  style={{ border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
+                                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                                >
+                                  UNPUBLISH
+                                </button>
+                              </>
+                            ) : released ? (
+                              <>
+                                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', letterSpacing: '0.08em' }}>
+                                  RELEASED
+                                </span>
+                                <button
+                                  onClick={() => handlePublishGuide(guide.id, true)}
+                                  className="focus:outline-none"
+                                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
+                                >
+                                  PUBLISH
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 9999, backgroundColor: 'rgba(238,217,138,0.15)', color: '#B8844A', letterSpacing: '0.08em' }}>
+                                  DRAFT
+                                </span>
+                                {scheduled && (
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78' }}>
+                                    Releases {formatDate(releaseAt!)}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => handlePublishGuide(guide.id, true)}
+                                  className="focus:outline-none"
+                                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
+                                >
+                                  PUBLISH
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={() => handleDeleteGuide(guide.id)}
+                              className="focus:outline-none"
+                              style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer' }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
+                            >
+                              DELETE
+                            </button>
                           </div>
-                        ) : (
-                          <button
-                            onClick={() => toggleFeedbackEditor(paper.id, paper.chair_feedback)}
-                            className="focus:outline-none"
-                            style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600, color: '#1B3828', background: 'none', border: 'none', cursor: 'pointer' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'underline'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecoration = 'none'; }}
-                          >
-                            {paper.chair_feedback ? 'EDIT FEEDBACK' : 'ADD FEEDBACK'}
-                          </button>
-                        )}
-                      </div>
+                        </div>
+                        );
+                      })}
                     </div>
+                  )}
+                </div>
+
+                {/* ── Section B: Position Papers ──────────────────────────── */}
+                <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderTop: '2.5px solid #1B3828', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                    <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Position Papers</p>
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>
+                      {selectedCommittee?.position_paper_deadline
+                        ? `Due ${formatDate(selectedCommittee.position_paper_deadline)}`
+                        : 'No deadline set'}
+                    </span>
                   </div>
-                  );
-                })}
+
+                  {/* Stats */}
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#9A8A78' }}>{totalCount} submitted</span>
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#3D7A52' }}>{approvedCount} approved</span>
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#B8844A' }}>{pendingCount} awaiting review</span>
+                    <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: '#8B2020' }}>{rejectedCount} rejected</span>
+                  </div>
+
+                  {/* Filter pills */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                    {['ALL', 'SUBMITTED', 'REVIEWED', 'APPROVED', 'REJECTED'].map(f => {
+                      const isActive = filterStatus === f;
+                      return (
+                        <button
+                          key={f}
+                          onClick={() => setFilterStatus(f)}
+                          className="focus:outline-none"
+                          style={{
+                            fontFamily: OUTFIT, fontSize: 10, fontWeight: 700,
+                            padding: '5px 12px', borderRadius: 9999, cursor: 'pointer', letterSpacing: '0.06em',
+                            border: isActive ? '1px solid #1B3828' : '1px solid #DDD4C0',
+                            backgroundColor: isActive ? '#1B3828' : 'transparent',
+                            color: isActive ? '#EED98A' : '#9A8A78',
+                          }}
+                        >
+                          {f}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {papersError ? (
+                    <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#8B2020', textAlign: 'center', padding: '32px 0' }}>
+                      Couldn&apos;t load position papers.
+                    </p>
+                  ) : (
+                    <PositionPaperRoster
+                      conferenceSlug={conference.slug}
+                      currentUserId={user?.id ?? ''}
+                      deadline={selectedCommittee?.position_paper_deadline ?? null}
+                      allocations={rosterAllocations}
+                      papers={papers}
+                      messagesByPaper={messagesByPaper}
+                      busyIds={busyIds}
+                      onApprove={id => updatePaperStatus(id, 'approved')}
+                      onReject={id => updatePaperStatus(id, 'rejected')}
+                      statusFilter={filterStatus}
+                    />
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {activeTab === 'settings' && settingsLoaded && (
+            <div className="flex flex-col gap-6" style={{ maxWidth: 640 }}>
+              {settingsError && (
+                <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px' }}>
+                  {settingsError}
+                </p>
+              )}
+
+              {/* Position Papers settings */}
+              <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
+                <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase', margin: '0 0 16px 0' }}>
+                  Position Papers
+                </p>
+
+                <div className="flex flex-col gap-2.5 mb-6">
+                  {committees.map(c => (
+                    <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                      <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.ink }}>
+                        {c.abbreviation || c.name}
+                      </span>
+                      <PillToggle value={c.pp_submissions_enabled} onChange={v => togglePpEnabled(c.id, v)} />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between gap-3 mb-4 pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                    Different Position Paper Deadline per Committee
+                  </span>
+                  <PillToggle value={ppPerCommittee} onChange={togglePpPerCommittee} />
+                </div>
+
+                {ppPerCommittee ? (
+                  <div className="flex flex-col gap-2.5">
+                    {committees.map(c => (
+                      <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                        <span className="truncate" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
+                          {c.abbreviation || c.name}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 220 }}>
+                          <DateTimeField value={c.position_paper_deadline} onSave={iso => savePerCommitteePpDeadline(c.id, iso)} placeholder="No deadline" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <DateTimeField value={ppGlobalDeadline} onSave={saveGlobalPpDeadline} placeholder="No deadline" />
+                )}
+              </div>
+
+              {/* Study Guides settings */}
+              <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
+                <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase', margin: '0 0 16px 0' }}>
+                  Study Guides
+                </p>
+
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <span style={{ fontFamily: OUTFIT, fontSize: 13.5, color: '#1C1410', fontWeight: 600 }}>
+                    Different Study Guide Release per Committee
+                  </span>
+                  <PillToggle value={sgPerCommittee} onChange={toggleSgPerCommittee} />
+                </div>
+
+                {sgPerCommittee ? (
+                  <div className="flex flex-col gap-2.5">
+                    {committees.map(c => (
+                      <div key={c.id} className="flex items-center gap-3 flex-wrap rounded-xl px-4 py-3" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                        <span className="truncate" style={{ width: 140, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink }}>
+                          {c.abbreviation || c.name}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 220 }}>
+                          <DateTimeField value={c.study_guides_publish_at} onSave={iso => savePerCommitteeSgPublishAt(c.id, iso)} placeholder="No scheduled release" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <DateTimeField value={sgGlobalPublishAt} onSave={saveGlobalSgPublishAt} placeholder="No scheduled release" />
+                )}
+                <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', marginTop: 12, lineHeight: 1.6 }}>
+                  A guide becomes visible to delegates once it is manually published, or once its committee&apos;s release time passes, whichever comes first. The PUBLISH button on a guide is still there for an early, manual release. Clear a schedule here if you need to pull an already-released draft back out of sight.
+                </p>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -945,22 +985,6 @@ export default function DocumentsPage() {
           userId={user.id}
           onClose={() => setShowUploadModal(false)}
           onUploaded={loadStudyGuides}
-        />
-      )}
-      {showDeadlineModal && selectedCommitteeId && selectedCommittee && (
-        <SetDeadlineModal
-          currentDeadline={selectedCommittee.position_paper_deadline}
-          currentLabel={selectedCommittee.position_paper_label}
-          currentEnabled={selectedCommittee.pp_submissions_enabled}
-          onClose={() => setShowDeadlineModal(false)}
-          onSave={updates => savePaperSettings(selectedCommitteeId, updates)}
-        />
-      )}
-      {viewerPaper && (
-        <PositionPaperViewerModal
-          fileUrl={viewerPaper.fileUrl}
-          fileName={viewerPaper.fileName}
-          onClose={() => setViewerPaper(null)}
         />
       )}
     </div>

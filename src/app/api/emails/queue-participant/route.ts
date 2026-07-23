@@ -3,7 +3,7 @@
 // participant's own browser session can never insert an outbox row directly
 // — queueEventEmail called from their session silently no-ops. This route
 // re-authorizes the specific (event, applicationIds) pair against the
-// caller's own JWT, then queues with the service role. Only the three
+// caller's own JWT, then queues with the service role. Only the
 // participant-triggered events below are reachable here; every other event
 // key stays organizer-only through the manage pages calling queueEventEmail
 // directly with their own authed client.
@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://luruhkwrgisytejswlas.supabase.co';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV';
 
-const ALLOWED_EVENTS = new Set(['application_received', 'delegation_swap', 'position_paper_feedback']);
+const ALLOWED_EVENTS = new Set(['application_received', 'delegation_swap']);
 const LEADER_STATUSES = ['accepted', 'assigned', 'checked-in'];
 
 interface QueueParticipantBody {
@@ -74,17 +74,6 @@ async function authorizeDelegationSwap(admin: SupabaseClient, callerId: string, 
   return (leaderRows?.length ?? 0) > 0;
 }
 
-async function authorizePositionPaperFeedback(admin: SupabaseClient, callerId: string, conferenceId: string): Promise<boolean> {
-  if (await isOrganizer(admin, callerId, conferenceId)) return true;
-  const { data: committees } = await admin
-    .from('conference_committees')
-    .select('id')
-    .eq('conference_id', conferenceId)
-    .contains('chair_user_ids', [callerId])
-    .limit(1);
-  return (committees?.length ?? 0) > 0;
-}
-
 export async function POST(req: NextRequest) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
@@ -127,7 +116,6 @@ export async function POST(req: NextRequest) {
   const authorized =
     eventKey === 'application_received' ? await authorizeApplicationReceived(admin, callerId, conferenceId, applicationIds) :
     eventKey === 'delegation_swap' ? await authorizeDelegationSwap(admin, callerId, conferenceId, applicationIds) :
-    eventKey === 'position_paper_feedback' ? await authorizePositionPaperFeedback(admin, callerId, conferenceId) :
     false;
 
   if (!authorized) {

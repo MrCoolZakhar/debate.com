@@ -53,7 +53,6 @@ export const EVENT_REGISTRY: EventDef[] = [
   { key: 'session_join_invite', label: 'Session Join Invite', description: 'Sent to committee participants inviting them to join the live session.', defaultDelivery: 'manual' },
   { key: 'request_reply', label: 'Request reply', description: 'Sent to a participant when the organizing team replies to their question.', defaultDelivery: 'immediate' },
   { key: 'delegation_swap', label: 'Delegation swap', description: 'Sent to both delegates when their committee allocations are swapped within a delegation.', defaultDelivery: 'immediate' },
-  { key: 'position_paper_feedback', label: 'Position Paper Feedback', description: 'Sent to a delegate when their chair leaves feedback on their position paper.', defaultDelivery: 'immediate' },
   { key: 'import_join_invite', label: 'Import: join Gavelling', description: 'Sent to imported applicants asking them to create a Gavelling account so their registration attaches automatically. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
 ];
 
@@ -99,7 +98,6 @@ export const NOTIFICATION_CATEGORY: Record<string, NotificationCategory> = {
   delegation_swap: 'applications',
   request_reply: 'applications',
   documents_published: 'documents',
-  position_paper_feedback: 'documents',
 };
 
 const PREFERENCE_FIELD: Record<NotificationCategory, 'notify_email_applications' | 'notify_email_documents' | 'notify_email_reminders'> = {

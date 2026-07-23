@@ -167,6 +167,7 @@ export default function ParticipantView({
             {DELEGATE_ROLES.has(selected.role) ? (
               <DelegateParticipant
                 conferenceId={conferenceId}
+                conferenceSlug={conferenceSlug}
                 conferenceStartDate={conferenceStartDate}
                 application={selected}
                 myAllocation={myAllocation}
@@ -181,7 +182,7 @@ export default function ParticipantView({
                 allocationSwapMode={allocationSwapMode}
               />
             ) : selected.role === 'chair' ? (
-              <ChairParticipant conferenceId={conferenceId} />
+              <ChairParticipant conferenceId={conferenceId} conferenceSlug={conferenceSlug} />
             ) : selected.role === 'observer' ? (
               <ObserverParticipant conferenceId={conferenceId} conferenceStartDate={conferenceStartDate} />
             ) : (
