@@ -5,7 +5,7 @@
 // Outfit eyebrows, Outfit for UI text, lucide icons only.
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Medal, Award, Info, X, Star } from 'lucide-react';
+import { Medal, Award, Info, X, Star, Trophy, Handshake, Megaphone, ScrollText, type LucideIcon } from 'lucide-react';
 import { EXPERIENCE_BANDS } from '@/lib/munExperience';
 import Portal from '@/components/Portal';
 import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
@@ -589,59 +589,49 @@ export function awardTier(name: string): AwardTier {
   return 'special'; // custom free-text honour → green
 }
 
-// Some award labels changed over time but their artwork asset did not. Older CV
-// rows may still store the previous label — map both to the same file so the
-// artwork keeps resolving. The owner ships /awards/diplomacy.png for both.
-const AWARD_ARTWORK_SLUG_ALIASES: Record<string, string> = {
-  'diplomacy-award': 'diplomacy',
-};
-
-export function awardArtworkPath(name: string): string {
-  const slug = awardSlug(name);
-  return `/awards/${AWARD_ARTWORK_SLUG_ALIASES[slug] ?? slug}.png`;
+// Each award renders a distinct, on-brand lucide glyph on its tier-coloured
+// disc — no external artwork (public/awards/ ships no PNGs, so every <img>
+// 404'd). Matching is case-insensitive and works off the award name; the tier
+// (awardTier) still drives the disc colour and glyph tint.
+function awardIcon(name: string): LucideIcon {
+  const n = name.toLowerCase();
+  if (/best delegate/.test(n)) return Trophy;         // gold
+  if (/diplomacy/.test(n)) return Handshake;          // gold
+  if (/outstanding/.test(n)) return Medal;            // silver
+  if (/honou?rable mention/.test(n)) return Award;    // silver (ribbon)
+  if (/verbal commendation/.test(n)) return Megaphone; // bronze
+  if (/position paper/.test(n)) return ScrollText;    // bronze
+  return Star;                                        // custom / special (green)
 }
 
 /**
- * Small artwork tile for an award. Tries /awards/<kebab-slug>.png first,
- * falls back to a styled medal disc when the artwork is not present yet.
+ * Small icon tile for an award: a tier-coloured disc (gold / silver / bronze /
+ * green) with a per-award lucide glyph tinted in the tier's medal colour.
  */
 export function AwardArtwork({ name, size = 20 }: { name: string; size?: number }) {
-  const [failed, setFailed] = useState(false);
   const t = awardTier(name);
   const tier = AWARD_TIER_STYLE[t];
-
-  // Custom "special" honours never have a bundled PNG (the name is free-text),
-  // so render the green disc directly — no 404 round-trip. Metal medals fall
-  // back to their disc only if the artwork asset is missing.
-  if (t === 'special' || failed) {
-    return (
-      <span
-        className="flex items-center justify-center flex-shrink-0 rounded-full"
-        style={{
-          width: `${size}px`,
-          height: `${size}px`,
-          background: `linear-gradient(135deg, ${tier.from}, ${tier.to})`,
-          border: `1px solid ${tier.border}`,
-        }}
-      >
-        {t === 'special'
-          ? <Star size={Math.round(size * 0.55)} strokeWidth={2.2} fill={tier.medal} style={{ color: tier.medal }} />
-          : t === 'bronze' && /position paper/i.test(name)
-          ? <Award size={Math.round(size * 0.55)} strokeWidth={2.2} style={{ color: tier.medal }} />
-          : <Medal size={Math.round(size * 0.55)} strokeWidth={2.2} style={{ color: tier.medal }} />}
-      </span>
-    );
-  }
-
+  const Icon = awardIcon(name);
+  // "Special" honours use a light glyph on the deep-green disc; the Star reads
+  // best filled. Metal tiers keep a crisp stroked glyph in the medal colour.
+  const filled = t === 'special';
   return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={awardArtworkPath(name)}
-      alt={name}
-      onError={() => setFailed(true)}
-      className="flex-shrink-0"
-      style={{ width: `${size}px`, height: `${size}px`, objectFit: 'contain', borderRadius: '50%' }}
-    />
+    <span
+      className="flex items-center justify-center flex-shrink-0 rounded-full"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        background: `linear-gradient(135deg, ${tier.from}, ${tier.to})`,
+        border: `1px solid ${tier.border}`,
+      }}
+    >
+      <Icon
+        size={Math.round(size * 0.55)}
+        strokeWidth={2.2}
+        fill={filled ? tier.medal : 'none'}
+        style={{ color: tier.medal }}
+      />
+    </span>
   );
 }
 

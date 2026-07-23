@@ -68,14 +68,19 @@ interface RoleSlide {
   secondary?: { label: string; href: string };
 }
 
+// Exactly three roles, arranged so the carousel opens on the SECRETARIAT /
+// organise path as the primary (centre) slide, with DELEGATES peeking on the
+// left and CHAIRS peeking on the right. The array order encodes that layout:
+// index 0 is the centre slide; index 1 (Chairs) resolves to the +1 right peek
+// and index 2 (Delegates) wraps to the -1 left peek. It loops among these three.
 const ROLE_SLIDES: RoleSlide[] = [
   {
-    role: 'Delegates',
-    blurb: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
-    image: '/roles/delegate.jpg',
-    imageAlt: 'A delegate speaking from their seat in committee',
-    primary: { label: 'Explore conferences', href: '/conferences/explore' },
-    secondary: { label: 'View your conferences', href: '/my-conferences?tab=delegate' },
+    role: 'Secretariat',
+    blurb: 'The machine behind the weekend: run applications, allocations, delegations and communications from one place — the whole show, zero fees.',
+    image: '/roles/secretariat.webp',
+    imageAlt: 'Secretariat staff coordinating a conference',
+    primary: { label: 'See open roles', href: '/conferences/roles' },
+    secondary: { label: 'List your conference', href: '/conferences/new' },
   },
   {
     role: 'Chairs',
@@ -86,35 +91,12 @@ const ROLE_SLIDES: RoleSlide[] = [
     secondary: { label: 'View your conferences', href: '/my-conferences?tab=chair' },
   },
   {
-    role: 'Secretariat',
-    blurb: 'The machine behind the weekend: applications, allocations and communications in one place.',
-    image: '/roles/secretariat.webp',
-    imageAlt: 'Secretariat staff coordinating a conference',
-    primary: { label: 'See open roles', href: '/conferences/roles' },
-  },
-  {
-    role: 'Organizers',
-    blurb: 'Registration, allocation, delegations, live committees. The whole show, zero fees.',
-    image: '/landing/organiser-desk.jpg',
-    imageAlt: 'A delegation working together on Gavelling at a laptop',
-    primary: { label: 'List your conference', href: '/conferences/new' },
-    secondary: { label: 'View your conferences', href: '/my-conferences?tab=organizer' },
-  },
-  {
-    role: 'Advisors',
-    blurb: 'Pledge spots, manage payments and keep your delegation organised, all in one place.',
-    image: '/landing/organiser-desk.jpg',
-    imageAlt: 'A delegation working together on Gavelling at a laptop',
+    role: 'Delegates',
+    blurb: 'Browse the circuit, apply once with your Gavelling profile, and build a MUN CV that writes itself.',
+    image: '/roles/delegate.jpg',
+    imageAlt: 'A delegate speaking from their seat in committee',
     primary: { label: 'Explore conferences', href: '/conferences/explore' },
-    secondary: { label: 'View your conferences', href: '/my-conferences?tab=advisor' },
-  },
-  {
-    role: 'Observers',
-    blurb: 'Follow committees live and see how the room moves, no placard required.',
-    image: '/landing/podium-speaker.jpg',
-    imageAlt: 'A full committee room mid-debate, chair at the podium',
-    primary: { label: 'Explore conferences', href: '/conferences/explore' },
-    secondary: { label: 'View your conferences', href: '/my-conferences?tab=observer' },
+    secondary: { label: 'View your conferences', href: '/my-conferences?tab=delegate' },
   },
 ];
 
@@ -129,6 +111,19 @@ function countryNameFromCode(code: string | null | undefined): string | null {
 interface GeoResult {
   country: string | null; // full name
   city: string | null;
+}
+
+// Landing-card conference title rule:
+//   • show the `acronym` when set, else the `full_name`
+//   • NEVER force/append "MUN"
+//   • append the edition year ONLY when the acronym/name does not already
+//     contain that same 4-digit year (so "Hult 2026" never becomes
+//     "Hult 2026 2026").
+function landingConfTitle(c: Pick<LabConference, 'acronym' | 'full_name' | 'start_date'>): string {
+  const base = ((c.acronym ?? '').trim() || (c.full_name ?? '').trim());
+  const year = c.start_date ? c.start_date.slice(0, 4) : '';
+  if (year && /^\d{4}$/.test(year) && !base.includes(year)) return `${base} ${year}`;
+  return base;
 }
 
 export default function VariantStagefront({
@@ -558,17 +553,18 @@ export default function VariantStagefront({
 
             <div className="lg:flex-1 lg:min-w-0" style={{ position: 'relative' }}>
               {/*
-                Photo: Miguel Henriques via Unsplash (license-safe, free to use)
-                https://unsplash.com/photos/9OKGEVJiTKk
-                /public/landing/podium-speaker.jpg (~170 KB).
+                Job-board photo: the secretariat/staff image (/public/roles/
+                secretariat.webp) — deliberately DIFFERENT from the hero
+                backdrop (/landing/podium-speaker.jpg) so the section reads as
+                the people running the conference, not the delegate on the floor.
               */}
               <div
                 className="relative overflow-hidden rounded-3xl"
                 style={{ border: '1px solid rgba(27,56,40,0.14)', boxShadow: '0 30px 60px rgba(27,56,40,0.18)', aspectRatio: '3 / 2' }}
               >
                 <Image
-                  src="/landing/podium-speaker.jpg"
-                  alt="A chair addressing a full auditorium of delegates"
+                  src="/roles/secretariat.webp"
+                  alt="Secretariat and staff coordinating a conference behind the scenes"
                   fill
                   sizes="(min-width: 1024px) 50vw, 100vw"
                   style={{ objectFit: 'cover' }}
@@ -650,6 +646,75 @@ export default function VariantStagefront({
             />
           </section>
         )}
+
+        {/* ── "What is Model UN?" — beginner-friendly SEO explainer, cream ──── */}
+        <section
+          className="px-6 md:px-14"
+          style={{ backgroundColor: CREAM, paddingTop: 'clamp(64px, 6vw, 104px)', paddingBottom: 'clamp(64px, 6vw, 104px)' }}
+        >
+          <div className="mx-auto" style={{ maxWidth: '980px' }}>
+            <p style={{ fontFamily: SANS, fontWeight: 700, fontSize: 'clamp(12px, 0.8vw, 14px)', letterSpacing: '0.14em', textTransform: 'uppercase', color: GOLD, margin: '0 0 10px 0' }}>
+              New to the circuit?
+            </p>
+            <h2
+              style={{
+                fontFamily: SANS,
+                fontWeight: 900,
+                fontSize: 'clamp(28px, 3.4vw, 54px)',
+                lineHeight: 1.03,
+                letterSpacing: '-0.02em',
+                color: INK,
+                margin: 0,
+              }}
+            >
+              What is Model United Nations?
+            </h2>
+            <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 20px)', lineHeight: 1.7, color: INK_70, margin: '20px 0 0 0', maxWidth: '760px' }}>
+              Model United Nations, or <strong style={{ color: INK }}>MUN</strong>, is an academic
+              simulation of the real United Nations. Students step into the shoes of diplomats,
+              each representing a country, and debate the world&rsquo;s biggest challenges — from
+              climate change to global security — in committees modelled on the UN&rsquo;s own.
+              It&rsquo;s part debate, part public speaking, part teamwork, and one of the best ways
+              to sharpen the skills that carry into university and beyond.
+            </p>
+            <p style={{ fontFamily: SANS, fontSize: 'clamp(16px, 1.15vw, 20px)', lineHeight: 1.7, color: INK_70, margin: '18px 0 0 0', maxWidth: '760px' }}>
+              At a conference, delegates research their country&rsquo;s position, deliver speeches,
+              negotiate with allies and rivals, and work together to draft <strong style={{ color: INK }}>resolutions</strong> —
+              the written proposals a committee votes on. A chairperson keeps the debate flowing,
+              and awards recognise the delegates who lead the room. No experience is needed to
+              start: everyone gives their first speech eventually.
+            </p>
+
+            <h3 style={{ fontFamily: SANS, fontWeight: 800, fontSize: 'clamp(19px, 1.5vw, 26px)', letterSpacing: '-0.01em', color: FOREST, margin: 'clamp(32px, 3vw, 48px) 0 16px 0' }}>
+              How a Model UN conference works
+            </h3>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '14px', maxWidth: '760px' }}>
+              {[
+                ['Pick a committee', 'Conferences run committees — the Security Council, historical crises, specialised agencies and more — each with its own topic and pace.'],
+                ['Represent a country', 'You’re assigned a country (or a character) and speak, vote and negotiate on its behalf throughout the weekend.'],
+                ['Debate and negotiate', 'Delegates make speeches, form blocs, and hammer out compromises through moderated and unmoderated caucuses.'],
+                ['Draft resolutions', 'Working together, committees write and amend resolutions, then vote — the heart of every MUN session.'],
+              ].map(([term, desc]) => (
+                <li key={term} className="flex items-start gap-3.5">
+                  <span
+                    aria-hidden="true"
+                    className="flex-shrink-0"
+                    style={{ width: 10, height: 10, marginTop: 9, borderRadius: 9999, backgroundColor: GOLD, boxShadow: '0 0 0 4px rgba(184,148,58,0.16)' }}
+                  />
+                  <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.6, color: INK_70, margin: 0 }}>
+                    <strong style={{ color: INK }}>{term}.</strong>{' '}{desc}
+                  </p>
+                </li>
+              ))}
+            </ul>
+
+            <p style={{ fontFamily: SANS, fontSize: 'clamp(15px, 1.05vw, 18px)', lineHeight: 1.7, color: INK_55, margin: 'clamp(28px, 2.5vw, 40px) 0 0 0', maxWidth: '760px' }}>
+              Whether you&rsquo;re a total beginner looking for your first conference or a seasoned
+              delegate chasing the next gavel, Gavelling helps you find the right room. Browse
+              conferences above and apply in minutes.
+            </p>
+          </div>
+        </section>
 
         {/* ── Section: MUN Across the Globe, copied verbatim from production ── */}
         <section
@@ -951,7 +1016,7 @@ function HeroSearchBar({ conferences }: { conferences: LabConference[] }) {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate" style={{ fontFamily: SANS, fontWeight: 700, fontSize: 14.5, color: INK }}>
-                  {c.acronym || c.full_name}
+                  {landingConfTitle(c)}
                 </span>
                 <span className="block truncate" style={{ fontFamily: SANS, fontWeight: 500, fontSize: 12.5, color: INK_55 }}>
                   {[c.city, c.country].filter(Boolean).join(', ')}

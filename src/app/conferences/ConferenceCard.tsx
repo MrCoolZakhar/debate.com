@@ -43,6 +43,7 @@ import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin } from 'lucide-re
 import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmount } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
+import { appendEditionYear } from '@/lib/presetNames';
 
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
@@ -119,6 +120,9 @@ export function ConferenceCard({
   // "Oxford, GB", ISO country code instead of the full country name (or flag)
   const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
   const editionYear = conf.start_date ? conf.start_date.slice(0, 4) : null;
+  // Heading = acronym + edition year, but never doubled if the acronym/name
+  // already carries that year (e.g. "Hult 2026" stays "Hult 2026").
+  const headingLabel = appendEditionYear(conf.acronym, editionYear);
   const initials = conf.acronym.slice(0, 3).toUpperCase();
   const [g0, g1] = gradientFor(conf.acronym);
   // heroCompact reuses compact's tighter horizontal padding.
@@ -234,7 +238,7 @@ export function ConferenceCard({
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}
         >
-          {conf.acronym} {editionYear}
+          {headingLabel}
         </h3>
         <div className="flex items-end justify-between gap-3" style={{ marginTop: '7px' }}>
           {/* Facts row: location+flag · fee · attendees (dates live top-right on the photo) */}
@@ -422,7 +426,7 @@ export function ConferenceCard({
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}
         >
-          {conf.acronym} {editionYear}
+          {headingLabel}
         </h3>
 
         {/* Location */}

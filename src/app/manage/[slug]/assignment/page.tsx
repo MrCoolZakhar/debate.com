@@ -279,16 +279,27 @@ interface UserHistory {
 // score(applicant, committee, slot) =
 //   preference:  1st choice committee +50, 2nd +30, 3rd +15
 //                +25 more if the slot is the exact country they asked for in that preference
-//   experience:  15 - 6 * |experience level - committee difficulty|  (floor 0)
+//   experience:  15 - 6 * |experience level - committee difficulty|  (floor 0),
+//                but ONLY when BOTH the applicant's experience level and the
+//                committee's difficulty are known — otherwise the term is
+//                dropped entirely (neutral, no bonus and no penalty).
 //   fullness:    12 * (1 - filled/total) , nudges suggestions toward emptier committees
 //   importance:  +18 / +10 / +4 / 0 for an open high / medium / low / standard
 //                seat, so the algorithm fills seats — and the committees that
 //                still hold them — in order of importance.
 
+// The canonical MUN skill ladder, shared by BOTH an applicant's experience
+// level and a committee's difficulty (they are graded on the same four rungs).
+// beginner→0, intermediate→1, advanced→2, expert→3. Returns `null` for a
+// missing/blank/unrecognised value so callers can treat it NEUTRALLY instead of
+// silently pretending it is 'intermediate'. Note: `difficulty` is the
+// organiser-set committee field — it is NEVER one of the committee_type values
+// (general-assembly / specialised / crisis), so those are (correctly) unknown
+// here and never map onto the ladder.
 const LEVELS = ['beginner', 'intermediate', 'advanced', 'expert'];
-function levelIdx(s: string | null | undefined): number {
-  const i = LEVELS.indexOf((s ?? '').toLowerCase());
-  return i === -1 ? 1 : i;
+function levelIdx(s: string | null | undefined): number | null {
+  const i = LEVELS.indexOf((s ?? '').toLowerCase().trim());
+  return i === -1 ? null : i;
 }
 
 // Importance-weighted need: an open high/medium-importance seat is a higher
@@ -299,14 +310,16 @@ const IMPORTANCE_NEED_WEIGHT: Record<ImportanceTier, number> = { high: 18, mediu
 
 // Committee difficulty ordering for the default board sort (ascending): the
 // gentlest committees first, hardest last. Mirrors the canonical DIFF_ORDER in
-// the committees page; 'general-assembly' committees are entry level, so they
-// sort alongside beginner.
+// the committees page EXACTLY — difficulty is strictly one of the four rungs and
+// is NEVER inferred from committee_type (a general-assembly committee sorts by
+// its own real `difficulty` field, not by being a GA). An unset/unknown
+// difficulty sorts last (99), matching the committees board, rather than being
+// silently treated as 'intermediate'.
 const DIFFICULTY_RANK: Record<string, number> = {
-  beginner: 0, 'general-assembly': 0, 'general assembly': 0,
-  intermediate: 1, advanced: 2, expert: 3,
+  beginner: 0, intermediate: 1, advanced: 2, expert: 3,
 };
 function difficultyRank(d: string | null | undefined): number {
-  return DIFFICULTY_RANK[(d ?? '').toLowerCase()] ?? 1;
+  return DIFFICULTY_RANK[(d ?? '').toLowerCase().trim()] ?? 99;
 }
 
 interface ScoreResult {
@@ -326,10 +339,21 @@ function scorePrefAndExp(app: AcceptedApp, committee: CommitteeData, slot: SlotR
     score += 25;
     reasons.push('COUNTRY PICK');
   }
-  const gap = Math.abs(levelIdx(app.experience_level) - levelIdx(committee.difficulty));
-  const expScore = Math.max(0, 15 - 6 * gap);
-  score += expScore;
-  if (gap === 0) reasons.push('EXP MATCH');
+  // Experience fit is scored ONLY when we actually know both the applicant's
+  // experience level AND the committee's difficulty. The committee's difficulty
+  // is the organiser-set field (beginner/intermediate/advanced/expert) — we
+  // never infer it from committee_type. If either side is unset we award
+  // nothing and impose no penalty, so an un-graded committee stays neutral
+  // rather than being treated as 'intermediate' (which would arbitrarily favour
+  // or punish applicants based on a difficulty nobody actually chose).
+  const expL = levelIdx(app.experience_level);
+  const diffL = levelIdx(committee.difficulty);
+  if (expL !== null && diffL !== null) {
+    const gap = Math.abs(expL - diffL);
+    const expScore = Math.max(0, 15 - 6 * gap);
+    score += expScore;
+    if (gap === 0) reasons.push('EXP MATCH');
+  }
   return { score, reasons };
 }
 
@@ -696,7 +720,7 @@ function PointsInfo() {
             </span>
             {row('Committee preference  +50 / +30 / +15', 'Their 1st choice committee scores 50, 2nd choice 30, 3rd choice 15.')}
             {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
-            {row('Experience fit  up to +15', 'Full 15 when their level matches the committee difficulty, minus 6 for each level of gap, floored at 0.')}
+            {row('Experience fit  up to +15', 'Full 15 when their level matches the committee difficulty, minus 6 for each level of gap, floored at 0. Skipped entirely — no bonus, no penalty — when the committee has no difficulty set.')}
             {row('Committee fill  up to +12', 'Emptier committees score higher (12 x share still open), nudging suggestions to where seats are needed.')}
             {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
             <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, lineHeight: 1.4, paddingTop: 2, borderTop: `1px solid ${NEU.base}` }}>
@@ -3364,6 +3388,19 @@ export default function AssignmentPage() {
       // Process the strongest candidates first (by their best available score).
       .sort((a, b) => b[0].score - a[0].score);
 
+    // Fast lookup: for a given applicant (by app id) + slot (by slot id), the
+    // pre-scored Suggestion object. This lets the swap-improvement pass below
+    // re-cost a hypothetical reassignment — and reuse its reasons — without
+    // re-running scoreSlot. Only open (non-full) slots appear here, exactly the
+    // ones a suggestion may legally target.
+    const optionByAppSlot = new Map<string, Map<string, Suggestion>>();
+    for (const options of ranked) {
+      if (options.length === 0) continue;
+      const m = new Map<string, Suggestion>();
+      for (const s of options) m.set(s.slot.id, s);
+      optionByAppSlot.set(options[0].app.id, m);
+    }
+
     // Greedy: each candidate takes their highest-scoring seat that still has an
     // open seat left in this suggestion set — one suggestion per candidate, and
     // never more suggestions for a slot than its open seats. Because a candidate
@@ -3387,8 +3424,49 @@ export default function AssignmentPage() {
       }
       if (out.length >= 6) break;
     }
-    // Display strongest-first: greedy insertion mostly follows score order, but a
-    // fall-through pick can land lower, so re-sort the cards high → low.
+
+    // ── Local swap-improvement pass ───────────────────────────────────────────
+    // Pure greedy assigns each candidate their best STILL-OPEN seat in candidate
+    // order, which can be globally suboptimal AND unfair: a strong candidate can
+    // grab a seat a second candidate needed far more, leaving the second one a
+    // poor fallback. Worked example — seat S1 scores A=100 / B=90, seat S2 scores
+    // A=95 / B=10: greedy gives A→S1(100), B→S2(10) = 110, but A→S2(95) +
+    // B→S1(90) = 185 is clearly better for the conference AND fairer to B. We
+    // repair this with pairwise swaps: for any two suggestions, if exchanging
+    // their seats STRICTLY raises the combined score — and both candidates
+    // actually had the other's seat as an open, valid option — perform the swap.
+    //
+    // Seat capacity is always preserved: a swap exchanges exactly one occupant of
+    // slot i with one occupant of slot j, so every slot keeps its head-count (a
+    // double-delegation slot filled by two suggestions stays filled by two). Each
+    // swap strictly increases the total score, which is bounded above, so the
+    // loop always terminates; the guard is only a belt-and-braces safety cap.
+    // This stays a suggestion AID, not a full assignment solver — with ≤6
+    // suggestions the repeated O(n²) sweeps are trivially cheap and easy to
+    // reason about.
+    let improved = true;
+    let guard = 0;
+    while (improved && guard++ < 24) {
+      improved = false;
+      for (let i = 0; i < out.length; i++) {
+        for (let j = i + 1; j < out.length; j++) {
+          const si = out[i];
+          const sj = out[j];
+          if (si.slot.id === sj.slot.id) continue; // same seat → swap is a no-op
+          const iOnJ = optionByAppSlot.get(si.app.id)?.get(sj.slot.id);
+          const jOnI = optionByAppSlot.get(sj.app.id)?.get(si.slot.id);
+          if (!iOnJ || !jOnI) continue; // a candidate can't legally take the other's seat
+          if (iOnJ.score + jOnI.score > si.score + sj.score) {
+            out[i] = iOnJ; // app i now sits in slot j (with slot-j reasons)
+            out[j] = jOnI; // app j now sits in slot i (with slot-i reasons)
+            improved = true;
+          }
+        }
+      }
+    }
+
+    // Display strongest-first: greedy insertion + swaps mostly follow score
+    // order, but a fall-through pick can land lower, so re-sort the cards high → low.
     out.sort((a, b) => b.score - a.score);
     return out;
   }, [accepted, committees]);

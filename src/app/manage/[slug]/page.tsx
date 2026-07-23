@@ -916,13 +916,24 @@ export default function DashboardPage() {
 
   // ── Derived numbers ──────────────────────────────────────────────────────
   const totalApps = dash.apps.length;
-  const acceptedApps = dash.apps.filter(a => a.status === 'accepted').length;
+  // Accepted = accepted-or-beyond. Allocating flips an application's status to
+  // 'assigned' (and check-in to 'checked-in'), so a naive status === 'accepted'
+  // count would exclude everyone already allocated and read *lower* than the
+  // allocated number — an impossibility, since Allocated ⊆ Accepted. Counting
+  // all three states keeps Allocated a true subset of Accepted.
+  const acceptedApps = dash.apps.filter(
+    a => a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in'
+  ).length;
   const paidApps = dash.apps.filter(a => a.payment_status === 'paid').length;
   const delegateApps = dash.apps.filter(a => a.role === 'delegate' || a.role === 'head-delegate').length;
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
   const committeeCount = dash.committees.length;
   const missingChairs = dash.committees.filter(c => !c.chair_user_ids || c.chair_user_ids.length === 0).length;
-  const unallocated = Math.max(0, acceptedApps - dash.allocated);
+  // Allocated (dash.allocated = conference_allocations rows) is now always a
+  // subset of Accepted, so unallocated = accepted − allocated is non-negative;
+  // the Math.max stays purely as a defensive floor against transient races.
+  const allocated = Math.min(dash.allocated, acceptedApps);
+  const unallocated = Math.max(0, acceptedApps - allocated);
   const fee = conference.fee_amount ?? 0;
 
   // ── Set-up priorities: 8 detection checks, in journey order ──────────────
@@ -1182,15 +1193,15 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between gap-2 flex-shrink-0">
               <h2 className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.ink }}>Delegates</h2>
               <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
-                {dash.allocated}/{acceptedApps} <span style={{ fontWeight: 600, color: NEU.muted }}>allocated</span>
+                {allocated}/{acceptedApps} <span style={{ fontWeight: 600, color: NEU.muted }}>allocated</span>
               </span>
             </div>
-            <NeuProgress value={dash.allocated} max={acceptedApps} gradient={NEU_GRADIENTS.forest} height={8} style={{ flexShrink: 0 }} />
+            <NeuProgress value={allocated} max={acceptedApps} gradient={NEU_GRADIENTS.forest} height={8} style={{ flexShrink: 0 }} />
             <div className="grid grid-cols-4">
               <PipelineCell n={totalApps} label="Submitted" href={`/manage/${slug}/applications`} first />
               <PipelineCell n={acceptedApps} label="Accepted" href={`/manage/${slug}/applications`} />
               <PipelineCell n={paidApps} label="Paid" href={`/manage/${slug}/financials`} />
-              <PipelineCell n={dash.allocated} label="Allocated" href={`/manage/${slug}/assignment`} />
+              <PipelineCell n={allocated} label="Allocated" href={`/manage/${slug}/assignment`} />
             </div>
           </NeuCard>
 

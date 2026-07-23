@@ -18,6 +18,7 @@ import { formatFee } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
+import { appendEditionYear } from '@/lib/presetNames';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
@@ -2700,7 +2701,7 @@ export default function ConferenceDetailClient() {
                               className="truncate"
                               style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410', margin: 0, letterSpacing: '0.01em' }}
                             >
-                              {p.acronym.toUpperCase()}{pYear ? ` ${pYear}` : ''}
+                              {appendEditionYear(p.acronym.toUpperCase(), pYear ? String(pYear) : null)}
                             </p>
                             {pLocation && (
                               <p className="truncate mt-0.5" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', color: '#9A8A78', margin: '2px 0 0 0', letterSpacing: '0.03em' }}>

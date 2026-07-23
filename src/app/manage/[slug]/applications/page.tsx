@@ -498,12 +498,15 @@ function PaymentMenu({
  *  popover is portaled + clamped/flipped so the clipping row card never cuts it
  *  off (mirrors PaymentMenu's portal pattern). */
 function QuickAllocate({
-  committees, loading, onOpen, onAllocate,
+  committees, loading, onOpen, onAllocate, big = false,
 }: {
   committees: QuickCommittee[] | null;
   loading: boolean;
   onOpen: () => void;
   onAllocate: (committee: QuickCommittee, slot: { country_code: string; country_name: string }) => void;
+  /** Renders the trigger as a full-width prominent CTA (the stacked allocation
+   *  area, #4) rather than the compact 28px "+" disc used inline. */
+  big?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<QuickCommittee | null>(null);
@@ -548,7 +551,10 @@ function QuickAllocate({
 
   // Measure + position on click (the button rect is available immediately),
   // so the effect never calls setState synchronously on open.
-  const toggle = () => {
+  const toggle = (e?: React.MouseEvent) => {
+    // The whole row card opens the preview on click (#3); the allocate trigger
+    // must never bubble up to it.
+    e?.stopPropagation();
     if (open) { setOpen(false); return; }
     onOpen();
     setPicked(null);
@@ -564,22 +570,42 @@ function QuickAllocate({
   const openSeats = (c: QuickCommittee) => c.slots.filter(s => !c.takenCodes.includes(s.country_code));
 
   return (
-    <div style={{ display: 'inline-block' }}>
-      <button
-        ref={btnRef}
-        onClick={toggle}
-        title="Allocate to a committee"
-        aria-label="Allocate to a committee"
-        className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
-        style={{
-          width: 28, height: 28, borderRadius: 999,
-          color: NEU.forest, backgroundColor: NEU.surface,
-          boxShadow: open ? NEU.inSm : NEU.outSm, border: 'none', cursor: 'pointer',
-          transition: `box-shadow 160ms ${EASE_LOCAL}`,
-        }}
-      >
-        <Plus size={15} strokeWidth={2.8} style={{ color: NEU.deepGold, transform: open ? 'rotate(45deg)' : 'none', transition: `transform 200ms ${EASE_LOCAL}` }} />
-      </button>
+    <div style={{ display: big ? 'block' : 'inline-block', width: big ? '100%' : undefined }}>
+      {big ? (
+        <button
+          ref={btnRef}
+          onClick={toggle}
+          title="Allocate to a committee"
+          aria-label="Allocate to a committee"
+          className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+          style={{
+            padding: '11px 18px', borderRadius: 999,
+            fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
+            color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
+            boxShadow: open ? NEU.inSm : `0 3px 8px ${NEU_GRADIENTS.gold[0]}44, ${NEU.outSm}`,
+            border: 'none', cursor: 'pointer', transition: `box-shadow 160ms ${EASE_LOCAL}`,
+          }}
+        >
+          <BadgeCheck size={16} strokeWidth={2.6} />
+          ALLOCATE COMMITTEE
+        </button>
+      ) : (
+        <button
+          ref={btnRef}
+          onClick={toggle}
+          title="Allocate to a committee"
+          aria-label="Allocate to a committee"
+          className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+          style={{
+            width: 28, height: 28, borderRadius: 999,
+            color: NEU.forest, backgroundColor: NEU.surface,
+            boxShadow: open ? NEU.inSm : NEU.outSm, border: 'none', cursor: 'pointer',
+            transition: `box-shadow 160ms ${EASE_LOCAL}`,
+          }}
+        >
+          <Plus size={15} strokeWidth={2.8} style={{ color: NEU.deepGold, transform: open ? 'rotate(45deg)' : 'none', transition: `transform 200ms ${EASE_LOCAL}` }} />
+        </button>
+      )}
       {open && pos && (
         <Portal>
           <div
@@ -1113,6 +1139,18 @@ export default function ApplicationsPage() {
   const [allocCommittees, setAllocCommittees] = useState<QuickCommittee[] | null>(null);
   const [allocLoading, setAllocLoading] = useState(false);
   const allocLoadedRef = useRef(false);
+  // Quick-filter search (#2). `searchInput` is the raw field value; `search`
+  // is the debounced, lower-cased term the list actually filters on.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim().toLowerCase()), 180);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+  // Delegation/society popup (#6): the society whose members are being shown,
+  // or null when closed. Populated from the already-loaded applications, so no
+  // extra fetch is needed.
+  const [delegationView, setDelegationView] = useState<{ id: string; name: string } | null>(null);
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -2078,6 +2116,22 @@ export default function ApplicationsPage() {
     }
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
     if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
+    // Quick-filter search (#2): matches ANY of the applicant's details —
+    // name, email, nationality/country, delegation/society, and every
+    // committee/country they preferenced or were allocated to.
+    if (search) {
+      const hay = [
+        a.profiles?.display_name, a.invited_name,
+        a.profiles?.email, a.invited_email,
+        a.profiles?.nationality,
+        a.societies?.name,
+        a.assigned_committee?.name, a.assigned_committee?.abbreviation, a.assigned_country_name,
+        ...(a.application_preferences ?? []).flatMap(p => [
+          p.conference_committees?.name, p.conference_committees?.abbreviation, p.country_name,
+        ]),
+      ].filter(Boolean).join('  ').toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
     return true;
   })
     // Default order = latest applications first. The DB fetch already orders by
@@ -2148,8 +2202,14 @@ export default function ApplicationsPage() {
   });
   const stats = {
     total: statScope.length,
-    accepted: statScope.filter(a => a.status === 'accepted').length,
-    assigned: statScope.filter(a => a.status === 'assigned').length,
+    // "Accepted" means accepted-or-BEYOND: once a delegate is allocated their
+    // status flips to 'assigned' (and to 'checked-in' on arrival), but they are
+    // still, by definition, accepted. Counting only status==='accepted' would
+    // undercount and make "allocated" look larger than "accepted" (impossible).
+    // So Accepted = accepted + assigned + checked-in, and Allocated (below) is
+    // always a strict subset of it.
+    accepted: statScope.filter(a => a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in').length,
+    assigned: statScope.filter(a => a.status === 'assigned' || a.status === 'checked-in').length,
     checkedIn: statScope.filter(a => a.status === 'checked-in').length,
     paid: statScope.filter(a => a.payment_status === 'paid').length,
     // Unpaid excludes chairs (always free, never owe a fee).
@@ -2158,21 +2218,31 @@ export default function ApplicationsPage() {
 
   // Clickable stat-tile filters (#10). Status tiles clear payment and vice
   // versa; clicking the active tile again clears it. Total resets to default.
+  // The Accepted / Allocated tiles now count status GROUPS (accepted-or-beyond
+  // and allocated-or-beyond), so their filters select the whole matching group
+  // rather than a single status — keeping the visible list in step with the
+  // number on the tile.
+  const ACCEPTED_GROUP = ['accepted', 'assigned', 'checked-in'];
+  const ALLOCATED_GROUP = ['assigned', 'checked-in'];
   const statusTileActive = (v: string) => filters.status.size === 1 && filters.status.has(v) && filters.payment.size === 0;
+  const statusGroupTileActive = (group: string[]) => sameSet(filters.status, group) && filters.payment.size === 0;
   const paymentTileActive = (v: string) => filters.payment.size === 1 && filters.payment.has(v) && filters.status.size === 0;
   const totalTileActive =
     filters.status.size === 0 && filters.payment.size === 0 && !filters.notAttending &&
     !filters.dateFrom && !filters.dateTo && sameSet(filters.role, DEFAULT_ROLES);
   const clearToDefault = () => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false });
   const toggleStatusTile = (v: string) => setFilters(f => ({ ...f, payment: new Set(), status: (f.status.size === 1 && f.status.has(v)) ? new Set() : new Set([v]) }));
+  const toggleStatusGroupTile = (group: string[]) => setFilters(f => ({ ...f, payment: new Set(), status: sameSet(f.status, group) ? new Set() : new Set(group) }));
   const togglePaymentTile = (v: string) => setFilters(f => ({ ...f, status: new Set(), payment: (f.payment.size === 1 && f.payment.has(v)) ? new Set() : new Set([v]) }));
 
-  // Order (#10): Total, Accepted, Assigned, Paid, Unpaid, Checked in — Checked
-  // in rightmost. Every tile applies its matching filter on click.
-  const statItems: { label: string; value: number; emoji: string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
+  // Order (#10): Total, Accepted, Allocated, Paid, Unpaid, Checked in — Checked
+  // in rightmost. Every tile applies its matching filter on click. Allocated is
+  // shown as a fraction of Accepted ("29 / 32") so it can never read as larger
+  // than the pool it is drawn from.
+  const statItems: { label: string; value: number | string; emoji: string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
     { label: 'Total',      value: stats.total,     emoji: 'Card index',          icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
-    { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',   icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusTileActive('accepted'),   onClick: () => toggleStatusTile('accepted') },
-    { label: 'Assigned',   value: stats.assigned,  emoji: 'Round pushpin',       icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusTileActive('assigned'),   onClick: () => toggleStatusTile('assigned') },
+    { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',   icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusGroupTileActive(ACCEPTED_GROUP),  onClick: () => toggleStatusGroupTile(ACCEPTED_GROUP) },
+    { label: 'Allocated',  value: `${stats.assigned} / ${stats.accepted}`, emoji: 'Round pushpin', icon: BadgeCheck, gradient: NEU_GRADIENTS.gold, active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
     { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',           icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
     { label: 'Unpaid',     value: stats.unpaid,    emoji: 'Hourglass not done',  icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
     { label: 'Checked in', value: stats.checkedIn, emoji: 'Person raising hand', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
@@ -2194,6 +2264,32 @@ export default function ApplicationsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Quick-filter search (#2): debounced, case-insensitive, matches any
+              applicant detail. Neumorphic pressed-in well to match the system. */}
+          <div
+            className="inline-flex items-center gap-2"
+            style={{ padding: '8px 14px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, minWidth: 200 }}
+          >
+            <Search size={15} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
+            <input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Search applicants…"
+              aria-label="Search applications"
+              className="flex-1 outline-none"
+              style={{ backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, minWidth: 0 }}
+            />
+            {searchInput && (
+              <button
+                onClick={() => setSearchInput('')}
+                aria-label="Clear search"
+                className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+                style={{ width: 18, height: 18, borderRadius: 999, background: 'transparent', border: 'none', cursor: 'pointer', color: NEU.muted }}
+              >
+                <X size={13} strokeWidth={2.6} />
+              </button>
+            )}
+          </div>
           <FilterPanel filters={filters} setFilters={setFilters} activeCount={activeFilterCount} />
           <button
             onClick={handleExportCSV}
@@ -2344,12 +2440,13 @@ export default function ApplicationsPage() {
               <NeuCard
                 key={app.id}
                 hover
+                onClick={() => setReviewId(app.id)}
                 style={{ padding: 0, overflow: 'hidden', position: 'relative', outline: selected ? `2px solid ${NEU.forest}` : 'none', outlineOffset: -2 }}
               >
                 <div className="flex flex-col lg:flex-row lg:items-stretch">
 
                   {/* LEFT · select + identity + facts */}
-                  <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1.1 1 320px', minWidth: 0, ...notAttendingFade }}>
+                  <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1 1 0', minWidth: 0, ...notAttendingFade }}>
                     <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
                     {/* Bigger avatar (#3) with the applicant's nationality flag
                         tucked into its bottom-right, slightly overlapping (#4). */}
@@ -2380,10 +2477,25 @@ export default function ApplicationsPage() {
                       {email && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, marginTop: 2, fontWeight: 500 }}>{email}</p>}
 
                       {app.societies?.name && (
-                        <p className="flex items-center gap-1.5 truncate" style={{ marginTop: 5, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink }} title={app.societies.name}>
-                          <Building2 size={15} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
-                          <span className="truncate">{app.societies.name}</span>
-                        </p>
+                        // Clicking the delegation/society name opens its members
+                        // in a popup (#6). stopPropagation so it doesn't also
+                        // fire the row's open-preview click.
+                        app.society_id ? (
+                          <button
+                            onClick={e => { e.stopPropagation(); setDelegationView({ id: app.society_id!, name: app.societies!.name }); }}
+                            title={`View ${app.societies.name} delegation`}
+                            className="flex items-center gap-1.5 truncate max-w-full focus:outline-none group"
+                            style={{ marginTop: 5, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                          >
+                            <Building2 size={15} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+                            <span className="truncate" style={{ textDecoration: 'underline', textDecorationColor: 'rgba(154,138,120,0.4)', textUnderlineOffset: 3 }}>{app.societies.name}</span>
+                          </button>
+                        ) : (
+                          <p className="flex items-center gap-1.5 truncate" style={{ marginTop: 5, fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: NEU.ink }} title={app.societies.name}>
+                            <Building2 size={15} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+                            <span className="truncate">{app.societies.name}</span>
+                          </p>
+                        )
                       )}
 
                       <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 mt-2.5">
@@ -2424,7 +2536,7 @@ export default function ApplicationsPage() {
                       row now the role has moved to the identity column (#6). */}
                   <div
                     className="p-4 lg:p-5 flex flex-col justify-center gap-3 border-t lg:border-t-0 lg:border-l"
-                    style={{ flex: '1 1 260px', minWidth: 0, borderColor: 'rgba(221,212,192,0.6)' }}
+                    style={{ flex: '1 1 0', minWidth: 0, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
                     {hasAllocation ? (() => {
                       // Naming rule (#6): long committee name → big ACRONYM with
@@ -2452,27 +2564,42 @@ export default function ApplicationsPage() {
                       </div>
                       );
                     })() : isDelegate && prefs.length > 0 ? (
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>Preferences</p>
-                          <span style={notAttendingLock}>
-                            <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
-                          </span>
+                      // Redesign (#4): preferences and the allocate control now
+                      // STACK vertically. Top — a large committee emblem (the
+                      // top-choice committee) with the three preferences laid
+                      // out beside it. Bottom — one clear, full-width allocate
+                      // CTA. All existing allocation logic/handlers unchanged.
+                      <div className="flex flex-col gap-3.5">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <LogoDisc
+                            src={prefs[0].conference_committees?.logo_url ?? null}
+                            size={72}
+                            fallbackText={committeeAbbr(prefs[0].conference_committees)}
+                            alt={prefs[0].conference_committees?.name ?? 'Top preference'}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase', marginBottom: 4 }}>
+                              Preferences
+                            </p>
+                            <div className="flex flex-col gap-1">
+                              {prefs.slice(0, 3).map(p => (
+                                <span
+                                  key={p.preference_order}
+                                  className="inline-flex items-center gap-1.5 w-fit max-w-full"
+                                  title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}
+                                  style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
+                                >
+                                  <span style={{ color: NEU.deepGold, fontWeight: 900 }}>{p.preference_order}.</span>
+                                  <span className="truncate">{committeeAbbr(p.conference_committees)}</span>
+                                  <CountryFlag name={p.country_name} code={p.country_code} size={15} />
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {prefs.slice(0, 3).map(p => (
-                            <span
-                              key={p.preference_order}
-                              className="inline-flex items-center gap-1.5"
-                              title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}
-                              style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
-                            >
-                              <span style={{ color: NEU.muted }}>{p.preference_order}.</span>
-                              {committeeAbbr(p.conference_committees)}
-                              <CountryFlag name={p.country_name} code={p.country_code} size={15} />
-                            </span>
-                          ))}
-                        </div>
+                        <span style={{ display: 'block', ...notAttendingLock }}>
+                          <QuickAllocate big committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                        </span>
                       </div>
                     ) : isDelegate ? (
                       <span className="inline-flex items-center gap-2">
@@ -2492,10 +2619,16 @@ export default function ApplicationsPage() {
                     )}
                   </div>
 
-                  {/* RIGHT · status/payment + actions */}
+                  {/* RIGHT · status/payment + actions. Fixed-width rail so the
+                      divider between the middle and this column lands at the
+                      same point on every card, and the left/middle columns
+                      split the remaining space evenly (their shared divider is
+                      always centered). Clicks here never open the preview — the
+                      whole column is an action zone, so it stops propagation. */}
                   <div
+                    onClick={e => e.stopPropagation()}
                     className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l"
-                    style={{ flex: '0 0 auto', minWidth: 200, borderColor: 'rgba(221,212,192,0.6)' }}
+                    style={{ flex: '0 0 248px', minWidth: 248, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
                     {/* NOT ATTENDING stays full-strength while everything else
                         in this column fades, so it never gets lost in the dim. */}
@@ -3308,6 +3441,104 @@ export default function ApplicationsPage() {
                   </button>
                 )}
               </div>
+            </div>
+          </div></Portal>
+        );
+      })()}
+
+      {/* Delegation / society popup (#6). Lists every applicant sharing this
+          society, drawn from the already-loaded applications — no extra fetch.
+          Rows mirror the review modal styling and open that member's own
+          preview on click. */}
+      {delegationView && (() => {
+        const members = applications
+          .filter(a => a.society_id === delegationView.id)
+          .sort((a, b) => {
+            // Head delegate first, then by name.
+            if (a.is_head_delegate !== b.is_head_delegate) return a.is_head_delegate ? -1 : 1;
+            const an = a.profiles?.display_name ?? a.invited_name ?? '';
+            const bn = b.profiles?.display_name ?? b.invited_name ?? '';
+            return an.localeCompare(bn);
+          });
+        const close = () => setDelegationView(null);
+        const allocatedCount = members.filter(m => m.status === 'assigned' || m.status === 'checked-in').length;
+        return (
+          <Portal><div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
+            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onClick={close}
+          >
+            <div
+              className="w-full max-w-xl rounded-2xl p-7 overflow-y-auto"
+              style={{ maxHeight: '85vh', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start gap-4 mb-5">
+                <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Building2} size={46} />
+                <div className="flex-1 min-w-0">
+                  <p className="mb-0.5" style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', color: NEU.deepGold, textTransform: 'uppercase' }}>
+                    Delegation
+                  </p>
+                  <h2 className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }} title={delegationView.name}>{delegationView.name}</h2>
+                  <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, fontWeight: 600 }}>
+                    {members.length} member{members.length === 1 ? '' : 's'} · {allocatedCount} allocated
+                  </p>
+                </div>
+                <button
+                  onClick={close}
+                  aria-label="Close delegation"
+                  className="flex-shrink-0 flex items-center justify-center rounded-lg focus:outline-none transition-colors"
+                  style={{ width: 30, height: 30, border: '1px solid #DDD4C0', color: NEU.muted, backgroundColor: 'transparent' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {members.length === 0 ? (
+                <p className="text-center py-8" style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted }}>
+                  No members found for this delegation.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {members.map(m => {
+                    const mName = m.profiles?.display_name ?? m.invited_name ?? 'Unknown';
+                    const mAlloc = (m.status === 'assigned' || m.status === 'checked-in') && m.assigned_committee
+                      ? committeeAbbr(m.assigned_committee)
+                      : null;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => { setDelegationView(null); setReviewId(m.id); }}
+                        className="flex items-center gap-3 w-full text-left focus:outline-none"
+                        style={{ padding: '10px 12px', borderRadius: 14, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer' }}
+                      >
+                        <MemberAvatar name={mName} url={m.profiles?.avatar_url ?? null} size={40} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: NEU.ink }}>{mName}</span>
+                            {m.is_head_delegate && (
+                              <span className="inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.08em', padding: '2px 7px', borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.1)', color: NEU.forest, border: '1px solid rgba(27,56,40,0.2)' }}>
+                                <Users size={8} strokeWidth={2.5} /> HEAD
+                              </span>
+                            )}
+                          </div>
+                          {mAlloc && (
+                            <span className="inline-flex items-center gap-1.5 truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.muted, marginTop: 1 }}>
+                              <BadgeCheck size={12} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
+                              {mAlloc}{m.assigned_country_name ? ` · ${m.assigned_country_name}` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <RolePill role={m.role} size="sm" />
+                        <StatusPill status={m.status} size="sm" awaitingResubmission={false} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div></Portal>
         );

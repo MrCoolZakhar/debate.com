@@ -137,10 +137,7 @@ function CommitteeLogo({ committee, size = 18 }: { committee: string; size?: num
   return (
     <span
       className="inline-flex items-center justify-center flex-shrink-0"
-      style={{
-        width: `${size}px`, height: `${size}px`, borderRadius: '5px',
-        backgroundColor: 'rgba(250,248,243,0.95)', border: '1px solid rgba(221,212,192,0.9)', padding: '2px',
-      }}
+      style={{ width: `${size}px`, height: `${size}px` }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt="" onError={() => setFailed(true)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />

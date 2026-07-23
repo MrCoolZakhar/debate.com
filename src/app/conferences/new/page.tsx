@@ -263,15 +263,17 @@ function suggestAcronym(fullName: string): string {
     .map((w) => w[0].toUpperCase())
     .join('');
   if (!initials) return '';
-  // The directory requires 'MUN' in the acronym. "Model United Nations" in the
-  // name already yields …MUN; otherwise append it as a friendly starting point.
-  return initials.includes('MUN') ? initials : initials + 'MUN';
+  // Conferences do NOT need 'MUN' in their acronym. Only suggest a …MUN acronym
+  // when the full name actually ends with "Model United Nations" (or a variant:
+  // "Model UN" / "MUN") — those already yield …MUN from the initials anyway.
+  // Otherwise the acronym is just the organizer's plain initials.
+  return initials;
 }
 
 function acronymProblem(acr: string): string {
   const upper = acr.toUpperCase();
-  if (upper.length < 4) return 'Acronym must be at least 4 characters.';
-  if (!upper.includes('MUN')) return "Acronym must include 'MUN', e.g. TEIMUN, LIMUN, SMUNC.";
+  if (upper.length < 2) return 'Acronym must be at least 2 characters.';
+  if (!/^[A-Z0-9]+$/.test(upper)) return 'Acronym can only contain letters and numbers.';
   return '';
 }
 
@@ -638,7 +640,7 @@ export default function NewConferencePage() {
                       <ErrorNote>{acronymError}</ErrorNote>
                     ) : (
                       <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 8 }}>
-                        Suggested from your conference name. Every Gavelling acronym includes &lsquo;MUN&rsquo;.
+                        Suggested from your conference name. Use whatever acronym your conference goes by.
                       </p>
                     )}
                   </div>

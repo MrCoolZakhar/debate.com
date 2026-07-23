@@ -10,7 +10,6 @@ import {
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { LogoDisc } from '@/components/LogoDisc';
-import { BrandConferences } from '@/components/Brand';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import type { EmailTheme } from '@/lib/emailHtml';
 
@@ -799,9 +798,24 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       >
         {/* Left: logo + divider + acronym */}
         <div className="flex items-center gap-3">
-          <Link href="/" style={{ textDecoration: 'none' }}>
-            {/* Conferences brand, greyed for the quiet /manage chrome */}
-            <BrandConferences tone="dark" size={28} monochrome />
+          <Link href="/" style={{ textDecoration: 'none', display: 'inline-flex' }}>
+            {/* The Conferences logo asset, greyed (grayscale+brightness) so the
+                forest-green wordmark reads on the dark /manage chrome. Same
+                mark SiteNav and the auth card use, for one consistent brand. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Conferences.webp"
+              alt="Gavelling Conferences"
+              width={120}
+              height={30}
+              decoding="async"
+              style={{ height: 30, width: 'auto', objectFit: 'contain', filter: 'grayscale(1) brightness(2.1)' }}
+              onError={(e) => {
+                const img = e.currentTarget as HTMLImageElement;
+                if (!img.src.endsWith('/Conferences.png')) img.src = '/Conferences.png';
+                else img.style.display = 'none';
+              }}
+            />
           </Link>
           <span style={{ color: 'rgba(238,217,138,0.3)', fontSize: '16px' }}>/</span>
           <Link

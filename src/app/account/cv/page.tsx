@@ -6,6 +6,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { syncExperienceLevel } from '@/lib/munExperience';
 import { CVEntryModal, type CVEntry } from '@/components/CVEntryModal';
+import { ShareAchievementModal } from '@/components/ShareAchievementModal';
 import { Eyebrow, GlassCard, OUTFIT, MONO } from '../accountUi';
 import { TimelineEntry, CVStatsRow } from './CVTimeline';
 
@@ -18,6 +19,8 @@ export default function CVPage() {
   const [modalEntry, setModalEntry] = useState<CVEntry | null>(null);
   const [modalOpen, setModalOpen]   = useState(false);
   const [copied, setCopied]         = useState(false);
+  // Spotify-Wrapped celebration — set only when a NEW entry is added.
+  const [shareEntry, setShareEntry] = useState<CVEntry | null>(null);
 
   const fetchEntries = useCallback(async () => {
     if (!user || !session) return;
@@ -62,18 +65,30 @@ export default function CVPage() {
     });
   }, [session, user]);
 
-  function handleShare() {
-    if (!user) return;
-    // Human-readable share link: name slug + first 8 chars of the UUID, e.g.
-    // /cv/hrehaan-vora-8f0376f2. Old raw-UUID links keep working (page resolves
-    // both forms). Fall back to the bare short id if there's no display name.
+  // Human-readable share link: name slug + first 8 chars of the UUID, e.g.
+  // /cv/hrehaan-vora-8f0376f2. Old raw-UUID links keep working (page resolves
+  // both forms). Falls back to the bare short id if there's no display name.
+  const buildCvShareUrl = useCallback(() => {
+    if (!user) return '';
     const slug = (profile?.display_name ?? '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
     const shortId = user.id.slice(0, 8);
     const path = slug ? `${slug}-${shortId}` : shortId;
-    const url = `${window.location.origin}/cv/${path}`;
+    return `${window.location.origin}/cv/${path}`;
+  }, [user, profile?.display_name]);
+
+  // After a save: refresh the timeline, and — only for a brand-new entry —
+  // fire the Spotify-Wrapped congratulations card.
+  const handleSaved = useCallback((added?: CVEntry) => {
+    fetchEntries();
+    if (added) setShareEntry(added);
+  }, [fetchEntries]);
+
+  function handleShare() {
+    if (!user) return;
+    const url = buildCvShareUrl();
     const done = () => { setCopied(true); setTimeout(() => setCopied(false), 2200); };
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).then(done).catch(() => {
@@ -222,10 +237,19 @@ export default function CVPage() {
           existing={modalEntry}
           userId={user.id}
           onClose={() => { setModalOpen(false); setModalEntry(null); }}
-          onSaved={fetchEntries}
+          onSaved={handleSaved}
           onDelete={handleDelete}
         />
       )}
+
+      {/* Spotify-Wrapped celebration — opens only after a NEW conference is added */}
+      <ShareAchievementModal
+        open={!!shareEntry}
+        entry={shareEntry}
+        profileName={profile?.display_name ?? ''}
+        cvShareUrl={buildCvShareUrl()}
+        onClose={() => setShareEntry(null)}
+      />
     </div>
   );
 }

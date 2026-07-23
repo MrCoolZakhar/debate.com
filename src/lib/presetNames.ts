@@ -187,6 +187,18 @@ export function committeeDisplayName(fullName: string | null | undefined, acrony
   return name;
 }
 
+// Append an edition year to a name/acronym label, but ONLY when the label does
+// not already contain that exact 4-digit year — so "Hult 2026" + 2026 stays
+// "Hult 2026" instead of becoming "Hult 2026 2026". A null/blank year (or a
+// blank label) is a no-op.
+export function appendEditionYear(label: string, year: string | null | undefined): string {
+  const base = (label ?? '').trim();
+  const y = (year ?? '').trim();
+  if (!y) return base;
+  if (base.includes(y)) return base;
+  return base ? `${base} ${y}` : y;
+}
+
 export function getCommitteeDisplayName(name: string, language: string): string {
   if (language === 'ar') return PRESET_NAME_AR[name] ?? name;
   if (language === 'fr') return PRESET_NAME_FR[name] ?? name;

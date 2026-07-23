@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2 } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
@@ -312,6 +313,203 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
           <p className="text-[11px] text-center mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
             Opens the chair console (co-chair view after production merge)
           </p>
+        </div>
+      )}
+    </ModalShell>
+  );
+}
+
+// ── Roster / present-delegate detail modal ──────────────────────────────────
+
+/** Present/absent visual language, forest-ivory. */
+function statusMeta(status: string): { label: string; color: string; ring: string; dot: string } {
+  if (status === 'present-voting') return { label: 'Present & Voting', color: NEU.forest, ring: 'rgba(27,56,40,0.32)', dot: NEU.forest };
+  if (status === 'present') return { label: 'Present', color: NEU.green, ring: 'rgba(61,122,82,0.30)', dot: NEU.green };
+  return { label: 'Absent', color: NEU.muted, ring: 'rgba(154,138,120,0.30)', dot: NEU.muted };
+}
+
+/** Small forest disc holding a chair's initials — a lightweight avatar. */
+function ChairAvatar({ name, size = 30 }: { name: string; size?: number }) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('') || '?';
+  return (
+    <span
+      className="inline-flex items-center justify-center flex-shrink-0"
+      style={{
+        width: size, height: size, borderRadius: Math.round(size * 0.34),
+        background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+        color: NEU.gold, fontFamily: OUTFIT, fontWeight: 900, fontSize: size * 0.4,
+        boxShadow: `0 3px 8px ${NEU_GRADIENTS.forest[0]}33, ${NEU.outSm}`,
+        letterSpacing: '0.02em',
+      }}
+      title={name}
+    >
+      {initials}
+    </span>
+  );
+}
+
+/** Committee chairs as small labelled avatars — reused inside the roster detail. */
+function ChairStrip({ chairNames }: { chairNames: string[] }) {
+  return (
+    <div>
+      <Eyebrow>Chairs</Eyebrow>
+      <div className="flex items-center gap-2 mt-2 flex-wrap">
+        {chairNames.length === 0 ? (
+          <span className="inline-flex items-center gap-2 text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+            <Gavel size={14} /> No chairs joined yet
+          </span>
+        ) : (
+          chairNames.map((name, i) => (
+            <span
+              key={`${name}-${i}`}
+              className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5"
+              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+            >
+              <ChairAvatar name={name} size={26} />
+              <span className="text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 140 }}>{name}</span>
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: () => void }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Total speaking time + speech count per country, summed from the speaking logs
+  // already assembled for this committee (messages sender='__system__' → __log__).
+  const speakingByCountry = new Map<string, { seconds: number; speeches: number }>();
+  for (const log of data.speechLogs) {
+    const prev = speakingByCountry.get(log.country) ?? { seconds: 0, speeches: 0 };
+    speakingByCountry.set(log.country, { seconds: prev.seconds + (log.seconds || 0), speeches: prev.speeches + 1 });
+  }
+
+  // Present first (present-voting, then present), absent last; alphabetical within each band.
+  const rank = (s: string) => (s === 'present-voting' ? 0 : s === 'present' ? 1 : 2);
+  const roster = [...data.delegates].sort((a, b) => rank(a.status) - rank(b.status) || a.country.localeCompare(b.country));
+
+  const present = data.delegates.filter((d) => d.status !== 'absent').length;
+  const voting = data.delegates.filter((d) => d.status === 'present-voting').length;
+  const chairNames = data.session?.chairNames ?? [];
+
+  return (
+    <ModalShell onClose={onClose}>
+      {/* Header */}
+      <div className="flex items-center gap-3.5 mb-1">
+        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={(data.conf.abbreviation ?? data.conf.name).slice(0, 3)} alt={data.conf.abbreviation ?? data.conf.name} />
+        <div className="min-w-0">
+          <Eyebrow>Roll call · present delegates</Eyebrow>
+          <h2 className="font-black mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.1 }}>
+            {data.conf.abbreviation ?? data.conf.name}
+          </h2>
+        </div>
+      </div>
+      {data.conf.abbreviation && data.conf.abbreviation !== data.conf.name && (
+        <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{data.conf.name}</p>
+      )}
+
+      {/* Present / voting summary */}
+      <div className="grid grid-cols-3 gap-3 mt-4 mb-5">
+        <StatTile icon={Users} emoji="Person raising hand" gradient={NEU_GRADIENTS.sage} value={`${present}/${data.delegates.length}`} label="Present" />
+        <StatTile icon={CheckCircle2} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.forest} value={String(voting)} label="Present & voting" />
+        <StatTile icon={Users} emoji="People holding hands" gradient={NEU_GRADIENTS.amber} value={String(data.delegates.length - present)} label="Absent" />
+      </div>
+
+      {/* Chairs — names + small avatars (shown with the detail per spec) */}
+      <div className="mb-5">
+        <ChairStrip chairNames={chairNames} />
+      </div>
+
+      {/* Roster list — click a delegate to expand full detail */}
+      <Eyebrow>Delegations</Eyebrow>
+      {roster.length === 0 ? (
+        <p className="text-sm mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No delegates on the roster yet.</p>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          {roster.map((d) => {
+            const meta = statusMeta(d.status);
+            const isOpen = expanded === d.country;
+            const spoken = speakingByCountry.get(d.country) ?? { seconds: 0, speeches: 0 };
+            return (
+              <NeuInset key={d.country} style={{ borderRadius: 14, overflow: 'hidden' }}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : d.country)}
+                  className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT }}
+                >
+                  <span
+                    className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
+                    style={{ width: 34, height: 34, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+                  >
+                    <FlagImg code={flagCodeFor(d.country)} size={22} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    {/* Name = the delegation's country (delegates join by nation; no personal name is stored) */}
+                    <p className="text-sm font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{d.country}</p>
+                    <p className="text-[11px] truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Represents {d.country}</p>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0"
+                    style={{ color: meta.color, backgroundColor: NEU.surface, boxShadow: `0 0 0 1.5px ${meta.ring}, ${NEU.outSm}`, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
+                  >
+                    <span className="rounded-full" style={{ width: 7, height: 7, backgroundColor: meta.dot }} />
+                    {meta.label}
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    style={{ color: NEU.muted, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform 200ms ${EASE}` }}
+                  />
+                </button>
+
+                {isOpen && (
+                  <div className="px-3.5 pb-3.5 pt-1" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                    {/* Full detail: total speaking time (sourced from speech logs) */}
+                    <div className="flex items-center gap-2 mt-3">
+                      <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Studio microphone" icon={Mic} size={30} />
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>Total speaking time</p>
+                        <p className="text-base font-black leading-none mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                          {fmtClock(spoken.seconds)}
+                          <span className="text-[11px] font-bold ml-2" style={{ color: NEU.muted }}>
+                            {spoken.speeches} {spoken.speeches === 1 ? 'speech' : 'speeches'}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status metadata. The delegates table stores only country/status/is_observer —
+                        there is no updated_at or roll-call timestamp column, so these are surfaced
+                        honestly as "not tracked" rather than fabricated.
+                        TODO(schema): add delegates.status_changed_at + delegates.last_roll_call_at
+                        (and expose them in live/page.tsx's delegates select) to fill these in. */}
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      <div className="flex items-center gap-2">
+                        <Clock size={14} style={{ color: NEU.muted, flexShrink: 0 }} />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>Status changed</p>
+                          <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Not tracked in schema</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Timer size={14} style={{ color: NEU.muted, flexShrink: 0 }} />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>Last roll call</p>
+                          <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Not tracked in schema</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </NeuInset>
+            );
+          })}
         </div>
       )}
     </ModalShell>

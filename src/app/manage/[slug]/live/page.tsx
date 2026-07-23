@@ -18,7 +18,7 @@ import {
 } from '@/components/neu';
 import {
   type LiveCommittee, type CaucusJson, cardStatus, PHASE_LABELS, fmtClock, flagCodeFor,
-  RecapModal, AwardsModal,
+  RecapModal, AwardsModal, RosterModal,
 } from './LiveModals';
 
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
@@ -81,6 +81,42 @@ function committeeIdentity(conf: LiveCommittee['conf']): { title: string; subtit
   const full = conf.name;
   const title = acr ?? full;
   return { title, subtitle: acr && acr !== full ? full : null, mono: (acr ?? full).slice(0, 3) };
+}
+
+/** Compact status glyph pill for the at-a-glance indicator row. */
+function StatusGlyph({
+  gradient, emoji, icon: Icon, value, label, accent, pulse = false,
+}: {
+  gradient: NeuGradient;
+  emoji: string;
+  icon: LucideIcon;
+  value: number;
+  label: string;
+  accent: string;
+  pulse?: boolean;
+}) {
+  const dim = value === 0;
+  return (
+    <div
+      className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3.5 py-1.5"
+      style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, opacity: dim ? 0.55 : 1, transition: `opacity 220ms ${EASE}` }}
+      title={`${value} ${label.toLowerCase()}`}
+    >
+      <span className="relative inline-flex flex-shrink-0">
+        <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={28} />
+        {pulse && !dim && (
+          <span
+            className="absolute rounded-full animate-pulse"
+            style={{ top: -1, right: -1, width: 9, height: 9, backgroundColor: NEU.green, boxShadow: `0 0 0 2px ${NEU.surface}` }}
+          />
+        )}
+      </span>
+      <span className="flex items-baseline gap-1.5">
+        <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, lineHeight: 1, color: dim ? NEU.muted : accent, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+        <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 9.5, letterSpacing: '0.11em', textTransform: 'uppercase', color: NEU.muted }}>{label}</span>
+      </span>
+    </div>
+  );
 }
 
 // ── Not-started card ────────────────────────────────────────────────────────
@@ -199,10 +235,12 @@ function LiveCard({
   data,
   onOpenRecap,
   onOpenAwards,
+  onOpenRoster,
 }: {
   data: LiveCommittee;
   onOpenRecap: (data: LiveCommittee) => void;
   onOpenAwards: (data: LiveCommittee) => void;
+  onOpenRoster: (data: LiveCommittee) => void;
 }) {
   const status = cardStatus(data);
   const session = data.session!;
@@ -395,10 +433,17 @@ function LiveCard({
             {passedCount} passed
           </span>
         )}
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full" style={chipStyle}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenRoster(data); }}
+          className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full focus:outline-none"
+          style={{ ...chipStyle, border: 'none', cursor: 'pointer', transition: `box-shadow 200ms ${EASE}` }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+          title="View present delegates"
+        >
           <Users size={12} style={{ color: NEU.forest }} />
           {present}/{data.delegates.length} present
-        </span>
+        </button>
       </div>
 
       {/* Up next, flowing speakers strip */}
@@ -451,6 +496,7 @@ export default function LiveStatusPage() {
   const [, setTick] = useState(0);
   const [recapFor, setRecapFor] = useState<string | null>(null);
   const [awardsFor, setAwardsFor] = useState<string | null>(null);
+  const [rosterFor, setRosterFor] = useState<string | null>(null);
   const [refreshHover, setRefreshHover] = useState(false);
   const loadingRef = useRef(false);
 
@@ -620,9 +666,18 @@ export default function LiveStatusPage() {
   // ── Derived ──
   const recapData = recapFor ? rows?.find((r) => r.conf.id === recapFor) ?? null : null;
   const awardsData = awardsFor ? rows?.find((r) => r.conf.id === awardsFor) ?? null : null;
+  const rosterData = rosterFor ? rows?.find((r) => r.conf.id === rosterFor) ?? null : null;
 
-  const liveCount = (rows ?? []).filter((r) => cardStatus(r) === 'live').length;
-  const chairsJoined = (rows ?? []).reduce((sum, r) => sum + (r.session?.chairNames.length ?? 0), 0);
+  const allRows = rows ?? [];
+  const liveCount = allRows.filter((r) => cardStatus(r) === 'live').length;
+  const chairsJoined = allRows.reduce((sum, r) => sum + (r.session?.chairNames.length ?? 0), 0);
+
+  // Aggregate glyph-row indicators — computed across every committee on the floor.
+  const speakingNow = allRows.filter((r) => !!r.currentSpeaker?.startedAt).length;
+  const rollCallCount = allRows.filter((r) => cardStatus(r) === 'not-started').length;
+  const motionsPending = allRows.reduce((sum, r) => sum + r.pendingMotions.length, 0);
+  const suspendedCount = allRows.filter((r) => cardStatus(r) === 'suspended').length;
+  const presentTotal = allRows.reduce((sum, r) => sum + r.delegates.filter((d) => d.status !== 'absent').length, 0);
 
   const secondsAgo = lastRefreshed ? Math.max(0, Math.floor((Date.now() - lastRefreshed) / 1000)) : null;
 
@@ -662,29 +717,59 @@ export default function LiveStatusPage() {
         </div>
       </div>
 
+      {/* Status glyph row — at-a-glance indicators across the whole floor */}
+      <div className="flex items-center gap-2.5 mb-4 flex-wrap">
+        <StatusGlyph gradient={NEU_GRADIENTS.green} emoji="Satellite antenna" icon={Radio} value={liveCount} label="Live" accent={NEU.green} pulse />
+        <StatusGlyph gradient={NEU_GRADIENTS.sage} emoji="Studio microphone" icon={Mic} value={speakingNow} label="Speaking" accent={NEU.forest} />
+        <StatusGlyph gradient={NEU_GRADIENTS.forest} emoji="Person raising hand" icon={Users} value={rollCallCount} label="Roll call" accent={NEU.forest} />
+        <StatusGlyph gradient={NEU_GRADIENTS.gold} emoji="Ballot box with ballot" icon={Gavel} value={motionsPending} label="Motions" accent={NEU.deepGold} />
+        <StatusGlyph gradient={NEU_GRADIENTS.amber} emoji="Pause button" icon={PauseCircle} value={suspendedCount} label="Suspended" accent={NEU.amber} />
+      </div>
+
       {/* Summary strip — floor overview + live counts */}
-      <NeuCard className="mb-7 flex items-center justify-between gap-6 flex-wrap" style={{ padding: '18px 22px' }}>
-        <div className="flex items-center gap-3.5 min-w-0">
-          <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Satellite antenna" icon={Radio} size={52} />
+      <NeuCard
+        className="mb-7 flex items-center justify-between gap-6 flex-wrap relative overflow-hidden"
+        style={{ padding: '20px 24px' }}
+      >
+        {/* Gold accent rail — a small hit of colour on the left edge */}
+        <span
+          className="absolute left-0 top-0 bottom-0"
+          style={{ width: 5, background: `linear-gradient(180deg, ${NEU.gold}, ${NEU.deepGold})`, boxShadow: `2px 0 6px ${NEU.deepGold}44` }}
+        />
+        <div className="flex items-center gap-4 min-w-0" style={{ paddingLeft: 8 }}>
+          <span className="relative inline-flex flex-shrink-0">
+            <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Satellite antenna" icon={Radio} size={58} />
+            {liveCount > 0 && (
+              <span
+                className="absolute rounded-full animate-pulse"
+                style={{ top: 0, right: 0, width: 13, height: 13, backgroundColor: NEU.green, boxShadow: `0 0 0 3px ${NEU.surface}, 0 0 0 5px ${NEU.green}33` }}
+              />
+            )}
+          </span>
           <div className="min-w-0">
-            <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', color: NEU.deepGold }}>
+            <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.16em', color: NEU.deepGold }}>
               {conference?.acronym ?? '…'} · FLOOR OVERVIEW
             </p>
-            <p className="font-black truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15, marginTop: 1 }}>
+            <p className="font-black truncate" style={{ color: liveCount > 0 ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.12, marginTop: 2 }}>
               {liveCount > 0 ? 'Committees are in session' : 'All quiet on the floor'}
             </p>
+            {presentTotal > 0 && (
+              <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+                {presentTotal} delegate{presentTotal === 1 ? '' : 's'} present across the floor
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-7 flex-wrap">
+        <div className="flex items-center gap-6 flex-wrap">
           {[
             { value: rows?.length ?? 0, label: 'COMMITTEES', color: NEU.ink },
-            { value: liveCount, label: 'IN SESSION', color: liveCount > 0 ? NEU.green : NEU.ink },
-            { value: chairsJoined, label: 'CHAIRS JOINED', color: NEU.ink },
+            { value: liveCount, label: 'IN SESSION', color: liveCount > 0 ? NEU.green : NEU.muted },
+            { value: chairsJoined, label: 'CHAIRS JOINED', color: NEU.deepGold },
           ].map((s) => (
-            <div key={s.label}>
-              <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 27, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.13em', color: NEU.muted, marginTop: 5 }}>{s.label}</p>
-            </div>
+            <NeuInset key={s.label} className="text-center" style={{ padding: '10px 18px', borderRadius: 14, minWidth: 92 }}>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
+              <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.12em', color: NEU.muted, marginTop: 5 }}>{s.label}</p>
+            </NeuInset>
           ))}
         </div>
       </NeuCard>
@@ -723,6 +808,7 @@ export default function LiveStatusPage() {
                 data={r}
                 onOpenRecap={(d) => setRecapFor(d.conf.id)}
                 onOpenAwards={(d) => setAwardsFor(d.conf.id)}
+                onOpenRoster={(d) => setRosterFor(d.conf.id)}
               />
             );
           })}
@@ -732,6 +818,7 @@ export default function LiveStatusPage() {
       {/* Modals */}
       {recapData && <RecapModal data={recapData} onClose={() => setRecapFor(null)} />}
       {awardsData && <AwardsModal data={awardsData} onClose={() => setAwardsFor(null)} />}
+      {rosterData && <RosterModal data={rosterData} onClose={() => setRosterFor(null)} />}
     </div>
   );
 }

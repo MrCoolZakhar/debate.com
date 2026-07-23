@@ -500,7 +500,13 @@ export function CVEntryModal({
 }: {
   existing: CVEntry | null;
   onClose: () => void;
-  onSaved: () => void;
+  /**
+   * Called after a successful save. On a NEW entry (an add, not an edit) it
+   * receives the freshly-inserted row so the parent can celebrate it (see the
+   * Spotify-Wrapped ShareAchievementModal). On an edit it is called with no
+   * argument. Existing `() => void` callers keep working unchanged.
+   */
+  onSaved: (added?: CVEntry) => void;
   onDelete: (id: string) => Promise<void>;
   userId: string;
 }) {
@@ -826,17 +832,29 @@ export function CVEntryModal({
     };
 
     let dbErr;
+    // On a NEW entry we read the inserted row back so the parent can celebrate
+    // it (the ShareAchievementModal). Edits report no added row.
+    let addedRow: CVEntry | undefined;
     if (existing) {
       ({ error: dbErr } = await supabase.from('mun_cv_entries').update(payload).eq('id', existing.id));
     } else {
-      ({ error: dbErr } = await supabase.from('mun_cv_entries').insert({ ...payload, user_id: userId, source: 'manual' }));
+      const insertRes = await supabase
+        .from('mun_cv_entries')
+        .insert({ ...payload, user_id: userId, source: 'manual' })
+        .select('id, entry_type, conference_name, committee, allocation, expertise_level, award, awards, photos, description, logo_url, conference_id, event_date, source, created_at')
+        .single();
+      dbErr = insertRes.error;
+      if (insertRes.data) {
+        const r = insertRes.data as CVEntry;
+        addedRow = { ...r, entry_type: r.entry_type ?? 'delegate', awards: r.awards ?? [], photos: r.photos ?? [] };
+      }
     }
     setSubmitting(false);
     if (dbErr) {
       setError(dbErr.message);
       return;
     }
-    onSaved();
+    onSaved(addedRow);
     onClose();
   }
 

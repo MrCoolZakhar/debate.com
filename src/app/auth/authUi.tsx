@@ -47,10 +47,19 @@ export function ConferencesWordmark() {
     <Link href="/" className="flex flex-col items-center" style={{ textDecoration: 'none' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/Conferences.png"
+        src="/Conferences.webp"
         alt="Gavelling Conferences"
+        width={184}
+        height={46}
+        decoding="async"
         style={{ height: 46, width: 'auto', objectFit: 'contain' }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        onError={(e) => {
+          // .webp can intermittently fail to decode; fall back to the .png
+          // once before giving up, never hide the brand outright.
+          const img = e.currentTarget as HTMLImageElement;
+          if (!img.src.endsWith('/Conferences.png')) img.src = '/Conferences.png';
+          else img.style.display = 'none';
+        }}
       />
     </Link>
   );

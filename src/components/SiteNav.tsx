@@ -55,14 +55,16 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, []);
 
-  // Conferences-area pages get the real "GAVELLING CONFERENCES" logo lockup
-  // (/Conferences.png, the same mark the footer uses) instead of the baked
-  // "SESSIONS APP" logo PNG. Sessions pages keep the existing PNG exactly.
+  // Brand-per-context: conferences-area pages get the "GAVELLING CONFERENCES"
+  // logo lockup (/Conferences.webp, .png fallback) — the same mark the footer,
+  // manage header and auth card use. Sessions pages get the "GAVELLING SESSIONS
+  // APP" logo (/GavellingSessionsApp.png). This mirrors the wordmark text the
+  // nav already switches per context.
   const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/my-conferences', '/invites'];
   const inConferencesArea =
     !logoOverride && (pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname?.startsWith(p)));
-  const logoSrc = logoOverride?.src ?? '/GavellingLogo.webp';
-  const logoAlt = logoOverride?.alt ?? 'Gavelling';
+  const logoSrc = logoOverride?.src ?? '/GavellingSessionsApp.png';
+  const logoAlt = logoOverride?.alt ?? 'Gavelling Sessions';
 
   const avatarInitial = profile?.display_name
     ? profile.display_name[0].toUpperCase()
@@ -150,9 +152,12 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
         <div className="flex items-center gap-1">
           <Link href="/" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none' }}>
             {inConferencesArea ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src="/Conferences.webp"
                 alt="Gavelling Conferences"
+                width={144}
+                height={36}
                 decoding="async"
                 style={{
                   height: 36,
@@ -160,12 +165,21 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   objectFit: 'contain',
                   filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined,
                 }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                onError={(e) => {
+                  // .webp can intermittently fail to decode (cache/partial); fall
+                  // back to the .png once before giving up, never hide outright.
+                  const img = e.currentTarget as HTMLImageElement;
+                  if (!img.src.endsWith('/Conferences.png')) img.src = '/Conferences.png';
+                  else img.style.display = 'none';
+                }}
               />
             ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={logoSrc}
                 alt={logoAlt}
+                width={160}
+                height={40}
                 decoding="async"
                 className="h-8 md:h-10 w-auto object-contain"
                 style={
