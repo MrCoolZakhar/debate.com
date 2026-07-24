@@ -16,25 +16,40 @@ interface StudyGuide {
   file_name: string;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 export default function StudyGuideCard({ committeeId }: { committeeId: string | null }) {
   const { session } = useAuth();
   const [guides, setGuides] = useState<StudyGuide[]>([]);
+  const [releaseAt, setReleaseAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!committeeId || !session) return;
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
-      .from('study_guides')
-      .select('id, title, file_url, file_name')
-      .eq('conference_committee_id', committeeId)
-      .order('created_at', { ascending: true });
-    setGuides((data ?? []) as StudyGuide[]);
+    const [{ data: guideData }, { data: ccData }] = await Promise.all([
+      supabase
+        .from('study_guides')
+        .select('id, title, file_url, file_name')
+        .eq('conference_committee_id', committeeId)
+        .order('created_at', { ascending: true }),
+      // conference_committees is participant-readable, the same schedule
+      // the organizer sets in Documents settings.
+      supabase.from('conference_committees').select('study_guides_publish_at').eq('id', committeeId).maybeSingle(),
+    ]);
+    setGuides((guideData ?? []) as StudyGuide[]);
+    setReleaseAt((ccData as { study_guides_publish_at: string | null } | null)?.study_guides_publish_at ?? null);
     setLoading(false);
   }, [committeeId, session]);
 
   useEffect(() => { load(); }, [load]);
+
+  const scheduled = !!releaseAt && new Date(releaseAt).getTime() > Date.now();
 
   return (
     <SectionCard>
@@ -47,7 +62,7 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
         </div>
       ) : !committeeId || guides.length === 0 ? (
         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          The study guide hasn&apos;t been released yet.
+          {scheduled ? `Releases ${fmtDate(releaseAt!)}.` : "The study guide hasn't been released yet."}
         </p>
       ) : (
         <div className="flex flex-col gap-2">

@@ -365,6 +365,7 @@ export default function PositionPaperPage() {
                     {committee?.abbreviation ?? committee?.name}
                     {submitterNames && ` · ${submitterNames}`}
                     {` · Submitted ${fmtDate(paper.submitted_at)}`}
+                    {committee?.position_paper_deadline && ` · Due ${fmtDate(committee.position_paper_deadline)}`}
                   </p>
                 </div>
               </div>

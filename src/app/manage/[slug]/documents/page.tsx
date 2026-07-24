@@ -10,6 +10,7 @@ import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
 import { PillToggle } from '@/app/account/accountUi';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import { NEU, EASE, NeuPill } from '@/components/neu';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
@@ -397,6 +398,7 @@ export default function DocumentsPage() {
   const [sgGlobalPublishAt, setSgGlobalPublishAt] = useState<string | null>(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsError, setSettingsError] = useState('');
+  const { confirm, modal: confirmModal } = useConfirmModal();
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -527,6 +529,24 @@ export default function DocumentsPage() {
         setActionError("Couldn't save, the change was reverted.");
       }
     });
+  }
+
+  // A guide that's only visible because its committee's release schedule
+  // already passed can't be hidden by flipping its own is_published (it was
+  // never true), the schedule itself is what's showing it. Clearing the
+  // schedule hides every guide in the committee relying on it, hence the
+  // confirm step.
+  async function handleUnscheduleGuide(guideId: string, committeeId: string) {
+    if (!session || busyIds.has(guideId)) return;
+    const { confirmed } = await confirm({
+      title: 'Unpublish this guide?',
+      body: 'This clears the scheduled release for this committee and hides its guides.',
+      confirmLabel: 'Unpublish',
+      danger: true,
+    });
+    if (!confirmed) return;
+    handlePublishGuide(guideId, false);
+    await savePerCommitteeSgPublishAt(committeeId, null);
   }
 
   function handleDeleteGuide(guideId: string) {
@@ -805,11 +825,13 @@ export default function DocumentsPage() {
                                   RELEASED
                                 </span>
                                 <button
-                                  onClick={() => handlePublishGuide(guide.id, true)}
+                                  onClick={() => selectedCommitteeId && handleUnscheduleGuide(guide.id, selectedCommitteeId)}
                                   className="focus:outline-none"
-                                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
+                                  style={{ border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
+                                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                                 >
-                                  PUBLISH
+                                  UNPUBLISH
                                 </button>
                               </>
                             ) : (
@@ -1021,6 +1043,7 @@ export default function DocumentsPage() {
           onUploaded={loadStudyGuides}
         />
       )}
+      {confirmModal}
     </div>
   );
 }

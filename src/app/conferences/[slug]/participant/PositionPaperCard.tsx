@@ -218,7 +218,16 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
 
   const deadline = myAllocation.conference_committees?.position_paper_deadline ?? null;
   const deadlineSoon = deadline ? (new Date(deadline).getTime() - Date.now()) < 7 * 24 * 60 * 60 * 1000 && new Date(deadline) > new Date() : false;
+  const deadlinePassed = deadline ? new Date(deadline).getTime() <= Date.now() : false;
   const late = myPositionPaper ? isPaperLate(myPositionPaper.submitted_at, deadline) : false;
+  // Shown in every state, submission doesn't retire the deadline, a
+  // replacement is still held to it (see the late-warning in the replace
+  // modal below).
+  const dueLine = deadline ? (
+    <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', margin: '0 0 10px 0' }}>
+      Due {fmtDate(deadline)}
+    </p>
+  ) : null;
 
   // Once a paper exists (and we aren't mid-replace), the card is a static,
   // always-visible clickable row — no accordion, matching the study guide
@@ -230,6 +239,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
           POSITION PAPER
         </p>
+        {dueLine}
         <NeuCard
           hover
           onClick={() => router.push(`/conferences/${conferenceSlug}/papers/${myPositionPaper.id}`)}
@@ -286,9 +296,14 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
             <div className="rounded-[20px] p-6 max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 24px 64px rgba(16,28,21,0.35)' }}>
               <h3 className="font-semibold text-base mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Replace Position Paper?</h3>
-              <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, marginBottom: deadlinePassed ? 8 : 24 }}>
                 This uploads a new version and reopens it for review. The conversation with your reviewer stays intact.
               </p>
+              {deadlinePassed && (
+                <p className="text-sm mb-6" style={{ color: '#8A5A2E', fontFamily: OUTFIT, fontWeight: 600 }}>
+                  The deadline has passed, so a new version will be marked late.
+                </p>
+              )}
               <div className="flex gap-3">
                 <ActionButton
                   onClick={() => setShowPPWarning(false)}
@@ -341,6 +356,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
           {expanded ? <ChevronUp size={15} style={{ color: '#9A8A78' }} /> : <ChevronDown size={15} style={{ color: '#9A8A78' }} />}
         </div>
       </button>
+      {dueLine && <div className="mt-2.5">{dueLine}</div>}
 
       {expanded && (
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
@@ -350,11 +366,6 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             </p>
           ) : (
             <>
-              {deadline && (
-                <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', marginBottom: 14 }}>
-                  Due {fmtDate(deadline)}
-                </p>
-              )}
               <input type="file" accept="application/pdf" onChange={handlePPFileSelect} className="hidden" ref={ppFileInputRef} />
               {!ppFile ? (
                 <div
