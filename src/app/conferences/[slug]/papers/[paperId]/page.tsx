@@ -309,7 +309,7 @@ export default function PositionPaperPage() {
     if (hasHistory) {
       router.back();
     } else {
-      router.push(`/conferences/${slug}?tab=participant`);
+      router.push(`/conferences/${slug}/role`);
     }
   }
 
@@ -319,9 +319,15 @@ export default function PositionPaperPage() {
   const late = paper ? isPaperLate(paper.submitted_at, committee?.position_paper_deadline ?? null) : false;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
+    <div
+      className="flex flex-col min-h-screen lg:min-h-0 lg:h-[100dvh] overflow-visible lg:overflow-hidden"
+      style={{ backgroundColor: NEU.base }}
+    >
       <SiteNav />
-      <div className="flex-1 w-full max-w-[1100px] mx-auto px-6 py-10">
+      <div
+        className="flex-1 w-full max-w-[1100px] mx-auto px-6"
+        style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box', paddingTop: 88, paddingBottom: 24 }}
+      >
         <ActionButton
           onClick={handleBack}
           icon={ArrowLeft}
@@ -417,10 +423,10 @@ export default function PositionPaperPage() {
             )}
 
             {/* Body: chat left, PDF right */}
-            <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6" style={{ flex: 1, minHeight: 0 }}>
               {/* Chat */}
-              <NeuCard style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, height: 560 }}>
-                <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+              <NeuCard className="h-[480px] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
+                <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3" style={{ minHeight: 0 }}>
                   {messages.length === 0 ? (
                     <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, textAlign: 'center', margin: 'auto 0' }}>
                       No messages yet. Start the conversation below.
@@ -475,7 +481,7 @@ export default function PositionPaperPage() {
               </NeuCard>
 
               {/* PDF */}
-              <NeuCard style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, height: 560 }}>
+              <NeuCard className="h-[480px] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
                 <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(27,56,40,0.08)' }}>
                   <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {paper.file_name}

@@ -70,7 +70,7 @@ export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConfer
     case 'conference_page':
       return `${siteUrl}/conferences/${conference.slug}`;
     case 'documents':
-      return `${siteUrl}/conferences/${conference.slug}?tab=participant`;
+      return `${siteUrl}/conferences/${conference.slug}/role`;
     case 'apply_page':
       return `${siteUrl}/conferences/${conference.slug}/apply${block.role ? `?role=${encodeURIComponent(block.role)}` : ''}`;
     case 'chair_invite_accept':

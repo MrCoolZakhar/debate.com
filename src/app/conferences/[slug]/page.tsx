@@ -153,7 +153,7 @@ export default async function ConferenceDetailPage({ params }: { params: Promise
           dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
         />
       )}
-      <ConferenceDetailClient />
+      <ConferenceDetailClient initialView="overview" />
     </>
   );
 }

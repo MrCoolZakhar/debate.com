@@ -493,7 +493,7 @@ function CardGrid({ entries, tab, muted }: { entries: TabEntry[]; tab: TabKey; m
           key={e.conference.id}
           conference={e.conference}
           roles={[e.tag]}
-          href={tab === 'organizer' ? `/manage/${e.conference.slug}` : `/conferences/${e.conference.slug}`}
+          href={tab === 'organizer' ? `/manage/${e.conference.slug}` : `/conferences/${e.conference.slug}/role`}
           manageDelegationHref={e.manageDelegationHref}
           resubmitHref={e.resubmitHref}
           muted={muted}

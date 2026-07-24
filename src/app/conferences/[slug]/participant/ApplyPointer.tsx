@@ -7,9 +7,13 @@ import { useRouter } from 'next/navigation';
 import { UserRound } from 'lucide-react';
 import { SectionCard, OUTFIT } from './shared';
 
-export default function ApplyPointer({ conferenceSlug, signedOut }: {
+export default function ApplyPointer({ conferenceSlug, signedOut, next }: {
   conferenceSlug: string;
   signedOut: boolean;
+  /** Exact URL to send the viewer back to after signing in, so a role deep
+   *  link never bounces them to the plain landing page. Defaults to the
+   *  role resolver when not given. */
+  next?: string;
 }) {
   const router = useRouter();
 
@@ -31,7 +35,7 @@ export default function ApplyPointer({ conferenceSlug, signedOut }: {
             : 'Apply to this conference and your application status, documents, payment and messages with the organizing team will all live here.'}
         </p>
         <button
-          onClick={() => router.push(signedOut ? `/auth/signin?next=/conferences/${conferenceSlug}` : `/conferences/${conferenceSlug}/apply`)}
+          onClick={() => router.push(signedOut ? `/auth/signin?next=${encodeURIComponent(next ?? `/conferences/${conferenceSlug}/role`)}` : `/conferences/${conferenceSlug}/apply`)}
           className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
           style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
