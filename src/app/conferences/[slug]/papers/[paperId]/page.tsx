@@ -18,6 +18,7 @@ import { getCountryByCode } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { isPaperLate } from '@/lib/positionPapers';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard } from '@/components/neu';
+import { ActionButton } from '@/components/PositionPaperButtons';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function fmtDate(iso: string): string {
@@ -87,72 +88,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ── House action button: same lift-on-hover, scale-on-press physics as
-// neu.tsx's NeuButton, but reusable as either a <button> or a download <a>,
-// and supports an outline visual for secondary/danger actions like Reject.
-
-type ActionIcon = React.ComponentType<{ size?: number; strokeWidth?: number }>;
-
-function ActionButton({
-  as = 'button', href, download, target, rel, onClick, disabled, icon: Icon, children,
-  background, hoverBackground, color, hoverColor, border, boxShadowColor, style,
-}: {
-  as?: 'button' | 'a';
-  href?: string;
-  download?: string;
-  target?: string;
-  rel?: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  icon?: ActionIcon;
-  children: React.ReactNode;
-  background: string;
-  hoverBackground?: string;
-  color: string;
-  hoverColor?: string;
-  border?: string;
-  boxShadowColor?: string;
-  style?: React.CSSProperties;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const [pressed, setPressed] = useState(false);
-  const shadowTint = boxShadowColor ?? 'rgba(27,56,40,0.2)';
-  const sharedStyle: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-    padding: '8px 16px', borderRadius: 9999,
-    border: border ?? 'none',
-    background: disabled ? 'rgba(27,56,40,0.12)' : (hovered && hoverBackground) ? hoverBackground : background,
-    color: disabled ? NEU.muted : (hovered && hoverColor) ? hoverColor : color,
-    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
-    textDecoration: 'none',
-    cursor: disabled ? 'default' : 'pointer',
-    boxShadow: disabled ? 'none' : hovered ? `0 6px 14px ${shadowTint}, ${NEU.outSmHover}` : `0 3px 8px ${shadowTint}, ${NEU.outSm}`,
-    transform: disabled ? 'none' : pressed ? 'scale(0.96)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
-    transition: `box-shadow 220ms ${EASE}, transform 140ms ${EASE}, background-color 180ms ${EASE}, color 180ms ${EASE}`,
-    ...style,
-  };
-  const handlers = {
-    onMouseEnter: () => { if (!disabled) setHovered(true); },
-    onMouseLeave: () => { setHovered(false); setPressed(false); },
-    onPointerDown: () => { if (!disabled) setPressed(true); },
-    onPointerUp: () => setPressed(false),
-  };
-  if (as === 'a') {
-    return (
-      <a href={href} download={download} target={target} rel={rel} className="focus:outline-none" style={sharedStyle} {...handlers}>
-        {Icon && <Icon size={13} strokeWidth={2.4} />}
-        {children}
-      </a>
-    );
-  }
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} className="focus:outline-none" style={sharedStyle} {...handlers}>
-      {Icon && <Icon size={13} strokeWidth={2.4} />}
-      {children}
-    </button>
-  );
-}
-
 // ── Circular send button, same physics, gradient-filled disc ──────────────
 
 function SendButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
@@ -180,6 +115,34 @@ function SendButton({ onClick, disabled }: { onClick: () => void; disabled: bool
     >
       <Send size={15} />
     </button>
+  );
+}
+
+// ── Sign-in link, same physics but stays a next/link for client nav ───────
+
+function SignInLink({ href }: { href: string }) {
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center justify-center rounded-full mt-4 focus:outline-none"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      style={{
+        padding: '9px 22px',
+        background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+        color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, letterSpacing: '0.06em',
+        textDecoration: 'none',
+        boxShadow: hovered ? `0 6px 14px ${NEU_GRADIENTS.forest[0]}55, ${NEU.outSmHover}` : `0 3px 8px ${NEU_GRADIENTS.forest[0]}40, ${NEU.outSm}`,
+        transform: pressed ? 'scale(0.96)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `box-shadow 220ms ${EASE}, transform 140ms ${EASE}`,
+      }}
+    >
+      SIGN IN
+    </Link>
   );
 }
 
@@ -381,13 +344,7 @@ export default function PositionPaperPage() {
             <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, marginTop: 6 }}>
               You need to be signed in to view this position paper.
             </p>
-            <Link
-              href={`/auth/signin?next=${encodeURIComponent(`/conferences/${slug}/papers/${paperId}`)}`}
-              className="inline-flex items-center justify-center rounded-xl px-5 py-2.5 mt-4 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
-            >
-              SIGN IN
-            </Link>
+            <SignInLink href={`/auth/signin?next=${encodeURIComponent(`/conferences/${slug}/papers/${paperId}`)}`} />
           </NeuCard>
         ) : !paper ? (
           <NeuCard style={{ padding: '32px', textAlign: 'center' }}>
