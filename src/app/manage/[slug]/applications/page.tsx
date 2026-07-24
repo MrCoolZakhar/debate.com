@@ -2400,7 +2400,7 @@ export default function ApplicationsPage() {
             // No recorded level → treat as the lowest tier "beginner" (#11).
             const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
             const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
-            const rowQuestions = questionsOf(normalizeBlocks(roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? []));
+            const rowQuestions = questionsOf(normalizeBlocks(roleConfigs.find(rc => rc.role === app.role)?.custom_questions ?? []), { includeArchived: true });
             const age = ageForApp(app, rowQuestions);
             const nationality = app.profiles?.nationality ?? null;
             const natCode = resolveRealCountryCode(nationality);
@@ -2956,12 +2956,15 @@ export default function ApplicationsPage() {
         const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
         const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
-        const questions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? []));
+        // Includes archived questions so a deleted question's answer stays
+        // labeled and readable, never falling through to the orphaned-answer
+        // fallback below.
+        const questions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? []), { includeArchived: true });
         const answers = app.custom_answers ?? {};
-        // Keys in custom_answers with no matching current question — the
-        // question was edited/removed since this applicant answered it. Their
-        // answer is still shown (never silently dropped), just without a
-        // matching label.
+        // Keys in custom_answers with no matching question at all (archived
+        // or current) — the question was removed before archiving existed, or
+        // the id was never a real question. Their answer is still shown
+        // (never silently dropped), just without a matching label.
         const questionIds = new Set(questions.map(q => q.id));
         const orphanedAnswers = Object.entries(answers).filter(([key]) => !questionIds.has(key));
         // Financial aid: the linked financial_aid_requests row (fetched on demand,
@@ -3254,7 +3257,17 @@ export default function ApplicationsPage() {
                       const ans = displayAnswer(q, answers[q.id]);
                       return (
                         <div key={q.id}>
-                          <p className="text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{q.label}</p>
+                          <p className="flex items-center gap-1.5 text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            {q.label}
+                            {q.archived && (
+                              <span
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                                style={{ color: '#9A8A78', backgroundColor: 'rgba(154,138,120,0.14)', letterSpacing: '0.04em' }}
+                              >
+                                ARCHIVED
+                              </span>
+                            )}
+                          </p>
                           <p className="text-sm whitespace-pre-wrap" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: ans ? 'normal' : 'italic' }}>
                             {ans || 'No answer provided.'}
                           </p>

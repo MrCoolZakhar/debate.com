@@ -59,7 +59,11 @@ export function normalizeQuestions(raw: unknown[] | null | undefined): CustomQue
 // splitIntoSections). Shared by conference application forms and financial
 // aid forms — one model, one builder, one renderer.
 
-export type QuestionBlock = CustomQuestion & { kind: 'question' };
+/** archived: soft-deleted from the live form. The block (and any answers
+ *  already stored against its id in applications.custom_answers) is kept
+ *  forever; only the "is this question currently on the form" view hides it.
+ *  See questionsOf below for how consumers opt in or out. */
+export type QuestionBlock = CustomQuestion & { kind: 'question'; archived?: boolean };
 
 export interface TitleBlock {
   kind: 'title';
@@ -101,13 +105,16 @@ export function normalizeBlocks(raw: unknown): FormBlock[] {
         description,
       };
     }
-    return { ...normalizeQuestion(item), kind: 'question' };
+    return { ...normalizeQuestion(item), kind: 'question', archived: r.archived === true };
   });
 }
 
-/** Question blocks only, in order — for validation and answer views. */
-export function questionsOf(blocks: FormBlock[]): CustomQuestion[] {
-  return blocks.filter((b): b is QuestionBlock => b.kind === 'question');
+/** Question blocks only, in order. Archived questions are excluded by
+ *  default, so the live applicant form and its required-validation never see
+ *  a soft-deleted question, pass includeArchived for organizer-side views
+ *  that need to resolve a past answer against the question that produced it. */
+export function questionsOf(blocks: FormBlock[], opts?: { includeArchived?: boolean }): QuestionBlock[] {
+  return blocks.filter((b): b is QuestionBlock => b.kind === 'question' && (opts?.includeArchived === true || !b.archived));
 }
 
 /** Splits a flat block list into pages at each Section block. A Section

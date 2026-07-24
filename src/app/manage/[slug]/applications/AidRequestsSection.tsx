@@ -97,8 +97,9 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
   const { confirm, modal: confirmModal } = useConfirmModal();
   // Normalizes the raw jsonb block list (backward compatible with legacy
   // flat CustomQuestion arrays) and keeps only question blocks — Title and
-  // Section blocks never render as blank questions here.
-  const normalizedAidQuestions = questionsOf(normalizeBlocks(aidBlocks));
+  // Section blocks never render as blank questions here. Includes archived
+  // questions so a deleted question's answer stays labeled and readable.
+  const normalizedAidQuestions = questionsOf(normalizeBlocks(aidBlocks), { includeArchived: true });
 
   const [requests, setRequests] = useState<AidRequestRow[]>([]);
   const [roleFees, setRoleFees] = useState<RoleFee[]>([]);
@@ -390,7 +391,17 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                   const ans = displayAnswer(q, reviewing.custom_answers?.[q.id]);
                   return (
                     <div key={q.id}>
-                      <p className="text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{q.label}</p>
+                      <p className="flex items-center gap-1.5 text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                        {q.label}
+                        {q.archived && (
+                          <span
+                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                            style={{ color: '#9A8A78', backgroundColor: 'rgba(154,138,120,0.14)', letterSpacing: '0.04em' }}
+                          >
+                            ARCHIVED
+                          </span>
+                        )}
+                      </p>
                       <p className="text-sm" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: OUTFIT, fontStyle: ans ? 'normal' : 'italic' }}>
                         {ans || 'No answer provided.'}
                       </p>
