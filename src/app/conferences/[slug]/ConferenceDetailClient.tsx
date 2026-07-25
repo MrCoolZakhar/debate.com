@@ -409,7 +409,20 @@ function SectionCard({ children, className = '' }: { children: React.ReactNode; 
 
 // ── Main component ────────────────────────────────────────────────────────
 
-export default function ConferenceDetailClient() {
+export interface ConferenceDetailClientProps {
+  /** Which route segment mounted this component: the plain landing page
+   *  (description-only), a /role or /role/[role] participant route, or
+   *  /reviews. Drives which section renders, thin page.tsx files pass this
+   *  in explicitly from their own route rather than the component guessing
+   *  it from the URL. */
+  initialView: 'overview' | 'participant' | 'reviews';
+  /** The role segment from /conferences/[slug]/role/[role], or null on the
+   *  bare /role resolver route (initialView === 'overview' | 'reviews'
+   *  never carry a role). */
+  initialRole?: string | null;
+}
+
+export default function ConferenceDetailClient({ initialView, initialRole = null }: ConferenceDetailClientProps) {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const router = useRouter();
@@ -422,13 +435,28 @@ export default function ConferenceDetailClient() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [myAllocation, setMyAllocation] = useState<ParticipantAllocation | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'participant' | 'reviews'>('overview');
-  // Deep link support for email buttons ("My conference view", legacy
-  // 'documents' destination): ?tab=participant opens straight to the person
-  // tab. Read post-mount (not via useSearchParams) to avoid a Suspense
-  // boundary requirement on this large top-level client component.
+  // Which tab is showing is entirely a function of which route mounted this
+  // component (a tab switch is a real navigation to a different route, which
+  // remounts this component with a new initialView), never local state.
+  const activeTab = initialView;
+  // Backward compatibility: the tab/role state used to live in query params
+  // on this one URL (?tab=participant, ?tab=reviews, ?role=<x>), so every
+  // link already sent in an email or bookmarked still carries them. They can
+  // only ever arrive on the plain landing route (the only URL that existed
+  // before /role and /reviews did), translate once, on mount.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('tab') === 'participant') setActiveTab('participant');
+    if (activeTab !== 'overview') return;
+    const qs = new URLSearchParams(window.location.search);
+    const tab = qs.get('tab');
+    const role = qs.get('role');
+    if (tab === 'reviews') {
+      router.replace(`/conferences/${slug}/reviews`);
+      return;
+    }
+    if (tab === 'participant' || role) {
+      router.replace(role ? `/conferences/${slug}/role/${role}` : `/conferences/${slug}/role`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Perceived-perf: warm the apply route's JS chunk + loading UI so the "Apply"
   // CTA (which navigates via router.push) feels instant. Prefetch is a no-op in
@@ -438,8 +466,11 @@ export default function ConferenceDetailClient() {
     router.prefetch(`/conferences/${slug}/apply`);
   }, [slug, router]);
   // Stripe checkout return (?payment=success|cancelled from create-checkout's
-  // success_url/cancel_url). Read once post-mount, then strip the query
-  // string immediately so a refresh never re-triggers it.
+  // success_url/cancel_url, still targets the plain landing URL). Off the
+  // participant route, forward straight to the role resolver (carrying the
+  // query along) so the confirmation banner below actually has somewhere to
+  // render; on it, consume it once and strip the query so a refresh never
+  // re-triggers it.
   const [paymentReturn, setPaymentReturn] = useState<'success' | 'cancelled' | null>(null);
   const [paymentConfirming, setPaymentConfirming] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
@@ -447,11 +478,14 @@ export default function ConferenceDetailClient() {
   const pollStartedRef = useRef(false);
   useEffect(() => {
     const payment = new URLSearchParams(window.location.search).get('payment');
-    if (payment === 'success' || payment === 'cancelled') {
-      setActiveTab('participant');
-      setPaymentReturn(payment);
-      window.history.replaceState(null, '', window.location.pathname);
+    if (payment !== 'success' && payment !== 'cancelled') return;
+    if (activeTab !== 'participant') {
+      router.replace(`/conferences/${slug}/role?payment=${payment}`);
+      return;
     }
+    setPaymentReturn(payment);
+    window.history.replaceState(null, '', window.location.pathname);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // The webhook is the only authority on payment state — this just polls the
   // application row every 2s (max ~20s) waiting for it to reflect what the
@@ -1299,7 +1333,7 @@ export default function ConferenceDetailClient() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setActiveTab('reviews')}
+                    onClick={() => router.push(`/conferences/${slug}/reviews`)}
                     className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors"
                     style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -1334,13 +1368,13 @@ export default function ConferenceDetailClient() {
                   }}
                 >
                   {([
-                    { key: 'overview' as const, label: 'Overview', icon: Landmark },
-                    { key: 'participant' as const, label: 'You', icon: UserRound },
-                    { key: 'reviews' as const, label: 'Reviews', icon: Star },
-                  ]).map(({ key, label, icon: TabIcon }) => (
+                    { key: 'overview' as const, label: 'Overview', icon: Landmark, href: `/conferences/${slug}` },
+                    { key: 'participant' as const, label: 'You', icon: UserRound, href: `/conferences/${slug}/role` },
+                    { key: 'reviews' as const, label: 'Reviews', icon: Star, href: `/conferences/${slug}/reviews` },
+                  ]).map(({ key, label, icon: TabIcon, href }) => (
                     <button
                       key={key}
-                      onClick={() => setActiveTab(key)}
+                      onClick={() => router.push(href)}
                       aria-label={label}
                       title={label}
                       className="relative flex items-center justify-center rounded-full focus:outline-none"
@@ -1633,6 +1667,7 @@ export default function ConferenceDetailClient() {
                   financialAidEnabled={conference.financial_aid_enabled}
                   aidBlocks={normalizeBlocks(conference.aid_questions)}
                   aidIntro={conference.aid_intro}
+                  initialRole={initialRole}
                 />
                 </>
               )}
@@ -1897,6 +1932,15 @@ export default function ConferenceDetailClient() {
                                 </div>
                               </div>
                             )}
+                            <Link
+                              href={`/conferences/${slug}/role/${myApp.role}`}
+                              className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mt-3 font-bold text-xs transition-colors focus:outline-none"
+                              style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textDecoration: 'none' }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.16)'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
+                            >
+                              VIEW YOUR DASHBOARD
+                            </Link>
                           </>
                         );
                       })()

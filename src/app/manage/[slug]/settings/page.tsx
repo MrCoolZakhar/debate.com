@@ -405,9 +405,10 @@ export default function SettingsPage() {
   const [configVersion, setConfigVersion] = useState(0);
   const [roleConfigError, setRoleConfigError] = useState('');
   // Roles with at least one application already in the pipeline (submitted or
-  // further along) — their existing questions are locked to protect answers
-  // that have already been collected against them.
-  const [lockedRoles, setLockedRoles] = useState<Set<string>>(new Set());
+  // further along) — used only to show a quiet caution in the question
+  // builder when rewording a question those applicants may have already
+  // answered. Never blocks an edit; see QuestionBuilder's hasApplications prop.
+  const [rolesWithApplications, setRolesWithApplications] = useState<Set<string>>(new Set());
   const { confirm, modal: confirmModal } = useConfirmModal();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
   const [selectedRole, setSelectedRole] = useState<string>('delegate');
@@ -467,7 +468,7 @@ export default function SettingsPage() {
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
   const roleSeq = useRef(0);
-  const lockedRolesSeq = useRef(0);
+  const rolesWithApplicationsSeq = useRef(0);
   const orgSeq = useRef(0);
   const invitesSeq = useRef(0);
   const lineageSeq = useRef(0);
@@ -493,11 +494,12 @@ export default function SettingsPage() {
   }, [conference]);
 
   // Count query on applications for (conference_id, role): any role with a
-  // submitted-or-further application gets its existing questions locked.
-  const loadLockedRoles = useCallback(async () => {
+  // submitted-or-further application surfaces a quiet caution in the question
+  // builder when its existing questions get reworded.
+  const loadRolesWithApplications = useCallback(async () => {
     if (!conference) return;
     if (!session) return;
-    const seq = ++lockedRolesSeq.current;
+    const seq = ++rolesWithApplicationsSeq.current;
     const supabase = getAuthedClient(session.access_token);
     const results = await Promise.all(ROLES.map(async (role) => {
       const { count } = await supabase
@@ -506,10 +508,10 @@ export default function SettingsPage() {
         .eq('conference_id', conference.id)
         .eq('role', role)
         .in('status', ['submitted', 'accepted', 'assigned', 'checked-in']);
-      return { role, locked: (count ?? 0) > 0 };
+      return { role, hasApplications: (count ?? 0) > 0 };
     }));
-    if (seq !== lockedRolesSeq.current) return;
-    setLockedRoles(new Set(results.filter(r => r.locked).map(r => r.role)));
+    if (seq !== rolesWithApplicationsSeq.current) return;
+    setRolesWithApplications(new Set(results.filter(r => r.hasApplications).map(r => r.role)));
   }, [conference, session]);
 
   const loadOrganizers = useCallback(async () => {
@@ -625,7 +627,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!conference) return;
     loadRoleConfigs();
-    loadLockedRoles();
+    loadRolesWithApplications();
     loadOrganizers();
     loadPendingInvites();
     loadLineage();
@@ -668,7 +670,7 @@ export default function SettingsPage() {
       whatsappUrl: conference.whatsapp_url ?? '', websiteUrl: conference.website_url ?? '',
     });
     minAgeBaseline.current = snap({ minAge: conference.min_age != null ? String(conference.min_age) : '' });
-  }, [conference?.id, loadRoleConfigs, loadLockedRoles, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
+  }, [conference?.id, loadRoleConfigs, loadRolesWithApplications, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
 
   // Partner typeahead: debounced authed search over public conferences,
   // excluding this conference and anything already linked.
@@ -1299,7 +1301,7 @@ export default function SettingsPage() {
 
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
   const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
-  const selectedRoleLocked = lockedRoles.has(selectedRole);
+  const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
   const enabledRoles = ROLES.filter(r => roleConfigs.find(rc => rc.role === r)?.is_enabled);
   const otherRoles = ROLES.filter(r => r !== selectedRole);
   const [copyNotice, setCopyNotice] = useState('');
@@ -2670,13 +2672,7 @@ export default function SettingsPage() {
                 </p>
               )}
             </div>
-            {selectedRoleLocked && (
-              <p className="flex items-start gap-2 text-xs mb-3 rounded-xl px-3 py-2.5" style={{ color: '#7A6E5E', backgroundColor: 'rgba(154,138,120,0.1)', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}>
-                <Lock size={13} className="flex-shrink-0 mt-0.5" />
-                Applications are in — existing questions are locked to protect submitted answers; you can still add new ones.
-              </p>
-            )}
-            <QuestionBuilder value={currentBlocks} onChange={handleBlocksChange} locked={selectedRoleLocked} />
+            <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
           </>
         )}
       </div>}

@@ -392,7 +392,7 @@ export default function PayPage() {
       <SiteNav />
       <div className="flex-1 w-full max-w-[900px] mx-auto px-6 py-10">
         <Link
-          href={`/conferences/${slug}?tab=participant`}
+          href={`/conferences/${slug}/role`}
           className="inline-flex items-center gap-1.5 mb-6 focus:outline-none"
           style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted, textDecoration: 'none' }}
         >

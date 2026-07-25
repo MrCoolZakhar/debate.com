@@ -1,11 +1,12 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ChevronUp, ChevronDown, Copy, GripVertical, Heading, Lock, Plus, Rows3, X } from 'lucide-react';
+import { Archive, ChevronUp, ChevronDown, Copy, GripVertical, Heading, Info, Plus, Rows3, RotateCcw, Trash2, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { Pill } from '@/app/account/accountUi';
+import { useConfirmModal } from '@/components/ConfirmModal';
 import {
-  type CustomQuestion, type QuestionType, type FormBlock, type TitleBlock, type SectionBlock,
+  type CustomQuestion, type QuestionType, type FormBlock, type QuestionBlock, type TitleBlock, type SectionBlock,
   isChoiceType, QUESTION_TYPE_LABELS,
 } from '@/lib/customQuestions';
 
@@ -28,9 +29,12 @@ function bgInput(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
 
 // ── Question edit modal ──────────────────────────────────────────────────────
 
-function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
+function QuestionEditModal({ existing, hasApplications, onSave, onClose }: {
   existing: CustomQuestion | null;
-  fieldsLocked: boolean;
+  /** True when the role/form this question belongs to already has
+   *  applications in the pipeline. Only ever softens the copy shown while
+   *  editing an existing question's wording — never disables a field. */
+  hasApplications: boolean;
   onSave: (q: CustomQuestion) => void;
   onClose: () => void;
 }) {
@@ -44,10 +48,16 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
   const choice = isChoiceType(type);
   const showPlaceholder = type === 'short_text' || type === 'paragraph' || type === 'number';
   const validOptions = options.map(o => o.trim()).filter(Boolean);
-  const canSave = fieldsLocked || (label.trim().length > 0 && (!choice || validOptions.length >= 2));
+  const canSave = label.trim().length > 0 && (!choice || validOptions.length >= 2);
+
+  // Quiet caution, not a blocker: once an applicant may already have
+  // answered this question, flag that rewording it leaves their answer
+  // attached to different wording than what they saw.
+  const labelChanged = existing !== null && label.trim() !== existing.label;
+  const optionsChanged = existing !== null && choice && JSON.stringify(validOptions) !== JSON.stringify(existing.options ?? []);
+  const showRewordingCaution = hasApplications && (labelChanged || optionsChanged);
 
   function moveOption(idx: number, dir: -1 | 1) {
-    if (fieldsLocked) return;
     setOptions(prev => {
       const next = [...prev];
       const target = idx + dir;
@@ -58,10 +68,6 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
   }
 
   function handleSave() {
-    if (fieldsLocked && existing) {
-      onSave({ ...existing, help: help.trim() ? help.trim() : undefined });
-      return;
-    }
     if (!canSave) return;
     onSave({
       id: existing?.id ?? crypto.randomUUID(),
@@ -73,10 +79,6 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
       help: help.trim() ? help.trim() : undefined,
     });
   }
-
-  const lockedFieldStyle: React.CSSProperties = fieldsLocked
-    ? { ...inputStyle, backgroundColor: '#F0EDE6', color: '#9A8A78', cursor: 'not-allowed' }
-    : inputStyle;
 
   return (
     <Portal><div
@@ -92,9 +94,10 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
         <h2 className="font-black text-lg mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           {existing ? 'Edit Question' : 'Add Question'}
         </h2>
-        {fieldsLocked && (
-          <p className="flex items-center gap-1.5 text-xs mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            <Lock size={11} /> Locked — only help text can be changed for a question with submitted answers.
+        {showRewordingCaution && (
+          <p className="flex items-start gap-1.5 text-xs mb-4 rounded-lg px-3 py-2" style={{ color: '#8A5A2C', backgroundColor: 'rgba(184,132,74,0.12)', fontFamily: "'Outfit', sans-serif" }}>
+            <Info size={12} className="flex-shrink-0 mt-0.5" />
+            Existing answers were given to the previous wording.
           </p>
         )}
 
@@ -107,8 +110,7 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="e.g. Why do you want to attend this conference?"
-            style={lockedFieldStyle}
-            disabled={fieldsLocked}
+            style={inputStyle}
             onFocus={fgInput}
             onBlur={bgInput}
           />
@@ -123,16 +125,15 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
               <button
                 key={t}
                 type="button"
-                onClick={() => { if (!fieldsLocked) setType(t); }}
-                disabled={fieldsLocked}
+                onClick={() => setType(t)}
                 className="py-2 px-3 rounded-[10px] font-bold text-xs focus:outline-none transition-all"
                 style={{
-                  backgroundColor: type === t ? (fieldsLocked ? '#DDD4C0' : '#1B3828') : 'transparent',
-                  color: type === t ? (fieldsLocked ? '#9A8A78' : '#EED98A') : (fieldsLocked ? '#B8AC98' : '#1C1410'),
-                  border: type === t ? `1.5px solid ${fieldsLocked ? '#DDD4C0' : '#1B3828'}` : '1.5px solid #DDD4C0',
+                  backgroundColor: type === t ? '#1B3828' : 'transparent',
+                  color: type === t ? '#EED98A' : '#1C1410',
+                  border: type === t ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
                   fontFamily: "'Outfit', sans-serif",
                   letterSpacing: '0.04em',
-                  cursor: fieldsLocked ? 'not-allowed' : 'pointer',
+                  cursor: 'pointer',
                 }}
               >
                 {QUESTION_TYPE_LABELS[t].toUpperCase()}
@@ -154,35 +155,34 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
                     value={opt}
                     onChange={(e) => setOptions(prev => prev.map((o, i) => (i === idx ? e.target.value : o)))}
                     placeholder={`Option ${idx + 1}`}
-                    style={{ ...lockedFieldStyle, flex: 1 }}
-                    disabled={fieldsLocked}
+                    style={{ ...inputStyle, flex: 1 }}
                     onFocus={fgInput}
                     onBlur={bgInput}
                   />
                   <button
                     type="button"
                     onClick={() => moveOption(idx, -1)}
-                    disabled={fieldsLocked || idx === 0}
+                    disabled={idx === 0}
                     className="p-1.5 rounded-lg focus:outline-none"
-                    style={{ color: fieldsLocked || idx === 0 ? '#DDD4C0' : '#1C1410', cursor: fieldsLocked || idx === 0 ? 'default' : 'pointer' }}
+                    style={{ color: idx === 0 ? '#DDD4C0' : '#1C1410', cursor: idx === 0 ? 'default' : 'pointer' }}
                   >
                     <ChevronUp size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => moveOption(idx, 1)}
-                    disabled={fieldsLocked || idx === options.length - 1}
+                    disabled={idx === options.length - 1}
                     className="p-1.5 rounded-lg focus:outline-none"
-                    style={{ color: fieldsLocked || idx === options.length - 1 ? '#DDD4C0' : '#1C1410', cursor: fieldsLocked || idx === options.length - 1 ? 'default' : 'pointer' }}
+                    style={{ color: idx === options.length - 1 ? '#DDD4C0' : '#1C1410', cursor: idx === options.length - 1 ? 'default' : 'pointer' }}
                   >
                     <ChevronDown size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => setOptions(prev => prev.filter((_, i) => i !== idx))}
-                    disabled={fieldsLocked || options.length <= 2}
+                    disabled={options.length <= 2}
                     className="p-1.5 rounded-lg focus:outline-none"
-                    style={{ color: fieldsLocked || options.length <= 2 ? '#DDD4C0' : '#8B2020', cursor: fieldsLocked || options.length <= 2 ? 'default' : 'pointer' }}
+                    style={{ color: options.length <= 2 ? '#DDD4C0' : '#8B2020', cursor: options.length <= 2 ? 'default' : 'pointer' }}
                   >
                     <X size={14} />
                   </button>
@@ -191,14 +191,13 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
             </div>
             <button
               type="button"
-              onClick={() => { if (!fieldsLocked) setOptions(prev => [...prev, '']); }}
-              disabled={fieldsLocked}
+              onClick={() => setOptions(prev => [...prev, ''])}
               className="mt-2 flex items-center gap-1 text-xs font-semibold focus:outline-none hover:underline"
-              style={{ color: fieldsLocked ? '#B8AC98' : '#1B3828', fontFamily: "'Outfit', sans-serif", cursor: fieldsLocked ? 'not-allowed' : 'pointer' }}
+              style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}
             >
               <Plus size={12} /> ADD OPTION
             </button>
-            {!fieldsLocked && validOptions.length < 2 && (
+            {validOptions.length < 2 && (
               <p className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
                 At least 2 options are required.
               </p>
@@ -215,8 +214,7 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
               type="text"
               value={placeholder}
               onChange={(e) => setPlaceholder(e.target.value)}
-              style={lockedFieldStyle}
-              disabled={fieldsLocked}
+              style={inputStyle}
               onFocus={fgInput}
               onBlur={bgInput}
             />
@@ -243,12 +241,11 @@ function QuestionEditModal({ existing, fieldsLocked, onSave, onClose }: {
             type="checkbox"
             id="qb-required"
             checked={required}
-            onChange={(e) => { if (!fieldsLocked) setRequired(e.target.checked); }}
-            disabled={fieldsLocked}
+            onChange={(e) => setRequired(e.target.checked)}
             className="w-4 h-4 cursor-pointer"
             style={{ accentColor: '#1B3828' }}
           />
-          <label htmlFor="qb-required" className="text-sm font-medium cursor-pointer" style={{ color: fieldsLocked ? '#9A8A78' : '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <label htmlFor="qb-required" className="text-sm font-medium cursor-pointer" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
             Required question
           </label>
         </div>
@@ -389,9 +386,8 @@ const ACCENT: Record<FormBlock['kind'], string | null> = {
   section: '#1B3828',
 };
 
-function BlockCard({ block, locked, onEdit, onDuplicate, onDelete }: {
+function BlockCard({ block, onEdit, onDuplicate, onDelete }: {
   block: FormBlock;
-  locked: boolean;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -404,7 +400,7 @@ function BlockCard({ block, locked, onEdit, onDuplicate, onDelete }: {
     >
       {accent && <div style={{ height: 4, backgroundColor: accent }} />}
       <div className="p-4 flex items-start gap-2.5">
-        <GripVertical size={15} className="mt-0.5 flex-shrink-0" style={{ color: locked ? '#DDD4C0' : '#B8AC98', cursor: locked ? 'not-allowed' : 'grab' }} />
+        <GripVertical size={15} className="mt-0.5 flex-shrink-0" style={{ color: '#B8AC98', cursor: 'grab' }} />
         <div className="flex-1 min-w-0">
           {block.kind === 'question' ? (
             <>
@@ -414,9 +410,6 @@ function BlockCard({ block, locked, onEdit, onDuplicate, onDelete }: {
               <div className="flex items-center gap-2 mb-2">
                 <Pill tone="neutral" size="sm">{QUESTION_TYPE_LABELS[block.type]}</Pill>
                 {block.required && <Pill tone="forest" size="sm">Required</Pill>}
-                {locked && (
-                  <Pill tone="neutral" size="sm" icon={<Lock size={9} />}>Locked</Pill>
-                )}
               </div>
             </>
           ) : (
@@ -451,18 +444,53 @@ function BlockCard({ block, locked, onEdit, onDuplicate, onDelete }: {
             >
               <Copy size={11} /> DUPLICATE
             </button>
-            {!locked && (
-              <button
-                onClick={onDelete}
-                className="text-xs font-semibold focus:outline-none hover:underline"
-                style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
-              >
-                DELETE
-              </button>
-            )}
+            <button
+              onClick={onDelete}
+              className="text-xs font-semibold focus:outline-none hover:underline"
+              style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}
+            >
+              DELETE
+            </button>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Archived question row ────────────────────────────────────────────────────
+// Collapsed and muted: no type/required pills, no edit or duplicate — an
+// archived question is off the live form, its only actions are bringing it
+// back or forgetting it (and its answers) for good.
+
+function ArchivedRow({ block, onRestore, onDeleteForever }: {
+  block: QuestionBlock;
+  onRestore: () => void;
+  onDeleteForever: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
+      style={{ backgroundColor: 'rgba(154,138,120,0.07)', border: '1px solid #EDE7D9' }}
+    >
+      <span className="flex-1 min-w-0 truncate text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+        {block.label || 'Untitled question'}
+      </span>
+      <button
+        onClick={onRestore}
+        className="flex items-center gap-1 text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
+        style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
+      >
+        <RotateCcw size={11} /> RESTORE
+      </button>
+      <button
+        onClick={onDeleteForever}
+        className="p-1 rounded-lg focus:outline-none flex-shrink-0"
+        style={{ color: '#B8AC98' }}
+        title="Delete permanently"
+      >
+        <Trash2 size={13} />
+      </button>
     </div>
   );
 }
@@ -475,23 +503,35 @@ type ModalState =
   | { kind: 'section'; existing: SectionBlock | null }
   | null;
 
-export default function QuestionBuilder({ value, onChange, locked = false }: {
+export default function QuestionBuilder({ value, onChange, hasApplications = false }: {
   value: FormBlock[];
   onChange: (next: FormBlock[]) => void;
-  /** True once the role has submitted applications — existing questions can no
-   *  longer be deleted or reordered (protects already-collected answers), but
-   *  new questions/titles/sections may still be added and help text edited. */
-  locked?: boolean;
+  /** True when this role/form already has applications in the pipeline.
+   *  Never locks anything — the builder is fully editable regardless — it
+   *  only softens the copy shown while rewording an existing question (see
+   *  QuestionEditModal) and is otherwise unused. Deleting still always
+   *  archives an existing question rather than destroying it; see newIds
+   *  below for the one case (a question added and deleted in the same
+   *  sitting, never seen by an applicant) that removes it outright. */
+  hasApplications?: boolean;
 }) {
   const [modal, setModal] = useState<ModalState>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  // Ids of question blocks created during this sitting (added or duplicated,
+  // not yet part of the persisted form when the builder mounted). Deleting
+  // one of these can never orphan an answer, so it's removed outright instead
+  // of archived.
+  const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
+  const { confirm, modal: confirmModal } = useConfirmModal();
 
-  const isLocked = (block: FormBlock) => locked && block.kind === 'question';
+  const activeBlocks = value.filter(b => !(b.kind === 'question' && b.archived));
+  const archivedBlocks = value.filter((b): b is QuestionBlock => b.kind === 'question' && !!b.archived);
 
   function handleSaveQuestion(q: CustomQuestion) {
     const block: FormBlock = { ...q, kind: 'question' };
     const exists = value.some(b => b.id === block.id);
+    if (!exists) setNewIds(prev => new Set(prev).add(block.id));
     onChange(exists ? value.map(b => (b.id === block.id ? block : b)) : [...value, block]);
     setModal(null);
   }
@@ -509,15 +549,42 @@ export default function QuestionBuilder({ value, onChange, locked = false }: {
   }
 
   function handleDuplicate(idx: number) {
-    const clone: FormBlock = { ...value[idx], id: crypto.randomUUID() };
-    const next = [...value];
-    next.splice(idx + 1, 0, clone);
-    onChange(next);
+    const clone: FormBlock = { ...activeBlocks[idx], id: crypto.randomUUID() };
+    if (clone.kind === 'question') setNewIds(prev => new Set(prev).add(clone.id));
+    const nextActive = [...activeBlocks];
+    nextActive.splice(idx + 1, 0, clone);
+    onChange([...nextActive, ...archivedBlocks]);
   }
 
   function handleDelete(id: string) {
     const block = value.find(b => b.id === id);
-    if (block && isLocked(block)) return;
+    if (!block) return;
+    if (block.kind === 'question' && !newIds.has(id)) {
+      // Could already have answers — archive instead of destroying them.
+      onChange(value.map(b => (b.id === id ? { ...b, archived: true } : b)));
+      return;
+    }
+    onChange(value.filter(b => b.id !== id));
+    setNewIds(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function handleRestore(id: string) {
+    onChange(value.map(b => (b.id === id ? { ...b, archived: false } : b)));
+  }
+
+  async function handlePermanentDelete(id: string) {
+    const { confirmed } = await confirm({
+      title: 'Delete this question permanently?',
+      body: 'Answers already given to it will no longer be shown. This cannot be undone.',
+      confirmLabel: 'Delete permanently',
+      danger: true,
+    });
+    if (!confirmed) return;
     onChange(value.filter(b => b.id !== id));
   }
 
@@ -526,48 +593,61 @@ export default function QuestionBuilder({ value, onChange, locked = false }: {
     dragIndexRef.current = null;
     setDragOverIndex(null);
     if (from === null || from === dropIdx) return;
-    if (isLocked(value[from])) return;
-    const next = [...value];
-    const [moved] = next.splice(from, 1);
-    next.splice(from < dropIdx ? dropIdx - 1 : dropIdx, 0, moved);
-    onChange(next);
+    const reordered = [...activeBlocks];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(from < dropIdx ? dropIdx - 1 : dropIdx, 0, moved);
+    onChange([...reordered, ...archivedBlocks]);
   }
 
   return (
     <>
       <div className="flex flex-col gap-3 mb-4">
-        {value.length === 0 ? (
+        {activeBlocks.length === 0 ? (
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
             No questions yet.
           </p>
         ) : (
-          value.map((block, idx) => {
-            const blockLocked = isLocked(block);
-            return (
-              <div key={block.id}>
-                {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
-                  <div className="h-0.5 rounded-full mx-2 mb-2" style={{ backgroundColor: '#1B3828' }} />
-                )}
-                <div
-                  draggable={!blockLocked}
-                  onDragStart={() => { if (!blockLocked) dragIndexRef.current = idx; }}
-                  onDragOver={(e) => { e.preventDefault(); setDragOverIndex(idx); }}
-                  onDrop={() => handleDrop(idx)}
-                  onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
-                >
-                  <BlockCard
-                    block={block}
-                    locked={blockLocked}
-                    onEdit={() => handleEdit(block)}
-                    onDuplicate={() => handleDuplicate(idx)}
-                    onDelete={() => handleDelete(block.id)}
-                  />
-                </div>
+          activeBlocks.map((block, idx) => (
+            <div key={block.id}>
+              {dragOverIndex === idx && dragOverIndex !== dragIndexRef.current && (
+                <div className="h-0.5 rounded-full mx-2 mb-2" style={{ backgroundColor: '#1B3828' }} />
+              )}
+              <div
+                draggable
+                onDragStart={() => { dragIndexRef.current = idx; }}
+                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(idx); }}
+                onDrop={() => handleDrop(idx)}
+                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
+              >
+                <BlockCard
+                  block={block}
+                  onEdit={() => handleEdit(block)}
+                  onDuplicate={() => handleDuplicate(idx)}
+                  onDelete={() => handleDelete(block.id)}
+                />
               </div>
-            );
-          })
+            </div>
+          ))
         )}
       </div>
+
+      {archivedBlocks.length > 0 && (
+        <div className="mb-4 pt-4" style={{ borderTop: '1px solid #EDE7D9' }}>
+          <p className="flex items-center gap-1.5 text-xs font-semibold mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}>
+            <Archive size={12} /> ARCHIVED QUESTIONS
+          </p>
+          <div className="flex flex-col gap-2">
+            {archivedBlocks.map(block => (
+              <ArchivedRow
+                key={block.id}
+                block={block}
+                onRestore={() => handleRestore(block.id)}
+                onDeleteForever={() => handlePermanentDelete(block.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -602,7 +682,7 @@ export default function QuestionBuilder({ value, onChange, locked = false }: {
       {modal?.kind === 'question' && (
         <QuestionEditModal
           existing={modal.existing}
-          fieldsLocked={locked && modal.existing !== null}
+          hasApplications={hasApplications}
           onSave={handleSaveQuestion}
           onClose={() => setModal(null)}
         />
@@ -615,6 +695,7 @@ export default function QuestionBuilder({ value, onChange, locked = false }: {
           onClose={() => setModal(null)}
         />
       )}
+      {confirmModal}
     </>
   );
 }

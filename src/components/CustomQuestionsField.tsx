@@ -34,9 +34,13 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
     setAnswer(id, next);
   }
 
+  // Archived questions are soft-deleted from the applicant's point of view:
+  // never rendered here, regardless of which caller passed the block list.
+  const visibleBlocks = blocks.filter(block => !(block.kind === 'question' && block.archived));
+
   return (
     <div className="flex flex-col gap-4">
-      {blocks.map(block => {
+      {visibleBlocks.map(block => {
         if (block.kind === 'section') {
           return (
             <div key={block.id} className="pt-1 pb-0.5" style={{ borderTop: '1px solid rgba(27,56,40,0.12)' }}>

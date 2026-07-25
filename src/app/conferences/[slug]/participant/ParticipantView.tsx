@@ -7,7 +7,7 @@
 // Deliberately has no conference summary card: the page around this tab
 // already is one.
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Pencil } from 'lucide-react';
@@ -65,38 +65,37 @@ export interface ParticipantViewProps {
   financialAidEnabled: boolean;
   aidBlocks: FormBlock[];
   aidIntro: string | null;
+  /** The role segment from /conferences/[slug]/role/[role], or null on the
+   *  bare /role resolver route. Whenever this doesn't match a role the
+   *  viewer actually holds (missing, wrong, or stale), the effect below
+   *  redirects to their default role's URL. */
+  initialRole: string | null;
 }
 
 export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
+  initialRole,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const holdsInitialRole = !!initialRole && myApplications.some(a => a.role === initialRole);
 
-  // Deep-link the active role via ?role=head-delegate (alongside the
-  // ?tab=participant param ConferenceDetailClient already reads the same
-  // way), so a refresh or a shared link lands on the role that was showing
-  // rather than always the default pick. Read post-mount from
-  // window.location.search rather than useSearchParams(), same reason
-  // ConferenceDetailClient avoids it: no Suspense boundary requirement.
+  // Resolver (/role) and "not holding that role" fallback (/role/[role] for
+  // a role the viewer doesn't actually have) both land here: once
+  // applications are known, redirect to the default role's real URL.
   useEffect(() => {
-    const role = new URLSearchParams(window.location.search).get('role');
-    if (!role) return;
-    const match = myApplications.find(a => a.role === role);
-    if (match) setSelectedId(match.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!user || myApplications.length === 0 || holdsInitialRole) return;
+    const target = pickDefault(myApplications).role;
+    router.replace(`/conferences/${conferenceSlug}/role/${target}`);
+  }, [user, myApplications, holdsInitialRole, conferenceSlug, router]);
 
   function selectApplication(app: ParticipantApplication) {
-    setSelectedId(app.id);
-    const url = new URL(window.location.href);
-    url.searchParams.set('role', app.role);
-    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+    router.push(`/conferences/${conferenceSlug}/role/${app.role}`);
   }
 
   if (!user) {
-    return <ApplyPointer conferenceSlug={conferenceSlug} signedOut />;
+    const next = `/conferences/${conferenceSlug}/role${initialRole ? `/${initialRole}` : ''}`;
+    return <ApplyPointer conferenceSlug={conferenceSlug} signedOut next={next} />;
   }
   // The organizer never "applies" to their own conference — don't nudge them
   // to apply; tell them they run it and point to the manage dashboard.
@@ -132,7 +131,10 @@ export default function ParticipantView({
     return <ApplyPointer conferenceSlug={conferenceSlug} signedOut={false} />;
   }
 
-  const selected = myApplications.find(a => a.id === selectedId) ?? pickDefault(myApplications);
+  // While the redirect effect above corrects a missing or unheld role in the
+  // URL, render the eventual default selection rather than flashing the
+  // wrong role's content in the meantime.
+  const selected = (holdsInitialRole ? myApplications.find(a => a.role === initialRole) : null) ?? pickDefault(myApplications);
   const roleConfig = roleConfigs.find(rc => rc.role === selected.role) ?? null;
   const paymentTiming = roleConfig?.payment_timing ?? 'anytime';
   const gateState = getGateState(paymentTiming, selected.status, selected.payment_status);

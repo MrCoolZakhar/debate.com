@@ -8,7 +8,7 @@
 // fails to load just renders the "not available" state.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Check, Download, Loader2, Send, X } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
@@ -17,7 +17,8 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByCode } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { isPaperLate } from '@/lib/positionPapers';
-import { NEU, OUTFIT, NeuCard } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard } from '@/components/neu';
+import { ActionButton } from '@/components/PositionPaperButtons';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function fmtDate(iso: string): string {
@@ -87,9 +88,68 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ── Circular send button, same physics, gradient-filled disc ──────────────
+
+function SendButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => { if (!disabled) setHovered(true); }}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onPointerDown={() => { if (!disabled) setPressed(true); }}
+      onPointerUp={() => setPressed(false)}
+      className="flex items-center justify-center flex-shrink-0 focus:outline-none"
+      style={{
+        width: 38, height: 38, borderRadius: 12, border: 'none',
+        background: disabled ? 'rgba(27,56,40,0.12)' : `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+        color: disabled ? NEU.muted : NEU.gold,
+        cursor: disabled ? 'default' : 'pointer',
+        boxShadow: disabled ? 'none' : hovered ? `0 6px 14px ${NEU_GRADIENTS.forest[0]}55, ${NEU.outSmHover}` : `0 3px 8px ${NEU_GRADIENTS.forest[0]}40, ${NEU.outSm}`,
+        transform: disabled ? 'none' : pressed ? 'scale(0.94)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `box-shadow 220ms ${EASE}, transform 140ms ${EASE}`,
+      }}
+    >
+      <Send size={15} />
+    </button>
+  );
+}
+
+// ── Sign-in link, same physics but stays a next/link for client nav ───────
+
+function SignInLink({ href }: { href: string }) {
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center justify-center rounded-full mt-4 focus:outline-none"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => { setHovered(false); setPressed(false); }}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      style={{
+        padding: '9px 22px',
+        background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+        color: NEU.gold, fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, letterSpacing: '0.06em',
+        textDecoration: 'none',
+        boxShadow: hovered ? `0 6px 14px ${NEU_GRADIENTS.forest[0]}55, ${NEU.outSmHover}` : `0 3px 8px ${NEU_GRADIENTS.forest[0]}40, ${NEU.outSm}`,
+        transform: pressed ? 'scale(0.96)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `box-shadow 220ms ${EASE}, transform 140ms ${EASE}`,
+      }}
+    >
+      SIGN IN
+    </Link>
+  );
+}
+
 export default function PositionPaperPage() {
   const params = useParams<{ slug: string; paperId: string }>();
   const { slug, paperId } = params;
+  const router = useRouter();
   const { user, session, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
@@ -231,23 +291,54 @@ export default function PositionPaperPage() {
     await refetchMessages();
   }
 
+  // History-aware back: if this tab actually has in-app history to return to
+  // (we were navigated here, not opened fresh), go back to wherever that
+  // was, organizer screen, chair roster, or delegate card alike. Only fall
+  // back to the conference page when there's nothing to go back to.
+  function handleBack() {
+    let hasHistory = false;
+    try {
+      if (document.referrer && new URL(document.referrer).origin === window.location.origin) hasHistory = true;
+    } catch {
+      // Malformed referrer, treat as no usable history.
+    }
+    if (!hasHistory) {
+      const navState = window.history.state as { idx?: number } | null;
+      if (navState && typeof navState.idx === 'number' && navState.idx > 0) hasHistory = true;
+    }
+    if (hasHistory) {
+      router.back();
+    } else {
+      router.push(`/conferences/${slug}/role`);
+    }
+  }
+
   const committee = paper?.conference_committees ?? null;
   const cName = paper ? (getCountryByCode(paper.country_code)?.name ?? paper.country_code) : '';
   const submitterNames = submitters.map(s => s.display_name).filter(Boolean).join(' & ');
   const late = paper ? isPaperLate(paper.submitted_at, committee?.position_paper_deadline ?? null) : false;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
+    <div
+      className="flex flex-col min-h-screen lg:min-h-0 lg:h-[100dvh] overflow-visible lg:overflow-hidden"
+      style={{ backgroundColor: NEU.base }}
+    >
       <SiteNav />
-      <div className="flex-1 w-full max-w-[1100px] mx-auto px-6 py-10">
-        <Link
-          href={`/conferences/${slug}?tab=participant`}
-          className="inline-flex items-center gap-1.5 mb-6 focus:outline-none"
-          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted, textDecoration: 'none' }}
+      <div
+        className="flex-1 w-full max-w-[1100px] mx-auto px-6"
+        style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box', paddingTop: 88, paddingBottom: 24 }}
+      >
+        <ActionButton
+          onClick={handleBack}
+          icon={ArrowLeft}
+          background={NEU.surface}
+          color={NEU.muted}
+          hoverColor={NEU.forest}
+          boxShadowColor="rgba(27,56,40,0.14)"
+          style={{ marginBottom: 24, padding: '7px 14px', fontSize: 11.5 }}
         >
-          <ArrowLeft size={14} strokeWidth={2.4} />
-          Back to conference
-        </Link>
+          Back
+        </ActionButton>
 
         {authLoading || loading ? (
           <div className="flex items-center justify-center py-24">
@@ -259,13 +350,7 @@ export default function PositionPaperPage() {
             <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, marginTop: 6 }}>
               You need to be signed in to view this position paper.
             </p>
-            <Link
-              href={`/auth/signin?next=${encodeURIComponent(`/conferences/${slug}/papers/${paperId}`)}`}
-              className="inline-flex items-center justify-center rounded-xl px-5 py-2.5 mt-4 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: NEU.forest, color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
-            >
-              SIGN IN
-            </Link>
+            <SignInLink href={`/auth/signin?next=${encodeURIComponent(`/conferences/${slug}/papers/${paperId}`)}`} />
           </NeuCard>
         ) : !paper ? (
           <NeuCard style={{ padding: '32px', textAlign: 'center' }}>
@@ -286,6 +371,7 @@ export default function PositionPaperPage() {
                     {committee?.abbreviation ?? committee?.name}
                     {submitterNames && ` · ${submitterNames}`}
                     {` · Submitted ${fmtDate(paper.submitted_at)}`}
+                    {committee?.position_paper_deadline && ` · Due ${fmtDate(committee.position_paper_deadline)}`}
                   </p>
                 </div>
               </div>
@@ -303,24 +389,30 @@ export default function PositionPaperPage() {
                 {isReviewer && (
                   <>
                     {paper.status !== 'approved' && (
-                      <button
+                      <ActionButton
                         onClick={() => updateStatus('approved')}
                         disabled={savingStatus}
-                        className="inline-flex items-center gap-1.5 focus:outline-none"
-                        style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11.5, color: '#EED98A', backgroundColor: '#3D7A52', border: 'none', borderRadius: 9999, padding: '7px 14px', cursor: savingStatus ? 'default' : 'pointer' }}
+                        icon={Check}
+                        background={`linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`}
+                        color={NEU.gold}
+                        boxShadowColor={`${NEU_GRADIENTS.green[0]}55`}
                       >
-                        <Check size={13} /> APPROVE
-                      </button>
+                        APPROVE
+                      </ActionButton>
                     )}
                     {paper.status !== 'rejected' && (
-                      <button
+                      <ActionButton
                         onClick={() => updateStatus('rejected')}
                         disabled={savingStatus}
-                        className="inline-flex items-center gap-1.5 focus:outline-none"
-                        style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11.5, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', borderRadius: 9999, padding: '7px 14px', cursor: savingStatus ? 'default' : 'pointer' }}
+                        icon={X}
+                        background="rgba(139,32,32,0.07)"
+                        hoverBackground="rgba(139,32,32,0.15)"
+                        color="#8B2020"
+                        border="1px solid rgba(139,32,32,0.28)"
+                        boxShadowColor="rgba(139,32,32,0.18)"
                       >
-                        <X size={13} /> REJECT
-                      </button>
+                        REJECT
+                      </ActionButton>
                     )}
                   </>
                 )}
@@ -331,22 +423,19 @@ export default function PositionPaperPage() {
             )}
 
             {/* Body: chat left, PDF right */}
-            <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6" style={{ flex: 1, minHeight: 0 }}>
               {/* Chat */}
-              <div
-                className="flex flex-col rounded-2xl overflow-hidden"
-                style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', height: 560 }}
-              >
-                <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+              <NeuCard className="h-[480px] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
+                <div ref={threadRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3" style={{ minHeight: 0 }}>
                   {messages.length === 0 ? (
-                    <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#9A8A78', textAlign: 'center', margin: 'auto 0' }}>
+                    <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, textAlign: 'center', margin: 'auto 0' }}>
                       No messages yet. Start the conversation below.
                     </p>
                   ) : (
                     messages.map(m => {
                       if (m.is_system) {
                         return (
-                          <p key={m.id} style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', fontStyle: 'italic', textAlign: 'center', margin: 0 }}>
+                          <p key={m.id} style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, fontStyle: 'italic', textAlign: 'center', margin: 0 }}>
                             {m.body}
                           </p>
                         );
@@ -360,14 +449,14 @@ export default function PositionPaperPage() {
                             className="rounded-2xl px-3.5 py-2.5"
                             style={{
                               maxWidth: '82%',
-                              backgroundColor: alignRight ? '#1B3828' : '#FFFFFF',
-                              color: alignRight ? '#F4EFE3' : '#1C1410',
-                              border: alignRight ? 'none' : '1px solid #DDD4C0',
+                              backgroundColor: alignRight ? NEU.forest : '#FFFFFF',
+                              color: alignRight ? '#F4EFE3' : NEU.ink,
+                              border: alignRight ? 'none' : '1px solid rgba(221,212,192,0.9)',
                             }}
                           >
                             <p style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.body}</p>
                           </div>
-                          <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: '#9A8A78', margin: '3px 4px 0 4px' }}>
+                          <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, margin: '3px 4px 0 4px' }}>
                             {senderName} · {fmtTime(m.created_at)}
                           </p>
                         </div>
@@ -375,56 +464,45 @@ export default function PositionPaperPage() {
                     })
                   )}
                 </div>
-                <div className="flex items-center gap-2 px-3 py-3" style={{ borderTop: '1px solid #DDD4C0' }}>
+                <div className="flex items-center gap-2 px-3 py-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
                   <input
                     value={body}
                     onChange={e => setBody(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                     placeholder="Write a message..."
                     className="flex-1 focus:outline-none"
-                    style={{ border: '1px solid #DDD4C0', borderRadius: 10, padding: '9px 12px', fontSize: 13, color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
+                    style={{ border: 'none', borderRadius: 12, padding: '10px 14px', fontSize: 13, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, fontFamily: OUTFIT }}
                   />
-                  <button
-                    onClick={handleSend}
-                    disabled={!body.trim() || sending}
-                    className="flex items-center justify-center flex-shrink-0 focus:outline-none"
-                    style={{
-                      width: 36, height: 36, borderRadius: 10, border: 'none',
-                      backgroundColor: !body.trim() || sending ? '#DDD4C0' : '#1B3828',
-                      color: !body.trim() || sending ? '#9A8A78' : '#EED98A',
-                      cursor: !body.trim() || sending ? 'default' : 'pointer',
-                    }}
-                  >
-                    <Send size={15} />
-                  </button>
+                  <SendButton onClick={handleSend} disabled={!body.trim() || sending} />
                 </div>
                 {sendError && (
                   <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#8B2020', padding: '0 12px 10px 12px' }}>{sendError}</p>
                 )}
-              </div>
+              </NeuCard>
 
               {/* PDF */}
-              <div
-                className="flex flex-col rounded-2xl overflow-hidden"
-                style={{ border: '1px solid #DDD4C0', backgroundColor: '#FFFFFF', height: 560 }}
-              >
-                <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                  <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: '#1C1410', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <NeuCard className="h-[480px] lg:h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, minHeight: 0 }}>
+                <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(27,56,40,0.08)' }}>
+                  <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5, color: NEU.ink, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {paper.file_name}
                   </p>
-                  <a
+                  <ActionButton
+                    as="a"
                     href={paper.file_url}
                     download={paper.file_name}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 flex-shrink-0 focus:outline-none"
-                    style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11.5, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 9999, padding: '6px 13px', textDecoration: 'none' }}
+                    icon={Download}
+                    background={`linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`}
+                    color={NEU.gold}
+                    boxShadowColor={`${NEU_GRADIENTS.forest[0]}55`}
+                    style={{ flexShrink: 0 }}
                   >
-                    <Download size={13} /> DOWNLOAD
-                  </a>
+                    DOWNLOAD
+                  </ActionButton>
                 </div>
                 <iframe src={paper.file_url} title={paper.file_name} className="flex-1 w-full" style={{ border: 'none' }} />
-              </div>
+              </NeuCard>
             </div>
           </>
         )}

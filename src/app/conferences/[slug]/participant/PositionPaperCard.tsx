@@ -9,10 +9,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, FileText } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionPapers';
+import { NEU, EASE, NeuCard } from '@/components/neu';
+import { ActionButton } from '@/components/PositionPaperButtons';
 import { SectionCard, OUTFIT, useAllocationPartner } from './shared';
 import type { ParticipantAllocation } from './types';
 
@@ -108,6 +110,20 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
 
   useEffect(() => { loadMyPositionPaper(); }, [loadMyPositionPaper]);
 
+  // A tab left open never learns about new reviewer messages on its own,
+  // refetch when the user actually comes back to it (window focus, or the
+  // tab becoming visible again after being backgrounded).
+  useEffect(() => {
+    function onFocus() { loadMyPositionPaper(); }
+    function onVisible() { if (document.visibilityState === 'visible') loadMyPositionPaper(); }
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadMyPositionPaper]);
+
   const partner = useAllocationPartner(myAllocation);
 
   function handlePPFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -202,7 +218,16 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
 
   const deadline = myAllocation.conference_committees?.position_paper_deadline ?? null;
   const deadlineSoon = deadline ? (new Date(deadline).getTime() - Date.now()) < 7 * 24 * 60 * 60 * 1000 && new Date(deadline) > new Date() : false;
+  const deadlinePassed = deadline ? new Date(deadline).getTime() <= Date.now() : false;
   const late = myPositionPaper ? isPaperLate(myPositionPaper.submitted_at, deadline) : false;
+  // Shown in every state, submission doesn't retire the deadline, a
+  // replacement is still held to it (see the late-warning in the replace
+  // modal below).
+  const dueLine = deadline ? (
+    <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', margin: '0 0 10px 0' }}>
+      Due {fmtDate(deadline)}
+    </p>
+  ) : null;
 
   // Once a paper exists (and we aren't mid-replace), the card is a static,
   // always-visible clickable row — no accordion, matching the study guide
@@ -214,12 +239,12 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
         <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
           POSITION PAPER
         </p>
-        <button
+        {dueLine}
+        <NeuCard
+          hover
           onClick={() => router.push(`/conferences/${conferenceSlug}/papers/${myPositionPaper.id}`)}
-          className="w-full flex items-center gap-3.5 rounded-2xl px-4 py-3 text-left transition-colors focus:outline-none"
-          style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
+          className="w-full flex items-center gap-3.5 text-left"
+          style={{ padding: '12px 16px', borderRadius: 16 }}
         >
           <div className="flex-shrink-0 flex items-center justify-center" style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: 'rgba(27,56,40,0.07)' }}>
             <FileText size={16} style={{ color: '#1B3828' }} />
@@ -254,40 +279,50 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             >
               {myPositionPaper.status.toUpperCase()}
             </span>
+            <ChevronRight size={16} strokeWidth={2.4} style={{ color: NEU.muted, flexShrink: 0 }} />
           </div>
-        </button>
+        </NeuCard>
         <button
           onClick={() => setShowPPWarning(true)}
-          className="focus:outline-none mt-2"
-          style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+          className="focus:outline-none mt-2.5"
+          style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 500, color: NEU.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'none', transition: `color 160ms ${EASE}` }}
+          onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.forest; el.style.textDecoration = 'underline'; }}
+          onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.muted; el.style.textDecoration = 'none'; }}
         >
-          REPLACE
+          Replace
         </button>
 
         {showPPWarning && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(28,20,16,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}>
             <div className="rounded-[20px] p-6 max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 24px 64px rgba(16,28,21,0.35)' }}>
               <h3 className="font-semibold text-base mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Replace Position Paper?</h3>
-              <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+              <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, marginBottom: deadlinePassed ? 8 : 24 }}>
                 This uploads a new version and reopens it for review. The conversation with your reviewer stays intact.
               </p>
+              {deadlinePassed && (
+                <p className="text-sm mb-6" style={{ color: '#8A5A2E', fontFamily: OUTFIT, fontWeight: 600 }}>
+                  The deadline has passed, so a new version will be marked late.
+                </p>
+              )}
               <div className="flex gap-3">
-                <button
+                <ActionButton
                   onClick={() => setShowPPWarning(false)}
-                  className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none"
-                  style={{ border: '1px solid #DDD4C0', color: '#1C1410', fontFamily: OUTFIT, backgroundColor: 'transparent' }}
+                  background={NEU.surface}
+                  color={NEU.ink}
+                  boxShadowColor="rgba(27,56,40,0.1)"
+                  style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
                   CANCEL
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                   onClick={() => { setShowPPWarning(false); setIsReplacing(true); setExpanded(true); setPPFile(null); setPPError(''); }}
-                  className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
+                  background="linear-gradient(135deg, #1B3828, #2F6644)"
+                  color="#EED98A"
+                  boxShadowColor="rgba(27,56,40,0.35)"
+                  style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
                   REPLACE
-                </button>
+                </ActionButton>
               </div>
             </div>
           </div>
@@ -303,8 +338,10 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
     <SectionCard>
       <button
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center justify-between gap-3 focus:outline-none"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        className="w-full flex items-center justify-between gap-3 rounded-xl focus:outline-none"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', margin: '-4px -6px', transition: `background-color 180ms ${EASE}` }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
       >
         <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
           POSITION PAPER
@@ -319,6 +356,7 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
           {expanded ? <ChevronUp size={15} style={{ color: '#9A8A78' }} /> : <ChevronDown size={15} style={{ color: '#9A8A78' }} />}
         </div>
       </button>
+      {dueLine && <div className="mt-2.5">{dueLine}</div>}
 
       {expanded && (
         <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
@@ -328,29 +366,34 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             </p>
           ) : (
             <>
-              {deadline && (
-                <p style={{ fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 11, color: deadlineSoon ? '#B8844A' : '#9A8A78', marginBottom: 14 }}>
-                  Due {fmtDate(deadline)}
-                </p>
-              )}
               <input type="file" accept="application/pdf" onChange={handlePPFileSelect} className="hidden" ref={ppFileInputRef} />
               {!ppFile ? (
                 <div
                   onClick={() => ppFileInputRef.current?.click()}
-                  style={{ border: '1.5px dashed rgba(154,138,120,0.6)', borderRadius: 14, padding: '28px 12px', textAlign: 'center', cursor: 'pointer', marginBottom: 12, transition: 'border-color 0.15s, background-color 0.15s', backgroundColor: 'rgba(237,231,216,0.25)' }}
-                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
+                  style={{
+                    border: '1.5px dashed rgba(154,138,120,0.55)', borderRadius: 14, padding: '28px 12px', textAlign: 'center', cursor: 'pointer', marginBottom: 12,
+                    backgroundColor: NEU.base, boxShadow: NEU.inSm,
+                    transition: `box-shadow 220ms ${EASE}, border-color 220ms ${EASE}`,
+                  }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = NEU.forest; el.style.boxShadow = NEU.in; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.55)'; el.style.boxShadow = NEU.inSm; }}
                 >
                   <p style={{ fontSize: 13, color: '#4A4238', fontFamily: OUTFIT, marginBottom: 2, fontWeight: 600 }}>Click to select PDF</p>
                   <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>MAX 5MB</p>
                 </div>
               ) : (
-                <div style={{ border: '1px solid rgba(61,122,82,0.3)', borderRadius: 12, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.05)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ borderRadius: 12, padding: '10px 14px', backgroundColor: 'rgba(61,122,82,0.06)', boxShadow: NEU.inSm, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <FileText size={15} style={{ color: '#2A5A3C', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ppFile.name}</p>
                   </div>
-                  <button onClick={() => ppFileInputRef.current?.click()} className="focus:outline-none" style={{ fontSize: 11, color: '#9A8A78', fontFamily: OUTFIT, textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
+                  <button
+                    onClick={() => ppFileInputRef.current?.click()}
+                    className="focus:outline-none"
+                    style={{ fontSize: 11, fontWeight: 500, color: NEU.muted, fontFamily: OUTFIT, textDecoration: 'none', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0, transition: `color 160ms ${EASE}` }}
+                    onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.forest; el.style.textDecoration = 'underline'; }}
+                    onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.muted; el.style.textDecoration = 'none'; }}
+                  >
                     Change
                   </button>
                 </div>
@@ -358,18 +401,26 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
               {ppError && <p style={{ fontSize: 11, color: '#8B2020', fontFamily: OUTFIT, marginBottom: 8 }}>{ppError}</p>}
               <div style={{ display: 'flex', gap: 8 }}>
                 {isReplacing && (
-                  <button onClick={() => { setIsReplacing(false); setPPFile(null); setPPError(''); }} className="focus:outline-none" style={{ border: '1px solid #DDD4C0', borderRadius: 12, padding: '10px 16px', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
+                  <ActionButton
+                    onClick={() => { setIsReplacing(false); setPPFile(null); setPPError(''); }}
+                    background={NEU.surface}
+                    color={NEU.ink}
+                    boxShadowColor="rgba(27,56,40,0.1)"
+                    style={{ padding: '10px 18px', fontSize: 13, borderRadius: 12 }}
+                  >
                     CANCEL
-                  </button>
+                  </ActionButton>
                 )}
-                <button
+                <ActionButton
                   onClick={isReplacing ? handleReplace : handlePPSubmit}
                   disabled={!ppFile || ppUploading}
-                  className="focus:outline-none"
-                  style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', backgroundColor: !ppFile || ppUploading ? '#DDD4C0' : '#1B3828', color: !ppFile || ppUploading ? '#9A8A78' : '#EED98A', cursor: !ppFile || ppUploading ? 'default' : 'pointer' }}
+                  background="linear-gradient(135deg, #1B3828, #2F6644)"
+                  color="#EED98A"
+                  boxShadowColor="rgba(27,56,40,0.35)"
+                  style={{ flex: 1, padding: '10px 0', fontSize: 13, borderRadius: 12 }}
                 >
                   {ppUploading ? 'UPLOADING...' : isReplacing ? 'SUBMIT NEW VERSION' : 'SUBMIT POSITION PAPER'}
-                </button>
+                </ActionButton>
               </div>
             </>
           )}
