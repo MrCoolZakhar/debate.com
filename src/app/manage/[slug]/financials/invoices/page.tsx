@@ -9,7 +9,7 @@
  * advisor_spot), unchanged, for "what does each application still owe."
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Clock, CreditCard, Eye, Receipt, RotateCcw, User, X } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -17,12 +17,13 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { isPaymentsLive } from '@/lib/payments';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
+import Portal from '@/components/Portal';
 import {
   type InvoiceRow, invoiceLabel, invoiceDueCents, centsToFee,
   INVOICE_STATUS_LABEL, INVOICE_STATUS_STYLE, type InvoiceStatus,
 } from '@/lib/invoices';
 import {
-  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc,
+  NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuIconDisc,
 } from '@/components/neu';
 import { inputStyle, mutedCaption, formatRowDate, roleLabel } from '../shared';
 
@@ -138,6 +139,123 @@ function payerName(batch: TxBatchRow, payerNames: Map<string, string>): string {
   return first(app.profiles)?.display_name ?? app.invited_name ?? 'Unknown';
 }
 
+// ── Remove pledged spot, a quiet text trigger + portaled confirm popover ───
+// Deliberately plainer than MARK PAID/MARK UNPAID (no pill, no fill) so it
+// never competes for attention on the row — this cancels an open, unpaid,
+// aid-free pledge_spot/advisor_spot invoice and lowers the delegation's
+// pledge count by one. Portaled at fixed viewport coordinates from the
+// trigger's own rect so the row's overflow:hidden card can never clip it
+// (mirrors PaymentMenu's pattern in manage/[slug]/applications/page.tsx).
+
+function RemovePledgeAction({
+  onConfirm,
+}: {
+  onConfirm: () => Promise<{ ok: boolean; error?: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const POP_W = 260;
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const left = Math.max(8, Math.min(r.right - POP_W, window.innerWidth - POP_W - 8));
+    setPos({ top: r.bottom + 6, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
+
+  async function handleConfirm() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    const result = await onConfirm();
+    if (!result.ok) {
+      setBusy(false);
+      setError(result.error || 'Could not remove this spot. Please try again.');
+      return;
+    }
+    setBusy(false);
+    setOpen(false);
+  }
+
+  return (
+    <span className="flex-shrink-0">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => { setError(''); setOpen(o => !o); }}
+        className="text-xs font-semibold focus:outline-none hover:underline"
+        style={{ color: NEU.muted, fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        REMOVE SPOT
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={popRef}
+            className="rounded-xl p-3.5"
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: POP_W,
+              backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: NEU.out,
+              animation: `neuPopIn 160ms ${EASE}`,
+            }}
+          >
+            <style>{'@keyframes neuPopIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }'}</style>
+            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#1C1410', lineHeight: 1.5, margin: 0 }}>
+              This cancels the pledged spot and its invoice, and lowers the delegation&apos;s pledge count by one.
+            </p>
+            {error && (
+              <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#8B2020', lineHeight: 1.45 }}>{error}</p>
+            )}
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
+                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleConfirm}
+                disabled={busy}
+                className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
+                style={{ border: 'none', color: '#FFFFFF', backgroundColor: busy ? '#C89494' : '#8B2020', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
+              >
+                {busy ? '…' : 'REMOVE'}
+              </button>
+            </div>
+          </div>
+        </Portal>
+      )}
+    </span>
+  );
+}
+
 export default function FinancialsInvoicesPage() {
   const { conference } = useManage();
   const { session } = useAuth();
@@ -217,6 +335,21 @@ export default function FinancialsInvoicesPage() {
     markBusy(inv.id, false);
     if (!result?.ok) { setActionError(result?.error || 'Could not mark this invoice unpaid.'); return; }
     setInvoices(cur => (cur ?? []).map(i => (i.id === inv.id ? { ...i, status: 'open', amount_paid_cents: 0 } : i)));
+  }
+
+  // Cancels an open, unpaid, aid-free pledge_spot/advisor_spot invoice and
+  // lowers the owning application's pledge count by one — callable here by
+  // organizers (and by the pledging leader on their own /pay page).
+  async function handleRemovePledgeInvoice(inv: InvoiceWithApp): Promise<{ ok: boolean; error?: string }> {
+    if (!session) return { ok: false, error: 'Session expired. Please sign in again.' };
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.rpc('remove_pledged_spot_invoice', { p_invoice_id: inv.id });
+    const result = data as { ok?: boolean; error?: string } | null;
+    if (error || !result?.ok) {
+      return { ok: false, error: result?.error || error?.message || 'Could not remove this spot. Please try again.' };
+    }
+    setInvoices(await fetchInvoicesData());
+    return { ok: true };
   }
 
   // ── Transactions data ────────────────────────────────────────────────────
@@ -668,6 +801,8 @@ export default function FinancialsInvoicesPage() {
                 const due = invoiceDueCents(inv);
                 const canMarkPaid = !paymentsLive && (inv.status === 'open' || inv.status === 'partial');
                 const canMarkUnpaid = !paymentsLive && inv.status === 'settled';
+                const canRemoveSpot = (inv.kind === 'pledge_spot' || inv.kind === 'advisor_spot')
+                  && inv.status === 'open' && inv.amount_paid_cents === 0 && inv.aid_applied_cents === 0;
                 return (
                   <div
                     key={inv.id}
@@ -737,6 +872,9 @@ export default function FinancialsInvoicesPage() {
                           </button>
                         )}
                       </div>
+                    )}
+                    {canRemoveSpot && (
+                      <RemovePledgeAction onConfirm={() => handleRemovePledgeInvoice(inv)} />
                     )}
                   </div>
                 );

@@ -23,7 +23,7 @@
 // pledge more spots (add_pledged_spots), which materialize as new
 // pledge_spot invoices in the list above rather than being paid inline.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -31,6 +31,7 @@ import {
   Lock, Mail, Minus, Plus, Receipt, ShoppingBag, Users2, Wallet, X,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { formatFee } from '@/lib/utils';
@@ -42,7 +43,7 @@ import {
 } from '@/lib/invoices';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import {
-  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuIconDisc, type NeuGradient,
+  NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuIconDisc, type NeuGradient,
 } from '@/components/neu';
 import { getGateState, roleLabel, statusPriority } from '../participant/shared';
 import AidRequestModal from '../participant/AidRequestModal';
@@ -435,6 +436,10 @@ export default function PayPage() {
     setConfigDescriptions(await fetchConfigDescriptions(session.access_token, invs));
   }
 
+  function removeInvoiceLocally(invoiceId: string) {
+    setInvoices(prev => prev.filter(i => i.id !== invoiceId));
+  }
+
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
       <SiteNav />
@@ -507,6 +512,7 @@ export default function PayPage() {
               activeAddons={activeAddons}
               paymentBatches={paymentBatches}
               onInvoicesChanged={refetchInvoices}
+              onInvoiceRemoved={removeInvoiceLocally}
             />
           </>
         )}
@@ -570,11 +576,125 @@ function ManualPayAction({
   );
 }
 
+// ── Remove pledge action, a quiet text trigger + portaled confirm popover ──
+// Undoes a misclick (pledged 9 spots instead of 8) before any money moves.
+// Portaled at fixed viewport coordinates from the trigger's own rect so the
+// card's rounded-corner overflow:hidden can never clip it (mirrors
+// PaymentMenu's pattern in manage/[slug]/applications/page.tsx).
+
+function RemovePledgeAction({
+  message, onConfirm,
+}: {
+  message: string;
+  onConfirm: () => Promise<{ ok: boolean; error?: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const POP_W = 252;
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const left = Math.max(8, Math.min(r.right - POP_W, window.innerWidth - POP_W - 8));
+    setPos({ top: r.bottom + 6, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
+
+  async function handleConfirm() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    const result = await onConfirm();
+    if (!result.ok) {
+      setBusy(false);
+      setError(result.error || 'Could not remove this. Please try again.');
+      return;
+    }
+    setBusy(false);
+    setOpen(false);
+  }
+
+  return (
+    <span onClick={(e) => e.stopPropagation()}>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => { setError(''); setOpen(o => !o); }}
+        className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
+        style={{ color: '#9A8A78', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        REMOVE
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={popRef}
+            className="rounded-xl p-3.5"
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: POP_W,
+              backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: NEU.out,
+              animation: `neuPopIn 160ms ${EASE}`,
+            }}
+          >
+            <style>{'@keyframes neuPopIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }'}</style>
+            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#1C1410', lineHeight: 1.5, margin: 0 }}>{message}</p>
+            {error && (
+              <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#8B2020', lineHeight: 1.45 }}>{error}</p>
+            )}
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
+                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleConfirm}
+                disabled={busy}
+                className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
+                style={{ border: 'none', color: '#FFFFFF', backgroundColor: busy ? '#C89494' : '#8B2020', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
+              >
+                {busy ? '…' : 'REMOVE'}
+              </button>
+            </div>
+          </div>
+        </Portal>
+      )}
+    </span>
+  );
+}
+
 // ── Generic invoice card (app_fee / addon) ──────────────────────────────────
 
 function GenericInvoiceCard({
   inv, application, description, paymentsEnabled, manualActive, externalPaymentUrl, externalPaymentNote,
-  awaitingReview, onUploadProof, expanded, onToggleExpand, selected, onToggleSelect, onPay, paying, payError, labelOverride,
+  awaitingReview, onUploadProof, canRemovePledge, onRemovePledge, expanded, onToggleExpand, selected, onToggleSelect, onPay, paying, payError, labelOverride,
 }: {
   inv: InvoiceRow;
   /** The invoice's OWNING application (whichever of the user's applications
@@ -590,6 +710,10 @@ function GenericInvoiceCard({
   /** This invoice belongs to a currently-pending manual payment batch. */
   awaitingReview: boolean;
   onUploadProof: () => void;
+  /** True for an open, unpaid, aid-free pledge_spot/advisor_spot invoice —
+   *  undoes a misclick (pledged 9 instead of 8) before any money moves. */
+  canRemovePledge: boolean;
+  onRemovePledge: () => Promise<{ ok: boolean; error?: string }>;
   expanded: boolean;
   onToggleExpand: () => void;
   selected: boolean;
@@ -671,6 +795,12 @@ function GenericInvoiceCard({
             {expanded ? <ChevronUp size={16} style={{ color: NEU.muted }} /> : <ChevronDown size={16} style={{ color: NEU.muted }} />}
           </div>
         </button>
+        {canRemovePledge && (
+          <RemovePledgeAction
+            message={inv.kind === 'advisor_spot' ? 'Remove this advisor ticket? Its invoice will be cancelled.' : 'Remove this spot? Its invoice will be cancelled.'}
+            onConfirm={onRemovePledge}
+          />
+        )}
       </div>
 
       {expanded && (
@@ -1448,7 +1578,7 @@ function PaymentsPanel({
 
 function PayInvoiceAndActions({
   conference, application, leaderApp, allApps, roleConfig, delegateRoleConfig, advisorRoleConfig, aidRequest, onAidSubmitted, invoices, configDescriptions,
-  activeAddons, paymentBatches, onInvoicesChanged,
+  activeAddons, paymentBatches, onInvoicesChanged, onInvoiceRemoved,
 }: {
   conference: PayConference;
   application: PayApplication;
@@ -1468,6 +1598,9 @@ function PayInvoiceAndActions({
   activeAddons: ActiveAddon[];
   paymentBatches: PaymentBatchRow[];
   onInvoicesChanged: () => void;
+  /** Removes one invoice from local state immediately (a removed pledge
+   *  should vanish from the list right away, not wait on a round trip). */
+  onInvoiceRemoved: (invoiceId: string) => void;
 }) {
   const { session } = useAuth();
   const aidBlocks: FormBlock[] = normalizeBlocks(conference.aid_questions);
@@ -1568,6 +1701,22 @@ function PayInvoiceAndActions({
   async function handleProofSubmitted() {
     setProofModalIds(null);
     await onInvoicesChanged();
+  }
+
+  // Undoes a misclick (pledged 9 spots instead of 8) before any money moves.
+  // Removes the row from local state immediately on success, then refetches
+  // so the count/list stay reconciled against the server.
+  async function handleRemovePledge(invoiceId: string): Promise<{ ok: boolean; error?: string }> {
+    if (!session) return { ok: false, error: 'Session expired. Please sign in again.' };
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.rpc('remove_pledged_spot_invoice', { p_invoice_id: invoiceId });
+    const result = data as { ok?: boolean; error?: string } | null;
+    if (error || !result?.ok) {
+      return { ok: false, error: result?.error || error?.message || 'Could not remove this. Please try again.' };
+    }
+    onInvoiceRemoved(invoiceId);
+    onInvoicesChanged();
+    return { ok: true };
   }
 
   function toggleExpanded(id: string) {
@@ -1935,6 +2084,11 @@ function PayInvoiceAndActions({
               externalPaymentNote={conference.external_payment_note}
               awaitingReview={pendingProofInvoiceIds.has(inv.id)}
               onUploadProof={() => setProofModalIds([inv.id])}
+              canRemovePledge={
+                (inv.kind === 'pledge_spot' || inv.kind === 'advisor_spot')
+                && inv.status === 'open' && inv.aid_applied_cents === 0 && !pendingProofInvoiceIds.has(inv.id)
+              }
+              onRemovePledge={() => handleRemovePledge(inv.id)}
               expanded={expandedIds.has(inv.id)}
               onToggleExpand={() => toggleExpanded(inv.id)}
               selected={selectedIds.has(inv.id)}
