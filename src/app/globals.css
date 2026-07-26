@@ -242,6 +242,25 @@ html, body {
   }
 }
 
+/* Skeleton loading shimmer (src/components/Skeleton.tsx). A soft highlight
+   gradient sweeps across the block's own muted background via
+   background-position, so no separate overlay element is needed. */
+@keyframes neu-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.neu-shimmer {
+  animation: neu-shimmer 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neu-shimmer {
+    animation: none;
+    background-image: none;
+  }
+}
+
 /* Typography niceties, site-wide: balance headings so they don't leave a lone
    short last line; pretty body text to avoid single-word orphans.
 

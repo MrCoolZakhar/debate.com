@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { Pencil } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { type FormBlock } from '@/lib/customQuestions';
+import { SectionCardSkeleton } from '@/components/Skeleton';
 import { SectionCard, OUTFIT, getGateState, roleLabel, statusPriority } from './shared';
 import { PayGate, RejectedCard } from './PayGate';
 import DelegateParticipant from './DelegateParticipant';
@@ -70,11 +71,18 @@ export interface ParticipantViewProps {
    *  viewer actually holds (missing, wrong, or stale), the effect below
    *  redirects to their default role's URL. */
   initialRole: string | null;
+  /** True until this viewer's own applications and allocation for this
+   *  conference are actually known (auth still resolving counts as loading
+   *  too). While true, every branch below, signed-out prompt, "no
+   *  applications" empty state, or real content, is unreachable, so an
+   *  empty state can never render as a placeholder for data that just
+   *  hasn't arrived yet. */
+  participantDataLoading: boolean;
 }
 
 export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
-  initialRole,
+  initialRole, participantDataLoading,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const router = useRouter();
@@ -91,6 +99,15 @@ export default function ParticipantView({
 
   function selectApplication(app: ParticipantApplication) {
     router.push(`/conferences/${conferenceSlug}/role/${app.role}`);
+  }
+
+  if (participantDataLoading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <SectionCardSkeleton />
+        <SectionCardSkeleton />
+      </div>
+    );
   }
 
   if (!user) {
