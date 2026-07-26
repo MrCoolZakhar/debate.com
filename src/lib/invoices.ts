@@ -6,7 +6,7 @@
 
 import { formatFee } from '@/lib/finance';
 
-export type InvoiceKind = 'role_fee' | 'pledge_spot' | 'app_fee' | 'addon' | (string & {});
+export type InvoiceKind = 'role_fee' | 'pledge_spot' | 'app_fee' | 'addon' | 'advisor_spot' | (string & {});
 export type InvoiceStatus = 'open' | 'partial' | 'settled' | 'waived' | 'void';
 
 export interface InvoiceRow {
@@ -33,6 +33,7 @@ const KIND_FALLBACK_LABEL: Record<string, string> = {
   pledge_spot: 'Delegation spot',
   app_fee: 'Conference Registration Fee',
   addon: 'Add-on',
+  advisor_spot: 'Advisor ticket',
 };
 
 /** Display label: the config-derived label already stored on the invoice
