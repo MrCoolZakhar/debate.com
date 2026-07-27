@@ -30,7 +30,7 @@ export const BUTTON_DESTINATION_LABELS: Record<ButtonDestination, string> = {
   custom: 'Custom URL',
   chair_invite_accept: 'Accept chair invite link',
   organizer_invite_accept: 'Accept organizer invite link',
-  signup_page: 'Gavelling sign-up page',
+  signup_page: 'Gavelling sign-up page (returns to this conference)',
 };
 
 export interface ButtonUrlConference {
@@ -78,7 +78,10 @@ export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConfer
     case 'organizer_invite_accept':
       return extra?.organizerInviteToken ? `${siteUrl}/invites/organizer/${extra.organizerInviteToken}` : '#';
     case 'signup_page':
-      return `${siteUrl}/auth/signup`;
+      // Carries the new account straight to this conference's role view
+      // after signup and onboarding (both already honor ?next= end to end),
+      // rather than dropping an imported delegate on the generic home page.
+      return `${siteUrl}/auth/signup?next=${encodeURIComponent(`/conferences/${conference.slug}/role`)}`;
     case 'custom':
       return absolutizeUrl(block.url, siteUrl) ?? '#';
   }

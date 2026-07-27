@@ -7,10 +7,10 @@
 // Deliberately has no conference summary card: the page around this tab
 // already is one.
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Pencil } from 'lucide-react';
+import { Pencil, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { type FormBlock } from '@/lib/customQuestions';
 import { SectionCardSkeleton } from '@/components/Skeleton';
@@ -78,15 +78,25 @@ export interface ParticipantViewProps {
    *  empty state can never render as a placeholder for data that just
    *  hasn't arrived yet. */
   participantDataLoading: boolean;
+  /** > 0 when claim_my_imported_applications just attached previously
+   *  unclaimed imported applications/allocations to this signed-in user on
+   *  this load (an existing account whose organizer imported them, the
+   *  counterpart to the signup claim flow). Drives a one-time quiet notice
+   *  below; 0 means nothing changed. */
+  justClaimedCount: number;
 }
 
 export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
-  initialRole, participantDataLoading,
+  initialRole, participantDataLoading, justClaimedCount,
 }: ParticipantViewProps) {
   const { user } = useAuth();
   const router = useRouter();
   const holdsInitialRole = !!initialRole && myApplications.some(a => a.role === initialRole);
+  // Dismissible, not persisted anywhere, "dismissed on navigation" falls out
+  // naturally: this component remounts fresh on every real route
+  // navigation, so leaving and coming back never resurrects a stale notice.
+  const [claimNoticeDismissed, setClaimNoticeDismissed] = useState(false);
 
   // Resolver (/role) and "not holding that role" fallback (/role/[role] for
   // a role the viewer doesn't actually have) both land here: once
@@ -158,6 +168,24 @@ export default function ParticipantView({
 
   return (
     <div className="flex flex-col gap-6">
+      {justClaimedCount > 0 && !claimNoticeDismissed && (
+        <SectionCard className="!py-3 !px-5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[13px]" style={{ color: '#2A5A3C', fontFamily: OUTFIT }}>
+              We found your registration and attached it to your account.
+            </p>
+            <button
+              onClick={() => setClaimNoticeDismissed(true)}
+              className="flex-shrink-0 focus:outline-none"
+              style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+              aria-label="Dismiss"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </SectionCard>
+      )}
+
       {myApplications.length > 1 && (
         <SectionCard className="!p-3">
           <div className="flex flex-wrap gap-1.5">

@@ -445,6 +445,15 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // must be a conclusion, never a placeholder. True whenever auth is still
   // resolving too, since there's nothing to show until we know who's asking.
   const [participantDataLoading, setParticipantDataLoading] = useState(true);
+  // Existing-user claim (claim_my_imported_applications): a person who
+  // already had an account when an organizer imported them never went
+  // through the signup claim flow. Attempted once per conference per page
+  // load (the ref survives re-renders and silent refreshes alike, so it
+  // never re-fires just because fetchAll runs again), before the
+  // applications/allocation fetch below so a newly-attached row shows up in
+  // the very first real fetch rather than needing a second reload.
+  const claimAttemptedForRef = useRef<string | null>(null);
+  const [justClaimedCount, setJustClaimedCount] = useState(0);
   // Which tab is showing is entirely a function of which route mounted this
   // component (a tab switch is a real navigation to a different route, which
   // remounts this component with a new initialView), never local state.
@@ -802,6 +811,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
     if (user && session) {
       const authedSupabase = getAuthedClient(session.access_token);
+
+      // Existing-user claim: attaches any imported applications/allocations
+      // matching this signed-in user's email. Idempotent server-side, but
+      // only actually called once per conference per page load here.
+      if (claimAttemptedForRef.current !== conf.id) {
+        claimAttemptedForRef.current = conf.id;
+        const { data: claimData } = await authedSupabase.rpc('claim_my_imported_applications');
+        const claimResult = claimData as { ok?: boolean; claimed?: number } | null;
+        if (claimResult?.ok && (claimResult.claimed ?? 0) > 0) {
+          setJustClaimedCount(claimResult.claimed ?? 0);
+        }
+      }
 
       // Organizer/secretariat detection, RLS only exposes rows to organizers themselves,
       // so this returns the viewer's own row or nothing.
@@ -1684,6 +1705,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   aidIntro={conference.aid_intro}
                   initialRole={initialRole}
                   participantDataLoading={authLoading || participantDataLoading}
+                  justClaimedCount={justClaimedCount}
                 />
                 </>
               )}
