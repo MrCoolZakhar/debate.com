@@ -22,6 +22,7 @@ import { matchPresetEmblem, committeeDisplayName } from '@/lib/presetNames';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { LogoDisc } from '@/components/LogoDisc';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
+import { queueEventEmail } from '@/lib/emailEvents';
 import Portal from '@/components/Portal';
 
 // ── Design constants ──────────────────────────────────────────────────────────
@@ -282,6 +283,9 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
     const { error } = await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committeeId);
     if (error) { setBusy(false); setErr('Could not seat that chair.'); return; }
     await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committeeId }).eq('id', app.id);
+    // The guard at the top of this function already ensures app.user_id
+    // wasn't already seated, so every call here is a genuinely new chair.
+    queueEventEmail(supabase, conferenceId, 'chair_assigned', [app.id]);
     setChairIds(nextIds);
     setApplicants((prev) => prev ? prev.filter((a) => a.id !== app.id) : prev);
     setBusy(false);

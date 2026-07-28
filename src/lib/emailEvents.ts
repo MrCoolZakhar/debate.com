@@ -26,7 +26,7 @@ export interface EventDef {
   functional?: boolean;
 }
 
-export const EVENT_REGISTRY: EventDef[] = [
+export const EVENT_REGISTRY = [
   { key: 'application_received', label: 'Application Received', description: 'Sent to a delegate when their application is submitted.', defaultDelivery: 'immediate' },
   { key: 'application_accepted', label: 'Application Accepted', description: 'Sent when an application is accepted.', defaultDelivery: 'immediate' },
   { key: 'application_rejected', label: 'Application Rejected', description: 'Sent when an application is rejected.', defaultDelivery: 'immediate' },
@@ -45,7 +45,7 @@ export const EVENT_REGISTRY: EventDef[] = [
   { key: 'spot_lost', label: 'Spot Lost', description: 'Sent when a delegate loses their paid spot.', defaultDelivery: 'manual' },
   { key: 'not_attending', label: 'Marked Not Attending', description: 'Sent when a delegate is marked not attending.', defaultDelivery: 'manual' },
   { key: 'attendance_restored', label: 'Attendance Restored', description: "Sent when a delegate's attendance is restored.", defaultDelivery: 'immediate' },
-  { key: 'documents_published', label: 'Documents Published', description: 'Sent when working papers or resolutions are published.', defaultDelivery: 'manual' },
+  { key: 'documents_published', label: 'Study guide released', description: "Sent automatically to a committee's delegates when its study guide release time passes.", defaultDelivery: 'immediate' },
   { key: 'chair_assigned', label: 'Chair Assigned', description: 'Sent when someone is assigned as a committee chair.', defaultDelivery: 'immediate' },
   { key: 'committee_chair_invite', label: 'Chair invite', description: 'Sent when an organizer invites someone to chair a committee. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
   { key: 'organizer_invite', label: 'Organizer invite', description: 'Sent when someone is invited to join the organizing team. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
@@ -54,7 +54,13 @@ export const EVENT_REGISTRY: EventDef[] = [
   { key: 'request_reply', label: 'Request reply', description: 'Sent to a participant when the organizing team replies to their question.', defaultDelivery: 'immediate' },
   { key: 'delegation_swap', label: 'Delegation swap', description: 'Sent to both delegates when their committee allocations are swapped within a delegation.', defaultDelivery: 'immediate' },
   { key: 'import_join_invite', label: 'Import: join Gavelling', description: 'Sent to imported applicants asking them to create a Gavelling account so their registration attaches automatically. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
-];
+] as const satisfies readonly EventDef[];
+
+/** Union of every valid event key, derived from the registry itself so
+ *  NOTIFICATION_CATEGORY below can be checked for exhaustiveness at compile
+ *  time — add a key to EVENT_REGISTRY and TypeScript refuses to build until
+ *  it also has a category. */
+export type EventKey = typeof EVENT_REGISTRY[number]['key'];
 
 /** Looks up a registry event's display label, falling back to the raw key if unknown. */
 export function getEventLabel(eventKey: string): string {
@@ -71,15 +77,15 @@ export function getEventLabel(eventKey: string): string {
 // check entirely for the handful of emails the product can't function
 // without, the invite itself is the consent.
 
-export type NotificationCategory = 'applications' | 'documents' | 'reminders';
+export type NotificationCategory = 'applications' | 'payments' | 'documents' | 'marketing';
 
-export const NOTIFICATION_CATEGORY: Record<string, NotificationCategory> = {
+export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   application_received: 'applications',
   application_accepted: 'applications',
   application_rejected: 'applications',
-  payment_available: 'applications',
-  payment_received: 'applications',
-  fee_waived: 'applications',
+  payment_available: 'payments',
+  payment_received: 'payments',
+  fee_waived: 'payments',
   aid_approved: 'applications',
   aid_denied: 'applications',
   allocation_assigned: 'applications',
@@ -92,18 +98,22 @@ export const NOTIFICATION_CATEGORY: Record<string, NotificationCategory> = {
   spot_lost: 'applications',
   not_attending: 'applications',
   attendance_restored: 'applications',
+  documents_published: 'documents',
   chair_assigned: 'applications',
+  committee_chair_invite: 'applications',
+  organizer_invite: 'applications',
   session_chair_invite: 'applications',
   session_join_invite: 'applications',
-  delegation_swap: 'applications',
   request_reply: 'applications',
-  documents_published: 'documents',
+  delegation_swap: 'applications',
+  import_join_invite: 'applications',
 };
 
-const PREFERENCE_FIELD: Record<NotificationCategory, 'notify_email_applications' | 'notify_email_documents' | 'notify_email_reminders'> = {
+const PREFERENCE_FIELD: Record<NotificationCategory, 'notify_email_applications' | 'notify_email_payments' | 'notify_email_documents' | 'notify_email_marketing'> = {
   applications: 'notify_email_applications',
+  payments: 'notify_email_payments',
   documents: 'notify_email_documents',
-  reminders: 'notify_email_reminders',
+  marketing: 'notify_email_marketing',
 };
 
 // Transactional/functional emails a user can't opt out of without breaking
@@ -117,11 +127,11 @@ const ALWAYS_SEND_EVENTS = new Set(['committee_chair_invite', 'organizer_invite'
  *  always-send functional events bypass the check. */
 function recipientAllowsEvent(
   eventKey: string,
-  profiles: { notify_email_applications?: boolean | null; notify_email_documents?: boolean | null; notify_email_reminders?: boolean | null } | null
+  profiles: { notify_email_applications?: boolean | null; notify_email_payments?: boolean | null; notify_email_documents?: boolean | null; notify_email_marketing?: boolean | null } | null
 ): boolean {
   if (ALWAYS_SEND_EVENTS.has(eventKey)) return true;
   if (!profiles) return true; // imported, unclaimed: no preferences to honour yet
-  const category = NOTIFICATION_CATEGORY[eventKey];
+  const category = NOTIFICATION_CATEGORY[eventKey as EventKey];
   if (!category) return true;
   const pref = profiles[PREFERENCE_FIELD[category]];
   return pref !== false; // default true when null/undefined, same as the profile page
@@ -226,7 +236,8 @@ interface RecipientRow {
   assigned_country_name: string | null;
   profiles: {
     display_name: string; email: string | null;
-    notify_email_applications: boolean | null; notify_email_documents: boolean | null; notify_email_reminders: boolean | null;
+    notify_email_applications: boolean | null; notify_email_payments: boolean | null; notify_email_documents: boolean | null;
+    notify_email_marketing?: boolean | null;
   } | null;
   invited_email: string | null;
   invited_name: string | null;
@@ -321,7 +332,7 @@ export async function queueEventEmail(
         societies (name),
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
-        profiles (display_name, email, notify_email_applications, notify_email_documents, notify_email_reminders),
+        profiles (display_name, email, notify_email_applications, notify_email_payments, notify_email_documents),
         invited_email, invited_name
       `)
       .in('id', ids),

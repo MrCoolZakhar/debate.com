@@ -1,15 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Download, Upload as UploadIcon, ArrowLeft, Check,
   AlertTriangle, Mail, Loader2, CircleCheck, CircleX,
-  FileSpreadsheet, Users, Link2, MailX,
+  FileSpreadsheet, Users, Link2, MailX, UserCheck, ArrowRight,
 } from 'lucide-react';
-import { useManage } from '@/app/manage/[slug]/layout';
+import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { useConfirmModal } from '@/components/ConfirmModal';
+import { useConfirmModal, type ConfirmModalConfig, type ConfirmModalResult } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
 import { NEU, NEU_GRADIENTS, NeuCard, NeuIconDisc } from '@/components/neu';
 import {
@@ -133,11 +134,18 @@ function ClassPill({ cls }: { cls: string }) {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 type Phase = 'upload' | 'parsing' | 'preview' | 'importing' | 'results';
+type Tab = 'import' | 'imported';
 
 export default function ImportPage() {
   const { conference } = useManage();
   const { session } = useAuth();
   const { confirm, modal: confirmModal } = useConfirmModal();
+  const searchParams = useSearchParams();
+
+  // Deep-linkable so a finished run's "View imported delegates" and any
+  // outside link (?tab=imported) land straight on the roster, not the wizard.
+  const initialTab: Tab = searchParams.get('tab') === 'imported' ? 'imported' : 'import';
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   const [phase, setPhase] = useState<Phase>('upload');
   const [fileError, setFileError] = useState<string | null>(null);
@@ -495,7 +503,13 @@ export default function ImportPage() {
 
   return (
     <div className="px-6 md:px-10 py-6 md:py-8">
-      <div className="mx-auto" style={{ maxWidth: isLanding ? 960 : 1080 }}>
+      <div className="mx-auto" style={{ maxWidth: isLanding && activeTab === 'import' ? 960 : 1080 }}>
+      <ImportTabSwitcher active={activeTab} onChange={setActiveTab} />
+
+      {activeTab === 'imported' ? (
+        <ImportedDelegatesTab conference={conference} session={session} confirm={confirm} />
+      ) : (
+      <>
       {/* Header (non-landing only; the landing header lives in the left column) */}
       {!isLanding && (
         <div className="flex items-center justify-between mb-6">
@@ -751,19 +765,67 @@ export default function ImportPage() {
 
           <ResultTable rows={resultRows} />
 
-          <button
-            onClick={resetToUpload}
-            className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none mt-6"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-          >
-            <UploadIcon size={14} />
-            IMPORT ANOTHER FILE
-          </button>
+          <div className="flex items-center gap-3 mt-6">
+            <button
+              onClick={resetToUpload}
+              className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none"
+              style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+            >
+              <UploadIcon size={14} />
+              IMPORT ANOTHER FILE
+            </button>
+            <button
+              onClick={() => setActiveTab('imported')}
+              className="inline-flex items-center gap-2 rounded-xl py-2.5 px-6 text-sm font-bold focus:outline-none"
+              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
+            >
+              <UserCheck size={14} />
+              VIEW IMPORTED DELEGATES
+              <ArrowRight size={13} />
+            </button>
+          </div>
         </>
+      )}
+      </>
       )}
 
       {confirmModal}
       </div>
+    </div>
+  );
+}
+
+// ── Tab switcher ─────────────────────────────────────────────────────────────
+
+function ImportTabSwitcher({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  return (
+    <div className="inline-flex p-1.5 mb-6" style={{ borderRadius: 999, gap: 4, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+      {(['import', 'imported'] as const).map(t => {
+        const isActive = active === t;
+        return (
+          <button
+            key={t}
+            onClick={() => onChange(t)}
+            className="focus:outline-none"
+            style={{
+              padding: '7px 18px',
+              borderRadius: 999,
+              fontSize: 11,
+              fontFamily: OUTFIT,
+              fontWeight: 800,
+              letterSpacing: '0.06em',
+              border: 'none',
+              backgroundColor: isActive ? '#1B3828' : 'transparent',
+              boxShadow: isActive ? '0 3px 8px rgba(27,56,40,0.26)' : 'none',
+              color: isActive ? '#EED98A' : NEU.muted,
+              cursor: 'pointer',
+              transition: 'color 200ms, box-shadow 200ms',
+            }}
+          >
+            {t === 'import' ? 'IMPORT' : 'IMPORTED DELEGATES'}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -885,5 +947,160 @@ function ResultTable({ rows }: { rows: ResultRow[] }) {
         </table>
       </div>
     </div>
+  );
+}
+
+// ── Imported delegates tab ────────────────────────────────────────────────────
+// A completed import lives on as applications rows with invited_email set —
+// there's no import marker column, invited_email IS the signal. Unlike the
+// wizard's in-memory resultRows (gone the moment you navigate away), this
+// queries live so a run is never a dead end once you leave the page.
+
+interface ImportedDelegateRow {
+  id: string;
+  invited_name: string | null;
+  invited_email: string;
+  role: string;
+  status: string;
+  user_id: string | null;
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  accepted: 'Accepted', assigned: 'Assigned', rejected: 'Rejected',
+  'not-attending': 'Not attending', waitlisted: 'Waitlisted',
+};
+
+function ImportedDelegatesTab({ conference, session, confirm }: {
+  conference: Conference;
+  session: { access_token: string } | null;
+  confirm: (config: ConfirmModalConfig) => Promise<ConfirmModalResult>;
+}) {
+  const [rows, setRows] = useState<ImportedDelegateRow[] | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resentIds, setResentIds] = useState<Set<string>>(new Set());
+
+  const load = useCallback(async () => {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('applications')
+      .select('id, invited_name, invited_email, role, status, user_id')
+      .eq('conference_id', conference.id)
+      .not('invited_email', 'is', null)
+      .order('user_id', { ascending: true, nullsFirst: true })
+      .order('invited_name', { ascending: true });
+    setRows((data ?? []) as ImportedDelegateRow[]);
+  }, [conference.id, session?.access_token]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleResend(row: ImportedDelegateRow) {
+    if (!session || resendingId) return;
+    const { confirmed } = await confirm({
+      title: 'Resend Gavelling invite?',
+      body: `Send another account invite to ${row.invited_name || row.invited_email}?`,
+      confirmLabel: 'Resend',
+    });
+    if (!confirmed) return;
+    setResendingId(row.id);
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      await queueImportJoinInviteEmails(supabase, conference.id, [{
+        applicationId: row.id, invitedEmail: row.invited_email, invitedName: row.invited_name ?? '',
+      }]);
+      setResentIds(prev => new Set(prev).add(row.id));
+    } finally {
+      setResendingId(null);
+    }
+  }
+
+  if (rows === null) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 size={22} className="animate-spin" style={{ color: NEU.forest }} />
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <NeuCard style={{ padding: '48px 24px' }}>
+        <div className="text-center">
+          <div className="flex justify-center mb-3">
+            <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={UserCheck} size={48} />
+          </div>
+          <p className="font-black text-base mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>No imported delegates yet</p>
+          <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Applicants brought in through Import will show up here.</p>
+        </div>
+      </NeuCard>
+    );
+  }
+
+  const unclaimed = rows.filter(r => !r.user_id).length;
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-3 mb-5">
+        <SummaryStat label="Imported" value={rows.length} tone="valid" />
+        <SummaryStat label="Unclaimed" value={unclaimed} tone="warning" />
+      </div>
+      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+        <div className="overflow-x-auto" style={{ maxHeight: 560, overflowY: 'auto' }}>
+          <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#F0EDE6' }}>
+                {['Name', 'Email', 'Role', 'Status', 'Invite', ''].map(h => (
+                  <th key={h} className="text-left px-3 py-2.5" style={{ fontSize: 10, color: '#6B5F52', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const claimed = !!r.user_id;
+                const resent = resentIds.has(r.id);
+                return (
+                  <tr key={r.id} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: '#FAF8F3' }}>
+                    <td className="px-3 py-2.5 text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.invited_name || '—'}</td>
+                    <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.invited_email}</td>
+                    <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{roleLabel(r.role)}</td>
+                    <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{STATUS_LABEL[r.status] ?? r.status}</td>
+                    <td className="px-3 py-2.5">
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
+                        style={claimed
+                          ? { backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C' }
+                          : { backgroundColor: 'rgba(184,132,74,0.16)', color: '#9A6B2F' }}
+                      >
+                        {claimed ? <Check size={11} /> : <Mail size={11} />}
+                        {claimed ? 'Claimed' : 'Unclaimed'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {!claimed && (
+                        <button
+                          onClick={() => handleResend(r)}
+                          disabled={resendingId === r.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg py-1 px-3 text-xs font-bold focus:outline-none"
+                          style={{
+                            border: '1px solid #DDD4C0', color: resent ? '#2A5A3C' : '#1C1410',
+                            backgroundColor: 'transparent', fontFamily: OUTFIT,
+                            cursor: resendingId === r.id ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {resendingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
+                          {resent ? 'RESENT' : 'RESEND INVITE'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }

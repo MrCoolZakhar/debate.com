@@ -2,6 +2,7 @@
 
 import React, { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import FitToScreen from '@/components/FitToScreen';
+import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
@@ -1117,10 +1118,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* Header */}
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-2 sm:px-4 h-11 flex items-center gap-1.5 sm:gap-2 relative z-[2] shrink-0">
-        <Link href="/sessions" className="shrink-0">
-          <img src="/GavellingLogo.png" alt="Gavelling" className="w-[104px] sm:w-[150px] h-auto max-h-8 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        </Link>
+      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2 relative z-[2] shrink-0">
+        <SessionsHeaderLogo />
         <div className="flex flex-1 min-w-0 h-full">
           {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((tab2, i) => {
             const labels: Record<DelegateTab, string> = { session: t('delegate_session_tab'), documents: t('delegate_documents_tab'), chat: t('tab_chat'), stats: t('delegate_stats_tab') };

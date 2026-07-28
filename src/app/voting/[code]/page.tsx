@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from 'react';
 import FitToScreen from '@/components/FitToScreen';
 import Portal from '@/components/Portal';
+import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -486,15 +487,8 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   };
 
   const Header = ({ children }: { children?: React.ReactNode }) => (
-    <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-6 h-12 flex items-center gap-4 shrink-0">
-      <Link href="/sessions">
-        <img
-          src="/GavellingLogo.png"
-          alt="Gavelling"
-          className="w-[150px] h-auto max-h-8 object-contain"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
-      </Link>
+    <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-4 shrink-0">
+      <SessionsHeaderLogo />
       <div className="flex-1 min-w-0 flex items-center gap-2">
         <span className="text-sm font-bold text-[#1C1410] truncate">{abbreviateCommitteeName(committee.name)}</span>
       </div>

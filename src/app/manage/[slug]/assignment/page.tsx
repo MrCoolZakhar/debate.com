@@ -1532,12 +1532,19 @@ interface AssignModalProps {
   preSelectedSlot?: SlotRow;
   preSelectedSeat?: number;
   preSelectedApp?: AcceptedApp;
+  /** Set when this assignment is really a move: the same application left
+   *  this allocation row (already deleted, see onChangeAllocation) for a
+   *  new seat within a single organizer action ("Change seat"). On success
+   *  a single allocation_changed queues instead of a removal followed by
+   *  an assignment. */
+  moveFrom?: AllocationRow;
+  pushDraftNotice?: (eventKey: string, outcome: 'unconfigured' | 'sent-default') => void;
   onClose: () => void;
   onConflict: (payload: { app: AcceptedApp; slot: SlotRow; seat: number; sibling: AllocationRow }) => void;
   onAssigned: (app: AcceptedApp, slot: SlotRow, seat: number, sentEmail: boolean) => void;
 }
 
-function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, preSelectedApp, onClose, onConflict, onAssigned }: AssignModalProps) {
+function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, preSelectedApp, moveFrom, pushDraftNotice, onClose, onConflict, onAssigned }: AssignModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [selectedApp, setSelectedApp] = useState<AcceptedApp | null>(preSelectedApp ?? null);
@@ -1586,6 +1593,17 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
       setError(insertErr);
       setSaving(false);
       return;
+    }
+
+    if (moveFrom) {
+      // The old row is already gone (freed before this modal opened, see
+      // onChangeAllocation), so all that's left is the single move email.
+      try {
+        const result = await queueEventEmail(supabase, conference.id, 'allocation_changed', [selectedApp.id]);
+        if (pushDraftNotice) notifyIfNeeded(result, pushDraftNotice);
+      } catch {
+        // Email queueing is secondary, the move stands.
+      }
     }
 
     if (sendEmail) {
@@ -2369,7 +2387,7 @@ function CommitteeOverviewModal({
   onClose: () => void;
   onRemoveAllocation: (a: AllocationRow) => void;
   onAssignSlot: (slot: SlotRow, seat: number) => void;
-  onChangeAllocation: (a: AllocationRow, slot: SlotRow) => void;
+  onChangeAllocation: (a: AllocationRow) => void;
 }) {
   // Keyed by `${slot.id}-${seat}` since a double slot now shows up to two rows.
   const [expandedSeatKey, setExpandedSeatKey] = useState<string | null>(null);
@@ -2548,7 +2566,7 @@ function CommitteeOverviewModal({
                     </div>
                     <RowMenu
                       items={[
-                        { label: 'Change seat', icon: <Repeat size={14} />, onClick: () => onChangeAllocation(alloc, slot) },
+                        { label: 'Change seat', icon: <Repeat size={14} />, onClick: () => onChangeAllocation(alloc) },
                         ...(removable ? [{ label: 'Deallocate', icon: <Trash2 size={14} />, danger: true, onClick: () => onRemoveAllocation(alloc) }] : []),
                       ]}
                     />
@@ -2911,7 +2929,7 @@ export default function AssignmentPage() {
   const [railSource, setRailSource] = useState<'delegates' | 'delegations'>('delegates');
   const [dragSocietyId, setDragSocietyId] = useState<string | null>(null);
   const [societyDropModal, setSocietyDropModal] = useState<{ committeeId: string; societyId: string } | null>(null);
-  const [assignModal, setAssignModal] = useState<{ committeeId: string; preSlot?: SlotRow; preSeat?: number } | null>(null);
+  const [assignModal, setAssignModal] = useState<{ committeeId: string; preSlot?: SlotRow; preSeat?: number; preApp?: AcceptedApp; moveFrom?: AllocationRow } | null>(null);
   const [overviewCommitteeId, setOverviewCommitteeId] = useState<string | null>(null);
   // Delegation-purity safeguard: set whenever an individual-delegate
   // assignment path (drop modal, slot-first assign modal, one-click
@@ -3378,6 +3396,12 @@ export default function AssignmentPage() {
       }
       if (chairApp.status === 'accepted') {
         await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committee.id }).eq('id', chairApp.id);
+      }
+      // Only newly added chairs get the email, not everyone already on the
+      // dais, they'd get spammed one more time on every unrelated re-save.
+      if (!alreadyOnDais && conference) {
+        const result = await queueEventEmail(supabase, conference.id, 'chair_assigned', [chairApp.id]);
+        notifyIfNeeded(result, pushDraftNotice);
       }
       loadData({ silent: true });
     })().catch(() => {
@@ -4244,6 +4268,9 @@ export default function AssignmentPage() {
           unassigned={accepted}
           preSelectedSlot={assignModal.preSlot}
           preSelectedSeat={assignModal.preSeat}
+          preSelectedApp={assignModal.preApp}
+          moveFrom={assignModal.moveFrom}
+          pushDraftNotice={pushDraftNotice}
           onClose={() => setAssignModal(null)}
           onConflict={payload => { setConflict({ committee: assignModalCommittee, ...payload }); setAssignModal(null); }}
           onAssigned={(app, slot, seat, sentEmail) => {
@@ -4263,14 +4290,28 @@ export default function AssignmentPage() {
           onClose={() => setOverviewCommitteeId(null)}
           onRemoveAllocation={handleRemoveAllocation}
           onAssignSlot={(slot, seat) => setAssignModal({ committeeId: overviewCommittee.id, preSlot: slot, preSeat: seat })}
-          onChangeAllocation={(alloc, slot) => {
-            // "Change" frees the seat (optimistic, synchronous state update) and
-            // immediately opens the assign flow for that now-open slot so the
-            // organizer can pick a replacement, preselecting the exact seat
-            // that was just vacated on a double country.
-            handleRemoveAllocation(alloc);
+          onChangeAllocation={async (alloc) => {
+            // "Change seat" moves THIS delegate to a different country within
+            // the same committee. The old row has to be freed before the new
+            // one can be inserted (a delegate can only hold one seat per
+            // committee), so unlike Deallocate this frees the seat WITHOUT
+            // queuing allocation_removed — AssignModal fires a single
+            // allocation_changed once the new seat actually lands.
+            if (!session || !conference) return;
+            const supabase = getAuthedClient(session.access_token);
+            const committeeId = overviewCommittee.id;
+            const { error } = await supabase.from('conference_allocations').delete().eq('id', alloc.id);
+            if (error) { showFlash('err', 'Could not free that seat.'); return; }
+            if (alloc.application_id) {
+              await supabase.from('applications').update({
+                status: 'accepted', assigned_committee_id: null, assigned_country_code: null, assigned_country_name: null,
+              }).eq('id', alloc.application_id);
+            }
+            setCommittees(prev => prev.map(c => c.id === committeeId
+              ? { ...c, conference_allocations: c.conference_allocations.filter(a => a.id !== alloc.id) }
+              : c));
             setOverviewCommitteeId(null);
-            setAssignModal({ committeeId: overviewCommittee.id, preSlot: slot, preSeat: alloc.seat });
+            setAssignModal({ committeeId, preApp: allocationToApp(alloc), moveFrom: alloc });
           }}
         />
       )}
