@@ -22,6 +22,7 @@ import { appendEditionYear } from '@/lib/presetNames';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
+import { SidebarCardSkeleton } from '@/components/Skeleton';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -435,6 +436,24 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [myAllocation, setMyAllocation] = useState<ParticipantAllocation | null>(null);
+  // Distinct from `loading`: the conference/committees essentials resolve
+  // (and clear `loading`) before this signed-in viewer's own applications and
+  // allocation are fetched, further down in the same fetchAll pass. Without
+  // this its own flag, the participant column and sidebar card would render
+  // their real empty states ("No open applications", not-assigned copy) for a
+  // beat before the actual data lands and overwrites them — an empty state
+  // must be a conclusion, never a placeholder. True whenever auth is still
+  // resolving too, since there's nothing to show until we know who's asking.
+  const [participantDataLoading, setParticipantDataLoading] = useState(true);
+  // Existing-user claim (claim_my_imported_applications): a person who
+  // already had an account when an organizer imported them never went
+  // through the signup claim flow. Attempted once per conference per page
+  // load (the ref survives re-renders and silent refreshes alike, so it
+  // never re-fires just because fetchAll runs again), before the
+  // applications/allocation fetch below so a newly-attached row shows up in
+  // the very first real fetch rather than needing a second reload.
+  const claimAttemptedForRef = useRef<string | null>(null);
+  const [justClaimedCount, setJustClaimedCount] = useState(0);
   // Which tab is showing is entirely a function of which route mounted this
   // component (a tab switch is a real navigation to a different route, which
   // remounts this component with a new initialView), never local state.
@@ -626,6 +645,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
   async function fetchAll(opts?: { silent?: boolean }) {
     if (!opts?.silent) setLoading(true);
+    if (!opts?.silent) setParticipantDataLoading(true);
     const supabase = anonSupabase;
 
     let { data: confData } = await supabase
@@ -792,6 +812,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     if (user && session) {
       const authedSupabase = getAuthedClient(session.access_token);
 
+      // Existing-user claim: attaches any imported applications/allocations
+      // matching this signed-in user's email. Idempotent server-side, but
+      // only actually called once per conference per page load here.
+      if (claimAttemptedForRef.current !== conf.id) {
+        claimAttemptedForRef.current = conf.id;
+        const { data: claimData } = await authedSupabase.rpc('claim_my_imported_applications');
+        const claimResult = claimData as { ok?: boolean; claimed?: number } | null;
+        if (claimResult?.ok && (claimResult.claimed ?? 0) > 0) {
+          setJustClaimedCount(claimResult.claimed ?? 0);
+        }
+      }
+
       // Organizer/secretariat detection, RLS only exposes rows to organizers themselves,
       // so this returns the viewer's own row or nothing.
       const { data: orgRow } = await authedSupabase
@@ -842,7 +874,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
       setMyApplications([]);
       setMyAllocation(null);
     }
-    // loading was already cleared right after the essentials loaded above.
+    // loading was already cleared right after the essentials loaded above;
+    // participantDataLoading only clears once applications/allocation are
+    // actually known (either branch above), so the sidebar and participant
+    // column never render an empty state before it's true.
+    setParticipantDataLoading(false);
   }
 
   async function refreshReviews(conferenceId: string) {
@@ -1668,6 +1704,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   aidBlocks={normalizeBlocks(conference.aid_questions)}
                   aidIntro={conference.aid_intro}
                   initialRole={initialRole}
+                  participantDataLoading={authLoading || participantDataLoading}
+                  justClaimedCount={justClaimedCount}
                 />
                 </>
               )}
@@ -1818,7 +1856,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     }}
                   />
                   <div className="relative">
-                    {isOrganizerViewer ? (
+                    {(authLoading || participantDataLoading) ? (
+                      /* 0, Applications/allocation not yet resolved: skeleton,
+                         never the empty/apply states below, which are only
+                         ever true conclusions once the data has landed. */
+                      <SidebarCardSkeleton />
+                    ) : isOrganizerViewer ? (
                       /* 1, Organizer/secretariat: manage affordances, never apply buttons */
                       <>
                         <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 8px 0' }}>

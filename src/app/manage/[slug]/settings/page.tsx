@@ -1510,10 +1510,6 @@ export default function SettingsPage() {
       setAcronymError('Acronym is required.');
       return;
     }
-    if (!upperAcr.includes('MUN')) {
-      setAcronymError("Acronym must include 'MUN', e.g. TEIMUN, LIMUN, SMUNC.");
-      return;
-    }
     setAcronymError('');
     setDetailsError('');
     setDetailsSaving(true);
@@ -2238,9 +2234,7 @@ export default function SettingsPage() {
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                   onBlur={(e) => {
                     const upper = e.target.value.toUpperCase().trim();
-                    if (!upper) setAcronymError('Acronym is required.');
-                    else if (!upper.includes('MUN')) setAcronymError("Acronym must include 'MUN', e.g. TEIMUN, LIMUN, SMUNC.");
-                    else setAcronymError('');
+                    if (!upper) setAcronymError('Acronym is required.'); else setAcronymError('');
                     e.currentTarget.style.borderColor = '#DDD4C0';
                   }}
                   placeholder="e.g. LIMUN"

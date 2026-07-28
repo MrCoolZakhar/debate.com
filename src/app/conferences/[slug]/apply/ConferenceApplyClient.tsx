@@ -112,6 +112,7 @@ interface ExistingApp {
   custom_answers: CustomAnswers | null;
   pledge_type: 'delegation' | null;
   spots_pledged: number | null;
+  advisors_pledged: number | null;
 }
 
 /** An active (submitted/accepted/assigned/checked-in) application the user
@@ -785,6 +786,11 @@ function ConferenceApplyInner() {
   // the normal payment system, so this is a plain yes/no.
   const [willPledgeSpots, setWillPledgeSpots] = useState<boolean | null>(null);
   const [spotsPledged, setSpotsPledged] = useState<number | ''>('');
+  // Parallel question, same step: paying for advisor tickets for the
+  // delegation, priced and materialized server-side exactly like delegate
+  // spots (see add_pledged_advisor_spots).
+  const [willPledgeAdvisors, setWillPledgeAdvisors] = useState<boolean | null>(null);
+  const [advisorsPledged, setAdvisorsPledged] = useState<number | ''>('');
   const [invoicingError, setInvoicingError] = useState('');
 
   // ── Step 3, Preferences
@@ -1016,6 +1022,8 @@ function ConferenceApplyInner() {
         selectedSocietyId: string | null;
         willPledgeSpots: boolean | null;
         spotsPledged: number | '';
+        willPledgeAdvisors: boolean | null;
+        advisorsPledged: number | '';
         preferences: Preference[];
         experienceLevel: string;
         customAnswers: CustomAnswers;
@@ -1028,6 +1036,8 @@ function ConferenceApplyInner() {
       setSelectedSocietyId(snap.selectedSocietyId);
       setWillPledgeSpots(snap.willPledgeSpots);
       setSpotsPledged(snap.spotsPledged);
+      setWillPledgeAdvisors(snap.willPledgeAdvisors ?? null);
+      setAdvisorsPledged(snap.advisorsPledged ?? '');
       setPreferences(snap.preferences);
       setExperienceLevel(snap.experienceLevel);
       setCustomAnswers(snap.customAnswers);
@@ -1092,7 +1102,7 @@ function ConferenceApplyInner() {
         .order('name', { ascending: true }),
       supabase
         .from('applications')
-        .select('id, status, is_independent, society_id, experience_level, custom_answers, pledge_type, spots_pledged')
+        .select('id, status, is_independent, society_id, experience_level, custom_answers, pledge_type, spots_pledged, advisors_pledged')
         .eq('conference_id', confData.id)
         .eq('user_id', user!.id)
         .eq('role', role)
@@ -1185,6 +1195,11 @@ function ConferenceApplyInner() {
       if (isInvoicingRole) {
         setWillPledgeSpots(appData.pledge_type === 'delegation');
         setSpotsPledged(appData.spots_pledged ? appData.spots_pledged : '');
+        // No separate pledge_type flag for advisors — a positive count is
+        // itself the "yes" answer, mirroring how it's written back (0 when
+        // declined, see the insert/update payloads above).
+        setWillPledgeAdvisors((appData.advisors_pledged ?? 0) > 0);
+        setAdvisorsPledged(appData.advisors_pledged ? appData.advisors_pledged : '');
       }
       // NOTE: experience_level is intentionally NOT restored from the saved
       // application here — the rank is always the freshly derived one (set from
@@ -1430,6 +1445,14 @@ function ConferenceApplyInner() {
         setInvoicingError('Please enter how many delegate spots you will pay for.');
         return;
       }
+      if (willPledgeAdvisors === null) {
+        setInvoicingError('Please select an option for advisor tickets.');
+        return;
+      }
+      if (willPledgeAdvisors && (advisorsPledged === '' || advisorsPledged < 1)) {
+        setInvoicingError('Please enter how many advisor tickets you will pay for.');
+        return;
+      }
       setInvoicingError('');
       advanceStep();
       return;
@@ -1587,6 +1610,7 @@ function ConferenceApplyInner() {
       if (isInvoicingRole) {
         insertPayload.pledge_type = willPledgeSpots ? 'delegation' : null;
         insertPayload.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
+        insertPayload.advisors_pledged = willPledgeAdvisors ? (advisorsPledged || 0) : 0;
       }
 
       const { data: app, error: appError } = await supabase
@@ -1721,6 +1745,7 @@ function ConferenceApplyInner() {
       if (isInvoicingRole) {
         updates.pledge_type = willPledgeSpots ? 'delegation' : null;
         updates.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
+        updates.advisors_pledged = willPledgeAdvisors ? (advisorsPledged || 0) : 0;
       }
       if (showPreferenceStep) {
         // Same row shape as the fresh-submit insert, minus application_id
@@ -1823,6 +1848,8 @@ function ConferenceApplyInner() {
         selectedSocietyId,
         willPledgeSpots,
         spotsPledged,
+        willPledgeAdvisors,
+        advisorsPledged,
         preferences,
         experienceLevel,
         customAnswers,
@@ -2260,6 +2287,69 @@ function ConferenceApplyInner() {
             </p>
           </div>
         )}
+
+        {/* Parallel question, quieter treatment than the big yes/no above —
+            same step, a second decision rather than a second full screen. */}
+        <div className="pt-6 mb-2" style={{ borderTop: '1px solid #F0EDE6' }}>
+          <label className="flex items-center gap-2 font-semibold text-sm mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <GraduationCap size={16} style={{ color: NEU.forest }} />
+            Paying for advisor tickets?
+          </label>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { setWillPledgeAdvisors(true); setInvoicingError(''); }}
+              className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
+              style={{
+                border: willPledgeAdvisors === true ? `1.5px solid ${NEU.forest}` : '1.5px solid #DDD4C0',
+                backgroundColor: willPledgeAdvisors === true ? 'rgba(27,56,40,0.06)' : 'transparent',
+                color: willPledgeAdvisors === true ? NEU.forest : '#6E5F4E',
+                fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => { setWillPledgeAdvisors(false); setInvoicingError(''); }}
+              className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
+              style={{
+                border: willPledgeAdvisors === false ? `1.5px solid ${NEU.forest}` : '1.5px solid #DDD4C0',
+                backgroundColor: willPledgeAdvisors === false ? 'rgba(27,56,40,0.06)' : 'transparent',
+                color: willPledgeAdvisors === false ? NEU.forest : '#6E5F4E',
+                fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              No
+            </button>
+          </div>
+
+          {willPledgeAdvisors === true && (
+            <div className="mt-4">
+              <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                How many advisor tickets will you pay for?
+              </label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={advisorsPledged}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setAdvisorsPledged(raw === '' ? '' : Math.max(1, Math.floor(Number(raw))));
+                  setInvoicingError('');
+                }}
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              />
+              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                Tickets stay with your delegation once purchased, pooled the same way as delegate spots.
+              </p>
+            </div>
+          )}
+        </div>
 
         {invoicingError && (
           <p className="mt-3 text-xs text-center" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
