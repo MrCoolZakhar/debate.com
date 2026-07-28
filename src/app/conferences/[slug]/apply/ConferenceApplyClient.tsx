@@ -547,27 +547,65 @@ function CountryChip({
   );
 }
 
-/** A confirmed preference in the ranked list: rank medallion + emblem/flag. */
+/** A confirmed preference in the ranked list: drag handle + rank medallion +
+ *  emblem/flag. Reorders by native HTML5 drag (the handle) or, when the
+ *  handle has keyboard focus, ArrowUp/ArrowDown — dragging is never the
+ *  only way to reorder. */
 function RankedRow({
-  index, total, committee, countryCode, countryName, onUp, onDown, onRemove, reducedMotion,
+  index, total, committee, countryCode, countryName, onMove, onRemove, reducedMotion, isDragging,
+  onDragStart, onDragOver, onDrop, onDragEnd,
 }: {
   index: number;
   total: number;
   committee: CommitteeOption | undefined;
   countryCode: string;
   countryName: string;
-  onUp: () => void;
-  onDown: () => void;
+  onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
   reducedMotion: boolean;
+  isDragging: boolean;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }) {
   const monogram = committee ? (committee.abbreviation || committee.name).slice(0, 3).toUpperCase() : '?';
   const resolved = countryCode || (countryName ? getCountryByName(countryName)?.code || '' : '');
   return (
     <div
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
       className="flex items-center gap-3"
-      style={{ padding: '10px 12px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+      style={{
+        padding: '10px 12px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+        opacity: isDragging ? 0.5 : 1,
+        cursor: 'grab',
+        transition: reducedMotion ? 'none' : `opacity 160ms ${EASE}`,
+      }}
     >
+      {/* Drag handle, dotted grip — keyboard-focusable so ArrowUp/ArrowDown
+          reorder without a drag gesture. */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Reorder ${countryName || committee?.name || 'preference'}, currently rank ${index + 1} of ${total}`}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowUp') { e.preventDefault(); onMove(-1); }
+          else if (e.key === 'ArrowDown') { e.preventDefault(); onMove(1); }
+        }}
+        className="shrink-0 flex flex-col gap-[3px] px-1 py-2 focus:outline-none"
+        style={{ cursor: 'grab' }}
+      >
+        {[0, 1, 2].map(r => (
+          <div key={r} className="flex gap-[3px]">
+            {[0, 1].map(c => <div key={c} className="w-[3px] h-[3px] rounded-full" style={{ backgroundColor: '#C5B9A8' }} />)}
+          </div>
+        ))}
+      </div>
+
       <span
         className="flex items-center justify-center flex-shrink-0"
         style={{
@@ -593,20 +631,6 @@ function RankedRow({
       </div>
 
       <div className="flex items-center gap-0.5 flex-shrink-0">
-        <button
-          type="button" onClick={onUp} disabled={index === 0} aria-label="Move up"
-          className="flex items-center justify-center rounded-lg focus:outline-none"
-          style={{ width: 26, height: 26, color: index === 0 ? 'rgba(154,138,120,0.35)' : NEU.muted, cursor: index === 0 ? 'default' : 'pointer' }}
-        >
-          <ChevronUp size={16} strokeWidth={2.4} />
-        </button>
-        <button
-          type="button" onClick={onDown} disabled={index === total - 1} aria-label="Move down"
-          className="flex items-center justify-center rounded-lg focus:outline-none"
-          style={{ width: 26, height: 26, color: index === total - 1 ? 'rgba(154,138,120,0.35)' : NEU.muted, cursor: index === total - 1 ? 'default' : 'pointer' }}
-        >
-          <ChevronDown size={16} strokeWidth={2.4} />
-        </button>
         <button
           type="button" onClick={onRemove} aria-label="Remove preference"
           className="flex items-center justify-center rounded-lg focus:outline-none"
@@ -815,6 +839,13 @@ function ConferenceApplyInner() {
     if (typeof window === 'undefined') return;
     prefScrollAnchor.current = { y: window.scrollY, h: document.documentElement.scrollHeight };
   }, []);
+  // Native HTML5 drag reorder for the ranking list, same mechanics as
+  // QuestionBuilder's block reorder (dragIndexRef + dragOverIndex + the
+  // insertion line). anchorPrefScroll still fires on drop so the layout
+  // effect above never fights it, though a reorder never changes document
+  // height, so in practice the delta it computes is always 0.
+  const prefDragIndexRef = useRef<number | null>(null);
+  const [prefDragOverIndex, setPrefDragOverIndex] = useState<number | null>(null);
 
   // ── Step 4, Experience & Questions
   // experienceLevel is NO LONGER user-chosen. It is auto-derived from the
@@ -2395,6 +2426,22 @@ function ConferenceApplyInner() {
         return next;
       });
     };
+    // Native HTML5 drag reorder, same mechanics as QuestionBuilder's block
+    // reorder — the index correction accounts for the removed item shifting
+    // every later index down by one before the reinsertion.
+    const handlePrefDrop = (dropIdx: number) => {
+      const from = prefDragIndexRef.current;
+      prefDragIndexRef.current = null;
+      setPrefDragOverIndex(null);
+      if (from === null || from === dropIdx) return;
+      anchorPrefScroll();
+      setPreferences(prev => {
+        const reordered = [...prev];
+        const [moved] = reordered.splice(from, 1);
+        reordered.splice(from < dropIdx ? dropIdx - 1 : dropIdx, 0, moved);
+        return reordered;
+      });
+    };
     const committeeRank = (id: string) => {
       const i = preferences.findIndex(p => p.committeeId === id);
       return i < 0 ? null : i + 1;
@@ -2419,20 +2466,31 @@ function ConferenceApplyInner() {
         <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 10, marginLeft: 2 }}>
           YOUR RANKING · {preferences.length}
         </p>
+        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginBottom: 8, marginLeft: 2 }}>
+          Drag to reorder your preferences.
+        </p>
         <div className="flex flex-col gap-2">
           {preferences.map((p, i) => (
-            <RankedRow
-              key={`${p.committeeId}-${p.countryCode}`}
-              index={i}
-              total={preferences.length}
-              committee={committees.find(c => c.id === p.committeeId)}
-              countryCode={p.countryCode}
-              countryName={p.countryName}
-              onUp={() => move(i, -1)}
-              onDown={() => move(i, 1)}
-              onRemove={() => removeAt(i)}
-              reducedMotion={reducedMotion}
-            />
+            <div key={`${p.committeeId}-${p.countryCode}`}>
+              {prefDragOverIndex === i && prefDragOverIndex !== prefDragIndexRef.current && (
+                <div className="h-0.5 rounded-full mx-2 mb-2" style={{ backgroundColor: '#1B3828' }} />
+              )}
+              <RankedRow
+                index={i}
+                total={preferences.length}
+                committee={committees.find(c => c.id === p.committeeId)}
+                countryCode={p.countryCode}
+                countryName={p.countryName}
+                onMove={(dir) => move(i, dir)}
+                onRemove={() => removeAt(i)}
+                reducedMotion={reducedMotion}
+                isDragging={prefDragIndexRef.current === i}
+                onDragStart={() => { prefDragIndexRef.current = i; }}
+                onDragOver={(e) => { e.preventDefault(); setPrefDragOverIndex(i); }}
+                onDrop={() => handlePrefDrop(i)}
+                onDragEnd={() => { prefDragIndexRef.current = null; setPrefDragOverIndex(null); }}
+              />
+            </div>
           ))}
         </div>
       </NeuInset>
