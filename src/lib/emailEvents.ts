@@ -237,7 +237,7 @@ interface RecipientRow {
   profiles: {
     display_name: string; email: string | null;
     notify_email_applications: boolean | null; notify_email_payments: boolean | null; notify_email_documents: boolean | null;
-    notify_email_marketing?: boolean | null;
+    notify_email_marketing: boolean | null;
   } | null;
   invited_email: string | null;
   invited_name: string | null;
@@ -332,7 +332,7 @@ export async function queueEventEmail(
         societies (name),
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
         assigned_country_name,
-        profiles (display_name, email, notify_email_applications, notify_email_payments, notify_email_documents),
+        profiles (display_name, email, notify_email_applications, notify_email_payments, notify_email_documents, notify_email_marketing),
         invited_email, invited_name
       `)
       .in('id', ids),

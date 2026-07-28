@@ -27,7 +27,7 @@ const NOTIFICATION_ROWS = [
   { field: 'notify_email_applications' as const, Icon: ClipboardCheck, label: 'Application & Status Updates', desc: 'Acceptance, rejection, allocation, and committee assignment emails' },
   { field: 'notify_email_payments'     as const, Icon: CreditCard,     label: 'Payment & Billing',            desc: 'Invoices, receipts, fee waivers, and payment reminders' },
   { field: 'notify_email_documents'    as const, Icon: FileText,       label: 'Documents & Deadlines',        desc: "Study guide releases, position paper feedback, and submission deadlines" },
-  { field: 'notify_email_marketing'    as const, Icon: Megaphone,      label: 'Conference Announcements',     desc: 'News and updates from Gavelling' },
+  { field: 'notify_email_marketing'    as const, Icon: Megaphone,      label: 'Conference Announcements',     desc: 'Broadcast announcements and general updates sent by conferences you applied to' },
 ];
 
 type NotifFields = {
