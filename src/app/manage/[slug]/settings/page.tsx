@@ -171,6 +171,10 @@ function saveFailMessage(error?: { message: string } | null): string {
   return "Couldn't save, please refresh and try again." + (error?.message ? ' ' + error.message : '');
 }
 
+// Exactly one plausible address, no spaces or pipes — catches the "a@x.com |
+// b@y.com" case that silently broke reply-to on every email this conference sent.
+const CONTACT_EMAIL_PATTERN = /^[^\s@|]+@[^\s@|]+\.[^\s@|]+$/;
+
 const inputStyle: React.CSSProperties = {
   backgroundColor: '#FAF8F3',
   border: '1.5px solid #DDD4C0',
@@ -376,6 +380,7 @@ export default function SettingsPage() {
   const [acronym, setAcronym] = useState('');
   const [acronymError, setAcronymError] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+  const [contactEmailError, setContactEmailError] = useState('');
   const [studentLevel, setStudentLevel] = useState<'school' | 'university' | 'both' | ''>('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -646,6 +651,7 @@ export default function SettingsPage() {
     setAcronym(conference.acronym ?? '');
     setAcronymError('');
     setContactEmail(conference.contact_email ?? '');
+    setContactEmailError('');
     setStudentLevel((conference.student_level as 'school' | 'university' | 'both' | '') ?? '');
     setStartDate(conference.start_date ?? '');
     setEndDate(conference.end_date ?? '');
@@ -1511,6 +1517,12 @@ export default function SettingsPage() {
       return;
     }
     setAcronymError('');
+    const trimmedEmail = contactEmail.trim();
+    if (trimmedEmail && !CONTACT_EMAIL_PATTERN.test(trimmedEmail)) {
+      setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+      return;
+    }
+    setContactEmailError('');
     setDetailsError('');
     setDetailsSaving(true);
     const parsedDelegates = parseInt(expectedDelegates, 10);
@@ -2249,12 +2261,20 @@ export default function SettingsPage() {
                 <input
                   type="email"
                   value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
+                  onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
                   placeholder="hello@yourmun.org"
                   style={inputStyle}
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                  onBlur={(e) => {
+                    const trimmed = e.target.value.trim();
+                    if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+                    else setContactEmailError('');
+                    e.currentTarget.style.borderColor = '#DDD4C0';
+                  }}
                 />
+                {contactEmailError && (
+                  <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{contactEmailError}</p>
+                )}
               </div>
             </div>
 
