@@ -90,7 +90,10 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
       currency: currency.toUpperCase(),
       applies_to: appliesTo,
       active,
-      gates_acceptance: gatesAcceptance,
+      // New rows always start with the gate off — an organizer must come back
+      // and deliberately turn it on, rather than inheriting whatever the
+      // toggle happened to be at on first save.
+      gates_acceptance: existing ? gatesAcceptance : false,
     };
     const { data, error: writeError } = existing
       ? await supabase.from('application_surcharges').update(payload).eq('id', existing.id).select('id').single()

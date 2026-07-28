@@ -289,7 +289,7 @@ function CreditInfoTip() {
               Credits are how Gavelling covers processing and platform automation. They&apos;re separate from what you pay the conference itself.
             </p>
             <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(28,20,16,0.8)', fontFamily: OUTFIT }}>
-              Credits cost $3 each ($1 in eligible regions); a subscription can include them.
+              Credits can be bought individually or in bulk, and they&apos;re included with every subscription.
             </p>
             <p className="text-xs leading-relaxed font-semibold" style={{ color: NEU.forest, fontFamily: OUTFIT }}>
               Credits are refunded if your application is rejected, or if you no longer attend the conference.
@@ -702,8 +702,16 @@ function UpgradePhotoCard({
             transition: `background 300ms ${EASE}`,
           }}
         />
-        {/* Eyebrow + title, always legible on the image */}
-        <div className="absolute left-0 right-0 bottom-0 px-4 pb-3">
+        {/* Eyebrow + title, fades out on hover so the description can take over */}
+        <div
+          className="absolute left-0 right-0 bottom-0 px-4 pb-3"
+          style={{
+            zIndex: 1,
+            opacity: hovered ? 0 : 1,
+            transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
+            transition: `opacity 220ms ${EASE}, transform 220ms ${EASE}`,
+          }}
+        >
           <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 9.5, letterSpacing: '0.16em', color: '#EED98A', marginBottom: 2 }}>
             {eyebrow}
           </p>
@@ -711,10 +719,11 @@ function UpgradePhotoCard({
             {title}
           </p>
         </div>
-        {/* Descriptive copy revealed over the darkened image on hover */}
+        {/* Descriptive copy, cross-fades in over the darkened image on hover */}
         <div
-          className="absolute inset-0 flex items-center px-4"
+          className="absolute inset-0 flex items-center px-4 py-3"
           style={{
+            zIndex: 2,
             opacity: hovered ? 1 : 0,
             transform: hovered ? 'translateY(0)' : 'translateY(6px)',
             transition: `opacity 260ms ${EASE}, transform 260ms ${EASE}`,
@@ -1916,6 +1925,7 @@ function ConferenceApplyInner() {
   const [buyingCredits, setBuyingCredits] = useState(false);
   const [buyCreditsError, setBuyCreditsError] = useState('');
   const [upgradingUnlimited, setUpgradingUnlimited] = useState(false);
+  const [unlimitedError, setUnlimitedError] = useState('');
   const CREDIT_MAX_QTY = 20;
 
   async function handleBuyCreditsInline() {
@@ -1951,11 +1961,40 @@ function ConferenceApplyInner() {
     window.location.assign(result.url);
   }
 
-  /** Upgrade to Gavelling Unlimited — routes to the existing subscription flow
-   *  (/account/unlimited) with a returnTo, snapshotting the application first. */
-  function goUnlimited() {
+  /** Upgrade to Gavelling Unlimited inline, mirroring handleBuyCreditsInline:
+   *  invokes the subscription checkout function directly rather than routing
+   *  to /account/unlimited, so the applicant never leaves the apply flow. */
+  async function goUnlimited() {
+    if (upgradingUnlimited) return;
     setUpgradingUnlimited(true);
-    goBuyCredits();
+    setUnlimitedError('');
+    saveResumeSnapshot();
+    try {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) {
+        setUnlimitedError('Your session has expired, please refresh and sign in again.');
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke('create-subscription-checkout', {
+        body: {
+          plan: 'monthly',
+          returnTo: `/conferences/${slug}/apply?role=${role}`,
+          ...(geoCountry ? { country: geoCountry } : {}),
+        },
+      });
+      if (error) {
+        setUnlimitedError(await extractFunctionErrorMessage(error));
+        return;
+      }
+      const result = data as { ok?: boolean; url?: string; error?: string } | null;
+      if (!result?.ok || !result.url) {
+        setUnlimitedError(result?.error || 'Could not start checkout. Please try again.');
+        return;
+      }
+      window.location.assign(result.url);
+    } finally {
+      setUpgradingUnlimited(false);
+    }
   }
 
   // ── Step render helpers ───────────────────────────────────────────────────
@@ -3226,7 +3265,7 @@ function ConferenceApplyInner() {
               <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 12 }}>
                 NEED MORE CREDITS?
               </p>
-              <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* Add credits — quantity stepper + direct checkout */}
                 <UpgradePhotoCard
                   image="/onboarding/laptop-01.jpg"
@@ -3309,11 +3348,18 @@ function ConferenceApplyInner() {
                   >
                     {upgradingUnlimited ? 'OPENING…' : 'UPGRADE'}
                   </button>
+                  <Link
+                    href="/account/unlimited"
+                    className="block text-center text-[11px] mt-2"
+                    style={{ color: NEU.muted, fontFamily: OUTFIT, textDecoration: 'underline', textUnderlineOffset: 2 }}
+                  >
+                    Yearly billing available in your account settings.
+                  </Link>
                 </UpgradePhotoCard>
               </div>
-              {buyCreditsError && (
+              {(buyCreditsError || unlimitedError) && (
                 <p className="text-xs mt-2.5 text-center" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-                  {buyCreditsError}
+                  {buyCreditsError || unlimitedError}
                 </p>
               )}
             </div>

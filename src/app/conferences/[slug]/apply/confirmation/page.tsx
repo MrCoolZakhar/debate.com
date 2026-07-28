@@ -24,7 +24,9 @@ function roleWithArticle(role: string): string {
 function ConfirmationInner() {
   const { slug } = useParams() as { slug: string };
   const searchParams = useSearchParams();
-  const role = searchParams.get('role') ?? 'delegate';
+  const rawRole = searchParams.get('role');
+  const role = rawRole ?? 'delegate';
+  const portalHref = rawRole ? `/conferences/${slug}/role/${rawRole}` : `/conferences/${slug}`;
   const timing = searchParams.get('timing');
   const resubmitted = searchParams.get('resubmitted') === '1';
   const timingNote = timing === 'after_application'
@@ -192,8 +194,8 @@ function ConfirmationInner() {
 
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
-            href={`/conferences/${slug}`}
-            className="rounded-xl py-3 px-6 font-bold text-sm focus:outline-none transition-colors"
+            href={portalHref}
+            className="rounded-xl py-3 px-6 font-bold text-sm focus:outline-none transition-colors text-center"
             style={{
               backgroundColor: '#1B3828',
               color: '#EED98A',
@@ -205,11 +207,11 @@ function ConfirmationInner() {
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
           >
-            VIEW CONFERENCE →
+            CONFERENCE PORTAL →
           </Link>
           <Link
-            href="/conferences/explore"
-            className="rounded-xl py-3 px-6 font-bold text-sm focus:outline-none transition-colors"
+            href={`/conferences/${slug}/pay`}
+            className="rounded-xl py-3 px-6 font-bold text-sm focus:outline-none transition-colors text-center"
             style={{
               border: '1.5px solid #C8BEA8',
               color: '#1C1410',
@@ -221,9 +223,23 @@ function ConfirmationInner() {
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
-            EXPLORE MORE
+            PAYMENT PORTAL
           </Link>
         </div>
+
+        <Link
+          href="/conferences/explore"
+          className="mt-5 text-xs font-medium focus:outline-none transition-colors"
+          style={{
+            color: '#9A8A78',
+            textDecoration: 'none',
+            fontFamily: OUTFIT,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+        >
+          explore more conferences
+        </Link>
       </div>
     </div>
   );
