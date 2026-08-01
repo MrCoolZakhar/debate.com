@@ -42,6 +42,19 @@ function trialDaysLeft(iso: string): number {
   return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
 }
 
+/** Copy for a lapsed (expired) Unlimited subscription, trial or paid. */
+function lapsedUnlimitedCopy(sub: Subscription): string {
+  const dateSuffix = sub.current_period_end ? ` on ${formatExpiry(sub.current_period_end)}` : '';
+  if (sub.plan === 'unlimited_trial') {
+    return `Your free trial ended${dateSuffix}. Subscribe to get Unlimited back.`;
+  }
+  return `Your Unlimited plan ended${dateSuffix}.`;
+}
+
+// Muted/neutral, distinct from the green ACTIVE pill and the gold purchase
+// accent — reads as "over", not as a warning.
+const ENDED_GRADIENT: [string, string] = ['#9A8A78', '#6B5F52'];
+
 /** Monthly button: "$5 A MONTH". Annual button: "$3.75 A MONTH · BILLED
  *  ANNUALLY ($45)", the annual total divided evenly across 12 months, both
  *  derived from unlimitedPricing(code) so the copy always matches whatever
@@ -109,6 +122,45 @@ const UNLIMITED_FEATURES: PlanFeature[] = [
   { text: 'Premium job board opportunities', comingSoon: true },
 ];
 
+/** The two Unlimited purchase buttons (monthly / annual), shared by the
+ *  no-subscription-yet state and the lapsed-subscription state so there's
+ *  one recovery path, not two copies of the same markup. */
+function UnlimitedPurchaseButtons({
+  busy, price, purchaseError, onMonthly, onYearly,
+}: {
+  busy: 'monthly' | 'yearly' | 'pro' | null;
+  price: { monthly: number; yearly: number; currency: string };
+  purchaseError: string;
+  onMonthly: () => void;
+  onYearly: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5" style={{ width: '100%' }}>
+      <NeuButton
+        gradient={NEU_GRADIENTS.gold}
+        disabled={busy !== null}
+        onClick={onMonthly}
+        style={{ width: '100%' }}
+      >
+        {busy === 'monthly' ? 'STARTING CHECKOUT…' : monthlyLabel(price)}
+      </NeuButton>
+      <NeuButton
+        gradient={NEU_GRADIENTS.forest}
+        disabled={busy !== null}
+        onClick={onYearly}
+        style={{ width: '100%', background: busy !== null ? undefined : 'transparent', border: `1.5px solid ${busy !== null ? 'rgba(154,138,120,0.3)' : 'rgba(27,56,40,0.35)'}`, color: busy !== null ? NEU.muted : NEU.forest }}
+      >
+        {busy === 'yearly' ? 'STARTING CHECKOUT…' : annualLabel(price)}
+      </NeuButton>
+      {purchaseError && (
+        <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+          {purchaseError}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function UnlimitedPage() {
   const { user, session, profile, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -147,6 +199,11 @@ export default function UnlimitedPage() {
 
   // ── Personal subscription: owner_user_id = the viewer, conference_id NULL ──
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  // Most recent row overall, held onto only for when there's no active one,
+  // so a lapsed trial/subscription can still be explained rather than
+  // silently reading as "never had one" (expire_subscriptions runs hourly
+  // now, so a lapsed row is a real, common thing to land on here).
+  const [lapsedSubscription, setLapsedSubscription] = useState<Subscription | null>(null);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
 
   const fetchSubscription = useCallback(async (): Promise<boolean> => {
@@ -157,14 +214,18 @@ export default function UnlimitedPage() {
       .select('plan, status, current_period_end')
       .eq('owner_user_id', user.id)
       .is('conference_id', null)
-      .in('status', ['active', 'trialing'])
-      .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
-      .limit(1)
-      .maybeSingle();
-    const row = (data as Subscription | null) ?? null;
-    setSubscription(row);
+      .order('created_at', { ascending: false })
+      .limit(5);
+    const rows = (data as Subscription[] | null) ?? [];
+    const now = Date.now();
+    const activeRow = rows.find(r =>
+      (r.status === 'active' || r.status === 'trialing')
+      && (r.current_period_end === null || new Date(r.current_period_end).getTime() > now)
+    ) ?? null;
+    setSubscription(activeRow);
+    setLapsedSubscription(rows[0] ?? null);
     setSubscriptionLoaded(true);
-    return !!row;
+    return !!activeRow;
   }, [user?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchSubscription(); }, [fetchSubscription]);
@@ -793,34 +854,40 @@ export default function UnlimitedPage() {
                   </p>
                 )}
               </div>
+            ) : !subscription && lapsedSubscription?.plan.startsWith('unlimited') ? (
+              // Lapsed Unlimited (trial or paid): expire_subscriptions runs
+              // hourly now, so this is a real, common state to land on, not
+              // an edge case. A lapsed pro_monthly doesn't hit this branch —
+              // Pro has its own card with its own single purchase button
+              // above, mixing its copy into the Unlimited card would be
+              // confusing next to these two Unlimited-specific buttons.
+              <div className="flex flex-col gap-2.5 items-start" style={{ width: '100%' }}>
+                <NeuPill active gradient={ENDED_GRADIENT}>
+                  <Minus size={11} strokeWidth={2.6} /> ENDED
+                </NeuPill>
+                <p className="text-xs font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                  {lapsedUnlimitedCopy(lapsedSubscription)}
+                </p>
+                <UnlimitedPurchaseButtons
+                  busy={busy}
+                  price={price}
+                  purchaseError={purchaseError}
+                  onMonthly={() => startCheckout('monthly')}
+                  onYearly={() => startCheckout('yearly')}
+                />
+              </div>
             ) : confirmTimedOut ? (
               <p className="text-[13px]" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.6 }}>
                 Payment received. Unlimited will activate here within a minute.
               </p>
             ) : (
-              <div className="flex flex-col gap-2.5">
-                <NeuButton
-                  gradient={NEU_GRADIENTS.gold}
-                  disabled={busy !== null}
-                  onClick={() => startCheckout('monthly')}
-                  style={{ width: '100%' }}
-                >
-                  {busy === 'monthly' ? 'STARTING CHECKOUT…' : monthlyLabel(price)}
-                </NeuButton>
-                <NeuButton
-                  gradient={NEU_GRADIENTS.forest}
-                  disabled={busy !== null}
-                  onClick={() => startCheckout('yearly')}
-                  style={{ width: '100%', background: busy !== null ? undefined : 'transparent', border: `1.5px solid ${busy !== null ? 'rgba(154,138,120,0.3)' : 'rgba(27,56,40,0.35)'}`, color: busy !== null ? NEU.muted : NEU.forest }}
-                >
-                  {busy === 'yearly' ? 'STARTING CHECKOUT…' : annualLabel(price)}
-                </NeuButton>
-                {purchaseError && (
-                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                    {purchaseError}
-                  </p>
-                )}
-              </div>
+              <UnlimitedPurchaseButtons
+                busy={busy}
+                price={price}
+                purchaseError={purchaseError}
+                onMonthly={() => startCheckout('monthly')}
+                onYearly={() => startCheckout('yearly')}
+              />
             )}
           </div>
         </NeuCard>

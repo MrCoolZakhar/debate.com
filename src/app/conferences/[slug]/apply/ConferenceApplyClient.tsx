@@ -875,7 +875,10 @@ function ConferenceApplyInner() {
   const [questionPage, setQuestionPage] = useState(0);
 
   // ── Checkout: vouchers + fee waivers (finance.ts is the single math source)
-  const [financeProfile, setFinanceProfile] = useState({ is_ambassador: false, unlimited_conferences_remaining: 0, has_active_subscription: false });
+  const [financeProfile, setFinanceProfile] = useState({
+    is_ambassador: false, unlimited_conferences_remaining: 0, has_active_subscription: false,
+    subscription_plan: null as string | null, subscription_period_end: null as string | null,
+  });
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherChecking, setVoucherChecking] = useState(false);
   const [voucherError, setVoucherError] = useState('');
@@ -1173,7 +1176,7 @@ function ConferenceApplyInner() {
       // itself carries no Gavelling surcharge regardless.
       supabase
         .from('subscriptions')
-        .select('id')
+        .select('plan, status, current_period_end')
         .eq('owner_user_id', user!.id)
         .is('conference_id', null)
         .in('status', ['active', 'trialing'])
@@ -1200,11 +1203,14 @@ function ConferenceApplyInner() {
     setExistingApp(appData);
     setOtherRoleApp(otherAppData);
     const prof = profileRes.data as { date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number; mun_experience_level: string | null } | null;
+    const sub = subRes.data as { plan: string; status: string; current_period_end: string | null } | null;
     setMyDob(prof?.date_of_birth ?? null);
     setFinanceProfile({
       is_ambassador: prof?.is_ambassador ?? false,
       unlimited_conferences_remaining: prof?.unlimited_conferences_remaining ?? 0,
-      has_active_subscription: !!subRes.data,
+      has_active_subscription: !!sub,
+      subscription_plan: sub?.plan ?? null,
+      subscription_period_end: sub?.current_period_end ?? null,
     });
 
     // Auto-derive the MUN rank from the applicant's CV. We derive from the live
@@ -3063,14 +3069,23 @@ function ConferenceApplyInner() {
   function renderStepOverview() {
     const questions = questionsOf(normalizeBlocks(roleConfig?.custom_questions ?? []));
     const societyLabel = isObserver ? null : isIndependent ? 'Independent' : (societyInput.trim() || '—');
-    const tierLabel = hasUnlimited ? 'Unlimited' : 'Free';
+    const isTrialPlan = financeProfile.subscription_plan === 'unlimited_trial';
+    const tierLabel = isTrialPlan ? 'Free trial' : hasUnlimited ? 'Unlimited' : 'Free';
     const costLabel = isExemptRole
       ? 'No credit needed for this role.'
+      : isTrialPlan
+      ? 'Included with your free trial'
       : hasUnlimited
       ? 'Included with Gavelling Unlimited ∞'
       : poolCovered
       ? 'Covered by your delegation'
       : 'This application uses 1 Gavelling credit';
+    // Same formula as trialDaysLeft in account/unlimited/page.tsx: whole
+    // days, floored at 0, never negative. Quiet nudge only, not an upsell.
+    const trialDaysLeft = financeProfile.subscription_period_end
+      ? Math.max(0, Math.ceil((new Date(financeProfile.subscription_period_end).getTime() - Date.now()) / 86_400_000))
+      : null;
+    const trialEndingSoon = isTrialPlan && trialDaysLeft !== null && trialDaysLeft <= 5;
     // Edit mode resubmits the existing application via resubmit_application —
     // it never runs the credit-consuming create path in handleSubmit, so the
     // gate/cost card only applies to fresh submissions.
@@ -3216,6 +3231,11 @@ function ConferenceApplyInner() {
                   {tierLabel}
                 </Pill>
               </div>
+              {trialEndingSoon && (
+                <p className="text-xs mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                  Your trial ends in {trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'}.
+                </p>
+              )}
             </div>
 
             {gated && (
