@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy,
+  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -23,6 +23,7 @@ import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
+import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -196,10 +197,11 @@ function bgInput(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
 
 // ── PillToggle ─────────────────────────────────────────────────────────────
 
-function PillToggle({ value, onChange, size = 'md' }: {
+function PillToggle({ value, onChange, size = 'md', disabled = false }: {
   value: boolean;
   onChange: (v: boolean) => void;
   size?: 'md' | 'sm';
+  disabled?: boolean;
 }) {
   const w = size === 'md' ? 40 : 32;
   const h = size === 'md' ? 22 : 18;
@@ -209,14 +211,16 @@ function PillToggle({ value, onChange, size = 'md' }: {
   return (
     <button
       type="button"
-      onClick={() => onChange(!value)}
+      onClick={() => { if (!disabled) onChange(!value); }}
+      disabled={disabled}
       className="relative flex-shrink-0 focus:outline-none"
       style={{
         width: `${w}px`, height: `${h}px`,
         borderRadius: '9999px',
         backgroundColor: value ? '#1B3828' : '#DDD4C0',
-        transition: 'background-color 200ms ease',
-        border: 'none', cursor: 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        transition: 'background-color 200ms ease, opacity 200ms ease',
+        border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
       <span
@@ -617,7 +621,11 @@ export default function SettingsPage() {
     const defaults = ROLES.map(role => ({
       conference_id: conference.id,
       role,
-      is_enabled: role === 'delegate' || role === 'chair',
+      // Mirrors the INSERT trigger's own coercion: the database would force
+      // these to false anyway when the conference isn't ready and isn't
+      // exempt, so seed local state with the same value it will actually
+      // land on rather than one the next refetch immediately contradicts.
+      is_enabled: (role === 'delegate' || role === 'chair') && (conference.payment_gate_exempt || conferencePaymentsReady(conference)),
       fee_amount: 0,
       fee_currency: conference.fee_currency ?? 'GBP',
       auto_accept: false,
@@ -1593,11 +1601,13 @@ export default function SettingsPage() {
   // `conference` only changes once refreshConferenceQuiet() confirms a write.
   const view: Conference = conference;
 
-  // Applications can't be configured or opened until the conference has
-  // chosen a payment method, even free conferences need one on file (they
-  // just pick Manual and note it's free) so the /pay page and
-  // PledgeInvoicingCard always have somewhere to point delegates.
-  const applicationsGated = activeTab === 'applications' && !conference.payment_method;
+  // Applications can't be configured or opened until the conference's
+  // payment method is actually usable by a delegate, not merely on file:
+  // manual needs a link or note, Stripe needs onboarding complete. Even
+  // free conferences need a method (they pick Manual and note it's free)
+  // so the /pay page and PledgeInvoicingCard always have somewhere to
+  // point delegates. Mirrors conference_payments_ready in the database.
+  const applicationsGated = activeTab === 'applications' && paymentGateBlocks(conference);
 
   // Inner grouped sub-card. These sit *inside* the raised floating panel, so
   // they read as quiet content groups (thicker 1.5px edge, a whisper of warm
@@ -1761,7 +1771,7 @@ export default function SettingsPage() {
             Application opening is not available until Financial Onboarding is completed.
           </p>
           <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
-            Set up how your conference gets paid before you can configure and open applications. Even free conferences must choose a method, so if yours is free, pick Manual and note &quot;This conference is free.&quot;
+            {paymentGateMessage(conference)}
           </p>
           <button
             onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
@@ -1772,6 +1782,30 @@ export default function SettingsPage() {
           >
             Go to Financial Settings
           </button>
+        </div>
+      )}
+
+      {/* ── Grandfathered warning — payment_gate_exempt conferences the gate
+          let through on purpose, but that still can't actually get paid.
+          Informs without blocking: applications tab renders normally below. ── */}
+      {activeTab === 'applications' && conference.payment_gate_exempt && !conferencePaymentsReady(conference) && (
+        <div
+          className="flex items-start gap-3 rounded-2xl px-5 py-4 mb-6"
+          style={{ backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}
+        >
+          <AlertTriangle size={18} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p className="font-bold text-sm mb-1" style={{ color: '#6B4F12', fontFamily: "'Outfit', sans-serif" }}>
+              Delegates cannot pay you yet
+            </p>
+            <p className="text-sm" style={{ color: '#6B4F12', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+              Your applications are open, but nothing on your financial setup gives delegates a way to pay. Finish it in{' '}
+              <Link href={`/manage/${conference.slug}/financials/settings`} className="font-bold underline">
+                Financial Settings
+              </Link>
+              {' '}so applicants are not left stuck.
+            </p>
+          </div>
         </div>
       )}
 
@@ -2937,7 +2971,14 @@ export default function SettingsPage() {
             {publicToggleSaving && (
               <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
             )}
-            <PillToggle value={view.is_public} onChange={publicToggleSaving ? () => {} : handlePublicToggle} size="md" />
+            {/* Only the private->public direction is gated (mirrors the DB
+                trigger), an organizer must always be able to unpublish. */}
+            <PillToggle
+              value={view.is_public}
+              onChange={publicToggleSaving ? () => {} : handlePublicToggle}
+              size="md"
+              disabled={!view.is_public && paymentGateBlocks(view)}
+            />
           </span>
         </div>
 
@@ -2946,6 +2987,9 @@ export default function SettingsPage() {
             ? 'Your conference is publicly listed on Gavelling.'
             : 'Your conference is private. Only people with the direct link can find it.'}
         </p>
+        {!view.is_public && paymentGateBlocks(view) && (
+          <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>{paymentGateMessage(view)}</p>
+        )}
         {privacyError && (
           <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{privacyError}</p>
         )}

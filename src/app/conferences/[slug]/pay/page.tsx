@@ -178,6 +178,30 @@ function Note({ tone, children }: { tone: keyof typeof NOTE_TONES; children: Rea
   );
 }
 
+// Shown wherever a delegate reaches a payable invoice but the organizer's
+// financial setup isn't ready yet — grandfathered conferences may never
+// finish this, so the copy points the delegate at the organizer rather than
+// asking them to wait for something that might not arrive.
+function PaymentsNotSetUp({ contactEmail }: { contactEmail: string | null }) {
+  return (
+    <div className="rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}>
+      <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#B8844A' }}>This conference has not set up payments yet</p>
+      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4, lineHeight: 1.6 }}>
+        The organizing team has not finished their payment setup, so there is nothing to pay here yet. Contact them and they can sort it out.
+      </p>
+      {contactEmail && (
+        <a
+          href={`mailto:${contactEmail}`}
+          className="inline-block mt-2"
+          style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: '#B8844A', textDecoration: 'underline', textUnderlineOffset: 3 }}
+        >
+          {contactEmail}
+        </a>
+      )}
+    </div>
+  );
+}
+
 type ActionIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
 function ActionRow({
@@ -693,7 +717,7 @@ function RemovePledgeAction({
 // ── Generic invoice card (app_fee / addon) ──────────────────────────────────
 
 function GenericInvoiceCard({
-  inv, application, description, paymentsEnabled, manualActive, externalPaymentUrl, externalPaymentNote,
+  inv, application, description, paymentsEnabled, manualActive, externalPaymentUrl, externalPaymentNote, contactEmail,
   awaitingReview, onUploadProof, canRemovePledge, onRemovePledge, expanded, onToggleExpand, selected, onToggleSelect, onPay, paying, payError, labelOverride,
 }: {
   inv: InvoiceRow;
@@ -707,6 +731,7 @@ function GenericInvoiceCard({
   manualActive: boolean;
   externalPaymentUrl: string | null;
   externalPaymentNote: string | null;
+  contactEmail: string | null;
   /** This invoice belongs to a currently-pending manual payment batch. */
   awaitingReview: boolean;
   onUploadProof: () => void;
@@ -822,12 +847,7 @@ function GenericInvoiceCard({
                 onUploadProof={onUploadProof}
               />
             ) : !paymentsEnabled ? (
-              <div className="rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}>
-                <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#B8844A' }}>Payments coming soon</p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4, lineHeight: 1.6 }}>
-                  The organizing team is finishing payment setup — you&apos;ll be able to pay here shortly.
-                </p>
-              </div>
+              <PaymentsNotSetUp contactEmail={contactEmail} />
             ) : (
               <>
                 {payError && (
@@ -2031,12 +2051,7 @@ function PayInvoiceAndActions({
                     onUploadProof={() => setProofModalIds([roleFeeInvoice!.id])}
                   />
                 ) : owesSomething && !paymentsEnabled ? (
-                  <div className="rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#B8844A' }}>Payments coming soon</p>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4, lineHeight: 1.6 }}>
-                      The organizing team is finishing payment setup — you&apos;ll be able to pay here shortly.
-                    </p>
-                  </div>
+                  <PaymentsNotSetUp contactEmail={conference.contact_email} />
                 ) : owesSomething ? (
                   <>
                     {payError && (
@@ -2082,6 +2097,7 @@ function PayInvoiceAndActions({
               manualActive={manualActive}
               externalPaymentUrl={externalPaymentUrl}
               externalPaymentNote={conference.external_payment_note}
+              contactEmail={conference.contact_email}
               awaitingReview={pendingProofInvoiceIds.has(inv.id)}
               onUploadProof={() => setProofModalIds([inv.id])}
               canRemovePledge={
@@ -2128,12 +2144,7 @@ function PayInvoiceAndActions({
                 onUploadProof={() => setProofModalIds(selectedInvoices.map(inv => inv.id))}
               />
             ) : !paymentsEnabled ? (
-              <div className="rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.24)' }}>
-                <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#B8844A' }}>Payments coming soon</p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 4, lineHeight: 1.6 }}>
-                  The organizing team is finishing payment setup — you&apos;ll be able to pay here shortly.
-                </p>
-              </div>
+              <PaymentsNotSetUp contactEmail={conference.contact_email} />
             ) : (
               <>
                 {selectedPayError && <Note tone="red">{selectedPayError}</Note>}

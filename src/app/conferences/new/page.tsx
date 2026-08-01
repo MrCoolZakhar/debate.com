@@ -492,7 +492,11 @@ export default function NewConferencePage() {
         ROLE_DEFAULTS.map(role => ({
           conference_id: conferenceId,
           role,
-          is_enabled: role === 'delegate' || role === 'chair',
+          // Applications now start closed by design: a brand new conference
+          // has no payment_method yet (not set above), so it can never be
+          // ready, and the INSERT trigger would coerce this to false anyway.
+          // They open once financial setup is done, from Settings.
+          is_enabled: false,
           fee_amount: role === 'delegate' ? (parseFloat(feeAmount) || 0) : 0,
           fee_currency: feeCurrency,
           auto_accept: false,
