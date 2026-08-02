@@ -32,6 +32,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { UN_COUNTRIES } from '@/lib/countries';
+import { compareStartDate } from '@/lib/conferenceDates';
 import { ConferenceCard } from '../ConferenceCard';
 import {
   LabConference, RatingSummary,
@@ -226,11 +227,11 @@ export default function VariantStagefront({
         c => c.country.toLowerCase() === geo.country!.toLowerCase(),
       );
       if (inCountry.length > 0) {
-        return { list: inCountry.sort((a, b) => a.start_date.localeCompare(b.start_date)), matched: true };
+        return { list: inCountry.sort((a, b) => compareStartDate(a.start_date, b.start_date)), matched: true };
       }
     }
     return {
-      list: upcoming.sort((a, b) => a.start_date.localeCompare(b.start_date)),
+      list: upcoming.sort((a, b) => compareStartDate(a.start_date, b.start_date)),
       matched: false,
     };
   }, [conferences, geo]);

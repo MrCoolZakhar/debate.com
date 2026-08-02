@@ -17,6 +17,7 @@ import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmount } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
+import { compareStartDate } from '@/lib/conferenceDates';
 import { ConferenceCard } from '../ConferenceCard';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
@@ -814,9 +815,9 @@ export default function ConferencesExploreClient() {
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
-    copy.sort((a, b) => dateSort === 'asc'
-      ? a.start_date.localeCompare(b.start_date)
-      : b.start_date.localeCompare(a.start_date));
+    // Undated (TBD) conferences sort last in BOTH directions, and a null
+    // start_date must never reach .localeCompare — see compareStartDate.
+    copy.sort((a, b) => compareStartDate(a.start_date, b.start_date, dateSort === 'asc' ? 'asc' : 'desc'));
     return copy;
   }, [filtered, dateSort]);
 

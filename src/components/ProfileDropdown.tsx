@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { compareStartDate } from '@/lib/conferenceDates';
 import { User, FileText, CalendarDays, Sparkles, Coins, LogOut, ArrowRight } from 'lucide-react';
 import Portal from '@/components/Portal';
 
@@ -183,7 +184,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
           add(conf, 'ORGANIZER');
         }
 
-        const list = Array.from(byId.values()).sort((a, b) => a.start_date.localeCompare(b.start_date));
+        const list = Array.from(byId.values()).sort((a, b) => compareStartDate(a.start_date, b.start_date));
         setMyConfs(list);
       } catch {
         setMyConfs([]);
