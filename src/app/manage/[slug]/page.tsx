@@ -19,6 +19,7 @@ import {
 } from '@/components/neu';
 import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
+import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 
 const RED = '#A8442F';
 
@@ -34,16 +35,23 @@ function PublishModal({
   onPublished: () => void;
 }) {
   const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
   const { session } = useAuth();
 
   async function handlePublish() {
     setPublishing(true);
-    if (!session) return;
+    setPublishError('');
+    if (!session) { setPublishing(false); return; }
     const supabase = getAuthedClient(session.access_token);
-    await supabase
+    const { error } = await supabase
       .from('conferences')
       .update({ is_public: true, status: 'public' })
       .eq('id', conference.id);
+    if (error) {
+      setPublishing(false);
+      setPublishError(error.message);
+      return;
+    }
     // Fire-and-forget: ping search engines (IndexNow) so the newly public
     // conference page gets crawled right away.
     void fetch('/api/indexnow', {
@@ -72,6 +80,9 @@ function PublishModal({
         <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
           Your conference will appear publicly on gavelling.com/conferences and delegates will be able to apply.
         </p>
+        {publishError && (
+          <p className="text-sm mb-4" style={{ color: RED, fontFamily: OUTFIT }}>{publishError}</p>
+        )}
         <div className="flex gap-3">
           <button
             onClick={onClose}
@@ -1015,9 +1026,11 @@ export default function DashboardPage() {
       emoji: 'Money bag',
       gradient: NEU_GRADIENTS.amber,
       title: 'Add financial information',
-      // fee_amount === 0 is a deliberate free conference, any non-null fee counts as configured.
-      done: conference.fee_amount !== null || conference.connect_onboarding_status === 'complete',
-      sub: 'Set your delegate fee or connect Stripe.',
+      // Mirrors conference_payments_ready: a non-null fee_amount alone was
+      // never a real signal (the creation page always writes one), this row
+      // only clears once delegates actually have somewhere to pay.
+      done: conferencePaymentsReady(conference),
+      sub: 'Choose how you get paid so delegates can actually pay you.',
       onClick: () => router.push(`/manage/${slug}/financials/settings`),
     },
     {
@@ -1055,6 +1068,13 @@ export default function DashboardPage() {
     if (committeeCount === 0) {
       setPublishBlockMsg('Add at least one committee before publishing.');
       setTimeout(() => setPublishBlockMsg(''), 3000);
+      return;
+    }
+    if (conference && paymentGateBlocks(conference)) {
+      setPublishBlockMsg(paymentGateMessage(conference));
+      // Longer timeout than the committee check above: this is a longer
+      // sentence and needs more time to actually be read.
+      setTimeout(() => setPublishBlockMsg(''), 6000);
       return;
     }
     setShowPublishModal(true);

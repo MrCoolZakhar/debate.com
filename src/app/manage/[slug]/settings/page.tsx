@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy,
+  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
+
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
@@ -23,6 +24,7 @@ import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
+import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,7 +43,6 @@ interface RoleConfig {
   custom_questions: unknown[];
   fee_phases: FeePhase[] | null;
   allow_resubmission: boolean;
-  fee_gates_acceptance: boolean;
 }
 
 interface Organizer {
@@ -171,6 +172,10 @@ function saveFailMessage(error?: { message: string } | null): string {
   return "Couldn't save, please refresh and try again." + (error?.message ? ' ' + error.message : '');
 }
 
+// Exactly one plausible address, no spaces or pipes — catches the "a@x.com |
+// b@y.com" case that silently broke reply-to on every email this conference sent.
+const CONTACT_EMAIL_PATTERN = /^[^\s@|]+@[^\s@|]+\.[^\s@|]+$/;
+
 const inputStyle: React.CSSProperties = {
   backgroundColor: '#FAF8F3',
   border: '1.5px solid #DDD4C0',
@@ -193,10 +198,11 @@ function bgInput(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
 
 // ── PillToggle ─────────────────────────────────────────────────────────────
 
-function PillToggle({ value, onChange, size = 'md' }: {
+function PillToggle({ value, onChange, size = 'md', disabled = false }: {
   value: boolean;
   onChange: (v: boolean) => void;
   size?: 'md' | 'sm';
+  disabled?: boolean;
 }) {
   const w = size === 'md' ? 40 : 32;
   const h = size === 'md' ? 22 : 18;
@@ -206,14 +212,16 @@ function PillToggle({ value, onChange, size = 'md' }: {
   return (
     <button
       type="button"
-      onClick={() => onChange(!value)}
+      onClick={() => { if (!disabled) onChange(!value); }}
+      disabled={disabled}
       className="relative flex-shrink-0 focus:outline-none"
       style={{
         width: `${w}px`, height: `${h}px`,
         borderRadius: '9999px',
         backgroundColor: value ? '#1B3828' : '#DDD4C0',
-        transition: 'background-color 200ms ease',
-        border: 'none', cursor: 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        transition: 'background-color 200ms ease, opacity 200ms ease',
+        border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
       <span
@@ -376,9 +384,11 @@ export default function SettingsPage() {
   const [acronym, setAcronym] = useState('');
   const [acronymError, setAcronymError] = useState('');
   const [contactEmail, setContactEmail] = useState('');
+  const [contactEmailError, setContactEmailError] = useState('');
   const [studentLevel, setStudentLevel] = useState<'school' | 'university' | 'both' | ''>('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [datesTbd, setDatesTbd] = useState(false);
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
   const [format, setFormat] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
@@ -461,7 +471,7 @@ export default function SettingsPage() {
   const detailsBaseline = useRef<string | null>(null);
   const visualBaseline = useRef<string | null>(null);
   const minAgeBaseline = useRef<string | null>(null);
-  const detailsSnap = () => snap({ fullName, acronym, contactEmail, studentLevel, startDate, endDate, country, city, format, expectedDelegates });
+  const detailsSnap = () => snap({ fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
   const visualSnap = () => snap({ description, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
   const minAgeSnap = () => snap({ minAge });
 
@@ -613,7 +623,11 @@ export default function SettingsPage() {
     const defaults = ROLES.map(role => ({
       conference_id: conference.id,
       role,
-      is_enabled: role === 'delegate' || role === 'chair',
+      // Mirrors the INSERT trigger's own coercion: the database would force
+      // these to false anyway when the conference isn't ready and isn't
+      // exempt, so seed local state with the same value it will actually
+      // land on rather than one the next refetch immediately contradicts.
+      is_enabled: (role === 'delegate' || role === 'chair') && (conference.payment_gate_exempt || conferencePaymentsReady(conference)),
       fee_amount: 0,
       fee_currency: conference.fee_currency ?? 'GBP',
       auto_accept: false,
@@ -646,9 +660,11 @@ export default function SettingsPage() {
     setAcronym(conference.acronym ?? '');
     setAcronymError('');
     setContactEmail(conference.contact_email ?? '');
+    setContactEmailError('');
     setStudentLevel((conference.student_level as 'school' | 'university' | 'both' | '') ?? '');
     setStartDate(conference.start_date ?? '');
     setEndDate(conference.end_date ?? '');
+    setDatesTbd(conference.dates_tbd ?? false);
     setCountry(conference.country ?? '');
     setCity(conference.city ?? '');
     setFormat((conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '');
@@ -660,6 +676,7 @@ export default function SettingsPage() {
       contactEmail: conference.contact_email ?? '',
       studentLevel: (conference.student_level as 'school' | 'university' | 'both' | '') ?? '',
       startDate: conference.start_date ?? '', endDate: conference.end_date ?? '',
+      datesTbd: conference.dates_tbd ?? false,
       country: conference.country ?? '', city: conference.city ?? '',
       format: (conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '',
       expectedDelegates: conference.expected_delegates != null ? String(conference.expected_delegates) : '',
@@ -1020,6 +1037,12 @@ export default function SettingsPage() {
 
   function handlePublicToggle(next: boolean) {
     if (!conference || publicToggleSaving) return;
+    // A conference with dates set to TBD (or no start date yet) can never be
+    // public — mirrors the DB CHECK `conferences_tbd_not_public`.
+    if (next && (conference.dates_tbd || !conference.start_date)) {
+      setPrivacyError('Add conference dates before publishing — a conference with dates set to TBD stays private.');
+      return;
+    }
     setPublicToggleSaving(true);
     setPrivacyError('');
     void (async () => {
@@ -1511,6 +1534,12 @@ export default function SettingsPage() {
       return;
     }
     setAcronymError('');
+    const trimmedEmail = contactEmail.trim();
+    if (trimmedEmail && !CONTACT_EMAIL_PATTERN.test(trimmedEmail)) {
+      setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+      return;
+    }
+    setContactEmailError('');
     setDetailsError('');
     setDetailsSaving(true);
     const parsedDelegates = parseInt(expectedDelegates, 10);
@@ -1526,8 +1555,9 @@ export default function SettingsPage() {
       acronym: upperAcr,
       contact_email: contactEmail || null,
       student_level: studentLevel || null,
-      start_date: startDate || null,
-      end_date: endDate || null,
+      start_date: datesTbd ? null : (startDate || null),
+      end_date: datesTbd ? null : (endDate || null),
+      dates_tbd: datesTbd,
       country: country || null,
       city: city || null,
       format: format || null,
@@ -1573,7 +1603,7 @@ export default function SettingsPage() {
     const t = setTimeout(() => { void handleSaveDetails(); }, 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullName, acronym, contactEmail, studentLevel, startDate, endDate, country, city, format, expectedDelegates, detailsSaving, conference]);
+  }, [fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates, detailsSaving, conference]);
 
   if (!conference) return null;
 
@@ -1582,11 +1612,13 @@ export default function SettingsPage() {
   // `conference` only changes once refreshConferenceQuiet() confirms a write.
   const view: Conference = conference;
 
-  // Applications can't be configured or opened until the conference has
-  // chosen a payment method, even free conferences need one on file (they
-  // just pick Manual and note it's free) so the /pay page and
-  // PledgeInvoicingCard always have somewhere to point delegates.
-  const applicationsGated = activeTab === 'applications' && !conference.payment_method;
+  // Applications can't be configured or opened until the conference's
+  // payment method is actually usable by a delegate, not merely on file:
+  // manual needs a link or note, Stripe needs onboarding complete. Even
+  // free conferences need a method (they pick Manual and note it's free)
+  // so the /pay page and PledgeInvoicingCard always have somewhere to
+  // point delegates. Mirrors conference_payments_ready in the database.
+  const applicationsGated = activeTab === 'applications' && paymentGateBlocks(conference);
 
   // Inner grouped sub-card. These sit *inside* the raised floating panel, so
   // they read as quiet content groups (thicker 1.5px edge, a whisper of warm
@@ -1750,7 +1782,7 @@ export default function SettingsPage() {
             Application opening is not available until Financial Onboarding is completed.
           </p>
           <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
-            Set up how your conference gets paid before you can configure and open applications. Even free conferences must choose a method, so if yours is free, pick Manual and note &quot;This conference is free.&quot;
+            {paymentGateMessage(conference)}
           </p>
           <button
             onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
@@ -1761,6 +1793,30 @@ export default function SettingsPage() {
           >
             Go to Financial Settings
           </button>
+        </div>
+      )}
+
+      {/* ── Grandfathered warning — payment_gate_exempt conferences the gate
+          let through on purpose, but that still can't actually get paid.
+          Informs without blocking: applications tab renders normally below. ── */}
+      {activeTab === 'applications' && conference.payment_gate_exempt && !conferencePaymentsReady(conference) && (
+        <div
+          className="flex items-start gap-3 rounded-2xl px-5 py-4 mb-6"
+          style={{ backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}
+        >
+          <AlertTriangle size={18} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p className="font-bold text-sm mb-1" style={{ color: '#6B4F12', fontFamily: "'Outfit', sans-serif" }}>
+              Delegates cannot pay you yet
+            </p>
+            <p className="text-sm" style={{ color: '#6B4F12', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+              Your applications are open, but nothing on your financial setup gives delegates a way to pay. Finish it in{' '}
+              <Link href={`/manage/${conference.slug}/financials/settings`} className="font-bold underline">
+                Financial Settings
+              </Link>
+              {' '}so applicants are not left stuck.
+            </p>
+          </div>
         </div>
       )}
 
@@ -2073,23 +2129,6 @@ export default function SettingsPage() {
                     </p>
                   </div>
 
-                  {/* Fee gates acceptance */}
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                        Must be paid before acceptance
-                      </label>
-                      <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        Delegates can&apos;t be accepted until this fee is paid.
-                      </p>
-                    </div>
-                    <PillToggle
-                      value={config.fee_gates_acceptance ?? false}
-                      onChange={(v) => saveRoleConfig(role, { fee_gates_acceptance: v })}
-                      size="md"
-                    />
-                  </div>
-
                   {/* Resubmission */}
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div>
@@ -2249,12 +2288,20 @@ export default function SettingsPage() {
                 <input
                   type="email"
                   value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
+                  onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
                   placeholder="hello@yourmun.org"
                   style={inputStyle}
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                  onBlur={(e) => {
+                    const trimmed = e.target.value.trim();
+                    if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+                    else setContactEmailError('');
+                    e.currentTarget.style.borderColor = '#DDD4C0';
+                  }}
                 />
+                {contactEmailError && (
+                  <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{contactEmailError}</p>
+                )}
               </div>
             </div>
 
@@ -2316,7 +2363,10 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 mb-4">
+            <div
+              className="flex gap-3 mb-3"
+              style={datesTbd ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
+            >
               <div className="flex-1">
                 <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Start date</label>
                 <DatePicker
@@ -2338,6 +2388,43 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+
+            {/* Dates TBD: keeps the conference private (no public link) until real
+                dates are set — mirrors the DB CHECK conferences_tbd_not_public.
+                Applications can still open while dates are undecided. */}
+            <button
+              type="button"
+              onClick={() => {
+                setDatesTbd((prev) => {
+                  const nextTbd = !prev;
+                  // Turning TBD on clears any set dates so the row goes null.
+                  if (nextTbd) { setStartDate(''); setEndDate(''); }
+                  return nextTbd;
+                });
+              }}
+              className="flex items-start gap-3 w-full text-left mb-4 focus:outline-none"
+            >
+              <span
+                className="flex items-center justify-center flex-shrink-0"
+                style={{
+                  width: '20px', height: '20px', borderRadius: '6px',
+                  marginTop: '1px',
+                  backgroundColor: datesTbd ? '#1B3828' : 'transparent',
+                  border: datesTbd ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
+                  transition: 'background-color 150ms ease, border-color 150ms ease',
+                }}
+              >
+                {datesTbd && <Check size={13} strokeWidth={3} color="#EED98A" />}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                  Dates are to be decided (TBD)
+                </span>
+                <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  A TBD conference stays private (no public link) until you add dates — applications can still open.
+                </span>
+              </span>
+            </button>
 
             <div className="flex gap-3 mb-4">
               <div className="flex-1">
@@ -2935,15 +3022,31 @@ export default function SettingsPage() {
             {publicToggleSaving && (
               <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
             )}
-            <PillToggle value={view.is_public} onChange={publicToggleSaving ? () => {} : handlePublicToggle} size="md" />
+            {/* Only the private->public direction is gated (mirrors the DB
+                trigger), an organizer must always be able to unpublish. */}
+            <PillToggle
+              value={view.is_public}
+              onChange={publicToggleSaving ? () => {} : handlePublicToggle}
+              size="md"
+              disabled={!view.is_public && (paymentGateBlocks(view) || view.dates_tbd || !view.start_date)}
+            />
           </span>
         </div>
 
-        <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
-          {view.is_public
-            ? 'Your conference is publicly listed on Gavelling.'
-            : 'Your conference is private. Only people with the direct link can find it.'}
-        </p>
+        {!view.is_public && (view.dates_tbd || !view.start_date) ? (
+          <p className="text-sm mt-3" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+            Add conference dates to publish — TBD conferences stay private.
+          </p>
+        ) : (
+          <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+            {view.is_public
+              ? 'Your conference is publicly listed on Gavelling.'
+              : 'Your conference is private. Only people with the direct link can find it.'}
+          </p>
+        )}
+        {!view.is_public && paymentGateBlocks(view) && (
+          <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>{paymentGateMessage(view)}</p>
+        )}
         {privacyError && (
           <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{privacyError}</p>
         )}

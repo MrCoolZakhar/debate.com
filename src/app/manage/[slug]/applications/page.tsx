@@ -48,7 +48,18 @@ interface RoleConfigLite {
   custom_questions: unknown[];
   fee_amount: number | null;
   fee_currency: string | null;
+  fee_phases: { amount?: number }[] | null;
   allow_resubmission: boolean;
+}
+
+/** A role config actually charges something, the flat fee or any phase's
+ *  amount. Chairs default to feeless, but a conference can configure a
+ *  chair fee (e.g. Bilkent charges TRY 1550) — when it does, chair
+ *  applications get the exact same payment treatment as any other role. */
+function roleHasFee(rc: RoleConfigLite | undefined): boolean {
+  if (!rc) return false;
+  if ((rc.fee_amount ?? 0) > 0) return true;
+  return (rc.fee_phases ?? []).some(p => (Number(p?.amount) || 0) > 0);
 }
 
 interface Application {
@@ -86,6 +97,11 @@ interface Application {
   aid_statement: string | null;
   aid_status: string | null;
   aid_requested_amount: number | null;
+  // Set server-side to 'chair_invite' when this chair was brought in by the
+  // organizing team (payment_status arrives 'waived' alongside it) — drives
+  // the INVITED badge and, when this role has no configured fee at all, the
+  // standalone WAIVED chip that stands in for the payment menu.
+  fee_waiver_source: string | null;
 }
 
 // The applicant's financial_aid_requests row, fetched on demand when the
@@ -203,6 +219,37 @@ function NotRegisteredChip() {
       style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(154,138,120,0.12)', color: '#9A8A78', border: '1px solid rgba(154,138,120,0.3)' }}
     >
       NOT REGISTERED
+    </span>
+  );
+}
+
+/** A chair brought in by the organizing team rather than applying — shown
+ *  next to the role chip regardless of whether this conference charges a
+ *  chair fee. */
+function InvitedChip() {
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full font-bold flex-shrink-0"
+      style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(182,135,31,0.14)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.35)' }}
+    >
+      INVITED
+    </span>
+  );
+}
+
+/** Static stand-in for the payment menu, an invited chair whose role has no
+ *  configured fee at all gets no PaymentMenu (there's nothing to mark paid),
+ *  so this is the only visible confirmation they owe nothing. Once a
+ *  conference configures a chair fee, the real PaymentMenu takes over and
+ *  already renders its own "WAIVED" label for a waived chair, same as any
+ *  other role — this chip only appears where that menu doesn't. */
+function WaivedChip() {
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-1 rounded-full font-bold flex-shrink-0"
+      style={{ fontSize: 10, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', backgroundColor: 'rgba(61,122,82,0.14)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.35)' }}
+    >
+      WAIVED
     </span>
   );
 }
@@ -1182,7 +1229,7 @@ export default function ApplicationsPage() {
           payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
-          aid_requested, aid_statement, aid_status, aid_requested_amount,
+          aid_requested, aid_statement, aid_status, aid_requested_amount, fee_waiver_source,
           assigned_committee:conference_committees!assigned_committee_id (name, abbreviation, topics, logo_url),
           profiles (display_name, email, avatar_url, nationality, date_of_birth, mun_experience_level),
           societies (name),
@@ -1195,7 +1242,7 @@ export default function ApplicationsPage() {
         .order('submitted_at', { ascending: false }),
       supabase
         .from('application_role_configs')
-        .select('role, payment_timing, custom_questions, fee_amount, fee_currency, allow_resubmission')
+        .select('role, payment_timing, custom_questions, fee_amount, fee_currency, fee_phases, allow_resubmission')
         .eq('conference_id', conference.id),
       // Unpaid gating invoices — any kind — blocks Accept until paid. Widened
       // from app_fee-only now that a role_fee (registration) can also gate
@@ -2158,12 +2205,15 @@ export default function ApplicationsPage() {
   // the inline note in the bulk bar rather than silently dropping them.
   const notAttendingSelectedCount = selectedApps.filter(a => !a.attending).length;
   const bulkEligibleApps = selectedApps.filter(a => a.attending);
-  // Chairs are always free, so bulk mark-paid / waive skip them entirely (#5).
+  // Chairs are feeless by default, so bulk mark-paid / waive skip them —
+  // unless this conference has actually configured a chair fee, in which
+  // case a chair application owes money exactly like any other role.
   // When Stripe checkout is live for this conference, manual mark-paid is not
   // offered at all (bulk or single) — checkout + webhook own that state.
+  const chairHasFee = roleHasFee(roleConfigs.find(rc => rc.role === 'chair'));
   const payEligible = (a: Application) =>
     !paymentsLive
-    && a.role !== 'chair'
+    && (a.role !== 'chair' || chairHasFee)
     && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
     && a.payment_status !== 'paid' && a.payment_status !== 'waived';
   // Accept is blocked while a gating app-fee invoice is unpaid, matched by
@@ -2212,8 +2262,8 @@ export default function ApplicationsPage() {
     assigned: statScope.filter(a => a.status === 'assigned' || a.status === 'checked-in').length,
     checkedIn: statScope.filter(a => a.status === 'checked-in').length,
     paid: statScope.filter(a => a.payment_status === 'paid').length,
-    // Unpaid excludes chairs (always free, never owe a fee).
-    unpaid: statScope.filter(a => a.role !== 'chair' && (a.payment_status == null || a.payment_status === 'unpaid')).length,
+    // Unpaid excludes chairs unless this conference configured a chair fee.
+    unpaid: statScope.filter(a => (a.role !== 'chair' || chairHasFee) && (a.payment_status == null || a.payment_status === 'unpaid')).length,
   };
 
   // Clickable stat-tile filters (#10). Status tiles clear payment and vice
@@ -2422,9 +2472,12 @@ export default function ApplicationsPage() {
             const hasAllocation = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in');
             const canCheckIn = app.status === 'accepted' || app.status === 'assigned';
             const isSubmitted = app.status === 'submitted';
-            // Chairs are always free — never any payment affordance (#5).
+            // Chairs are feeless by default — no payment affordance — unless
+            // this conference configured a chair fee, in which case they get
+            // the exact same treatment as any other role (#5).
             const isChair = app.role === 'chair';
-            const showPayControl = !isChair && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
+            const isInvitedChair = isChair && app.fee_waiver_source === 'chair_invite';
+            const showPayControl = (!isChair || chairHasFee) && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
 
             const factStyle: React.CSSProperties = {
               fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.muted,
@@ -2527,7 +2580,10 @@ export default function ApplicationsPage() {
                         The chair gavel now lives inside the CHAIR pill itself
                         (#1), so no separate emblem sits here. */}
                     <div className="flex flex-col items-center gap-2 flex-shrink-0">
-                      <RolePill role={app.role} size="sm" />
+                      <div className="flex items-center gap-1.5">
+                        <RolePill role={app.role} size="sm" />
+                        {isInvitedChair && <InvitedChip />}
+                      </div>
                       <LevelBadge level={expLabel} count={confCount} />
                     </div>
                   </div>
@@ -2755,7 +2811,7 @@ export default function ApplicationsPage() {
                         </button>
                       )}
                       <div className="flex items-center gap-1.5">
-                        {showPayControl && (
+                        {showPayControl ? (
                           <span style={notAttendingLock}>
                             <PaymentMenu
                               app={app}
@@ -2768,7 +2824,9 @@ export default function ApplicationsPage() {
                               onUndoWaive={() => handleUndoWaive(app)}
                             />
                           </span>
-                        )}
+                        ) : isInvitedChair ? (
+                          <WaivedChip />
+                        ) : null}
                         <button
                           onClick={() => setReviewId(app.id)}
                           className="inline-flex items-center justify-center gap-1.5 focus:outline-none flex-1"
@@ -2987,11 +3045,14 @@ export default function ApplicationsPage() {
         // fully active. Restores the moment they're marked attending again.
         const notAttendingLock: React.CSSProperties = !app.attending ? { opacity: 0.45, pointerEvents: 'none' } : {};
 
-        // Chairs are always free — no payment control in the review modal (#5).
-        const showPaymentControls = app.role !== 'chair'
+        // Chairs are feeless by default — no payment control — unless this
+        // conference configured a chair fee, matching any other role (#5).
+        const showPaymentControls = (app.role !== 'chair' || chairHasFee)
           && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'submitted' || app.status === 'checked-in');
         // Unified payment control (F: merge mark-paid vs waive). One menu, both
-        // underlying states still reachable.
+        // underlying states still reachable. An invited chair whose role has
+        // no configured fee gets the static WaivedChip instead — there's no
+        // PaymentMenu to show it there.
         const paymentControls = showPaymentControls ? (
           <span style={notAttendingLock}>
             <PaymentMenu
@@ -3004,6 +3065,8 @@ export default function ApplicationsPage() {
               onUndoWaive={() => handleUndoWaive(app)}
             />
           </span>
+        ) : (app.role === 'chair' && app.fee_waiver_source === 'chair_invite') ? (
+          <WaivedChip />
         ) : null;
 
         const rejectControls = renderRejectControls(app, !app.attending);
@@ -3111,6 +3174,7 @@ export default function ApplicationsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     {!app.user_id && <NotRegisteredChip />}
                     <RolePill role={app.role} size="sm" />
+                    {app.role === 'chair' && app.fee_waiver_source === 'chair_invite' && <InvitedChip />}
                     <StatusPill
                       status={app.status}
                       size="sm"

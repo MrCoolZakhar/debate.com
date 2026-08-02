@@ -315,6 +315,9 @@ export default function NewConferencePage() {
   const [city, setCity] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  // Dates "to be decided": the conference can be created and take applications
+  // before dates are fixed. A TBD conference stays private until dates are set.
+  const [datesTbd, setDatesTbd] = useState(false);
   const [delegateRange, setDelegateRange] = useState('');
   const [expectedDelegates, setExpectedDelegates] = useState('');
   const [feeKind, setFeeKind] = useState<'free' | 'paid' | ''>('');
@@ -455,8 +458,9 @@ export default function NewConferencePage() {
           acronym: acronym.toUpperCase(),
           contact_email: contactEmail,
           student_level: studentLevel,
-          start_date: startDate || null,
-          end_date: endDate || null,
+          start_date: datesTbd ? null : (startDate || null),
+          end_date: datesTbd ? null : (endDate || null),
+          dates_tbd: datesTbd,
           country,
           city,
           format,
@@ -492,7 +496,11 @@ export default function NewConferencePage() {
         ROLE_DEFAULTS.map(role => ({
           conference_id: conferenceId,
           role,
-          is_enabled: role === 'delegate' || role === 'chair',
+          // Applications now start closed by design: a brand new conference
+          // has no payment_method yet (not set above), so it can never be
+          // ready, and the INSERT trigger would coerce this to false anyway.
+          // They open once financial setup is done, from Settings.
+          is_enabled: false,
           fee_amount: role === 'delegate' ? (parseFloat(feeAmount) || 0) : 0,
           fee_currency: feeCurrency,
           auto_accept: false,
@@ -739,7 +747,7 @@ export default function NewConferencePage() {
                 onBack={back}
               >
                 <NeuInset style={{ padding: '20px 22px', borderRadius: 20 }}>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4" style={datesTbd ? { opacity: 0.4, pointerEvents: 'none' } : undefined}>
                     <div>
                       <FieldLabel>First day</FieldLabel>
                       <DatePicker
@@ -759,6 +767,39 @@ export default function NewConferencePage() {
                       />
                     </div>
                   </div>
+
+                  {/* Dates TBD: create now, decide dates later. A TBD conference
+                      stays private (no public listing) until dates are set, but
+                      can still open delegate applications. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !datesTbd;
+                      setDatesTbd(next);
+                      setStepError('');
+                      if (next) { setStartDate(''); setEndDate(''); }
+                    }}
+                    className="flex items-center gap-2.5 mt-4 w-full text-left focus:outline-none"
+                  >
+                    <span
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: 20, height: 20, borderRadius: 6,
+                        border: `1.5px solid ${datesTbd ? '#1B3828' : '#C9BEA6'}`,
+                        backgroundColor: datesTbd ? '#1B3828' : 'transparent',
+                      }}
+                    >
+                      {datesTbd && <Check size={13} strokeWidth={3} style={{ color: '#EED98A' }} />}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                        Dates are to be decided
+                      </span>
+                      <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        Set them any time later. A TBD conference stays private (no public link) until you add dates — you can still open applications.
+                      </span>
+                    </span>
+                  </button>
                 </NeuInset>
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
                 <ContinueButton onClick={continueStep5} />
@@ -1064,7 +1105,7 @@ export default function NewConferencePage() {
                   <ReviewRow label="Format" value={format === 'in-person' ? 'In person' : format === 'online' ? 'Online' : 'Hybrid'} onEdit={() => editFromReview(2)} />
                   <ReviewRow label="Level" value={studentLevel === 'school' ? 'High school' : studentLevel === 'university' ? 'University' : 'Both'} onEdit={() => editFromReview(3)} />
                   <ReviewRow label="Location" value={`${city}, ${country}`} onEdit={() => editFromReview(4)} />
-                  <ReviewRow label="Dates" value={formatDateRange(startDate, endDate)} onEdit={() => editFromReview(5)} />
+                  <ReviewRow label="Dates" value={datesTbd ? 'To be decided' : formatDateRange(startDate, endDate)} onEdit={() => editFromReview(5)} />
                   <ReviewRow label="Expected delegates" value={expectedDelegates || 'Skipped'} onEdit={() => editFromReview(6)} />
                   <ReviewRow
                     label="Fee"

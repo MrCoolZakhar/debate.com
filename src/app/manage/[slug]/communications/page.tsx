@@ -2258,7 +2258,7 @@ function CommunicationsPageInner() {
                 Automatic emails triggered by application events. Draft one, then switch it on when you&apos;re ready.
               </p>
               <div className="flex flex-col gap-2">
-                {EVENT_REGISTRY.map(ev => {
+                {EVENT_REGISTRY.map((ev: EventDef) => {
                   const template = templatesByEvent.get(ev.key);
                   const hasDraft = !!template && (
                     (Array.isArray(template.body_blocks) && (template.body_blocks as unknown[]).length > 0)

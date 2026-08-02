@@ -194,6 +194,12 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
         await loadRequests();
         return;
       }
+      try {
+        const waiveResult = await queueEventEmail(supabase, conferenceId, 'fee_waived', [r.application_id]);
+        notifyIfNeeded(waiveResult, pushDraftNotice);
+      } catch {
+        setActionError('Aid approved, but the fee-waived notification email could not be queued.');
+      }
     }
 
     try {

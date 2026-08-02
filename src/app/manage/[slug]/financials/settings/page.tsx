@@ -16,7 +16,7 @@ import {
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getFreshAuthedClient } from '@/lib/supabase-auth';
-import { extractFunctionErrorMessage, isStripeCountrySupported } from '@/lib/payments';
+import { extractFunctionErrorMessage, isStripeCountrySupported, conferencePaymentsReady, paymentGateMessageHere } from '@/lib/payments';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { PillToggle } from '@/app/account/accountUi';
@@ -250,6 +250,15 @@ export default function FinancialsSettingsPage() {
   async function savePaymentPage(): Promise<boolean> {
     if (!conference || paymentSaving) return false;
     const trimmedUrl = paymentUrl.trim();
+    const trimmedNote = paymentNote.trim();
+    // Matches the database rule exactly (conference_payments_ready): either
+    // field satisfies it, whitespace only does not count. A blank form must
+    // never write payment_method: 'manual' — that would look configured
+    // while paying nobody.
+    if (!trimmedUrl && !trimmedNote) {
+      setPaymentSaveError('Add a payment link or written payment instructions so delegates have somewhere to pay.');
+      return false;
+    }
     if (trimmedUrl && !trimmedUrl.startsWith('https://')) {
       setPaymentUrlError('The link must start with https://');
       return false;
@@ -341,6 +350,26 @@ export default function FinancialsSettingsPage() {
 
   return (
     <>
+      {/* Readiness banner — shown whenever delegates still have nowhere to
+          pay, in both the wizard and steady states (a method can be set and
+          still not be ready: a blank manual form, incomplete Stripe). */}
+      {!conferencePaymentsReady(conference) && (
+        <div
+          className="rounded-2xl px-5 py-4 mb-6 flex items-start gap-3"
+          style={{ backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}
+        >
+          <TriangleAlert size={18} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <p className="font-bold text-sm mb-1" style={{ color: '#6B4F12', fontFamily: OUTFIT }}>
+              Applications stay closed until this is finished
+            </p>
+            <p className="text-sm" style={{ color: '#6B4F12', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+              {paymentGateMessageHere(conference)}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Onboard payments — first-time wizard (State A) until a method is set, then the steady state (State B) */}
       {showWizard ? (
         <div className="mb-6 flex flex-col gap-4">
@@ -509,6 +538,10 @@ export default function FinancialsSettingsPage() {
                   icon={CreditCard}
                   gradient={NEU_GRADIENTS.gold}
                   disabled={connectBusy !== null}
+                  // Writes payment_method before onboarding completes, which
+                  // used to permanently satisfy the old gate. Harmless now:
+                  // readiness for stripe requires connect_onboarding_status
+                  // === 'complete', not merely payment_method === 'stripe'.
                   onClick={() => { startConnectOnboarding(payoutCountry); setActiveMethod('stripe'); }}
                 >
                   {connectBusy === 'start' ? 'CONNECTING…' : 'CONNECT WITH STRIPE'}

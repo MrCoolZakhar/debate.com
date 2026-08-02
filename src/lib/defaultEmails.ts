@@ -147,9 +147,9 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   documents_published: {
-    subject: 'New documents are up for {{conference_name}}',
+    subject: 'Your study guide is up for {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nNew working papers or draft resolutions have just been published for your committee at {{conference_name}}. Take a look before the next session.' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe study guide for your committee at {{conference_name}} has just been released. Take a look before the next session.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, ClipboardCheck, FileText, BellRing, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School } from 'lucide-react';
+import { Star, X, Megaphone, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
@@ -24,17 +24,17 @@ interface ReviewableConference {
 }
 
 const NOTIFICATION_ROWS = [
-  { field: 'notify_email_marketing'    as const, Icon: Megaphone,      label: 'Marketing & Newsletter', desc: 'Updates about new Gavelling features and MUN news' },
-  { field: 'notify_email_applications' as const, Icon: ClipboardCheck, label: 'Application Updates',    desc: 'Acceptance, rejection, and assignment notifications' },
-  { field: 'notify_email_documents'    as const, Icon: FileText,       label: 'Document Notifications', desc: 'Study guide releases and position paper feedback' },
-  { field: 'notify_email_reminders'    as const, Icon: BellRing,       label: 'Conference Reminders',   desc: 'Reminders before conferences you\'re attending' },
+  { field: 'notify_email_applications' as const, Icon: ClipboardCheck, label: 'Application & Status Updates', desc: 'Acceptance, rejection, allocation, and committee assignment emails' },
+  { field: 'notify_email_payments'     as const, Icon: CreditCard,     label: 'Payment & Billing',            desc: 'Invoices, receipts, fee waivers, and payment reminders' },
+  { field: 'notify_email_documents'    as const, Icon: FileText,       label: 'Documents & Deadlines',        desc: "Study guide releases, position paper feedback, and submission deadlines" },
+  { field: 'notify_email_marketing'    as const, Icon: Megaphone,      label: 'Conference Announcements',     desc: 'Broadcast announcements and general updates sent by conferences you applied to' },
 ];
 
 type NotifFields = {
-  notify_email_marketing:    boolean;
   notify_email_applications: boolean;
+  notify_email_payments:     boolean;
   notify_email_documents:    boolean;
-  notify_email_reminders:    boolean;
+  notify_email_marketing:    boolean;
 };
 
 const inputStyle: React.CSSProperties = {
@@ -61,10 +61,10 @@ export default function ProfilePage() {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [dobError, setDobError] = useState('');
   const [notifications, setNotifications] = useState<NotifFields>({
-    notify_email_marketing:    true,
     notify_email_applications: true,
+    notify_email_payments:     true,
     notify_email_documents:    true,
-    notify_email_reminders:    true,
+    notify_email_marketing:    true,
   });
   const [educationLevel, setEducationLevel] = useState<string | null>(null);
   const [cvCount, setCvCount]         = useState<number | null>(null);
@@ -125,7 +125,7 @@ export default function ProfilePage() {
 
     supabase
       .from('profiles')
-      .select('display_name, nationality, date_of_birth, education_level, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_reminders')
+      .select('display_name, nationality, date_of_birth, education_level, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_payments')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -135,10 +135,10 @@ export default function ProfilePage() {
           setDateOfBirth(data.date_of_birth ?? '');
           setEducationLevel(data.education_level ?? null);
           setNotifications({
-            notify_email_marketing:    data.notify_email_marketing    ?? true,
             notify_email_applications: data.notify_email_applications ?? true,
+            notify_email_payments:     data.notify_email_payments     ?? true,
             notify_email_documents:    data.notify_email_documents    ?? true,
-            notify_email_reminders:    data.notify_email_reminders    ?? true,
+            notify_email_marketing:    data.notify_email_marketing    ?? true,
           });
         }
         setDataLoading(false);
@@ -1102,7 +1102,7 @@ export default function ProfilePage() {
            requests) aren't gated by these toggles, see ALWAYS_SEND_EVENTS
            in src/lib/emailEvents.ts, opting out would break the product. */}
         <p className="text-xs mt-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          Essential emails about invitations and your requests are always sent.
+          Invitations and direct replies to your messages are always sent, regardless of these settings.
         </p>
       </GlassCard>
 

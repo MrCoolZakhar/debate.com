@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 
 export default function MobileGate({ children }: { children: React.ReactNode }) {
   const [isMobile, setIsMobile] = useState(false);
@@ -30,14 +31,9 @@ export default function MobileGate({ children }: { children: React.ReactNode }) 
       }}
     >
       {/* Gavel icon */}
-      <img
-        src="/GavellingLogo.png"
-        alt="Gavelling"
-        width={160}
-        height={48}
-        style={{ width: 160, height: 'auto', objectFit: 'contain', marginBottom: 32 }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-      />
+      <div style={{ marginBottom: 32 }}>
+        <SessionsHeaderLogo linked={false} height={40} />
+      </div>
 
       <p style={{ fontSize: 48, marginBottom: 16, lineHeight: 1 }}>🖥️</p>
 

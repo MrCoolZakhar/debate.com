@@ -90,6 +90,9 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
       currency: currency.toUpperCase(),
       applies_to: appliesTo,
       active,
+      // Default-off is guaranteed by useState(false) above, so the toggle's
+      // current value is always the organizer's actual intent, on create and
+      // on update alike.
       gates_acceptance: gatesAcceptance,
     };
     const { data, error: writeError } = existing

@@ -63,6 +63,8 @@ export interface CardConference {
   city: string;
   start_date: string | null;
   end_date: string | null;
+  /** When the dates are "to be decided", the date chip is omitted entirely. */
+  dates_tbd?: boolean;
   expected_delegates: number;
   fee_amount: number;
   fee_currency: string;
@@ -124,6 +126,8 @@ export function ConferenceCard({
   // already carries that year (e.g. "Hult 2026" stays "Hult 2026").
   const headingLabel = appendEditionYear(conf.acronym, editionYear);
   const initials = conf.acronym.slice(0, 3).toUpperCase();
+  // Hide the date chip entirely when dates are TBD or missing (no "TBD" text).
+  const showDates = !conf.dates_tbd && !!conf.start_date;
   const [g0, g1] = gradientFor(conf.acronym);
   // heroCompact reuses compact's tighter horizontal padding.
   const dense = compact || heroCompact;
@@ -201,22 +205,24 @@ export function ConferenceCard({
         }}
       />
 
-      {/* Date chip, glass pill, top-right over the photo */}
-      <span
-        className="flex items-center gap-1"
-        style={{
-          position: 'absolute', top: '12px', right: '14px', zIndex: 2,
-          backgroundColor: 'rgba(20,36,27,0.5)',
-          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-          border: '1px solid rgba(250,248,243,0.2)',
-          padding: '3px 10px', borderRadius: '9999px',
-        }}
-      >
-        <CalendarDays size={12} style={{ color: '#EED98A', flexShrink: 0 }} />
-        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
-          {formatDateRange(conf.start_date, conf.end_date)}
+      {/* Date chip, glass pill, top-right over the photo (omitted when TBD/missing) */}
+      {showDates && (
+        <span
+          className="flex items-center gap-1"
+          style={{
+            position: 'absolute', top: '12px', right: '14px', zIndex: 2,
+            backgroundColor: 'rgba(20,36,27,0.5)',
+            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(250,248,243,0.2)',
+            padding: '3px 10px', borderRadius: '9999px',
+          }}
+        >
+          <CalendarDays size={12} style={{ color: '#EED98A', flexShrink: 0 }} />
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
+            {formatDateRange(conf.start_date, conf.end_date)}
+          </span>
         </span>
-      </span>
+      )}
 
       {/* Floating logo disc, top-left over the photo */}
       <div style={{ position: 'absolute', top: '12px', left: '14px' }}>
@@ -342,21 +348,23 @@ export function ConferenceCard({
             </span>
           </>
         )}
-        {/* Date chip, glass pill, top-left, so the dates read first */}
-        <span
-          className="absolute top-3 left-3 flex items-center gap-1"
-          style={{
-            backgroundColor: 'rgba(20,36,27,0.5)',
-            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-            border: '1px solid rgba(250,248,243,0.2)',
-            padding: '3px 10px', borderRadius: '9999px',
-          }}
-        >
-          <CalendarDays size={12} style={{ color: '#EED98A', flexShrink: 0 }} />
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
-            {formatDateRange(conf.start_date, conf.end_date)}
+        {/* Date chip, glass pill, top-left, so the dates read first (omitted when TBD/missing) */}
+        {showDates && (
+          <span
+            className="absolute top-3 left-3 flex items-center gap-1"
+            style={{
+              backgroundColor: 'rgba(20,36,27,0.5)',
+              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+              border: '1px solid rgba(250,248,243,0.2)',
+              padding: '3px 10px', borderRadius: '9999px',
+            }}
+          >
+            <CalendarDays size={12} style={{ color: '#EED98A', flexShrink: 0 }} />
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
+              {formatDateRange(conf.start_date, conf.end_date)}
+            </span>
           </span>
-        </span>
+        )}
         {/* Format chip */}
         {conf.format && (
           <span
