@@ -15,7 +15,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
 import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
-import { currencySymbol, formatFeeAmount } from '@/lib/utils';
+import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { compareStartDate } from '@/lib/conferenceDates';
 import { ConferenceCard } from '../ConferenceCard';
@@ -558,7 +558,7 @@ function ConferenceListRow({
                 {currencySymbol(conf.fee_currency)}
               </span>
               <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
-                {formatFeeAmount(conf.fee_amount)}
+                {formatFeeAmountCompact(conf.fee_amount)}
               </span>
             </span>
           </>
