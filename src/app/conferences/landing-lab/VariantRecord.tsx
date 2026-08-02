@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, ArrowUpRight, Search } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { LogoDisc } from '@/components/LogoDisc';
+import { compareStartDate } from '@/lib/conferenceDates';
 import {
   LabConference, LabReview, RatingSummary,
   CREAM, FOREST, GOLD, HAIRLINE, INK, IVORY, MONO, PALE_GOLD, SANS, TAUPE, GRAIN,
@@ -40,7 +41,7 @@ export default function VariantRecord({
       const ac = isConcluded(a) ? 1 : 0;
       const bc = isConcluded(b) ? 1 : 0;
       if (ac !== bc) return ac - bc;
-      return a.start_date.localeCompare(b.start_date);
+      return compareStartDate(a.start_date, b.start_date);
     });
   }, [conferences]);
 
