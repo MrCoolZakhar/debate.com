@@ -26,6 +26,10 @@ export interface Conference {
   banner_url: string | null;
   start_date: string;
   end_date: string;
+  /** Dates "to be decided": start/end are null and the conference cannot be
+   *  published (enforced by the conferences_tbd_not_public CHECK) until real
+   *  dates are set. Applications can still open. */
+  dates_tbd: boolean;
   country: string;
   city: string;
   format: string;
@@ -83,7 +87,7 @@ export function useManage() {
 
 const CONFERENCE_COLUMNS = [
   'id', 'slug', 'full_name', 'acronym', 'is_public', 'status',
-  'logo_url', 'banner_url', 'start_date', 'end_date', 'country', 'city',
+  'logo_url', 'banner_url', 'start_date', 'end_date', 'dates_tbd', 'country', 'city',
   'format', 'expected_delegates', 'fee_amount', 'fee_currency',
   'contact_email', 'student_level', 'description',
   'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',

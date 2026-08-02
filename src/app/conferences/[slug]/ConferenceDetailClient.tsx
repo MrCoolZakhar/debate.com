@@ -79,6 +79,7 @@ interface Conference {
   student_level: string;
   start_date: string | null;
   end_date: string | null;
+  dates_tbd: boolean | null;
   fee_amount: number;
   fee_currency: string;
   expected_delegates: number;
@@ -652,7 +653,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
       .from('conferences')
       .select(`
         id, slug, full_name, acronym, country, city, format, student_level,
-        start_date, end_date, fee_amount, fee_currency, expected_delegates,
+        start_date, end_date, dates_tbd, fee_amount, fee_currency, expected_delegates,
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
         contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
@@ -670,7 +671,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           .from('conferences')
           .select(`
             id, slug, full_name, acronym, country, city, format, student_level,
-            start_date, end_date, fee_amount, fee_currency, expected_delegates,
+            start_date, end_date, dates_tbd, fee_amount, fee_currency, expected_delegates,
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
             contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
@@ -1249,10 +1250,23 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       {isOnline ? 'Online' : `${conference.city}, ${(countryObj?.code ?? conference.country).toUpperCase()}`}
                     </span>
                   </span>
-                  <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
-                  <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
-                    {formatDateRange(conference.start_date, conference.end_date)}
-                  </span>
+                  {/* Dates are hidden when TBD or missing. The organizer alone
+                      still sees a subtle "Dates: TBD" chip so the state is clear. */}
+                  {!conference.dates_tbd && conference.start_date ? (
+                    <>
+                      <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '12px', color: 'rgba(237,231,216,0.78)' }}>
+                        {formatDateRange(conference.start_date, conference.end_date)}
+                      </span>
+                    </>
+                  ) : isOrganizerViewer ? (
+                    <>
+                      <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
+                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', letterSpacing: '0.06em', color: '#EED98A', backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px' }}>
+                        Dates: TBD
+                      </span>
+                    </>
+                  ) : null}
                 </div>
               </div>
             </div>

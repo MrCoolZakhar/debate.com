@@ -79,7 +79,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     description,
     alternates: { canonical: url },
     // Private conferences stay reachable by link but out of search indexes.
-    robots: conf.is_public === false ? { index: false, follow: false } : undefined,
+    // Public ones get EXPLICIT index/follow + rich-preview directives (rather
+    // than inheriting silently) so results can show large image + full snippet.
+    robots: conf.is_public === false
+      ? { index: false, follow: false }
+      : { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 } },
     openGraph: {
       title: name,
       description,

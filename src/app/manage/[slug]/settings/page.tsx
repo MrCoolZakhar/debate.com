@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle,
+  SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
+
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
@@ -387,6 +388,7 @@ export default function SettingsPage() {
   const [studentLevel, setStudentLevel] = useState<'school' | 'university' | 'both' | ''>('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [datesTbd, setDatesTbd] = useState(false);
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
   const [format, setFormat] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
@@ -469,7 +471,7 @@ export default function SettingsPage() {
   const detailsBaseline = useRef<string | null>(null);
   const visualBaseline = useRef<string | null>(null);
   const minAgeBaseline = useRef<string | null>(null);
-  const detailsSnap = () => snap({ fullName, acronym, contactEmail, studentLevel, startDate, endDate, country, city, format, expectedDelegates });
+  const detailsSnap = () => snap({ fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
   const visualSnap = () => snap({ description, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
   const minAgeSnap = () => snap({ minAge });
 
@@ -662,6 +664,7 @@ export default function SettingsPage() {
     setStudentLevel((conference.student_level as 'school' | 'university' | 'both' | '') ?? '');
     setStartDate(conference.start_date ?? '');
     setEndDate(conference.end_date ?? '');
+    setDatesTbd(conference.dates_tbd ?? false);
     setCountry(conference.country ?? '');
     setCity(conference.city ?? '');
     setFormat((conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '');
@@ -673,6 +676,7 @@ export default function SettingsPage() {
       contactEmail: conference.contact_email ?? '',
       studentLevel: (conference.student_level as 'school' | 'university' | 'both' | '') ?? '',
       startDate: conference.start_date ?? '', endDate: conference.end_date ?? '',
+      datesTbd: conference.dates_tbd ?? false,
       country: conference.country ?? '', city: conference.city ?? '',
       format: (conference.format as 'in-person' | 'online' | 'hybrid' | '') ?? '',
       expectedDelegates: conference.expected_delegates != null ? String(conference.expected_delegates) : '',
@@ -1033,6 +1037,12 @@ export default function SettingsPage() {
 
   function handlePublicToggle(next: boolean) {
     if (!conference || publicToggleSaving) return;
+    // A conference with dates set to TBD (or no start date yet) can never be
+    // public — mirrors the DB CHECK `conferences_tbd_not_public`.
+    if (next && (conference.dates_tbd || !conference.start_date)) {
+      setPrivacyError('Add conference dates before publishing — a conference with dates set to TBD stays private.');
+      return;
+    }
     setPublicToggleSaving(true);
     setPrivacyError('');
     void (async () => {
@@ -1545,8 +1555,9 @@ export default function SettingsPage() {
       acronym: upperAcr,
       contact_email: contactEmail || null,
       student_level: studentLevel || null,
-      start_date: startDate || null,
-      end_date: endDate || null,
+      start_date: datesTbd ? null : (startDate || null),
+      end_date: datesTbd ? null : (endDate || null),
+      dates_tbd: datesTbd,
       country: country || null,
       city: city || null,
       format: format || null,
@@ -1592,7 +1603,7 @@ export default function SettingsPage() {
     const t = setTimeout(() => { void handleSaveDetails(); }, 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullName, acronym, contactEmail, studentLevel, startDate, endDate, country, city, format, expectedDelegates, detailsSaving, conference]);
+  }, [fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates, detailsSaving, conference]);
 
   if (!conference) return null;
 
@@ -2352,7 +2363,10 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 mb-4">
+            <div
+              className="flex gap-3 mb-3"
+              style={datesTbd ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
+            >
               <div className="flex-1">
                 <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Start date</label>
                 <DatePicker
@@ -2374,6 +2388,43 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+
+            {/* Dates TBD: keeps the conference private (no public link) until real
+                dates are set — mirrors the DB CHECK conferences_tbd_not_public.
+                Applications can still open while dates are undecided. */}
+            <button
+              type="button"
+              onClick={() => {
+                setDatesTbd((prev) => {
+                  const nextTbd = !prev;
+                  // Turning TBD on clears any set dates so the row goes null.
+                  if (nextTbd) { setStartDate(''); setEndDate(''); }
+                  return nextTbd;
+                });
+              }}
+              className="flex items-start gap-3 w-full text-left mb-4 focus:outline-none"
+            >
+              <span
+                className="flex items-center justify-center flex-shrink-0"
+                style={{
+                  width: '20px', height: '20px', borderRadius: '6px',
+                  marginTop: '1px',
+                  backgroundColor: datesTbd ? '#1B3828' : 'transparent',
+                  border: datesTbd ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
+                  transition: 'background-color 150ms ease, border-color 150ms ease',
+                }}
+              >
+                {datesTbd && <Check size={13} strokeWidth={3} color="#EED98A" />}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                  Dates are to be decided (TBD)
+                </span>
+                <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  A TBD conference stays private (no public link) until you add dates — applications can still open.
+                </span>
+              </span>
+            </button>
 
             <div className="flex gap-3 mb-4">
               <div className="flex-1">
@@ -2977,16 +3028,22 @@ export default function SettingsPage() {
               value={view.is_public}
               onChange={publicToggleSaving ? () => {} : handlePublicToggle}
               size="md"
-              disabled={!view.is_public && paymentGateBlocks(view)}
+              disabled={!view.is_public && (paymentGateBlocks(view) || view.dates_tbd || !view.start_date)}
             />
           </span>
         </div>
 
-        <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
-          {view.is_public
-            ? 'Your conference is publicly listed on Gavelling.'
-            : 'Your conference is private. Only people with the direct link can find it.'}
-        </p>
+        {!view.is_public && (view.dates_tbd || !view.start_date) ? (
+          <p className="text-sm mt-3" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+            Add conference dates to publish — TBD conferences stay private.
+          </p>
+        ) : (
+          <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+            {view.is_public
+              ? 'Your conference is publicly listed on Gavelling.'
+              : 'Your conference is private. Only people with the direct link can find it.'}
+          </p>
+        )}
         {!view.is_public && paymentGateBlocks(view) && (
           <p className="text-xs mt-2" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>{paymentGateMessage(view)}</p>
         )}

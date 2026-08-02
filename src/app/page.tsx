@@ -1,5 +1,31 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import StagefrontClient from './conferences/StagefrontClient';
+import { supabase } from '@/lib/supabase';
+
+// The landing composition fetches its conferences CLIENT-side (useEffect), so
+// the server-rendered HTML a crawler receives contains no conference links at
+// all. That left every /conferences/[slug] page reachable only through
+// /conferences/explore — a deep, thin link graph, and the reason Search Console
+// reports public conferences as "Discovered – currently not indexed" with
+// "Referring page: None detected". This server-rendered index gives every public
+// conference a real, crawlable <a> from the site's highest-authority page.
+// Revalidates hourly so newly published conferences are linked without a deploy.
+export const revalidate = 3600;
+
+async function publicConferences(): Promise<{ slug: string; full_name: string; acronym: string | null }[]> {
+  try {
+    const { data } = await supabase
+      .from('conferences')
+      .select('slug, full_name, acronym')
+      .eq('is_public', true)
+      .order('start_date', { ascending: true })
+      .limit(200);
+    return (data ?? []).filter((c): c is { slug: string; full_name: string; acronym: string | null } => !!c?.slug);
+  } catch {
+    return [];
+  }
+}
 
 export const metadata: Metadata = {
   // The root page shares the root layout's segment, so the `%s | Gavelling`
@@ -61,7 +87,9 @@ const websiteSchema = {
   },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const conferences = await publicConferences();
+
   return (
     <>
       <script
@@ -73,6 +101,47 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
       <StagefrontClient />
+
+      {/* Crawlable conference index. Visually quiet by design — this is a real
+          directory footer for readers AND the crawl path to every conference
+          page. Deliberately server-rendered (never behind the client fetch) and
+          never `display:none`/`hidden`, which Google discounts as cloaking. */}
+      {conferences.length > 0 && (
+        <nav
+          aria-label="All conferences on Gavelling"
+          style={{ borderTop: '1px solid rgba(221,212,192,0.7)', backgroundColor: '#FAF8F3' }}
+        >
+          <div className="mx-auto w-full max-w-6xl px-5 py-10">
+            <h2
+              style={{
+                fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 13,
+                letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B6871F', margin: '0 0 14px',
+              }}
+            >
+              Model UN conferences on Gavelling
+            </h2>
+            <ul className="flex flex-wrap gap-x-4 gap-y-2" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {conferences.map(c => (
+                <li key={c.slug}>
+                  <Link
+                    href={`/conferences/${c.slug}`}
+                    style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, color: '#5C5140', textDecoration: 'none' }}
+                  >
+                    {c.full_name || c.acronym}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/conferences/explore"
+              className="inline-block mt-5"
+              style={{ fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, color: '#1B3828', textDecoration: 'none' }}
+            >
+              Explore all Model UN conferences →
+            </Link>
+          </div>
+        </nav>
+      )}
     </>
   );
 }

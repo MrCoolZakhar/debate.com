@@ -362,7 +362,11 @@ function scoreSlot(app: AcceptedApp, committee: CommitteeData, slot: SlotRow, fi
   const base = scorePrefAndExp(app, committee, slot);
   const fullness = Math.round(12 * (1 - filled / Math.max(total, 1)));
   base.score += fullness;
-  if (total > 0 && filled / total < 0.34 && fullness > 0) base.reasons.push('NEEDS DELEGATES');
+  // NB: the 'NEEDS DELEGATES' chip is NOT decided here. It is a GLOBAL signal —
+  // a committee only "needs delegates" relative to how full the OTHER committees
+  // are — so it is computed once across the whole board (see needyCommitteeIds)
+  // and layered onto suggestions afterwards, not from this single committee's
+  // fill in isolation. The fullness score above still nudges emptier committees.
   // Importance-weighted need signal: filling a higher-importance open seat
   // matters more, so it lifts the fit score and the algorithm works through
   // the priority seats — and the committees still holding them — first.
@@ -1315,12 +1319,17 @@ function DelegateDetail({
 interface DropAllocateModalProps {
   committee: CommitteeData;
   app: AcceptedApp;
+  /** True when this committee trails the board (see needyCommitteeIds on the
+   *  page): the "NEEDS DELEGATES" chip is a GLOBAL, relative signal, so it is
+   *  decided once across all committees and passed in rather than re-derived
+   *  from this one committee's fill. */
+  needy?: boolean;
   onClose: () => void;
   onConflict: (payload: { app: AcceptedApp; slot: SlotRow; seat: number; sibling: AllocationRow }) => void;
   onAssigned: (slot: SlotRow, seat: number, msg: string) => void;
 }
 
-function DropAllocateModal({ committee, app, onClose, onConflict, onAssigned }: DropAllocateModalProps) {
+function DropAllocateModal({ committee, app, needy = false, onClose, onConflict, onAssigned }: DropAllocateModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [busySlotId, setBusySlotId] = useState<string | null>(null);
@@ -1336,7 +1345,11 @@ function DropAllocateModal({ committee, app, onClose, onConflict, onAssigned }: 
     .filter(s => !isSlotFull(s, byCountry))
     .map(slot => {
       const scored = allocationScore(app, committee, slot, filled, committee.total_slots, byCountry);
-      return { slot, score: scored.total, reasons: scored.reasons };
+      return {
+        slot,
+        score: scored.total,
+        reasons: needy ? [...scored.reasons, 'NEEDS DELEGATES'] : scored.reasons,
+      };
     })
     .sort((a, b) =>
       TIER_RANK[a.slot.importance] - TIER_RANK[b.slot.importance] || b.score - a.score
@@ -3535,6 +3548,28 @@ export default function AssignmentPage() {
     [committees],
   );
 
+  // ── "Needs delegates" — a RELATIVE signal across the whole board ─────────────
+  // A committee is flagged only when it is conspicuously behind the pack: its
+  // fill ratio is more than 25% below the SECOND-least-populated committee's.
+  // Comparing against the second-least (not the least, which is always the
+  // emptiest and would compare to itself) gives a stable baseline, so the flag
+  // highlights the one or two committees that genuinely trail the rest rather
+  // than firing on every under-half-full committee.
+  const needyCommitteeIds = useMemo<Set<string>>(() => {
+    const needy = new Set<string>();
+    if (committees.length < 2) return needy;
+    const ratios = committees.map(c => ({
+      id: c.id,
+      // total_slots 0 → treat as "full" (ratio 1) so an empty-of-seats committee
+      // never reads as needing delegates.
+      ratio: c.total_slots > 0 ? distinctCountryFilled(c.conference_allocations) / c.total_slots : 1,
+    }));
+    const secondLeast = [...ratios].sort((a, b) => a.ratio - b.ratio)[1].ratio;
+    const threshold = secondLeast * 0.75; // >25% below the second-least-populated
+    for (const r of ratios) if (r.ratio < threshold) needy.add(r.id);
+    return needy;
+  }, [committees]);
+
   // ── Suggestions (global, across all committees) ─────────────────────────────
   // Every accepted, attending applicant is a candidate — INCLUDING those with
   // no committee preferences (common in real data). A preference-less delegate
@@ -3669,8 +3704,14 @@ export default function AssignmentPage() {
     // Display strongest-first: greedy insertion + swaps mostly follow score
     // order, but a fall-through pick can land lower, so re-sort the cards high → low.
     out.sort((a, b) => b.score - a.score);
-    return out;
-  }, [accepted, committees]);
+    // Layer on the global "needs delegates" chip (see needyCommitteeIds) — added
+    // last so preference / country / experience reasons still lead the row.
+    return out.map(s =>
+      needyCommitteeIds.has(s.committee.id) && !s.reasons.includes('NEEDS DELEGATES')
+        ? { ...s, reasons: [...s.reasons, 'NEEDS DELEGATES'] }
+        : s
+    );
+  }, [accepted, committees, needyCommitteeIds]);
 
   if (!conference) return null;
 
@@ -3854,67 +3895,73 @@ export default function AssignmentPage() {
                   const toggle = () => setExpandedSuggestionKey(prev => (prev === key ? null : key));
                   return (
                     <NeuInset key={key} small className="px-3 py-2.5">
-                      <div className="flex items-center gap-3">
-                        {/* Clicking the delegate opens their full application
-                            detail (same info as the rail card), so the
-                            organizer can vet a pick before assigning. */}
+                      {/* Row 1 — identity + fit score + assign. Clicking the
+                          identity opens the applicant's full detail so the
+                          organizer can vet a pick before assigning. The score
+                          lives up here (next to ASSIGN) so Row 2 is reserved
+                          entirely for the committee + reason tags, keeping every
+                          card a consistent two rows with the tags side by side. */}
+                      <div className="flex items-center gap-2.5">
                         <div
                           role="button"
                           tabIndex={0}
                           onClick={toggle}
                           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
-                          className="flex items-center gap-3 flex-1 min-w-0 focus:outline-none"
+                          className="flex items-center gap-2.5 flex-1 min-w-0 focus:outline-none"
                           style={{ cursor: 'pointer' }}
                           title={expanded ? 'Hide applicant detail' : 'View applicant detail'}
                         >
                           <PersonAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                                {sug.app.profiles?.display_name ?? sug.app.invited_name}
-                              </p>
-                              <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
-                              <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} />
-                              <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{sug.slot.country_name}</p>
-                            </div>
-                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                              <span className="inline-flex items-center gap-1.5" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
-                                <LogoDisc bare src={sug.committee.logo_url} size={20} fallbackText={committeeLabels(sug.committee).big} alt="" />
-                                {committeeLabels(sug.committee).big}
-                              </span>
-                              {sug.reasons.slice(0, 2).map(r => <ReasonChip key={r} reason={r} />)}
-                              {sug.swap && (
-                                <span title={`Swapped with ${sug.swap.partnerName}, a net gain of +${sug.swap.netGain} across both delegates.`}>
-                                  <ReasonChip reason={SWAP_REASON} />
-                                </span>
-                              )}
-                              {sug.swap ? (
-                                <span
-                                  className="inline-flex items-baseline gap-1"
-                                  style={{ marginLeft: 'auto' }}
-                                  title={`Suggested here at ${sug.score}; their own best available seat scored ${sug.swap.ownBestScore}.`}
-                                >
-                                  <span style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                                    {sug.score}
-                                  </span>
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: NEU.muted, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
-                                    (best {sug.swap.ownBestScore})
-                                  </span>
-                                </span>
-                              ) : (
-                                <span style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
-                                  {sug.score}
-                                </span>
-                              )}
-                            </div>
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                              {sug.app.profiles?.display_name ?? sug.app.invited_name}
+                            </p>
+                            <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
+                            <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} />
+                            <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{sug.slot.country_name}</p>
                           </div>
                           {expanded
                             ? <ChevronUp size={14} style={{ color: NEU.muted, flexShrink: 0 }} />
                             : <ChevronDown size={14} style={{ color: NEU.muted, flexShrink: 0 }} />}
                         </div>
+                        {sug.swap ? (
+                          <span
+                            className="inline-flex items-baseline gap-1 flex-shrink-0"
+                            title={`Suggested here at ${sug.score}; their own best available seat scored ${sug.swap.ownBestScore}.`}
+                          >
+                            <span style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
+                              {sug.score}
+                            </span>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: NEU.muted, fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
+                              (best {sug.swap.ownBestScore})
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="flex-shrink-0" style={{ fontSize: 11, fontWeight: 800, color: fitColor(sug.score), fontFamily: MONO, fontVariantNumeric: 'tabular-nums' }}>
+                            {sug.score}
+                          </span>
+                        )}
                         <NeuButton onClick={() => quickAssign(sug)} disabled={busy} style={{ padding: '8px 16px', fontSize: 11 }}>
                           {busy ? '...' : 'ASSIGN'}
                         </NeuButton>
+                      </div>
+                      {/* Row 2 — committee + reason tags on a single line. The
+                          committee chip (with logo) truncates first so the tags
+                          always sit next to each other and never wrap to a third
+                          row. */}
+                      <div className="flex items-center gap-1.5 mt-2 min-w-0" style={{ flexWrap: 'nowrap', overflow: 'hidden' }}>
+                        <span className="inline-flex items-center gap-1.5 min-w-0" style={{ fontSize: 10, fontWeight: 800, color: NEU.forest, fontFamily: MONO }}>
+                          <LogoDisc bare src={sug.committee.logo_url} size={18} fallbackText={committeeLabels(sug.committee).big} alt="" />
+                          <span className="truncate">{committeeLabels(sug.committee).big}</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 flex-shrink-0">
+                          {sug.reasons.slice(0, 3).map(r => <ReasonChip key={r} reason={r} />)}
+                          {sug.swap && (
+                            <span title={`Swapped with ${sug.swap.partnerName}, a net gain of +${sug.swap.netGain} across both delegates.`}>
+                              <ReasonChip reason={SWAP_REASON} />
+                            </span>
+                          )}
+                        </span>
                       </div>
                       {expanded && <DelegateDetail app={sug.app} history={sugHistory} contextCommitteeId={sug.committee.id} contextCountryCode={sug.slot.country_code} />}
                     </NeuInset>
@@ -4116,14 +4163,17 @@ export default function AssignmentPage() {
                 )}
               </div>
 
-              {/* Board, every committee visible at once. items-start so each
-                  panel sizes to its own content (a 3-allocation committee stays
-                  short) instead of stretching to match the tallest in its row. */}
+              {/* Board, every committee visible at once. A masonry (CSS
+                  columns) layout instead of a grid: panels of different heights
+                  pack tightly down each column with no empty gaps between rows,
+                  so a short committee never leaves dead space beneath it waiting
+                  on a taller neighbour. Each panel is break-inside-avoid + a
+                  bottom margin (columns have no row gap of their own). */}
               <div className="flex-1 min-w-0 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
+                <div className="columns-1 md:columns-2 2xl:columns-3" style={{ columnGap: '1rem' }}>
                   {sortedCommittees.map(c => (
+                    <div key={c.id} className="mb-4 break-inside-avoid">
                     <CommitteeBoardPanel
-                      key={c.id}
                       committee={c}
                       dragging={dragAppId !== null || dragSocietyId !== null}
                       isDropTarget={dropTargetId === c.id}
@@ -4135,6 +4185,7 @@ export default function AssignmentPage() {
                       onRemoveAllocation={handleRemoveAllocation}
                       onOpenOverview={() => setOverviewCommitteeId(c.id)}
                     />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -4147,12 +4198,12 @@ export default function AssignmentPage() {
           {mode === 'chairs' && (
             <div className="w-full">
               {/* No unassigned-chairs rail: chairs are invited per committee by
-                  name + email. The board shows every committee at once.
-                  items-start keeps each dais card at its natural height. */}
-              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4 items-start">
+                  name + email. Masonry (CSS columns) so dais cards of different
+                  heights pack tightly with no empty gaps between rows. */}
+              <div className="columns-1 md:columns-2 2xl:columns-3" style={{ columnGap: '1rem' }}>
                 {sortedCommittees.map(c => (
+                  <div key={c.id} className="mb-4 break-inside-avoid">
                   <ChairBoardPanel
-                    key={c.id}
                     committee={c}
                     invites={invitesByCommittee.get(c.id) ?? []}
                     dragging={dragChairAppId !== null}
@@ -4166,6 +4217,7 @@ export default function AssignmentPage() {
                     onRevokeInvite={invite => handleRevokeInvite(invite, c)}
                     onInvite={() => setInviteModalCommitteeId(c.id)}
                   />
+                  </div>
                 ))}
               </div>
             </div>
@@ -4222,6 +4274,7 @@ export default function AssignmentPage() {
         <DropAllocateModal
           committee={dropModalCommittee}
           app={dropModalApp}
+          needy={needyCommitteeIds.has(dropModalCommittee.id)}
           onClose={() => setDropModal(null)}
           onConflict={payload => { setConflict({ committee: dropModalCommittee, ...payload }); setDropModal(null); }}
           onAssigned={(slot, seat, msg) => {
