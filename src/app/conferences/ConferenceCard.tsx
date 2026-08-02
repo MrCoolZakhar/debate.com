@@ -41,7 +41,7 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin } from 'lucide-react';
 import { getCountryByName } from '@/lib/countries';
-import { currencySymbol, formatFeeAmount } from '@/lib/utils';
+import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
 import { appendEditionYear } from '@/lib/presetNames';
 
@@ -278,7 +278,7 @@ export function ConferenceCard({
                   border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px', whiteSpace: 'nowrap',
                 }}
               >
-                {currencySymbol(conf.fee_currency)}{formatFeeAmount(conf.fee_amount)}
+                {currencySymbol(conf.fee_currency)}{formatFeeAmountCompact(conf.fee_amount)}
               </span>
             )}
             <span className="flex items-center gap-1">
@@ -406,7 +406,7 @@ export function ConferenceCard({
               {currencySymbol(conf.fee_currency)}
             </span>
             <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '16.5px', color: '#1C1410' }}>
-              {formatFeeAmount(conf.fee_amount)}
+              {formatFeeAmountCompact(conf.fee_amount)}
             </span>
           </>
         )}

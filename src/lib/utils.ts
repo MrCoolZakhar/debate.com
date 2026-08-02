@@ -37,3 +37,34 @@ export function formatFeeAmount(amount: number): string {
 export function formatFee(amount: number, currency: string): string {
   return `${currencySymbol(currency)}${formatFeeAmount(amount)}`;
 }
+
+/**
+ * Fee amount for DISPLAY on conference listings: abbreviated once it reaches
+ * 10,000 so large-denomination currencies (INR, IDR, VND, KRW…) don't blow out
+ * a price chip — "₹15000" renders as "₹15k".
+ *
+ *   9999 → "9999"      (under the threshold, exact and unchanged)
+ *   10000 → "10k"       15500 → "15.5k"      150000 → "150k"
+ *   1500000 → "1.5M"   (millions, so an IDR fee never reads "1500k")
+ *
+ * One decimal at most, and never a trailing ".0". This is a PRESENTATION
+ * helper only — accounting surfaces (invoices, revenue, aid grants, vouchers)
+ * must keep using the exact formatFee/formatFeeAmount.
+ */
+export function formatFeeAmountCompact(amount: number): string {
+  if (!Number.isFinite(amount) || Math.abs(amount) < 10_000) return formatFeeAmount(amount);
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  let value = round1(amount / 1_000);
+  let suffix = 'k';
+  // 999,999 would otherwise round to "1000k" — promote it to millions instead.
+  if (Math.abs(value) >= 1_000) {
+    value = round1(amount / 1_000_000);
+    suffix = 'M';
+  }
+  return `${Number.isInteger(value) ? value : value.toFixed(1)}${suffix}`;
+}
+
+/** Currency symbol + abbreviated amount, for listing price chips. */
+export function formatFeeCompact(amount: number, currency: string): string {
+  return `${currencySymbol(currency)}${formatFeeAmountCompact(amount)}`;
+}
