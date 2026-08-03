@@ -18,7 +18,7 @@ import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
-import { compareStartDate } from '@/lib/conferenceDates';
+import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { ConferenceCard } from '../ConferenceCard';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
@@ -793,7 +793,18 @@ export default function ConferencesExploreClient() {
   // "Conferences around you" heading. Clears the moment the visitor picks a region.
   const aroundYouMode = aroundYouDefault && region === '' && !regionTouched;
 
+  // Headline count = what's actually browsable. Counts only the concluded
+  // exclusion, NOT the search/region/format filters, so the hero line stays a
+  // stable "here's how big the circuit is" rather than jumping as you filter.
+  const upcomingCount = useMemo(() => conferences.filter(c => !hasConcluded(c)).length, [conferences]);
+
   const filtered = useMemo(() => conferences.filter(c => {
+    // Finished conferences are dropped from the directory — nobody browsing for
+    // one to attend wants last year's. Their pages stay live, linkable and in
+    // the sitemap, so a direct link and Google search still reach them; this
+    // only trims what the browse listing puts in front of people. Undated
+    // ("dates TBD") conferences are never treated as finished.
+    if (hasConcluded(c)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (
@@ -912,7 +923,7 @@ export default function ConferencesExploreClient() {
               >
                 {loading
                   ? 'Loading the directory…'
-                  : `${conferences.length} conference${conferences.length === 1 ? '' : 's'} across every continent. Find where you debate next.`}
+                  : `${upcomingCount} conference${upcomingCount === 1 ? '' : 's'} across every continent. Find where you debate next.`}
               </p>
             </div>
             <button
