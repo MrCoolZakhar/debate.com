@@ -657,9 +657,16 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         .eq('conference_id', (confData as any).id)
         .maybeSingle();
       if (!orgRow) {
-        setAccessDenied(true);
-        setLoadingConf(false);
-        return;
+        // Gavelling staff can open any conference's dashboard. The real gate is
+        // is_conference_organizer() in the database, which already returns true
+        // for platform admins — this only stops the UI denying them first.
+        const { data: staff } = await supabase.rpc('is_platform_admin');
+        if (staff !== true) {
+          setAccessDenied(true);
+          setLoadingConf(false);
+          return;
+        }
+        setIsOwner(true);
       }
       setPermissions(((orgRow as any).permissions ?? {}) as Record<string, boolean>);
     }
