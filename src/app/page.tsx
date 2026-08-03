@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_BASE } from '@/lib/seo';
 import Link from 'next/link';
 import StagefrontClient from './conferences/StagefrontClient';
 import { supabase } from '@/lib/supabase';
@@ -42,7 +43,7 @@ export const metadata: Metadata = {
       'ar': 'https://gavelling.com?lang=ar',
     },
   },
-  openGraph: { url: 'https://gavelling.com' },
+  openGraph: { ...OG_BASE, url: 'https://gavelling.com' },
 };
 
 const organizationSchema = {

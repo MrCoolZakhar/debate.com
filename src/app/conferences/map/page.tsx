@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_BASE } from '@/lib/seo';
 import MapClient from './MapClient';
 
 export const metadata: Metadata = {
@@ -7,6 +8,7 @@ export const metadata: Metadata = {
     'See where Model UN conferences are happening on a world map. Browse by continent and country, then open any conference to view committees, dates, and fees.',
   alternates: { canonical: 'https://gavelling.com/conferences/map' },
   openGraph: {
+    ...OG_BASE,
     title: 'MUN Conference World Map',
     description:
       'See where Model UN conferences are happening on a world map, from London to San Salvador.',

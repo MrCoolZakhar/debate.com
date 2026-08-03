@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_BASE } from '@/lib/seo';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
     'Browse Model UN conferences around the world by country, date, fee, and level. See committees, deadlines, and fees, then apply as a delegate, chair, or advisor in minutes.',
   alternates: { canonical: 'https://gavelling.com/conferences/explore' },
   openGraph: {
+    ...OG_BASE,
     title: 'Explore Model UN Conferences',
     description:
       'Browse Model UN conferences around the world by country, date, fee, and level. Apply as a delegate, chair, or advisor in minutes.',
