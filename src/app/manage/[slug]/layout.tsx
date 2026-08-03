@@ -666,9 +666,13 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
           setLoadingConf(false);
           return;
         }
+        // Staff are treated as owners: sectionBlocked keys off !isOwner, so this
+        // opens every section. There is no organizer row to read permissions
+        // from — reading one here is what previously threw and blanked the page.
         setIsOwner(true);
+      } else {
+        setPermissions((orgRow.permissions ?? {}) as Record<string, boolean>);
       }
-      setPermissions(((orgRow as any).permissions ?? {}) as Record<string, boolean>);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
