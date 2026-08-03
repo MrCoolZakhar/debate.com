@@ -98,7 +98,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
         <meta name="theme-color" content="#1B3828" />
-        <link rel="preload" as="image" href="/og-image.png" />
+        {/* Preload the nav logo, not the OG image. og-image.png is only ever
+            fetched by crawlers building a link preview — preloading it on every
+            page load spent early bandwidth on something no visitor sees, while
+            the one image that IS painted immediately (the header logo) had to
+            wait, flashing its alt text in the meantime. */}
+        <link rel="preload" as="image" href="/Conferences.webp" type="image/webp" fetchPriority="high" />
       </head>
       <body className="min-h-full bg-[#EDE7D8] text-[#1C1410] antialiased">
         <AuthProvider>

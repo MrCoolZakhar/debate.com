@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Users, FileText, CreditCard, Zap } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import FooterLegal from '@/components/FooterLegal';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 import { FocusCard } from '@/components/ConferenceFocusCards';
@@ -548,6 +549,7 @@ function GlobeSection() {
           </div>
           <p className="text-xs font-semibold md:text-right" style={{ color: 'rgba(238,217,138,0.45)' }}>© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
         </div>
+        <FooterLegal tone="forest" />
       </footer>
     </section>
   );

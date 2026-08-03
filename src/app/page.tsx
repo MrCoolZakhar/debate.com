@@ -112,14 +112,10 @@ export default async function HomePage() {
           style={{ borderTop: '1px solid rgba(221,212,192,0.7)', backgroundColor: '#FAF8F3' }}
         >
           <div className="mx-auto w-full max-w-6xl px-5 py-10">
-            <h2
-              style={{
-                fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 13,
-                letterSpacing: '0.12em', textTransform: 'uppercase', color: '#B6871F', margin: '0 0 14px',
-              }}
-            >
-              Model UN conferences on Gavelling
-            </h2>
+            {/* No visible heading: the label read as SEO furniture. The nav's
+                aria-label still names the section for assistive tech, and the
+                LINKS — the actual crawl path to every conference page — are
+                untouched. */}
             <ul className="flex flex-wrap gap-x-4 gap-y-2" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {conferences.map(c => (
                 <li key={c.slug}>

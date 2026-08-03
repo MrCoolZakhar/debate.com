@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import FooterLegal from '@/components/FooterLegal';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
@@ -114,7 +115,8 @@ export default function PrivacyPage() {
             <p className="mt-3">If you believe a child has submitted personal information in a way that raises privacy concerns, please contact us at the address below and we will promptly delete it.</p>
           </section>
 
-          <section>
+          {/* Anchor target for footer "Your Data & GDPR Rights" deep links (/privacy#your-rights) */}
+          <section id="your-rights" className="scroll-mt-24">
             <h2 className="text-lg font-black mb-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>8. Your Rights and Choices</h2>
             <p>Because Gavelling does not require accounts or email addresses, we cannot identify you across sessions. However, you may:</p>
             <ul className="list-disc ps-5 mt-2 space-y-1">
@@ -150,6 +152,7 @@ export default function PrivacyPage() {
             style={{ filter: 'brightness(0) saturate(100%) invert(18%) sepia(25%) saturate(800%) hue-rotate(100deg) brightness(85%)' }} />
           <p className="text-xs text-[#9A8A78]">© {new Date().getFullYear()} Gavelling. All rights reserved.</p>
         </div>
+        <FooterLegal tone="ivory" />
       </footer>
     </div>
   );

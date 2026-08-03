@@ -159,10 +159,18 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                 width={144}
                 height={36}
                 decoding="async"
+                loading="eager"
+                fetchPriority="high"
                 style={{
                   height: 36,
                   width: 'auto',
                   objectFit: 'contain',
+                  // Until the bitmap arrives the browser paints the ALT TEXT
+                  // (and a broken-image glyph) into the reserved 144x36 box —
+                  // the ugly block that flashed on every cold load. Transparent
+                  // text hides that flash; `alt` is untouched, so screen readers
+                  // and crawlers still get the name.
+                  color: 'transparent',
                   filter: overlay ? 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' : undefined,
                 }}
                 onError={(e) => {
@@ -181,13 +189,26 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                 width={160}
                 height={40}
                 decoding="async"
+                loading="eager"
+                fetchPriority="high"
                 className="h-8 md:h-10 w-auto object-contain"
-                style={
-                  overlay
+                style={{
+                  // Same alt-text flash guard as the conferences lockup above.
+                  color: 'transparent',
+                  ...(overlay
                     ? { filter: 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(500%) hue-rotate(5deg) brightness(105%) drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }
-                    : undefined
-                }
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    : {}),
+                }}
+                onError={(e) => {
+                  // Retry ONCE past a partial/failed cache entry. Never
+                  // display:none — that was how the logo used to vanish for the
+                  // rest of the session after a single transient failure.
+                  const img = e.currentTarget as HTMLImageElement;
+                  if (!img.dataset.retried) {
+                    img.dataset.retried = '1';
+                    img.src = `${logoSrc}?reload=1`;
+                  }
+                }}
               />
             )}
           </Link>

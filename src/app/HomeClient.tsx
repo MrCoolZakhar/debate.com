@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Mic, Scale, List, FileText, MessageSquare, Save } from 'lucide-react';
 import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import SiteNav from '@/components/SiteNav';
+import FooterLegal from '@/components/FooterLegal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 
 function getCommitteeAcronym(title: string): string {
@@ -856,6 +857,7 @@ export default function HomeClient() {
                 <Link href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</Link>
               </div>
             </div>
+            <FooterLegal tone="ivory" />
           </footer>
 
         </div>
