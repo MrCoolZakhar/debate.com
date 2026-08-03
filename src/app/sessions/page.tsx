@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { OG_BASE } from '@/lib/seo';
 import HomeClient from '../HomeClient';
 
 export const metadata: Metadata = {
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
   description:
     'Gavelling gives chairs and directors everything they need to run professional, efficient Model UN sessions. Roll call, speakers, motions, voting, all in one place.',
   alternates: { canonical: 'https://gavelling.com/sessions' },
-  openGraph: { url: 'https://gavelling.com/sessions' },
+  openGraph: { ...OG_BASE, url: 'https://gavelling.com/sessions' },
 };
 
 const softwareSchema = {
