@@ -63,7 +63,10 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/my-conferences', '/invites'];
   const inConferencesArea =
     !logoOverride && (pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname?.startsWith(p)));
-  const logoSrc = logoOverride?.src ?? '/GavellingSessionsApp.png';
+  // Transparent WEBP: the original .png has NO alpha and carried a solid
+  // #F2F2F2 plate, which showed as a pale block behind the mark on the
+  // site's ivory. The .png remains as the onError fallback.
+  const logoSrc = logoOverride?.src ?? '/GavellingSessionsApp.webp';
   const logoAlt = logoOverride?.alt ?? 'Gavelling Sessions';
 
   const avatarInitial = profile?.display_name
