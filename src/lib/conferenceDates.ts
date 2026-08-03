@@ -12,6 +12,38 @@
  * date is never "the soonest" and never "the latest", it simply isn't on the
  * timeline, so it belongs at the end of either ordering.
  */
+/** Today as a local 'YYYY-MM-DD' string, so date-only comparisons never shift
+ *  a conference by a day for users west/east of UTC. */
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Has this conference already finished?
+ *
+ * Used to keep finished conferences out of the public BROWSE surfaces. Their
+ * pages stay live, linkable and indexable — this only decides what we put in
+ * front of someone shopping for a conference to attend.
+ *
+ * Rules:
+ *  • The last day is `end_date`, falling back to `start_date` for single-day
+ *    conferences that never set an end.
+ *  • Undated / "dates TBD" conferences are NEVER concluded — an unknown date
+ *    hasn't happened yet. (The old `daysUntil` path returned NaN here and
+ *    relied on `NaN < 0` being false; this states it outright.)
+ *  • A conference running TODAY is still on, so the comparison is strictly
+ *    "last day is before today".
+ */
+export function hasConcluded(
+  c: { start_date?: string | null; end_date?: string | null },
+  today: string = todayISO(),
+): boolean {
+  const lastDay = (c.end_date || c.start_date || '').slice(0, 10);
+  if (!lastDay) return false;
+  return lastDay < today;
+}
+
 export function compareStartDate(
   a: string | null | undefined,
   b: string | null | undefined,
