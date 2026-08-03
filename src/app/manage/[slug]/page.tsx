@@ -684,7 +684,7 @@ function PipelineCell({ n, label, href, first }: { n: number; label: string; hre
 interface DashData {
   apps: AppRow[];
   allocated: number;
-  committees: { id: string; chair_user_ids: string[] | null }[];
+  committees: { id: string; chair_user_ids: string[] | null; committee_country_slots?: { delegation_size: number | null }[] | null }[];
   organizerCount: number;
   enabledEmailCount: number;
 }
@@ -829,7 +829,10 @@ export default function DashboardPage() {
           .eq('conference_id', confId),
         supabase
           .from('conference_committees')
-          .select('id, chair_user_ids')
+          // committee_country_slots gives the SEAT count: a double-delegation
+          // country seats two delegates, so capacity is the sum of
+          // delegation_size, never a count of country rows.
+          .select('id, chair_user_ids, committee_country_slots(delegation_size)')
           .eq('conference_id', confId),
         supabase
           .from('conference_organizers')
@@ -940,6 +943,14 @@ export default function DashboardPage() {
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
   const committeeCount = dash.committees.length;
   const missingChairs = dash.committees.filter(c => !c.chair_user_ids || c.chair_user_ids.length === 0).length;
+  // Seats delegates can actually occupy, vs how many the organiser says they
+  // expect. 3 committees x 20 seats does not host 150 people.
+  const seatCapacity = dash.committees.reduce(
+    (sum, c) => sum + (c.committee_country_slots ?? []).reduce((n, s) => n + (s.delegation_size ?? 1), 0),
+    0,
+  );
+  const expectedDelegates = conference.expected_delegates ?? 0;
+  const seatShortfall = expectedDelegates > 0 ? Math.max(0, expectedDelegates - seatCapacity) : 0;
   // Allocated (dash.allocated = conference_allocations rows) is now always a
   // subset of Accepted, so unallocated = accepted − allocated is non-negative;
   // the Math.max stays purely as a defensive floor against transient races.
@@ -968,8 +979,13 @@ export default function DashboardPage() {
       emoji: 'Classical building',
       gradient: NEU_GRADIENTS.forest,
       title: 'Add committees',
-      sub: committeeCount > 0 ? `${committeeCount} committee${committeeCount === 1 ? '' : 's'} created.` : 'Create committees and their topics.',
-      done: committeeCount > 0,
+      sub: committeeCount === 0
+        ? 'Create committees and their topics.'
+        : seatShortfall > 0
+          // The gap is the actionable number, so lead with it.
+          ? `Only ${seatCapacity} seats for ${expectedDelegates} expected delegates — ${seatShortfall} short.`
+          : `${committeeCount} committee${committeeCount === 1 ? '' : 's'}, ${seatCapacity} seats.`,
+      done: committeeCount > 0 && seatShortfall === 0,
       onClick: () => router.push(`/manage/${slug}/committees`),
     },
     {
