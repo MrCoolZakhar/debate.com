@@ -142,7 +142,10 @@ function SignInInner() {
       </p>
 
       <p className="text-xs text-center mt-3" style={{ color: '#C0B4A4', fontFamily: OUTFIT }}>
-        By signing in you agree to our Terms of Service and Privacy Policy
+        By signing in you agree to our{' '}
+        <Link href="/terms" style={{ color: '#9A8A78', fontWeight: 700, textDecoration: 'underline' }}>Terms of Service</Link>{' '}
+        and{' '}
+        <Link href="/privacy" style={{ color: '#9A8A78', fontWeight: 700, textDecoration: 'underline' }}>Privacy Policy</Link>
       </p>
     </AuthLayout>
   );

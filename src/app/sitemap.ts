@@ -40,6 +40,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: 'https://gavelling.com/about',        lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
     { url: 'https://gavelling.com/contact',      lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
     { url: 'https://gavelling.com/privacy',      lastModified: new Date(), changeFrequency: 'yearly',  priority: 0.3 },
+    { url: 'https://gavelling.com/terms',        lastModified: new Date(), changeFrequency: 'yearly',  priority: 0.3 },
     { url: 'https://gavelling.com/blog',         lastModified: new Date(), changeFrequency: 'weekly',  priority: 0.9 },
     ...conferences,
     { url: 'https://gavelling.com/blog/how-to-run-mun-committee',    lastModified: new Date('2026-06-01'), changeFrequency: 'monthly', priority: 0.8 },
