@@ -16,6 +16,7 @@ export default function robots(): MetadataRoute.Robots {
           '/create/',
           // Conferences private surfaces (auth-gated dashboards & flows)
           '/manage/',
+          '/admin',
           '/account/',
           '/my-conferences',
           '/invites/',
