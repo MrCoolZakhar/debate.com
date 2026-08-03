@@ -61,8 +61,14 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   // APP" logo (/GavellingSessionsApp.png). This mirrors the wordmark text the
   // nav already switches per context.
   const CONFERENCES_PREFIXES = ['/conferences', '/manage', '/account', '/auth', '/my-conferences', '/invites'];
+  // `!pathname` defaults to the CONFERENCES lockup on purpose. usePathname() can
+  // resolve to null while a page is being statically prerendered, and when that
+  // happened the homepage baked the SESSIONS logo into its static HTML — every
+  // first-time visitor to gavelling.com saw the wrong brand until hydration
+  // swapped it. Gavelling is conferences-first, so an unknown path must fall
+  // back to conferences rather than to sessions.
   const inConferencesArea =
-    !logoOverride && (pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname?.startsWith(p)));
+    !logoOverride && (!pathname || pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname.startsWith(p)));
   // Transparent WEBP: the original .png has NO alpha and carried a solid
   // #F2F2F2 plate, which showed as a pale block behind the mark on the
   // site's ivory. The .png remains as the onError fallback.
