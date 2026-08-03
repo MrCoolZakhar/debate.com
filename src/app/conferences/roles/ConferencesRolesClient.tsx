@@ -9,6 +9,7 @@ import {
   CalendarDays, ChevronDown, CheckCircle2, ScrollText,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import FooterLegal from '@/components/FooterLegal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
@@ -713,6 +714,7 @@ function Footer() {
           © {new Date().getFullYear()} Gavelling. Built for the MUN community.
         </p>
       </div>
+      <FooterLegal tone="ivory" />
     </footer>
   );
 }

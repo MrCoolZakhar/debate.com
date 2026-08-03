@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import SiteNav from '@/components/SiteNav';
+import FooterLegal from '@/components/FooterLegal';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -433,6 +434,7 @@ export default function ContactClient() {
               <a href="/privacy" className="text-xs transition-colors" style={{ color: '#9A8A78' }} onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}>Privacy Policy</a>
             </div>
           </div>
+          <FooterLegal tone="ivory" />
         </footer>
       </div>
     </div>

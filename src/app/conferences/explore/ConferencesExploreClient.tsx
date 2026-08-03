@@ -9,6 +9,7 @@ import {
   MapPin, Monitor, School, GraduationCap,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import FooterLegal from '@/components/FooterLegal';
 import { Emoji3D } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -1217,6 +1218,7 @@ export default function ConferencesExploreClient() {
             </div>
             <p className="text-xs font-semibold text-[#1B3828] md:text-right">© {new Date().getFullYear()} Gavelling. Built for the MUN community.</p>
           </div>
+          <FooterLegal tone="ivory" />
         </footer>
       </div>
     </div>

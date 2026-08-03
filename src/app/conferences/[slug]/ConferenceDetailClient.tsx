@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock, ScrollText, CreditCard } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import FooterLegal from '@/components/FooterLegal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -3102,6 +3103,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               © {new Date().getFullYear()} Gavelling. Built for the MUN community.
             </p>
           </div>
+          <FooterLegal tone="ivory" />
         </footer>
       </div>
     </div>

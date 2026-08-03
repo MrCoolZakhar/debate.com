@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { formatFeeAmount } from '@/lib/utils';
+import FooterLegal from '@/components/FooterLegal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Landing lab · shared primitives
@@ -256,6 +257,7 @@ export function LabFooter() {
           © {new Date().getFullYear()} Gavelling. Built for the MUN community.
         </p>
       </div>
+      <FooterLegal tone="ivory" />
     </footer>
   );
 }
