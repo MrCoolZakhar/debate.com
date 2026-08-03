@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { formatFeeAmount } from '@/lib/utils';
+import { formatFeeAmountCompact } from '@/lib/utils';
 import FooterLegal from '@/components/FooterLegal';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ export function isConcluded(c: LabConference): boolean {
 }
 
 export function feeLabel(c: LabConference): string {
-  return c.fee_amount === 0 ? 'Free' : `${c.fee_currency} ${formatFeeAmount(c.fee_amount)}`;
+  return c.fee_amount === 0 ? 'Free' : `${c.fee_currency} ${formatFeeAmountCompact(c.fee_amount)}`;
 }
 
 /** "In 231 days" / "Happening now" / "Concluded", honest urgency (RA/Meetup register). */

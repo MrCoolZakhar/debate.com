@@ -15,7 +15,9 @@ import { OrganizerPencil } from '@/components/OrganizerPencil';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
-import { formatFee } from '@/lib/utils';
+// Compact: public price displays abbreviate at 10k (Rp300000 -> Rp300k).
+// Checkout/invoice surfaces deliberately keep the exact formatFee.
+import { formatFeeCompact } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
@@ -2072,7 +2074,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               // today's date, otherwise the flat role fee.
                               const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: r.fee_phases });
                               const fee = resolved.amount > 0
-                                ? formatFee(resolved.amount, r.fee_currency ?? conference.fee_currency)
+                                ? formatFeeCompact(resolved.amount, r.fee_currency ?? conference.fee_currency)
                                 : 'Free';
                               const reason = windowStatus === 'closed'
                                 ? 'Applications closed'
@@ -2142,7 +2144,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
                         ) : (
                           <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
-                            {formatFee(headlineFee, heroFeeCurrency)}
+                            {formatFeeCompact(headlineFee, heroFeeCurrency)}
                           </span>
                         );
                       })()}
@@ -2182,7 +2184,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 <span className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                                   {(() => {
                                     const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: phases });
-                                    return resolved.amount > 0 ? formatFee(resolved.amount, currency) : 'Free';
+                                    return resolved.amount > 0 ? formatFeeCompact(resolved.amount, currency) : 'Free';
                                   })()}
                                 </span>
                               </div>
@@ -2227,7 +2229,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                             className="text-[11.5px] font-bold"
                                             style={{ color: isCurrent ? '#1B3828' : '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
                                           >
-                                            {p.amount > 0 ? formatFee(p.amount, currency) : 'Free'}
+                                            {p.amount > 0 ? formatFeeCompact(p.amount, currency) : 'Free'}
                                           </span>
                                         </span>
                                       </div>
