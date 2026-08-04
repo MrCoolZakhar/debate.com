@@ -455,10 +455,11 @@ export function GlassCard({ children, className = '', style = {}, ...rest }: {
 
 // ── PillToggle (matches src/app/manage/[slug]/settings/page.tsx) ───────────
 
-export function PillToggle({ value, onChange, size = 'md' }: {
+export function PillToggle({ value, onChange, size = 'md', disabled = false }: {
   value: boolean;
   onChange: (v: boolean) => void;
   size?: 'md' | 'sm';
+  disabled?: boolean;
 }) {
   const w = size === 'md' ? 40 : 32;
   const h = size === 'md' ? 22 : 18;
@@ -468,14 +469,17 @@ export function PillToggle({ value, onChange, size = 'md' }: {
   return (
     <button
       type="button"
-      onClick={() => onChange(!value)}
+      onClick={() => { if (!disabled) onChange(!value); }}
+      disabled={disabled}
+      aria-disabled={disabled}
       className="relative flex-shrink-0 focus:outline-none"
       style={{
         width: `${w}px`, height: `${h}px`,
         borderRadius: '9999px',
         backgroundColor: value ? '#1B3828' : '#DDD4C0',
-        transition: 'background-color 200ms ease',
-        border: 'none', cursor: 'pointer',
+        transition: 'background-color 200ms ease, opacity 200ms ease',
+        border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.45 : 1,
       }}
     >
       <span

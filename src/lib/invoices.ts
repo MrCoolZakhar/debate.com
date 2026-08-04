@@ -78,10 +78,13 @@ export const INVOICE_STATUS_STYLE: Record<InvoiceStatus, { bg: string; color: st
   void: { bg: 'rgba(154,138,120,0.16)', color: '#6B5E4E' },
 };
 
-/** Applies gates acceptance for an UNPAID invoice, any kind — the
- *  acceptance-block rule shared by applications/page.tsx. Widened from
- *  app_fee-only now that a role_fee (registration) can also gate acceptance
- *  via application_role_configs.fee_gates_acceptance. */
+/** True when an UNPAID invoice blocks acceptance. This is the acceptance-block
+ *  rule shared with applications/page.tsx. Only app_fee rows ever carry
+ *  gates_acceptance=true: the flag is copied from
+ *  application_surcharges.gates_acceptance by sync_participant_invoices, which
+ *  hard-codes false on every role_fee row. The old role-level gate
+ *  (application_role_configs.fee_gates_acceptance) is gone from the UI and from
+ *  the database. */
 export function isUnpaidGatingInvoice(inv: Pick<InvoiceRow, 'gates_acceptance' | 'status'>): boolean {
   return inv.gates_acceptance && inv.status !== 'settled' && inv.status !== 'waived' && inv.status !== 'void';
 }
