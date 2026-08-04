@@ -40,7 +40,7 @@ export function buildImportTemplateCSV(): string {
     'unpaid',
     'UNSC',
     'France',
-    '', // seat: left empty in the example, only meaningful for double-delegation committees
+    '', // seat: optional. Leave empty and double-delegation seats fill in order.
   ].map(v => `"${v.replace(/"/g, '""')}"`).join(',');
   return `${header}\n${example}\n`;
 }
@@ -56,8 +56,9 @@ export interface ParsedImportRow {
   payment: string;
   committee: string;
   country: string;
-  /** Raw text, "1", "2", or empty. Only meaningful for double-delegation
-   *  committees — validated against the target committee's delegation_size. */
+  /** Raw text, "1", "2", or empty. OPTIONAL — when empty the importer fills the
+   *  next free seat for that country, so listing a country once per delegate is
+   *  enough. An explicit value pins the delegate to that half instead. */
   seat: string;
 }
 
@@ -271,37 +272,58 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
           if (!slot) {
             reasons.push({ severity: 'warning', message: `'${raw.country.trim()}' is not in ${committeeLabel}'s roster, so imported without allocation.` });
           } else {
+            // Seat resolution. The `seat` column is OPTIONAL: listing a country
+            // once per delegate is all an organiser has to do. In a
+            // double-delegation committee the first row naming France takes
+            // seat 1 and the second takes seat 2 — writing "France" twice does
+            // the obvious thing. An explicit 1/2 is still honoured for anyone
+            // who wants to pin which half a delegate sits in.
+            //
+            // This used to demand an explicit seat and raise an ERROR without
+            // one, which dropped the delegate entirely rather than merely
+            // leaving them unallocated — so a 200-row file with no seat column
+            // imported nobody at all.
             const isDouble = committee.delegation_size === 2;
+            const capacity = isDouble ? 2 : 1;
             const seatRaw = raw.seat.trim();
+            const seatTaken = (n: number) => {
+              const k = `${committee.id}|${slot.country_code}|${n}`;
+              return ctx.existingAllocations.has(k) || claimedInFile.has(k);
+            };
             let seatValue: number | null = null;
-            if (isDouble) {
+
+            if (seatRaw === '') {
+              for (let n = 1; n <= capacity; n++) {
+                if (!seatTaken(n)) { seatValue = n; break; }
+              }
+              if (seatValue === null) {
+                reasons.push({ severity: 'warning', message: `${slot.country_name} is fully allocated in ${committeeLabel}, so imported without allocation.` });
+              }
+            } else {
               const n = Number(seatRaw);
-              if (seatRaw === '' || !(n === 1 || n === 2)) {
-                reasons.push({ severity: 'error', message: 'This committee is a double-delegation committee — every allocation needs a Seat of 1 or 2.' });
+              if (!Number.isInteger(n) || n < 1 || n > capacity) {
+                reasons.push({
+                  severity: 'error',
+                  message: capacity === 1
+                    ? `${committeeLabel} seats one delegate per country, so Seat must be 1 or left empty.`
+                    : `Seat must be 1 or 2 in ${committeeLabel}, or left empty to fill the next free seat.`,
+                });
+              } else if (seatTaken(n)) {
+                reasons.push({ severity: 'warning', message: `${slot.country_name}${isDouble ? ` seat ${n}` : ''} is already allocated in ${committeeLabel}, so imported without allocation.` });
               } else {
                 seatValue = n;
               }
-            } else if (seatRaw !== '') {
-              reasons.push({ severity: 'error', message: 'This committee seats one delegate per country — leave the Seat column empty.' });
-            } else {
-              seatValue = 1;
             }
 
             if (seatValue !== null) {
-              const slotKey = `${committee.id}|${slot.country_code}|${seatValue}`;
-              const occupied = ctx.existingAllocations.has(slotKey) || claimedInFile.has(slotKey);
-              if (occupied) {
-                reasons.push({ severity: 'warning', message: `${slot.country_name}${isDouble ? ` seat ${seatValue}` : ''} is already allocated in ${committeeLabel}, so imported without allocation.` });
-              } else {
-                claimedInFile.add(slotKey);
-                committeeId = committee.id;
-                // Copied verbatim from the matched slot row, no derivation —
-                // guarantees import-created allocations are byte-identical to
-                // UI-created ones.
-                countryCode = slot.country_code;
-                countryName = slot.country_name;
-                seat = seatValue;
-              }
+              claimedInFile.add(`${committee.id}|${slot.country_code}|${seatValue}`);
+              committeeId = committee.id;
+              // Copied verbatim from the matched slot row, no derivation —
+              // guarantees import-created allocations are byte-identical to
+              // UI-created ones.
+              countryCode = slot.country_code;
+              countryName = slot.country_name;
+              seat = seatValue;
             }
           }
         }

@@ -641,7 +641,7 @@ export default function ImportPage() {
                   <p><strong style={{ color: NEU.ink }}>payment</strong>: paid, unpaid, or waived. Defaults to unpaid.</p>
                   <p><strong style={{ color: NEU.ink }}>committee</strong>: an existing committee&apos;s name or abbreviation.</p>
                   <p><strong style={{ color: NEU.ink }}>country</strong>: a name from the committee&apos;s roster, a country (France) or, for crisis committees, a character (Fidel Castro).</p>
-                  <p><strong style={{ color: NEU.ink }}>seat</strong>: 1 or 2, only for committees marked double delegation. Leave empty for normal committees.</p>
+                  <p><strong style={{ color: NEU.ink }}>seat</strong>: optional. In a double-delegation committee, list the country once per delegate and the seats fill in order — France twice gives you seats 1 and 2. Only set this if you want to pin who sits in which seat.</p>
                 </div>
               </div>
             </NeuCard>
