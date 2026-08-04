@@ -1146,9 +1146,9 @@ export default function ApplicationsPage() {
   const { session } = useAuth();
   const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
   const [applications, setApplications] = useState<Application[]>([]);
-  // Unpaid gating invoices, any kind (gates_acceptance=true, status not
-  // settled/waived/void) — role_fee and app_fee can both gate acceptance now.
-  // Fetched alongside the applications list.
+  // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
+  // void). Only app_fee rows ever carry the flag, since it comes from
+  // application_surcharges.gates_acceptance. Fetched with the applications list.
   const [gatingInvoices, setGatingInvoices] = useState<{ application_id: string | null; society_id: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   // Empty role set = no constraint, so a fresh page shows every role
@@ -1244,9 +1244,12 @@ export default function ApplicationsPage() {
         .from('application_role_configs')
         .select('role, payment_timing, custom_questions, fee_amount, fee_currency, fee_phases, allow_resubmission')
         .eq('conference_id', conference.id),
-      // Unpaid gating invoices — any kind — blocks Accept until paid. Widened
-      // from app_fee-only now that a role_fee (registration) can also gate
-      // acceptance via application_role_configs.fee_gates_acceptance.
+      // Unpaid gating invoices block Accept until paid. The only source of
+      // gates_acceptance=true is application_surcharges.gates_acceptance, the
+      // Conference Registration Fee in Financials, copied onto the app_fee
+      // invoice by sync_participant_invoices. The old role-level gate
+      // (application_role_configs.fee_gates_acceptance) was removed from
+      // Settings > Applications and dropped from the database.
       supabase
         .from('invoices')
         .select('application_id, society_id')
@@ -2257,15 +2260,15 @@ export default function ApplicationsPage() {
     && (a.role !== 'chair' || chairHasFee)
     && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
     && a.payment_status !== 'paid' && a.payment_status !== 'waived';
-  // Accept is blocked while a gating app-fee invoice is unpaid, matched by
+  // Accept is blocked while a gating app_fee invoice is unpaid, matched by
   // this application's own id, or its society's (per-delegation surcharges
   // are tied to whichever application first triggered them, not necessarily
-  // this one — see sync_participant_invoices).
+  // this one; see sync_participant_invoices).
   const gatingAppIds = new Set(gatingInvoices.map(i => i.application_id).filter((id): id is string => !!id));
   const gatingSocietyIds = new Set(gatingInvoices.map(i => i.society_id).filter((id): id is string => !!id));
   const isAcceptBlockedByFee = (a: Application) =>
     gatingAppIds.has(a.id) || (!!a.society_id && gatingSocietyIds.has(a.society_id));
-  const ACCEPT_BLOCKED_MESSAGE = "A required fee is unpaid — they can be accepted once it's paid.";
+  const ACCEPT_BLOCKED_MESSAGE = "A required fee is unpaid. They can be accepted once it's paid.";
   const bulkAcceptable = bulkEligibleApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
   const bulkRejectable = bulkEligibleApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
   const bulkCheckInable = bulkEligibleApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
@@ -2952,7 +2955,7 @@ export default function ApplicationsPage() {
               return bulkAcceptable.length > 0 ? (
                 <button
                   onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
-                  title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded — ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
+                  title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded. ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
                   className="inline-flex items-center gap-1.5 focus:outline-none"
                   style={{
                     padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',

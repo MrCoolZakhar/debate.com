@@ -74,11 +74,21 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
     })();
   }, [conference.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A fee of 0 can never be settled, so a zero-amount gate would block every
+  // applicant with no way through. The DB enforces this too, via the
+  // application_surcharges_gate_needs_amount check constraint.
+  const amountMinor = Math.round(Number(amount) * 100);
+  const amountIsPositive = Number.isFinite(amountMinor) && amountMinor > 0;
+
   async function handleSave() {
     if (!session || saving) return;
     const amt = Number(amount);
     if (!label.trim()) { setError('Give the fee a label.'); return; }
     if (!Number.isFinite(amt) || amt < 0) { setError('Enter an amount of 0 or more.'); return; }
+    if (gatesAcceptance && Math.round(amt * 100) <= 0) {
+      setError('A fee of 0 cannot block acceptance. Enter an amount above 0, or turn acceptance gating off.');
+      return;
+    }
     setError('');
     setSaving(true);
     const supabase = getAuthedClient(session.access_token);
@@ -117,7 +127,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
             Conference Registration Fee
           </h2>
           <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted }}>
-            A registration charge collected alongside conference fees — set whether it must be paid before you can accept an applicant.
+            A registration charge collected alongside conference fees. Set whether it must be paid before you can accept an applicant.
           </p>
         </div>
       </div>
@@ -164,7 +174,11 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
                   min={0}
                   step="0.01"
                   value={amount}
-                  onChange={e => setAmount(e.target.value)}
+                  onChange={e => {
+                    setAmount(e.target.value);
+                    const nextMinor = Math.round(Number(e.target.value) * 100);
+                    if (!Number.isFinite(nextMinor) || nextMinor <= 0) setGatesAcceptance(false);
+                  }}
                   placeholder="25.00"
                   style={inputStyle}
                 />
@@ -195,13 +209,20 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
             <div>
               <span style={fieldLabelStyle}>Acceptance gating</span>
               <div className="flex items-center gap-3" style={{ paddingTop: 3 }}>
-                <PillToggle value={gatesAcceptance} onChange={setGatesAcceptance} size="sm" />
-                <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>
+                <PillToggle
+                  value={gatesAcceptance}
+                  onChange={setGatesAcceptance}
+                  size="sm"
+                  disabled={!amountIsPositive}
+                />
+                <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: amountIsPositive ? NEU.ink : NEU.muted }}>
                   {gatesAcceptance ? 'Must be paid before acceptance' : "Collected as a normal invoice (doesn't block acceptance)"}
                 </span>
               </div>
               <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 4 }}>
-                When on, applicants can&apos;t be accepted until this fee is paid.
+                {amountIsPositive
+                  ? "When on, applicants can't be accepted until this fee is paid."
+                  : 'Set an amount above 0 to use acceptance gating. A fee of 0 can never be paid, so it would block every applicant with no way through.'}
               </p>
             </div>
 
@@ -209,7 +230,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
               <div className="flex items-center gap-3">
                 <PillToggle value={active} onChange={setActive} size="sm" />
                 <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>
-                  {active ? 'Active — charged on applications' : 'Inactive — no fee charged'}
+                  {active ? 'Active: charged on applications' : 'Inactive: no fee charged'}
                 </span>
               </div>
               <NeuButton onClick={handleSave} disabled={saving} gradient={saved ? NEU_GRADIENTS.green : NEU_GRADIENTS.forest}>
