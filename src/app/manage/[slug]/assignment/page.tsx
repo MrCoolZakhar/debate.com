@@ -951,8 +951,12 @@ async function insertAllocation(
   slot: SlotRow,
   seat: number,
 ): Promise<string | null> {
-  const userId = app.profiles?.id;
-  if (!userId) return 'Applicant profile not found.';
+  // An imported applicant has no account yet, so app.profiles is null and
+  // user_id stays null until they claim their invite. conference_allocations
+  // .user_id is nullable and the importer already writes nulls, so this is a
+  // perfectly valid allocation. Never block on a missing profile: doing so
+  // strands every imported delegate until they happen to register.
+  const userId = app.profiles?.id ?? null;
 
   const { error: insertErr } = await supabase.from('conference_allocations').insert({
     conference_id: conferenceId,
@@ -969,7 +973,11 @@ async function insertAllocation(
       return 'That country does not have a second seat in this committee.';
     }
     if (insertErr.code === '23505') {
-      return insertErr.message.includes('user_id')
+      // Two indexes catch a repeat allocation: the old (committee, user_id) one
+      // for registered delegates, and the partial (committee, application_id)
+      // one that also covers imported delegates, whose null user_id the first
+      // index cannot dedupe.
+      return insertErr.message.includes('user_id') || insertErr.message.includes('_application_key')
         ? 'This delegate already has an allocation in this committee.'
         : insertErr.message.includes('country_code')
         ? 'That seat is already taken.'
@@ -1585,8 +1593,8 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
 
   async function handleAssign() {
     if (!selectedApp || !selectedSlot) { setError('Select an applicant and a country.'); return; }
-    const userId = selectedApp.profiles?.id;
-    if (!userId) { setError('Applicant profile not found.'); return; }
+    // No profiles row means an imported applicant who has not claimed their
+    // account yet. That is allocatable, see insertAllocation.
     if (!session) return;
     if (!conference) { setError('Conference not loaded. Please refresh.'); return; }
     const seat = preSelectedSeat ?? lowestOpenSeat(selectedSlot, byCountry);
@@ -1620,11 +1628,15 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
     }
 
     if (sendEmail) {
+      // Key off application_id, not user_id. An imported applicant's user_id is
+      // null, and .eq('user_id', null) matches no rows, so the allocation would
+      // silently stay marked unsent. Every delegate allocation has an
+      // application_id, imported or not.
       await supabase
         .from('conference_allocations')
         .update({ allocation_sent: true, allocation_sent_at: new Date().toISOString() })
         .eq('conference_committee_id', committee.id)
-        .eq('user_id', userId);
+        .eq('application_id', selectedApp.id);
     }
 
     setSaving(false);
@@ -3123,7 +3135,9 @@ export default function AssignmentPage() {
   function applyLocalAllocation(committee: CommitteeData, app: AcceptedApp, slot: SlotRow, seat: number, sent = false): AllocationRow {
     const row: AllocationRow = {
       id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      user_id: app.profiles?.id ?? '',
+      // null, not '': AllocationRow.user_id is string | null, and an imported
+      // delegate genuinely has no user id until they claim their account.
+      user_id: app.profiles?.id ?? null,
       country_code: slot.country_code,
       country_name: slot.country_name,
       allocation_sent: sent,
