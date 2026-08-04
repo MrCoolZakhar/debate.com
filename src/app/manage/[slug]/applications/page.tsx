@@ -1910,6 +1910,30 @@ export default function ApplicationsPage() {
       const { error } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', app.id);
       if (error) throw error;
 
+      // Settle their invoices too. This is NOT optional bookkeeping: the accept
+      // gate reads INVOICES (gates_acceptance, unsettled), never
+      // applications.payment_status, so marking someone paid without settling
+      // left them permanently un-acceptable — the organiser saw a green PAID
+      // badge next to "A required fee is unpaid", with ACCEPT greyed out and no
+      // way forward. It also left the ledger claiming nothing was collected.
+      //
+      // mark_invoice_paid is the same RPC the financials page uses: it writes
+      // the payment + batch rows, settles the invoice and runs
+      // settle_invoice_effects, so manual payments land identically wherever
+      // they are recorded.
+      try {
+        const { data: openInvoices } = await supabase
+          .from('invoices')
+          .select('id')
+          .eq('application_id', app.id)
+          .not('status', 'in', '(settled,waived,void)');
+        for (const inv of (openInvoices ?? []) as { id: string }[]) {
+          await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
+        }
+      } catch {
+        setActionError('Marked paid, but their invoice could not be settled — they may still be blocked from acceptance. Settle it in Financials → Invoices.');
+      }
+
       // Secondary effects, a failure here must NOT roll back the payment mark.
       try {
         const pool = poolForRole(app.role);
@@ -1956,6 +1980,23 @@ export default function ApplicationsPage() {
       const supabase = getAuthedClient(session.access_token);
       const { error } = await supabase.from('applications').update({ payment_status: 'unpaid', self_paid: false }).eq('id', app.id);
       if (error) throw error;
+
+      // Mirror of handleMarkPaid: reopen anything we settled on their behalf,
+      // so the ledger tracks the payment mark in BOTH directions. Without this
+      // the reverse inconsistency appears — an application reading unpaid while
+      // its invoice still claims the money arrived.
+      try {
+        const { data: settled } = await supabase
+          .from('invoices')
+          .select('id')
+          .eq('application_id', app.id)
+          .eq('status', 'settled');
+        for (const inv of (settled ?? []) as { id: string }[]) {
+          await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
+        }
+      } catch {
+        setActionError('Marked unpaid, but their invoice still shows as settled. Reopen it in Financials → Invoices.');
+      }
 
       try {
         const pool = poolForRole(app.role);
