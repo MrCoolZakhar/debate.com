@@ -137,6 +137,15 @@ export interface ClassifiedImportRow {
   raw: ParsedImportRow;
   cls: ImportRowClass;
   reasons: string[];
+  /** 'create' inserts a new application. 'update' patches the one that already
+   *  exists for this email + role — re-importing a roster after fixing it is a
+   *  normal workflow, not an error. */
+  mode: 'create' | 'update';
+  /** The application to patch, for mode === 'update'. */
+  existingId: string | null;
+  /** True when an update row would change nothing at all, so the result table
+   *  can say "unchanged" rather than implying work was done. */
+  noop: boolean;
   resolved: {
     email: string;
     name: string;
@@ -169,10 +178,25 @@ export interface RosterSlot {
   country_name: string;
 }
 
+/** An application already on this conference, keyed by `${email}|${role}`.
+ *  Re-importing someone is an UPDATE, so the classifier needs their current
+ *  state to decide what a second row would actually change. */
+export interface ExistingApplication {
+  id: string;
+  /** Their current allocation, if any — null when imported without one. */
+  committeeId: string | null;
+  countryCode: string | null;
+  countryName: string | null;
+  seat: number | null;
+  /** Already attached to a delegation? Blank cells never clear this. */
+  hasSociety: boolean;
+}
+
 export interface ClassifyContext {
   committees: CommitteeLite[];
-  /** `${lowercased email}|${role}` for every application already on this conference (invited_email or profile email). */
-  existingEmailRole: Set<string>;
+  /** Every application already on this conference, by `${lowercased email}|${role}`
+   *  (invited_email or profile email). */
+  existingByEmailRole: Map<string, ExistingApplication>;
   /** `${committeeId}|${countryCode}|${seat}` for every country already allocated in this conference — single-delegation allocations are keyed at seat 1. */
   existingAllocations: Set<string>;
   /** Every committee's roster (committee_country_slots), keyed by committee id — the single source of truth for what's assignable in that committee, standard or crisis alike. */
@@ -233,16 +257,25 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
       reasons.push({ severity: 'error', message: `Unknown role "${raw.role}".` });
     }
 
+    // Re-importing an existing delegate UPDATES them rather than failing. The
+    // common workflow is: import the roster, discover a country was missing
+    // from a committee, fix the roster, re-import. That used to be rejected
+    // wholesale ("an application already exists"), leaving the organiser to
+    // hand-assign the stragglers.
+    let mode: 'create' | 'update' = 'create';
+    let existing: ExistingApplication | undefined;
+
     const emailValid = EMAIL_PATTERN.test(raw.email.trim());
     if (emailValid && role) {
       const key = `${emailLower}|${role}`;
       if (seenInFile.has(key)) {
+        // Still an error: two rows for one person in ONE file is a mistake in
+        // the file, not an intentional update.
         reasons.push({ severity: 'error', message: 'Duplicate email + role within this file.' });
       }
       seenInFile.add(key);
-      if (ctx.existingEmailRole.has(key)) {
-        reasons.push({ severity: 'error', message: 'An application already exists for this email and role.' });
-      }
+      existing = ctx.existingByEmailRole.get(key);
+      if (existing) mode = 'update';
     }
 
     if (raw.country.trim() && !raw.committee.trim()) {
@@ -287,6 +320,15 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
             const capacity = isDouble ? 2 : 1;
             const seatRaw = raw.seat.trim();
             const seatTaken = (n: number) => {
+              // A seat this same delegate already occupies is not "taken" from
+              // their point of view — otherwise re-importing an unchanged row
+              // would warn that they are blocking themselves.
+              if (existing
+                  && existing.committeeId === committee.id
+                  && existing.countryCode === slot.country_code
+                  && (existing.seat ?? 1) === n) {
+                return false;
+              }
               const k = `${committee.id}|${slot.country_code}|${n}`;
               return ctx.existingAllocations.has(k) || claimedInFile.has(k);
             };
@@ -335,6 +377,45 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
       reasons.push({ severity: 'warning', message: `Unknown payment value "${raw.payment}", defaulting to unpaid.` });
     }
 
+    // ── Update-specific rules ────────────────────────────────────────────────
+    // A re-import FILLS GAPS. It never overwrites an allocation an organiser
+    // has already made — moving a delegate who is sitting somewhere is a
+    // decision, not a side effect of re-running a spreadsheet.
+    let noop = false;
+    if (mode === 'update' && existing) {
+      const alreadyAllocated = !!existing.committeeId && !!existing.countryCode;
+      const sameSeat = alreadyAllocated
+        && existing.committeeId === committeeId
+        && existing.countryCode === countryCode;
+      // Set when we declined a genuine change, so the "adds nothing new" line
+      // below is suppressed — the row DID carry something new, we just refused
+      // to act on it, and saying both at once contradicts itself.
+      let declinedAMove = false;
+
+      if (alreadyAllocated && committeeId && !sameSeat) {
+        reasons.push({
+          severity: 'warning',
+          message: `Already allocated to ${existing.countryName ?? existing.countryCode}, so the new assignment was ignored. Move them from Assignment if that's intended.`,
+        });
+        committeeId = null; countryCode = null; countryName = null; seat = null;
+        declinedAMove = true;
+      } else if (sameSeat) {
+        // Re-stating what they already have is not a change.
+        committeeId = null; countryCode = null; countryName = null; seat = null;
+      }
+
+      // Blank cells mean "no change", never "clear it", so a partial re-import
+      // can't wipe a delegation. Payment is deliberately untouched on update:
+      // it now settles invoices as a side effect, which a spreadsheet should
+      // not be able to trigger.
+      const willAllocate = !!committeeId;
+      const willSetSociety = !!raw.delegation.trim() && !existing.hasSociety;
+      noop = !willAllocate && !willSetSociety;
+      if (noop && !declinedAMove) {
+        reasons.push({ severity: 'warning', message: 'Already imported, and this row adds nothing new.' });
+      }
+    }
+
     const cls: ImportRowClass = reasons.some(r => r.severity === 'error')
       ? 'error'
       : reasons.some(r => r.severity === 'warning')
@@ -346,6 +427,9 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
       raw,
       cls,
       reasons: reasons.map(r => r.message),
+      mode,
+      existingId: existing?.id ?? null,
+      noop,
       resolved: {
         email: emailLower,
         name: raw.name.trim(),
