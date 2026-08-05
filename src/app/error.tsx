@@ -9,7 +9,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { reportCrash } from '@/lib/reportCrash';
+import { reportCrash, recoverFromStaleDeploy, isStaleDeployError } from '@/lib/reportCrash';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -20,7 +20,15 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => { reportCrash(error); }, [error]);
+  useEffect(() => {
+    // A chunk missing because we deployed under the visitor's feet is
+    // self-healing: reload and the current build's chunks resolve. Don't show
+    // an error card the user can't act on, and don't page anyone about it —
+    // if the reload doesn't fix it, the second attempt lands here and IS
+    // reported, because then something is genuinely wrong.
+    if (recoverFromStaleDeploy(error)) return;
+    reportCrash(error);
+  }, [error]);
 
   return (
     <div className="flex items-center justify-center px-6" style={{ minHeight: '70vh' }}>
@@ -50,7 +58,13 @@ export default function Error({
 
         <div className="flex items-center justify-center gap-2.5 flex-wrap">
           <button
-            onClick={reset}
+            onClick={() => {
+              // reset() re-renders the same tree, which re-requests the same
+              // missing chunk — useless for a stale deploy. A hard reload
+              // fetches the current build instead.
+              if (isStaleDeployError(error)) window.location.reload();
+              else reset();
+            }}
             className="rounded-full focus:outline-none"
             style={{
               padding: '12px 22px', backgroundColor: '#1B3828', color: '#EED98A',
