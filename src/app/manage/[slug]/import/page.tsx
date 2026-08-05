@@ -16,6 +16,7 @@ import { NEU, NEU_GRADIENTS, NeuCard, NeuIconDisc } from '@/components/neu';
 import {
   buildImportTemplateCSV, parseImportFile, classifyImportRows, summarizeRows,
   type ClassifiedImportRow, type CommitteeLite, type ImportableRole, type RosterSlot,
+  type ExistingApplication,
 } from '@/lib/applicantImport';
 import { queueImportJoinInviteEmails } from '@/lib/emailEvents';
 
@@ -44,7 +45,7 @@ function roleLabel(role: string) {
 
 // ── Row outcome (post-execute) ──────────────────────────────────────────────
 
-type RowOutcome = 'imported' | 'imported-no-allocation' | 'skipped';
+type RowOutcome = 'imported' | 'imported-no-allocation' | 'updated' | 'unchanged' | 'skipped';
 
 interface ResultRow {
   row: ClassifiedImportRow;
@@ -69,7 +70,7 @@ interface OrphanAllocationRow {
 
 interface DbContext {
   committees: CommitteeLite[];
-  existingEmailRole: Set<string>;
+  existingByEmailRole: Map<string, ExistingApplication>;
   existingAllocations: Set<string>;
   committeeSlots: Map<string, RosterSlot[]>;
 }
@@ -77,18 +78,39 @@ interface DbContext {
 async function loadContext(supabase: ReturnType<typeof getAuthedClient>, conferenceId: string): Promise<DbContext> {
   const [{ data: committees }, { data: apps }, { data: allocs }] = await Promise.all([
     supabase.from('conference_committees').select('id, name, abbreviation, delegation_size').eq('conference_id', conferenceId),
-    supabase.from('applications').select('role, invited_email, profiles(email)').eq('conference_id', conferenceId),
-    supabase.from('conference_allocations').select('conference_committee_id, country_code, seat').eq('conference_id', conferenceId),
+    supabase.from('applications').select('id, role, invited_email, society_id, profiles(email)').eq('conference_id', conferenceId),
+    supabase.from('conference_allocations').select('application_id, conference_committee_id, country_code, country_name, seat').eq('conference_id', conferenceId),
   ]);
 
-  const existingEmailRole = new Set<string>();
-  for (const a of (apps ?? []) as unknown as { role: string; invited_email: string | null; profiles: { email: string } | null }[]) {
+  const allocRows = (allocs ?? []) as {
+    application_id: string | null; conference_committee_id: string; country_code: string;
+    country_name: string | null; seat: number | null;
+  }[];
+
+  // Allocation by application, so a re-import knows whether this person is
+  // already seated somewhere (and where) before deciding what to change.
+  const allocByApp = new Map<string, (typeof allocRows)[number]>();
+  for (const al of allocRows) if (al.application_id) allocByApp.set(al.application_id, al);
+
+  const existingByEmailRole = new Map<string, ExistingApplication>();
+  for (const a of (apps ?? []) as unknown as {
+    id: string; role: string; invited_email: string | null; society_id: string | null; profiles: { email: string } | null;
+  }[]) {
     const email = (a.invited_email ?? a.profiles?.email)?.toLowerCase();
-    if (email) existingEmailRole.add(`${email}|${a.role}`);
+    if (!email) continue;
+    const al = allocByApp.get(a.id);
+    existingByEmailRole.set(`${email}|${a.role}`, {
+      id: a.id,
+      committeeId: al?.conference_committee_id ?? null,
+      countryCode: al?.country_code ?? null,
+      countryName: al?.country_name ?? null,
+      seat: al?.seat ?? null,
+      hasSociety: !!a.society_id,
+    });
   }
 
   const existingAllocations = new Set<string>();
-  for (const al of (allocs ?? []) as { conference_committee_id: string; country_code: string; seat: number | null }[]) {
+  for (const al of allocRows) {
     existingAllocations.add(`${al.conference_committee_id}|${al.country_code}|${al.seat ?? 1}`);
   }
 
@@ -108,7 +130,7 @@ async function loadContext(supabase: ReturnType<typeof getAuthedClient>, confere
     }
   }
 
-  return { committees: (committees ?? []) as CommitteeLite[], existingEmailRole, existingAllocations, committeeSlots };
+  return { committees: (committees ?? []) as CommitteeLite[], existingByEmailRole, existingAllocations, committeeSlots };
 }
 
 // ── Row classification pill ──────────────────────────────────────────────────
@@ -334,8 +356,11 @@ export default function ImportPage() {
       }
     }
 
-    // 2. Insert applications.
-    const insertRows = importable.map(r => ({
+    // 2. Insert applications. Re-imported people are UPDATES, not inserts —
+    // they already have a row, so they are patched further down instead.
+    const toCreate = importable.filter(r => r.mode === 'create');
+    const toUpdate = importable.filter(r => r.mode === 'update');
+    const insertRows = toCreate.map(r => ({
       conference_id: conference.id,
       invited_email: r.resolved.email,
       invited_name: r.resolved.name,
@@ -355,23 +380,25 @@ export default function ImportPage() {
       .filter(r => r.cls === 'error')
       .map(r => ({ row: r, outcome: 'skipped', note: r.reasons.join(' ') }));
 
-    if (insertRows.length === 0) {
+    if (insertRows.length === 0 && toUpdate.length === 0) {
       setResultRows(results);
       await loadUnclaimedCount();
       return;
     }
 
-    const { error: insertError } = await supabase.from('applications').insert(insertRows);
-    if (insertError) {
-      for (const r of importable) {
-        results.push({ row: r, outcome: 'skipped', note: `Import failed: ${insertError.message}` });
+    if (insertRows.length > 0) {
+      const { error: insertError } = await supabase.from('applications').insert(insertRows);
+      if (insertError) {
+        for (const r of toCreate) {
+          results.push({ row: r, outcome: 'skipped', note: `Import failed: ${insertError.message}` });
+        }
+        // Updates are independent of the insert, so they still run below.
+        toCreate.length = 0;
       }
-      setResultRows(results.sort((a, b) => a.row.rowNumber - b.row.rowNumber));
-      return;
     }
 
     // Re-select to map row -> real application id (email+role pair is unique per conference).
-    const emails = Array.from(new Set(importable.map(r => r.resolved.email)));
+    const emails = Array.from(new Set(toCreate.map(r => r.resolved.email)));
     const { data: createdApps } = await supabase
       .from('applications')
       .select('id, invited_email, role')
@@ -381,10 +408,14 @@ export default function ImportPage() {
     for (const a of (createdApps ?? []) as { id: string; invited_email: string; role: string }[]) {
       appIdByKey.set(`${a.invited_email.toLowerCase()}|${a.role}`, a.id);
     }
+    // Re-imported rows already know their application id from the dry run.
+    for (const r of toUpdate) {
+      if (r.existingId && r.resolved.role) appIdByKey.set(`${r.resolved.email}|${r.resolved.role}`, r.existingId);
+    }
 
     // 3. Pool increments, batched per (society, pool).
     const poolIncrements = new Map<string, number>(); // `${societyId}|${column}` -> count
-    for (const r of importable) {
+    for (const r of toCreate) {
       if (r.resolved.paymentStatus !== 'paid' || !r.resolved.societyName || !r.resolved.role) continue;
       const societyId = societyMap.get(r.resolved.societyName.trim().toLowerCase());
       const pool = poolForRole(r.resolved.role);
@@ -400,16 +431,44 @@ export default function ImportPage() {
       await supabase.from('societies').update({ [column]: current + count }).eq('id', societyId);
     }
 
+    // 3b. Patch re-imported applications. Fill-blanks-only: a missing cell in
+    // the file means "no change", never "clear it", so a partial re-import
+    // cannot wipe a delegation. Payment is deliberately untouched here —
+    // marking paid now settles invoices as a side effect, which a spreadsheet
+    // should not be able to trigger.
+    for (const r of toUpdate) {
+      if (r.noop || !r.existingId) continue;
+      const patch: Record<string, unknown> = {};
+      if (r.resolved.name) patch.invited_name = r.resolved.name;
+      if (r.resolved.societyName) {
+        const societyId = societyMap.get(r.resolved.societyName.trim().toLowerCase());
+        if (societyId) { patch.society_id = societyId; patch.is_independent = false; }
+      }
+      if (Object.keys(patch).length > 0) {
+        await supabase.from('applications').update(patch).eq('id', r.existingId);
+      }
+    }
+
     // 4. Allocations for rows with a resolved committee + country.
     for (const r of importable) {
       if (!r.resolved.role) continue;
+      // Rows whose insert failed above were dropped from toCreate.
+      if (r.mode === 'create' && !toCreate.includes(r)) continue;
+      if (r.noop) {
+        results.push({ row: r, outcome: 'unchanged', note: r.reasons.join(' ') || null });
+        continue;
+      }
       const appId = appIdByKey.get(`${r.resolved.email}|${r.resolved.role}`);
       if (!appId) {
         results.push({ row: r, outcome: 'skipped', note: 'Could not locate the created application.' });
         continue;
       }
       if (!r.resolved.committeeId || !r.resolved.countryCode || !r.resolved.countryName) {
-        results.push({ row: r, outcome: r.cls === 'warning' ? 'imported-no-allocation' : 'imported', note: r.cls === 'warning' ? r.reasons.join(' ') : null });
+        results.push({
+          row: r,
+          outcome: r.mode === 'update' ? 'updated' : r.cls === 'warning' ? 'imported-no-allocation' : 'imported',
+          note: r.cls === 'warning' ? r.reasons.join(' ') : null,
+        });
         continue;
       }
       const { error: allocError } = await supabase.from('conference_allocations').insert({
@@ -435,7 +494,7 @@ export default function ImportPage() {
         assigned_country_code: r.resolved.countryCode,
         assigned_country_name: r.resolved.countryName,
       }).eq('id', appId);
-      results.push({ row: r, outcome: 'imported', note: null });
+      results.push({ row: r, outcome: r.mode === 'update' ? 'updated' : 'imported', note: null });
     }
 
     setResultRows(results.sort((a, b) => a.row.rowNumber - b.row.rowNumber));
@@ -906,6 +965,9 @@ function RowTable({ rows, committees }: { rows: ClassifiedImportRow[]; committee
 const OUTCOME_STYLES: Record<RowOutcome, { icon: typeof CircleCheck; color: string; label: string }> = {
   'imported': { icon: CircleCheck, color: '#2A5A3C', label: 'Imported' },
   'imported-no-allocation': { icon: AlertTriangle, color: '#9A6B2F', label: 'Imported, no allocation' },
+  // A person who was already here and got filled in by this run.
+  'updated': { icon: UserCheck, color: '#1B3828', label: 'Updated' },
+  'unchanged': { icon: Check, color: '#9A8A78', label: 'Already up to date' },
   'skipped': { icon: CircleX, color: '#8B2020', label: 'Skipped' },
 };
 
