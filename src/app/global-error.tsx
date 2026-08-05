@@ -9,7 +9,7 @@
 // depends on the thing that just broke is not a fallback.
 
 import { useEffect } from 'react';
-import { reportCrash } from '@/lib/reportCrash';
+import { reportCrash, recoverFromStaleDeploy } from '@/lib/reportCrash';
 
 const SYSTEM_FONT =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -21,7 +21,11 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => { reportCrash(error); }, [error]);
+  useEffect(() => {
+    // Same self-healing path as the route boundary — see src/app/error.tsx.
+    if (recoverFromStaleDeploy(error)) return;
+    reportCrash(error);
+  }, [error]);
 
   return (
     <html lang="en">
