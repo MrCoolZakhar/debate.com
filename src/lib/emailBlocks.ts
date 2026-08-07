@@ -3,7 +3,7 @@
 // mirror so the older resolver/preview/history code paths (which only know
 // about plain text) keep working unchanged.
 
-export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept' | 'organizer_invite_accept' | 'signup_page';
+export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept' | 'organizer_invite_accept' | 'signup_page' | 'import_claim';
 
 export interface ParagraphBlock {
   type: 'paragraph';
@@ -31,6 +31,7 @@ export const BUTTON_DESTINATION_LABELS: Record<ButtonDestination, string> = {
   chair_invite_accept: 'Accept chair invite link',
   organizer_invite_accept: 'Accept organizer invite link',
   signup_page: 'Gavelling sign-up page (returns to this conference)',
+  import_claim: 'Imported delegate claim link',
 };
 
 export interface ButtonUrlConference {
@@ -42,6 +43,7 @@ export interface ButtonUrlConference {
 export interface ButtonUrlExtra {
   chairInviteToken?: string;
   organizerInviteToken?: string;
+  importClaimToken?: string;
 }
 
 /** NEXT_PUBLIC_SITE_URL with the same production fallback used elsewhere for metadata/sitemap. */
@@ -77,6 +79,8 @@ export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConfer
       return extra?.chairInviteToken ? `${siteUrl}/invites/chair/${extra.chairInviteToken}` : '#';
     case 'organizer_invite_accept':
       return extra?.organizerInviteToken ? `${siteUrl}/invites/organizer/${extra.organizerInviteToken}` : '#';
+    case 'import_claim':
+      return extra?.importClaimToken ? `${siteUrl}/invites/import/${extra.importClaimToken}` : '#';
     case 'signup_page':
       // Carries the new account straight to this conference's role view
       // after signup and onboarding (both already honor ?next= end to end),

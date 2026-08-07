@@ -642,7 +642,9 @@ export async function queueImportJoinInviteEmails(
 ): Promise<{ queued: number }> {
   if (recipients.length === 0) return { queued: 0 };
 
-  const [{ data: confData }, { data: templateData }] = await Promise.all([
+  const recipientIds = recipients.map(r => r.applicationId);
+
+  const [{ data: confData }, { data: templateData }, { data: claimData }, { data: allocData }] = await Promise.all([
     supabase
       .from('conferences')
       .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
@@ -654,6 +656,19 @@ export async function queueImportJoinInviteEmails(
       .eq('conference_id', conferenceId)
       .eq('event_key', 'import_join_invite')
       .maybeSingle(),
+    // Per-recipient claim token: the personal /invites/import/[token] link the
+    // 'import_claim' button resolves to. A null token means the DB trigger
+    // hasn't minted one (or the row isn't really an imported invite), so that
+    // recipient is skipped rather than sent a dead-link '#' button.
+    supabase
+      .from('applications')
+      .select('id, claim_token')
+      .in('id', recipientIds),
+    // Per-recipient allocation, so the default copy can lead with their seat.
+    supabase
+      .from('conference_allocations')
+      .select('application_id, country_name, conference_committees(name, abbreviation)')
+      .in('application_id', recipientIds),
   ]);
 
   const conference = confData as ConferenceRow | null;
@@ -668,28 +683,63 @@ export async function queueImportJoinInviteEmails(
     email_theme: conference?.email_theme ?? null,
   };
 
+  const claimTokenByApp = new Map<string, string | null>();
+  for (const c of (claimData ?? []) as { id: string; claim_token: string | null }[]) {
+    claimTokenByApp.set(c.id, c.claim_token);
+  }
+  const allocByApp = new Map<string, { countryName: string; committeeName: string }>();
+  type CommitteeLite = { name: string; abbreviation: string | null };
+  type AllocRow = { application_id: string; country_name: string | null; conference_committees: CommitteeLite | CommitteeLite[] | null };
+  for (const a of (allocData ?? []) as unknown as AllocRow[]) {
+    // PostgREST types this to-one embed as an array in the generic even though
+    // it returns a single object at runtime, so normalize both shapes.
+    const committee = Array.isArray(a.conference_committees) ? a.conference_committees[0] : a.conference_committees;
+    if (a.application_id && committee?.name && a.country_name && !allocByApp.has(a.application_id)) {
+      allocByApp.set(a.application_id, { countryName: a.country_name, committeeName: committee.name });
+    }
+  }
+
   const useTemplate = !!template && template.enabled;
   const fallback = getDefaultEventEmail('import_join_invite');
-  const blocks: EmailBlock[] = useTemplate ? normalizeBlocks(template!.body_blocks, template!.body) : (fallback?.blocks ?? []);
+  // A custom enabled template is shared verbatim across recipients (organizer's
+  // own copy); otherwise each recipient gets the default, with an allocation
+  // holder's leading paragraph swapped for a seat-specific one.
+  const sharedBlocks: EmailBlock[] = useTemplate ? normalizeBlocks(template!.body_blocks, template!.body) : (fallback?.blocks ?? []);
   const subjectSource = useTemplate ? template!.subject : (fallback?.subject ?? '');
-  const flatBody = flattenBlocksToPlainText(blocks, renderConf);
 
-  const rows = recipients.map(r => {
+  const rows = recipients.flatMap(r => {
+    const token = claimTokenByApp.get(r.applicationId) ?? null;
+    if (!token) return []; // no claim link to send, skip this recipient entirely
+
+    let blocks = sharedBlocks;
+    if (!useTemplate) {
+      const alloc = allocByApp.get(r.applicationId);
+      if (alloc) {
+        blocks = sharedBlocks.map(b =>
+          b.type === 'paragraph'
+            ? { ...b, content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs on Gavelling. You are registered as ' + alloc.countryName + ' in ' + alloc.committeeName + '. Open your invitation to confirm your seat and activate your account, and everything attaches automatically.' }
+            : b
+        );
+      }
+    }
+
     const ctx: EmailTokenContext = {
       delegate_name: r.invitedName,
       conference_name: conference?.full_name ?? null,
     };
-    return {
+    return [{
       conference_id: conferenceId,
       template_id: useTemplate ? template!.id : null,
       recipient_application_id: r.applicationId,
       recipient_email: r.invitedEmail,
       subject: resolveTokens(subjectSource, ctx),
-      body: resolveTokens(flatBody, ctx),
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
+      body: resolveTokens(flattenBlocksToPlainText(blocks, renderConf, { importClaimToken: token }), ctx),
+      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, importClaimToken: token }),
       status: 'pending' as const,
-    };
+    }];
   });
+
+  if (rows.length === 0) return { queued: 0 };
 
   const { error } = await supabase.from('email_outbox').insert(rows);
   if (error) return { queued: 0 };
