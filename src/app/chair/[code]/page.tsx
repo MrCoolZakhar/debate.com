@@ -1,7 +1,6 @@
 'use client';
 import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import MobileGate from '@/components/MobileGate';
 import FitToScreen from '@/components/FitToScreen';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -2123,7 +2122,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   };
 
   return (
-    <MobileGate>
     <FitToScreen>
     <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -2976,7 +2974,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       )}
     </div>
     </FitToScreen>
-    </MobileGate>
   );
 }
 

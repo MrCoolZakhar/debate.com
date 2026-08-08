@@ -15,8 +15,8 @@ export default function SessionsHeaderLogo({
   /** Rendered height in px. Defaults to 32, which sits comfortably inside
    *  the 44px chair toolbar, the shortest of the three session headers. */
   height?: number;
-  /** Every in-toolbar use links back to /sessions. MobileGate's full-screen
-   *  splash renders the mark bare, there's nowhere useful to send it. */
+  /** Every in-toolbar use links back to /sessions. Set false to render the
+   *  mark bare, for surfaces where there's nowhere useful to send it. */
   linked?: boolean;
   className?: string;
 }) {
