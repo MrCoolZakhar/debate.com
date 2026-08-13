@@ -10,6 +10,7 @@ import {
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { LogoDisc } from '@/components/LogoDisc';
+import Loader from '@/components/Loader';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import type { EmailTheme } from '@/lib/emailHtml';
 
@@ -730,7 +731,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   if (authLoading || (user && loadingConf)) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+        <Loader size={72} label="Loading conference console" />
       </div>
     );
   }

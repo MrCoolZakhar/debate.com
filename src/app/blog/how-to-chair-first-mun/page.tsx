@@ -1,21 +1,17 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'How to Chair Your First MUN Committee: A Practical Guide for New Chairs',
   description:
     'Nervous about chairing your first Model UN committee? This step-by-step guide covers everything from preparation to running roll call, managing debate, and closing the session.',
-  alternates: { canonical: 'https://gavelling.com/blog/how-to-chair-first-mun' },
-  openGraph: {
-    title: 'How to Chair Your First MUN Committee: A Practical Guide for New Chairs',
-    description: 'A practical, encouraging guide for first-time MUN chairs.',
-    url: 'https://gavelling.com/blog/how-to-chair-first-mun',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  path: '/blog/how-to-chair-first-mun',
+  ogDescription:
+    'A practical, encouraging guide for first-time MUN chairs.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

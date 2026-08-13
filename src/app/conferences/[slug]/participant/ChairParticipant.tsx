@@ -15,6 +15,7 @@ import { getSiteUrl } from '@/lib/emailBlocks';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
 import StudyGuideCard from './StudyGuideCard';
+import Loader from '@/components/Loader';
 import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
@@ -261,7 +262,7 @@ function ChairCommitteeBlock({ conferenceSlug, committee, chairDisplayName, conf
         </p>
         {loading ? (
           <div className="flex justify-center py-6">
-            <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+            <Loader size={36} />
           </div>
         ) : (
           <PositionPaperRoster
@@ -322,7 +323,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug }: { con
     return (
       <SectionCard>
         <div className="flex justify-center py-6">
-          <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          <Loader size={48} />
         </div>
       </SectionCard>
     );

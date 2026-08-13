@@ -7,6 +7,7 @@ import { Compass, Check, X, Mail, Plus, ChevronDown, CalendarDays, Globe2, Gavel
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { Eyebrow, OUTFIT, MONO } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, EASE, NeuIconDisc } from '@/components/neu';
@@ -943,7 +944,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         className={`flex items-center justify-center ${embedded ? 'py-24' : 'min-h-screen'}`}
         style={embedded ? undefined : { backgroundColor: NEU.base }}
       >
-        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+        <Loader size={72} label="Loading your conferences" />
       </div>
     );
   }
@@ -1115,7 +1116,7 @@ export default function MyConferencesClient({ embedded = false }: { embedded?: b
           className={`flex items-center justify-center ${embedded ? 'py-24' : 'min-h-screen'}`}
           style={embedded ? undefined : { backgroundColor: NEU.base }}
         >
-          <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+          <Loader size={72} label="Loading your conferences" />
         </div>
       }
     >

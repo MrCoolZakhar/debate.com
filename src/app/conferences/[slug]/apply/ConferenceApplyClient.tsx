@@ -23,6 +23,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
 import CustomQuestionsField from '@/components/CustomQuestionsField';
+import Loader from '@/components/Loader';
 import { type CustomAnswers, normalizeBlocks, questionsOf, splitIntoSections, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import {
   Gavel, Users, Sprout,
@@ -2552,7 +2553,7 @@ function ConferenceApplyInner() {
           sub={subtitle}
         >
           <div className="flex items-center justify-center py-16">
-            <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+            <Loader size={56} />
           </div>
         </WizardShell>
       );
@@ -3462,7 +3463,7 @@ function ConferenceApplyInner() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+        <Loader size={72} label="Loading application" />
       </div>
     );
   }
@@ -3751,7 +3752,7 @@ export default function ConferenceApplyClient() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          <Loader size={72} label="Loading application" />
         </div>
       }
     >

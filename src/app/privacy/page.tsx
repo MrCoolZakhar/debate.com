@@ -1,14 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import { LegalShell, LegalSection, Disclosure } from '@/components/LegalPage';
 import { COMPANY, PLACE_OF_REGISTRATION } from '@/lib/companyDetails';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Privacy Policy',
   description:
     'How GAVELLING LTD collects, uses, shares and protects personal data across Gavelling Sessions and Gavelling Conferences — including your UK GDPR rights.',
-  alternates: { canonical: 'https://gavelling.com/privacy' },
-};
+  path: '/privacy',
+});
 
 const EFFECTIVE_DATE = 'August 3, 2026';
 const CONTACT_EMAIL = 'wearegavelling@gmail.com';

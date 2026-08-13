@@ -619,7 +619,7 @@ function JoinPageInner() {
 
           {foundCommittee && mode === 'chair' && (
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>Join as</label>
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>{t('join_chair_role_label')}</label>
               <div className="flex gap-2">
                 {(['head', 'co'] as const).map((r) => (
                   <button key={r} type="button" onClick={() => setChairRole(r)}
@@ -629,14 +629,14 @@ function JoinPageInner() {
                       borderColor: chairRole === r ? '#2A5A3C' : '#DDD4C0',
                       color: chairRole === r ? 'white' : '#6A5A4A',
                     }}>
-                    {r === 'head' ? 'Head chair' : 'Co-chair'}
+                    {r === 'head' ? t('join_chair_role_head') : t('join_chair_role_co')}
                   </button>
                 ))}
               </div>
               <p className="text-[11px] mt-1.5" style={{ color: '#9A8A78' }}>
                 {chairRole === 'head'
-                  ? 'You’ll take the gavel: any current head chair becomes view-only.'
-                  : 'You’ll join view-only; you can take the gavel later from Settings.'}
+                  ? t('join_chair_role_head_note')
+                  : t('join_chair_role_co_note')}
               </p>
             </div>
           )}

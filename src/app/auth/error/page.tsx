@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Loader from '@/components/Loader';
 import {
   AuthLayout,
   NoticeScreen,
@@ -96,7 +97,7 @@ export default function AuthErrorPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="w-5 h-5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
+          <Loader size={64} label="Loading" />
         </div>
       }
     >

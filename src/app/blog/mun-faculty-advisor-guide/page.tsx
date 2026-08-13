@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Faculty Advisor Guide: How to Prepare and Support Your Team',
-  description: 'A complete guide for faculty advisors running a Model UN program: preparing students, choosing conferences, reviewing position papers, and supporting delegates at the conference.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-faculty-advisor-guide' },
-  openGraph: {
-    title: 'MUN Faculty Advisor Guide: How to Prepare and Support Your Team',
-    description: 'Everything faculty advisors need to run a successful MUN program.',
-    url: 'https://gavelling.com/blog/mun-faculty-advisor-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A complete guide for faculty advisors running a Model UN program: preparing students, choosing conferences, reviewing position papers, and supporting delegates at the conference.',
+  path: '/blog/mun-faculty-advisor-guide',
+  ogDescription:
+    'Everything faculty advisors need to run a successful MUN program.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

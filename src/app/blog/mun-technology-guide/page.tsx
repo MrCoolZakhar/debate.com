@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Technology Guide: Software, Apps, and Tools for Modern Committees',
-  description: 'How technology is transforming Model UN in 2026: committee management software, document collaboration, delegate apps, and what chairs and directors actually need.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-technology-guide' },
-  openGraph: {
-    title: 'MUN Technology Guide: Software, Apps, and Tools for Modern Committees',
-    description: 'The guide to technology tools for modern MUN committees.',
-    url: 'https://gavelling.com/blog/mun-technology-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'How technology is transforming Model UN in 2026: committee management software, document collaboration, delegate apps, and what chairs and directors actually need.',
+  path: '/blog/mun-technology-guide',
+  ogDescription:
+    'The guide to technology tools for modern MUN committees.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

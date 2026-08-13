@@ -13,6 +13,7 @@ export const EMAIL_TOKEN_KEYS = [
   'conference_dates',
   'fee',
   'request_subject',
+  'request_body',
   'session_code',
 ] as const;
 
@@ -29,6 +30,7 @@ export const EMAIL_TOKEN_LABELS: Record<EmailTokenKey, string> = {
   conference_dates: 'Conference Dates',
   fee: 'Fee',
   request_subject: 'Request Subject',
+  request_body: 'Request Message',
   session_code: 'Session Code',
 };
 

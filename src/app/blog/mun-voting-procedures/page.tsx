@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
-  description: 'A complete guide to Model UN voting procedures: simple majority, supermajority, roll call votes, placard votes, abstentions, and voting on resolutions.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-voting-procedures' },
-  openGraph: {
-    title: 'MUN Voting Procedures Explained: In Favour, Against, Abstain',
-    description: 'Everything you need to know about voting in Model UN committees.',
-    url: 'https://gavelling.com/blog/mun-voting-procedures',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A complete guide to Model UN voting procedures: simple majority, supermajority, roll call votes, placard votes, abstentions, and voting on resolutions.',
+  path: '/blog/mun-voting-procedures',
+  ogDescription:
+    'Everything you need to know about voting in Model UN committees.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

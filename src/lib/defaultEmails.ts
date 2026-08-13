@@ -195,6 +195,17 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  // Organizer-facing, unlike every other default here. The custom-destination
+  // button carries no url on purpose: queueRequestReceivedEmail fills it with
+  // the deep link to that specific inbox thread, and the digest fills it with
+  // the inbox itself.
+  request_received: {
+    subject: 'New question from {{delegate_name}} — {{request_subject}}',
+    blocks: [
+      { type: 'paragraph', content: '{{delegate_name}} has asked {{conference_name}} a question on Gavelling.\n\nSubject: {{request_subject}}\n\n{{request_body}}' },
+      { type: 'button', label: 'OPEN THE INBOX', destination: 'custom', url: '' },
+    ],
+  },
   delegation_swap: {
     subject: 'Your committee allocation has been swapped — {{conference_name}}',
     blocks: [

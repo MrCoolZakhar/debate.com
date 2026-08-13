@@ -21,6 +21,7 @@ import {
 import { matchPresetEmblem, committeeDisplayName } from '@/lib/presetNames';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { LogoDisc } from '@/components/LogoDisc';
+import Loader from '@/components/Loader';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { queueEventEmail } from '@/lib/emailEvents';
 import Portal from '@/components/Portal';
@@ -809,7 +810,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
               <label style={{ ...labelStyle, alignSelf: 'flex-start' }}>Emblem</label>
               {logoUploading ? (
                 <div className="flex items-center justify-center" style={{ width: 96, height: 96 }}>
-                  <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                  <Loader size={48} />
                 </div>
               ) : logoUrl ? (
                 <LogoDisc src={logoUrl} alt="Committee emblem" size={96} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
@@ -1098,7 +1099,7 @@ export function CommitteeEditorModal({ conference, committee, onSaved, onClose }
     return (
       <ModalOverlay onClose={onClose}>
         <div className="rounded-2xl p-10 flex items-center justify-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 200 }}>
-          <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          <Loader size={48} />
         </div>
       </ModalOverlay>
     );

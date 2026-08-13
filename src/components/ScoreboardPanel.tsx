@@ -146,7 +146,12 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
     <Portal>
       <style>{`@keyframes sbFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(28,20,16,0.45)' }} onClick={onClose}>
-        <div className="w-full max-w-3xl rounded-2xl overflow-hidden flex flex-col" style={{ maxHeight: '88vh', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', fontFamily: "'Poppins','Outfit',sans-serif" }} onClick={(e) => e.stopPropagation()}>
+        {/* Height is capped as a % of the overlay, NEVER in vh: this modal is portalled into
+            #fit-root, which is scale()d, so vh resolves against the real viewport while the
+            overlay's own box is only FitToScreen's BASE_H. On tall screens 88vh overflowed
+            that box and the header/footer were pushed off-screen (and unreachable, because a
+            centred flex item overflows in both directions). % matches Motions/Documents. */}
+        <div className="w-full max-w-3xl max-h-[92%] rounded-2xl overflow-hidden flex flex-col" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', fontFamily: "'Poppins','Outfit',sans-serif" }} onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="px-5 py-3 flex items-center gap-3 shrink-0 sticky top-0 z-10" style={{ backgroundColor: '#1B3828' }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
@@ -254,8 +259,10 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
                   <tbody>
                     {[...matrix].sort((a, b) => b.total - a.total).map((r) => (
                       <tr key={r.country}>
-                        <td className="px-2 py-1.5" style={{ borderBottom: '1px solid #DDD4C0' }}>
-                          <span className="flex items-center gap-1.5">{flag(r.country)}<span className="truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(r.country, language)}</span></span>
+                        {/* Cap the name column so a long delegation name truncates instead of
+                            widening the table (which would force the whole row to scroll). */}
+                        <td className="px-2 py-1.5" style={{ borderBottom: '1px solid #DDD4C0', maxWidth: 220 }}>
+                          <span className="flex items-center gap-1.5 min-w-0"><span className="shrink-0 flex">{flag(r.country)}</span><span className="truncate" style={{ color: '#1C1410' }} title={getCountryDisplayName(r.country, language)}>{getCountryDisplayName(r.country, language)}</span></span>
                         </td>
                         <td className="text-end px-2 py-1.5 font-mono" style={{ borderBottom: '1px solid #DDD4C0', color: '#6A5A4A' }}>{r.gsl}</td>
                         <td className="text-end px-2 py-1.5 font-mono" style={{ borderBottom: '1px solid #DDD4C0', color: '#6A5A4A' }}>{r.caucus}</td>

@@ -7,6 +7,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { syncExperienceLevel } from '@/lib/munExperience';
 import { CVEntryModal, type CVEntry } from '@/components/CVEntryModal';
 import { ShareAchievementModal } from '@/components/ShareAchievementModal';
+import Loader from '@/components/Loader';
 import { Eyebrow, GlassCard, OUTFIT, MONO } from '../accountUi';
 import { TimelineEntry, CVStatsRow } from './CVTimeline';
 
@@ -102,10 +103,7 @@ export default function CVPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div
-          className="w-6 h-6 rounded-full border-2 animate-spin"
-          style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }}
-        />
+        <Loader size={56} label="Loading your CV" />
       </div>
     );
   }

@@ -10,6 +10,7 @@ import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matc
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
 import { Globe, PenLine, ChevronLeft, Megaphone } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
+import Loader from '@/components/Loader';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 
@@ -934,7 +935,7 @@ function CreatePageInner() {
 
 export default function CreatePage() {
   return (
-    <Suspense fallback={<div className="h-screen bg-[#EDE7D8] flex items-center justify-center"><span className="text-[#9A8A78]">Loading...</span></div>}>
+    <Suspense fallback={<div className="h-screen bg-[#EDE7D8] flex items-center justify-center"><Loader size={72} label="Loading" /></div>}>
       <CreatePageInner />
     </Suspense>
   );

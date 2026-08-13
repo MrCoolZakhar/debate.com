@@ -1,29 +1,23 @@
 import type { Metadata } from 'next';
-import { OG_BASE } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import ConferencesExploreClient from './ConferencesExploreClient';
+import Loader from '@/components/Loader';
 
 // Re-render hourly so the server-rendered directory below picks up newly
 // published conferences without a redeploy.
 export const revalidate = 3600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Explore Model UN Conferences',
   description:
     'Browse Model UN conferences around the world by country, date, fee, and level. See committees, deadlines, and fees, then apply as a delegate, chair, or advisor in minutes.',
-  alternates: { canonical: 'https://gavelling.com/conferences/explore' },
-  openGraph: {
-    ...OG_BASE,
-    title: 'Explore Model UN Conferences',
-    description:
-      'Browse Model UN conferences around the world by country, date, fee, and level. Apply as a delegate, chair, or advisor in minutes.',
-    url: 'https://gavelling.com/conferences/explore',
-    siteName: 'Gavelling',
-    type: 'website',
-  },
-};
+  path: '/conferences/explore',
+  ogDescription:
+    'Browse Model UN conferences around the world by country, date, fee, and level. Apply as a delegate, chair, or advisor in minutes.',
+});
 
 interface DirectoryConf {
   slug: string;
@@ -107,7 +101,16 @@ async function ConferenceDirectory() {
 export default function ConferencesExplorePage() {
   return (
     <>
-      <Suspense fallback={<div style={{ minHeight: '100vh', backgroundColor: '#EDE7D8' }} />}>
+      <Suspense
+        fallback={
+          <div
+            className="flex items-center justify-center"
+            style={{ minHeight: '100vh', backgroundColor: '#EDE7D8' }}
+          >
+            <Loader size={72} label="Loading conferences" />
+          </div>
+        }
+      >
         <ConferencesExploreClient />
       </Suspense>
       <ConferenceDirectory />

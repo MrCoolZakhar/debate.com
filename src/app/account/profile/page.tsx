@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Star, X, Megaphone, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School } from 'lucide-react';
+import { Star, X, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
@@ -13,6 +13,7 @@ import { NEU, NeuIconDisc, NEU_GRADIENTS } from '@/components/neu';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { DatePicker } from '@/components/DatePicker';
 import Portal from '@/components/Portal';
+import Loader from '@/components/Loader';
 
 interface ReviewableConference {
   id: string;
@@ -28,6 +29,9 @@ const NOTIFICATION_ROWS = [
   { field: 'notify_email_payments'     as const, Icon: CreditCard,     label: 'Payment & Billing',            desc: 'Invoices, receipts, fee waivers, and payment reminders' },
   { field: 'notify_email_documents'    as const, Icon: FileText,       label: 'Documents & Deadlines',        desc: "Study guide releases, position paper feedback, and submission deadlines" },
   { field: 'notify_email_marketing'    as const, Icon: Megaphone,      label: 'Conference Announcements',     desc: 'Broadcast announcements and general updates sent by conferences you applied to' },
+  // Organizer-side. Harmless for a delegate who never organizes anything —
+  // nothing sends against it unless you're on an organizing team.
+  { field: 'notify_email_reminders'    as const, Icon: MessageSquare,   label: 'Questions & Reminders',        desc: "For conferences you organize: a heads-up when a participant asks your team a question, and a reminder every 3 days while questions are still waiting on a reply" },
 ];
 
 type NotifFields = {
@@ -35,6 +39,7 @@ type NotifFields = {
   notify_email_payments:     boolean;
   notify_email_documents:    boolean;
   notify_email_marketing:    boolean;
+  notify_email_reminders:    boolean;
 };
 
 const inputStyle: React.CSSProperties = {
@@ -65,6 +70,7 @@ export default function ProfilePage() {
     notify_email_payments:     true,
     notify_email_documents:    true,
     notify_email_marketing:    true,
+    notify_email_reminders:    true,
   });
   const [educationLevel, setEducationLevel] = useState<string | null>(null);
   const [cvCount, setCvCount]         = useState<number | null>(null);
@@ -125,7 +131,7 @@ export default function ProfilePage() {
 
     supabase
       .from('profiles')
-      .select('display_name, nationality, date_of_birth, education_level, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_payments')
+      .select('display_name, nationality, date_of_birth, education_level, mun_experience_level, notify_email_marketing, notify_email_applications, notify_email_documents, notify_email_payments, notify_email_reminders')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
@@ -139,6 +145,7 @@ export default function ProfilePage() {
             notify_email_payments:     data.notify_email_payments     ?? true,
             notify_email_documents:    data.notify_email_documents    ?? true,
             notify_email_marketing:    data.notify_email_marketing    ?? true,
+            notify_email_reminders:    data.notify_email_reminders    ?? true,
           });
         }
         setDataLoading(false);
@@ -414,10 +421,7 @@ export default function ProfilePage() {
   if (dataLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div
-          className="w-6 h-6 rounded-full border-2 animate-spin"
-          style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }}
-        />
+        <Loader size={56} label="Loading your profile" />
       </div>
     );
   }

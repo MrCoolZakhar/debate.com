@@ -18,7 +18,7 @@
 
 | Table | Purpose |
 |-------|---------|
-| `committees` | One row per session. Stores phase, caucus (JSONB), settings (JSONB), suspended_at, ended_at, expires_at, resuming_chair |
+| `committees` | One row per session. Stores phase, caucus (JSONB), settings (JSONB), suspended_at, ended_at, expires_at, resuming_chair, session_origin |
 | `delegates` | One row per delegate. Status: absent / present / present-voting |
 | `speakers_list` | GSL queue (list_type='gsl') AND caucus queue (list_type='caucus'). NEVER mix these |
 | `current_speaker` | Single row per committee. Stores who is speaking RIGHT NOW + time_remaining + started_at |
@@ -90,7 +90,7 @@
 - GSL is NEVER wiped when entering a caucus
 - The "isLastGSLSpeaker" guard prevents starting timer when only 1 delegate is on list (to ensure queue never empties mid-session)
 - Extra time (+⏱) adds seconds to speakerTimeRemaining only — no DB write until pause/next
-- Right of Reply inserts a delegate at the TOP of speakersList with a custom time override
+- Right of Reply is a fully INDEPENDENT fixed overlay with its own `rtrTimeRemaining` state (`chair/[code]/page.tsx:1284-1288, 3148-3206`). It NEVER writes `speakersList` — it does not insert the delegate into the GSL, and it does not touch `currentSpeaker`. It logs a `right-of-reply` scoring event (`:3174`) and nothing else. (This line previously claimed RTR inserted at the top of speakersList with a time override; that was verified false against the code.)
 - speakersList display in main view prepends currentSpeaker as position 1 (gslDisplayList)
 
 ### DB operations
@@ -185,6 +185,16 @@
 - Delegates stay on waiting screen until phase leaves pre-session
 - Co-chairs who didn't click Resume see: greyed-out button with "X is resuming..." message
 
+### Resuming is TWO writes against the `resuming_chair` latch — and BOTH can fail
+- `resuming_chair` is an **atomic one-shot latch**. `claimResumeSession` (`committeeService.ts:1017`) writes it only `.is('resuming_chair', null)`; `startResumeRollCall` (`:1078`) is the only thing that clears it on the success path. **NEVER weaken that `.is(..., null)` guard** — it is the whole single-winner guarantee. The correct fix for a stuck latch is an explicit release or take-over, never a looser claim.
+- `startResumeRollCall` returns `Promise<boolean>` and the caller **MUST** check it. It returns false on error AND on an RLS-rejected 0-row update (`.select('id').maybeSingle()`). If the claim landed and this write silently failed, the latch stays set and NO chair can ever resume the committee again.
+- `releaseResumeClaim(committeeId, chairName, code, chairSuffix?)` (`:1041`) — the release valve. Compare-and-swap `.eq('resuming_chair', chairName)`, so it clears the latch ONLY if it still names you. It can never clear another chair's live claim. `runResumeRollCall` (`chair/[code]/page.tsx:2439`) calls it whenever the roll-call write fails, rolls the optimistic phase/suspendedAt back, and shows `session_resume_failed` / `session_resume_failed_locked` depending on whether the release succeeded.
+- `takeOverResumeClaim(committeeId, fromChairName, toChairName, code, chairSuffix?)` (`:1061`) — CAS from a stale holder to you (`.eq('resuming_chair', fromChairName)`). Two chairs racing to take over the same stale latch still produce exactly one winner: the first write flips the value, the second matches no row and returns false.
+- **`alreadyMine` self-heal** (`chair/[code]/page.tsx:2472`): a chair who reloads mid-resume already holds the latch, so re-claiming is impossible (the column is no longer null). That path skips the claim and goes straight to the second write. Before this existed the Resume button was permanently dead — that is the deadlock users actually hit. Only the chair NAMED in the latch takes this path, so it does not weaken anything.
+- Lost the claim → the chair page refetches the real row (`getCommitteeByCode`) rather than leaving the button a silent no-op: if the winner already finished, drop out of suspension; if the latch turns out to be ours (our claim landed, the response was lost), finish the job; otherwise render "{name} is resuming…" off the fresh row.
+- **Take-over affordance**: `foreignResumeLatch` (`:2122`) starts a 12s timer the moment ANOTHER chair is observed holding the latch (`:2126`); after that the co-chair gets a `session_resume_takeover` button (`:2862`) wired to `handleTakeOverResume` (`:2503`).
+- All five resume failure/affordance strings are keyed: `session_resume_failed`, `session_resume_failed_locked`, `session_resume_retry`, `session_resume_takeover`, `session_resume_lost`.
+
 ### Rules
 - ONLY clear suspended_at by setting phase back to pre-session via startResumeRollCall
 - Roll call on resume: going absent DOES NOT remove delegates from GSL (phase='pre-session' guard in handleStatusChange and RollCallPanel.cycleStatus)
@@ -198,12 +208,12 @@
 ## FEATURE: END DEBATE
 
 ### How it works
-- Motion passes → endDebateInDB sets ended_at + expires_at (now + 72hrs) + phase='adjourned'
+- Motion passes → endDebateInDB sets ended_at + expires_at (**now + 1 hour**) + phase='adjourned' (`committeeService.ts:1096`). MotionsModal's optimistic mirror uses the same 1 hour (`MotionsModal.tsx:1376`) — if one is ever changed, change both.
 - All devices detect via realtime → setSessionEnded(true)
 - Both chairs and delegates see: two-tab overlay (🏁 End View + 👁 Session View)
-- End View shows: "This committee has ended", countdown in hours until deletion
+- End View shows: "This committee has ended" + a countdown computed from `expires_at`, not a fixed promise — `Math.max(1, ceil(ms/1h))` (`chair/[code]/page.tsx:2092`, `delegate/[code]/page.tsx:894`) rendered through `session_hours_until_delete`. With the 1-hour window it reads "1 hour until committee is deleted"
 - Session View: full session visible but READ-ONLY
-- pg_cron job runs hourly, deletes committees where expires_at < NOW()
+- pg_cron job runs hourly, deletes committees where expires_at < NOW() — so with the 1-hour window an ended committee is really gone 1–2 hours after the gavel
 
 ### Read-only rules (when sessionEnded=true)
 - Hide: Motions button, Documents button, Chat button (header)
@@ -259,7 +269,10 @@
 
 ### Notification rules
 - chatReadCounts: Record<string, number> — lifted to parent pages (chair + delegate)
-- Persisted in localStorage keyed as `chat-read-${committee.code}`
+- Persisted in localStorage under a **per-reader** key built by `chatReadStorageKey` in `src/lib/chatReadKey.ts:33`: `chat-read-${code}-${role}:${identity}` (e.g. `chat-read-ABC123-chair:Alice`). `role` is `'chair' | 'delegate'`, `identity` is `myChairName` for a chair and `country` for a delegate; a reader with no identity falls into the `~anon` bucket. Role is in the key on purpose — a chair may be named "France" while a delegate represents France.
+- The old shared `chat-read-${code}` key made two chairs on one dais laptop (or a chair who also opens the delegate view) overwrite each other's read state and resurrect already-read badges. **NEVER** go back to a key without the reader identity in it.
+- Both pages go through `loadChatReadCounts` / `saveChatReadCounts` (`chatReadKey.ts:66, 77`) — `chair/[code]/page.tsx:2108, 2115` and `delegate/[code]/page.tsx:851, 858`. Do not rebuild the key inline.
+- **Legacy migration, still live**: when this reader has no entry yet, `loadChatReadCounts` adopts the pre-identity `chat-read-${code}` value (`legacyChatReadStorageKey`, `:39`) — copied forward, not moved. Orphaning it would give every existing user one burst of phantom unread covering the whole backlog. The legacy key is never written again, and from the first save onward the two identities diverge into their own keys.
 - Loaded on committee load, saved whenever chatReadCounts changes
 - Own messages NEVER count toward unread badges
 - Badge clears immediately when conversation is opened
@@ -296,34 +309,141 @@
 - "Submit Documents" tab: submit form only (no list of existing docs shown)
 - PDF rows resizable by dragging right edge
 
-### Document limits (Settings → Motions)
-- wpSubmissionLimit: number | null (null = unlimited)
-- drSubmissionLimit: number | null
-- Reset button deletes docs from DB AND removes from local state via onResetDocuments prop
+### Document names are renameable (Settings → Motions → Documents)
+- `CommitteeSettings.documentNames` holds singular + plural for both types; defaults are the English `DEFAULT_DOCUMENT_NAMES`.
+- Mirrored into `committees.settings` JSONB by the SettingsPanel `upd` helper, so delegates on other devices see the rename.
+- **Every** user-facing render of the type name goes through `docName(committee, type, form, translatedFallback)` in `src/lib/docNames.ts`. Never hardcode "Working Paper" / "Draft Resolution" in UI text again.
+- Renaming is presentation only — `DocumentType`, the `documents.type` column and the `'working-paper'` / `'draft-resolution'` discriminators never change.
+
+### Document approval gate (Settings → Motions → Documents)
+- `requireDocApproval` (default false). Read in `DocumentsModal.tsx:856`; when on, each doc card gets an approve/reject control and `CommitteeDocument.approval` gates introduction.
+
+### Document limits — LEGACY, NO UI
+- `wpSubmissionLimit` / `drSubmissionLimit` still exist on `CommitteeSettings` and are still ENFORCED on submit (`DocumentsModal.tsx:469`), but **nothing writes them** — the Settings UI and the `onResetDocuments` Reset button no longer exist anywhere in `src/`.
+- In practice they are always `null` (unlimited) unless an old committee row still carries a value in its settings JSONB.
 
 ---
 
 ## FEATURE: SETTINGS
 
-### Stored where?
-- CommitteeSettings stored in Zustand (localStorage), keyed by committee code
-- chairJoinSuffix ALSO stored in DB (committees.settings JSONB) so other devices can read it
-- On chair page load: DB suffix synced to localStorage via updateSetting
+### Stored where? — DB IS THE SOURCE OF TRUTH ON WRITE, localStorage IS A STALE MIRROR
+- The `upd` helper in `SettingsPanel.tsx:390-394` does BOTH on every single change:
+  1. `updateSetting(code, key, value)` → Zustand `persist` store (`localStorage: gavelling-settings`), keyed by committee code
+  2. `saveCommitteeSettings(committee.id, { ...getSettings(code), [key]: value }, ...)` → writes the **complete settings object** into the `committees.settings` JSONB (`committeeService.ts:227-236`, read-merge-write so `chairJoinSuffix` / `headChair` survive)
+- Scoring is written separately by `updScoring` → `updateCommitteeScoringInDB` (`committeeService.ts:991`), into `settings.scoring`.
+- `rowToCommittee` (`committeeService.ts:76-83`) surfaces the blob as `committee.dbSettings` plus the convenience fields `dbChairJoinSuffix`, `dbHeadChair`, `dbSeparateChairCode`, `dbScoring`.
+- The voting page writes the same way (`voting/[code]/page.tsx:503-508`).
+
+### The READ side is the gap — this is where the real bugs come from
+| Surface | Hydrates the store from `dbSettings`? |
+|---------|----------------------------------------|
+| `/chair/[code]` | **Once**, in the initial loader (`page.tsx:1291-1295`). Never again — no re-hydrate in the realtime subscription, so a co-chair's setting change never reaches this device's store |
+| `/voting/[code]` | **Once**, in the loader (`page.tsx:335-338`) |
+| `/delegate/[code]` | **NEVER** |
+| `/advisor/[code]` | **NEVER** (does not import `useSettingsStore` at all) |
+- Both hydrate paths destructure away `chairJoinSuffix` and `separateChairCode` and merge everything else — including `headChair` — into the store.
+- **ALWAYS** read a setting on a non-chair surface with the pure-function-of-the-committee-row pattern: `getCommitteeFlags(committee)` / `sponsorLabel(committee, fallback)` in `src/lib/committeeFlags.ts`, `getScoringConfig(committee)` in `src/lib/scoring.ts:31`, `docName(committee, ...)` in `src/lib/docNames.ts`. These read `committee.dbSettings` / `committee.dbScoring` and never touch localStorage.
+- **NEVER** call `getSettings(code)` on the delegate or advisor pages — the store is empty there and you silently get `DEFAULT_SETTINGS`.
+- Residual instance, **dead code, not a live bug**: `delegate/[code]/page.tsx:930` calls `getSettings(committee.code)` and `:939` builds `enabledMotionTypes` from it — but `enabledMotionTypes` is referenced nowhere (verified: the identifier appears only at its own declaration). Left over from the removed delegate Motions tab. Delete both; that removes the delegate page's last `useSettingsStore` dependency, which is the correct end state. Do **not** "fix" it by rewiring it to `dbSettings` — there is no consumer to fix.
 
 ### Chair code system
-- separateChairCode: boolean (default true)
-- chairJoinSuffix: 4-digit string, generated on committee creation, stored in DB
-- Full chair code format: `{code}-{suffix}` e.g. "UNSC2026-4821"
-- Only the full chair code with correct suffix grants chair access
-- Join page validates suffix against foundCommittee.dbChairJoinSuffix (from DB) — NOT localStorage
-- Landing page: if code contains dash with 4-char suffix → auto-routes to chair tab
-- Chair code NOT shown in header — only visible in Settings → Access panel
+- `chairJoinSuffix`: 4-digit string, generated at committee creation (`committeeService.ts:100`) and stored in `committees.settings`.
+- `SettingsPanel.tsx:415-425` regenerates it **only** when the store copy is `''`, and otherwise re-syncs the existing one to the DB via `updateCommitteeChairSuffixInDB`.
+- Full chair code format: `{code}-{suffix}` e.g. "UNSC2026-4821".
+- Join page validates against `foundCommittee.dbChairJoinSuffix` (from DB), falling back to localStorage only if the DB value is missing (`join/page.tsx:281`).
+- Landing page: if code contains dash with 4-char suffix → auto-routes to chair tab.
+- Chair code NOT shown in header — only visible in Settings → Access panel.
+- The suffix is also the **only** write credential: `sessionClient(code, suffix)` sends it as the `x-chair-suffix` header and RLS checks it (see FEATURE: CHAIR ROLES).
+- `separateChairCode` is **not** a `CommitteeSettings` field. It is written literally as `true` at create time (`committeeService.ts:108`), surfaced as `dbSeparateChairCode`, read by no code, and explicitly stripped on hydrate. Do not build on it.
 
-### Settings tabs
-- Voting: thresholds (simple/supermajority/consensus), abstentions, veto mode, quorum
-- Motions: enabled motion types, motion names (renameable), WP/DR submission limits
-- Access: custom session ID, chair code, chair approval, multi-chair, delegation name requirement
-- Points: delegate leaderboard with score breakdown
+### Settings tabs — actual order from the `tabs` array (`SettingsPanel.tsx:427-432`)
+Default open tab is **`access`** (`SettingsPanel.tsx:387`).
+
+| Tab | Contents |
+|-----|----------|
+| Access | session code, chair code, head-chair claim ("Take the gavel"), `requireChairApproval`, `sponsorLabel`, `lockDelegateRollCall`, `disableChat`, `gslRequireNextSpeaker` |
+| Motions | drag-reorder + rename + enable/disable of the four caucus motions (`motionOrder`, `motionNames`), CoW timer toggle, rename-only Suspend/End Debate, Documents (`requireDocApproval`, `documentNames`) |
+| Voting | `substantiveThreshold`, `allowAbstentions`, `vetoMode` + `p5Delegations` / `vetoCountries`, `quorumThreshold` |
+| Points | scoring config — sources, factors, factor scale, score blend, hide-scores toggle |
+
+There is **no** custom-session-ID control, **no** multi-chair toggle and **no** delegation-name-requirement setting. `updateCommitteeCode` (`committeeService.ts:937`) and `migrateSettings` (`settingsStore.ts:179`) are both dead code — nothing calls them. `requireDelegationName` has zero occurrences in `src/`.
+
+### CommitteeSettings fields and where they are enforced
+| Setting | What it does | Enforced at |
+|---------|--------------|-------------|
+| `substantiveThreshold`, `allowAbstentions`, `vetoMode`, `p5Delegations`, `vetoCountries`, `quorumThreshold` | voting maths | `/voting/[code]` + `VotingRulesPanel`; quorum also `chair/[code]/page.tsx:1818-1819` |
+| `abstentionsInDenominator` | false = abstentions excluded from the threshold denominator; true = they join For + Against | `VotingRulesPanel.tsx:79` |
+| `motionModeratedCaucus` / `motionUnmoderatedCaucus` / `motionCoW` / `motionTourDeTable` / `motionCustom` | which motion types delegates/chairs can raise | `MotionsModal.tsx`, `delegate/[code]/page.tsx:940-943` |
+| `motionOrder` | chair-ordered disruptiveness ranking (top = most disruptive); drives motion sort order | `MotionsModal.tsx:1052-1059`, passed into `addPendingMotionInDB` |
+| `motionNames` | renameable display labels for all motion types | `MotionsModal`, chair + delegate UI |
+| `cowTimerEnabled` / `cowTimerSeconds` | optional standalone timer during a Consultation of the Whole | `chair/[code]/page.tsx:548-550` |
+| `requireDocApproval` | chair must approve a WP/DR before it can be introduced | `DocumentsModal.tsx:856` |
+| `documentNames` | renameable WP/DR labels (singular + plural) | via `docName()` — see FEATURE: DOCUMENTS |
+| `wpSubmissionLimit` / `drSubmissionLimit` | legacy, no UI writes them | `DocumentsModal.tsx:469` |
+| `gslRequireNextSpeaker` | blocks Next while only one delegate remains on the GSL, so the queue never empties mid-session | `chair/[code]/page.tsx:1820, 2659, 2674` |
+| `chairJoinSuffix` | 4-digit chair code AND the RLS write credential | join page + `sessionClient` |
+| `requireChairApproval` | delegates must be approved by a chair before joining the floor | `delegate/[code]/page.tsx:931, 995, 1068` (via `getCommitteeFlags`) |
+| `sponsorLabel` | overrides the visible word "Sponsors" ('' → translated default) | `sponsorLabel()` in `committeeFlags.ts`, used by delegate/voting/DocumentsModal |
+| `lockDelegateRollCall` | delegates cannot change their own Present / Present-Voting status | `delegate/[code]/page.tsx:1432` |
+| `disableChat` | hides chat for delegates AND chairs | `chair/[code]/page.tsx:2385`, `delegate/[code]/page.tsx:1020` |
+
+### `scoring` sub-object (`ScoringConfig`, defaults in `settingsStore.ts:34-53`)
+Persisted into `settings.scoring`; read everywhere via `getScoringConfig(committee)` — never via localStorage.
+- `sources` — `ScoreSource[]` (id, name, value, enabled, builtin). Nine built-ins (attendance, gslSpeech, caucusSpeech, speakingTimePer10s, motionRaised, rightOfReply, wpSponsor, drSponsor, drPassed); chairs can edit values, disable any, and add custom ones. Disabled → the ledger row is omitted entirely.
+- `factors` — `RankingFactor[]`, the subjective per-speech qualities chairs rate (Diplomacy, Public Speaking, Collaboration, Content & Research by default).
+- `factorScaleMax` — upper bound of the factor rating scale (default 100).
+- `scoreBlend` — 0 = pure objective points … 100 = pure subjective quality. Consumed by `computeHeadline` (`ScoreboardPanel.tsx:63`).
+- `hideScoresFromDelegates` — default false; when true the delegate Stats tab hides scores (`delegate/[code]/page.tsx:424`).
+
+---
+
+## FEATURE: CHAIR ROLES & THE GAVEL (head chair vs view-only co-chair)
+
+### Chair identity
+- A chair's identity is **only** the `?chairName=` URL query param: `const myChairName = searchParams.get('chairName') ?? ''` (`chair/[code]/page.tsx:1160`).
+- There is no session, no cookie and no DB row identifying a chair. The name is typed on the join page, appended to `committees.chair_names[]` by `addChairName`, and carried in the URL from then on.
+- Everything downstream (chat sender, feedback author, gavel comparison) keys off that string.
+
+### The gavel (head chair)
+- Stored as `headChair` **inside the `committees.settings` JSONB**. It is NOT a column — the `committees` table has `resuming_chair` but no `head_chair`.
+- Written by `updateCommitteeHeadChairInDB` (`committeeService.ts:975-987`), which read-merges the existing settings blob so it does not clobber `chairJoinSuffix`.
+- Read back as `committee.dbHeadChair` (`committeeService.ts:80`).
+- Claim-at-will — any chair may take it, from two places:
+  - the join page, by picking the "head chair" role (`chairRole` defaults to `'co'`) → `join/page.tsx:256` (conference session) and `join/page.tsx:290` (anonymous session)
+  - Settings → Access → "Take the gavel" → `onBecomeHeadChair` (`chair/[code]/page.tsx:2813-2817`)
+- Taking the gavel flips the previous holder to view-only via the realtime `committees` refetch.
+
+### Role derivation (client-side, `chair/[code]/page.tsx:1449-1456`)
+```
+const head = committee?.dbHeadChair || committee?.chairNames?.[0] || myChairName || null;
+setIsViewOnly(!!myChairName && !!head && head !== myChairName);
+```
+- Unset `headChair` → the committee creator (`chairNames[0]`) holds it.
+- Presence (`chair-presence-${id}`) is used ONLY so the join page can show who is active. It does NOT decide the gavel — that race was deliberately removed (`chair/[code]/page.tsx:1439-1441`).
+
+### `isViewOnly` IS A PURE UI GATE — THERE IS NO SERVER-SIDE ENFORCEMENT
+- RLS policy `sess_chair_update` on `committees` is `is_session_chair(id)` for both USING and WITH CHECK.
+- `is_session_chair(p_committee)` only checks that the caller's `x-chair-suffix` header equals `settings->>'chairJoinSuffix'` (and that the suffix is non-empty). It knows nothing about `headChair`.
+- The header is attached by `sessionClient(code, chairSuffix)` (`src/lib/sessionClient.ts`), and every chair device has the suffix — it is displayed in Settings → Access.
+- **Therefore: ANY chair holding the chair code can write ANYTHING to the session, regardless of who holds the gavel.** `isViewOnly` hides buttons; it does not stop writes. Never treat it as a security boundary, and never move a genuinely privileged operation behind it alone.
+
+### `resuming_chair` is NOT the gavel
+- `resuming_chair` is a real `text` column on `committees` and is completely unrelated to `headChair`.
+- It is the one-shot claim lock for suspend/resume: `claimResumeSession` (`committeeService.ts:898-907`) updates `resuming_chair` with `.is('resuming_chair', null)`, so only the first chair to click Resume wins; the rest see "X is resuming…".
+- `startResumeRollCall` clears it back to null along with `suspended_at`.
+- **NEVER** merge or conflate the two.
+
+### What actually differs in the view-only co-chair view
+- Persistent "View only · {headChairName} is chairing" badge (`chair/[code]/page.tsx:2222-2238`).
+- GSL: no timer/progress bar — the speaker card shows "is speaking" text instead (`:2644`); no Start/Next/restart/time controls (`:2666, 2727, 2736, 2770`); no add-speaker input; reorder and remove handlers passed as `undefined` (`:2627-2628, 2716-2717`); Extra Time and Right of Reply popovers suppressed (`:2828, 2883`).
+- Caucus: no add-speaker, next-speaker, extend or end-caucus controls (`:976, 1055, 1112, 1118`); unmoderated/CoW controls hidden (`:658, 683`).
+- `RollCallPanel`, `MotionsModal` and `DocumentsModal` all receive `isViewOnly` and hide their write affordances (`RollCallPanel.tsx:507, 598, 613`; `MotionsModal.tsx:692, 821, 925, 999`; `DocumentsModal.tsx:1067`). MotionsModal also opens on the `vote` view instead of `raise`.
+- **`FeedbackLogPanel` is rendered ONLY when `isViewOnly` is true** (`chair/[code]/page.tsx:2780-2786`) — the live feedback dock is a co-chair-exclusive surface. Do not "restore" it for the head chair without being asked.
+- Realtime behaviour differs and must stay that way:
+  - a view-only co-chair DOES process `current_speaker` events (patched via `getCurrentSpeakerRow`), the head chair returns early — it owns that row (`:1318-1320`)
+  - a view-only co-chair NEVER debounces (`withinDebounce = !isViewOnlyRef.current && …`, `:1360`) — it writes nothing, so debouncing would make it miss the head chair's phase/caucus changes
+  - a view-only co-chair always takes the fresh row rather than pinning live timer state (`:1407`)
+  - a view-only co-chair does not run the caucus clock (`:1492`) — it would refresh the debounce every second and write a phase it does not own
 
 ---
 
@@ -364,13 +484,17 @@
 ## FEATURE: JOIN PAGE
 
 ### Modes
-- **Delegate**: requires country selection if requireDelegationName is enabled
-- **Chair**: requires full chair code with suffix (if separateChairCode enabled), then name selection
+- **Delegate**: country selection is always required in the anonymous flow. In a conference-linked session the country comes from the delegate's allocation instead (`?country=…&locked=1`)
+- **Chair**: name selection (existing name or new), plus the chair code — validated against `foundCommittee.dbChairJoinSuffix`, falling back to localStorage only when the DB value is missing (`join/page.tsx:281`). Conference chairs skip the code; access was already verified against the conference records
 - **Faculty Advisor**: read-only observer view, no interaction
 
 ### Chair name persistence
 - When chair joins with a new name, addChairName() appends it to committee.chair_names[] in DB
 - addChairName is idempotent — checks for duplicates before inserting
+
+### Head chair vs co-chair at join
+- The chair tab has a head/co role picker; `chairRole` defaults to `'co'` (`join/page.tsx:56`).
+- Picking "head" calls `updateCommitteeHeadChairInDB` before routing — see FEATURE: CHAIR ROLES & THE GAVEL.
 
 ### Suspended/ended committees
 - Suspended: delegates can join but see waiting screen. Chairs can join and auto-start resume roll call.
@@ -435,6 +559,10 @@
 9. **Never await DB writes for UI updates** — always fire-and-forget, optimistic first
 10. **Never call removePendingMotionInDB with a temp ID** — wait for real UUID via pendingIds tracking
 11. **Never use a native `<input type="date">` (or any other old/native date picker)** — see UI RULES
+12. **Never let `headChair` ride along when the settings store is written back to the DB** — the chair and voting loaders hydrate the whole `dbSettings` blob (minus `chairJoinSuffix`/`separateChairCode`) into Zustand, and `SettingsPanel`'s `upd` / the voting page's `applyRule` then POST `{ ...getSettings(code), [key]: value }` back. A `headChair` hydrated at page load is stale the moment another chair takes the gavel, and writing it back silently reverts the gavel to the earlier holder. Strip it on hydrate or exclude it from the write — never both-ways it.
+13. **Never regenerate `chairJoinSuffix` when the DB already has one** — it is the ONLY write credential (`x-chair-suffix` → `is_session_chair`) and the code every chair typed on the join page. Overwriting it locks every chair out of a live committee. `SettingsPanel.tsx:415-425` generates one only when the store copy is `''`; keep that guard.
+14. **Never read a setting via `getSettings(code)` on the delegate or advisor pages** — neither page ever hydrates the store, so it silently returns `DEFAULT_SETTINGS`. Use `getCommitteeFlags` / `sponsorLabel` / `getScoringConfig` / `docName`, which are pure functions of the committee row.
+15. **Never treat `isViewOnly` as a permission** — it is a UI gate only. RLS grants full write access to anyone holding the chair suffix.
 
 ---
 
@@ -462,3 +590,25 @@
 - Use the shared `committeeDisplayName(fullName, acronym?)` helper in `src/lib/presetNames.ts` to derive the acronym (it collapses long names to an acronym). Prefer an explicit `abbreviation` when the committee has one.
 - If the acronym has no meaningful expansion (or the name is already short), just show the name once — no redundant second line.
 - Applies everywhere committees render: applications, assignment, committee cards, rosters, overviews.
+
+---
+
+## WORKING RULES — SESSIONS WORK ON `feature/conferences-auth`
+
+### RULE: Never push to production without explicit instruction
+- All sessions work happens on **`feature/conferences-auth`**.
+- The production deploy branch is `claude/muncommand-recreation-9yjin` (auto-deploys to gavelling.com via Vercel).
+- **NEVER** merge into or push to the deploy branch unless Peter explicitly says "push to production" / "deploy this".
+- Committing and pushing to `feature/conferences-auth` is fine and expected — that branch does not deploy.
+
+### RULE: Always cross-check against Christian's work
+- Christian Galindo (`chrisgalindoh`) owns the conferences layer that shares this branch.
+- Before changing any shared surface, check `git log --author=Christian` and `git log -p <file>` for his recent commits on that file.
+- Never revert, restructure, or "clean up" conference-side code (`/manage`, `/conferences`, applications, assignment, financials, auth) as a side effect of a sessions change.
+- The shared surface between the two workstreams is **the database**. Schema changes must be checked against his migrations before being applied.
+
+### RULE: Always launch agents for tasks
+- Every task — investigation, audit, implementation, verification — is delegated to a subagent via the Agent tool.
+- Run independent agents in parallel in a single message.
+- Implementation agents that touch the same file must be serialized, not parallelized.
+- Every implementation is followed by a **verification agent** that independently confirms the change works.

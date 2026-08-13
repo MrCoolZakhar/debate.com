@@ -8,6 +8,7 @@ import { FileText, Download } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { SectionCard, OUTFIT } from './shared';
+import Loader from '@/components/Loader';
 
 interface StudyGuide {
   id: string;
@@ -58,7 +59,7 @@ export default function StudyGuideCard({ committeeId }: { committeeId: string | 
       </p>
       {loading ? (
         <div className="flex justify-center py-6">
-          <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          <Loader size={36} />
         </div>
       ) : !committeeId || guides.length === 0 ? (
         <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>

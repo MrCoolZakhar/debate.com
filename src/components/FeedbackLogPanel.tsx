@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlagImg } from '@/components/FlagImg';
-import { Committee } from '@/lib/types';
+import { CaucusState, Committee } from '@/lib/types';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getScoringConfig } from '@/lib/scoring';
@@ -29,10 +29,21 @@ function pastSpeeches(committee: Committee): PastSpeech[] {
     .map((e) => ({ country: e.country, context: e.context ?? 'speakers-list', seconds: e.seconds ?? 0, timestamp: e.timestamp ?? '' }));
 }
 
+// The caucus that is ACTUALLY on the floor right now. `committee.caucus` alone is not
+// enough: the phase and the caucus JSONB can diverge (a suspend/end-debate leaves the
+// caucus object behind, and the two writes that end a caucus land as separate rows), so
+// a leftover object would otherwise keep the dock claiming a caucus long after the
+// committee is back on the GSL. Both must agree before we call it a caucus.
+export function liveCaucus(committee: Committee): CaucusState | null {
+  const inCaucusPhase = committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus';
+  return inCaucusPhase && committee.caucus ? committee.caucus : null;
+}
+
 // The context the live/upcoming speakers will be logged under (for later reconciliation).
 function liveContext(committee: Committee): string {
-  if (committee.caucus) return committee.caucus.type === 'unmoderated' ? 'unmoderated-caucus' : 'moderated-caucus';
-  return 'speakers-list';
+  const caucus = liveCaucus(committee);
+  if (!caucus) return 'speakers-list';
+  return caucus.type === 'unmoderated' ? 'unmoderated-caucus' : 'moderated-caucus';
 }
 
 export default function FeedbackLogPanel({ committee, chairName, currentCountry }: {
@@ -41,11 +52,12 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   const { language } = useLanguage();
   const cfg = getScoringConfig(committee);
   const factors = cfg.factors.filter((f) => f.enabled);
+  const caucus = liveCaucus(committee);
   const ctx = liveContext(committee);
 
   const past = useMemo(() => pastSpeeches(committee), [committee.messages]);
   // Upcoming queue (GSL or caucus), excluding whoever currently holds the floor.
-  const queue = (committee.caucus ? committee.caucusQueue : committee.speakersList) ?? [];
+  const queue = (caucus ? committee.caucusQueue : committee.speakersList) ?? [];
   const upcoming = queue.filter((s) => s.country !== currentCountry);
 
   const [state, setState] = useState<Record<string, RowState>>({});
@@ -167,7 +179,15 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
 
   const PILL_TRANSITION = 'transform 260ms cubic-bezier(.2,.8,.2,1), filter 260ms ease, opacity 260ms ease, box-shadow 260ms ease, background-color 260ms ease';
   const GRID_COL = 280;       // reserved so pills/grids stay aligned across rows
-  const tagFor = (item: FeedItem) => item.context === 'speakers-list' ? 'GSL' : (committee.caucus?.motionLabel ?? 'CAUCUS');
+  // The tag belongs to the ROW, not to the room: a past speech keeps the context it was
+  // actually given under. Only rows sitting on the live context borrow the running caucus's
+  // own label — otherwise a finished caucus speech would be re-tagged by whatever is on the
+  // floor now (or, once the caucus ends, re-tag the GSL rows as a caucus).
+  const tagFor = (item: FeedItem) => {
+    if (item.context === 'speakers-list') return 'GSL';
+    if (item.context === ctx && caucus?.motionLabel) return caucus.motionLabel;
+    return item.context === 'unmoderated-caucus' ? 'UNMOD' : 'CAUCUS';
+  };
   const maxScale = Math.max(1, cfg.factorScaleMax);
 
   // Distance-based recede (index 0 = focused). Gentle on scale so pills stay wide.

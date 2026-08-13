@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Free MUN Tools in 2026: Best Software for Chairs and Delegates',
-  description: 'A detailed comparison of free MUN tools and software in 2026: Gavelling, spreadsheets, timer apps, and what actually works for running a real committee session.',
-  alternates: { canonical: 'https://gavelling.com/blog/free-mun-tools' },
-  openGraph: {
-    title: 'Free MUN Tools in 2026: Best Software for Chairs and Delegates',
-    description: 'Find the best free MUN tools for running your committee.',
-    url: 'https://gavelling.com/blog/free-mun-tools',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A detailed comparison of free MUN tools and software in 2026: Gavelling, spreadsheets, timer apps, and what actually works for running a real committee session.',
+  path: '/blog/free-mun-tools',
+  ogDescription:
+    'Find the best free MUN tools for running your committee.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

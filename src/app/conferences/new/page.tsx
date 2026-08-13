@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus, Camera, ThumbsUp, Music2, MessageCircle, Globe, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
 import { generateSlug } from '@/lib/utils';
@@ -577,10 +578,7 @@ export default function NewConferencePage() {
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
-        <div
-          className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }}
-        />
+        <Loader size={72} label="Loading" />
       </div>
     );
   }

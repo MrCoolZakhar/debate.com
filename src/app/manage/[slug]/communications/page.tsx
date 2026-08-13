@@ -1127,10 +1127,18 @@ function CommunicationsPageInner() {
     setBuilderOpen(false);
   }
 
-  // Deep link: ?event=<key> opens the Notifications tab with that event's composer.
+  // Deep link: ?event=<key> opens the Notifications tab with that event's
+  // composer; ?inbox=<requestId> opens the Inbox on that thread (the target
+  // of the 'request_received' email's button).
   useEffect(() => {
     if (loading || deepLinkHandled) return;
     setDeepLinkHandled(true);
+    const inboxId = searchParams.get('inbox');
+    if (inboxId) {
+      setActiveTab('inbox');
+      setSelectedRequestId(inboxId);
+      return;
+    }
     const ev = searchParams.get('event');
     if (!ev) return;
     const def = EVENT_REGISTRY.find(e => e.key === ev);

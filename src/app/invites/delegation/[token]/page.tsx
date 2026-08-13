@@ -26,6 +26,7 @@ import { Users2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabaseAuthClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
 
@@ -45,14 +46,6 @@ const primaryPillStyle: React.CSSProperties = {
   color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.05em',
   boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
 };
-
-function Spinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
-      <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
-    </div>
-  );
-}
 
 export default function DelegationInvitePage() {
   const router = useRouter();
@@ -92,7 +85,13 @@ export default function DelegationInvitePage() {
     resolve();
   }, [authLoading, resolve]);
 
-  if (state !== 'failed') return <Spinner />;
+  if (state !== 'failed') {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
+        <Loader size={72} label="Loading invitation" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>

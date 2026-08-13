@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Bloc Building: How to Form and Lead a Coalition',
-  description: 'A practical guide to building blocs in Model UN: how to find allies, draft collaboratively, handle defections, and lead a coalition to a successful resolution.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-bloc-building' },
-  openGraph: {
-    title: 'MUN Bloc Building: How to Form and Lead a Coalition',
-    description: 'Master coalition building in Model UN committees.',
-    url: 'https://gavelling.com/blog/mun-bloc-building',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A practical guide to building blocs in Model UN: how to find allies, draft collaboratively, handle defections, and lead a coalition to a successful resolution.',
+  path: '/blog/mun-bloc-building',
+  ogDescription:
+    'Master coalition building in Model UN committees.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

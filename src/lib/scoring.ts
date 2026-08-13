@@ -1,7 +1,8 @@
 // Single source of truth for committee scoring. Reads the DB-backed scoring config
 // (never localStorage) and produces an itemized ledger — one row per point-earning event.
 import type { Committee } from './types';
-import { DEFAULT_SCORING, type ScoringConfig } from './settingsStore';
+import { DEFAULT_SCORING, DEFAULT_DOCUMENT_NAMES, type ScoringConfig } from './settingsStore';
+import { docName } from './docNames';
 
 // Parsed __log__ event (superset of the legacy speaking-log entry).
 export interface LedgerEvent {
@@ -26,6 +27,12 @@ export interface LedgerRow {
   timestamp: string;
   context?: string;   // speech rows: the speaking context (for matching feedback)
   seconds?: number;   // speech rows: seconds spoken (for matching feedback)
+  // Speech rows only: how much of `pts` came from the speakingTimePer10s source
+  // rather than the flat GSL/caucus speech value. The row itself stays whole — the
+  // chair's itemized ledger is one line per speech and must not be split — but the
+  // by-source fold below needs to attribute the time bonus to the source that
+  // actually pays it. 0 when that source is disabled.
+  timePts?: number;
 }
 
 // committee.dbScoring merged over DEFAULT_SCORING — never reads localStorage.
@@ -91,7 +98,7 @@ export function computeLedger(committee: Committee, country: string): LedgerRow[
       const secs = e.seconds ?? 0;
       const timePts = per10 != null ? Math.floor(secs / 10) * per10 : 0;
       const detail = [e.topic, secs ? `${secs}s` : ''].filter(Boolean).join(' · ');
-      rows.push({ type: 'speech', sourceId: sid, label: name(cfg, sid), country, pts: base + timePts, detail, timestamp: e.timestamp ?? '', context: e.context ?? 'speakers-list', seconds: secs });
+      rows.push({ type: 'speech', sourceId: sid, label: name(cfg, sid), country, pts: base + timePts, detail, timestamp: e.timestamp ?? '', context: e.context ?? 'speakers-list', seconds: secs, timePts });
     } else if (type === 'motion-raised') {
       const v = val(cfg, 'motionRaised'); if (v == null) continue;
       rows.push({ type, sourceId: 'motionRaised', label: name(cfg, 'motionRaised'), country, pts: v, detail: '', timestamp: e.timestamp ?? '' });
@@ -108,18 +115,27 @@ export function computeLedger(committee: Committee, country: string): LedgerRow[
     }
   }
 
-  // Documents — sponsorship + DR passed
+  // Documents — sponsorship + DR passed.
+  // Ledger labels follow the committee's own names for the document types when the
+  // chair has renamed them (Settings → Motions → Documents); the built-in scoring
+  // source name stays the fallback.
+  const wpLabel = docName(committee, 'working-paper', 'singular', name(cfg, 'wpSponsor'));
+  const drLabel = docName(committee, 'draft-resolution', 'singular', name(cfg, 'drSponsor'));
+  const drRenamed = docName(committee, 'draft-resolution', 'singular', DEFAULT_DOCUMENT_NAMES.draftResolution);
+  const drPassedLabel = drRenamed === DEFAULT_DOCUMENT_NAMES.draftResolution
+    ? name(cfg, 'drPassed')
+    : `${drRenamed} passed`;
   const myDocs = (committee.documents ?? []).filter((d) => d.sponsors.includes(country));
   for (const d of myDocs) {
     if (d.type === 'working-paper') {
       const v = val(cfg, 'wpSponsor');
-      if (v != null) rows.push({ type: 'wp', sourceId: 'wpSponsor', label: name(cfg, 'wpSponsor'), country, pts: v, detail: d.docCode || d.title, timestamp: d.submittedAt });
+      if (v != null) rows.push({ type: 'wp', sourceId: 'wpSponsor', label: wpLabel, country, pts: v, detail: d.docCode || d.title, timestamp: d.submittedAt });
     } else if (d.type === 'draft-resolution') {
       const v = val(cfg, 'drSponsor');
-      if (v != null) rows.push({ type: 'dr', sourceId: 'drSponsor', label: name(cfg, 'drSponsor'), country, pts: v, detail: d.docCode || d.title, timestamp: d.submittedAt });
+      if (v != null) rows.push({ type: 'dr', sourceId: 'drSponsor', label: drLabel, country, pts: v, detail: d.docCode || d.title, timestamp: d.submittedAt });
       if (d.status === 'passed') {
         const pv = val(cfg, 'drPassed');
-        if (pv != null) rows.push({ type: 'drPassed', sourceId: 'drPassed', label: name(cfg, 'drPassed'), country, pts: pv, detail: d.docCode || d.title, timestamp: d.submittedAt });
+        if (pv != null) rows.push({ type: 'drPassed', sourceId: 'drPassed', label: drPassedLabel, country, pts: pv, detail: d.docCode || d.title, timestamp: d.submittedAt });
       }
     }
   }
@@ -132,6 +148,24 @@ export function computeObjectiveScore(committee: Committee, country: string): { 
   const rows = computeLedger(committee, country);
   const total = rows.reduce((s, r) => s + r.pts, 0);
   return { total, rows };
+}
+
+// One delegation's points broken down BY SCORE SOURCE — the same ledger, folded.
+// Disabled sources never produce rows, so they never appear here either; that is
+// what lets a caller (see ./delegateTips) reason about "which categories is this
+// delegation short on" without ever re-implementing the scoring maths.
+// The time bonus is banked against `speakingTimePer10s`, not against the speech
+// source, so "you are short on speaking time" is answerable separately from
+// "you are short on speeches". Row totals are untouched — summing this record
+// still equals computeObjectiveScore().total.
+export function computeSourceTotals(committee: Committee, country: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of computeLedger(committee, country)) {
+    const timePts = r.timePts ?? 0;
+    out[r.sourceId] = (out[r.sourceId] ?? 0) + (r.pts - timePts);
+    if (timePts) out.speakingTimePer10s = (out.speakingTimePer10s ?? 0) + timePts;
+  }
+  return out;
 }
 
 // ── Quality (subjective) scoring from chair recaps ──

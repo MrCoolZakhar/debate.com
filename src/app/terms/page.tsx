@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import { LegalShell, LegalSection, Disclosure } from '@/components/LegalPage';
 import { COMPANY, PLACE_OF_REGISTRATION } from '@/lib/companyDetails';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Terms of Service',
   description: 'The terms governing your use of Gavelling — the Model UN conference and committee platform operated by GAVELLING LTD.',
-  alternates: { canonical: 'https://gavelling.com/terms' },
-};
+  path: '/terms',
+});
 
 const EFFECTIVE_DATE = 'August 3, 2026';
 const CONTACT_EMAIL = 'wearegavelling@gmail.com';

@@ -1,122 +1,124 @@
 'use client';
 
-// Gavelling staff overview — every conference, published or draft, with how far
-// through set-up it is.
+// Gavelling staff console — four tabs over the whole platform.
 //
 // SECURITY: this component holds no access logic worth trusting. The gate is
 // admin_conference_overview(), a SECURITY DEFINER function that raises
 // 'not authorised' unless is_platform_admin(). A non-staff visitor who loads
 // this page gets an error from the database and sees the same "nothing here"
-// screen as a logged-out one — the route being reachable leaks nothing.
+// screen as a logged-out one — the route being reachable leaks nothing. The tab
+// shell renders only AFTER that RPC has succeeded, so an outsider never even
+// sees the tabs; each sibling tab still owns (and must keep) its own DB-side
+// gate, because a UI that never renders is not a permission.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Search, ShieldCheck } from 'lucide-react';
+import { Activity, Building2, Radio, ShieldCheck, Users } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { NEU, OUTFIT, EASE, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
+import ConferencesTab, { type AdminConferenceRow } from './ConferencesTab';
 
-const OUTFIT = "'Outfit', sans-serif";
+// ── Sibling tabs. Each is self-contained: no required props, fetches its own
+// data, owns its own loading/empty/denied states. Built concurrently by other
+// agents; if any of these three modules is missing the build fails on the
+// import alone, which is expected until they land.
+import UsersTab from './UsersTab';
+import ActivityTab from './ActivityTab';
+import LiveCommitteesTab from './LiveCommitteesTab';
+
+// Shared branded spinner (Gavelling green), built by a sibling agent.
+import Loader from '@/components/Loader';
+
 const MONO = 'ui-monospace, monospace';
-const INK = '#1C1410';
-const MUTED = '#9A8A78';
-const FOREST = '#1B3828';
-const GOLD = '#B6871F';
-const PANEL = '#FAF8F3';
-const LINE = '#DDD4C0';
 
-interface Row {
-  id: string; slug: string; acronym: string | null; full_name: string;
-  is_public: boolean; status: string; dates_tbd: boolean;
-  start_date: string | null; end_date: string | null; city: string | null; country: string | null;
-  expected_delegates: number; seat_capacity: number;
-  setup_done: number; setup_total: number; setup_complete: boolean;
-  pending_keys: string[];
-  committees: number; chairs_missing: number; applications: number; paid_applications: number;
-  organizer_name: string | null; organizer_email: string | null;
-  created_at: string; updated_at: string; last_nudge_at: string | null;
-}
+type TabKey = 'conferences' | 'users' | 'activity' | 'live';
 
-const KEY_LABEL: Record<string, string> = {
-  page: 'page', committees: 'committees', chairs: 'chairs', email: 'email',
-  secretariat: 'secretariat', financials: 'financials', delegate: 'first delegate', publish: 'publish',
-};
-
-type Tab = 'drafts' | 'ready' | 'published' | 'all';
-
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-}
+const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
+  { key: 'conferences', label: 'Conferences', icon: Building2 },
+  { key: 'users',       label: 'Users',       icon: Users },
+  { key: 'activity',    label: 'Activity',    icon: Activity },
+  { key: 'live',        label: 'Live',        icon: Radio },
+];
 
 export default function AdminClient() {
   const { session, loading: authLoading } = useAuth();
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [rows, setRows] = useState<AdminConferenceRow[] | null>(null);
+  const [logos, setLogos] = useState<Record<string, string | null>>({});
+  const [avatars, setAvatars] = useState<Record<string, string | null>>({});
   const [denied, setDenied] = useState(false);
-  const [tab, setTab] = useState<Tab>('drafts');
-  const [q, setQ] = useState('');
+  const [tab, setTab] = useState<TabKey>('conferences');
 
   const load = useCallback(async () => {
     if (!session) { setDenied(true); return; }
     const supabase = getAuthedClient(session.access_token);
     const { data, error } = await supabase.rpc('admin_conference_overview');
     if (error) { setDenied(true); return; }
-    setRows((data ?? []) as Row[]);
+    setRows((data ?? []) as AdminConferenceRow[]);
+
+    // Logos and organiser avatars are not part of admin_conference_overview()'s
+    // return type, so they come from two follow-up reads. NEITHER widens the
+    // staff gate:
+    //   • `conferences` already has a public SELECT policy ("Anyone can read
+    //     conferences by link") — the anon key could fetch this already.
+    //   • `profiles` is read under the EXISTING "Organizers read co-organizer
+    //     profiles" policy, which passes here only because
+    //     is_conference_organizer() short-circuits on is_platform_admin(). A
+    //     non-staff caller gets zero rows from RLS, and never reaches this code
+    //     at all because the RPC above already failed.
+    // Either read failing is harmless: rows fall back to monogram / initials.
+    const { data: confRows } = await supabase.from('conferences').select('id, logo_url, organizer_id');
+    if (!confRows) return;
+
+    const logoMap: Record<string, string | null> = {};
+    const organizerOf: Record<string, string | null> = {};
+    for (const c of confRows as { id: string; logo_url: string | null; organizer_id: string | null }[]) {
+      logoMap[c.id] = c.logo_url;
+      organizerOf[c.id] = c.organizer_id;
+    }
+    setLogos(logoMap);
+
+    const organizerIds = Array.from(new Set(Object.values(organizerOf).filter((x): x is string => !!x)));
+    if (organizerIds.length === 0) return;
+    const { data: profileRows } = await supabase.from('profiles').select('id, avatar_url').in('id', organizerIds);
+    if (!profileRows) return;
+
+    const avatarOfUser = new Map((profileRows as { id: string; avatar_url: string | null }[]).map(p => [p.id, p.avatar_url]));
+    const byConference: Record<string, string | null> = {};
+    for (const [confId, userId] of Object.entries(organizerOf)) {
+      byConference[confId] = userId ? avatarOfUser.get(userId) ?? null : null;
+    }
+    setAvatars(byConference);
   }, [session]);
 
   useEffect(() => { if (!authLoading) void load(); }, [authLoading, load]);
 
-  const stats = useMemo(() => {
-    const r = rows ?? [];
-    return {
-      total: r.length,
-      drafts: r.filter(x => !x.is_public).length,
-      ready: r.filter(x => !x.is_public && x.setup_complete).length,
-      published: r.filter(x => x.is_public).length,
-      stalled: r.filter(x => !x.is_public && (daysSince(x.updated_at) ?? 0) > 14).length,
-      underCapacity: r.filter(x => x.expected_delegates > 0 && x.seat_capacity < x.expected_delegates).length,
-    };
-  }, [rows]);
-
-  const shown = useMemo(() => {
-    let r = rows ?? [];
-    if (tab === 'drafts') r = r.filter(x => !x.is_public);
-    else if (tab === 'ready') r = r.filter(x => !x.is_public && x.setup_complete);
-    else if (tab === 'published') r = r.filter(x => x.is_public);
-    const s = q.trim().toLowerCase();
-    if (s) {
-      r = r.filter(x =>
-        (x.acronym ?? '').toLowerCase().includes(s) ||
-        x.full_name.toLowerCase().includes(s) ||
-        (x.organizer_name ?? '').toLowerCase().includes(s) ||
-        (x.organizer_email ?? '').toLowerCase().includes(s) ||
-        (x.city ?? '').toLowerCase().includes(s) ||
-        (x.country ?? '').toLowerCase().includes(s));
-    }
-    return r;
-  }, [rows, tab, q]);
+  const counts = useMemo(() => ({ conferences: rows?.length ?? 0 }), [rows]);
 
   if (authLoading || (!rows && !denied)) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#EDE7D8' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: NEU.base }}>
         <SiteNav />
-        <p className="text-center py-24 text-sm" style={{ color: MUTED, fontFamily: OUTFIT }}>Loading…</p>
+        <div className="flex justify-center" style={{ padding: '96px 0' }}>
+          <Loader size={40} />
+        </div>
       </div>
     );
   }
 
   // Deliberately bland and identical for "logged out", "not staff" and "RPC
   // failed" — it should not confirm that a staff view exists here.
-  if (denied) {
+  if (denied || !rows) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#EDE7D8' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: NEU.base }}>
         <SiteNav />
         <div className="flex flex-col items-center justify-center text-center px-6" style={{ minHeight: '60vh' }}>
-          <h1 className="font-black text-xl" style={{ color: INK, fontFamily: OUTFIT }}>Nothing here</h1>
-          <p className="mt-2 text-sm" style={{ color: MUTED, fontFamily: OUTFIT }}>
+          <h1 className="font-black text-xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Nothing here</h1>
+          <p className="mt-2 text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
             This page isn&apos;t available for your account.
           </p>
-          <Link href="/" className="mt-6 text-sm font-bold" style={{ color: FOREST, fontFamily: OUTFIT }}>
+          <Link href="/" className="mt-6 text-sm font-bold" style={{ color: NEU.forest, fontFamily: OUTFIT }}>
             Back to Gavelling →
           </Link>
         </div>
@@ -124,164 +126,90 @@ export default function AdminClient() {
     );
   }
 
-  const TABS: { key: Tab; label: string; n: number }[] = [
-    { key: 'drafts', label: 'Drafts', n: stats.drafts },
-    { key: 'ready', label: 'Ready, unpublished', n: stats.ready },
-    { key: 'published', label: 'Published', n: stats.published },
-    { key: 'all', label: 'All', n: stats.total },
-  ];
-
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#EDE7D8' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: NEU.base }}>
       <SiteNav />
-      <main className="mx-auto w-full max-w-6xl px-5 py-10">
-        <div className="flex items-center gap-2 mb-1">
-          <ShieldCheck size={16} style={{ color: GOLD }} />
-          <p style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: '0.16em', color: GOLD, fontWeight: 700 }}>
-            GAVELLING STAFF
-          </p>
-        </div>
-        <h1 className="font-black mb-6" style={{ color: INK, fontFamily: OUTFIT, fontSize: 27, letterSpacing: '-0.02em' }}>
-          Every conference
-        </h1>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2.5 mb-7">
-          {[
-            { label: 'Total', v: stats.total },
-            { label: 'Drafts', v: stats.drafts },
-            { label: 'Ready, unpublished', v: stats.ready, accent: stats.ready > 0 },
-            { label: 'Published', v: stats.published },
-            { label: 'Stalled 14d+', v: stats.stalled, warn: stats.stalled > 0 },
-            { label: 'Under capacity', v: stats.underCapacity, warn: stats.underCapacity > 0 },
-          ].map(s => (
-            <div key={s.label} className="rounded-2xl px-4 py-3" style={{ backgroundColor: PANEL, border: `1px solid ${LINE}` }}>
-              <p style={{ fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: s.warn ? '#8B2020' : s.accent ? FOREST : INK, fontVariantNumeric: 'tabular-nums' }}>
-                {s.v}
-              </p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: MUTED, letterSpacing: '0.02em' }}>{s.label}</p>
-            </div>
-          ))}
+      <main className="mx-auto w-full max-w-7xl px-5 md:px-8 py-9">
+        {/* Header */}
+        <div className="flex items-center gap-3.5 mb-6">
+          <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={ShieldCheck} emoji="Shield" size={46} />
+          <div>
+            <p className="flex items-center gap-1.5 mb-0.5" style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: '0.16em', color: NEU.deepGold, fontWeight: 700 }}>
+              GAVELLING STAFF
+            </p>
+            <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 27, color: NEU.ink, letterSpacing: '-0.02em' }}>
+              Platform console
+            </h1>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-2 flex-wrap mb-4">
-          {TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className="rounded-full px-3.5 py-2 focus:outline-none"
-              style={{
-                fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', cursor: 'pointer',
-                backgroundColor: tab === t.key ? FOREST : 'transparent',
-                color: tab === t.key ? '#EED98A' : '#6B5F52',
-                border: tab === t.key ? 'none' : `1px solid ${LINE}`,
-              }}
-            >
-              {t.label} · {t.n}
-            </button>
-          ))}
-          <span className="flex items-center gap-2 rounded-full px-3 py-2 ml-auto"
-                style={{ backgroundColor: PANEL, border: `1px solid ${LINE}` }}>
-            <Search size={13} style={{ color: MUTED }} />
-            <input
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Conference, organiser, city…"
-              className="focus:outline-none"
-              style={{ fontFamily: OUTFIT, fontSize: 12.5, background: 'transparent', border: 'none', color: INK, width: 210 }}
-            />
-          </span>
-        </div>
-
-        {/* List */}
-        <div className="flex flex-col gap-2">
-          {shown.length === 0 && (
-            <p className="text-sm py-10 text-center" style={{ color: MUTED, fontFamily: OUTFIT }}>Nothing matches.</p>
-          )}
-          {shown.map(r => {
-            const idle = daysSince(r.updated_at);
-            const short = r.expected_delegates > 0 && r.seat_capacity < r.expected_delegates;
-            const pct = Math.round((r.setup_done / Math.max(r.setup_total, 1)) * 100);
+        {/* Tab bar — a pressed-in track holding four extruded pills. Arrow keys
+            move between tabs (roving tabindex), matching the ARIA tabs pattern. */}
+        <div
+          role="tablist"
+          aria-label="Staff console sections"
+          className="inline-flex items-center gap-1 mb-6 flex-wrap"
+          style={{ padding: 5, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
+        >
+          {TABS.map((t, i) => {
+            const on = tab === t.key;
+            const Icon = t.icon;
             return (
-              <div key={r.id} className="rounded-2xl px-4 py-3.5" style={{ backgroundColor: PANEL, border: `1px solid ${LINE}` }}>
-                <div className="flex items-start gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0" style={{ minWidth: 220 }}>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-black" style={{ color: INK, fontFamily: OUTFIT, fontSize: 15 }}>
-                        {r.acronym || r.full_name}
-                      </span>
-                      {r.is_public
-                        ? <Chip text="PUBLISHED" bg="rgba(61,122,82,0.12)" fg="#3D7A52" />
-                        : r.setup_complete
-                          ? <Chip text="READY — NOT LIVE" bg="rgba(182,135,31,0.14)" fg={GOLD} />
-                          : <Chip text="DRAFT" bg="rgba(154,138,120,0.14)" fg={MUTED} />}
-                      {r.dates_tbd && <Chip text="DATES TBD" bg="rgba(27,56,40,0.08)" fg={FOREST} />}
-                      {short && <Chip text={`${r.seat_capacity}/${r.expected_delegates} SEATS`} bg="rgba(139,32,32,0.10)" fg="#8B2020" />}
-                    </div>
-                    <p className="mt-1 truncate" style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 12 }}>
-                      {r.full_name}
-                      {(r.city || r.country) && ` · ${[r.city, r.country].filter(Boolean).join(', ')}`}
-                    </p>
-                    <p className="mt-0.5 truncate" style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 11.5 }}>
-                      {r.organizer_name || 'Unknown organiser'}
-                      {r.organizer_email && ` · ${r.organizer_email}`}
-                      {idle !== null && ` · touched ${idle}d ago`}
-                      {r.last_nudge_at && ` · nudged ${daysSince(r.last_nudge_at)}d ago`}
-                    </p>
-                  </div>
-
-                  {/* Progress */}
-                  <div style={{ width: 168 }}>
-                    <div className="flex items-baseline justify-between mb-1">
-                      <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTED }}>SET-UP</span>
-                      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 800, color: r.setup_complete ? '#3D7A52' : INK, fontVariantNumeric: 'tabular-nums' }}>
-                        {r.setup_done}/{r.setup_total}
-                      </span>
-                    </div>
-                    <div style={{ height: 5, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.10)', overflow: 'hidden' }}>
-                      <div style={{ width: `${pct}%`, height: '100%', backgroundColor: r.setup_complete ? '#3D7A52' : GOLD }} />
-                    </div>
-                    <p className="mt-1.5 leading-snug" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: MUTED }}>
-                      {r.pending_keys.length === 0
-                        ? 'Everything done.'
-                        : `Left: ${r.pending_keys.map(k => KEY_LABEL[k] ?? k).join(', ')}`}
-                    </p>
-                  </div>
-
-                  {/* Counts + links */}
-                  <div className="flex flex-col items-end gap-1.5" style={{ minWidth: 132 }}>
-                    <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: MUTED, fontVariantNumeric: 'tabular-nums' }}>
-                      {r.committees} cttee · {r.applications} apps · {r.paid_applications} paid
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/manage/${r.slug}`} className="inline-flex items-center gap-1 rounded-full px-3 py-1.5"
-                            style={{ backgroundColor: FOREST, color: '#EED98A', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, textDecoration: 'none' }}>
-                        Dashboard
-                      </Link>
-                      <Link href={`/conferences/${r.slug}`} className="inline-flex items-center gap-1"
-                            style={{ color: FOREST, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, textDecoration: 'none' }}>
-                        Page <ArrowUpRight size={12} />
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <button
+                key={t.key}
+                role="tab"
+                id={`admin-tab-${t.key}`}
+                aria-selected={on}
+                aria-controls={`admin-panel-${t.key}`}
+                tabIndex={on ? 0 : -1}
+                onClick={() => setTab(t.key)}
+                onKeyDown={e => {
+                  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+                  e.preventDefault();
+                  const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
+                  setTab(next.key);
+                  document.getElementById(`admin-tab-${next.key}`)?.focus();
+                }}
+                className="inline-flex items-center gap-2 focus:outline-none"
+                style={{
+                  padding: '9px 17px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                  color: on ? NEU.gold : NEU.ink,
+                  background: on ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : 'transparent',
+                  boxShadow: on ? `0 4px 12px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}` : 'none',
+                  transition: `box-shadow 240ms ${EASE}, color 240ms ${EASE}, background 240ms ${EASE}`,
+                }}
+              >
+                <Icon size={14} strokeWidth={2.5} style={{ color: on ? NEU.gold : NEU.deepGold }} />
+                {t.label}
+                {t.key === 'conferences' && (
+                  <span
+                    className="inline-flex items-center justify-center"
+                    style={{
+                      minWidth: 20, height: 18, padding: '0 6px', borderRadius: 999,
+                      fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+                      color: on ? NEU.forest : '#FFFFFF',
+                      backgroundColor: on ? NEU.gold : NEU.forest,
+                    }}
+                  >
+                    {counts.conferences}
+                  </span>
+                )}
+              </button>
             );
           })}
         </div>
+
+        {/* Panels. Only the selected tab mounts, so a sibling tab never fetches
+            until a staff member actually opens it. */}
+        <div role="tabpanel" id={`admin-panel-${tab}`} aria-labelledby={`admin-tab-${tab}`}>
+          {tab === 'conferences' && <ConferencesTab rows={rows} logos={logos} avatars={avatars} />}
+          {tab === 'users' && <UsersTab />}
+          {tab === 'activity' && <ActivityTab />}
+          {tab === 'live' && <LiveCommitteesTab />}
+        </div>
       </main>
     </div>
-  );
-}
-
-function Chip({ text, bg, fg }: { text: string; bg: string; fg: string }) {
-  return (
-    <span style={{
-      fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-      color: fg, backgroundColor: bg, padding: '3px 7px', borderRadius: 999, whiteSpace: 'nowrap',
-    }}>
-      {text}
-    </span>
   );
 }

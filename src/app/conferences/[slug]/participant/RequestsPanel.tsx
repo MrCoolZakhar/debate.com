@@ -11,9 +11,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MessageSquare, ChevronLeft, ChevronRight, Plus, Send, ArrowLeftRight, BadgeCheck, CalendarDays, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
+import { notifyOrganizersOfRequest } from '@/lib/emailEvents';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuInset, NeuIconDisc, NeuButton } from '@/components/neu';
 import { FilterPopoverShell, FilterGroup, FilterHeading, toggleIn } from '@/components/FilterPopover';
 import { DatePicker } from '@/components/DatePicker';
+import Loader from '@/components/Loader';
 import type { ParticipantApplication } from './types';
 
 const MONO = "'DM Mono', monospace";
@@ -371,6 +373,11 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
       is_organizer: false,
       body: newBody.trim(),
     });
+    // Secondary effect, deliberately not awaited and never able to fail the
+    // thread that was already created: tell the organizing team a question
+    // is waiting. email_outbox is organizer-write-only, so this goes through
+    // the participant queue route rather than straight to the DB.
+    void notifyOrganizersOfRequest(session.access_token, conferenceId, (reqRow as { id: string }).id);
     setSubmitting(false);
     setNewSubject('');
     setNewBody('');
@@ -564,7 +571,7 @@ export default function RequestsPanel({ conferenceId, applicationId, myApplicati
         </div>
       ) : loading ? (
         <div className="flex justify-center py-6">
-          <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+          <Loader size={40} />
         </div>
       ) : requests.length === 0 ? (
         <div className="flex flex-col items-center text-center py-8">

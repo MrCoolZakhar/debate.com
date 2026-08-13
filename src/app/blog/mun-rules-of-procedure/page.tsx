@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Rules of Procedure: Complete Reference Guide',
-  description: 'A comprehensive reference for Model UN rules of procedure: points, motions, yields, quorum, voting thresholds, and how rules differ across major conferences.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-rules-of-procedure' },
-  openGraph: {
-    title: 'MUN Rules of Procedure: Complete Reference Guide',
-    description: 'Everything you need to know about MUN rules of procedure.',
-    url: 'https://gavelling.com/blog/mun-rules-of-procedure',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A comprehensive reference for Model UN rules of procedure: points, motions, yields, quorum, voting thresholds, and how rules differ across major conferences.',
+  path: '/blog/mun-rules-of-procedure',
+  ogDescription:
+    'Everything you need to know about MUN rules of procedure.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

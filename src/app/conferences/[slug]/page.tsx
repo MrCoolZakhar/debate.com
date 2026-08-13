@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
+import { OG_IMAGE_URL, pageMetadata } from '@/lib/seo';
 import { supabase } from '@/lib/supabase';
 import ConferenceDetailClient from './ConferenceDetailClient';
 
@@ -17,7 +18,7 @@ interface ConfMeta {
   format: string | null;
 }
 
-const FALLBACK_IMAGE = 'https://gavelling.com/og-image.png';
+const FALLBACK_IMAGE = OG_IMAGE_URL;
 
 // One DB round-trip shared between generateMetadata and the page render
 // (React request-level cache), so adding the Event schema costs nothing extra.
@@ -53,10 +54,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const conf = await getConference(slug);
 
   if (!conf) {
-    return {
+    // Still needs its own og:url — a card that claims to be the homepage shares
+    // the homepage's preview-cache entry on Facebook/WhatsApp.
+    return pageMetadata({
       title: 'Conference',
       description: 'A Model UN conference on Gavelling.',
-    };
+      path: `/conferences/${slug}`,
+    });
   }
 
   const name = conf.full_name || conf.acronym || 'Conference';
@@ -72,33 +76,20 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // Banner is the hero for the large card; fall back to the logo, then the
   // site image. Storage URLs are already absolute.
   const image = conf.banner_url || conf.logo_url || FALLBACK_IMAGE;
-  const url = `https://gavelling.com/conferences/${slug}`;
 
-  return {
+  return pageMetadata({
     title: name,
     description,
-    alternates: { canonical: url },
+    path: `/conferences/${slug}`,
+    image,
+    imageAlt: name,
     // Private conferences stay reachable by link but out of search indexes.
     // Public ones get EXPLICIT index/follow + rich-preview directives (rather
     // than inheriting silently) so results can show large image + full snippet.
     robots: conf.is_public === false
       ? { index: false, follow: false }
       : { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 } },
-    openGraph: {
-      title: name,
-      description,
-      url,
-      siteName: 'Gavelling',
-      type: 'website',
-      images: [{ url: image, alt: name }],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: name,
-      description,
-      images: [image],
-    },
-  };
+  });
 }
 
 // schema.org Event JSON-LD → Google event rich results for public conferences.

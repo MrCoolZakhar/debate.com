@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { OG_IMAGE, OG_IMAGE_URL } from '@/lib/seo';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { LanguageProvider } from '@/contexts/LanguageContext';
@@ -53,16 +54,9 @@ export const metadata: Metadata = {
     title: 'Gavelling: MUN Conferences & Committee Software',
     description:
       'Find and apply to Model UN conferences worldwide, organise your own, and run committee sessions live: roll call, speakers, motions, voting.',
-    url: 'https://gavelling.com',
+    // NOTE: deliberately NO `url` here — see below.
     siteName: 'Gavelling',
-    images: [
-      {
-        url: 'https://gavelling.com/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Gavelling: MUN Conferences & Committee Software',
-      },
-    ],
+    images: [OG_IMAGE],
     locale: 'en_US',
     type: 'website',
   },
@@ -72,10 +66,20 @@ export const metadata: Metadata = {
     description:
       'Find and apply to Model UN conferences worldwide, organise your own, and run committee sessions live.',
     creator: '@wearegavelling',
-    images: ['https://gavelling.com/og-image.png'],
+    images: [OG_IMAGE_URL],
   },
-  // NOTE: no root-level `alternates` here. A root canonical is inherited by
-  // every child page that doesn't define its own `alternates`, silently
+  // NOTE: no root-level `openGraph.url`. Facebook and WhatsApp treat og:url as
+  // the object's IDENTITY and key their preview cache on it. A hardcoded
+  // homepage URL here was inherited by every page that doesn't set its own —
+  // /conferences/new, /create, /join, /privacy, /terms — so each of them told
+  // crawlers "I am the homepage", collapsing them all into ONE shared cache
+  // entry. That is why previews broke seemingly at random and why fixes
+  // appeared not to apply. Scrapers fall back to the requested URL when og:url
+  // is absent, so a missing og:url is strictly better than a wrong one; pages
+  // that matter set their own via `pageMetadata()` in src/lib/seo.ts.
+  //
+  // NOTE: no root-level `alternates` here either. A root canonical is inherited
+  // by every child page that doesn't define its own `alternates`, silently
   // marking those pages as duplicates of the homepage and keeping them out of
   // the index. Each indexable page declares its own canonical instead.
   // Favicon + apple-touch icon are served by the App Router file convention
@@ -95,6 +99,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* DELIBERATE: only Playfair Display (italic) and Noto Sans Arabic are
+            loaded. This matches production exactly and is Peter's explicit
+            choice — do NOT "fix" it by adding Outfit or DM Mono back.
+
+            `OUTFIT` in neu.tsx and the ~460 "'Outfit', sans-serif" style
+            literals therefore fall through to the system sans (SF Pro on macOS,
+            Segoe UI on Windows). That is the intended look. A previous session
+            read the unloaded family as a regression from 91b40e8 and restored
+            it; that change was reverted here because it altered the typography
+            of the whole app away from what ships. */}
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
         <meta name="theme-color" content="#1B3828" />

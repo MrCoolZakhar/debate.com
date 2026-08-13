@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'How to Write a MUN Position Paper: Format, Tips & Examples',
-  description: 'Step-by-step guide to writing a Model UN position paper: correct format, what to include, common mistakes, and examples that impress chairs.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-position-paper-guide' },
-  openGraph: {
-    title: 'How to Write a MUN Position Paper: Format, Tips & Examples',
-    description: 'Write position papers that impress chairs and set you up to lead debate.',
-    url: 'https://gavelling.com/blog/mun-position-paper-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'Step-by-step guide to writing a Model UN position paper: correct format, what to include, common mistakes, and examples that impress chairs.',
+  path: '/blog/mun-position-paper-guide',
+  ogDescription:
+    'Write position papers that impress chairs and set you up to lead debate.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

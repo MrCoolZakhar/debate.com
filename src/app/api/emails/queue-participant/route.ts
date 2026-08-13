@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { queueEventEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
+import { queueEventEmail, queueRequestReceivedEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
 import type { getAuthedClient } from '@/lib/supabase-auth';
 import type { EmailTokenContext } from '@/lib/emailTokens';
 
@@ -23,7 +23,10 @@ export const dynamic = 'force-dynamic';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://luruhkwrgisytejswlas.supabase.co';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_k7NdduzaXK358z8ew18ZKA_vBSieDlV';
 
-const ALLOWED_EVENTS = new Set(['application_received', 'delegation_swap']);
+// 'request_received' is the one organizer-directed event reachable here: the
+// participant who asked the question is the trigger, but the recipients are
+// the organizing team, so it takes a requestId rather than applicationIds.
+const ALLOWED_EVENTS = new Set(['application_received', 'delegation_swap', 'request_received']);
 const LEADER_STATUSES = ['accepted', 'assigned', 'checked-in'];
 
 interface QueueParticipantBody {
@@ -31,6 +34,8 @@ interface QueueParticipantBody {
   eventKey?: string;
   applicationIds?: string[];
   extraCtx?: EmailTokenContext;
+  /** 'request_received' only: the conference_requests row that was just opened. */
+  requestId?: string;
 }
 
 async function isOrganizer(admin: SupabaseClient, callerId: string, conferenceId: string): Promise<boolean> {
@@ -92,12 +97,18 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
   }
-  const { conferenceId, eventKey, applicationIds, extraCtx } = body;
-  if (!conferenceId || !eventKey || !Array.isArray(applicationIds) || applicationIds.length === 0) {
-    return NextResponse.json({ error: 'Missing conferenceId, eventKey, or applicationIds.' }, { status: 400 });
+  const { conferenceId, eventKey, applicationIds, extraCtx, requestId } = body;
+  if (!conferenceId || !eventKey) {
+    return NextResponse.json({ error: 'Missing conferenceId or eventKey.' }, { status: 400 });
   }
   if (!ALLOWED_EVENTS.has(eventKey)) {
     return NextResponse.json({ error: `Event "${eventKey}" cannot be queued from the participant side.` }, { status: 403 });
+  }
+  const isRequestReceived = eventKey === 'request_received';
+  if (isRequestReceived) {
+    if (!requestId) return NextResponse.json({ error: 'Missing requestId.' }, { status: 400 });
+  } else if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
+    return NextResponse.json({ error: 'Missing applicationIds.' }, { status: 400 });
   }
 
   const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -113,9 +124,52 @@ export async function POST(req: NextRequest) {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 
+  // request_received takes its own path: the trigger is the asker, the
+  // recipients are the organizing team, so it resolves recipients from
+  // conference_organizers rather than from applicationIds.
+  if (isRequestReceived) {
+    const { data: reqData } = await admin
+      .from('conference_requests')
+      .select('id, user_id, conference_id, kind, subject')
+      .eq('id', requestId!)
+      .maybeSingle();
+    const request = reqData as { id: string; user_id: string; conference_id: string; kind: string; subject: string } | null;
+    // Only the asker's own freshly opened QUESTION thread. swap_request /
+    // swap_notice are a different workflow and never notify this way.
+    if (!request || request.user_id !== callerId || request.conference_id !== conferenceId || request.kind !== 'question') {
+      return NextResponse.json({ error: 'Not authorized to queue this event.' }, { status: 403 });
+    }
+
+    const [{ data: msgData }, { data: profileData }] = await Promise.all([
+      admin
+        .from('conference_request_messages')
+        .select('body')
+        .eq('request_id', request.id)
+        .order('created_at', { ascending: true })
+        .limit(1),
+      admin.from('profiles').select('display_name').eq('id', callerId).maybeSingle(),
+    ]);
+    const firstMessage = ((msgData ?? []) as { body: string }[])[0]?.body ?? '';
+    const askerName = (profileData as { display_name: string | null } | null)?.display_name ?? null;
+
+    try {
+      const { queued } = await queueRequestReceivedEmail(admin as unknown as ReturnType<typeof getAuthedClient>, {
+        conferenceId,
+        requestId: request.id,
+        subject: request.subject,
+        body: firstMessage,
+        askerName,
+      });
+      return NextResponse.json({ outcome: queued > 0 ? 'sent-default' : 'no-recipients', drafted: false, queued, eventKey } satisfies QueueEventEmailResult);
+    } catch (err) {
+      console.error('[queue-participant] queueRequestReceivedEmail threw:', err);
+      return NextResponse.json({ outcome: 'unconfigured', drafted: false, queued: 0, eventKey } satisfies QueueEventEmailResult);
+    }
+  }
+
   const authorized =
-    eventKey === 'application_received' ? await authorizeApplicationReceived(admin, callerId, conferenceId, applicationIds) :
-    eventKey === 'delegation_swap' ? await authorizeDelegationSwap(admin, callerId, conferenceId, applicationIds) :
+    eventKey === 'application_received' ? await authorizeApplicationReceived(admin, callerId, conferenceId, applicationIds!) :
+    eventKey === 'delegation_swap' ? await authorizeDelegationSwap(admin, callerId, conferenceId, applicationIds!) :
     false;
 
   if (!authorized) {
@@ -131,7 +185,7 @@ export async function POST(req: NextRequest) {
     // and queuing the outbox row is what actually matters. A minute-cadence
     // server cron drains any pending row regardless of whether the
     // immediate delivery trigger landed.
-    result = await queueEventEmail(admin as unknown as ReturnType<typeof getAuthedClient>, conferenceId, eventKey, applicationIds, extraCtx);
+    result = await queueEventEmail(admin as unknown as ReturnType<typeof getAuthedClient>, conferenceId, eventKey, applicationIds!, extraCtx);
   } catch (err) {
     console.error('[queue-participant] queueEventEmail threw:', eventKey, err);
     return NextResponse.json({ outcome: 'unconfigured', drafted: false, queued: 0, eventKey } satisfies QueueEventEmailResult);

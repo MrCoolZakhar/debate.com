@@ -4,7 +4,7 @@
 
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
-import { normalizeBlocks, flattenBlocksToPlainText, type EmailBlock } from '@/lib/emailBlocks';
+import { normalizeBlocks, flattenBlocksToPlainText, getSiteUrl, type EmailBlock } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference, type EmailTheme } from '@/lib/emailHtml';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
@@ -52,6 +52,7 @@ export const EVENT_REGISTRY = [
   { key: 'session_chair_invite', label: 'Session Chair Invite', description: 'Sent to committee chairs with their session code and chair password.', defaultDelivery: 'manual' },
   { key: 'session_join_invite', label: 'Session Join Invite', description: 'Sent to committee participants inviting them to join the live session.', defaultDelivery: 'manual' },
   { key: 'request_reply', label: 'Request reply', description: 'Sent to a participant when the organizing team replies to their question.', defaultDelivery: 'immediate' },
+  { key: 'request_received', label: 'Question received', description: 'Sent to your organizing team when a participant asks a question on Gavelling, and again as a digest every 3 days while questions are still awaiting a reply. Each organizer can turn it off under Questions & Reminders on their own profile.', defaultDelivery: 'immediate' },
   { key: 'delegation_swap', label: 'Delegation swap', description: 'Sent to both delegates when their committee allocations are swapped within a delegation.', defaultDelivery: 'immediate' },
   { key: 'import_join_invite', label: 'Import: join Gavelling', description: 'Sent to imported applicants asking them to create a Gavelling account so their registration attaches automatically. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
 ] as const satisfies readonly EventDef[];
@@ -77,7 +78,7 @@ export function getEventLabel(eventKey: string): string {
 // check entirely for the handful of emails the product can't function
 // without, the invite itself is the consent.
 
-export type NotificationCategory = 'applications' | 'payments' | 'documents' | 'marketing';
+export type NotificationCategory = 'applications' | 'payments' | 'documents' | 'marketing' | 'requests';
 
 export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   application_received: 'applications',
@@ -105,16 +106,32 @@ export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   session_chair_invite: 'applications',
   session_join_invite: 'applications',
   request_reply: 'applications',
+  request_received: 'requests',
   delegation_swap: 'applications',
   import_join_invite: 'applications',
 };
 
-const PREFERENCE_FIELD: Record<NotificationCategory, 'notify_email_applications' | 'notify_email_payments' | 'notify_email_documents' | 'notify_email_marketing'> = {
+/** The profiles column each category is gated on. 'requests' reuses the
+ *  long-existing but previously unwired notify_email_reminders column (NOT
+ *  NULL DEFAULT true), so an organizer who has never opened their profile
+ *  receives question alerts — no migration, and no conflation with the
+ *  applications toggle, which is a participant-side concern. */
+export const PREFERENCE_FIELD: Record<NotificationCategory, PreferenceField> = {
   applications: 'notify_email_applications',
   payments: 'notify_email_payments',
   documents: 'notify_email_documents',
   marketing: 'notify_email_marketing',
+  requests: 'notify_email_reminders',
 };
+
+export type PreferenceField =
+  | 'notify_email_applications'
+  | 'notify_email_payments'
+  | 'notify_email_documents'
+  | 'notify_email_marketing'
+  | 'notify_email_reminders';
+
+type PreferenceRow = Partial<Record<PreferenceField, boolean | null>>;
 
 // Transactional/functional emails a user can't opt out of without breaking
 // the product: clicking INVITE (chair/import) is itself the consent, and a
@@ -127,7 +144,7 @@ const ALWAYS_SEND_EVENTS = new Set(['committee_chair_invite', 'organizer_invite'
  *  always-send functional events bypass the check. */
 function recipientAllowsEvent(
   eventKey: string,
-  profiles: { notify_email_applications?: boolean | null; notify_email_payments?: boolean | null; notify_email_documents?: boolean | null; notify_email_marketing?: boolean | null } | null
+  profiles: PreferenceRow | null
 ): boolean {
   if (ALWAYS_SEND_EVENTS.has(eventKey)) return true;
   if (!profiles) return true; // imported, unclaimed: no preferences to honour yet
@@ -747,6 +764,166 @@ export async function queueImportJoinInviteEmails(
   triggerEmailDelivery(supabase);
 
   return { queued: rows.length };
+}
+
+// ── Organizer-directed event queue ("a question just came in") ──────────────
+// Every other event in the registry is participant-facing: queueEventEmail
+// resolves its recipients from applications joined to profiles. An organizer
+// has no application row, so this resolves the organizing team from
+// conference_organizers (which every conference owner also has a row in)
+// joined to profiles, and writes outbox rows with recipient_application_id
+// null against a resolved recipient_email — the same shape
+// queueChairInviteEmail / queueOrganizerInviteEmail already use for
+// recipients who aren't applicants. Nothing about the 27 existing events
+// changes.
+//
+// Template rules, a deliberate superset of the two patterns already here:
+//   no template row      -> built-in default sends (an organizer alert must
+//                           not be silently blocked on template setup, the
+//                           way an 'unconfigured' participant event is)
+//   row present, off     -> skip, that's an explicit organizer choice
+//   row on but undrafted -> built-in default
+//   row on and drafted   -> their draft
+
+export interface QueueRequestReceivedArgs {
+  conferenceId: string;
+  requestId: string;
+  subject: string;
+  /** The participant's opening message. Truncated in the email body. */
+  body: string;
+  /** Display name of the participant who asked. */
+  askerName: string | null;
+}
+
+const REQUEST_BODY_PREVIEW_CHARS = 600;
+
+interface OrganizerRecipientRow {
+  user_id: string;
+  profiles: { display_name: string | null; email: string | null; notify_email_reminders: boolean | null } | null;
+}
+
+/** Deep link into the conference's Communications inbox, focused on one thread. */
+export function requestInboxUrl(slug: string, requestId: string): string {
+  return `${getSiteUrl()}/manage/${slug}/communications?inbox=${encodeURIComponent(requestId)}`;
+}
+
+/** Points any custom-destination button in the built-in default at this
+ *  specific thread. A conference's own drafted template is never rewritten. */
+function withInboxLink(blocks: EmailBlock[], url: string): EmailBlock[] {
+  return blocks.map(b => (b.type === 'button' && b.destination === 'custom' ? { ...b, url } : b));
+}
+
+export async function queueRequestReceivedEmail(
+  supabase: ReturnType<typeof getAuthedClient>,
+  args: QueueRequestReceivedArgs
+): Promise<{ queued: number }> {
+  const { conferenceId, requestId, subject, body, askerName } = args;
+  const eventKey = 'request_received';
+
+  const [{ data: confData }, { data: templateData }, { data: organizerData }] = await Promise.all([
+    supabase
+      .from('conferences')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
+      .eq('id', conferenceId)
+      .single(),
+    supabase
+      .from('email_templates')
+      .select('id, subject, body, body_blocks, enabled')
+      .eq('conference_id', conferenceId)
+      .eq('event_key', eventKey)
+      .maybeSingle(),
+    supabase
+      .from('conference_organizers')
+      .select('user_id, profiles (display_name, email, notify_email_reminders)')
+      .eq('conference_id', conferenceId),
+  ]);
+
+  const template = templateData as TemplateRow | null;
+  if (template && !template.enabled) return { queued: 0 };
+
+  const conference = confData as ConferenceRow | null;
+  const renderConf: EmailRenderConference = {
+    slug: conference?.slug ?? '',
+    acronym: conference?.acronym ?? '',
+    full_name: conference?.full_name ?? '',
+    banner_url: conference?.banner_url ?? null,
+    logo_url: conference?.logo_url ?? null,
+    contact_email: conference?.contact_email ?? '',
+    email_theme: conference?.email_theme ?? null,
+  };
+
+  const useDraft = !!template && hasDraftContent(template);
+  const fallback = getDefaultEventEmail(eventKey);
+  const inboxUrl = requestInboxUrl(renderConf.slug, requestId);
+  const blocks: EmailBlock[] = useDraft
+    ? normalizeBlocks(template!.body_blocks, template!.body)
+    : withInboxLink(fallback?.blocks ?? [], inboxUrl);
+  const subjectSource = useDraft ? template!.subject : (fallback?.subject ?? '');
+  const flatBody = flattenBlocksToPlainText(blocks, renderConf);
+
+  const trimmed = body.trim();
+  const preview = trimmed.length > REQUEST_BODY_PREVIEW_CHARS
+    ? `${trimmed.slice(0, REQUEST_BODY_PREVIEW_CHARS)}…`
+    : trimmed;
+
+  const ctx: EmailTokenContext = {
+    delegate_name: askerName,
+    conference_name: conference?.full_name ?? null,
+    request_subject: subject,
+    request_body: preview,
+  };
+
+  const organizers = (organizerData ?? []) as unknown as OrganizerRecipientRow[];
+  const rows = organizers
+    .filter(o => recipientAllowsEvent(eventKey, o.profiles))
+    .map(o => o.profiles?.email)
+    .filter((e): e is string => !!e)
+    .filter((e, i, all) => all.indexOf(e) === i)
+    .map(email => ({
+      conference_id: conferenceId,
+      template_id: useDraft ? template!.id : null,
+      recipient_application_id: null,
+      recipient_email: email,
+      subject: resolveTokens(subjectSource, ctx),
+      body: resolveTokens(flatBody, ctx),
+      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
+      status: 'pending' as const,
+    }));
+
+  if (rows.length === 0) return { queued: 0 };
+
+  const { error } = await supabase.from('email_outbox').insert(rows);
+  if (error) {
+    console.error(`[queueRequestReceivedEmail] email_outbox insert failed (${rows.length} row${rows.length === 1 ? '' : 's'}):`, error.message);
+    return { queued: 0 };
+  }
+
+  triggerEmailDelivery(supabase);
+  return { queued: rows.length };
+}
+
+/** Client-side companion to queueRequestReceivedEmail: a participant's own
+ *  session can never write email_outbox (organizer-only RLS), so their
+ *  browser POSTs the request id to the existing participant queue route,
+ *  which re-authorizes it and queues with the service role. */
+export async function notifyOrganizersOfRequest(
+  accessToken: string,
+  conferenceId: string,
+  requestId: string
+): Promise<void> {
+  try {
+    const res = await fetch('/api/emails/queue-participant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ conferenceId, eventKey: 'request_received', requestId }),
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null) as { error?: string } | null;
+      console.error(`[notifyOrganizersOfRequest] rejected (${res.status}):`, payload?.error);
+    }
+  } catch (err) {
+    console.error('[notifyOrganizersOfRequest] request threw:', err);
+  }
 }
 
 // ── Participant-triggered event queue (browser → server route) ─────────────

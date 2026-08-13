@@ -928,9 +928,18 @@ export default function HomeClient() {
               </div>
 
               {/* Buttons */}
+              {/*
+                ?chairName is the chair's ONLY identity — chat sender, feedback author and the
+                gavel comparison all key off it. Rejoining without it silently renamed the
+                chair to the literal "Chair", so their own DMs stopped grouping into the
+                threads both sides could already see.
+              */}
               <div className="flex gap-2">
                 <button
-                  onClick={() => { window.location.href = `/chair/${rejoinData.code}`; }}
+                  onClick={() => {
+                    const q = rejoinData.chairName ? `?chairName=${encodeURIComponent(rejoinData.chairName)}` : '';
+                    window.location.href = `/chair/${rejoinData.code}${q}`;
+                  }}
                   className="flex-1 py-2.5 rounded-xl font-black text-sm transition-colors"
                   style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}

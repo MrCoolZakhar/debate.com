@@ -1,13 +1,26 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { isSecurityCouncil } from './presetNames';
 
 export interface MotionNames {
   moderated: string;
   unmoderated: string;
   consultation: string;
   tour: string;
+  custom: string;
   suspendDebate: string;
   endDebate: string;
+}
+
+// Chair-renameable display names for the two document types. Singular AND plural
+// are stored because the UI needs both ("Submit a Working Paper" vs "Working Papers").
+// Values are the canonical ENGLISH defaults until a chair overrides them — exactly
+// like MotionNames — so a localized label never leaks into the store or the DB.
+export interface DocumentNames {
+  workingPaper: string;
+  workingPapers: string;
+  draftResolution: string;
+  draftResolutions: string;
 }
 
 export interface ScoreSource { id: string; name: string; value: number; enabled: boolean; builtin: boolean; }
@@ -44,6 +57,10 @@ export interface CommitteeSettings {
   // Tab 1 — Voting & Majorities
   substantiveThreshold: 'simple' | 'supermajority-2-3' | 'consensus';
   allowAbstentions: boolean;
+  // false (default, historic behaviour) = abstentions are excluded from the
+  // threshold denominator. true = they join For + Against, so abstaining makes
+  // a resolution harder to pass. Enforced on the voting screen.
+  abstentionsInDenominator: boolean;
   vetoMode: 'none' | 'p5' | 'unanimous' | 'custom';
   p5Delegations: string[];
   vetoCountries: string[];
@@ -55,11 +72,16 @@ export interface CommitteeSettings {
   cowTimerEnabled: boolean;     // optional standalone timer during Consultation of the Whole
   cowTimerSeconds: number;      // default duration for the CoW timer
   motionTourDeTable: boolean;
+  // Free-text placeholder motion for procedural business handled verbally in the
+  // room. Accepting one is a deliberate no-op, so it has no order position — it
+  // is always the least disruptive motion on the floor.
+  motionCustom: boolean;
   motionNames: MotionNames;
   motionOrder: ('moderated' | 'unmoderated' | 'consultation' | 'tour')[];
   wpSubmissionLimit: number | null;  // null = unlimited
   drSubmissionLimit: number | null;
   requireDocApproval: boolean;       // default false — chair must approve WP/DR before it can be introduced
+  documentNames: DocumentNames;      // chair-renameable labels for the two document types
   // GSL behaviour
   gslRequireNextSpeaker: boolean;
   // Scoring & ranking
@@ -78,13 +100,22 @@ export const DEFAULT_MOTION_NAMES: MotionNames = {
   unmoderated: 'Unmoderated Caucus',
   consultation: 'Consultation of the Whole',
   tour: 'Tour de Table',
+  custom: 'Custom',
   suspendDebate: 'Suspend Debate',
   endDebate: 'End Debate',
+};
+
+export const DEFAULT_DOCUMENT_NAMES: DocumentNames = {
+  workingPaper: 'Working Paper',
+  workingPapers: 'Working Papers',
+  draftResolution: 'Draft Resolution',
+  draftResolutions: 'Draft Resolutions',
 };
 
 export const DEFAULT_SETTINGS: CommitteeSettings = {
   substantiveThreshold: 'simple',
   allowAbstentions: true,
+  abstentionsInDenominator: false,
   vetoMode: 'none',
   p5Delegations: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
   vetoCountries: ['China', 'France', 'Russia', 'United Kingdom', 'United States'],
@@ -95,11 +126,13 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   cowTimerEnabled: false,
   cowTimerSeconds: 60,
   motionTourDeTable: true,
+  motionCustom: true,
   motionNames: { ...DEFAULT_MOTION_NAMES },
   motionOrder: ['consultation', 'tour', 'unmoderated', 'moderated'],
   wpSubmissionLimit: null,
   drSubmissionLimit: null,
   requireDocApproval: false,
+  documentNames: { ...DEFAULT_DOCUMENT_NAMES },
   chairJoinSuffix: '',
   requireChairApproval: false,
   gslRequireNextSpeaker: false,
@@ -108,6 +141,34 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   lockDelegateRollCall: false,
   disableChat: false,
 };
+
+// ── Identity-implied defaults ────────────────────────────────────────────────
+/**
+ * Settings that a committee's IDENTITY implies when the chair has never made a
+ * choice. Today there is exactly one: a Security Council starts with the P5 veto
+ * switched on.
+ *
+ * THE ONE CORRECTNESS RULE: a key is only implied when it is ABSENT from the
+ * committee's stored `committees.settings` jsonb. Any stored value — including a
+ * chair deliberately setting `vetoMode: 'none'` — is an explicit choice and wins.
+ * The moment the implied value is written back to the DB (or the chair changes any
+ * rule, which persists the whole blob) the key becomes present, so this function
+ * returns `{}` on every subsequent load and can never re-override the chair.
+ *
+ * Pure function of the committee row — it never reads localStorage, so it is safe
+ * on the delegate/advisor surfaces too (AGENTS.md rule 14).
+ */
+export function impliedSettings(
+  committeeName: string | null | undefined,
+  storedSettings: Record<string, unknown> | null | undefined,
+  abbreviation?: string | null,
+): Partial<CommitteeSettings> {
+  const stored = storedSettings ?? {};
+  const implied: Partial<CommitteeSettings> = {};
+  const vetoChosen = Object.prototype.hasOwnProperty.call(stored, 'vetoMode') && stored.vetoMode != null;
+  if (!vetoChosen && isSecurityCouncil(committeeName, abbreviation)) implied.vetoMode = 'p5';
+  return implied;
+}
 
 interface SettingsStore {
   settings: Record<string, CommitteeSettings>;

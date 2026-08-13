@@ -11,12 +11,55 @@ import { Committee, DelegateStatus } from '@/lib/types';
 import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
-import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB } from '@/lib/committeeService';
-import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
+import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings } from '@/lib/committeeService';
+import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, type CommitteeSettings } from '@/lib/settingsStore';
+import { VotingRulesPanel, VotingRulesPopover, computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
 import { sponsorLabel } from '@/lib/committeeFlags';
+import { docName } from '@/lib/docNames';
 import { SettingsPanel } from '@/components/SettingsPanel';
+
+/**
+ * Device-local evidence that this browser has actually been a chair of `code`.
+ *
+ * Two sources, both written by /chair/[code] and by nothing else:
+ *   • `gavelling-settings` → settings[CODE].chairJoinSuffix — the chair page mirrors
+ *     the DB credential there on every load (the delegate and advisor pages never
+ *     write it, so its presence really does mean "this device opened the chair view")
+ *   • `gavelling-rejoin` → { code, chairSuffix, chairName } for THIS committee
+ *
+ * Read straight out of localStorage rather than through the Zustand selector, and
+ * captured during the FIRST render, because the access-granted effect below writes
+ * the DB suffix into that same store. Reading it back afterwards would hand the
+ * gate its own answer and let anyone in on the second page load.
+ */
+function readChairDeviceProof(code: string): { suffix: string | null; chairName: string | null } {
+  if (typeof window === 'undefined') return { suffix: null, chairName: null };
+  const upper = code.toUpperCase();
+  let suffix: string | null = null;
+  let chairName: string | null = null;
+  try {
+    const raw = localStorage.getItem('gavelling-settings');
+    if (raw) {
+      const parsed = JSON.parse(raw) as { state?: { settings?: Record<string, { chairJoinSuffix?: string }> } };
+      const bag = parsed?.state?.settings ?? {};
+      const entry = bag[upper] ?? bag[code];
+      if (entry?.chairJoinSuffix) suffix = String(entry.chairJoinSuffix);
+    }
+  } catch { /* unreadable store — fall through to the rejoin blob */ }
+  try {
+    const raw = localStorage.getItem('gavelling-rejoin');
+    if (raw) {
+      const parsed = JSON.parse(raw) as { code?: string; chairSuffix?: string | null; chairName?: string | null };
+      if ((parsed?.code ?? '').toUpperCase() === upper) {
+        if (!suffix && parsed.chairSuffix) suffix = String(parsed.chairSuffix);
+        if (parsed.chairName) chairName = String(parsed.chairName);
+      }
+    }
+  } catch { /* malformed blob — no proof from here */ }
+  return { suffix, chairName };
+}
 
 function abbreviateCommitteeName(name: string): string {
   return name
@@ -48,11 +91,14 @@ function RollCallModal({
   rollCallStatuses,
   onCycleStatus,
   onConfirm,
+  side,
 }: {
   delegates: Committee['delegates'];
   rollCallStatuses: Record<string, DelegateStatus>;
   onCycleStatus: (id: string) => void;
   onConfirm: () => void;
+  /** Rendered immediately beside the roll call card (the voting-rules console). */
+  side?: React.ReactNode;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -65,7 +111,7 @@ function RollCallModal({
     status === 'absent' ? 'bg-[#8B2020]' : status === 'present' ? 'bg-[#3D7A52]' : 'bg-[#B6871F]';
   const presentCount = votable.filter((d) => (rollCallStatuses[d.id] ?? d.status) !== 'absent').length;
   return (
-    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
+    <Portal><div className="fixed inset-0 z-50 flex items-center justify-center gap-4 px-4" style={{ background: 'rgba(5,4,3,0.92)', backdropFilter: 'blur(4px)' }}>
       <div className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col" style={{ maxHeight: '85%', backgroundColor: '#1B3828', border: '1px solid rgba(255,255,255,0.12)' }}>
         <div className="px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
           <div className="flex items-center justify-between mb-1">
@@ -128,7 +174,53 @@ function RollCallModal({
           </button>
         </div>
       </div>
+      {side}
     </div></Portal>
+  );
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+// Declared at module scope (like RollCallModal) so React keeps the same element
+// type across renders. Nested inside VotingPage it was a brand-new component type
+// on every render, which remounted the whole bar — killing CSS transitions and
+// resetting any state a header child owns (e.g. the open voting-rules popover).
+function VotingHeader({ committeeName, onBack, onEndDebate, onOpenSettings, rules, children }: {
+  committeeName: string;
+  onBack: () => void;
+  onEndDebate: () => void;
+  onOpenSettings: () => void;
+  rules?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  const t = useT();
+  return (
+    <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-4 shrink-0">
+      <SessionsHeaderLogo />
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        <span className="text-sm font-bold text-[#1C1410] truncate">{abbreviateCommitteeName(committeeName)}</span>
+      </div>
+      <button
+        onClick={onBack}
+        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0"
+        style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+      >
+        {t('voting_back_to_session')}
+      </button>
+      <button
+        onClick={onEndDebate}
+        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0"
+        style={{ backgroundColor: '#8B2020', color: 'white' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
+      >
+        {t('voting_end_debate')}
+      </button>
+      {rules}
+      <button onClick={onOpenSettings} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-2xl">⚙</button>
+      {children}
+    </header>
   );
 }
 
@@ -227,32 +319,98 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   // ── ALL hooks must be called before any early returns ──────────────────────
   const t = useT();
   const { language } = useLanguage();
-  const getSettings = useSettingsStore((s) => s.getSettings);
+  // Subscribe to the settings SLICE, not the getSettings selector: selecting the
+  // (stable) function would never re-render this page when a rule changes, so the
+  // inline rules console could not live-recompute the verdict.
+  const settingsMap = useSettingsStore((s) => s.settings);
+  const updateSetting = useSettingsStore((s) => s.updateSetting);
   const { user, session, loading: authLoading } = useAuth();
-  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
+  const [confAccess, setConfAccess] = useState<'checking' | 'standalone' | 'allowed' | 'denied' | 'signin'>('checking');
   const hydrateSettings = useSettingsStore((s) => s.hydrateSettings);
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
 
-  // Conference-session access guard (#8). Standalone sessions stay anonymous; a conference
-  // session requires a signed-in verified member of THIS committee's conference.
+  // ── Standalone chair gate ──────────────────────────────────────────────────
+  // This page ends debate, adjourns the committee, rewrites delegate statuses,
+  // persists resolution results and hosts the whole SettingsPanel. It used to be
+  // reachable by anyone who could read the six-character code off the header chip.
+  // Standalone sessions now require the chair code — the same credential the join
+  // page checks (`dbChairJoinSuffix`). Captured on the first render, before the
+  // access-granted effect mirrors the DB value into the settings store.
+  const [deviceChairProof] = useState(() => readChairDeviceProof(code));
+  // ?chairName= read once, in the same first-render initializer, so the derived gate
+  // below never touches `window` during render (this page has no Suspense boundary,
+  // so useSearchParams() would break the prerender).
+  const [urlChairName] = useState(() =>
+    typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('chairName') ?? '',
+  );
+  const [chairCodeUnlocked, setChairCodeUnlocked] = useState(false);
+  const [chairCodeInput, setChairCodeInput] = useState('');
+  const [chairCodeError, setChairCodeError] = useState('');
+  // Identity-implied settings seeded at load (UNSC → P5 veto) that still have to be
+  // written back to the DB. Only flushed once access is granted.
+  const settingsSeedRef = useRef<Partial<CommitteeSettings> | null>(null);
+
+  // Conference-session access guard (#8). A conference session requires a signed-in
+  // verified member of THIS committee's conference; a standalone session falls
+  // through to the chair-code gate below.
   useEffect(() => {
     let cancelled = false;
     async function guard() {
       if (authLoading) return;
       const isConf = await detectConferenceSession(code);
       if (cancelled) return;
-      if (!isConf) { setAccessState('allowed'); return; }
-      if (!session || !user) { setAccessState('signin'); return; }
+      if (!isConf) { setConfAccess('standalone'); return; }
+      if (!session || !user) { setConfAccess('signin'); return; }
       const access = await verifyConferenceAccess(code, session.access_token, user.id);
       if (cancelled) return;
-      setAccessState(access.kind === 'chair' || access.kind === 'organizer' ? 'allowed' : 'denied');
+      setConfAccess(access.kind === 'chair' || access.kind === 'organizer' ? 'allowed' : 'denied');
     }
-    setAccessState('checking');
+    setConfAccess('checking');
     guard();
     return () => { cancelled = true; };
   }, [code, authLoading, session?.access_token, user?.id]);
+
+  // Standalone gate — DERIVED, not state. It is a pure function of the committee row
+  // plus the credentials this device already held at first render, so there is no
+  // window where it reads "allowed" before the committee has loaded.
+  const chairGate: 'checking' | 'allowed' | 'locked' = (() => {
+    if (confAccess !== 'standalone') return 'allowed';        // conference path owns its own gate
+    if (loading) return 'checking';
+    if (chairCodeUnlocked) return 'allowed';                  // chair code typed on this screen
+    if (!committee) return 'allowed';                         // the "not found" screen owns this case
+    const expected = (committee.dbChairJoinSuffix ?? '').trim();
+    if (expected) return deviceChairProof.suffix === expected ? 'allowed' : 'locked';
+    // Legacy committee with no chair code at all — there is no credential to check,
+    // so fall back to the weaker device proof rather than locking its chairs out:
+    // having been in this committee's chair view, or arriving with a ?chairName=
+    // the committee itself knows.
+    const knownName = !!urlChairName && committee.chairNames.includes(urlChairName);
+    return deviceChairProof.chairName || knownName ? 'allowed' : 'locked';
+  })();
+
+  const accessGranted = confAccess === 'allowed' || (confAccess === 'standalone' && chairGate === 'allowed');
+
+  // Post-access side effects. Deliberately NOT in the loader:
+  //  • mirroring `chairJoinSuffix` into the settings store there would hand the gate
+  //    its own answer on the next load (and is only needed so SettingsPanel does not
+  //    mint a fresh suffix — SettingsPanel only renders once access is granted)
+  //  • the identity-implied settings seed is a DB write, which must never fire for
+  //    someone who has not proved they chair this committee
+  useEffect(() => {
+    if (!accessGranted || !committee) return;
+    if (committee.dbChairJoinSuffix) {
+      updateSetting(committee.code, 'chairJoinSuffix', committee.dbChairJoinSuffix);
+    }
+    const seed = settingsSeedRef.current;
+    if (seed && Object.keys(seed).length > 0) {
+      settingsSeedRef.current = null;
+      // Read-merge write: it only ADDS the absent key, so it cannot disturb anything
+      // the chair has already chosen.
+      saveCommitteeSettings(committee.id, seed, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    }
+  }, [accessGranted, committee?.id]);
   const [votes, setVotes] = useState<DelegateVote[]>([]);
   const [phase, setPhase] = useState<VotingPhase>('voting');
   const [currentVoterIndex, setCurrentVoterIndex] = useState(0);
@@ -277,12 +435,45 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       const found = await getCommitteeByCode(code);
       setCommittee(found ?? null);
       if (found) {
+        // Defaults the committee's IDENTITY implies — today: a Security Council
+        // starts with the P5 veto on. `impliedSettings` returns a key ONLY when it
+        // is absent from the stored jsonb, so an explicit chair choice (including
+        // deliberately switching the veto OFF) always wins and is never re-applied.
+        const stored = (found.dbSettings ?? {}) as Record<string, unknown>;
+        const implied = impliedSettings(found.name, stored);
+        settingsSeedRef.current = Object.keys(implied).length > 0 ? implied : null;
         if (found.dbSettings) {
           // DB is the source of truth — apply the master chair's saved thresholds/veto/etc.
-          const { chairJoinSuffix: _cjs, separateChairCode: _scc, ...rest } = found.dbSettings as Record<string, unknown>;
-          void _cjs; void _scc;
-          hydrateSettings(code, rest as Partial<CommitteeSettings>);
+          //
+          // `headChair` must NOT enter the store. Both write paths on this page
+          // (`applyRule` below and SettingsPanel's `upd`) POST the WHOLE settings
+          // object back, so a gavel holder captured at page load would silently
+          // revert the gavel the moment another chair took it. Same for the
+          // write-only `separateChairCode` marker. See AGENTS.md rule 12.
+          // `chairJoinSuffix` is stripped here too — it is the credential the
+          // standalone gate below checks against, and hydrating it would write the
+          // DB answer into localStorage for anyone who merely opened this URL,
+          // unlocking the gate on their next page load. The access-granted effect
+          // above puts it back once the viewer has proved they chair this session.
+          const { headChair: _hc, separateChairCode: _scc, chairJoinSuffix: _cjs, ...rest } = stored;
+          void _hc; void _scc; void _cjs;
+          // Key on found.code, not the URL param: getCommitteeByCode uppercases
+          // before querying, and every read below goes through committee.code.
+          // A lowercase URL would otherwise hydrate a key nothing ever reads.
+          hydrateSettings(found.code, { ...(rest as Partial<CommitteeSettings>), ...implied });
+        } else if (Object.keys(implied).length > 0) {
+          hydrateSettings(found.code, implied);
         }
+        // `chairJoinSuffix` DOES have to reach the store — it is the opposite case.
+        // It is the only write credential (x-chair-suffix → is_session_chair) and
+        // the code every chair typed on the join page. Leaving it out means the
+        // store reads '' on any device that has no localStorage entry for this
+        // committee (co-chair who arrived by link, fresh browser, incognito,
+        // cleared cache); SettingsPanel's mount effect then MINTS A NEW RANDOM
+        // SUFFIX and writes it to the DB, and `applyRule` writes '' back over the
+        // real one — either way every chair holding the printed code is locked out.
+        // It is written by the access-granted effect above rather than here, so the
+        // standalone chair gate cannot be satisfied by this page's own write.
         const statuses: Record<string, DelegateStatus> = {};
         found.delegates.forEach((d) => { statuses[d.id] = d.status; });
         setRollCallStatuses(statuses);
@@ -318,11 +509,14 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     setRightsRunning(false);
   }, [rightsIndex, rightsTimerLimit]);
 
-  if (loading || authLoading || accessState === 'checking') {
+  if (
+    loading || authLoading || confAccess === 'checking' ||
+    (confAccess === 'standalone' && chairGate === 'checking')
+  ) {
     return <GavelLoader />;
   }
 
-  if (accessState === 'signin') {
+  if (confAccess === 'signin') {
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
@@ -334,7 +528,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     );
   }
 
-  if (accessState === 'denied') {
+  if (confAccess === 'denied') {
     return (
       <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
         <div className="text-center max-w-sm">
@@ -361,8 +555,84 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     );
   }
 
-  // ── committee is guaranteed non-null from here ─────────────────────────────
-  const settings = getSettings(committee.code);
+  // ── Standalone chair gate: prove the chair code before anything is writable ──
+  if (confAccess === 'standalone' && chairGate !== 'allowed') {
+    const expectedSuffix = (committee.dbChairJoinSuffix ?? '').trim();
+    const submitChairCode = () => {
+      const entered = chairCodeInput.trim();
+      // Accept the full printed chair code ("UNSC26-4821") as well as the bare suffix.
+      const bare = entered.includes('-') ? (entered.split('-').pop() ?? '').trim() : entered;
+      if (!expectedSuffix || bare !== expectedSuffix) {
+        setChairCodeError('Incorrect chair code. Ask your head chair.');
+        return;
+      }
+      setChairCodeError('');
+      setChairCodeUnlocked(true);
+    };
+    return (
+      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
+        <div className="w-full max-w-sm text-center">
+          <div className="mb-3"><Emoji size="2.25rem">🪑</Emoji></div>
+          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Chairs only</h1>
+          <p className="mb-6 text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
+            The voting screen records resolution results, changes the committee&apos;s rules and can end
+            debate. Enter the chair code for{' '}
+            <span className="font-black" style={{ color: '#1B3828' }}>{committee.code}</span> to open it.
+          </p>
+          {expectedSuffix ? (
+            <form
+              onSubmit={(e) => { e.preventDefault(); submitChairCode(); }}
+              className="space-y-3"
+            >
+              <input
+                autoFocus
+                inputMode="numeric"
+                maxLength={24}
+                value={chairCodeInput}
+                onChange={(e) => { setChairCodeInput(e.target.value); setChairCodeError(''); }}
+                placeholder="0000"
+                aria-label="Chair code"
+                className="w-full text-center rounded-xl px-4 py-3 font-black tracking-[0.4em] focus:outline-none"
+                style={{
+                  backgroundColor: '#FAF8F3',
+                  border: `1.5px solid ${chairCodeError ? '#8B2020' : '#DDD4C0'}`,
+                  color: '#1C1410',
+                  fontFamily: "'DM Mono', monospace",
+                }}
+              />
+              {chairCodeError && (
+                <p className="text-xs font-semibold" style={{ color: '#8B2020' }}>{chairCodeError}</p>
+              )}
+              <button
+                type="submit"
+                className="w-full font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+                style={{ backgroundColor: '#1B3828' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              >
+                OPEN VOTING
+              </button>
+            </form>
+          ) : (
+            <p className="text-sm leading-relaxed" style={{ color: '#6A5A4A' }}>
+              This committee has no chair code. Open the voting screen from the chair session itself —
+              Documents → Go to voting.
+            </p>
+          )}
+          <Link
+            href={`/join?code=${encodeURIComponent(committee.code)}&mode=chair`}
+            className="inline-block mt-5 text-xs font-semibold underline"
+            style={{ color: '#6A5A4A' }}
+          >
+            Re-join as chair
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── committee is guaranteed non-null and the viewer is a chair from here ────
+  const settings: CommitteeSettings = { ...DEFAULT_SETTINGS, ...(settingsMap[committee.code] ?? {}) };
 
   const allDRs = (committee.documents ?? []).filter(
     (d) => d.type === 'draft-resolution' &&
@@ -382,42 +652,63 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
   const withRights = withRightsAll.slice(0, 10);
 
-  // Veto check: custom → chair-picked vetoCountries; p5 → p5Delegations (fallback to hardcoded P5)
-  const vetoList = settings.vetoMode === 'custom'
-    ? (settings.vetoCountries ?? [])
-    : (settings.p5Delegations?.length ? settings.p5Delegations : ["China","France","Russia","United Kingdom","United States"]);
-  const p5Veto = (settings.vetoMode === 'p5' || settings.vetoMode === 'custom')
-    && vetoList.length > 0
-    && votes.some((v) => vetoList.includes(v.country) && (v.choice === 'against' || v.choice === 'against-rights'));
-  const unanimousRequired = settings.vetoMode === 'unanimous';
-  // Unanimous: every present delegate (P and PV) must vote 'for' or 'for-rights'
+  // Unanimous mode looks at every present delegate (P and PV)
   const presentAndPvDelegates = committee.delegates.filter(
     (d) => !d.isObserver && (rollCallStatuses[d.id] ?? d.status) !== 'absent'
   );
-  const unanimousFail =
-    unanimousRequired &&
-    phase === 'result' &&
-    presentAndPvDelegates.some((d) => {
+  const votableDelegates = committee.delegates.filter((d) => !d.isObserver);
+  const tally = { forCount, againstCount, abstainCount };
+
+  /** The veto seats in force under a given rule set. `custom` → the chair-picked
+   *  list; `p5` → p5Delegations, falling back to the shipped P5 default. */
+  const vetoListFor = (s: CommitteeSettings): string[] => {
+    if (s.vetoMode === 'custom') return s.vetoCountries ?? [];
+    if (s.vetoMode === 'p5') return s.p5Delegations?.length ? s.p5Delegations : DEFAULT_SETTINGS.p5Delegations;
+    return [];
+  };
+
+  // ── Live outcome ───────────────────────────────────────────────────────────
+  // One pure evaluation shared by the screen and the inline rules console, so
+  // flipping a rule instantly moves the denominator, the required-to-pass number
+  // and the verdict for the vote already in progress. `evaluate` is also called
+  // with the *next* settings when a rule changes on the result screen.
+  const evaluate = (s: CommitteeSettings) => {
+    const vetoList = vetoListFor(s);
+    // Matched by resolved country identity, NOT raw string equality. A roster
+    // imported as "Russian Federation" / "United States of America" / "USA" / "UK"
+    // used to match nothing here, so the veto never fired and a vetoed resolution
+    // was recorded as PASSED with no warning anywhere. Entries that resolve to no
+    // country (crisis cabinets, corporations) still match by exact name.
+    const vetoBlocked = (s.vetoMode === 'p5' || s.vetoMode === 'custom')
+      && vetoList.length > 0
+      && votes.some((v) => (v.choice === 'against' || v.choice === 'against-rights')
+        && isVetoDelegation(vetoList, v.country));
+    // Unanimous: every present delegate must have voted 'for' or 'for-rights'
+    const unanFail = s.vetoMode === 'unanimous' && presentAndPvDelegates.some((d) => {
       const vote = votes.find((v) => v.delegateId === d.id);
       return !vote || (vote.choice !== 'for' && vote.choice !== 'for-rights');
     });
+    return {
+      vetoBlocked,
+      unanFail,
+      outcome: computeVoteOutcome({
+        tally,
+        rules: s,
+        presentCount: presentAndPvDelegates.length,
+        totalCount: votableDelegates.length,
+        vetoBlocked,
+        unanimousFail: unanFail,
+      }),
+    };
+  };
 
-  // Threshold check (substantive votes)
-  const totalDecisive = forCount + againstCount; // abstentions excluded from denominator
-  let thresholdMet = false;
-  if (settings.substantiveThreshold === 'supermajority-2-3') {
-    thresholdMet = totalDecisive > 0 && forCount >= (2 / 3) * totalDecisive;
-  } else if (settings.substantiveThreshold === 'consensus') {
-    thresholdMet = againstCount === 0 && forCount > 0;
-  } else {
-    // simple majority: more for than against
-    thresholdMet = forCount > againstCount;
-  }
+  const { vetoBlocked: p5Veto, unanFail: unanimousFail, outcome } = evaluate(settings);
+  const totalDecisive = outcome.denominator;
+  const thresholdMet = outcome.thresholdMet;
+  const passed = outcome.passed;
 
-  const passed = !p5Veto && !unanimousFail && thresholdMet;
-
-  const persistResult = (docId: string, result: 'passed' | 'failed') => {
-    if (resultPersistedRef.current) return;
+  const persistResult = (docId: string, result: 'passed' | 'failed', force = false) => {
+    if (resultPersistedRef.current && !force) return;
     resultPersistedRef.current = true;
     updateDocumentStatusInDB(docId, result, committee.code, committee.dbChairJoinSuffix ?? undefined);
     // Update local committee state so the DR list reflects the result immediately
@@ -430,6 +721,54 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         ),
       };
     });
+  };
+
+  // ── Live rule changes from the inline console ──────────────────────────────
+  // Same write path as SettingsPanel: the Zustand store (instant, this device)
+  // AND the committees.settings jsonb, so every chair device that opens this
+  // session computes the identical verdict. This page already treats the DB copy
+  // as the source of truth on load (hydrateSettings in the loader above).
+  const applyRule = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => {
+    updateSetting(committee.code, key, value);
+    const next: CommitteeSettings = { ...settings, [key]: value };
+    // Never let the credential or the gavel ride along in the payload.
+    // saveCommitteeSettings read-merges into the existing jsonb, so omitting a
+    // key PRESERVES the DB's value. chairJoinSuffix is the chair password —
+    // writing a stale/empty copy locks every chair out. headChair is the gavel —
+    // writing a copy captured at page load reverts it to an earlier holder
+    // (AGENTS.md rule 12/13). A localStorage entry persisted before this guard
+    // existed can still carry either one, so strip on write as well as on load.
+    const { chairJoinSuffix: _cjs, ...payload } =
+      next as CommitteeSettings & { headChair?: string };
+    void _cjs;
+    delete (payload as { headChair?: string }).headChair;
+    saveCommitteeSettings(committee.id, payload, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    // Result already on screen: the verdict can flip, so the DR's stored status
+    // has to follow it rather than keeping the value from the first evaluation.
+    if (phase === 'result' && selectedDoc) {
+      const nextPassed = evaluate(next).outcome.passed;
+      if (nextPassed !== passed) persistResult(selectedDoc.id, nextPassed ? 'passed' : 'failed', true);
+    }
+  };
+
+  const rulesProps = {
+    rules: settings,
+    onChange: applyRule,
+    vetoMode: settings.vetoMode,
+    onVetoModeChange: (m: CommitteeSettings['vetoMode']) => applyRule('vetoMode', m),
+    tally,
+    outcome,
+    votesCast: votes.length,
+    eligible: presentDelegates.length,
+    presentCount: presentAndPvDelegates.length,
+    totalCount: votableDelegates.length,
+    resultShown: phase === 'result',
+    vetoBlocked: p5Veto,
+    unanimousFail,
+    // So the console can warn about veto seats that match NO delegation in the room
+    // — a silent no-match is exactly how a missing veto used to hide.
+    vetoEntries: vetoListFor(settings),
+    delegationNames: votableDelegates.map((d) => d.country),
   };
 
   const startNewVote = (docId: string) => {
@@ -479,41 +818,28 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const handleBackToSession = async () => {
     await setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    router.push(`/chair/${committee.code}`);
+    // A chair's identity is ONLY ?chairName= — there is no session, cookie or DB row for it.
+    // Dropping it here would make the session believe this device is the acting chair
+    // (isViewOnly needs a non-empty name) and rename them to the literal 'Chair' in chat.
+    // Read from window.location: this page has no Suspense boundary, so useSearchParams()
+    // would fail the prerender, and this only ever runs in a click handler.
+    const chairName = new URLSearchParams(window.location.search).get('chairName') ?? '';
+    router.push(`/chair/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`);
   };
   const handleEndDebate = async () => {
     await setPhaseInDB(committee.id, 'adjourned', committee.code, committee.dbChairJoinSuffix ?? undefined);
     router.push('/sessions');
   };
 
-  const Header = ({ children }: { children?: React.ReactNode }) => (
-    <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-4 shrink-0">
-      <SessionsHeaderLogo />
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="text-sm font-bold text-[#1C1410] truncate">{abbreviateCommitteeName(committee.name)}</span>
-      </div>
-      <button
-        onClick={handleBackToSession}
-        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0"
-        style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-      >
-        {t('voting_back_to_session')}
-      </button>
-      <button
-        onClick={() => setShowEndDebateConfirm(true)}
-        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0"
-        style={{ backgroundColor: '#8B2020', color: 'white' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
-      >
-        {t('voting_end_debate')}
-      </button>
-      <button onClick={() => setShowSettings(true)} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0 text-2xl">⚙</button>
-      {children}
-    </header>
-  );
+  // VotingHeader lives at module scope so it never remounts; the rules popover it
+  // hosts therefore keeps its open state while votes are being cast.
+  const headerProps = {
+    committeeName: committee.name,
+    onBack: handleBackToSession,
+    onEndDebate: () => setShowEndDebateConfirm(true),
+    onOpenSettings: () => setShowSettings(true),
+    rules: <VotingRulesPopover {...rulesProps} />,
+  };
 
   // ── Roll call modal (blocks until dismissed) ─────────────────────────────
   const cycleRollCallStatus = (id: string) => {
@@ -529,23 +855,32 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   if (!selectedDoc) {
     return (
       <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
-        <Header />
+        <VotingHeader {...headerProps} />
         {!rollCallDone && (
           <RollCallModal
             delegates={committee.delegates}
             rollCallStatuses={rollCallStatuses}
             onCycleStatus={cycleRollCallStatus}
             onConfirm={() => setRollCallDone(true)}
+            side={
+              <VotingRulesPanel
+                {...rulesProps}
+                className="hidden md:flex w-[336px] shrink-0"
+                style={{ maxHeight: '85%', overflow: 'hidden' }}
+              />
+            }
           />
         )}
         {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="w-full max-w-sm space-y-3">
             <p className="text-xs font-mono text-[#9A8A78] text-center mb-5 tracking-widest">
-              {t('voting_select_dr')}
+              {t('voting_select_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution_type')).toUpperCase() })}
             </p>
             {allDRs.length === 0 ? (
-              <p className="text-sm text-[#9A8A78] text-center py-8">No introduced draft resolutions.</p>
+              <p className="text-sm text-[#9A8A78] text-center py-8">
+                {t('voting_no_introduced_docs', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_type_dr')) })}
+              </p>
             ) : (
               allDRs.map((doc) => {
                 const isVoted = doc.status === 'passed' || doc.status === 'failed';
@@ -611,7 +946,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   return (
     <FitToScreen>
     <div className="h-full w-full bg-[#F6F1E9] flex flex-col overflow-hidden">
-      <Header>
+      <VotingHeader {...headerProps}>
         <span className="text-xs font-mono font-bold text-[#1B3828] bg-[#DDD4C0] px-2 py-0.5 rounded shrink-0">
           {selectedDoc.docCode}
         </span>
@@ -623,9 +958,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           onClick={() => setSelectedDocId(null)}
           className="text-xs text-[#9A8A78] hover:text-[#6A5A4A] transition-colors shrink-0"
         >
-          {t('voting_back_drs')}
+          {t('voting_back_docs', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab')) })}
         </button>
-      </Header>
+      </VotingHeader>
 
       {/* ── Active voting: one delegate at a time ── */}
       {phase === 'voting' && currentDelegate && (
@@ -811,6 +1146,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             )}
           </div>
           <VoteScale forCount={forCount} againstCount={againstCount} totalVoted={votes.length} />
+          <p className="text-xs text-[#6A5A4A] tabular-nums -mt-2">
+            {settings.substantiveThreshold === 'consensus'
+              ? `${totalDecisive} counted · no votes against allowed`
+              : `${totalDecisive} counted · ${outcome.needed} needed to pass`}
+            {outcome.quorumNeeded > 0 && ` · quorum ${presentAndPvDelegates.length}/${outcome.quorumNeeded}`}
+          </p>
           <button
             onClick={handleFinishVoting}
             className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2"
@@ -993,6 +1334,21 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 {t('voting_consensus').replace('{against}', String(againstCount))}
               </p>
             )}
+            {!p5Veto && !unanimousFail && settings.substantiveThreshold === 'simple' && (
+              <p className="text-sm mt-3 font-semibold tabular-nums" style={{ color: thresholdMet ? '#6EE7A0' : '#FCA5A5' }}>
+                Simple majority · {forCount}/{totalDecisive} in favour, {outcome.needed} needed
+              </p>
+            )}
+            {!outcome.quorumMet && (
+              <p className="text-sm mt-3 font-semibold tabular-nums" style={{ color: '#FCA5A5' }}>
+                Quorum not met · {presentAndPvDelegates.length} present, {outcome.quorumNeeded} required
+              </p>
+            )}
+            {outcome.countsAbstentions && abstainCount > 0 && (
+              <p className="text-xs mt-2" style={{ color: passed ? 'rgba(238,217,138,0.6)' : 'rgba(255,208,208,0.6)' }}>
+                Abstentions counted toward the total
+              </p>
+            )}
           </div>
 
           <div className="flex items-center justify-center gap-6">
@@ -1018,7 +1374,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              {t('voting_next_dr')}
+              {t('voting_next_doc', { doc: docName(committee, 'draft-resolution', 'singular', t('documents_draft_resolution')) })}
             </button>
             <button
               onClick={() => setShowEndDebateConfirm(true)}

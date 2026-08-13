@@ -1,0 +1,126 @@
+/* Loader.module.css — the Gavelling branded indeterminate loader.
+ *
+ * A cascade of three laurel leaves (the laurel is half of the Gavelling
+ * gavel mark) falling through the frame, each one growing as it passes
+ * centre and shrinking away below. Adapted from the Uiverse.io
+ * falling-petals loader by andrew-manzyk, recoloured into the forest
+ * palette and re-expressed in element-relative units so it scales
+ * cleanly from a 20px inline chip to a 120px full-page mark.
+ *
+ * WHY A CSS MODULE: the reference ships bare global names (`.loader`,
+ * `@keyframes flowe-one`). globals.css already owns `skeleton-pulse`,
+ * `neu-shimmer` and `ambassador-scroll`, and ~33 inline <style> blocks in
+ * TSX leak further global keyframes (`gavel-strike`, `pulse-skeleton`,
+ * `cal-shimmer`, `gvShimmer`, …). CSS Modules hash BOTH class names and
+ * @keyframes names at build time, so nothing here can collide with any
+ * of them, now or later.
+ *
+ * Colours are custom properties so a caller can retune without forking
+ * the file; the component sets them per tone.
+ */
+
+.root {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  /* Set by the component: --gv-fill, --gv-shine, --gv-leaf, --gv-glow */
+  filter: drop-shadow(0 0 var(--gv-glow) var(--gv-shine));
+}
+
+.leaf {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--gv-leaf);
+  height: var(--gv-leaf);
+  margin-top: calc(var(--gv-leaf) / -2);
+  margin-left: calc(var(--gv-leaf) / -2);
+  /* Hidden until its own keyframe run brings it in, so a leaf never
+     flashes at rest position on first paint. */
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.leaf svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Mirrors the reference's `svg g path:first-child` hook: the blade takes
+   the theme fill, the midrib keeps its own low-opacity stroke. */
+.leaf svg g path:first-child {
+  fill: var(--gv-fill);
+}
+
+/* ── The cascade ─────────────────────────────────────────────────────
+   Same three-element structure and the same 0.3s / 0.6s stagger as the
+   reference. The delays are NEGATIVE so all three are already in flight
+   on the first frame — a positive delay leaves the first 600ms of every
+   mount showing a single lonely leaf, which reads as a stutter.
+   Translations are percentages of the leaf's own box, so the whole
+   motion is resolution-independent and needs no per-size keyframes.   */
+
+.one {
+  animation: gvLoaderFallA 1s linear infinite;
+}
+
+.two {
+  animation: gvLoaderFallB 1s linear infinite;
+  animation-delay: -0.3s;
+}
+
+.three {
+  animation: gvLoaderFallC 1s linear infinite;
+  animation-delay: -0.6s;
+}
+
+/* Travel budget: the leaf is 50-66% of the box, so a leaf whose centre sits
+   at -46% of its OWN height still has its tip inside the frame at scale 0.8.
+   Anything beyond that is only reached at low opacity and small scale, where
+   it reads as fading in from above rather than as a clipped shape. Verified
+   frame-by-frame in the browser at 110px. */
+@keyframes gvLoaderFallA {
+  0%   { transform: translate(0, -96%) rotate(-4deg) scale(0.40); opacity: 0; }
+  24%  { transform: translate(0, -46%) rotate(-2deg) scale(0.80); opacity: 1; }
+  50%  { transform: translate(0, 0)    rotate(0deg)  scale(1);    opacity: 1; }
+  76%  { transform: translate(0, 46%)  rotate(2deg)  scale(0.62); opacity: 0.9; }
+  100% { transform: translate(0, 94%)  rotate(4deg)  scale(0.16); opacity: 0; }
+}
+
+@keyframes gvLoaderFallB {
+  0%   { transform: translate(-54%, -96%) rotate(-14deg) scale(0.40); opacity: 0; }
+  24%  { transform: translate(-36%, -46%) rotate(-9deg)  scale(0.82); opacity: 1; }
+  50%  { transform: translate(-20%, 0)    rotate(-2deg)  scale(1);    opacity: 1; }
+  76%  { transform: translate(-6%, 46%)   rotate(6deg)   scale(0.62); opacity: 0.9; }
+  100% { transform: translate(10%, 94%)   rotate(13deg)  scale(0.16); opacity: 0; }
+}
+
+@keyframes gvLoaderFallC {
+  0%   { transform: translate(54%, -96%) rotate(14deg)  scale(0.40); opacity: 0; }
+  24%  { transform: translate(36%, -46%) rotate(9deg)   scale(0.82); opacity: 1; }
+  50%  { transform: translate(20%, 0)    rotate(2deg)   scale(1);    opacity: 1; }
+  76%  { transform: translate(6%, 46%)   rotate(-6deg)  scale(0.62); opacity: 0.9; }
+  100% { transform: translate(-10%, 94%) rotate(-13deg) scale(0.16); opacity: 0; }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────
+   Not a frozen frame — at no point in the animation do all three leaves
+   sit still and legible at once. This is a deliberately composed still
+   mark: the three leaves settle into a laurel triad, full opacity, full
+   size, gently fanned. The "something is happening" signal for these
+   users comes from role="status" announcing the label, and from whatever
+   copy the calling surface renders beside it.                         */
+@media (prefers-reduced-motion: reduce) {
+  .one,
+  .two,
+  .three {
+    animation: none;
+    opacity: 1;
+  }
+
+  .one   { transform: translate(0, -6%) rotate(0deg) scale(0.92); }
+  .two   { transform: translate(-46%, 12%) rotate(-26deg) scale(0.78); }
+  .three { transform: translate(46%, 12%) rotate(26deg) scale(0.78); }
+}

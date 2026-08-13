@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2026)',
   description:
     'MUN Command (MUNCommand, by mymun) charges €1 per user per day for its Conference App. Gavelling covers committee sessions and full conference management free. Side-by-side comparison.',
+  path: '/blog/muncommand-alternative',
   keywords: [
     'MUN Command',
     'MUNCommand',
@@ -16,17 +18,10 @@ export const metadata: Metadata = {
     'free MUN software',
     'MUN committee software',
   ],
-  alternates: { canonical: 'https://gavelling.com/blog/muncommand-alternative' },
-  openGraph: {
-    title: 'MUN Command vs Gavelling: Honest Comparison & Free Alternative (2026)',
-    description:
-      'MUN Command charges per user per day. Gavelling covers sessions and conference management free. Full side-by-side.',
-    url: 'https://gavelling.com/blog/muncommand-alternative',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  ogDescription:
+    'MUN Command charges per user per day. Gavelling covers sessions and conference management free. Full side-by-side.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',
@@ -121,6 +116,9 @@ export default function MunCommandAlternative() {
             <p style={s.p}>
               <strong>MUN Command</strong> (often written <strong>MUNCommand</strong>) is the conference software built by the mymun team, and it is one of the most established platforms in the Model UN space. If you are evaluating it for your conference, this comparison lays out exactly where it is strong, what it costs, and how <strong>Gavelling</strong> compares as a free alternative — so you can make the call on facts, not marketing.
             </p>
+            <p style={s.p}>
+              Wondering why searching for MUN Command keeps taking you to mymun? The two brands are converging under the mymun name — <Link href="/blog/mymun-alternative" style={{ color: '#1B3828', fontWeight: 600 }}>mymun and MUN Command vs Gavelling</Link> explains the relationship and compares the full conference platform, not just the session app.
+            </p>
 
             <h2 style={s.h2}>What MUN Command does well</h2>
             <p style={s.p}>
@@ -198,7 +196,7 @@ export default function MunCommandAlternative() {
             </p>
 
             <p style={s.p}>
-              See also: <Link href="/blog/best-mun-software-2026" style={{ color: '#1B3828', fontWeight: 600 }}>Best MUN Software in 2026</Link> for the full field, including Muncoordinated and open-source options.
+              See also: <Link href="/blog/mymun-alternative" style={{ color: '#1B3828', fontWeight: 600 }}>mymun and MUN Command vs Gavelling</Link> for the wider platform comparison and worked pricing at conference scale, and <Link href="/blog/best-mun-software-2026" style={{ color: '#1B3828', fontWeight: 600 }}>Best MUN Software in 2026</Link> for the full field, including Muncoordinated and open-source options.
             </p>
 
             <RelatedGuides currentSlug="muncommand-alternative" />

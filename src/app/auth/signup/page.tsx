@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
 import { ageAt } from '@/lib/age';
 import { DatePicker } from '@/components/DatePicker';
+import Loader from '@/components/Loader';
 import {
   AuthLayout,
   CardHeading,
@@ -332,7 +333,7 @@ export default function SignUpPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="w-5 h-5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
+          <Loader size={64} label="Loading sign up" />
         </div>
       }
     >

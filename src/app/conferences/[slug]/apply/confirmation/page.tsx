@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Check, Send, Search, Award } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -250,7 +251,7 @@ export default function ConfirmationPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          <Loader size={64} label="Loading confirmation" />
         </div>
       }
     >

@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Director Guide: How to Run a Model UN Conference',
-  description: 'A complete guide for MUN secretariat directors: planning the conference, assigning committees, briefing chairs, managing logistics, and running a smooth event.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-director-guide' },
-  openGraph: {
-    title: 'MUN Director Guide: How to Run a Model UN Conference',
-    description: 'The complete secretariat guide to directing a Model UN conference.',
-    url: 'https://gavelling.com/blog/mun-director-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A complete guide for MUN secretariat directors: planning the conference, assigning committees, briefing chairs, managing logistics, and running a smooth event.',
+  path: '/blog/mun-director-guide',
+  ogDescription:
+    'The complete secretariat guide to directing a Model UN conference.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

@@ -1,21 +1,17 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "How to Run a Model UN Committee: Chair's Complete Guide (2026)",
   description:
     'Everything a MUN chair needs to run a professional committee session: opening procedures, roll call, General Speakers List, motions, caucuses, and voting. Step-by-step guide.',
-  alternates: { canonical: 'https://gavelling.com/blog/how-to-run-mun-committee' },
-  openGraph: {
-    title: "How to Run a Model UN Committee: Chair's Complete Guide (2026)",
-    description: 'Everything a MUN chair needs to run a professional committee session.',
-    url: 'https://gavelling.com/blog/how-to-run-mun-committee',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  path: '/blog/how-to-run-mun-committee',
+  ogDescription:
+    'Everything a MUN chair needs to run a professional committee session.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

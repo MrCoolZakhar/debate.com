@@ -6,6 +6,7 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
 import { sponsorLabel } from '@/lib/committeeFlags';
+import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
@@ -142,11 +143,11 @@ function formatTime(seconds: number) {
 
 // ── Countdown Timer (reading / presentation / Q&A) ────────────────────────────
 function StageTimer({
-  label, color, totalSeconds, doc, showDocument,
+  label, color, totalSeconds, doc, committee, showDocument,
   onComplete, onToggleDocument, onBack,
 }: {
   label: React.ReactNode; color: string; totalSeconds: number;
-  doc: CommitteeDocument; showDocument: boolean;
+  doc: CommitteeDocument; committee: Committee; showDocument: boolean;
   onComplete: () => void; onToggleDocument: () => void; onBack: () => void;
 }) {
   const t = useT();
@@ -197,7 +198,7 @@ function StageTimer({
     <div ref={containerRef} className={`flex-1 flex ${showDocument ? 'flex-row items-stretch' : 'flex-col items-center justify-center px-8 py-8 text-center'}`}>
       <div className={`flex flex-col items-center justify-center text-center ${showDocument ? 'px-6 py-8' : 'w-full px-8 py-8'}`} style={showDocument ? { width: `${splitPct}%` } : undefined}>
       <p className="text-xs font-mono tracking-widest mb-2" style={{ color: '#9A8A78' }}>
-        {doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')} · {doc.docCode}
+        {docName(committee, doc.type, 'singular', doc.type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')).toUpperCase()} · {doc.docCode}
       </p>
       <h2 className="text-2xl font-black mb-1" style={{ color: '#1C1410' }}>{doc.title}</h2>
       <p className="text-xs font-black mb-6 mt-1 tracking-widest uppercase" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{label}</p>
@@ -462,11 +463,12 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   onDocumentAdded: (doc: CommitteeDocument) => void;
 }) {
   const t = useT();
-  const { getSettings } = useSettingsStore();
-  const settings = getSettings(committee.code);
-  const existingCount = (committee.documents ?? []).filter((d) => d.type === type).length;
-  const limit = type === 'working-paper' ? settings.wpSubmissionLimit : settings.drSubmissionLimit;
-  const limitReached = limit !== null && existingCount >= limit;
+  // Limits come from the committee row (dbSettings), not the localStorage settings
+  // store — see docLimitReached. Same helper backs the delegate submit path, which
+  // previously enforced nothing at all.
+  const existingCount = docCount(committee, type);
+  const limit = docLimit(committee, type);
+  const limitReached = docLimitReached(committee, type);
 
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
   const [title, setTitle] = useState('');
@@ -537,7 +539,10 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}>{t('documents_back')}</button>
         <h2 className="text-xl font-black text-center uppercase tracking-wide" style={{ color: '#1B3828' }}>
-          {type === 'working-paper' ? t('documents_submit_wp_heading') : t('documents_submit_dr_heading')}
+          {t('documents_submit_doc_heading', {
+            doc: docName(committee, type, 'singular',
+              type === 'working-paper' ? t('documents_working_paper_type') : t('documents_draft_resolution_type')).toUpperCase(),
+          })}
         </h2>
       </div>
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-2.5">
@@ -593,7 +598,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
       </div>
       {limitReached && (
         <p className="text-xs text-red-400 text-center">
-          {t('documents_limit_exceeded').replace('{current}', String(existingCount)).replace('{limit}', String(limit)).replace('{type}', type === 'working-paper' ? t('documents_type_wp') : t('documents_type_dr'))}
+          {t('documents_limit_exceeded').replace('{current}', String(existingCount)).replace('{limit}', String(limit)).replace('{type}', docName(committee, type, 'plural', type === 'working-paper' ? t('documents_type_wp') : t('documents_type_dr')))}
         </p>
       )}
       {isSubmitting ? (
@@ -615,13 +620,18 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
 }
 
 // ── Timing Setup Dialog ───────────────────────────────────────────────────────
-function TimingSetup({ doc, onStart, onSkip }: {
+function TimingSetup({ doc, committee, onStart, onSkip }: {
   doc: CommitteeDocument;
+  committee: Committee;
   onStart: (readingMins: number, presentationMins: number, qaMins: number) => void;
   onSkip: () => void;
 }) {
   const t = useT();
   const isWP = doc.type === 'working-paper';
+  const typeName = docName(committee, doc.type, 'singular',
+    isWP ? t('documents_working_paper') : t('documents_draft_resolution'));
+  const typeNamePlural = docName(committee, doc.type, 'plural',
+    isWP ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'));
   const [readingMins, setReadingMins] = useState(0);
   const [presentationMins, setPresentationMins] = useState(0);
   const [qaMins, setQaMins] = useState(0);
@@ -631,14 +641,14 @@ function TimingSetup({ doc, onStart, onSkip }: {
       <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · {t('documents_setup_timers')}</p>
       <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
       <p className="text-sm text-[#6A5A4A] mb-8">
-        {isWP ? t('documents_working_paper_flow') : t('documents_dr_flow')}
+        {isWP ? t('documents_doc_flow_auto', { doc: typeName }) : t('documents_doc_flow_vote', { doc: typeName })}
       </p>
 
       <div className="w-full max-w-sm space-y-4">
         {[
           { key: 'reading', label: t('documents_stage_reading'), value: readingMins, set: setReadingMins, note: t('documents_stage_note_reading') },
           { key: 'presentation', label: t('documents_stage_presentation'), value: presentationMins, set: setPresentationMins, note: t('documents_stage_note_presentation') },
-          { key: 'qa', label: t('documents_stage_qa'), value: qaMins, set: setQaMins, note: isWP ? t('documents_qa_optional') : t('documents_qa_note') },
+          { key: 'qa', label: t('documents_stage_qa'), value: qaMins, set: setQaMins, note: isWP ? t('documents_qa_optional_doc', { doc: typeNamePlural }) : t('documents_qa_note') },
         ].map(({ key, label, value, set, note }) => (
           <div key={key} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
             <div className="flex items-center justify-between mb-1">
@@ -836,10 +846,16 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false }: {
+export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, isViewOnly = false, chairName = '' }: {
   committee: Committee; onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   isViewOnly?: boolean;
+  // The acting chair's name, so "Go to voting" can hand it on to /voting/[code] and the
+  // voting page's "Back to Session" can hand it back. A chair's identity is ONLY the
+  // ?chairName= query param, so any navigation that drops it loses the gavel comparison
+  // and the chat sender name. Passed already-resolved by the chair page (it falls back to
+  // the rejoin blob when the URL is bare), which is the only surface rendering this modal.
+  chairName?: string;
 }) {
   const t = useT();
   const router = useRouter();
@@ -857,6 +873,11 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
   const docs = (committee.documents ?? []).filter((d) => d.type === tab);
+  // Chair-renameable labels for the active tab's document type.
+  const tabSingularName = docName(committee, tab, 'singular',
+    tab === 'working-paper' ? t('documents_working_paper') : t('documents_draft_resolution'));
+  const tabPluralName = docName(committee, tab, 'plural',
+    tab === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'));
 
   const handleDocumentAdded = (doc: CommitteeDocument) => {
     update((c) => ({ ...c, documents: [...(c.documents ?? []), doc] }));
@@ -951,7 +972,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 
         {stage === 'reading' && timings.reading > 0 && (
           <StageTimer label={t('documents_stage_reading')} color="text-[#1B3828]"
-            totalSeconds={timings.reading * 60} doc={activeDoc}
+            totalSeconds={timings.reading * 60} doc={activeDoc} committee={committee}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('reading')}
             onToggleDocument={() => setShowDocContent((v) => !v)}
@@ -959,7 +980,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
         )}
         {stage === 'presentation' && timings.presentation > 0 && (
           <StageTimer label={t('documents_stage_presentation')} color="text-[#1B3828]"
-            totalSeconds={timings.presentation * 60} doc={activeDoc}
+            totalSeconds={timings.presentation * 60} doc={activeDoc} committee={committee}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('presentation')}
             onToggleDocument={() => setShowDocContent((v) => !v)}
@@ -967,7 +988,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
         )}
         {stage === 'qa' && timings.qa > 0 && (
           <StageTimer label={t('documents_stage_qa')} color="text-[#1B3828]"
-            totalSeconds={timings.qa * 60} doc={activeDoc}
+            totalSeconds={timings.qa * 60} doc={activeDoc} committee={committee}
             showDocument={showDocContent}
             onComplete={() => advanceFromStage('qa')}
             onToggleDocument={() => setShowDocContent((v) => !v)}
@@ -990,7 +1011,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
           <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('documents_introduce_header')}</span>
           <button onClick={() => { setStage(null); setActiveDoc(null); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
-        <TimingSetup doc={activeDoc} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
+        <TimingSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
       </div></Portal>
     );
   }
@@ -1012,7 +1033,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               return (
                 <button key={tabItem} onClick={() => setTab(tabItem)}
                   className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === tabItem ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
-                  {tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab')}
+                  {docName(committee, tabItem, 'plural', tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'))}
                   {count > 0 && (
                     <span className={`ms-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
                   )}
@@ -1029,7 +1050,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
             <div className="px-7 pb-7 space-y-3">
               {tab === 'draft-resolution' && (committee.documents ?? []).some((d) => d.type === 'draft-resolution' && d.status === 'introduced') && (
                 <button
-                  onClick={() => router.push(`/voting/${committee.code}`)}
+                  onClick={() => router.push(`/voting/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`)}
                   className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] border border-[#1B3828] text-[#EED98A] py-3 rounded-xl font-black text-sm transition-colors"
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(27,56,40,0.25)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
@@ -1039,7 +1060,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               )}
               {docs.length === 0 ? (
                 <div className="text-center py-10">
-                  <p className="text-2xl font-black mb-1" style={{ color: '#1B3828' }}>{tab === 'working-paper' ? t('documents_empty_wp') : t('documents_empty_dr')}</p>
+                  <p className="text-2xl font-black mb-1" style={{ color: '#1B3828' }}>{t('documents_empty_doc', { doc: tabPluralName })}</p>
                   <p className="text-sm mt-1" style={{ color: '#9A8A78' }}>{t('documents_empty_sub')}</p>
                 </div>
               ) : (
@@ -1053,7 +1074,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               {!isViewOnly && (
                 <button onClick={() => setShowForm(true)}
                   className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                  + {tab === 'working-paper' ? t('documents_submit_new_wp').replace('+ ', '') : t('documents_submit_new_dr').replace('+ ', '')}
+                  + {t('documents_submit_new_doc', { doc: tabSingularName })}
                 </button>
               )}
             </div>
