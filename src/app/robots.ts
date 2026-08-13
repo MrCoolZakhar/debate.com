@@ -24,7 +24,6 @@ export default function robots(): MetadataRoute.Robots {
           '/delegation/',
           '/api/',
           '/conferences/new',
-          '/conferences/landing-lab',
           '/conferences/*/apply',
           '/conferences/*/pay',
           '/conferences/*/participant',

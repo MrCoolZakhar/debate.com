@@ -1,16 +1,17 @@
 'use client';
 
-import Link from 'next/link';
 import { formatFeeAmountCompact } from '@/lib/utils';
 import FooterLegal from '@/components/FooterLegal';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Landing lab · shared primitives
+// Shared primitives for the "Stagefront" landing composition.
 //
-// Three variants, three theses (see docs/design/landing-research.md §4):
-//   V1 "Stagefront"  , Dice/RA poster-first browse          (delegates)
-//   V2 "The Record"  , Eventbrite search × Stripe precision (delegates/advisors)
-//   V3 "First Gavel" , Luma supply-side minimalism          (organisers)
+// THIS IS PRODUCTION CODE. The `/conferences/landing-lab` design-lab route and
+// its two unshipped variants (V2 "The Record", V3 "First Gavel") were deleted;
+// V1 "Stagefront" had already been promoted to the real homepage. This file and
+// VariantStagefront.tsx are imported by ../StagefrontClient.tsx, which renders
+// `/`. Editing either one edits the production landing page.
+// Original design rationale: docs/design/landing-research.md §4.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const INK = '#1C1410';
@@ -152,60 +153,6 @@ export function Stars({ avg, size = 13, color = GOLD }: { avg: number; size?: nu
         <span key={i} style={{ color: i <= filled ? color : 'rgba(154,138,120,0.4)' }}>★</span>
       ))}
     </span>
-  );
-}
-
-// ── Fixed glass variant switcher pill (lab mechanic, do not remove) ─────────
-
-export function VariantSwitcher({ current }: { current: 1 | 2 | 3 }) {
-  return (
-    <div
-      className="fixed z-[90] flex items-center gap-1"
-      style={{
-        bottom: '20px',
-        right: '20px',
-        backgroundColor: 'rgba(250,248,243,0.82)',
-        backdropFilter: 'blur(16px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
-        border: '1px solid rgba(221,212,192,0.9)',
-        borderRadius: '9999px',
-        padding: '5px',
-        boxShadow: '0 12px 32px rgba(27,56,40,0.18)',
-      }}
-    >
-      <span
-        className="pl-3 pr-2"
-        style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.18em', color: TAUPE }}
-      >
-        LAB
-      </span>
-      {([1, 2, 3] as const).map(v => (
-        <Link
-          key={v}
-          href={`/conferences/landing-lab?v=${v}`}
-          style={{
-            fontFamily: MONO,
-            fontSize: '11px',
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            padding: '6px 12px',
-            borderRadius: '9999px',
-            textDecoration: 'none',
-            color: current === v ? PALE_GOLD : FOREST,
-            backgroundColor: current === v ? FOREST : 'transparent',
-            transition: 'background-color 180ms ease, color 180ms ease',
-          }}
-          onMouseEnter={(e) => {
-            if (current !== v) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)';
-          }}
-          onMouseLeave={(e) => {
-            if (current !== v) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-          }}
-        >
-          V{v}
-        </Link>
-      ))}
-    </div>
   );
 }
 
