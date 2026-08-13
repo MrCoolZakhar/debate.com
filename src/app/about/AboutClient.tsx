@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -90,14 +89,29 @@ export default function AboutClient() {
   const [form, setForm] = useState({ name: '', email: '', country: '', experience: '' });
   const [submitted, setSubmitted] = useState(false);
 
+  // Moved server-side (/api/ambassador) so the row insert and the team alert
+  // happen together. The user-visible behaviour is deliberately unchanged from
+  // the old client-side insert: same validation gate, no loading state, no
+  // error state, and the success screen always shows — the previous code
+  // discarded the Supabase insert error too. The try/catch exists only to
+  // preserve that: fetch rejects on a network failure where supabase-js did
+  // not, and without it the dialog would silently hang on failure.
   const handleSubmit = async () => {
     if (!form.name || !form.email || !form.country) return;
-    await supabase.from('ambassador_applications').insert({
-      name: form.name.trim(),
-      email: form.email.trim(),
-      country: form.country.trim(),
-      experience: form.experience.trim() || null,
-    });
+    try {
+      await fetch('/api/ambassador', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          country: form.country.trim(),
+          experience: form.experience.trim() || null,
+        }),
+      });
+    } catch {
+      // Swallowed on purpose — matches the pre-existing behaviour.
+    }
     setSubmitted(true);
   };
 

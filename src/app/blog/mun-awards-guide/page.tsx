@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Awards Guide: How Best Delegate Is Chosen',
-  description: 'How MUN awards work: Best Delegate, Outstanding Delegate, Verbal Commendation: what chairs look for, how to improve your score, and what not to do.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-awards-guide' },
-  openGraph: {
-    title: 'MUN Awards Guide: How Best Delegate Is Chosen',
-    description: 'Understand how MUN awards are chosen and how to improve your chances.',
-    url: 'https://gavelling.com/blog/mun-awards-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'How MUN awards work: Best Delegate, Outstanding Delegate, Verbal Commendation: what chairs look for, how to improve your score, and what not to do.',
+  path: '/blog/mun-awards-guide',
+  ogDescription:
+    'Understand how MUN awards are chosen and how to improve your chances.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

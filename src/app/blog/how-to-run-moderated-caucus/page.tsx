@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'How to Run a Moderated Caucus in MUN: Chair Guide',
-  description: 'A complete chair guide to running a moderated caucus in Model UN: how to open, manage speaker time, keep order, and close the caucus smoothly.',
-  alternates: { canonical: 'https://gavelling.com/blog/how-to-run-moderated-caucus' },
-  openGraph: {
-    title: 'How to Run a Moderated Caucus in MUN: Chair Guide',
-    description: 'Everything a chair needs to know to run a moderated caucus confidently.',
-    url: 'https://gavelling.com/blog/how-to-run-moderated-caucus',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A complete chair guide to running a moderated caucus in Model UN: how to open, manage speaker time, keep order, and close the caucus smoothly.',
+  path: '/blog/how-to-run-moderated-caucus',
+  ogDescription:
+    'Everything a chair needs to know to run a moderated caucus confidently.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

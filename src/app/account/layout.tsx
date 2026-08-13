@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { User, ScrollText, CalendarDays, Coins, CalendarCheck, ArrowRight, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -36,10 +37,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-        <div
-          className="w-7 h-7 rounded-full border-2 animate-spin"
-          style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }}
-        />
+        <Loader size={72} label="Loading your account" />
       </div>
     );
   }

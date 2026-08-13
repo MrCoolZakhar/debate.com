@@ -16,6 +16,7 @@ import { Check, X, Users2, LogIn, UserPlus, LogOut } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, NeuButton, NeuIconDisc } from '@/components/neu';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
@@ -43,14 +44,6 @@ const primaryPillStyle: React.CSSProperties = {
   color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.05em',
   boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
 };
-
-function Spinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
-      <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
-    </div>
-  );
-}
 
 export default function OrganizerInvitePage() {
   const router = useRouter();
@@ -112,7 +105,13 @@ export default function OrganizerInvitePage() {
     }
   }
 
-  if (authLoading) return <Spinner />;
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
+        <Loader size={72} label="Loading invitation" />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -159,7 +158,13 @@ export default function OrganizerInvitePage() {
     );
   }
 
-  if (loading) return <Spinner />;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: NEU.base }}>
+        <Loader size={72} label="Loading invitation" />
+      </div>
+    );
+  }
 
   const failed = !invite || !invite.ok;
   const resolvedCopy = invite?.status && invite.status !== 'pending' ? STATUS_COPY[invite.status] : null;

@@ -10,8 +10,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Check, Download, Loader2, Send, X } from 'lucide-react';
+import { ArrowLeft, Check, Download, Send, X } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByCode } from '@/lib/countries';
@@ -342,7 +343,7 @@ export default function PositionPaperPage() {
 
         {authLoading || loading ? (
           <div className="flex items-center justify-center py-24">
-            <Loader2 size={26} className="animate-spin" style={{ color: NEU.muted }} />
+            <Loader size={72} label="Loading paper" />
           </div>
         ) : !user ? (
           <NeuCard style={{ padding: '32px', textAlign: 'center' }}>

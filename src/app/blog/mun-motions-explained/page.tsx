@@ -1,21 +1,17 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
   description:
     'A complete guide to Model UN motions: moderated caucus, unmoderated caucus, extension of speaking time, adjournment, and more. Includes voting thresholds and chair tips.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-motions-explained' },
-  openGraph: {
-    title: 'MUN Motions Explained: Types, How to Propose, and Voting Rules',
-    description: 'Complete reference for every MUN motion type with voting thresholds and chair tips.',
-    url: 'https://gavelling.com/blog/mun-motions-explained',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  path: '/blog/mun-motions-explained',
+  ogDescription:
+    'Complete reference for every MUN motion type with voting thresholds and chair tips.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

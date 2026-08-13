@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from '@/components/Portal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
@@ -19,6 +19,7 @@ import {
   clearCaucusList as clearCaucusListInDB,
   suspendDebate as suspendDebateInDB,
   endDebate as endDebateInDB,
+  clearCurrentSpeakerIfUnchanged,
   logEvent,
 } from '@/lib/committeeService';
 
@@ -32,6 +33,7 @@ const TYPE_STATIC: Record<PendingMotionType, { icon: string; sub: string }> = {
   tour:             { icon: '🔄', sub: 'Everyone speaks once, alphabetical order' },
   unmoderated:      { icon: '💬', sub: 'Free time for delegates to talk' },
   moderated:        { icon: '🎙️', sub: 'Structured speeches, blank slate to fill' },
+  custom:           { icon: '📝', sub: 'Handled in the room, the session carries on unchanged' },
 };
 
 function buildTypeMeta(motionNames: MotionNames): TypeMeta {
@@ -42,8 +44,60 @@ function buildTypeMeta(motionNames: MotionNames): TypeMeta {
     tour:             { ...TYPE_STATIC.tour,              label: motionNames.tour },
     unmoderated:      { ...TYPE_STATIC.unmoderated,       label: motionNames.unmoderated },
     moderated:        { ...TYPE_STATIC.moderated,         label: motionNames.moderated },
+    custom:           { ...TYPE_STATIC.custom,            label: motionNames.custom },
   };
 }
+
+// ── Custom motion helpers ─────────────────────────────────────────────────────
+// A Custom motion is a free-text placeholder for procedural business that is
+// settled verbally in the room. Its optional name is stored in the existing
+// `topic` column (no schema change), its proposer may be blank, and ACCEPTING
+// ONE IS A DELIBERATE NO-OP — see handleMotionAccepted.
+const CUSTOM_NAME_MAX = 80;
+
+/** Collapse whitespace and hard-cap the length so a pasted essay cannot break the layout. */
+function sanitiseCustomName(raw: string): string {
+  return raw.replace(/\s+/g, ' ').trim().slice(0, CUSTOM_NAME_MAX);
+}
+
+const customFallbackLabel = (language: string) =>
+  language === 'ar' ? 'اقتراح مخصص' : language === 'fr' ? 'Motion personnalisée' : language === 'es' ? 'Moción personalizada' : 'Custom motion';
+
+const customNameLabel = (language: string) =>
+  language === 'ar' ? 'اسم الاقتراح' : language === 'fr' ? 'Nom de la motion' : language === 'es' ? 'Nombre de la moción' : 'Motion name';
+
+const customNamePlaceholder = (language: string) =>
+  language === 'ar' ? 'مثال: نقطة نظام بشأن ترتيب التصويت'
+  : language === 'fr' ? "ex. Point d'ordre sur l'ordre du vote"
+  : language === 'es' ? 'ej. Cuestión de orden sobre el orden de votación'
+  : 'e.g. Point of order on the voting order';
+
+const noProposerLabel = (language: string) =>
+  language === 'ar' ? 'بدون مقدِّم' : language === 'fr' ? 'Sans proposant' : language === 'es' ? 'Sin proponente' : 'No proposer';
+
+/** Accepting a Custom motion only takes it off the floor, so the button says so. */
+const clearFromFloorLabel = (language: string) =>
+  language === 'ar' ? 'قبول وإزالة' : language === 'fr' ? 'Accepter et retirer' : language === 'es' ? 'Aceptar y retirar' : 'Accept & clear';
+
+const blankNameHint = (language: string, fallback: string) =>
+  language === 'ar' ? `إذا تُرك فارغًا سيظهر باسم "${fallback}".`
+  : language === 'fr' ? `Laissé vide, il s'affichera comme « ${fallback} ».`
+  : language === 'es' ? `Si se deja en blanco, se mostrará como "${fallback}".`
+  : `Left blank, it shows as "${fallback}".`;
+
+/** Title to render for a motion card: a Custom motion shows its own name. */
+const motionDisplayLabel = (m: PendingMotion, typeMeta: TypeMeta, language: string) =>
+  m.type === 'custom' ? (m.topic?.trim() || customFallbackLabel(language)) : typeMeta[m.type].label;
+
+/** Identity used to re-match a motion across a temp-ID → real-UUID swap. Custom
+ *  motions add their name so two of them never collapse onto one another. */
+const motionIdentity = (m: PendingMotion) =>
+  m.type === 'custom' ? `custom|${m.proposedBy}|${m.topic ?? ''}` : `${m.proposedBy}|${m.type}`;
+
+/** Custom motions never occupy a delegation's "one motion on the floor" slot,
+ *  and never block another motion, because they change nothing. */
+const isFloorMotion = (m: PendingMotion) =>
+  (m.type as string) !== 'join-request' && (m.type as string) !== 'gsl-request' && m.type !== 'custom';
 
 
 function requiredVotes(type: PendingMotionType, present: number): { needed: number; fraction: string } {
@@ -53,10 +107,12 @@ function requiredVotes(type: PendingMotionType, present: number): { needed: numb
 
 function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
   const t = useT();
+  const { language } = useLanguage();
   const labels: Record<PendingMotionType, string> = {
     'end-debate': t('motions_badge_ends'), 'suspend-debate': t('motions_badge_suspends'),
     consultation: t('motions_badge_most'), tour: t('motions_badge_very'),
     unmoderated: t('motions_badge_disruptive'), moderated: t('motions_badge_least'),
+    custom: informationalLabel(language),
   };
   const colors: Record<PendingMotionType, string> = {
     'end-debate': 'bg-[#8B2020]/20 text-[#8B2020] border-[#8B2020]/40',
@@ -65,21 +121,118 @@ function DisruptivenessBadge({ type }: { type: PendingMotionType }) {
     tour: 'bg-[#B8844A]/15 text-[#B8844A] border-orange-800/40',
     unmoderated: 'bg-[#B6871F]/10 text-[#B6871F] border-[#B6871F]/30',
     moderated: 'bg-[#1B3828]/30 text-[#EED98A] border-[#1B3828]/40',
+    custom: 'bg-[#9A8A78]/12 text-[#6A5A4A] border-[#C5B9A8]',
   };
   return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colors[type]}`}>{labels[type]}</span>;
+}
+
+const informationalLabel = (language: string) =>
+  language === 'ar' ? 'للعلم فقط' : language === 'fr' ? 'Informatif' : language === 'es' ? 'Informativo' : 'Informational';
+
+const noOpCopy = (language: string) => language === 'ar'
+  ? { head: 'قبول هذا الاقتراح لا يغير الجلسة', body: 'الاقتراح المخصص هو سجل فقط. عند قبوله يختفي من قائمة الاقتراحات ولا يتغير شيء آخر: تبقى المرحلة وقائمة المتحدثين والمتحدث الحالي كما هي، ويستمر النقاش من حيث توقف.' }
+  : language === 'fr' ? { head: "Accepter ne change rien à la séance", body: "Une motion personnalisée n'est qu'une trace écrite. À l'acceptation elle quitte le plancher et rien d'autre ne bouge : la phase, la liste des orateurs et l'orateur en cours restent identiques, le débat reprend exactement où il en était." }
+  : language === 'es' ? { head: 'Aceptarla no cambia la sesión', body: 'Una moción personalizada es solo un registro. Al aceptarla desaparece del pleno y nada más cambia: la fase, la lista de oradores y el orador actual siguen igual, y el debate continúa donde estaba.' }
+  : { head: 'Accepting this will not change the session', body: 'A Custom motion is a record only. Accepting it clears it from the floor and nothing else moves: the phase, the speakers list, the caucus queue and the current speaker all stay exactly as they are, and debate carries on where it left off.' };
+
+/** Informational "i" affordance. Opens on HOVER and on FOCUS (never on click),
+ *  per the house UI rules, and is portaled at fixed viewport coordinates with
+ *  edge flipping so a scrollable modal body can never clip it. */
+function InfoHint({ head, body }: { head: string; body: string }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
+
+  const WIDTH = 288;
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - WIDTH - 8));
+    const spaceBelow = window.innerHeight - r.bottom;
+    const flipped = spaceBelow < 150 && r.top > spaceBelow;
+    setPos({ top: flipped ? r.top - 8 : r.bottom + 8, left, flipped });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onScroll = () => place();
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => { window.removeEventListener('scroll', onScroll, true); window.removeEventListener('resize', onScroll); };
+  }, [open, place]);
+
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+
+  const show = () => { if (closeTimer.current) clearTimeout(closeTimer.current); place(); setOpen(true); };
+  // Small delay so the pointer can travel from the badge into the panel.
+  const hide = () => { if (closeTimer.current) clearTimeout(closeTimer.current); closeTimer.current = setTimeout(() => setOpen(false), 160); };
+
+  return (
+    <>
+      <button
+        ref={btnRef} type="button" tabIndex={0} aria-label={head}
+        onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
+        onClick={(e) => e.preventDefault()}
+        className="shrink-0 w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] font-black leading-none transition-colors focus:outline-none"
+        style={{ border: '1px solid #C5B9A8', color: '#6A5A4A', backgroundColor: '#FAF8F3' }}
+      >
+        i
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            onMouseEnter={show} onMouseLeave={hide}
+            className="fixed z-[70] rounded-2xl px-4 py-3"
+            style={{
+              top: pos.top, left: pos.left, width: WIDTH,
+              transform: pos.flipped ? 'translateY(-100%)' : undefined,
+              backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0',
+              boxShadow: '0 10px 30px rgba(28,20,16,0.18), 0 2px 6px rgba(28,20,16,0.08)',
+            }}
+          >
+            <p className="text-xs font-black mb-1" style={{ color: '#1B3828' }}>{head}</p>
+            <p className="text-xs leading-relaxed" style={{ color: '#6A5A4A' }}>{body}</p>
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
+
+/** The strip that makes it unmistakable a Custom motion is informational. */
+function CustomNoOpNotice({ compact = false }: { compact?: boolean }) {
+  const { language } = useLanguage();
+  const copy = noOpCopy(language);
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-xl ${compact ? 'px-2.5 py-1' : 'px-3 py-1.5'}`}
+      style={{ backgroundColor: '#EDE7D8', border: '1px dashed #C5B9A8' }}
+    >
+      <span className={compact ? 'text-[10px]' : 'text-xs'} style={{ color: '#6A5A4A', fontWeight: 600 }}>{copy.head}</span>
+      <span className="ms-auto flex items-center"><InfoHint head={copy.head} body={copy.body} /></span>
+    </div>
+  );
 }
 
 const CHAIR_KEY = '__chair__';
 const chairDisplayName = (language: string) => language === 'ar' ? 'الرئيس' : language === 'fr' ? 'Président' : language === 'es' ? 'Presidente' : 'Chair';
 
-function ProposerInput({ candidates, value, onChange, blockedCountries }: {
+function ProposerInput({ candidates, value, onChange, blockedCountries, optional = false }: {
   candidates: string[]; value: string; onChange: (v: string) => void; blockedCountries?: Set<string>;
+  /** Custom motions allow a blank proposer — shows a "leave blank" affordance. */
+  optional?: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; flipped: boolean } | null>(null);
   const q = query.trim().toLowerCase();
   const dName = (c: string) => c === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(c, language);
   // Chair entry: always show at top when query is empty or matches "chair"
@@ -95,8 +248,45 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
     if (blockedCountries?.has(country)) return;
     onChange(country); setQuery(dName(country)); setOpen(false);
   };
+
+  // The modal body is `overflow-y-auto`, so an in-flow absolute dropdown gets
+  // clipped. Render it through a Portal at fixed viewport coordinates measured
+  // from the field, repositioned on scroll (capture) + resize, flipping upward
+  // and clamping horizontally near the viewport edges.
+  const LIST_MAX_H = 192;
+  const place = useCallback(() => {
+    const w = wrapRef.current;
+    if (!w) return;
+    const r = w.getBoundingClientRect();
+    const width = Math.min(r.width, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    const spaceBelow = window.innerHeight - r.bottom;
+    const flipped = spaceBelow < LIST_MAX_H + 16 && r.top > spaceBelow;
+    setPos({ top: flipped ? r.top - 4 : r.bottom + 4, left, width, flipped });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onMove = () => place();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    // Outside click closes, but clicks inside the portaled list must not count.
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target) || listRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [open, place]);
+
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapRef}>
       {value && !open ? (
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
           {value === CHAIR_KEY
@@ -110,40 +300,53 @@ function ProposerInput({ candidates, value, onChange, blockedCountries }: {
           <input ref={inputRef} autoFocus={open} type="text" value={query}
             onChange={(e) => { setQuery(e.target.value); setOpen(true); onChange(''); }}
             onKeyDown={(e) => { if (e.key === 'Enter' && top) { e.preventDefault(); commit(top); } if (e.key === 'Escape') { setQuery(''); setOpen(false); } }}
-            placeholder={t('motions_proposer_placeholder')}
+            placeholder={optional ? optionalProposerPlaceholder(language) : t('motions_proposer_placeholder')}
             className="flex-1 bg-transparent px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm" />
           {top && query && <span className="text-xs text-[#9A8A78] px-3 truncate max-w-[120px]">↵ {dName(top)}</span>}
         </div>
       )}
-      {open && (query || showChair) && matches.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-50 shadow-xl max-h-48 overflow-y-auto">
-          {matches.slice(0, 7).map((country, i) => {
-            const isChair = country === CHAIR_KEY;
-            const found = isChair ? null : getCountryByName(country);
-            const isBlocked = blockedCountries?.has(country) ?? false;
-            return (
-              <button key={country}
-                onMouseDown={(e) => { e.preventDefault(); if (!isBlocked) commit(country); }}
-                disabled={isBlocked}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${
-                  isBlocked ? 'opacity-50 cursor-not-allowed bg-[#FAF8F3]' :
-                  i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
-                }`}>
-                {isChair
-                  ? <span className="text-base leading-none">🪑</span>
-                  : found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
-                <span className="text-sm flex-1">{dName(country)}</span>
-                {isBlocked
-                  ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
-                  : i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
-              </button>
-            );
-          })}
-        </div>
+      {open && (query || showChair) && matches.length > 0 && pos && (
+        <Portal>
+          <div
+            ref={listRef}
+            className="fixed bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-[65] overflow-y-auto"
+            style={{
+              top: pos.top, left: pos.left, width: pos.width, maxHeight: LIST_MAX_H,
+              transform: pos.flipped ? 'translateY(-100%)' : undefined,
+              boxShadow: '0 12px 32px rgba(28,20,16,0.22), 0 2px 6px rgba(28,20,16,0.10)',
+            }}
+          >
+            {matches.slice(0, 7).map((country, i) => {
+              const isChair = country === CHAIR_KEY;
+              const found = isChair ? null : getCountryByName(country);
+              const isBlocked = blockedCountries?.has(country) ?? false;
+              return (
+                <button key={country}
+                  onMouseDown={(e) => { e.preventDefault(); if (!isBlocked) commit(country); }}
+                  disabled={isBlocked}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${
+                    isBlocked ? 'opacity-50 cursor-not-allowed bg-[#FAF8F3]' :
+                    i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'
+                  }`}>
+                  {isChair
+                    ? <span className="text-base leading-none">🪑</span>
+                    : found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
+                  <span className="text-sm flex-1">{dName(country)}</span>
+                  {isBlocked
+                    ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
+                    : i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
+                </button>
+              );
+            })}
+          </div>
+        </Portal>
       )}
     </div>
   );
 }
+
+const optionalProposerPlaceholder = (language: string) =>
+  language === 'ar' ? 'اختياري — اتركه فارغًا' : language === 'fr' ? 'Facultatif — laisser vide' : language === 'es' ? 'Opcional — dejar en blanco' : 'Optional — leave blank';
 
 // ── Raise Motion Form ─────────────────────────────────────────────────────────
 function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion, belowQuorum = false, isViewOnly = false }: {
@@ -159,12 +362,14 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
   const s = getSettings(committee.code);
-  const DEFAULT_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation'];
+  // Custom always sits last: it is the least disruptive motion there is.
+  const DEFAULT_ORDER: PendingMotionType[] = ['moderated', 'unmoderated', 'tour', 'consultation', 'custom'];
   const enabledTypes = DEFAULT_ORDER.filter((motionType) => {
     if (motionType === 'moderated')    return s.motionModeratedCaucus !== false;
     if (motionType === 'unmoderated')  return s.motionUnmoderatedCaucus !== false;
     if (motionType === 'consultation') return s.motionCoW !== false;
     if (motionType === 'tour')         return s.motionTourDeTable !== false;
+    if (motionType === 'custom')       return s.motionCustom !== false;
     return true;
   });
   const [type, setType] = useState<PendingMotionType | null>(editingMotion?.type ?? enabledTypes[0] ?? null);
@@ -172,15 +377,16 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const [totalMinsStr, setTotalMinsStr] = useState(editingMotion ? String(Math.floor(editingMotion.totalTime / 60)) : '10');
   const [totalSecsStr, setTotalSecsStr] = useState(editingMotion ? String(editingMotion.totalTime % 60) : '0');
   const [speakingTimeStr, setSpeakingTimeStr] = useState(editingMotion ? String(editingMotion.speakingTime) : '60');
-  const [topic, setTopic] = useState(editingMotion?.topic ?? '');
+  const [topic, setTopic] = useState(editingMotion && editingMotion.type !== 'custom' ? editingMotion.topic : '');
+  // A Custom motion's optional free-text name. Stored in the `topic` column on save.
+  const [customName, setCustomName] = useState(editingMotion?.type === 'custom' ? (editingMotion.topic ?? '') : '');
   const [tourOrder, setTourOrder] = useState<'asc' | 'desc' | 'custom'>(editingMotion?.tourOrder ?? 'asc');
   const [error, setError] = useState('');
 
   const presentCountries = committee.delegates.filter((d) => d.status !== 'absent').map((d) => d.country);
+  // Custom motions never consume a delegation's "one motion on the floor" slot.
   const countriesWithMotions = new Set(
-    (committee.pendingMotions ?? [])
-      .filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request')
-      .map((m) => m.proposedBy)
+    (committee.pendingMotions ?? []).filter(isFloorMotion).map((m) => m.proposedBy)
   );
 
   const totalMins = parseInt(totalMinsStr, 10) || 0;
@@ -195,7 +401,10 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const numClassSm = 'bg-transparent text-[#1C1410] text-lg font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
   const canSubmit = () => {
-    if (!type || !proposer) return false;
+    if (!type) return false;
+    // Custom: name AND proposer are both optional, so a blank form is valid.
+    if (type === 'custom') return true;
+    if (!proposer) return false;
     if (type === 'moderated' && !topic.trim()) return false;
     return true;
   };
@@ -203,6 +412,16 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const submit = () => {
     if (!type || !canSubmit()) return;
     setError('');
+
+    // Custom motion: no timings, sanitised optional name, optional proposer.
+    if (type === 'custom') {
+      onRaised({
+        type, proposedBy: proposer, totalTime: 0, speakingTime: 0,
+        topic: sanitiseCustomName(customName), speakerList: [], proposerPosition: null,
+      });
+      return;
+    }
+
     const isSuspendOrEnd = type === 'suspend-debate' || type === 'end-debate';
     if (!isSuspendOrEnd) {
       if ((type === 'moderated' || type === 'unmoderated') && totalTime === 0) {
@@ -270,11 +489,39 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
               </div>
             )}
 
+            {/* Custom motion: optional free-text name, then optional proposer. */}
+            {type === 'custom' && (
+              <>
+                <CustomNoOpNotice />
+                <div>
+                  <label className="block text-lg font-semibold text-[#6A5A4A] mb-2">
+                    {customNameLabel(language)} <span className="text-[#9A8A78] text-sm font-normal">({t('motions_optional')})</span>
+                  </label>
+                  <input
+                    type="text" value={customName} maxLength={CUSTOM_NAME_MAX}
+                    onChange={(e) => setCustomName(e.target.value.slice(0, CUSTOM_NAME_MAX))}
+                    placeholder={customNamePlaceholder(language)}
+                    className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <p className="text-xs" style={{ color: '#9A8A78' }}>
+                      {blankNameHint(language, customFallbackLabel(language))}
+                    </p>
+                    <span className="ms-auto text-xs font-mono tabular-nums shrink-0" style={{ color: customName.length >= CUSTOM_NAME_MAX ? '#B8844A' : '#C5B9A8' }}>
+                      {customName.length}/{CUSTOM_NAME_MAX}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* For moderated caucus: Topic first, then Proposed By */}
             {type !== 'moderated' && (
               <div>
-                <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>{t('motions_proposed_by')}</label>
-                <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={countriesWithMotions} />
+                <label className="block text-lg font-semibold mb-2" style={{ color: '#3D7A52' }}>
+                  {t('motions_proposed_by')}
+                  {type === 'custom' && <span className="text-[#9A8A78] text-sm font-normal ms-1.5">({t('motions_optional')})</span>}
+                </label>
+                <ProposerInput candidates={presentCountries} value={proposer} onChange={setProposer} blockedCountries={type === 'custom' ? undefined : countriesWithMotions} optional={type === 'custom'} />
               </div>
             )}
 
@@ -456,7 +703,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
 }
 
 // ── Voting View ───────────────────────────────────────────────────────────────
-function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false }: {
+function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBack, onEdit, pendingIds, isViewOnly = false, rank }: {
   committee: Committee;
   typeMeta: TypeMeta;
   onAccepted: (motion: PendingMotion) => void;
@@ -466,14 +713,18 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onEdit: (motionId: string) => void;
   pendingIds: Set<string>;
   isViewOnly?: boolean;
+  /** B7 — recompute disruptiveness from the CURRENT motionOrder instead of trusting the
+   *  value baked into the row at insert time. See rankMotion in MotionsModal. */
+  rank: (m: PendingMotion) => number;
 }) {
   const t = useT();
+  const { language } = useLanguage();
   const { getSettings } = useSettingsStore();
   // Filter out join-request pseudo-motions, those are handled in the chair banner, not here
   const initialSorted = [...(committee.pendingMotions ?? [])]
     .filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request')
     .sort((a, b) => {
-      if (b.disruptiveness !== a.disruptiveness) return b.disruptiveness - a.disruptiveness;
+      if (rank(b) !== rank(a)) return rank(b) - rank(a);
       const aIdx = (committee.pendingMotions ?? []).findIndex((m) => m.id === a.id);
       const bIdx = (committee.pendingMotions ?? []).findIndex((m) => m.id === b.id);
       return aIdx - bIdx;
@@ -487,16 +738,17 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   useEffect(() => {
     const current = (committee.pendingMotions ?? []).filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request');
     setOrder((prev) => {
-      // Match by proposer+type so temp ID → real UUID swaps don't create duplicates
-      const currentMap = new Map(current.map((m) => [`${m.proposedBy}|${m.type}`, m]));
+      // Match by proposer+type (plus name, for Custom) so temp ID → real UUID
+      // swaps don't create duplicates
+      const currentMap = new Map(current.map((m) => [motionIdentity(m), m]));
       const merged = prev
-        .map((p) => currentMap.get(`${p.proposedBy}|${p.type}`) ?? null)
+        .map((p) => currentMap.get(motionIdentity(p)) ?? null)
         .filter((m): m is PendingMotion => m !== null);
-      const mergedKeys = new Set(merged.map((m) => `${m.proposedBy}|${m.type}`));
+      const mergedKeys = new Set(merged.map(motionIdentity));
       const newOnes = current
-        .filter((m) => !mergedKeys.has(`${m.proposedBy}|${m.type}`))
-        .sort((a, b) => b.disruptiveness - a.disruptiveness);
-      return [...merged, ...newOnes].sort((a, b) => b.disruptiveness - a.disruptiveness);
+        .filter((m) => !mergedKeys.has(motionIdentity(m)))
+        .sort((a, b) => rank(b) - rank(a));
+      return [...merged, ...newOnes].sort((a, b) => rank(b) - rank(a));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motionIdKey]);
@@ -529,7 +781,13 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
     const fmtTime = (mins: number, secs: number) =>
       mins > 0 ? (secs > 0 ? `${mins}m ${secs}s` : `${mins}m`) : `${secs}s`;
     const isPrimary = idx === 0;
-    const f = getCountryByName(m.proposedBy);
+    const f = m.proposedBy ? getCountryByName(m.proposedBy) : null;
+    const isCustom = m.type === 'custom';
+    // A Custom motion titles itself with its own free-text name.
+    const cardLabel = motionDisplayLabel(m, typeMeta, language);
+    // Its ID must be real before Accept can delete the row (never call the DB
+    // with a temp ID — the row would survive and realtime would resurrect it).
+    const acceptBlocked = isCustom && pendingIds.has(m.id);
 
     return (
       <div
@@ -562,8 +820,8 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         </div>
         {/* Header: icon + type label + flag in top-right */}
         <div className="flex items-center gap-2">
-          <span className={`font-black text-[#1C1410] flex-1 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
-            {meta.label}
+          <span className={`font-black text-[#1C1410] flex-1 min-w-0 ${large ? 'text-3xl' : 'text-lg'} flex items-center gap-1.5`}>
+            <span className="min-w-0 break-words">{cardLabel}</span>
             {!isPrimary && !isViewOnly && (
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
@@ -582,8 +840,21 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             : f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
         </div>
 
-        {/* Topic inline */}
-        {m.topic && (
+        {/* Custom motions: badge line + the informational no-op strip */}
+        {isCustom && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <DisruptivenessBadge type="custom" />
+              {!m.proposedBy && (
+                <span className={`${large ? 'text-sm' : 'text-xs'} font-semibold`} style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</span>
+              )}
+            </div>
+            <CustomNoOpNotice compact={!large} />
+          </div>
+        )}
+
+        {/* Topic inline — a Custom motion's `topic` IS its title, already rendered above */}
+        {m.topic && !isCustom && (
           <p className={`${large ? 'text-2xl' : 'text-base'} font-semibold`} style={{ color: '#1C1410' }}>
             <span className="font-bold" style={{ color: '#1B3828' }}>{t('motions_topic_inline')} </span>{m.topic}
           </p>
@@ -657,9 +928,11 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
         {/* Accept/Reject/Edit, primary card only; non-primary has inline pencil */}
         {isPrimary && !isViewOnly && (
           <div className="flex gap-2 mt-auto">
-            <button onClick={() => onAccepted(m)}
-              className="flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
-              {t('motions_accept_btn')}
+            <button onClick={() => { if (!acceptBlocked) onAccepted(m); }}
+              disabled={acceptBlocked}
+              title={acceptBlocked ? 'Saving…' : undefined}
+              className={`flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
             </button>
             <button onClick={() => onRemove(m.id)}
               disabled={pendingIds.has(m.id)}
@@ -758,6 +1031,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     unmoderated: 'حوار حر',
     consultation: 'مشاورات الهيئة',
     tour: 'جولة المتحدثين',
+    custom: 'مخصص',
     suspendDebate: 'تعليق النقاش',
     endDebate: 'إنهاء النقاش',
   } : language === 'fr' ? {
@@ -765,6 +1039,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     unmoderated: 'Caucus non modéré',
     consultation: "Consultation de l'assemblée",
     tour: 'Tour de table',
+    custom: 'Personnalisée',
     suspendDebate: 'Suspension du débat',
     endDebate: 'Clôture du débat',
   } : language === 'es' ? {
@@ -772,29 +1047,43 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     unmoderated: 'Cáucus No Moderado',
     consultation: 'Consulta de Gabinete',
     tour: 'Round Robin',
+    custom: 'Personalizada',
     suspendDebate: 'Suspender Debate',
     endDebate: 'Cerrar Debate',
   } : DEFAULT_MOTION_NAMES;
   const committeeSettings = getSettings(committee.code);
   const storedNames = committeeSettings.motionNames;
   const motionOrder: string[] = committeeSettings.motionOrder ?? ['consultation', 'tour', 'unmoderated', 'moderated'];
-  const localCalcDisruptiveness = (type: string, totalTime: number) => {
-    if (type === 'end-debate') return 6_000_000 + totalTime;
-    if (type === 'suspend-debate') return 5_000_000 + totalTime;
-    const idx = motionOrder.indexOf(type);
-    const base = idx >= 0 ? (4 - idx) * 1_000_000 : 1_000_000;
-    return base + totalTime;
-  };
+
   const motionNames = {
     moderated:     storedNames.moderated     !== DEFAULT_MOTION_NAMES.moderated     ? storedNames.moderated     : DEFAULT_MOTION_NAMES_LOCALIZED.moderated,
     unmoderated:   storedNames.unmoderated   !== DEFAULT_MOTION_NAMES.unmoderated   ? storedNames.unmoderated   : DEFAULT_MOTION_NAMES_LOCALIZED.unmoderated,
     consultation:  storedNames.consultation  !== DEFAULT_MOTION_NAMES.consultation  ? storedNames.consultation  : DEFAULT_MOTION_NAMES_LOCALIZED.consultation,
     tour:          storedNames.tour          !== DEFAULT_MOTION_NAMES.tour          ? storedNames.tour          : DEFAULT_MOTION_NAMES_LOCALIZED.tour,
+    // `custom` post-dates existing persisted settings blobs, so fall back explicitly.
+    custom:        (storedNames.custom && storedNames.custom !== DEFAULT_MOTION_NAMES.custom) ? storedNames.custom : DEFAULT_MOTION_NAMES_LOCALIZED.custom,
     suspendDebate: storedNames.suspendDebate !== DEFAULT_MOTION_NAMES.suspendDebate ? storedNames.suspendDebate : DEFAULT_MOTION_NAMES_LOCALIZED.suspendDebate,
     endDebate:     storedNames.endDebate     !== DEFAULT_MOTION_NAMES.endDebate     ? storedNames.endDebate     : DEFAULT_MOTION_NAMES_LOCALIZED.endDebate,
   };
+  // B7 — `disruptiveness` is baked into the motions row at INSERT time, so a motion that
+  // was queued BEFORE the chair reordered Settings → Motions still carries the old
+  // ranking, and the list sorts inconsistently against motions raised after the reorder.
+  // Rank at SORT time from the CURRENT motionOrder instead: no DB cost, no bulk row
+  // update, and the stored column stays untouched (it is still the server-side ordering
+  // fallback). Custom stays pinned lowest — localCalcDisruptiveness gives it base 0. The
+  // join-request / gsl-request pseudo-motions carry hand-set 99M/98M scores but are
+  // filtered out of every list below, so they are never re-ranked.
+  // Single ranking source for this component, mirroring calcDisruptiveness() in
+  // committeeService so an optimistic row and the DB row rank identically. Built as a plain
+  // lookup table (a for loop, not a callback) because it is consumed during render.
+  // Procedural motions keep fixed high scores; Custom is base 0, always last.
+  const motionRankBase: Record<string, number> = { 'end-debate': 6_000_000, 'suspend-debate': 5_000_000, custom: 0 };
+  for (let i = 0; i < motionOrder.length; i++) motionRankBase[motionOrder[i]] = (4 - i) * 1_000_000;
+  const rankMotion = (m: PendingMotion) => (m.type === 'custom' ? 0 : (motionRankBase[m.type] ?? 1_000_000) + m.totalTime);
+  const localCalcDisruptiveness = (type: string, totalTime: number) =>
+    (type === 'custom' ? 0 : (motionRankBase[type] ?? 1_000_000) + totalTime);
   const typeMeta = buildTypeMeta(motionNames);
-  const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').sort((a, b) => b.disruptiveness - a.disruptiveness);
+  const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').sort((a, b) => rankMotion(b) - rankMotion(a));
   const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -802,11 +1091,15 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
 
   const handleRaised = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
-    if (committee.pendingMotions?.some(
-      (m) => m.proposedBy === motion.proposedBy &&
-        m.type !== ('join-request' as string) &&
-        (m.type as string) !== 'gsl-request'
-    )) return;
+    const existing = committee.pendingMotions ?? [];
+    if (motion.type === 'custom') {
+      // Custom motions don't take a delegation's floor slot, so several may be
+      // queued at once. Only a byte-identical one (same proposer AND same name)
+      // is rejected — that also keeps every queued Custom motion distinguishable.
+      if (existing.some((m) => m.type === 'custom' && m.proposedBy === motion.proposedBy && (m.topic ?? '') === motion.topic)) return;
+    } else if (existing.some((m) => isFloorMotion(m) && m.proposedBy === motion.proposedBy)) {
+      return;
+    }
 
     const tempId = `temp-${Date.now()}`;
     const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
@@ -869,10 +1162,54 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     // Clear ALL other pending motions, only the accepted one proceeds
     // GSL (speakersList) is NEVER modified here
 
+    // ── CUSTOM MOTION: DELIBERATE NO-OP ───────────────────────────────────────
+    // This branch is FIRST and returns unconditionally so a Custom motion can
+    // never reach any of the caucus/suspend/end branches below. Accepting one
+    // does exactly two things: drop it from the local pending list, and delete
+    // its row. It must NOT touch phase, caucus, caucusQueue, speakersList or
+    // currentSpeaker, must not log a score event, and must not trigger the
+    // caucus loading screen — the committee carries on exactly where it was.
+    // Do not add anything else to this branch.
+    if (motion.type === 'custom') {
+      update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id) }));
+      // Never call the DB with a temp ID (the Accept button is disabled until
+      // the real UUID lands, this is the belt-and-braces guard).
+      if (!motion.id.startsWith('temp-')) {
+        removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      }
+      // Close only when the floor is now empty; otherwise stay so the chair can
+      // work through the remaining motions.
+      const othersLeft = (committee.pendingMotions ?? []).some((m) => m.id !== motion.id && isFloorMotion(m));
+      const customsLeft = (committee.pendingMotions ?? []).some((m) => m.id !== motion.id && m.type === 'custom');
+      if (!othersLeft && !customsLeft) onClose();
+      return;
+    }
+
     if (motion.type === 'suspend-debate' || motion.type === 'end-debate') {
       setSpecialVoteMotion(motion);
       return;
     }
+
+    // ── H3: the GSL speaker must LEAVE THE FLOOR when a caucus starts ──────────
+    // Every caucus branch below sets `currentSpeaker: null`, but that was LOCAL ONLY: the
+    // current_speaker DB row kept the previous delegate with started_at still set, so
+    // delegates and advisors went on seeing them "speaking" for the whole caucus, and the
+    // still-running timer drained the caucus clock during the loading screen.
+    //
+    // This clears the row for real. It is NOT the blind clearCurrentSpeaker() that MUST
+    // NEVER HAPPEN #5 forbids: clearCurrentSpeakerIfUnchanged only matches the exact
+    // speaker we saw (so a late clear is a no-op) AND nextSpeaker() drains it before
+    // seating anyone (so it cannot be late relative to a later seat). It also nulls
+    // started_at, so no separate stopSpeakerTimer write is needed — one conditional write,
+    // nothing to race with. See the docstring in committeeService.ts.
+    const floorSpeaker = committee.currentSpeaker;
+    const clearFloorForCaucus = () => {
+      if (!floorSpeaker) return;
+      clearCurrentSpeakerIfUnchanged(
+        committee.id, floorSpeaker.delegateId, floorSpeaker.country,
+        committee.code, committee.dbChairJoinSuffix ?? undefined,
+      );
+    };
 
     // The proposer earns a point for getting a motion approved onto the floor.
     if (motion.proposedBy) {
@@ -886,9 +1223,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         totalTime: motion.totalTime, remainingTime: motion.totalTime,
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
         proposerPosition: null, spokenCountries: [],
+        // Total clock starts PAUSED — the chair presses play. remainingTime is the truth
+        // until then, so every device reads the full time and nothing drains early.
+        totalStartedAt: null,
       };
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
+      clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -902,10 +1243,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         totalTime: motion.totalTime, remainingTime: motion.totalTime,
         speakingTime: 0, speakerTimeRemaining: 0, currentSpeaker: null,
         proposerPosition: null, spokenCountries: [], isConsultation: true,
+        totalStartedAt: null,   // paused until the chair presses play
       };
       // GSL preserved, caucusQueue cleared, phase → unmoderated-caucus
       update((c) => ({ ...c, phase: 'unmoderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
+      clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -919,9 +1262,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         totalTime: motion.totalTime, remainingTime: motion.totalTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
+        totalStartedAt: null,   // paused until the chair starts the first speaker
       };
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue: [], currentSpeaker: null }));
       onClose();
+      clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -946,6 +1291,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
           proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
           speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
           currentSpeaker: null, proposerPosition: null, spokenCountries: [],
+          totalStartedAt: null,   // paused until the chair starts the first speaker
         };
         // Numbered placeholder queue, "Speaker 1", "Speaker 2", etc.
         const caucusQueue = alphabetical.map((_, i) => ({
@@ -954,6 +1300,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         }));
         update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue, currentSpeaker: null }));
         onClose();
+        clearFloorForCaucus();
         removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
         updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
         setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -980,12 +1327,14 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         proposedBy: motion.proposedBy, totalTime: totalTourTime, remainingTime: totalTourTime,
         speakingTime: motion.speakingTime, speakerTimeRemaining: motion.speakingTime,
         currentSpeaker: null, proposerPosition: null, spokenCountries: [],
+        totalStartedAt: null,   // paused until the chair starts the first speaker
       };
       const caucusQueue = presentDelegates.map((d) => ({ delegateId: d.id, country: d.country }));
 
       // GSL preserved, caucusQueue filled with ordered delegates
       update((c) => ({ ...c, phase: 'moderated-caucus', caucus, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id), caucusQueue, currentSpeaker: null }));
       onClose();
+      clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
       setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
@@ -1085,6 +1434,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               onEdit={(motionId) => { setEditingMotionId(motionId); setView('raise'); }}
               pendingIds={pendingIds}
               isViewOnly={isViewOnly}
+              rank={rankMotion}
             />
           )}
           {view === 'list' && (
@@ -1104,24 +1454,33 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                     if (!meta) return null;
                     const mins = Math.floor(m.totalTime / 60);
                     const secs = m.totalTime % 60;
-                    const proposerFlag = getCountryByName(m.proposedBy);
+                    const proposerFlag = m.proposedBy ? getCountryByName(m.proposedBy) : null;
+                    const rowIsCustom = m.type === 'custom';
                     return (
-                      <div key={m.id} className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-4">
+                      <div key={m.id} className="rounded-xl px-4 py-4" style={rowIsCustom
+                        ? { backgroundColor: '#F3EFE4', border: '1px dashed #C5B9A8' }
+                        : { backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
                         <div className="flex items-start gap-3">
                           <span className="text-xs text-[#9A8A78] font-mono w-4 mt-1">{i + 1}</span>
                           <Emoji size="1.5rem">{meta.icon}</Emoji>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-base font-black text-[#1C1410]">{meta.label}</span>
+                              <span className="text-base font-black text-[#1C1410] break-words min-w-0">{motionDisplayLabel(m, typeMeta, language)}</span>
                               <DisruptivenessBadge type={m.type} />
                             </div>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              {m.proposedBy === CHAIR_KEY
-                                ? <span className="text-base leading-none">🪑</span>
-                                : proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
-                              <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(m.proposedBy, language)}</span>
-                            </div>
-                            {m.topic && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
+                            {(m.proposedBy || !rowIsCustom) && (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                {m.proposedBy === CHAIR_KEY
+                                  ? <span className="text-base leading-none">🪑</span>
+                                  : proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
+                                <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(m.proposedBy, language)}</span>
+                              </div>
+                            )}
+                            {rowIsCustom && !m.proposedBy && (
+                              <p className="text-sm font-semibold mt-1" style={{ color: '#9A8A78' }}>{noProposerLabel(language)}</p>
+                            )}
+                            {rowIsCustom && <div className="mt-2"><CustomNoOpNotice compact /></div>}
+                            {m.topic && !rowIsCustom && <p className="text-sm text-[#6A5A4A] mt-1 font-medium">"{m.topic}"</p>}
                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                               {m.type !== 'tour' && m.totalTime > 0 && (
                                 <span className="text-xs font-bold text-[#1B3828] bg-[#FAF8F3] border border-[#DDD4C0] px-2 py-0.5 rounded-md">

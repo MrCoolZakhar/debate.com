@@ -54,6 +54,8 @@ export interface RenderEmailHtmlArgs {
   chairInviteToken?: string;
   /** Per-invite token for an 'organizer_invite_accept' button block, if one is present. */
   organizerInviteToken?: string;
+  /** Per-recipient token for an 'import_claim' button block, if one is present. */
+  importClaimToken?: string;
 }
 
 const FONT_STACK = "Georgia, 'Times New Roman', Arial, sans-serif";
@@ -122,7 +124,8 @@ function renderBlock(
   ctx: EmailTokenContext,
   theme: Required<EmailTheme>,
   chairInviteToken?: string,
-  organizerInviteToken?: string
+  organizerInviteToken?: string,
+  importClaimToken?: string
 ): string {
   if (block.type === 'paragraph') {
     if (!block.content.trim()) return '';
@@ -130,7 +133,7 @@ function renderBlock(
       ${renderTokenizedHtml(block.content, ctx)}
     </td></tr>`;
   }
-  const url = resolveButtonUrl(block, conference, { chairInviteToken, organizerInviteToken });
+  const url = resolveButtonUrl(block, conference, { chairInviteToken, organizerInviteToken, importClaimToken });
   // Bulletproof CTA: background-color + border-radius + padding all live on
   // the <td>, not the <a> — Outlook (and older Gmail app builds) can drop
   // padding/border-radius declared only on an inline <a>, silently
@@ -148,10 +151,10 @@ function renderBlock(
 }
 
 /** Renders a complete, standalone HTML email document from the block model. */
-export function renderEmailHtml({ blocks, conference, ctx, chairInviteToken, organizerInviteToken }: RenderEmailHtmlArgs): string {
+export function renderEmailHtml({ blocks, conference, ctx, chairInviteToken, organizerInviteToken, importClaimToken }: RenderEmailHtmlArgs): string {
   const siteUrl = getSiteUrl();
   const theme = resolveEmailTheme(conference.email_theme);
-  const bodyRows = blocks.map(b => renderBlock(b, conference, ctx, theme, chairInviteToken, organizerInviteToken)).join('');
+  const bodyRows = blocks.map(b => renderBlock(b, conference, ctx, theme, chairInviteToken, organizerInviteToken, importClaimToken)).join('');
   const footerLine = theme.footerLine.trim();
 
   return `<!doctype html>

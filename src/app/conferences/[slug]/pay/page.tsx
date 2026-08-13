@@ -27,10 +27,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, ChevronDown, ChevronUp, Clock, Coins, CreditCard, GraduationCap, HandCoins, ImageUp, Loader2,
+  ArrowLeft, ChevronDown, ChevronUp, Clock, Coins, CreditCard, GraduationCap, HandCoins, ImageUp,
   Lock, Mail, Minus, Plus, Receipt, ShoppingBag, Users2, Wallet, X,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -479,7 +480,7 @@ export default function PayPage() {
 
         {authLoading || loading ? (
           <div className="flex items-center justify-center py-24">
-            <Loader2 size={26} className="animate-spin" style={{ color: NEU.muted }} />
+            <Loader size={72} label="Loading payment details" />
           </div>
         ) : !user ? (
           <NeuCard style={{ padding: '32px', textAlign: 'center' }}>

@@ -26,11 +26,70 @@ function calcDisruptiveness(type: PendingMotionType, totalTime: number, motionOr
   // Procedural motions keep fixed high scores
   if (type === 'end-debate') return 6_000_000 + totalTime;
   if (type === 'suspend-debate') return 5_000_000 + totalTime;
+  // A Custom motion disrupts nothing at all, so it always sorts to the very
+  // bottom of the queue. 0 is strictly below the lowest orderable base (1M).
+  if (type === 'custom') return 0;
   // The 4 orderable types: position 0 = 4M base, position 1 = 3M, etc.
   const order = motionOrder ?? ['consultation', 'tour', 'unmoderated', 'moderated'];
   const idx = order.indexOf(type);
   const base = idx >= 0 ? (4 - idx) * 1_000_000 : 1_000_000;
   return base + totalTime;
+}
+
+// ============================================================
+// CLOCK ANCHORS — pure readers, safe on every surface
+//
+// You cannot sync a per-second TICK across devices, and you must not try: writing
+// caucus.remainingTime every second is one write/sec/committee AND it re-arms the
+// realtime debounce (RULE 4 / MUST NEVER HAPPEN #4).
+//
+// You do not need to. ANCHOR instead: persist a start timestamp + a duration ONCE and
+// let every client derive `remaining = duration - (now - startedAt)` and render its own
+// tick. All devices agree because they derive from the same fixed point rather than from
+// each other. This is exactly what current_speaker.started_at already does for the
+// speaker clock; caucus.totalStartedAt does it for the total caucus clock.
+//
+// Both helpers are pure functions of the committee row — no localStorage, no store — so
+// they are safe to call from the delegate and advisor pages (MUST NEVER HAPPEN #14).
+// ============================================================
+
+/** Live remaining seconds on the TOTAL caucus clock. Falls back to the stored
+ *  remainingTime when there is no anchor (paused clock, or a caucus started before the
+ *  anchor field existed) — never NaN, never a jumped clock. */
+export function caucusRemainingNow(caucus: CaucusState | null | undefined, now: number = Date.now()): number {
+  if (!caucus) return 0;
+  const base = Number.isFinite(caucus.remainingTime) ? caucus.remainingTime : 0;
+  if (!caucus.totalStartedAt) return Math.max(0, base);
+  const startedMs = new Date(caucus.totalStartedAt).getTime();
+  if (!Number.isFinite(startedMs)) return Math.max(0, base);
+  const elapsed = Math.max(0, Math.round((now - startedMs) / 1000));
+  return Math.max(0, base - elapsed);
+}
+
+/** Live remaining seconds on the CURRENT SPEAKER clock (GSL or caucus alike).
+ *  `speakerTimeRemaining` is current_speaker.time_remaining — the value at the anchor —
+ *  and `speakerStartedAt` is current_speaker.started_at (null = paused). */
+export function speakerRemainingNow(
+  speakerTimeRemaining: number,
+  speakerStartedAt: string | null | undefined,
+  now: number = Date.now(),
+): number {
+  const base = Number.isFinite(speakerTimeRemaining) ? speakerTimeRemaining : 0;
+  if (!speakerStartedAt) return Math.max(0, base);
+  const startedMs = new Date(speakerStartedAt).getTime();
+  if (!Number.isFinite(startedMs)) return Math.max(0, base);
+  const elapsed = Math.max(0, Math.round((now - startedMs) / 1000));
+  return Math.max(0, base - elapsed);
+}
+
+/** Stamp the total-clock anchor onto a caucus. `running` false → paused (anchor cleared,
+ *  remainingTime is the literal truth). Always pass the LIVE remaining, not the stale one. */
+export function anchorCaucusClock(caucus: CaucusState, liveRemaining: number, running: boolean): CaucusState {
+  return {
+    ...caucus,
+    remainingTime: Math.max(0, Math.round(liveRemaining)),
+    totalStartedAt: running ? new Date().toISOString() : null,
+  };
 }
 
 type DbRow = Record<string, unknown>;
@@ -366,6 +425,12 @@ export async function addDelegate(committeeId: string, country: string, code: st
 // CURRENT SPEAKER + TIMER
 // ============================================================
 
+// In-flight conditional clear of current_speaker, if any. nextSpeaker() awaits it before
+// writing, so a clear issued by the caucus lifecycle can NEVER land after — and therefore
+// never blank — a speaker that nextSpeaker has just seated. See
+// clearCurrentSpeakerIfUnchanged() for the full ordering argument.
+let currentSpeakerClearInFlight: Promise<void> | null = null;
+
 export async function nextSpeaker(
   committeeId: string,
   speakerTimeLimit: number,
@@ -375,6 +440,14 @@ export async function nextSpeaker(
   code: string,
   chairSuffix?: string,
 ): Promise<void> {
+  // HAPPENS-BEFORE GUARD (MUST NEVER HAPPEN #5). Rule #5 forbids firing a blind
+  // clearCurrentSpeaker when entering a caucus because it races nextSpeakerInDB: two
+  // unordered fire-and-forget writes to the same row, last one wins, and a late clear
+  // wipes the caucus speaker. This guard removes the concurrency entirely — any clear
+  // already issued is drained before we seat anyone.
+  if (currentSpeakerClearInFlight) {
+    try { await currentSpeakerClearInFlight; } catch { /* a failed clear must not block the advance */ }
+  }
   const client = sessionClient(code, chairSuffix);
   await Promise.all([
     removeDelegateId
@@ -418,6 +491,55 @@ export async function clearCurrentSpeaker(committeeId: string, code: string, cha
   await sessionClient(code, chairSuffix).from('current_speaker')
     .update({ delegate_id: null, country: null, time_remaining: 0, started_at: null })
     .eq('committee_id', committeeId);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Clear current_speaker ONLY IF the row still holds the speaker the caller saw.
+ *
+ * This is the caucus-lifecycle-safe replacement for clearCurrentSpeaker(), which
+ * MUST NEVER HAPPEN #5 forbids on caucus entry. Two independent properties make it
+ * race-free where the blind clear was not:
+ *
+ *  1. CONDITIONAL — the UPDATE carries a predicate on the speaker's identity
+ *     (delegate_id, or country for Room-Order "Speaker N" placeholders whose ids are not
+ *     uuids). If a nextSpeaker() write has already seated somebody else, the predicate
+ *     matches zero rows and the clear is a silent no-op. It can only ever erase the
+ *     exact speaker the caller intended to erase.
+ *  2. ORDERED — the promise is published to currentSpeakerClearInFlight, and
+ *     nextSpeaker() awaits it before writing. So a clear can never be overtaken by, or
+ *     overtake, a seat that starts after it.
+ *
+ * Together: a late clear is a no-op, and a clear cannot be late relative to any seat
+ * issued after it. Passing expectedDelegateId=null and expectedCountry=null is a no-op
+ * (nothing was on the floor, nothing to clear).
+ */
+export async function clearCurrentSpeakerIfUnchanged(
+  committeeId: string,
+  expectedDelegateId: string | null,
+  expectedCountry: string | null,
+  code: string,
+  chairSuffix?: string,
+): Promise<void> {
+  if (!expectedDelegateId && !expectedCountry) return;
+  const run = (async () => {
+    let q = sessionClient(code, chairSuffix).from('current_speaker')
+      .update({ delegate_id: null, country: null, time_remaining: 0, started_at: null })
+      .eq('committee_id', committeeId);
+    // delegate_id is a uuid column — a Room-Order placeholder id ("room-order-3") would be
+    // a 22P02 cast error, so fall back to the country text for those.
+    if (expectedDelegateId && UUID_RE.test(expectedDelegateId)) q = q.eq('delegate_id', expectedDelegateId);
+    else if (expectedCountry) q = q.eq('country', expectedCountry);
+    else return;
+    const { error } = await q;
+    if (error) console.error('Error clearing current speaker:', error);
+  })();
+  const wrapped: Promise<void> = run.finally(() => {
+    if (currentSpeakerClearInFlight === wrapped) currentSpeakerClearInFlight = null;
+  });
+  currentSpeakerClearInFlight = wrapped;
+  await wrapped;
 }
 
 // Lightweight single-row fetch of just the current speaker — used by co-chair views
@@ -648,13 +770,18 @@ export async function sendMessage(
   code: string, chairSuffix: string | undefined,
   isPrivate: boolean = false, recipient?: string,
   messageType?: 'general' | 'speech-comment',
-): Promise<void> {
+): Promise<boolean> {
   // Encode messageType as a prefix so it survives without a schema change
   const encoded = messageType === 'speech-comment' ? `[🎙️] ${content}` : content;
+  // Writes MUST keep going through sessionClient(code, chairSuffix) with unchanged headers —
+  // the RLS write-gate keys off them and will silently reject anything else.
   const { error } = await sessionClient(code, chairSuffix).from('messages').insert({
     committee_id: committeeId, sender, content: encoded, is_private: isPrivate, recipient: recipient ?? null,
   });
-  if (error) console.error('Error sending message:', error);
+  if (error) { console.error('Error sending message:', error); return false; }
+  // Reported so the sender can render a real failed state instead of a bubble that silently
+  // evaporates on the next reconcile.
+  return true;
 }
 
 // ============================================================
@@ -898,13 +1025,64 @@ export async function claimResumeSession(committeeId: string, chairName: string,
   return !error && !!data;
 }
 
-export async function startResumeRollCall(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
-  const { error } = await sessionClient(code, chairSuffix).from('committees').update({
+/**
+ * Release a resume claim that THIS chair holds.
+ *
+ * `resuming_chair` is a one-shot latch: `claimResumeSession` only writes it when it is
+ * null, and `startResumeRollCall` is the only thing that clears it. If the roll-call write
+ * fails after the claim succeeded, the latch stays set forever and NO chair can ever resume
+ * the committee again. This is the release valve for that path.
+ *
+ * The `.eq('resuming_chair', chairName)` guard is a compare-and-swap, exactly like the
+ * `.is(..., null)` guard on the claim: you can only release a latch you actually hold, so
+ * the single-winner guarantee is preserved — this never lets a second chair clear someone
+ * else's live claim.
+ */
+export async function releaseResumeClaim(committeeId: string, chairName: string, code: string, chairSuffix?: string): Promise<boolean> {
+  const { data, error } = await sessionClient(code, chairSuffix)
+    .from('committees')
+    .update({ resuming_chair: null })
+    .eq('id', committeeId)
+    .eq('resuming_chair', chairName)
+    .select('id')
+    .maybeSingle();
+  if (error) console.error('Error releasing resume claim:', error);
+  return !error && !!data;
+}
+
+/**
+ * Take over a resume claim abandoned by another chair (they crashed, closed the tab, or
+ * lost connectivity between claiming and starting the roll call).
+ *
+ * Still a compare-and-swap — `.eq('resuming_chair', fromChairName)` — so if two chairs try
+ * to take over the same stale latch at the same moment, the first write flips the value and
+ * the second matches no row and returns false. Exactly one winner, same as the claim.
+ */
+export async function takeOverResumeClaim(committeeId: string, fromChairName: string, toChairName: string, code: string, chairSuffix?: string): Promise<boolean> {
+  const { data, error } = await sessionClient(code, chairSuffix)
+    .from('committees')
+    .update({ resuming_chair: toChairName })
+    .eq('id', committeeId)
+    .eq('resuming_chair', fromChairName)
+    .select('id')
+    .maybeSingle();
+  if (error) console.error('Error taking over resume claim:', error);
+  return !error && !!data;
+}
+
+/**
+ * Returns true only when the roll call actually started. The caller MUST check it: on false
+ * the resume latch is still held and has to be released (see `releaseResumeClaim`), or the
+ * committee is stranded suspended forever.
+ */
+export async function startResumeRollCall(committeeId: string, code: string, chairSuffix?: string): Promise<boolean> {
+  const { data, error } = await sessionClient(code, chairSuffix).from('committees').update({
     suspended_at: null,
     resuming_chair: null,
     phase: 'pre-session',
-  }).eq('id', committeeId);
+  }).eq('id', committeeId).select('id').maybeSingle();
   if (error) console.error('Error starting resume roll call:', error);
+  return !error && !!data;
 }
 
 export async function suspendDebate(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
@@ -1026,7 +1204,15 @@ export async function updateSpeakerTimeLimit(committeeId: string, limitSeconds: 
 // already-subscribed channel and throws "cannot add postgres_changes callbacks after subscribe()".
 const committeeChannels: Record<string, ReturnType<typeof supabase.channel>> = {};
 
-export function subscribeToCommittee(committeeId: string, onChange: (table: string) => void): () => void {
+export type RealtimeStatus = 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED';
+
+export function subscribeToCommittee(
+  committeeId: string,
+  onChange: (table: string) => void,
+  // Realtime does NOT replay events missed while the socket was down — the normal case for a
+  // backgrounded phone. Callers use this to run a catch-up fetch on every re-SUBSCRIBED.
+  onStatus?: (status: RealtimeStatus) => void,
+): () => void {
   // Tear down any prior channel for this committee first.
   const prev = committeeChannels[committeeId];
   if (prev) { supabase.removeChannel(prev); delete committeeChannels[committeeId]; }
@@ -1040,7 +1226,7 @@ export function subscribeToCommittee(committeeId: string, onChange: (table: stri
     .on('postgres_changes', { event: '*', schema: 'public', table: 'motions', filter: `committee_id=eq.${committeeId}` }, () => onChange('motions'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'documents', filter: `committee_id=eq.${committeeId}` }, () => onChange('documents'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `committee_id=eq.${committeeId}` }, () => onChange('messages'))
-    .subscribe();
+    .subscribe((status) => { onStatus?.(status as RealtimeStatus); });
   committeeChannels[committeeId] = channel;
   return () => {
     supabase.removeChannel(channel);

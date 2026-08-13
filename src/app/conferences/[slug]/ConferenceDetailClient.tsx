@@ -26,6 +26,7 @@ import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantVie
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
 import { SidebarCardSkeleton } from '@/components/Skeleton';
+import Loader from '@/components/Loader';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -1021,7 +1022,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+        <Loader size={72} label="Loading conference" />
       </div>
     );
   }
@@ -2869,7 +2870,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               >
                 {assetUploading ? (
                   <div className="flex justify-center py-2">
-                    <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    <Loader size={48} />
                   </div>
                 ) : (
                   <>
@@ -2941,7 +2942,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
                 >
                   {assetUploading ? (
-                    <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    <Loader size={48} />
                   ) : conference.logo_url ? (
                     <LogoDisc src={conference.logo_url} alt={conference.acronym} size={80} fallbackText={conference.acronym.slice(0, 3)} />
                   ) : (

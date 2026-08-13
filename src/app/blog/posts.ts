@@ -23,6 +23,11 @@ export const articles: BlogPost[] = [
     description: 'MUN Command charges €1 per user per day. Gavelling covers sessions and conference management free. Full side-by-side.',
   },
   {
+    slug: 'mymun-alternative',
+    title: 'mymun Alternative 2026: mymun and MUN Command vs Gavelling',
+    description: 'MUN Command is mymun’s software and the brands are merging. What it costs, what its free tier does not save, and where each tool actually wins.',
+  },
+  {
     slug: 'muncoordinated-alternative',
     title: 'Muncoordinated vs Gavelling: Which Free MUN Software in 2026?',
     description: 'Two free MUN tools, two very different scopes: open-source dais tool vs full conference platform. Honest comparison.',

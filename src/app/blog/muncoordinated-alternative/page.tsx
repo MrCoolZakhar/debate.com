@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Muncoordinated vs Gavelling: Which Free MUN Software in 2026?',
   description:
     'Muncoordinated (MUN Coordinated) is a free, open-source MUN committee tool. Gavelling is a free platform covering sessions and full conference management. Honest side-by-side comparison.',
+  path: '/blog/muncoordinated-alternative',
   keywords: [
     'Muncoordinated',
     'MUN Coordinated',
@@ -16,17 +18,10 @@ export const metadata: Metadata = {
     'open source MUN software',
     'MUN committee software',
   ],
-  alternates: { canonical: 'https://gavelling.com/blog/muncoordinated-alternative' },
-  openGraph: {
-    title: 'Muncoordinated vs Gavelling: Which Free MUN Software in 2026?',
-    description:
-      'Two free MUN tools, two very different scopes. Full side-by-side comparison for chairs and organisers.',
-    url: 'https://gavelling.com/blog/muncoordinated-alternative',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  ogDescription:
+    'Two free MUN tools, two very different scopes. Full side-by-side comparison for chairs and organisers.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

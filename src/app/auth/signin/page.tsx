@@ -4,6 +4,7 @@ import { useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
+import Loader from '@/components/Loader';
 import {
   AuthLayout,
   CardHeading,
@@ -156,7 +157,7 @@ export default function SignInPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="w-5 h-5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin" />
+          <Loader size={64} label="Loading sign in" />
         </div>
       }
     >

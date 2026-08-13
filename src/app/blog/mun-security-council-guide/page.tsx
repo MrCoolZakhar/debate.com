@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Security Council Guide: Veto, P5, and How UNSC Works',
-  description: 'Everything you need to know about simulating the UN Security Council in MUN: veto power, P5 dynamics, procedure differences, and how to chair or delegate UNSC.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-security-council-guide' },
-  openGraph: {
-    title: 'MUN Security Council Guide: Veto, P5, and How UNSC Works',
-    description: 'Master the UN Security Council simulation in Model UN.',
-    url: 'https://gavelling.com/blog/mun-security-council-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'Everything you need to know about simulating the UN Security Council in MUN: veto power, P5 dynamics, procedure differences, and how to chair or delegate UNSC.',
+  path: '/blog/mun-security-council-guide',
+  ogDescription:
+    'Master the UN Security Council simulation in Model UN.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

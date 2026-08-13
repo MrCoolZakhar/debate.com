@@ -1,10 +1,10 @@
 'use client';
 
-// Production conferences landing: the "Stagefront" composition promoted from the
-// design lab (owner-approved at /conferences/landing-lab?v=1). This thin client
-// mirrors the lab's data fetch and renders the composition without the lab's
-// variant-switcher pill. The component itself still lives in landing-lab/ so the
-// lab route and production stay one source of truth.
+// Production conferences landing: the owner-approved "Stagefront" composition,
+// rendered by `/`. This thin client does the data fetch and renders the
+// composition. The component still lives in the landing-lab/ directory for
+// history — the design-lab route itself has been deleted, so VariantStagefront
+// and landing-lab/shared are now production-only files despite the folder name.
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';

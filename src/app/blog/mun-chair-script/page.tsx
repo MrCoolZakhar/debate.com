@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Chair Script: Exact Phrases for Every Situation',
-  description: 'A complete MUN chair script with exact phrases for opening, roll call, GSL, caucuses, voting, and closing. Copy-paste language for every committee situation.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-chair-script' },
-  openGraph: {
-    title: 'MUN Chair Script: Exact Phrases for Every Situation',
-    description: 'The complete MUN chair script with language for every committee moment.',
-    url: 'https://gavelling.com/blog/mun-chair-script',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A complete MUN chair script with exact phrases for opening, roll call, GSL, caucuses, voting, and closing. Copy-paste language for every committee situation.',
+  path: '/blog/mun-chair-script',
+  ogDescription:
+    'The complete MUN chair script with language for every committee moment.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

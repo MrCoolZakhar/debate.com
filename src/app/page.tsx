@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { OG_BASE } from '@/lib/seo';
+import { pageMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import StagefrontClient from './conferences/StagefrontClient';
 import { supabase } from '@/lib/supabase';
@@ -28,23 +28,20 @@ async function publicConferences(): Promise<{ slug: string; full_name: string; a
   }
 }
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   // The root page shares the root layout's segment, so the `%s | Gavelling`
   // title template does NOT apply here — the brand must be inline.
   title: 'Find Model UN Conferences | Gavelling',
   description:
     'Find your next Model UN conference on Gavelling: real conferences, real committee rooms, from London to San Salvador. Apply as a delegate, chair, or advisor. Organisers list free.',
-  alternates: {
-    canonical: 'https://gavelling.com',
-    languages: {
-      'en-US': 'https://gavelling.com',
-      'es': 'https://gavelling.com?lang=es',
-      'fr': 'https://gavelling.com?lang=fr',
-      'ar': 'https://gavelling.com?lang=ar',
-    },
+  path: '/',
+  languages: {
+    'en-US': 'https://gavelling.com',
+    'es': 'https://gavelling.com?lang=es',
+    'fr': 'https://gavelling.com?lang=fr',
+    'ar': 'https://gavelling.com?lang=ar',
   },
-  openGraph: { ...OG_BASE, url: 'https://gavelling.com' },
-};
+});
 
 const organizationSchema = {
   '@context': 'https://schema.org',

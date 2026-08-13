@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createAuthClient } from '@/lib/supabase-auth';
+import Loader from '@/components/Loader';
 import {
   AuthLayout,
   CardHeading,
@@ -90,8 +91,8 @@ export default function ResetPasswordPage() {
         // Still establishing (or failing to establish) the recovery session.
         // Show a neutral checking state rather than flashing the form for a
         // link that may have already expired.
-        <div className="py-10 flex flex-col items-center justify-center gap-3" role="status" aria-live="polite">
-          <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+        <div className="py-10 flex flex-col items-center justify-center gap-3">
+          <Loader size={40} label="Checking your reset link" />
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>Checking your reset link…</p>
         </div>
       ) : hasSession === false ? (

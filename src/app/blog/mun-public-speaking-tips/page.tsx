@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Public Speaking Tips: How to Speak Confidently in Committee',
-  description: 'Practical public speaking tips for Model UN delegates: how to structure speeches, manage nerves, use your voice effectively, and make every speech count.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-public-speaking-tips' },
-  openGraph: {
-    title: 'MUN Public Speaking Tips: How to Speak Confidently in Committee',
-    description: 'Master public speaking for MUN with these practical techniques.',
-    url: 'https://gavelling.com/blog/mun-public-speaking-tips',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'Practical public speaking tips for Model UN delegates: how to structure speeches, manage nerves, use your voice effectively, and make every speech count.',
+  path: '/blog/mun-public-speaking-tips',
+  ogDescription:
+    'Master public speaking for MUN with these practical techniques.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

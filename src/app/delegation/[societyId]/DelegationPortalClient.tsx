@@ -29,6 +29,7 @@ import {
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard, NeuIconDisc } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
@@ -591,7 +592,7 @@ export default function DelegationPortalClient() {
     return (
       <Shell>
         <div className="flex items-center justify-center py-24">
-          <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+          <Loader size={72} label="Loading delegation portal" />
         </div>
       </Shell>
     );

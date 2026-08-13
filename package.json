@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:og": "node scripts/check-og.mjs",
+    "check:og:build": "next build && node scripts/check-og.mjs --start"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

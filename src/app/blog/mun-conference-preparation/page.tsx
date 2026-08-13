@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'How to Prepare for a MUN Conference: Complete Pre-Conference Checklist',
-  description: 'Everything you need to do before a Model UN conference: research, position papers, practice speeches, rules of procedure, and what to pack.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-conference-preparation' },
-  openGraph: {
-    title: 'How to Prepare for a MUN Conference: Complete Pre-Conference Checklist',
-    description: 'The complete MUN pre-conference preparation guide.',
-    url: 'https://gavelling.com/blog/mun-conference-preparation',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'Everything you need to do before a Model UN conference: research, position papers, practice speeches, rules of procedure, and what to pack.',
+  path: '/blog/mun-conference-preparation',
+  ogDescription:
+    'The complete MUN pre-conference preparation guide.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

@@ -10,6 +10,7 @@ import { extractFunctionErrorMessage, unlimitedPricing, creditPricing, proPricin
 import { formatFee } from '@/lib/finance';
 import { Eyebrow, GlassCard } from '../accountUi';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuPill, NeuIconDisc, NeuInset } from '@/components/neu';
+import Loader from '@/components/Loader';
 
 interface Subscription {
   plan: string;
@@ -554,10 +555,7 @@ export default function UnlimitedPage() {
   if (authLoading || !subscriptionLoaded) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div
-          className="w-6 h-6 rounded-full border-2 animate-spin"
-          style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }}
-        />
+        <Loader size={56} label="Loading your subscription" />
       </div>
     );
   }

@@ -1,21 +1,17 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'General Speakers List (GSL) in MUN: Complete Guide for Chairs and Delegates',
   description:
     'What is the General Speakers List in Model UN? How does it work, how do delegates add themselves, how do chairs manage it, and what are the rules? Full guide with tips.',
-  alternates: { canonical: 'https://gavelling.com/blog/general-speakers-list-guide' },
-  openGraph: {
-    title: 'General Speakers List (GSL) in MUN: Complete Guide for Chairs and Delegates',
-    description: 'Everything you need to know about the GSL: how it works, yielding, points, and chair tips.',
-    url: 'https://gavelling.com/blog/general-speakers-list-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  path: '/blog/general-speakers-list-guide',
+  ogDescription:
+    'Everything you need to know about the GSL: how it works, yielding, points, and chair tips.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

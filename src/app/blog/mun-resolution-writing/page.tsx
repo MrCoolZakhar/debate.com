@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'How to Write a MUN Resolution: Clauses, Format & Examples',
-  description: 'Learn how to write a Model UN resolution from scratch: preambulatory clauses, operative clauses, correct format, sponsor rules, and amendment process.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-resolution-writing' },
-  openGraph: {
-    title: 'How to Write a MUN Resolution: Clauses, Format & Examples',
-    description: 'The complete guide to drafting MUN resolutions that pass.',
-    url: 'https://gavelling.com/blog/mun-resolution-writing',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'Learn how to write a Model UN resolution from scratch: preambulatory clauses, operative clauses, correct format, sponsor rules, and amendment process.',
+  path: '/blog/mun-resolution-writing',
+  ogDescription:
+    'The complete guide to drafting MUN resolutions that pass.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

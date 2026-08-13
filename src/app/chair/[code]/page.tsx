@@ -3,18 +3,21 @@ import { use, useEffect, useState, useRef, useCallback, useMemo, Suspense } from
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import FitToScreen from '@/components/FitToScreen';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
+import GavelChip from '@/components/GavelChip';
+import CommitteeIdentityBadge from '@/components/CommitteeIdentityBadge';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Committee, DelegateStatus } from '@/lib/types';
+import { Committee, Delegate, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
-import { getCommitteeDisplayName } from '@/lib/presetNames';
+import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
+import { getAuthedClient } from '@/lib/supabase-auth';
 import { Emoji } from '@/components/Emoji';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
-import FeedbackLogPanel from '@/components/FeedbackLogPanel';
+import FeedbackLogPanel, { liveCaucus } from '@/components/FeedbackLogPanel';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
@@ -23,7 +26,9 @@ import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
-import { chatUnreadTotal } from '@/lib/chatConversations';
+import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
+import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
+import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import {
   getCommitteeByCode,
@@ -42,6 +47,10 @@ import {
   startSpeakerTimer as startSpeakerTimerInDB,
   stopSpeakerTimer as stopSpeakerTimerInDB,
   updateCaucus as updateCaucusInDB,
+  clearCurrentSpeakerIfUnchanged,
+  caucusRemainingNow,
+  speakerRemainingNow,
+  anchorCaucusClock,
   approveJoinRequest,
   denyJoinRequest,
   approveGslRequest,
@@ -50,6 +59,8 @@ import {
   resumeSession as resumeSessionInDB,
   claimResumeSession as claimResumeSessionInDB,
   startResumeRollCall as startResumeRollCallInDB,
+  releaseResumeClaim as releaseResumeClaimInDB,
+  takeOverResumeClaim as takeOverResumeClaimInDB,
   removePendingMotion as removePendingMotionInDB,
   updateSpeakerTimeLimit,
   updateCommitteeHeadChairInDB,
@@ -126,6 +137,21 @@ function abbrevCountry(name: string): string {
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
 
 const localUpdateTime = { current: 0 };
+
+// True while the acting chair's UNMODERATED caucus countdown is running. That clock lives
+// entirely in local state — nothing writes caucus.remainingTime per tick — so a fresh row
+// fetched by the subscription would rewind it to the value stored when the caucus started.
+// The subscription uses this to carry the live countdown across a refetch. It is NOT a
+// debounce: everything else, including a caucus the head chair has just ended, still comes
+// from the fresh row. (The moderated caucus clock needs no equivalent — it only ticks while
+// timerRunning is true, which already pins caucus/phase in the subscription.)
+const caucusClockRunning = { current: false };
+
+// How long a locally-written delegate status stays pinned against an incoming refetch before
+// we hand control back to the DB row. Deliberately the same number as OPTIMISTIC_TTL_MS in
+// RollCallPanel.tsx — both are the backstop for a status write that never lands, and a chair
+// should not see the two surfaces give up at different moments.
+const STATUS_PIN_TTL_MS = 8000;
 
 function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => Committee, structural = false) {
   if (structural) localUpdateTime.current = Date.now();
@@ -534,7 +560,11 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
   const t = useT();
   const { language } = useLanguage();
   const unmoderatedName = language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
-  const [running, setRunning] = useState(false);
+  // Resume the countdown on mount when the stored caucus carries a live anchor — i.e. the
+  // clock was running when this chair refreshed or rejoined (H2). Lazy initial state, so it
+  // reads the anchor before the chair-level resolver effect consumes it. No anchor (paused
+  // clock, or a pre-anchor caucus) → false, exactly the old behaviour.
+  const [running, setRunning] = useState(() => !isViewOnly && !!committee.caucus?.totalStartedAt);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
   const remainingRef = useRef(caucus.remainingTime);
@@ -592,13 +622,19 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
 
   useEffect(() => {
     if (running) {
+      // structural=false (RULE 4 / MUST NEVER HAPPEN #4). This is a per-second tick, not a
+      // structural write: setting localUpdateTime here would keep the 3s debounce permanently
+      // armed for the whole unmoderated caucus, and the subscription returns early for
+      // speakers_list inside the debounce — so a co-chair's GSL edit or an approved GSL request
+      // would stay invisible to the acting chair until the caucus ended. Genuine mutations in
+      // this view (handleCowTap, handleEndCaucus) keep structural=true.
       const tick = () => {
         if (remainingRef.current <= 0) { setRunning(false); return; }
         updateLocal(setCommittee, (c) => {
           if (!c.caucus) return c;
           const newTotal = Math.max(0, c.caucus.remainingTime - 1);
           return { ...c, caucus: { ...c.caucus, remainingTime: newTotal } };
-        }, true);
+        }, false);
       };
       tick();
       intervalRef.current = setInterval(tick, 1000);
@@ -608,8 +644,61 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running]);
 
+  // Tell the subscription the local-only unmoderated countdown is live, so a refetch carries
+  // it instead of rewinding it. Cleared on stop AND on unmount (caucus end) so it can never
+  // stay armed past the caucus.
+  useEffect(() => {
+    caucusClockRunning.current = running && !isViewOnly;
+    return () => { caucusClockRunning.current = false; };
+  }, [running, isViewOnly]);
+
+  // ── H2 — ANCHOR the total clock ────────────────────────────────────────────
+  // Nothing writes remainingTime per second (that is the H1 bug), so on its own the value
+  // in the DB is frozen at whatever it was when the caucus started: delegates and advisors
+  // rendered a dead clock for the whole caucus, and a chair refresh restored the FULL
+  // original time. Instead we persist a start timestamp once per play/pause and let every
+  // device compute `remaining = remainingTime - (now - totalStartedAt)` locally. Same
+  // proven shape as current_speaker.started_at.
+  //
+  // ONE write per press. Not structural — no localUpdateTime (RULE 4): this is the same
+  // clock the local tick already owns, and caucusClockRunning already carries it across a
+  // refetch. Arming the debounce here would blind the chair to speakers_list events.
+  const handleToggleUnmodClock = () => {
+    const nowRunning = !running;
+    setRunning(nowRunning);
+    if (!committee.caucus) return;
+    const anchored = anchorCaucusClock(committee.caucus, remainingRef.current, nowRunning);
+    updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), false);
+    updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
+  };
+
+  // Extending RE-ANCHORS: the added seconds go onto the live remaining, and the anchor is
+  // restamped to now so the elapsed time already burnt is not charged twice.
+  const handleExtendUnmod = (addSecs: number) => {
+    if (addSecs <= 0 || !committee.caucus) return;
+    // remainingRef is the LIVE local value (the local tick decrements it every second).
+    // Never re-derive it through caucusRemainingNow here — locally the elapsed time has
+    // already been subtracted, so that would charge it twice.
+    const extended = { ...committee.caucus, totalTime: committee.caucus.totalTime + addSecs };
+    const anchored = anchorCaucusClock(extended, remainingRef.current + addSecs, running);
+    updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), true);
+    updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    setShowExtendUnmod(false);
+  };
+
   const handleEndCaucus = () => {
     setRunning(false);
+    // H4 — clear the current_speaker DB ROW, not just local state. getCommitteeByCode loads
+    // current_speaker unconditionally, so a stale row resurrects the caucus speaker as the
+    // GSL current speaker on the next refresh — someone who was never on the GSL — and the
+    // next "Next" logs speaking time for them all over again. Conditional + serialised
+    // against nextSpeaker(), so it is not the blind clear MUST NEVER HAPPEN #5 forbids.
+    if (committee.currentSpeaker) {
+      clearCurrentSpeakerIfUnchanged(
+        committee.id, committee.currentSpeaker.delegateId, committee.currentSpeaker.country,
+        committee.code, committee.dbChairJoinSuffix ?? undefined,
+      );
+    }
     setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateCaucusInDB(committee.id, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => {
@@ -655,7 +744,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
         </div>
       )}
       {!isViewOnly && <div className="flex gap-3 flex-wrap justify-center">
-        <button onClick={() => setRunning((r) => !r)} className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+        <button onClick={handleToggleUnmodClock} className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
           {running ? (
             <span className="flex items-center justify-center gap-2">
               <span className="flex gap-[3px] items-center">
@@ -749,18 +838,8 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
                   .map((m) => Math.round(m * 2) / 2)
               )].sort((a, b) => a - b);
               return suggestions.map((m) => (
-                <button key={m} onClick={() => {
-                  const addSecs = m * 60;
-                  updateLocal(setCommittee, (c) => {
-                    if (!c.caucus) return c;
-                    const newRemaining = c.caucus.remainingTime + addSecs;
-                    const newTotal = c.caucus.totalTime + addSecs;
-                    const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                    updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
-                    return { ...c, caucus: updated };
-                  }, true);
-                  setShowExtendUnmod(false);
-                }} className="flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-transparent border border-[#DDD4C0] text-[#1B3828] hover:border-[#1B3828] transition-colors focus:outline-none">
+                <button key={m} onClick={() => handleExtendUnmod(m * 60)}
+                  className="flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-transparent border border-[#DDD4C0] text-[#1B3828] hover:border-[#1B3828] transition-colors focus:outline-none">
                   {m % 1 === 0 ? `${m}m` : `${m}m`}
                 </button>
               ));
@@ -771,19 +850,8 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
               className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs text-center focus:outline-none focus:border-[#1B3828]" />
             <span className="text-xs text-[#9A8A78] shrink-0">m</span>
           </div>
-          <button onClick={() => {
-            const addSecs = extendMinsUnmod * 60;
-            if (addSecs <= 0) return;
-            updateLocal(setCommittee, (c) => {
-              if (!c.caucus) return c;
-              const newRemaining = c.caucus.remainingTime + addSecs;
-              const newTotal = c.caucus.totalTime + addSecs;
-              const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-              updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
-              return { ...c, caucus: updated };
-            }, true);
-            setShowExtendUnmod(false);
-          }} className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
+          <button onClick={() => handleExtendUnmod(extendMinsUnmod * 60)}
+            className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
             {t('gsl_add_time_extended')}
           </button>
         </div>
@@ -863,6 +931,20 @@ function ModeratedCaucusMain({
       });
     }
   }, [speakerTimeRemaining, timerRunning]);
+
+  // Extending RE-ANCHORS the total clock (H2). `caucus.remainingTime` is already the LIVE
+  // local value — the chair-level tick decrements it every second — so it is used as-is and
+  // never re-derived through caucusRemainingNow, which would subtract the elapsed time a
+  // second time. In a moderated caucus the total clock only advances while the speaker
+  // timer runs, so the anchor is armed iff timerRunning: the two stay in lockstep.
+  const handleExtendMod = (addSecs: number) => {
+    if (addSecs <= 0 || !committee.caucus) return;
+    const extended = { ...committee.caucus, totalTime: committee.caucus.totalTime + addSecs };
+    const anchored = anchorCaucusClock(extended, committee.caucus.remainingTime + addSecs, timerRunning);
+    updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), true);
+    updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    setShowExtendMod(false);
+  };
 
   const speakTime2 = speakerTime > 0 ? speakerTime : 1;
   const remainingForMax = committee.caucus?.remainingTime ?? liveRemaining;
@@ -1030,8 +1112,10 @@ function ModeratedCaucusMain({
               />
             )}
             <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
-            <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
-            {!sessionEnded && (
+            {/* A view-only co-chair cannot call a speaker, so neither the instruction nor the
+                (previously disabled-looking but still rendered) button belong on their screen. */}
+            {!isViewOnly && <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>}
+            {!sessionEnded && !isViewOnly && (
               <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
                 className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
                 {t('gsl_call_first')}
@@ -1068,18 +1152,8 @@ function ModeratedCaucusMain({
                             .map((m) => Math.round(m * 2) / 2)
                         )].sort((a, b) => a - b);
                         return suggestions.map((m) => (
-                          <button key={m} onClick={() => {
-                            const addSecs = m * 60;
-                            updateLocal(setCommittee, (c) => {
-                              if (!c.caucus) return c;
-                              const newRemaining = c.caucus.remainingTime + addSecs;
-                              const newTotal = c.caucus.totalTime + addSecs;
-                              const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                              updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
-                              return { ...c, caucus: updated };
-                            }, true);
-                            setShowExtendMod(false);
-                          }} className="flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-transparent border border-[#DDD4C0] text-[#1B3828] hover:border-[#1B3828] transition-colors focus:outline-none">
+                          <button key={m} onClick={() => handleExtendMod(m * 60)}
+                            className="flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-transparent border border-[#DDD4C0] text-[#1B3828] hover:border-[#1B3828] transition-colors focus:outline-none">
                             {m % 1 === 0 ? `${m}m` : `${m}m`}
                           </button>
                         ));
@@ -1090,19 +1164,8 @@ function ModeratedCaucusMain({
                         className="flex-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-2 py-1.5 text-[#1C1410] text-xs text-center focus:outline-none focus:border-[#1B3828]" />
                       <span className="text-xs text-[#9A8A78] shrink-0">m</span>
                     </div>
-                    <button onClick={() => {
-                      const addSecs = extendMinsMod * 60;
-                      if (addSecs <= 0) return;
-                      updateLocal(setCommittee, (c) => {
-                        if (!c.caucus) return c;
-                        const newRemaining = c.caucus.remainingTime + addSecs;
-                        const newTotal = c.caucus.totalTime + addSecs;
-                        const updated = { ...c.caucus, remainingTime: newRemaining, totalTime: newTotal };
-                        updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
-                        return { ...c, caucus: updated };
-                      }, true);
-                      setShowExtendMod(false);
-                    }} className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
+                    <button onClick={() => handleExtendMod(extendMinsMod * 60)}
+                      className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
                       {t('gsl_add_time_extended')}
                     </button>
                   </div>
@@ -1156,7 +1219,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();
   const { updateSetting, getSettings, hydrateSettings } = useSettingsStore();
   const searchParams = useSearchParams();
-  const myChairName = searchParams.get('chairName') ?? '';
+  // A chair's identity is ONLY ?chairName=. Some navigations back into the session drop it
+  // (the voting page's "Back to Session" still does — see report), and an empty chairName
+  // makes isViewOnly unreachable: this device then believes it holds the gavel forever.
+  // Fall back to the rejoin blob we wrote for THIS committee before defaulting to ''.
+  // Read in an effect, never during render — localStorage does not exist on the server.
+  const urlChairName = searchParams.get('chairName') ?? '';
+  const [rejoinChairName, setRejoinChairName] = useState('');
+  useEffect(() => {
+    if (urlChairName) { setRejoinChairName(''); return; }
+    try {
+      const raw = localStorage.getItem('gavelling-rejoin');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { code?: string; chairName?: string };
+      if (typeof parsed?.chairName !== 'string' || !parsed.chairName) return;
+      if ((parsed.code ?? '').toUpperCase() !== code.toUpperCase()) return;
+      setRejoinChairName(parsed.chairName);
+    } catch { /* malformed blob — stay anonymous */ }
+  }, [urlChairName, code]);
+  const myChairName = urlChairName || rejoinChairName;
   const { user, session, loading: authLoading } = useAuth();
   const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
   const [committee, setCommittee] = useState<Committee | null>(null);
@@ -1181,6 +1262,37 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     guard();
     return () => { cancelled = true; };
   }, [code, authLoading, session?.access_token, user?.id]);
+
+  // Committee emblem for the sidebar. The sessions `committees` table has no logo column,
+  // so the artwork is resolved in this order:
+  //   1. conference_committees.logo_url — a CONFERENCE-created session, where the organiser
+  //      uploaded custom artwork for this committee. Matched by session_code and readable to
+  //      anyone associated with it.
+  //   2. matchPresetEmblem(name) — the committee's OWN emblem, derived from the name the
+  //      chair typed. This is what makes a standalone "UN Security Council" session wear the
+  //      real UN mark; before this the fetch below was the only source, so every standalone
+  //      session fell through to a monogram no matter what it was called.
+  //   3. null → the monogram fallback, so there is never a broken image or an empty gap.
+  const [committeeEmblem, setCommitteeEmblem] = useState<{ logoUrl: string | null; abbreviation: string | null }>({ logoUrl: null, abbreviation: null });
+  useEffect(() => {
+    let cancelled = false;
+    const token = session?.access_token;
+    if (!token) { setCommitteeEmblem({ logoUrl: null, abbreviation: null }); return; }
+    (async () => {
+      try {
+        const sb = getAuthedClient(token);
+        const { data } = await sb
+          .from('conference_committees')
+          .select('logo_url, abbreviation')
+          .eq('session_code', code.toUpperCase())
+          .maybeSingle();
+        if (cancelled || !data) return;
+        const row = data as { logo_url: string | null; abbreviation: string | null };
+        setCommitteeEmblem({ logoUrl: row.logo_url ?? null, abbreviation: row.abbreviation ?? null });
+      } catch { /* standalone session, or no read access — monogram fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, [code, session?.access_token]);
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [suspendTab, setSuspendTab] = useState<'suspend' | 'session'>('suspend');
@@ -1200,6 +1312,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
+  // Resume-from-suspend UI state. `resumeBusy` also double-taps the button, so one chair
+  // cannot fire two claims at once. `resumeError` surfaces a failure the chair can act on
+  // instead of a console.error nobody sees. `resumeStuckSince` starts ticking the moment we
+  // observe ANOTHER chair holding the latch, so a latch abandoned mid-resume can be taken
+  // over rather than bricking the committee.
+  const [resumeBusy, setResumeBusy] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  const [resumeStale, setResumeStale] = useState(false);
   // Only one of these can be open at a time
   const [activePopover, setActivePopover] = useState<'extraTime' | 'rightToReply' | null>(null);
   const [extraTimeSecs, setExtraTimeSecs] = useState('');
@@ -1222,10 +1342,28 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [speakerTimeRemaining, setSpeakerTimeRemaining] = useState(90);
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [headChairName, setHeadChairName] = useState<string | null>(null);
+  // Gavel chip: live presence dots + the transient handover toast.
+  const [onlineChairs, setOnlineChairs] = useState<Set<string>>(new Set());
+  const [headOffline, setHeadOffline] = useState(false);
+  const [gavelToast, setGavelToast] = useState<{ tone: 'lost' | 'gained'; text: string } | null>(null);
+  const lastSeenRef = useRef<Map<string, number>>(new Map());
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerRunningRef = useRef(false);
   const isViewOnlyRef = useRef(false);
+  // Serialises concurrent getCommitteeByCode results inside the realtime subscription.
+  // Two rapid writes produce two echoes and two in-flight refetches; without this an OLDER
+  // snapshot resolving last would overwrite the newer one with stale rows. Each fetch takes
+  // a ticket and only applies if it is still the newest.
+  const fetchSeq = useRef(0);
+  // Delegate statuses this chair has written but not yet seen confirmed by a DB refetch.
+  // A refetch whose snapshot predates our write would otherwise repaint the roll-call
+  // slider with the pre-click status. Pinned until DB truth agrees, or the TTL expires
+  // (backstop for a write that failed outright).
+  const pendingStatusWrites = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
+  // Set by the loader when it reconstructs the speaker clock from current_speaker.started_at
+  // / time_remaining, so the caucus seeding effect knows not to overwrite it (H5).
+  const speakerClockHydratedRef = useRef(false);
   const committeeIdRef = useRef('');
   const committeeCodeRef = useRef('');
   const chairSuffixRef = useRef<string | undefined>(undefined);
@@ -1245,6 +1383,32 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   committeePhaseRef.current = committee?.phase ?? '';
   committeeCodeRef.current = committee?.code ?? '';
   chairSuffixRef.current = committee?.dbChairJoinSuffix ?? undefined;
+
+  // Merge a freshly fetched delegates array over this chair's still-unconfirmed status writes.
+  // Only rows this device just wrote are pinned; every other row is taken from the DB, so a
+  // delegate's own status change or a co-chair's roll call still lands. Each pin releases the
+  // moment DB truth agrees with it — or after the TTL, if the write never landed at all.
+  // Pins for ids missing from `fresh` (a deleted delegate) simply age out on the TTL.
+  const applyPinnedStatuses = (fresh: Delegate[]): Delegate[] => {
+    const pins = pendingStatusWrites.current;
+    if (Object.keys(pins).length === 0) return fresh;
+    const now = Date.now();
+    return fresh.map((d) => {
+      const pin = pins[d.id];
+      if (!pin) return d;
+      // DB agrees, or the pin is stale — hand control back to the authoritative row.
+      if (d.status === pin.value || now - pin.at >= STATUS_PIN_TTL_MS) {
+        delete pins[d.id];
+        return d;
+      }
+      return { ...d, status: pin.value };
+    });
+  };
+
+  // Realtime does not replay events missed while the socket was down. The chair's outbox now
+  // outlives chat closing, so it needs the same catch-up as the delegate view.
+  const onRealtimeStatus = useReSubscribeCatchUp(setCommittee);
+  useChatCatchUp(committee?.id, setCommittee);
 
   useEffect(() => {
     if (committee) document.title = `${abbreviateCommitteeName(committee.name)} - Gavelling Session`;
@@ -1279,18 +1443,30 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         setSpeakerTimeLimitLocal(found.speakerTimeLimit);
         if (found.speakerStartedAt) {
           // Timer was running when the chair left — compute real elapsed time and resume.
-          const elapsed = Math.round((Date.now() - new Date(found.speakerStartedAt).getTime()) / 1000);
-          const remaining = Math.max(0, found.speakerTimeLimit - elapsed);
+          // The base is current_speaker.time_remaining (the value AT the anchor), NOT the
+          // committee speaker limit: nextSpeaker() writes the limit into time_remaining
+          // when it seats someone, a pause syncs the true remainder, and a moderated caucus
+          // seats speakers with the CAUCUS speaking time. Using speakerTimeLimit therefore
+          // rewound a paused-then-resumed GSL speaker and reset every caucus speaker to the
+          // committee default (H5).
+          const remaining = speakerRemainingNow(found.speakerTimeRemaining, found.speakerStartedAt);
           setSpeakerTimeRemaining(remaining);
           if (remaining > 0) setTimerRunning(true);
         } else {
           setSpeakerTimeRemaining(found.speakerTimeRemaining);
         }
+        // The load has authoritatively reconstructed the speaker clock from the DB anchor.
+        // Tell the caucus seeding effect below not to clobber it on its first pass (H5).
+        speakerClockHydratedRef.current = true;
         committeeIdRef.current = found.id;
         if (found.dbSettings) {
           // DB is the source of truth for committee settings (thresholds, veto, motions, etc.).
-          const { chairJoinSuffix: _cjs, separateChairCode: _scc, ...rest } = found.dbSettings as Record<string, unknown>;
-          void _cjs; void _scc;
+          // `headChair` is stripped on the way IN (MUST NEVER HAPPEN #12): it is not a
+          // CommitteeSettings field, it goes stale the instant another chair takes the gavel,
+          // and SettingsPanel's `upd` posts the whole store blob back — a hydrated copy would
+          // silently revert the gavel to whoever held it at page load.
+          const { chairJoinSuffix: _cjs, separateChairCode: _scc, headChair: _hc, ...rest } = found.dbSettings as Record<string, unknown>;
+          void _cjs; void _scc; void _hc;
           hydrateSettings(found.code, rest as Partial<CommitteeSettings>);
         }
         if (found.dbChairJoinSuffix) {
@@ -1316,7 +1492,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // single-row fetch instead of the full committee refetch.
           if (table === 'current_speaker') {
             if (!isViewOnlyRef.current) return;
+            // Two rapid Next clicks by the head chair race two of these fetches on this
+            // device; ticket them so an older row can never land last (same seq as the
+            // committee refetches — any newer fetch supersedes this one).
+            const seq = ++fetchSeq.current;
             const cs = await getCurrentSpeakerRow(found.id);
+            if (seq !== fetchSeq.current) return;
             if (!cs) return;
             setCommittee((prev) => {
               if (!prev) return prev;
@@ -1342,36 +1523,72 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               }
               return patched;
             });
-            if (cs.speakerStartedAt) {
-              const elapsed = Math.round((Date.now() - new Date(cs.speakerStartedAt).getTime()) / 1000);
-              setSpeakerTimeRemaining(Math.max(0, speakerTimeLimitRef.current - elapsed));
-            } else {
-              setSpeakerTimeRemaining(cs.speakerTimeRemaining);
-            }
+            // Anchor base is the row's own time_remaining, NOT the committee speaker limit:
+            // a moderated-caucus speaker is seated with the CAUCUS speaking time, and a
+            // paused-then-resumed speaker carries their true remainder (H5).
+            setSpeakerTimeRemaining(speakerRemainingNow(cs.speakerTimeRemaining, cs.speakerStartedAt));
             return;
           }
 
-          const withinDebounce = Date.now() - localUpdateTime.current < 3000;
+          // Chat + speech-log rows are append-only and belong to no optimistic state. Patch
+          // them with one scoped query instead of the 8-query getCommitteeByCode, and merge by
+          // id so two unsequenced refetches can only ADD rows, never drop one.
+          if (table === 'messages') {
+            await catchUpMessages(found.id, setCommittee);
+            return;
+          }
 
-          // Within debounce: structural tables (speakers_list, delegates) changed because
-          // the chair just wrote them. Skip the fetch entirely — optimistic state is truth.
-          // Only fetch for motion/session/document events where another actor may have written.
+          // The debounce protects the ACTING chair's optimistic state from its own realtime
+          // echo. A view-only co-chair owns no session state and writes none, so it must never
+          // debounce: doing so silently drops phase/caucus changes it can only learn remotely
+          // (e.g. the head chair ending a caucus), leaving the co-chair — and the feedback dock
+          // it renders — stuck on a caucus the committee has already left.
+          const withinDebounce = !isViewOnlyRef.current && Date.now() - localUpdateTime.current < 3000;
+
+          // Within debounce: speakers_list is skipped outright — the chair just wrote it and
+          // its optimistic state is truth (RULE 4). `delegates` is NOT skipped: delegates and
+          // co-chairs write that table too (roster membership and status), and it feeds the
+          // present count, the quorum gate and the majority pie — dropping those events leaves
+          // this device with a silently wrong count and no way back from its own traffic.
+          // Instead the refetch is ticketed (an older snapshot resolving last is discarded) and
+          // every row this chair has just written stays pinned to the optimistic value until DB
+          // truth confirms it — otherwise a snapshot predating the write repaints the roll-call
+          // slider with the pre-click status.
+          // Anything else here is a motion/session/document event another actor may have written.
           if (withinDebounce) {
             if (table === 'speakers_list') return;
             if (table === 'delegates') {
+              const seq = ++fetchSeq.current;
               const updated = await getCommitteeByCode(code);
-              if (!updated) return;
-              setCommittee((prev) => prev ? { ...prev, delegates: updated.delegates } : prev);
+              if (!updated || seq !== fetchSeq.current) return;   // a newer refetch already applied
+              setCommittee((prev) => prev ? { ...prev, delegates: applyPinnedStatuses(updated.delegates) } : prev);
               return;
             }
+            const seq = ++fetchSeq.current;
             const updated = await getCommitteeByCode(code);
-            if (!updated) return;
+            if (!updated || seq !== fetchSeq.current) return;   // a newer refetch already applied
             setCommittee((prev) => {
               if (!prev) return prev;
               // messages (speech log + chat) are append-only and NOT part of the optimistic
               // speaker/timer/caucus state, so refresh them even inside the debounce — otherwise
               // the acting chair's own just-logged speech is missing from scoring/scoreboard/stats.
-              let next = { ...prev, pendingMotions: updated.pendingMotions, messages: updated.messages };
+              // The gavel arrives as exactly ONE `committees` event and is never re-delivered.
+              // Dropping it inside the debounce meant that if the acting chair had made any
+              // structural write in the preceding 3s, the handover was silently discarded and
+              // this device kept acting as head chair forever. Neither field is optimistic
+              // speaker/timer/caucus state, so merging them does not weaken RULE 4.
+              let next = {
+                ...prev,
+                pendingMotions: updated.pendingMotions,
+                messages: mergeMessagesById(prev.messages, updated.messages),
+                dbHeadChair: updated.dbHeadChair,
+                chairNames: updated.chairNames,
+                // The resume latch is DB-owned, never optimistic speaker/timer/caucus state,
+                // so merging it here does not weaken RULE 4. Previously it rode along only
+                // when suspendedAt changed, which meant a chair who lost the resume race
+                // inside the debounce window never learned who was resuming.
+                resumingChair: updated.resumingChair,
+              };
               if (updated.endedAt) next = { ...next, endedAt: updated.endedAt, expiresAt: updated.expiresAt };
               if (updated.suspendedAt !== prev.suspendedAt) next = { ...next, suspendedAt: updated.suspendedAt, resumingChair: updated.resumingChair, phase: updated.phase };
               return next;
@@ -1383,8 +1600,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           }
 
           // Outside debounce: full update — another actor (delegate, co-chair) changed something.
+          const seq = ++fetchSeq.current;
           const updated = await getCommitteeByCode(code);
-          if (!updated) return;
+          if (!updated || seq !== fetchSeq.current) return;   // a newer refetch already applied
           if (updated.endedAt) {
             setSessionEnded(true);
           } else if (updated.suspendedAt) {
@@ -1395,8 +1613,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           }
           // A foreign event (delegate GSL request, co-chair write) must never disturb the
           // live speaker/timer/caucus state owned by the running chair. Merge non-timer fields
-          // and preserve the live ones while the timer is running.
-          if (timerRunningRef.current) {
+          // and preserve the live ones while the timer is running. A view-only co-chair owns
+          // none of this — pinning phase/caucus there would freeze it on a stale caucus — so
+          // it always takes the fresh row.
+          if (timerRunningRef.current && !isViewOnlyRef.current) {
             setCommittee((prev) => prev ? {
               ...updated,
               currentSpeaker: prev.currentSpeaker,
@@ -1405,47 +1625,166 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               speakerTimeRemaining: prev.speakerTimeRemaining,
               caucus: prev.caucus,
               phase: prev.phase,
+              messages: mergeMessagesById(prev.messages, updated.messages),
+              delegates: applyPinnedStatuses(updated.delegates),
             } : updated);
           } else {
-            setCommittee(updated);
-            // Sync isolated timer atom only when local timer is not running
-            if (updated.speakerStartedAt) {
-              const elapsed = Math.round((Date.now() - new Date(updated.speakerStartedAt).getTime()) / 1000);
-              setSpeakerTimeRemaining(Math.max(0, updated.speakerTimeLimit - elapsed));
+            // Unmoderated caucus: carry ONLY the live countdown across the refetch (see
+            // caucusClockRunning). Every other field is taken fresh — critically, if the head
+            // chair has ended the caucus, updated.caucus is null and the guard falls through
+            // to the plain fresh row. Everything else below is unchanged.
+            if (caucusClockRunning.current && !isViewOnlyRef.current) {
+              setCommittee((prev) => (prev?.caucus && updated.caucus)
+                ? { ...updated, caucus: { ...updated.caucus, remainingTime: prev.caucus.remainingTime }, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
+                : updated);
             } else {
-              setSpeakerTimeRemaining(updated.speakerTimeRemaining);
+              setCommittee((prev) => prev
+                ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
+                : updated);
             }
+            // Sync isolated timer atom only when local timer is not running. Anchor base is
+            // current_speaker.time_remaining, not the committee limit — see H5 above.
+            setSpeakerTimeRemaining(speakerRemainingNow(updated.speakerTimeRemaining, updated.speakerStartedAt));
           }
-        });
+        }, (status) => onRealtimeStatus(found.id, status));
       }
     }
     load();
     return () => unsubscribe?.();
-  }, [code]);
+  }, [code, onRealtimeStatus]);
 
   useEffect(() => {
     if (!committee?.id || !myChairName) return;
     const channel = supabase.channel(`chair-presence-${committee.id}`, {
       config: { presence: { key: myChairName } },
     });
-    // Presence is used ONLY so the join page can show which chairs are currently active.
-    // Head-chair status is NOT decided here anymore — it's a persisted, claim-at-will
-    // setting derived from committee.dbHeadChair (see the effect below).
+    // Presence tells the join page which chairs are active, and feeds the GavelChip's
+    // live dots. Head-chair status is NOT decided here — it's a persisted, claim-at-will
+    // setting derived from committee.dbHeadChair (see the effect below). Presence must
+    // NEVER auto-transfer the gavel: a 5s network blip would hand the session away
+    // mid-speech. It only surfaces "this chair looks offline" so a human decides.
+    const syncPresence = () => {
+      const state = channel.presenceState() as Record<string, unknown[]>;
+      const names = new Set(Object.keys(state));
+      names.add(myChairName);
+      const now = Date.now();
+      names.forEach((n) => { lastSeenRef.current.set(n, now); });
+      setOnlineChairs(names);
+    };
+    channel.on('presence', { event: 'sync' }, syncPresence);
+    channel.on('presence', { event: 'join' }, syncPresence);
+    channel.on('presence', { event: 'leave' }, syncPresence);
     channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') await channel.track({ joinedAt: Date.now() });
+      if (status === 'SUBSCRIBED') { await channel.track({ joinedAt: Date.now() }); syncPresence(); }
     });
     return () => { supabase.removeChannel(channel); };
   }, [committee?.id, myChairName]);
+
+  // "Holder looks offline" — informational only, never an auto-handover. 20s of grace so a
+  // brief disconnect is invisible; past that the chip turns amber and offers a take-over.
+  useEffect(() => {
+    const evaluate = () => {
+      const head = headChairName;
+      if (!head || head === myChairName) { setHeadOffline(false); return; }
+      if (onlineChairs.has(head)) { setHeadOffline(false); return; }
+      const last = lastSeenRef.current.get(head);
+      setHeadOffline(last !== undefined && Date.now() - last > 20_000);
+    };
+    evaluate();
+    const id = setInterval(evaluate, 5_000);
+    return () => clearInterval(id);
+  }, [headChairName, myChairName, onlineChairs]);
 
   // Head chair (the gavel) is a persisted, claim-at-will setting — derive view-only status
   // from it, never from presence join-order. Unset → the committee creator (chairNames[0])
   // holds it. Any chair can claim it (Settings or at join), flipping the previous head to
   // view-only via the realtime committees refetch.
+  // The role flip is detected HERE, synchronously, in the same pass that computes it —
+  // not by diffing the isViewOnly state in a later effect. isViewOnly starts false and only
+  // settles once the committee loads, so a state-diff would read that initial settle as a
+  // handover and make every already-view-only co-chair refetch on mount. roleRef records the
+  // baseline the first time a loaded committee is available; only real changes after that
+  // raise a flip.
+  const roleRef = useRef<boolean | null>(null);
+  const [roleFlip, setRoleFlip] = useState<{ lost: boolean; at: number } | null>(null);
   useEffect(() => {
     const head = committee?.dbHeadChair || committee?.chairNames?.[0] || myChairName || null;
     setHeadChairName(head);
-    setIsViewOnly(!!myChairName && !!head && head !== myChairName);
-  }, [committee?.dbHeadChair, committee?.chairNames, myChairName]);
+    const next = !!myChairName && !!head && head !== myChairName;
+    setIsViewOnly(next);
+    if (!committee?.id) return;                       // not loaded yet — no baseline to diff
+    const prev = roleRef.current;
+    roleRef.current = next;
+    if (prev === null || prev === next) return;       // first settle, or nothing changed
+    setRoleFlip({ lost: next, at: Date.now() });
+  }, [committee?.dbHeadChair, committee?.chairNames, committee?.id, myChairName]);
+
+  // ── ROLE TRANSITION (A1) ────────────────────────────────────────────────────
+  // Flipping isViewOnly changes what this device OWNS, so it must also drop what it was
+  // holding on to as the acting chair. Without this the demoted chair's chrome went
+  // view-only while its session state froze: the local timer kept ticking, the debounce
+  // stayed armed, and the subscription's timerRunning pin kept re-applying the stale
+  // phase/caucus/currentSpeaker — the co-chair watched a session that had moved on.
+  // Symmetrically, the promoted chair must pick up the RUNNING timer, not a dead one.
+  useEffect(() => {
+    if (!roleFlip) return;
+    const lost = roleFlip.lost;
+
+    // Stop owning the clock, and close anything that only makes sense while acting.
+    setTimerRunning(false);
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    setActivePopover(null);
+    setRtrOpen(false);
+    setRtrTimerActive(false);
+    setCaucusLoading(false);
+    setUnmodLoading(false);
+    // Release the debounce immediately — whatever this device wrote is no longer the truth.
+    localUpdateTime.current = 0;
+
+    const newHead = committee?.dbHeadChair || committee?.chairNames?.[0] || '';
+    setGavelToast({
+      tone: lost ? 'lost' : 'gained',
+      text: lost ? `${newHead || 'Another chair'} took the gavel. You're now co-chairing.` : 'You have the gavel.',
+    });
+
+    // ONE clean resync, then recompute the timer from current_speaker.started_at exactly
+    // the way the initial load path does — so the new chair inherits a live countdown.
+    let cancelled = false;
+    (async () => {
+      const fresh = await getCommitteeByCode(code);
+      if (cancelled || !fresh) return;
+      // Keep the gavel value we already hold. On the GAINING side it is our optimistic
+      // claim, and this fetch can easily outrun the settings write — taking fresh here would
+      // bounce the role back and re-fire the whole transition. On the LOSING side prev
+      // already carries the incoming value that caused this flip, so it is identical.
+      setCommittee((prev) => prev ? { ...fresh, dbHeadChair: prev.dbHeadChair } : fresh);
+      setSpeakerTimeLimitLocal(fresh.speakerTimeLimit);
+      // Anchor base is current_speaker.time_remaining, not the committee limit — see H5.
+      const remaining = speakerRemainingNow(fresh.speakerTimeRemaining, fresh.speakerStartedAt);
+      setSpeakerTimeRemaining(remaining);
+      if (fresh.speakerStartedAt && !lost && remaining > 0) setTimerRunning(true);
+    })();
+    return () => { cancelled = true; };
+  // committee/code are read, not tracked: this must run on the ROLE flip only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roleFlip]);
+
+  // Handover toast — transient, 6s, same flash pattern as caucusMaxReachedMsg.
+  useEffect(() => {
+    if (!gavelToast) return;
+    const t = setTimeout(() => setGavelToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [gavelToast]);
+
+  // The ONLY gavel write: settings.headChair, read-merged so chairJoinSuffix survives.
+  // Nothing else is touched — not current_speaker, not speakers_list, not caucus, not
+  // phase. The session keeps running and delegates see nothing at all. Last writer wins
+  // on simultaneous claims; every client converges on the realtime `committees` event.
+  const handleSetHeadChair = useCallback((name: string) => {
+    if (!committee || !name) return;
+    updateLocal(setCommittee, (c) => ({ ...c, dbHeadChair: name }));
+    updateCommitteeHeadChairInDB(committee.id, name, committee.code, committee.dbChairJoinSuffix ?? undefined);
+  }, [committee?.id, committee?.code, committee?.dbChairJoinSuffix]);
 
   // Timer — isolated: only updates the speakerTimeRemaining atom, never the committee object.
   // This prevents whole-tree re-renders every second (S1).
@@ -1468,22 +1807,100 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
   }, [timerRunning]);
 
-  // Seed speaker timer atom to caucus speaking time on entry.
+  // Seed the speaker timer atom to the caucus speaking time when ENTERING a caucus.
+  //
+  // H5 — this used to fire on the initial load too (phase goes undefined → moderated-caucus,
+  // which is indistinguishable from a real transition), overwriting the value the load path
+  // had just reconstructed from current_speaker.started_at. A chair refreshing mid-speech in
+  // a moderated caucus therefore watched the clock jump back to the full speaking time.
+  // Now the first pass after a load is skipped whenever the load reconstructed a clock.
+  const caucusSeedPhaseRef = useRef<string | null>(null);
   useEffect(() => {
-    if (committee?.phase === 'moderated-caucus' && committee.caucus) {
-      setSpeakerTimeRemaining(committee.caucus.speakingTime);
+    const phase = committee?.phase ?? null;
+    const prev = caucusSeedPhaseRef.current;
+    caucusSeedPhaseRef.current = phase;
+    if (phase !== 'moderated-caucus' || !committee?.caucus) return;
+    if (prev === null && speakerClockHydratedRef.current) {
+      // First render after a load — the DB anchor already won. Do not reseed.
+      speakerClockHydratedRef.current = false;
+      return;
     }
+    setSpeakerTimeRemaining(committee.caucus.speakingTime);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.phase, committee?.caucus?.speakingTime]);
 
-  // Sync caucus total timer with speaker atom — one tick per second while running.
+  // ── H2 — resolve a stored total-clock ANCHOR into a live local value ────────
+  // The DB stores `remainingTime` as the value AT `totalStartedAt`, never a per-second
+  // write. Whenever a caucus arrives carrying an anchor this device has not seen before
+  // (initial load, rejoin, or a refetch after another chair pressed play), collapse it to
+  // the real remaining time. Without this a chair who refreshed mid-caucus resumed from the
+  // start-of-caucus value — the whole point of H2.
+  //
+  // Keyed on the anchor VALUE, and every value is consumed at most once. That matters: the
+  // subscription's caucusClockRunning/timerRunning carries re-attach the SAME anchor to an
+  // already-live remainingTime on every refetch, and re-resolving it would subtract the
+  // elapsed seconds a second time. A genuinely new anchor always arrives with a fresh base.
+  //
+  // structural=false — this is clock state, not a structural mutation (RULE 4).
+  const consumedAnchorRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!timerRunning) return;
+    const anchor = committee?.caucus?.totalStartedAt ?? null;
+    if (!anchor || consumedAnchorRef.current === anchor) return;
+    consumedAnchorRef.current = anchor;
+    const live = caucusRemainingNow(committee!.caucus!);
+    if (live === committee!.caucus!.remainingTime) return;
+    updateLocal(setCommittee, (prev) => (prev.caucus ? { ...prev, caucus: { ...prev.caucus, remainingTime: live } } : prev), false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.caucus?.totalStartedAt]);
+
+  // H3 (local half) — entering ANY caucus stops the GSL clock on this device.
+  // MotionsModal can only null `currentSpeaker` in the committee object; `timerRunning` is
+  // a chair-page atom it cannot reach, so the GSL countdown kept running straight into the
+  // caucus and drained the caucus total clock during the 3.5s loading screen. The DB half
+  // (clearing the current_speaker row) is done in MotionsModal.
+  const prevCaucusPhaseRef = useRef<string | null>(null);
+  useEffect(() => {
+    const phase = committee?.phase ?? null;
+    const prev = prevCaucusPhaseRef.current;
+    prevCaucusPhaseRef.current = phase;
+    const isCaucus = phase === 'moderated-caucus' || phase === 'unmoderated-caucus';
+    const wasCaucus = prev === 'moderated-caucus' || prev === 'unmoderated-caucus';
+    if (prev !== null && isCaucus && !wasCaucus) setTimerRunning(false);
+  }, [committee?.phase]);
+
+  // Sync caucus total timer with speaker atom — one tick per second while running.
+  // Only the acting (head) chair runs this clock. A view-only co-chair must not: it would
+  // refresh the structural-write debounce every second (blinding itself to the head chair's
+  // caucus-end broadcast) and, on expiry, write the caucus/phase it does not own.
+  //
+  // structural=false is MANDATORY here (RULE 4 / MUST NEVER HAPPEN #4): a per-second tick that
+  // set localUpdateTime would hold the 3s debounce open for the entire caucus, and the
+  // subscription returns early for speakers_list inside the debounce — so the acting chair
+  // would silently discard every queue reorder, removal and approved GSL request for the whole
+  // caucus. The caucus countdown does not need the debounce: it is already protected from the
+  // realtime echo by the timerRunning pin above (`caucus: prev.caucus, phase: prev.phase`).
+  // Only the one-shot expiry below is a genuine structural write, and it arms the debounce
+  // itself so the two separate DB updates (caucus, then phase) cannot flicker back in.
+  useEffect(() => {
+    if (!timerRunning || isViewOnly) return;
     if (committee?.phase !== 'moderated-caucus' || !committee.caucus) return;
     updateLocal(setCommittee, (prev) => {
       if (!prev?.caucus || prev.phase !== 'moderated-caucus') return prev;
       const next = Math.max(0, prev.caucus.remainingTime - 1);
       if (next === 0) {
+        localUpdateTime.current = Date.now();
+        // H4 — clear the current_speaker DB ROW as well as local state. Without this the row
+        // still holds the caucus speaker (with started_at set), so the next chair refresh
+        // resurrects them as the GSL current speaker — a delegate who was never on the GSL —
+        // and the following "Next" logs their speaking time a second time. Conditional and
+        // serialised against nextSpeaker(), so it is not the blind clear MUST NEVER HAPPEN
+        // #5 forbids.
+        if (prev.currentSpeaker) {
+          clearCurrentSpeakerIfUnchanged(
+            prev.id, prev.currentSpeaker.delegateId, prev.currentSpeaker.country,
+            prev.code, prev.dbChairJoinSuffix ?? undefined,
+          );
+        }
         updateCaucusInDB(prev.id, null, prev.code, prev.dbChairJoinSuffix ?? undefined);
         setPhaseInDB(prev.id, 'speakers-list', prev.code, prev.dbChairJoinSuffix ?? undefined);
         // Auto-expiry must mirror the manual End button: clear the caucus and its speaker but
@@ -1492,7 +1909,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: prev.speakersList };
       }
       return { ...prev, caucus: { ...prev.caucus, remainingTime: next } };
-    }, true);
+    }, false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speakerTimeRemaining]);
 
@@ -1617,6 +2034,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const handleStatusChange = useCallback((delegateId: string, status: DelegateStatus) => {
     if (!committee) return;
+    // Pin this row against any refetch whose snapshot predates the write below.
+    pendingStatusWrites.current[delegateId] = { value: status, at: Date.now() };
     updateLocal(setCommittee, (c) => ({
       ...c,
       delegates: c.delegates.map((d) => d.id === delegateId ? { ...d, status } : d),
@@ -1740,16 +2159,32 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // onReadCountsChange while the panel is open; the header badge below reads the same
   // map. Persist it across reloads (mirrors the delegate view) so the badge reflects
   // genuinely new messages, not the whole backlog, after every refresh.
+  // Keyed by READER, not just by committee: two chairs on one dais laptop (or a chair who
+  // also opens the delegate view) used to share `chat-read-${code}` and overwrite each
+  // other, resurrecting badges on threads they had already read. See src/lib/chatReadKey.ts.
   useEffect(() => {
     if (!committee?.code) return;
-    try { const stored = localStorage.getItem(`chat-read-${committee.code}`); if (stored) setChatReadCounts(JSON.parse(stored)); } catch {}
+    const stored = loadChatReadCounts(committee.code, { role: 'chair', identity: myChairName });
+    if (stored) setChatReadCounts(stored);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee?.code]);
+  }, [committee?.code, myChairName]);
 
   useEffect(() => {
     if (!committee?.code) return;
-    try { localStorage.setItem(`chat-read-${committee.code}`, JSON.stringify(chatReadCounts)); } catch {}
-  }, [chatReadCounts, committee?.code]);
+    saveChatReadCounts(committee.code, { role: 'chair', identity: myChairName }, chatReadCounts);
+  }, [chatReadCounts, committee?.code, myChairName]);
+
+  // A resume latch held by ANOTHER chair is normally a sub-second blink: they claim it and
+  // immediately clear it by starting the roll call. If it is still there ~12s later that
+  // chair died between the two writes, so offer a take-over rather than leaving every other
+  // chair staring at a permanently disabled Resume button.
+  const foreignResumeLatch = !!committee?.suspendedAt && !committee?.endedAt && !!committee?.resumingChair
+    && committee.resumingChair !== (myChairName || committee?.chairNames?.[0] || 'Chair');
+  useEffect(() => {
+    if (!foreignResumeLatch) { setResumeStale(false); return; }
+    const id = setTimeout(() => setResumeStale(true), 12_000);
+    return () => clearTimeout(id);
+  }, [foreignResumeLatch]);
 
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
@@ -1876,6 +2311,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
       syncSpeakerTimeInDB(committeeIdRef.current, speakerTimeRemaining, committeeCodeRef.current, chairSuffixRef.current);
     }
+    // H2 — in a moderated caucus the TOTAL clock advances in lockstep with the speaker
+    // clock, so play/pause is also the total clock's anchor point. One write per press,
+    // never per second: `remainingTime` is stamped with the live local value and
+    // `totalStartedAt` with now (or null on pause), so delegates and advisors can render a
+    // real countdown and a refresh cannot rewind it.
+    if (committee.phase === 'moderated-caucus' && committee.caucus) {
+      const anchored = anchorCaucusClock(committee.caucus, committee.caucus.remainingTime, starting);
+      // structural=false: this is the clock the local tick already owns and the timerRunning
+      // pin already protects from the realtime echo. Arming the debounce (RULE 4 / MUST
+      // NEVER HAPPEN #4) would make this device drop speakers_list events for 3s.
+      updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), false);
+      updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    }
   };
 
   const handleRestartTime = () => {
@@ -1894,7 +2342,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       const newSpoken = currentCountry && !prevSpoken.includes(currentCountry)
         ? [...prevSpoken, currentCountry]
         : prevSpoken;
-      const updated = { ...committee.caucus, speakerTimeRemaining: speakTime, remainingTime: newRemainingTime, spokenCountries: newSpoken };
+      // Restart stops the clock (setTimerRunning(false) above), so the total-clock anchor is
+      // released and newRemainingTime becomes the literal truth for every reader.
+      const updated = { ...committee.caucus, speakerTimeRemaining: speakTime, remainingTime: newRemainingTime, spokenCountries: newSpoken, totalStartedAt: null };
       updateLocal(setCommittee, (c) => ({ ...c, caucus: updated }), true);
       updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
     } else {
@@ -1963,6 +2413,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       speakerTimeRemaining: speakTime,
       remainingTime: newRemaining,
       spokenCountries: newSpoken,
+      // Advancing stops the clock (setTimerRunning(false) at the top of this handler), so the
+      // total-clock anchor is released and newRemaining is the literal truth for every reader
+      // until the chair presses play again. This is the per-speaker re-anchor point (H2).
+      totalStartedAt: null,
     };
 
     // Pure state update — no DB calls inside
@@ -1995,7 +2449,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const handleEndCaucus = () => {
     setTimerRunning(false);
-    stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
+    // H4 — clear the current_speaker DB ROW, not just local state. getCommitteeByCode loads
+    // current_speaker unconditionally, so leaving it populated resurrects the caucus speaker
+    // as the GSL current speaker on the next refresh — someone who was never on the GSL —
+    // and the next "Next" logs speaking time for them again. The conditional clear also
+    // nulls started_at, so it subsumes stopSpeakerTimer for this row. Conditional +
+    // serialised against nextSpeaker(): not the blind clear MUST NEVER HAPPEN #5 forbids.
+    if (committee.currentSpeaker) {
+      clearCurrentSpeakerIfUnchanged(
+        committee.id, committee.currentSpeaker.delegateId, committee.currentSpeaker.country,
+        committee.code, committee.dbChairJoinSuffix ?? undefined,
+      );
+    } else {
+      stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
+    }
     setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateCaucusInDB(committee.id, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => ({
@@ -2023,15 +2490,95 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
-  const handleResumeClick = async () => {
-    if (!committee) return;
-    try { localStorage.setItem('gavelling_tutorial_seen_' + committee.id, '1'); } catch {}
-    const claimedName = myChairName || committee.chairNames[0] || 'Chair';
-    const claimed = await claimResumeSessionInDB(committee.id, claimedName, committee.code, committee.dbChairJoinSuffix ?? undefined);
-    if (!claimed) return;
-    updateLocal(setCommittee, (c) => ({ ...c, phase: 'pre-session', suspendedAt: null }));
+  // Resuming is TWO writes against the one-shot `resuming_chair` latch: claim it, then clear
+  // it by starting the roll call. If the second write fails and the latch is left set, the
+  // committee can NEVER be resumed again — `claimResumeSession` only writes when the column
+  // is null — so delegates sit on the waiting screen forever. Every exit path below therefore
+  // either clears the latch or leaves it in a state some chair can still act on.
+  const runResumeRollCall = async (claimedName: string) => {
+    const prevPhase = committee.phase;
+    const prevSuspendedAt = committee.suspendedAt ?? null;
+    // Optimistic (RULE 5) — but remembered, so a failed write can put the overlay back
+    // instead of leaving the chair on a phantom roll call for a still-suspended committee.
+    updateLocal(setCommittee, (c) => ({ ...c, phase: 'pre-session', suspendedAt: null, resumingChair: null }));
     setSessionSuspended(false);
-    await startResumeRollCallInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    const started = await startResumeRollCallInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    if (started) { setResumeError(null); return true; }
+    // Roll the optimistic state back and hand the latch back so this chair (or another) can
+    // retry. releaseResumeClaim is a compare-and-swap on our own name, so it cannot stomp a
+    // claim someone else has since taken.
+    updateLocal(setCommittee, (c) => ({ ...c, phase: prevPhase, suspendedAt: prevSuspendedAt, resumingChair: claimedName }));
+    setSessionSuspended(true);
+    const released = await releaseResumeClaimInDB(committee.id, claimedName, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    if (released) updateLocal(setCommittee, (c) => ({ ...c, resumingChair: null }));
+    setResumeError(released
+      ? t('session_resume_failed')
+      : t('session_resume_failed_locked'));
+    return false;
+  };
+
+  const handleResumeClick = async () => {
+    if (!committee || resumeBusy) return;
+    setResumeBusy(true);
+    setResumeError(null);
+    try {
+      try { localStorage.setItem('gavelling_tutorial_seen_' + committee.id, '1'); } catch {}
+      const claimedName = myChairName || committee.chairNames[0] || 'Chair';
+      // Self-heal: if this device already holds the latch (it claimed, then the roll-call
+      // write failed or the page reloaded in between), re-claiming is impossible — the
+      // column is no longer null — so go straight to the second write. This does not weaken
+      // the latch: only the chair NAMED in it takes this path.
+      const alreadyMine = committee.resumingChair === claimedName;
+      const claimed = alreadyMine
+        || await claimResumeSessionInDB(committee.id, claimedName, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      if (!claimed) {
+        // Lost the race (or the latch is stale). Pull the real row so the button stops being
+        // a silent no-op and the chair actually sees who is resuming.
+        const fresh = await getCommitteeByCode(committee.code);
+        if (!fresh) {
+          setResumeError(t('session_resume_retry'));
+          return;
+        }
+        setCommittee((prev) => prev ? { ...prev, resumingChair: fresh.resumingChair, suspendedAt: fresh.suspendedAt, phase: fresh.phase } : prev);
+        // The winner already finished: the committee is out of suspension, nothing to report.
+        if (!fresh.suspendedAt) { setSessionSuspended(false); return; }
+        // The latch turns out to be ours after all (our own claim landed but the response was
+        // lost). Finish the job rather than reporting a failure.
+        if (fresh.resumingChair === claimedName) { await runResumeRollCall(claimedName); return; }
+        // Someone else holds it — the "{name} is resuming…" line now renders off the refetched
+        // row, so the button is no longer a silent no-op. No extra error needed.
+        if (!fresh.resumingChair) setResumeError(t('session_resume_retry'));
+        return;
+      }
+      await runResumeRollCall(claimedName);
+    } finally {
+      setResumeBusy(false);
+    }
+  };
+
+  // Offered only after a foreign latch has sat unresolved for ~12s. Compare-and-swap from
+  // the stale holder's name to ours, so two chairs racing to take over still produce exactly
+  // one winner.
+  const handleTakeOverResume = async () => {
+    if (!committee || resumeBusy) return;
+    const stale = committee.resumingChair;
+    if (!stale) return;
+    setResumeBusy(true);
+    setResumeError(null);
+    try {
+      const claimedName = myChairName || committee.chairNames[0] || 'Chair';
+      const took = await takeOverResumeClaimInDB(committee.id, stale, claimedName, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      if (!took) {
+        const fresh = await getCommitteeByCode(committee.code);
+        if (fresh) setCommittee((prev) => prev ? { ...prev, resumingChair: fresh.resumingChair, suspendedAt: fresh.suspendedAt, phase: fresh.phase } : prev);
+        if (fresh && !fresh.suspendedAt) { setSessionSuspended(false); return; }
+        setResumeError(t('session_resume_lost'));
+        return;
+      }
+      await runResumeRollCall(claimedName);
+    } finally {
+      setResumeBusy(false);
+    }
   };
 
   const handlePhaseChange = (phase: string) => {
@@ -2207,22 +2754,35 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           </svg>
         </button>
       </header>
-      {isViewOnly && (
+      {/* The gavel lives here, on the front page — not buried in Settings — and shows for
+          EVERY chair in BOTH states, so handover reads as a one-tap switch rather than an
+          error. A genuinely solo chair has nobody to hand to, so the affordance stays hidden —
+          but a view-only device always gets it, including the organiser's ?chairName=Secretariat
+          deep link, whose name may not be in chair_names yet. */}
+      {!sessionEnded && ((committee.chairNames?.length ?? 0) > 1 || isViewOnly) && (
+        <GavelChip
+          chairNames={committee.chairNames ?? []}
+          headChairName={headChairName}
+          myChairName={myChairName}
+          onlineChairs={onlineChairs}
+          headOffline={headOffline}
+          onTakeGavel={() => handleSetHeadChair(myChairName)}
+          onHandOver={(name) => handleSetHeadChair(name)}
+        />
+      )}
+      {gavelToast && (
         <div
-          className="fixed z-50 flex items-center gap-2 px-3.5 py-2 rounded-full"
+          className="fixed z-50 flex items-center gap-2 px-3.5 py-2 rounded-2xl"
           style={{
-            top: '3.75rem', right: '0.85rem',
-            backgroundColor: 'rgba(139,32,32,0.16)',
-            backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-            border: '1px solid rgba(139,32,32,0.28)',
-            boxShadow: '0 8px 24px rgba(28,20,16,0.14)',
-            color: '#8B2020', fontFamily: "'Poppins','Outfit',sans-serif",
+            top: '6.6rem', right: '0.85rem', maxWidth: '19rem',
+            backgroundColor: gavelToast.tone === 'lost' ? '#F6EEE0' : '#1B3828',
+            border: gavelToast.tone === 'lost' ? '1px solid rgba(184,132,74,0.45)' : '1px solid rgba(238,217,138,0.28)',
+            boxShadow: '0 12px 30px rgba(27,56,40,0.22)',
+            color: gavelToast.tone === 'lost' ? '#8A5A2E' : '#EED98A',
+            fontFamily: "'Outfit', sans-serif",
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-          <span className="text-xs font-bold whitespace-nowrap"><span className="font-black">View only</span> · {headChairName} is chairing</span>
+          <span className="text-xs font-bold leading-snug">{gavelToast.text}</span>
         </div>
       )}
       {/* Ended tab bar */}
@@ -2262,7 +2822,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       )}
       {!sessionEnded && sessionSuspended && suspendTab === 'session' && (
         <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
-          Session is suspended, delegates cannot see this view
+          {t('session_suspended_banner')}
         </div>
       )}
       {/* Waiting Room — delegates awaiting chair admission (chair-approval gate) */}
@@ -2340,7 +2900,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       ) : (!sessionEnded && sessionSuspended && suspendTab === 'suspend') ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           {(() => {
-            const anotherChairResuming = committee.resumingChair && committee.resumingChair !== (myChairName || committee.chairNames[0]);
+            // Same identity expression as claimedName in handleResumeClick — they must agree,
+            // or a chair holding the latch under the 'Chair' fallback sees a disabled button
+            // and cannot finish their own resume.
+            const anotherChairResuming = committee.resumingChair && committee.resumingChair !== (myChairName || committee.chairNames[0] || 'Chair');
             return (
               <>
                 <h1 className="text-6xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_suspended_title')}</h1>
@@ -2351,15 +2914,31 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       {t('session_resume_btn')}
                     </button>
                     <p className="text-sm mt-4" style={{ color: '#B8844A' }}>{t('session_resuming_other').replace('{name}', committee.resumingChair ?? '')}</p>
+                    {/* The latch normally clears in well under a second. Still held after 12s
+                        means that chair never finished — offer a take-over so the committee is
+                        not stranded suspended forever. */}
+                    {resumeStale && (
+                      <button
+                        onClick={handleTakeOverResume}
+                        disabled={resumeBusy}
+                        className="mt-5 px-6 py-3 rounded-xl font-black text-sm transition-colors focus:outline-none disabled:opacity-60"
+                        style={{ backgroundColor: '#8B5A20', color: '#EDE7D8', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
+                        {resumeBusy ? '…' : t('session_resume_takeover')}
+                      </button>
+                    )}
                   </>
                 ) : (
                   <button
                     onClick={handleResumeClick}
-                    className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                    disabled={resumeBusy}
+                    className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none disabled:opacity-70 disabled:cursor-wait" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+                    onMouseEnter={(e) => { if (!resumeBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
                     {t('session_resume_btn')}
                   </button>
+                )}
+                {resumeError && (
+                  <p className="text-sm mt-5 max-w-md" role="alert" style={{ color: '#8B2020' }}>{resumeError}</p>
                 )}
                 <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
               </>
@@ -2407,11 +2986,41 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <>
             {showRollCall && (
               <aside data-tutorial="speakers-sidebar" className="w-[22rem] flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
+                {/* The committee's identity, stated ONCE for this whole column. RollCallPanel
+                    below gets `hideIdentity` so it no longer prints the name and topic a
+                    second time, one line down and behind its own border. Compact on purpose:
+                    the badge is SHORTER than the two headings it replaced, so the speakers
+                    list beneath it gained height rather than losing it.
+                    Long names collapse to the acronym with the full name small beneath
+                    (UI RULE), via committeeDisplayName. */}
+                {(() => {
+                  // Match and derive against the RAW stored name: the preset aliases are
+                  // English, so a localised display name would never match them.
+                  const rawName = committee.name;
+                  const fullName = getCommitteeDisplayName(rawName, language);
+                  // A standalone session has no `abbreviation` column, so without a derived
+                  // acronym committeeDisplayName would always fall back to the full name and
+                  // the acronym-plus-subtitle UI RULE could never fire outside conferences.
+                  const acronym = deriveCommitteeAcronym(rawName, committeeEmblem.abbreviation);
+                  const primary = committeeDisplayName(fullName, acronym);
+                  const secondary = primary !== fullName ? fullName : null;
+                  const logoSrc = committeeEmblem.logoUrl ?? matchPresetEmblem(rawName, committeeEmblem.abbreviation);
+                  return (
+                    <CommitteeIdentityBadge
+                      logoSrc={logoSrc}
+                      primary={primary}
+                      secondary={secondary}
+                      topic={committee.topic}
+                      topicLabel={t('rollcall_topic')}
+                    />
+                  );
+                })()}
                 {caucusMaxReachedMsg && (
                   <div className="shrink-0 px-3 py-2 bg-amber-900/20 border-b border-amber-700/40 text-amber-300 text-xs text-center font-semibold">
                     Maximum speakers reached. Add more delegates if time remains after current speakers.
                   </div>
                 )}
+                <div className="flex-1 min-h-0 overflow-hidden">
                 {(caucusPanelLocked || committee.caucus?.type === 'moderated') ? (
                   <RollCallPanel committee={caucusRollCallCommittee ?? { ...committee, speakersList: committee.caucusQueue ?? [], currentSpeaker: null }}
                     isTdT={committee.caucus?.purpose?.startsWith('Tour de Table') ?? false}
@@ -2429,6 +3038,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: [...(c.caucusQueue ?? []), { delegateId, country: delegate.country }] }), true);
                       addToCaucusListInDB(committee.id, delegateId, delegate.country, committee.code, committee.dbChairJoinSuffix ?? undefined, inlinePos);
                     }}
+                    hideIdentity
                     onListIds={caucusQueueIds}
                     onRemoveFromList={(delegateId) => {
                       updateLocal(setCommittee, (c) => ({ ...c, caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId) }), true);
@@ -2446,6 +3056,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     isViewOnly={isViewOnly} />
                 ) : (committee.phase === 'unmoderated-caucus' && committee.caucus) ? (
                   <RollCallPanel committee={committee}
+                    hideIdentity
                     onCycleStatus={handleCycleStatus}
                     onStatusChange={handleStatusChange}
                     onDelegateAdd={handleDelegateAdd}
@@ -2455,6 +3066,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     isViewOnly={isViewOnly} />
                 ) : (
                   <RollCallPanel committee={committee}
+                    hideIdentity
                     onAddToList={handleAddToSpeakersList}
                     onListIds={gslListIds}
                     onRemoveFromList={handleRemoveFromSpeakersList}
@@ -2469,6 +3081,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     isReadOnly={sessionEnded}
                     isViewOnly={isViewOnly} />
                 )}
+                </div>
               </aside>
             )}
             <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
@@ -2765,11 +3378,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 </>
               )}
               {/* Co-chair live feedback feed — docked under the timer, beside (never over) the roll-call sidebar */}
+              {/* currentCountry uses liveCaucus, NOT committee.caucus: a leftover caucus JSONB
+                  (suspend/end-debate never nulls it, and the two writes that end a caucus land as
+                  separate realtime rows) would otherwise name the old caucus speaker as the one
+                  holding the floor while the committee is already back on the GSL. */}
               {isViewOnly && (
                 <FeedbackLogPanel
                   committee={committee}
                   chairName={myChairName || committee.chairNames[0] || 'Chair'}
-                  currentCountry={committee.caucus?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
+                  currentCountry={liveCaucus(committee)?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
                 />
               )}
             </main>
@@ -2792,17 +3409,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onClose={() => setShowDocuments(false)}
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
           isViewOnly={isViewOnly}
+          // Carried into /voting/[code] so its "Back to Session" can hand the identity
+          // back here — ?chairName= is the only thing that identifies a chair.
+          chairName={myChairName}
         />
       )}
       {showSettings && (
         <SettingsPanel
           committee={committee}
           myChairName={myChairName}
-          onBecomeHeadChair={() => {
-            if (!myChairName) return;
-            updateLocal(setCommittee, (c) => ({ ...c, dbHeadChair: myChairName }));
-            updateCommitteeHeadChairInDB(committee.id, myChairName, committee.code, committee.dbChairJoinSuffix ?? undefined);
-          }}
+          isViewOnly={isViewOnly}
           onClose={() => setShowSettings(false)}
         />
       )}

@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Amendments Explained: Friendly vs Unfriendly, How to Submit',
-  description: 'Everything about amendments in Model UN: the difference between friendly and unfriendly amendments, how to submit them, voting order, and strategic use.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-amendment-guide' },
-  openGraph: {
-    title: 'MUN Amendments Explained: Friendly vs Unfriendly, How to Submit',
-    description: 'The complete guide to amendments in MUN committees.',
-    url: 'https://gavelling.com/blog/mun-amendment-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'Everything about amendments in Model UN: the difference between friendly and unfriendly amendments, how to submit them, voting order, and strategic use.',
+  path: '/blog/mun-amendment-guide',
+  ogDescription:
+    'The complete guide to amendments in MUN committees.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

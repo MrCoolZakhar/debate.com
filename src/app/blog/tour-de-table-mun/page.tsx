@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Tour de Table in MUN: What It Is and How Chairs Run It',
-  description: 'Everything about tour de table in Model UN: what it is, how it differs from the GSL, when to use it, and how chairs manage it with and without software.',
-  alternates: { canonical: 'https://gavelling.com/blog/tour-de-table-mun' },
-  openGraph: {
-    title: 'Tour de Table in MUN: What It Is and How Chairs Run It',
-    description: 'The complete guide to tour de table in MUN committees.',
-    url: 'https://gavelling.com/blog/tour-de-table-mun',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'Everything about tour de table in Model UN: what it is, how it differs from the GSL, when to use it, and how chairs manage it with and without software.',
+  path: '/blog/tour-de-table-mun',
+  ogDescription:
+    'The complete guide to tour de table in MUN committees.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

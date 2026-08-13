@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
-  description: 'Learn what an unmoderated caucus is in Model UN, how delegates should use the time, and tips for chairs on managing unmod periods effectively.',
-  alternates: { canonical: 'https://gavelling.com/blog/unmoderated-caucus-guide' },
-  openGraph: {
-    title: 'Unmoderated Caucus in MUN: What It Is and How to Use It',
-    description: 'The complete guide to unmoderated caucuses for MUN chairs and delegates.',
-    url: 'https://gavelling.com/blog/unmoderated-caucus-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'Learn what an unmoderated caucus is in Model UN, how delegates should use the time, and tips for chairs on managing unmod periods effectively.',
+  path: '/blog/unmoderated-caucus-guide',
+  ogDescription:
+    'The complete guide to unmoderated caucuses for MUN chairs and delegates.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

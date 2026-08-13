@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   Download, Upload as UploadIcon, ArrowLeft, Check,
   AlertTriangle, Mail, Loader2, CircleCheck, CircleX,
-  FileSpreadsheet, Users, Link2, MailX, UserCheck, ArrowRight,
+  FileSpreadsheet, Users, Link2, UserCheck, ArrowRight,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -497,6 +497,28 @@ export default function ImportPage() {
       results.push({ row: r, outcome: r.mode === 'update' ? 'updated' : 'imported', note: null });
     }
 
+    // Auto-send the personal claim invite for every NEWLY CREATED row that
+    // actually landed (with or without an allocation). Updates and no-ops are
+    // excluded on purpose so re-importing a roster never re-spams anyone who
+    // is already in the system. A failed email queue must never make the
+    // import itself look failed, hence the try/catch.
+    const inviteRecipients = results
+      .filter(res => res.row.mode === 'create' && (res.outcome === 'imported' || res.outcome === 'imported-no-allocation'))
+      .map(res => {
+        const appId = appIdByKey.get(`${res.row.resolved.email}|${res.row.resolved.role}`);
+        return appId ? { applicationId: appId, invitedEmail: res.row.resolved.email, invitedName: res.row.resolved.name } : null;
+      })
+      .filter((r): r is { applicationId: string; invitedEmail: string; invitedName: string } => r !== null);
+    if (inviteRecipients.length > 0) {
+      try {
+        const inviteResult = await queueImportJoinInviteEmails(supabase, conference.id, inviteRecipients);
+        setLastInviteQueued(inviteResult.queued);
+      } catch {
+        // Import stands even if the invite queue fails; the persistent
+        // unclaimed banner is the manual resend path.
+      }
+    }
+
     setResultRows(results.sort((a, b) => a.row.rowNumber - b.row.rowNumber));
     await loadUnclaimedCount();
   }
@@ -525,7 +547,7 @@ export default function ImportPage() {
     if (!conference || !session || sendingInvites) return;
     const { confirmed } = await confirm({
       title: `Send ${unclaimedCount} Gavelling invite${unclaimedCount === 1 ? '' : 's'}?`,
-      body: 'Each unclaimed imported applicant gets an email inviting them to create a Gavelling account. Their registration attaches automatically once they sign up with the same email.',
+      body: 'Each unclaimed imported applicant gets an email with their personal invitation link. Their registration attaches automatically when they claim it, whichever email address they sign up with.',
       confirmLabel: 'Send Invites',
     });
     if (!confirmed) return;
@@ -662,9 +684,9 @@ export default function ImportPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={MailX} size={34} />
+                <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Mail} size={34} />
                 <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT, lineHeight: 1.5 }}>
-                  No one is emailed automatically. You send Gavelling invites when you are ready.
+                  Everyone you import gets a personal invitation link by email, automatically. Their registration attaches the moment they claim it.
                 </p>
               </div>
             </div>

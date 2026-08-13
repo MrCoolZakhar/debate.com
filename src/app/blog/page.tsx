@@ -1,20 +1,15 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import { articles } from './posts';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Resources & Guides',
   description: 'Practical guides for Model UN chairs and delegates: how to run a committee, manage the GSL, handle motions, and run great MUN sessions.',
-  alternates: { canonical: 'https://gavelling.com/blog' },
-  openGraph: {
-    title: 'MUN Resources & Guides: Gavelling Blog',
-    description: 'Practical guides for Model UN chairs and delegates.',
-    url: 'https://gavelling.com/blog',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'website',
-  },
-};
+  path: '/blog',
+  ogTitle: 'MUN Resources & Guides: Gavelling Blog',
+  ogDescription: 'Practical guides for Model UN chairs and delegates.',
+});
 
 const itemListSchema = {
   '@context': 'https://schema.org',

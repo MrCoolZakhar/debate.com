@@ -7,6 +7,7 @@ import { Compass, Check, X, Mail, Plus, ChevronDown, CalendarDays, Globe2, Gavel
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import SiteNav from '@/components/SiteNav';
+import Loader from '@/components/Loader';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { Eyebrow, OUTFIT, MONO } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, EASE, NeuIconDisc } from '@/components/neu';
@@ -58,6 +59,15 @@ interface OrganizerInvite {
   conferenceName: string;
   acronym: string;
   slug: string;
+}
+
+interface ImportInvite {
+  application_id: string;
+  role: string;
+  invited_name: string | null;
+  claim_token: string;
+  conference: { slug: string; acronym: string; full_name: string; logo_url: string | null; start_date: string | null; end_date: string | null; dates_tbd: boolean; city: string; country: string };
+  allocation: { committee: string; abbreviation: string | null; country_name: string; country_code: string } | null;
 }
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -444,6 +454,58 @@ function ChairInvitesSection({ invites, onRespond }: { invites: ChairInvite[]; o
   );
 }
 
+// ── Imported delegate invitations (pending, claimable by the signed-in user) ─
+// Not an accept/decline invite: it's a one-way claim, so this is a sibling of
+// InviteCardShell (same visual recipe) with a single OPEN INVITATION link into
+// the claim landing rather than the two-button accept/decline shell.
+
+function PendingImportInvitesSection({ invites }: { invites: ImportInvite[] }) {
+  if (invites.length === 0) return null;
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2.5 mb-3">
+        <Eyebrow>Pending Invitations</Eyebrow>
+        <CountChip n={invites.length} />
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {invites.map(inv => {
+          const subtitle = inv.allocation
+            ? `${inv.allocation.country_name} in ${inv.allocation.abbreviation || inv.allocation.committee}`
+            : inv.conference.full_name;
+          return (
+            <div
+              key={inv.application_id}
+              className="flex items-center gap-3.5 rounded-2xl px-4 py-3.5"
+              style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }}
+            >
+              <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Mail} size={40} />
+              <div className="flex-1 min-w-0">
+                <p className="font-black text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                  {inv.conference.acronym} invited you as {inv.role.replace(/-/g, ' ')}
+                </p>
+                <p className="text-xs truncate mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                  {subtitle}
+                </p>
+              </div>
+              <Link
+                href={`/invites/import/${inv.claim_token}`}
+                className="flex-shrink-0 inline-flex items-center gap-2 rounded-full py-2 px-4 font-bold text-xs focus:outline-none"
+                style={{
+                  background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+                  color: NEU.gold, textDecoration: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
+                  boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
+                }}
+              >
+                OPEN INVITATION
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Organizer invites (pending, awaiting the signed-in user's response) ────
 
 function OrganizerInviteCard({ invite, onRespond }: { invite: OrganizerInvite; onRespond: (invite: OrganizerInvite, accept: boolean) => void }) {
@@ -517,6 +579,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   const [continent, setContinent] = useState<'all' | Continent>('all');
   const [chairInvites, setChairInvites] = useState<ChairInvite[]>([]);
   const [organizerInvites, setOrganizerInvites] = useState<OrganizerInvite[]>([]);
+  const [importInvites, setImportInvites] = useState<ImportInvite[]>([]);
   const [acceptedToast, setAcceptedToast] = useState(false);
 
   const tabParam = searchParams.get('tab');
@@ -577,6 +640,13 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
       };
     });
     setChairInvites(invites);
+  }, [user, session]);
+
+  const loadImportInvites = useCallback(async () => {
+    if (!user || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase.rpc('my_pending_import_invites');
+    setImportInvites((data ?? []) as unknown as ImportInvite[]);
   }, [user, session]);
 
   async function handleRespondInvite(invite: ChairInvite, accept: boolean) {
@@ -837,7 +907,8 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     loadAll();
     loadChairInvites();
     loadOrganizerInvites();
-  }, [authLoading, user, loadAll, loadChairInvites, loadOrganizerInvites]);
+    loadImportInvites();
+  }, [authLoading, user, loadAll, loadChairInvites, loadOrganizerInvites, loadImportInvites]);
 
   // ── Filtering (timeframe → continent) within the active tab ────────────────
 
@@ -873,7 +944,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         className={`flex items-center justify-center ${embedded ? 'py-24' : 'min-h-screen'}`}
         style={embedded ? undefined : { backgroundColor: NEU.base }}
       >
-        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+        <Loader size={72} label="Loading your conferences" />
       </div>
     );
   }
@@ -962,6 +1033,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
 
+        {activeTab === 'all' && <PendingImportInvitesSection invites={importInvites} />}
         {activeTab === 'chair' && <ChairInvitesSection invites={chairInvites} onRespond={handleRespondInvite} />}
         {activeTab === 'organizer' && <OrganizerInvitesSection invites={organizerInvites} onRespond={handleRespondOrganizerInvite} />}
 
@@ -1044,7 +1116,7 @@ export default function MyConferencesClient({ embedded = false }: { embedded?: b
           className={`flex items-center justify-center ${embedded ? 'py-24' : 'min-h-screen'}`}
           style={embedded ? undefined : { backgroundColor: NEU.base }}
         >
-          <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+          <Loader size={72} label="Loading your conferences" />
         </div>
       }
     >

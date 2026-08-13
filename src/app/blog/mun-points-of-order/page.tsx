@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Points of Order in MUN: When to Use Them and When Not To',
-  description: 'A complete guide to points of order in Model UN: what qualifies, how to raise them correctly, how chairs should rule, and the difference between a point of order and a point of information.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-points-of-order' },
-  openGraph: {
-    title: 'Points of Order in MUN: When to Use Them and When Not To',
-    description: 'Master points of order in MUN, for delegates and chairs.',
-    url: 'https://gavelling.com/blog/mun-points-of-order',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A complete guide to points of order in Model UN: what qualifies, how to raise them correctly, how chairs should rule, and the difference between a point of order and a point of information.',
+  path: '/blog/mun-points-of-order',
+  ogDescription:
+    'Master points of order in MUN, for delegates and chairs.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

@@ -7,10 +7,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
 import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
-import { TranslationKey } from '@/lib/translations';
 import ChatPanel from '@/components/ChatPanel';
-import { useSettingsStore, DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
-import { computeObjectiveScore, getScoringConfig, type LedgerRow } from '@/lib/scoring';
+import { computeObjectiveScore, getScoringConfig } from '@/lib/scoring';
+import { selectDelegateTips } from '@/lib/delegateTips';
 import { getDelegateFeedback } from '@/lib/committeeService';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
@@ -19,15 +18,17 @@ import { Emoji } from '@/components/Emoji';
 import { FlagImg } from '@/components/FlagImg';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
-import { getCommitteeFlags, sponsorLabel } from '@/lib/committeeFlags';
-import { chatUnreadTotal } from '@/lib/chatConversations';
+import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFlags';
+import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
+import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
+import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
+import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
   getCurrentSpeakerRow,
   getDelegatesList,
   getSpeakersLists,
-  getMessagesList,
   getDocumentsList,
   getPendingMotionsList,
   addToSpeakersList as addToSpeakersListInDB,
@@ -151,33 +152,10 @@ function parseSpeakingLogs(committee: Committee): SpeakingLogEntry[] {
     .map((e) => e as SpeakingLogEntry);
 }
 
-// Point calculation — total/rows come from the shared objective scorer (single source of
-// truth). Tiers are removed; only universal activity-based tips remain.
-function calcPoints(logs: SpeakingLogEntry[], committee: Committee, country: string, t: (key: TranslationKey) => string): {
-  total: number;
-  rows: LedgerRow[];
-  tips: string[];
-} {
-  const { total, rows } = computeObjectiveScore(committee, country);
-
-  const myLogs = logs.filter((l) => l.country === country);
-  const gslSpeeches = myLogs.filter((l) => l.context === 'speakers-list');
-  const caucusSpeeches = myLogs.filter((l) => l.context === 'moderated-caucus' || l.context === 'unmoderated-caucus');
-  const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
-  const myDocs = (committee.documents ?? []).filter((d) => d.sponsors.includes(country));
-  const wps = myDocs.filter((d) => d.type === 'working-paper');
-  const drs = myDocs.filter((d) => d.type === 'draft-resolution');
-
-  // Universal conditional tips (no tier buckets)
-  const tips: string[] = [];
-  if (gslSpeeches.length === 0) tips.push(t('delegate_tip_gsl_not_spoken'));
-  if (caucusSpeeches.length === 0 && committee.phase !== 'pre-session') tips.push(t('delegate_tip_no_caucus'));
-  if (wps.length === 0 && drs.length === 0) tips.push(t('delegate_tip_no_docs'));
-  if (totalSeconds > 0 && totalSeconds < 45) tips.push(t('delegate_tip_speaking_time'));
-  if (drs.length === 0 && wps.length > 0) tips.push(t('delegate_tip_have_wp'));
-
-  return { total, rows, tips };
-}
+// Tips no longer live here. They are chosen in `selectDelegateTips`
+// (src/lib/delegateTips.ts) from this delegation's own per-source ledger, so a
+// delegate is coached on the categories they are actually short on. Points come
+// straight from the shared objective scorer, which stays the single source of truth.
 
 // ── Co-Sponsors input ─────────────────────────────────────────────────────────
 function SponsorsInput({
@@ -309,6 +287,14 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Submission limits were only ever enforced in the chair's DocumentsModal, which
+  // read them from the localStorage settings store. The delegate page never hydrates
+  // that store, so the delegates the cap was aimed at could submit without bound.
+  // docLimitReached reads committee.dbSettings, so both paths now agree.
+  const existingCount = docCount(committee, docType);
+  const limit = docLimit(committee, docType);
+  const limitReached = docLimitReached(committee, docType);
+
   // Upload the PDF to Supabase Storage and store only the public URL — NOT the file bytes.
   // Previously this used FileReader.readAsDataURL, base64-inlining the whole PDF into the
   // documents row. That row is pulled by getCommitteeByCode on every realtime refetch, so a
@@ -328,7 +314,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || sending || uploading) return;
+    if (!title.trim() || sending || uploading || limitReached) return;
     setSending(true);
     await addDocumentInDB(committee.id, {
       type: docType,
@@ -364,7 +350,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
             {(['working-paper', 'draft-resolution'] as DocumentType[]).map((dt) => (
               <button key={dt} onClick={() => setDocType(dt)}
                 className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${docType === dt ? 'bg-[#DDD4C0] border-[#1B3828] text-[#1C1410]' : 'bg-[#FAF8F3] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
-                {dt === 'working-paper' ? t('delegate_doc_type_wp') : t('delegate_doc_type_dr')}
+                {docName(committee, dt, 'singular', dt === 'working-paper' ? t('delegate_doc_type_wp') : t('delegate_doc_type_dr'))}
               </button>
             ))}
           </div>
@@ -404,11 +390,26 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
             }} />
         </div>
 
-        <button onClick={handleSubmit} disabled={!title.trim() || sending || uploading}
-          className="w-full text-white py-3 rounded-xl text-sm font-black transition-colors focus:outline-none"
-          style={{ backgroundColor: !title.trim() || sending || uploading ? '#DDD4C0' : '#1B3828', color: !title.trim() || sending || uploading ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
-          {sending ? t('delegate_doc_submitting') : t('delegate_doc_submit_to_chair')}
-        </button>
+        {limitReached && (
+          <p className="text-xs text-center" style={{ color: '#8B2020' }}>
+            {t('documents_limit_exceeded')
+              .replace('{current}', String(existingCount))
+              .replace('{limit}', String(limit))
+              .replace('{type}', docName(committee, docType, 'plural', docType === 'working-paper' ? t('documents_type_wp') : t('documents_type_dr')))}
+          </p>
+        )}
+        {(() => {
+          const disabled = !title.trim() || sending || uploading || limitReached;
+          return (
+            <button onClick={handleSubmit} disabled={disabled}
+              className="w-full text-white py-3 rounded-xl text-sm font-black transition-colors focus:outline-none"
+              style={{ backgroundColor: disabled ? '#DDD4C0' : '#1B3828', color: disabled ? '#9A8A78' : 'white', letterSpacing: '0.05em' }}>
+              {limitReached
+                ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit))
+                : sending ? t('delegate_doc_submitting') : t('delegate_doc_submit_to_chair')}
+            </button>
+          );
+        })()}
       </div>
 
     </div>
@@ -422,7 +423,12 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
   const cfg = getScoringConfig(committee);
   const hideScores = cfg.hideScoresFromDelegates === true;
   const logs = parseSpeakingLogs(committee);
-  const { total, rows, tips } = calcPoints(logs, committee, country, t);
+  const { total, rows } = computeObjectiveScore(committee, country);
+  // Guidance is deliberately NOT gated on `hideScores` — it never states a number or a
+  // rank, so a chair who hides scores still gets their delegates coached. The one key
+  // that would surface a scoring-config label they cannot otherwise see
+  // (`delegate_tip_custom_source`) is suppressed inside the selector.
+  const tips = selectDelegateTips(committee, country, language, t);
   const myLogs = logs.filter((l) => l.country === country);
 
   // Category subtotals (summary) — delegates see grouped categories, never the chair's itemized ledger.
@@ -455,7 +461,7 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
   // Points per country for leaderboard
   const pointsByCountry: Record<string, number> = {};
   ranking.slice(0, 10).forEach(({ country: c }) => {
-    pointsByCountry[c] = calcPoints(logs, committee, c, t).total;
+    pointsByCountry[c] = computeObjectiveScore(committee, c).total;
   });
 
   return (
@@ -603,9 +609,9 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
           <div className="space-y-2">
             {tips.map((tip) => (
-              <div key={tip} className="flex gap-2 text-sm" style={{ color: '#6A5A4A' }}>
+              <div key={tip.key} className="flex gap-2 text-sm" style={{ color: '#6A5A4A' }}>
                 <span className="shrink-0">→</span>
-                <span>{tip.replace(/^\p{Emoji}\s*/u, '')}</span>
+                <span>{tip.text}</span>
               </div>
             ))}
           </div>
@@ -660,7 +666,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [gslDenied, setGslDenied] = useState(false);
   const prevPendingRef = useRef<Committee['pendingMotions']>([]);
 
-  const { getSettings } = useSettingsStore();
+  // NOTE: this page deliberately holds NO reference to useSettingsStore. It never
+  // hydrates that store from the DB, so getSettings() here silently returns
+  // DEFAULT_SETTINGS (AGENTS.md rule 14). Every setting this page needs is read
+  // as a pure function of the committee row: getCommitteeFlags / sponsorLabel /
+  // motionNames (committeeFlags), getScoringConfig (scoring), docName + docLimit
+  // (docNames).
+
+  // Realtime does not replay events missed while the socket was down — the normal case for a
+  // backgrounded phone. Catch chat up on reconnect, tab-visible and back-online.
+  const onRealtimeStatus = useReSubscribeCatchUp(setCommittee);
+  useChatCatchUp(committee?.id, setCommittee);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -722,8 +738,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             return;
           }
           if (table === 'messages') {
-            const messages = await getMessagesList(cid);
-            setCommittee((prev) => prev ? { ...prev, messages } : prev);
+            await catchUpMessages(cid, setCommittee);
             return;
           }
           if (table === 'documents') {
@@ -754,14 +769,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               setSessionEnded(false);
               setSessionSuspended(false);
             }
-            setCommittee(updated);
+            // Messages are append-only: merge rather than replace so this full refetch can
+            // never drop a message that the scoped messages handler already delivered.
+            setCommittee((prev) => prev
+              ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages) }
+              : updated);
           }
-        });
+        }, (status) => onRealtimeStatus(cid, status));
       }
     }
     load();
     return () => unsubscribe?.();
-  }, [code]);
+  }, [code, onRealtimeStatus]);
 
   // Conference-session access guard. Runs independently of the committee load. For a standalone
   // session this resolves to 'allowed' (anonymous). For a conference session it requires a
@@ -794,15 +813,20 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => { document.title = 'Gavelling'; };
   }, [committee?.name, country]);
 
+  // Keyed by READER (this delegation), not just by committee — otherwise this tab and any
+  // chair tab in the same browser overwrite each other's read-state. See
+  // src/lib/chatReadKey.ts.
   useEffect(() => {
     if (!committee) return;
-    try { const stored = localStorage.getItem(`chat-read-${committee.code}`); if (stored) setChatReadCounts(JSON.parse(stored)); } catch {}
-  }, [committee?.code]);
+    const stored = loadChatReadCounts(committee.code, { role: 'delegate', identity: country });
+    if (stored) setChatReadCounts(stored);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.code, country]);
 
   useEffect(() => {
     if (!committee) return;
-    try { localStorage.setItem(`chat-read-${committee.code}`, JSON.stringify(chatReadCounts)); } catch {}
-  }, [chatReadCounts, committee?.code]);
+    saveChatReadCounts(committee.code, { role: 'delegate', identity: country }, chatReadCounts);
+  }, [chatReadCounts, committee?.code, country]);
 
   // Prevent browser back button from leaving an active session.
   // When sessionEnded or sessionSuspended become true the effect re-runs,
@@ -918,7 +942,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     );
   }
 
-  const settings = getSettings(committee.code);
   const requireChairApproval = getCommitteeFlags(committee).requireChairApproval;
   const myDelegate = committee.delegates.find((d) => d.country === country);
   const isAbsent = !myDelegate || myDelegate.status === 'absent';
@@ -927,38 +950,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const isCurrentSpeaker = committee.currentSpeaker?.country === country;
   const changesLeft = myDelegate ? statusChangesRemaining(committee.id, country) : 0;
 
-  const enabledMotionTypes = {
-    moderated: settings.motionModeratedCaucus,
-    unmoderated: settings.motionUnmoderatedCaucus,
-    consultation: settings.motionCoW,
-    tour: settings.motionTourDeTable,
-  };
+  // The chair's renamed motion names, read off the committee row so they reach this
+  // device whether or not a caucus is running (AGENTS.md rule 14 — never getSettings here).
+  const mn = motionNames(committee, language);
 
   const phaseDisplay = (() => {
-    const mn = language === 'ar' ? {
-      moderated: 'حوار منهجي',
-      unmoderated: 'حوار حر',
-      consultation: 'مشاورات الهيئة',
-      tour: 'جولة المتحدثين',
-      suspendDebate: 'تعليق النقاش',
-      endDebate: 'إنهاء النقاش',
-    } : language === 'fr' ? {
-      moderated: 'Caucus modéré',
-      unmoderated: 'Caucus non modéré',
-      consultation: "Consultation de l'assemblée",
-      tour: 'Tour de table',
-      suspendDebate: 'Suspension du débat',
-      endDebate: 'Clôture du débat',
-    } : language === 'es' ? {
-      moderated: 'Cáucus Moderado',
-      unmoderated: 'Cáucus No Moderado',
-      consultation: 'Consulta de Gabinete',
-      tour: 'Round Robin',
-      suspendDebate: 'Suspender Debate',
-      endDebate: 'Cerrar Debate',
-    } : { ...DEFAULT_MOTION_NAMES };
-    // Prefer the chair's (possibly renamed) motion label, which the caucus record syncs to
-    // every device — so custom names like "Directive Debate" show to delegates, not just the dais.
+    // `caucus.motionLabel` still wins where it is set: it records WHICH motion opened
+    // the caucus, and a Tour de Table is stored as a moderated caucus, so the caucus
+    // type alone would mislabel it. `mn` is the fallback and covers every other surface.
     if (committee.phase === 'moderated-caucus') return committee.caucus?.motionLabel || mn.moderated || PHASE_LABELS['moderated-caucus'];
     if (committee.phase === 'unmoderated-caucus') return committee.caucus?.motionLabel || mn.unmoderated || PHASE_LABELS['unmoderated-caucus'];
     return PHASE_LABEL[committee.phase] ?? PHASE_LABELS[committee.phase] ?? committee.phase;
@@ -1209,7 +1208,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
                 <div className="rounded-xl p-5 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{committee.caucus.motionLabel || t('delegate_moderated_caucus_label')}</p>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{committee.caucus.motionLabel || mn.moderated || t('delegate_moderated_caucus_label')}</p>
                   <p className="text-xl mt-2" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   {committee.caucus.currentSpeaker && (
                     <div className="mt-4">
@@ -1258,7 +1257,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
                 </div>
                 <div className="rounded-xl p-6 text-center space-y-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{committee.caucus.motionLabel || t('delegate_unmoderated_caucus_label')}</p>
+                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{committee.caucus.motionLabel || mn.unmoderated || t('delegate_unmoderated_caucus_label')}</p>
                   {committee.caucus.purpose && (
                     <p className="text-xl" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
                   )}
@@ -1332,7 +1331,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   {committee.caucus && (
                     <div className="mt-3">
                       <div className="text-sm text-[#6A5A4A] mb-2">
-                        {committee.caucus.type === 'moderated' ? t('delegate_moderated') : t('delegate_unmoderated')} {language === 'ar' ? '' : language === 'es' ? 'Cáucus' : 'Caucus'}
+                        {committee.caucus.motionLabel || (committee.caucus.type === 'moderated' ? mn.moderated : mn.unmoderated)}
                         {committee.caucus.purpose && `: ${committee.caucus.purpose}`}
                       </div>
                       <div className="text-3xl font-black font-mono text-[#1C1410]">
@@ -1510,9 +1509,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     return (
                       <div className="p-4 max-w-2xl mx-auto space-y-6">
                         <div className="space-y-3">
-                          <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_draft_resolutions')}</h2>
+                          <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{docName(committee, 'draft-resolution', 'plural', t('delegate_draft_resolutions')).toUpperCase()}</h2>
                           {drs.length === 0 ? (
-                            <div className="text-center py-4 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_drs')}</div>
+                            <div className="text-center py-4 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_docs_floor', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab')) })}</div>
                           ) : (
                             drs.map((doc) => {
                               const isPresenting = doc.status === 'introduced';
@@ -1547,9 +1546,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                           )}
                         </div>
                         <div className="space-y-3">
-                          <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_working_papers')}</h2>
+                          <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{docName(committee, 'working-paper', 'plural', t('delegate_working_papers')).toUpperCase()}</h2>
                           {wps.length === 0 ? (
-                            <div className="text-center py-4 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_wps')}</div>
+                            <div className="text-center py-4 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_docs_submitted', { doc: docName(committee, 'working-paper', 'plural', t('documents_working_papers_tab')) })}</div>
                           ) : (
                             wps.map((doc) => (
                               <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>

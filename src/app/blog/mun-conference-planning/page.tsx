@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'How to Plan a MUN Conference: Step-by-Step for Schools and Clubs',
-  description: 'A complete step-by-step guide to planning a Model UN conference from scratch: timeline, committees, registration, background guides, technology, and logistics.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-conference-planning' },
-  openGraph: {
-    title: 'How to Plan a MUN Conference: Step-by-Step for Schools and Clubs',
-    description: 'Plan your first MUN conference with this complete organiser guide.',
-    url: 'https://gavelling.com/blog/mun-conference-planning',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A complete step-by-step guide to planning a Model UN conference from scratch: timeline, committees, registration, background guides, technology, and logistics.',
+  path: '/blog/mun-conference-planning',
+  ogDescription:
+    'Plan your first MUN conference with this complete organiser guide.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

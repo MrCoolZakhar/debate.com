@@ -19,6 +19,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { NEU, NeuButton } from '@/components/neu';
+import Loader from '@/components/Loader';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import {
   POOL_MEMBER_SELECT, pledgeSatisfied, pledgeText, MemberAvatar,
@@ -380,7 +381,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
     return (
       <SectionCard>
         <div className="flex justify-center py-6">
-          <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          <Loader size={48} />
         </div>
       </SectionCard>
     );

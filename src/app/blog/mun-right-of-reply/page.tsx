@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Right of Reply in MUN: When and How to Use It',
-  description: 'A complete guide to the right of reply in Model UN: what qualifies, how to request it, chair discretion, and how to use it effectively without abusing it.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-right-of-reply' },
-  openGraph: {
-    title: 'Right of Reply in MUN: When and How to Use It',
-    description: 'Everything you need to know about the right of reply in MUN.',
-    url: 'https://gavelling.com/blog/mun-right-of-reply',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'A complete guide to the right of reply in Model UN: what qualifies, how to request it, chair discretion, and how to use it effectively without abusing it.',
+  path: '/blog/mun-right-of-reply',
+  ogDescription:
+    'Everything you need to know about the right of reply in MUN.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

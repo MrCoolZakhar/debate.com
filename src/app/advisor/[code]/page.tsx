@@ -11,13 +11,14 @@ import {
   getCurrentSpeakerRow,
   getDelegatesList,
   getSpeakersLists,
-  getMessagesList,
   getDocumentsList,
   getPendingMotionsList,
 } from '@/lib/committeeService';
+import { mergeMessagesById } from '@/lib/chatConversations';
+import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
-import { DEFAULT_MOTION_NAMES } from '@/lib/settingsStore';
+import { getCommitteeFlags, motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
@@ -50,28 +51,13 @@ function ExpandedDelegateCard({
 }) {
   const { language } = useLanguage();
   const t = useT();
-  const mn = language === 'ar' ? {
-    moderated: 'حوار منهجي',
-    unmoderated: 'حوار حر',
-    consultation: 'مشاورات الهيئة',
-    tour: 'جولة المتحدثين',
-    suspendDebate: 'تعليق النقاش',
-    endDebate: 'إنهاء النقاش',
-  } : language === 'fr' ? {
-    moderated: 'Caucus modéré',
-    unmoderated: 'Caucus non modéré',
-    consultation: "Consultation de l'assemblée",
-    tour: 'Tour de table',
-    suspendDebate: 'Suspension du débat',
-    endDebate: 'Clôture du débat',
-  } : language === 'es' ? {
-    moderated: 'Cáucus Moderado',
-    unmoderated: 'Cáucus No Moderado',
-    consultation: 'Consulta de Gabinete',
-    tour: 'Round Robin',
-    suspendDebate: 'Suspender Debate',
-    endDebate: 'Cerrar Debate',
-  } : { ...DEFAULT_MOTION_NAMES };
+  // Chair-renamed motion names, resolved off the committee row. This page never
+  // hydrates the settings store (AGENTS.md rule 14), so this is the only read that
+  // works here — and unlike caucus.motionLabel it works with no caucus running.
+  const mn = motionNames(committee, language);
+  // Nudges are chat messages. With chat disabled a delegate can see them but cannot
+  // reply, so the affordance goes away with the rest of chat.
+  const chatDisabled = getCommitteeFlags(committee).disableChat;
   const [nudgeSent, setNudgeSent] = useState<string | null>(null);
 
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
@@ -97,6 +83,7 @@ function ExpandedDelegateCard({
     : null;
 
   const handleNudge = (nudgeKey: string) => {
+    if (chatDisabled) return;   // belt-and-braces: the buttons are not rendered either
     const msg = t(nudgeKey as any);
     sendMessageDB(committee.id, 'Faculty Advisor', msg, committee.code, undefined, true, delegate.country);
     setNudgeSent(msg);
@@ -118,6 +105,7 @@ function ExpandedDelegateCard({
       moderated: mn.moderated,
       unmoderated: mn.unmoderated,
       consultation: mn.consultation,
+      custom: mn.custom,
       tour: mn.tour,
       'suspend-debate': mn.suspendDebate,
       'end-debate': mn.endDebate,
@@ -159,6 +147,18 @@ function ExpandedDelegateCard({
         </div>
       </div>
 
+      {/* Nudges are chat messages under the hood. When the chairs disable chat the
+          delegate can still receive them but has no way to answer, so the whole
+          affordance is replaced by a short explanation. */}
+      {chatDisabled ? (
+        <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9A8A78" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h9" />
+            <line x1="2" y1="2" x2="22" y2="22" />
+          </svg>
+          <p className="text-xs" style={{ color: '#9A8A78' }}>Nudges are off — the chairs have disabled chat for this committee.</p>
+        </div>
+      ) : (
       <div className="flex flex-col items-center">
         <p className="text-xs font-mono uppercase tracking-wider mb-2" style={{ color: '#9A8A78' }}>{t('advisor_send_nudge')}</p>
         <div className="flex gap-2 flex-wrap justify-center">
@@ -179,6 +179,7 @@ function ExpandedDelegateCard({
           <p className="text-xs font-semibold mt-2" style={{ color: '#1B3828' }}>{t('advisor_nudge_sent').replace('{msg}', nudgeSent ?? '')}</p>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -266,6 +267,11 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Realtime does not replay events missed while the socket was down. Catch chat up on
+  // reconnect, tab-visible and back-online.
+  const onRealtimeStatus = useReSubscribeCatchUp(setCommittee);
+  useChatCatchUp(committee?.id, setCommittee);
+
   // Conference-session access guard (#8 / #4). Standalone sessions stay anonymous; a
   // conference session requires an advisor/observer or organizer (conference-wide).
   useEffect(() => {
@@ -339,8 +345,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           return;
         }
         if (table === 'messages') {
-          const messages = await getMessagesList(cid);
-          setCommittee((prev) => prev ? { ...prev, messages } : prev);
+          await catchUpMessages(cid, setCommittee);
           return;
         }
         if (table === 'documents') {
@@ -354,12 +359,16 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           return;
         }
         const updated = await getCommitteeByCode(upperCode);
-        if (updated) setCommittee(updated);
-      });
+        // Messages are append-only: merge rather than replace so this full refetch can never
+        // drop a message the scoped messages handler already delivered.
+        if (updated) setCommittee((prev) => prev
+          ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages) }
+          : updated);
+      }, (status) => onRealtimeStatus(cid, status));
     });
 
     return () => { unsub?.(); };
-  }, [code]);
+  }, [code, onRealtimeStatus]);
 
   if (accessState === 'signin') {
     return (
@@ -440,28 +449,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const isUnmoderatedCaucus = committee.phase === 'unmoderated-caucus';
   const isCaucus = isModeratedCaucus || isUnmoderatedCaucus;
 
-  const advisorMotionNames = language === 'ar' ? {
-    moderated: 'حوار منهجي',
-    unmoderated: 'حوار حر',
-    consultation: 'مشاورات الهيئة',
-    tour: 'جولة المتحدثين',
-    suspendDebate: 'تعليق النقاش',
-    endDebate: 'إنهاء النقاش',
-  } : language === 'fr' ? {
-    moderated: 'Caucus modéré',
-    unmoderated: 'Caucus non modéré',
-    consultation: "Consultation de l'assemblée",
-    tour: 'Tour de table',
-    suspendDebate: 'Suspension du débat',
-    endDebate: 'Clôture du débat',
-  } : language === 'es' ? {
-    moderated: 'Cáucus Moderado',
-    unmoderated: 'Cáucus No Moderado',
-    consultation: 'Consulta de Gabinete',
-    tour: 'Round Robin',
-    suspendDebate: 'Suspender Debate',
-    endDebate: 'Cerrar Debate',
-  } : { ...DEFAULT_MOTION_NAMES };
+  // Same DB-backed resolver the delegate page uses, so a chair's rename shows here
+  // too — including for Suspend / End Debate, which no caucus record ever carries.
+  const advisorMotionNames = motionNames(committee, language);
   const advisorPhaseDisplay = (() => {
     // Prefer the chair's (possibly renamed) motion label, synced to every device via the caucus record.
     if (committee.phase === 'moderated-caucus') return committee.caucus?.motionLabel || advisorMotionNames.moderated;

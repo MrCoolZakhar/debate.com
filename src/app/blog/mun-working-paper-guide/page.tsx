@@ -1,21 +1,18 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import React from 'react';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'MUN Working Paper Guide: How to Draft, Merge, and Introduce',
-  description: 'How to write and submit a MUN working paper: format, drafting tips, merging blocs, and transitioning from working paper to draft resolution.',
-  alternates: { canonical: 'https://gavelling.com/blog/mun-working-paper-guide' },
-  openGraph: {
-    title: 'MUN Working Paper Guide: How to Draft, Merge, and Introduce',
-    description: 'The complete guide to MUN working papers.',
-    url: 'https://gavelling.com/blog/mun-working-paper-guide',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  description:
+    'How to write and submit a MUN working paper: format, drafting tips, merging blocs, and transitioning from working paper to draft resolution.',
+  path: '/blog/mun-working-paper-guide',
+  ogDescription:
+    'The complete guide to MUN working papers.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',

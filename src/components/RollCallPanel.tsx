@@ -6,10 +6,9 @@ import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matc
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   setPhase as setPhaseInDB,
-  setDelegateStatus as setDelegateStatusInDB,
-  removeFromSpeakersList as removeFromSpeakersListInDB,
   setDelegateObserver as setDelegateObserverInDB,
 } from '@/lib/committeeService';
+import { liveCaucus } from '@/components/FeedbackLogPanel';
 import { Megaphone } from 'lucide-react';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
@@ -205,7 +204,15 @@ function FullListPopup({
       style={{ background: 'rgba(5, 8, 20, 0.80)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#EDE7D8] border-2 border-[#C8BAA8] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+      {/* #fit-root scaling trap: FitToScreen wraps this page in a `transform: scale()`d
+          box of FIXED height (820px). A transformed ancestor is the containing block for
+          `position: fixed` descendants, so the overlay above is 820px tall — but `vh`
+          still resolves against the REAL viewport. On any window taller than 820px a
+          `max-h-[..vh]` card is sized LARGER than the box it lives in and, being a centred
+          flex item, overflows equally top and bottom — pushing the header and close button
+          off the top of the screen. Always size against the containing block with a
+          PERCENTAGE here, never vh (matches DocumentsModal / ScoreboardPanel). */}
+      <div className="bg-[#EDE7D8] border-2 border-[#C8BAA8] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden max-h-[92%] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#DDD4C0] shrink-0">
           <h3 className="font-black text-[#1C1410] text-base">{title}</h3>
           <div className="flex items-center gap-3">
@@ -213,7 +220,7 @@ function FullListPopup({
             <button onClick={onClose} className="text-[#9A8A78] hover:text-[#1C1410] text-xl leading-none">✕</button>
           </div>
         </div>
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1 min-h-0">
           {list.length === 0 ? (
             <div className="px-5 py-8 text-center text-[#9A8A78] text-sm">No speakers queued</div>
           ) : (
@@ -265,6 +272,11 @@ export function MajorityPie({ arcFill, color, label }: {
   );
 }
 
+// How long an optimistic status override survives without the committee row
+// confirming it. Long enough to cover a slow write, short enough that a failed
+// write cannot mask another chair's change for the rest of the session.
+const OPTIMISTIC_TTL_MS = 8000;
+
 // ── Roll Call Panel ───────────────────────────────────────────────────────────
 function RollCallPanelInner({
   committee,
@@ -284,6 +296,7 @@ function RollCallPanelInner({
   isViewOnly = false,
   isTdT = false,
   isRoomOrderTdT = false,
+  hideIdentity = false,
   listView: listViewProp,
   onListViewChange,
 }: {
@@ -291,7 +304,13 @@ function RollCallPanelInner({
   onAddToList?: (delegateId: string) => void;
   onListIds?: Set<string>;
   onRemoveFromList?: (delegateId: string) => void;
-  /** Preferred over onStatusChange for toggle clicks, parent reads from a ref for rapid-click safety */
+  /**
+   * @deprecated Never called. Rapid-click safety now lives in this panel
+   * (pendingStatusRef), which is also the only place that knows an observer
+   * cycles absent → present → absent with no PV step — the parent's cycle
+   * handler does not, so wiring this up would break observer placards.
+   * The parent should drop the prop and its handler.
+   */
   onCycleStatus?: (delegateId: string) => void;
   onStatusChange?: (delegateId: string, status: DelegateStatus) => void;
   onPhaseChange?: (phase: string) => void;
@@ -305,6 +324,15 @@ function RollCallPanelInner({
   isViewOnly?: boolean;
   isTdT?: boolean;
   isRoomOrderTdT?: boolean;
+  /**
+   * Drop this panel's own committee name + topic heading, because the surface
+   * around it already states the committee's identity. The chair sidebar sets
+   * it: CommitteeIdentityBadge sits directly above and owns that identity, so
+   * leaving the heading in printed the committee twice, one line apart, with a
+   * border between the two. The full-screen pre-session roll call has no badge
+   * above it and keeps the heading (the default).
+   */
+  hideIdentity?: boolean;
   listView?: 'az' | 'queue';
   onListViewChange?: (v: 'az' | 'queue') => void;
 }) {
@@ -320,14 +348,61 @@ function RollCallPanelInner({
   const listRef = useRef<HTMLDivElement>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  // Every optimistic status override, with the value we set and when we set it.
+  // Mutated synchronously on click so rapid taps cycle off the latest value
+  // rather than the one baked into the last render.
+  const pendingStatusRef = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
+  const [reconcileTick, setReconcileTick] = useState(0);
 
   useEffect(() => {
+    pendingStatusRef.current = {};
     setLocalStatuses({});
     setLocalObservers({});
   }, [committee.id]);
 
+  // ── Optimistic status reconciliation ────────────────────────────────────────
+  // `localStatuses` exists only so the slider moves the instant it is tapped. It
+  // MUST expire: an override that lives until the committee changes makes this
+  // device ignore every later change another chair makes to that delegate, so the
+  // present count, the majority pies and the quorum warning silently diverge on a
+  // two-laptop dais.
+  // Rule: drop an override as soon as the incoming committee row reports the same
+  // value we optimistically set (our write landed — hand control back to the
+  // authoritative value), or after OPTIMISTIC_TTL_MS if it never lands (backstop
+  // for a failed write). Either way a genuine remote change becomes visible again.
+  useEffect(() => {
+    const pending = pendingStatusRef.current;
+    const ids = Object.keys(pending);
+    if (ids.length === 0) return;
+    const now = Date.now();
+    const statusById = new Map(committee.delegates.map((d) => [d.id, d.status]));
+    let changed = false;
+    let nextCheckIn = Infinity;
+    for (const id of ids) {
+      const entry = pending[id];
+      const dbStatus = statusById.get(id);
+      if (dbStatus === undefined || dbStatus === entry.value || now - entry.at >= OPTIMISTIC_TTL_MS) {
+        delete pending[id];
+        changed = true;
+      } else {
+        nextCheckIn = Math.min(nextCheckIn, OPTIMISTIC_TTL_MS - (now - entry.at));
+      }
+    }
+    if (changed) {
+      const rebuilt: Record<string, DelegateStatus> = {};
+      for (const [id, entry] of Object.entries(pending)) rebuilt[id] = entry.value;
+      setLocalStatuses(rebuilt);
+    }
+    // No committee update will arrive if the write failed — self-schedule the backstop.
+    if (nextCheckIn !== Infinity) {
+      const timer = setTimeout(() => setReconcileTick((n) => n + 1), nextCheckIn + 50);
+      return () => clearTimeout(timer);
+    }
+  }, [committee.delegates, reconcileTick]);
+
   const present = committee.delegates.filter((d) => (localStatuses[d.id] ?? d.status) !== 'absent').length;
   const total = committee.delegates.length;
+  const caucus = liveCaucus(committee);
 
   // Build a map: delegateId → position in GSL (1-indexed)
   // Current speaker is always #1; queue starts at 2 if there's a current speaker.
@@ -339,26 +414,37 @@ function RollCallPanelInner({
   (committee.speakersList ?? []).forEach((s, i) => {
     queuePositionMap.set(s.delegateId, i + queueOffset);
   });
-  // Caucus current speaker, only when committee.currentSpeaker is null (caucus mode)
-  if (!committee.currentSpeaker && committee.caucus?.currentSpeaker) {
-    const caucusCurrent = committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker);
+  // Caucus current speaker, only when committee.currentSpeaker is null (caucus mode).
+  // Guarded by liveCaucus: a leftover caucus JSONB (suspend/end-debate, or the gap
+  // between the two writes that end a caucus) would otherwise badge the OLD caucus
+  // speaker as position 1 while the committee is already back on the GSL.
+  if (!committee.currentSpeaker && caucus?.currentSpeaker) {
+    const caucusCurrent = committee.delegates.find((d) => d.country === caucus.currentSpeaker);
     if (caucusCurrent) queuePositionMap.set(caucusCurrent.id, 1);
   }
+
+  // Optimistic write, one DB round trip owned by the parent.
+  // The panel NEVER calls committeeService for a status — the parent's
+  // onStatusChange already writes it (and handles the GSL/caucus-queue removal
+  // when a delegate goes absent mid-session). Writing here too doubled every
+  // request: ~380 on "All Present" for a 190-seat GA.
+  const applyStatus = (id: string, next: DelegateStatus) => {
+    pendingStatusRef.current[id] = { value: next, at: Date.now() };
+    setLocalStatuses((prev) => ({ ...prev, [id]: next }));
+    onStatusChange?.(id, next);
+  };
 
   const cycleStatus = (id: string, current: DelegateStatus) => {
     const delegate = committee.delegates.find((d) => d.id === id);
     const isObserver = (localObservers[id] ?? delegate?.isObserver) === true;
+    // Rapid clicks: the ref holds the value set by the previous click, which the
+    // render that produced `current` has not necessarily seen yet.
+    const base = pendingStatusRef.current[id]?.value ?? current;
     // Observers cycle absent → present → absent (no present-voting).
     const next: DelegateStatus = isObserver
-      ? (current === 'absent' ? 'present' : 'absent')
-      : (current === 'absent' ? 'present' : current === 'present' ? 'present-voting' : 'absent');
-    setLocalStatuses((prev) => ({ ...prev, [id]: next }));
-    onStatusChange?.(id, next);
-    setDelegateStatusInDB(id, next, committee.code, committee.dbChairJoinSuffix ?? undefined);
-    if (!isRollCallPhase && next === 'absent' && queuePositionMap.has(id)) {
-      onRemoveFromList?.(id);
-      removeFromSpeakersListInDB(committee.id, id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-    }
+      ? (base === 'absent' ? 'present' : 'absent')
+      : (base === 'absent' ? 'present' : base === 'present' ? 'present-voting' : 'absent');
+    applyStatus(id, next);
   };
 
   const toggleObserver = (id: string, current: boolean) => {
@@ -369,43 +455,23 @@ function RollCallPanelInner({
     if (next) {
       const delegate = committee.delegates.find((d) => d.id === id);
       const cur = localStatuses[id] ?? delegate?.status;
-      if (cur === 'present-voting') {
-        setLocalStatuses((prev) => ({ ...prev, [id]: 'present' }));
-        onStatusChange?.(id, 'present');
-        setDelegateStatusInDB(id, 'present', committee.code, committee.dbChairJoinSuffix ?? undefined);
-      }
+      if (cur === 'present-voting') applyStatus(id, 'present');
     }
   };
 
-  const handleAllPresent = () => {
+  // Bulk set: localStatuses is flushed ATOMICALLY (one setState, one render) and
+  // the parent owns the writes — one per delegate, not two.
+  const setAllStatuses = (status: DelegateStatus) => {
     const newStatuses: Record<string, DelegateStatus> = {};
-    committee.delegates.forEach((d) => {
-      newStatuses[d.id] = 'present';
-      onStatusChange?.(d.id, 'present');
-      setDelegateStatusInDB(d.id, 'present', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    });
+    const at = Date.now();
+    committee.delegates.forEach((d) => { newStatuses[d.id] = status; pendingStatusRef.current[d.id] = { value: status, at }; });
     setLocalStatuses(newStatuses);
+    committee.delegates.forEach((d) => onStatusChange?.(d.id, status));
   };
 
-  const handleAllPresentVoting = () => {
-    const newStatuses: Record<string, DelegateStatus> = {};
-    committee.delegates.forEach((d) => {
-      newStatuses[d.id] = 'present-voting';
-      onStatusChange?.(d.id, 'present-voting');
-      setDelegateStatusInDB(d.id, 'present-voting', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    });
-    setLocalStatuses(newStatuses);
-  };
-
-  const handleClear = () => {
-    const newStatuses: Record<string, DelegateStatus> = {};
-    committee.delegates.forEach((d) => {
-      newStatuses[d.id] = 'absent';
-      onStatusChange?.(d.id, 'absent');
-      setDelegateStatusInDB(d.id, 'absent', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    });
-    setLocalStatuses(newStatuses);
-  };
+  const handleAllPresent = () => setAllStatuses('present');
+  const handleAllPresentVoting = () => setAllStatuses('present-voting');
+  const handleClear = () => setAllStatuses('absent');
 
   const handleBeginSession = () => {
     onPhaseChange?.('speakers-list');
@@ -434,8 +500,8 @@ function RollCallPanelInner({
   const currentSpeakerDelegate = committee.currentSpeaker?.delegateId
     ? committee.delegates.find((d) => d.id === committee.currentSpeaker!.delegateId) ?? null
     : null;
-  const caucusCurrentDelegate = (!committee.currentSpeaker && committee.caucus?.currentSpeaker)
-    ? committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker) ?? null
+  const caucusCurrentDelegate = (!committee.currentSpeaker && caucus?.currentSpeaker)
+    ? committee.delegates.find((d) => d.country === caucus.currentSpeaker) ?? null
     : null;
   const speakerAtTop = currentSpeakerDelegate ?? caucusCurrentDelegate;
   const finalQueueOrdered = speakerAtTop
@@ -463,12 +529,24 @@ function RollCallPanelInner({
         }
       }}
     >
-      <div className="px-4 pt-4 pb-3 shrink-0 relative z-10" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-        <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
-        {committee.topic && (
-          <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
-            <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('rollcall_topic')} </span>{committee.topic}
-          </p>
+      {/* hideIdentity: the surface above already states the committee (the chair
+          sidebar's CommitteeIdentityBadge). Repeating it here printed the name
+          twice, one line apart. The heading goes; the bottom border STAYS, and
+          it becomes the single seam under the whole masthead — badge and stats
+          row now sit inside one block instead of two bordered cards. */}
+      <div
+        className={`px-4 ${hideIdentity ? 'pt-1.5' : 'pt-4'} pb-3 shrink-0 relative z-10`}
+        style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}
+      >
+        {!hideIdentity && (
+          <>
+            <p className="text-lg font-black leading-tight truncate mb-0.5" style={{ color: '#EED98A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
+            {committee.topic && (
+              <p className="text-xs leading-snug line-clamp-2 mb-2" style={{ color: 'rgba(238,217,138,0.55)' }}>
+                <span className="font-semibold" style={{ color: 'rgba(238,217,138,0.7)' }}>{t('rollcall_topic')} </span>{committee.topic}
+              </p>
+            )}
+          </>
         )}
         <div className="flex items-center justify-between">
           <div className="flex gap-1.5">
@@ -499,7 +577,7 @@ function RollCallPanelInner({
           const isCurrentSpeaker = committee.currentSpeaker?.delegateId === d.id;
           const isCurrentSpeakerInPanel = queuePos === 1 && (
             committee.currentSpeaker?.delegateId === d.id ||
-            committee.caucus?.currentSpeaker === d.country
+            caucus?.currentSpeaker === d.country
           );
           const isUpNext = listView === 'queue' && isCurrentSpeakerInPanel;
 
@@ -584,7 +662,7 @@ function RollCallPanelInner({
                   {queuePos !== null && !isRoomOrderTdT && (
                     <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-0.5 rounded-full flex items-center justify-center font-black leading-none text-[10px]"
                       style={{ backgroundColor: '#EDE7D8', color: '#1B3828', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
-                      {queuePos === 1 && (committee.currentSpeaker?.delegateId === d.id || committee.caucus?.currentSpeaker === d.country) ? '★' : queuePos <= 99 ? queuePos : '99+'}
+                      {isCurrentSpeakerInPanel ? '★' : queuePos <= 99 ? queuePos : '99+'}
                     </div>
                   )}
                 </div>
@@ -628,7 +706,9 @@ function RollCallPanelInner({
             disabled={present < 1}
             className="w-full disabled:opacity-40 disabled:cursor-not-allowed py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all active:scale-[0.98]" style={{ backgroundColor: '#EDE7D8', color: '#1B3828' }} onMouseEnter={(e) => { if ((e.currentTarget as HTMLButtonElement).disabled) return; (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px rgba(237,231,216,0.3)'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
           >
-            {present >= 1 ? t('rollcall_begin_session') : t('rollcall_add_delegate')}
+            {/* With delegates in the room but none marked present, the blocker is the
+                roll call, not the roster — "Add at least 1 delegate" was simply wrong. */}
+            {present >= 1 ? t('rollcall_begin_session') : total === 0 ? t('rollcall_add_delegate') : t('voting_mark_present')}
           </button>
         )}
       </div>

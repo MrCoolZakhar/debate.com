@@ -143,32 +143,113 @@ export const PRESET_EMBLEM_PICKS: PresetEmblem[] = (() => {
 
 // Match a committee's name + abbreviation to a preset emblem logo, or null.
 // Abbreviation is weighted first (exact acronym), then name substring.
-export function matchPresetEmblem(name: string | null | undefined, abbreviation?: string | null): string | null {
-  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-  const abbr = abbreviation ? norm(abbreviation) : '';
+//
+// This is the ONLY emblem resolver for a standalone session — a session
+// `committees` row has no logo column, so a chair who starts "UN Security
+// Council" gets the real UN mark purely because this function recognises the
+// name they typed. It therefore has to survive what chairs actually type, not
+// just the canonical preset strings:
+//   • punctuation — "UNSC (Historical)", "Security-Council", "WHO — 1948",
+//     "G-20". Every non-alphanumeric run collapses to a single space BEFORE
+//     matching, so neither the phrase aliases ("security council") nor the
+//     word-boundary acronym aliases are blocked by a dash, colon or bracket.
+//   • dotted acronyms — "U.N.S.C." normalises to "u n s c", so runs of
+//     CONSECUTIVE single characters are rejoined and matched again as "unsc".
+//     Only single-char runs are joined: squashing the whole string would turn
+//     "Renato Council" into "renatocouncil" and false-match the 'nato' alias.
+//   • accents/casing — normalised away, as before.
+//
+// Returns the whole PRESET_EMBLEMS entry so callers can also use its real
+// acronym (`label`) — see deriveCommitteeAcronym. `matchPresetEmblem` below is
+// the unchanged logo-only signature every existing caller uses.
+export function matchPresetEmblemEntry(
+  name: string | null | undefined,
+  abbreviation?: string | null,
+): PresetEmblem | null {
+  const norm = (s: string) =>
+    s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  // Rejoin runs of CONSECUTIVE single characters ("u n s c" -> "unsc") and a
+  // single letter glued to a number ("g 20" -> "g20"). Deliberately narrow:
+  // squashing whole strings would turn "Renato Council" into "renatocouncil"
+  // and false-match the 'nato' alias.
+  const unspace = (s: string) =>
+    s
+      .replace(/\b[a-z0-9](?:\s+[a-z0-9])+\b/g, (m) => m.replace(/\s+/g, ''))
+      .replace(/\b([a-z])\s+(\d+)\b/g, '$1$2');
+
+  const abbr = abbreviation ? unspace(norm(abbreviation)) : '';
   const nm = name ? norm(name) : '';
   if (!abbr && !nm) return null;
   // 1) Exact acronym match on the abbreviation field.
   if (abbr) {
     for (const e of PRESET_EMBLEMS) {
-      if (e.aliases.some((a) => a === abbr)) return e.logo;
+      if (e.aliases.some((a) => a === abbr)) return e;
     }
   }
   // 2) Alias appears in the name (or abbreviation). Multi-word aliases match as a
   // phrase; single short tokens must match on a word boundary so e.g. "eu" does
   // not fire inside "museum".
   const hay = `${nm} ${abbr}`.trim();
+  const squashed = unspace(hay);
+  const hays = squashed === hay ? [hay] : [hay, squashed];
   for (const e of PRESET_EMBLEMS) {
     for (const a of e.aliases) {
-      if (a.includes(' ')) {
-        if (hay.includes(a)) return e.logo;
-      } else {
-        const esc = a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (new RegExp(`\\b${esc}\\b`).test(hay)) return e.logo;
+      for (const h of hays) {
+        if (a.includes(' ')) {
+          if (h.includes(a)) return e;
+        } else {
+          const esc = a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          if (new RegExp(`\\b${esc}\\b`).test(h)) return e;
+        }
       }
     }
   }
   return null;
+}
+
+export function matchPresetEmblem(name: string | null | undefined, abbreviation?: string | null): string | null {
+  return matchPresetEmblemEntry(name, abbreviation)?.logo ?? null;
+}
+
+// The acronym to show for a committee that has NO explicit `abbreviation` - i.e.
+// every standalone session, whose `committees` row has only a free-text name.
+// `committeeDisplayName` needs an acronym to apply the UI RULE (long name ->
+// acronym + full name beneath); without one it silently keeps the long name and
+// the rule never fires.
+//
+// Order:
+//   1. the explicit abbreviation, when there is one (conference committees);
+//   2. the matched preset's REAL acronym - "Disarmament and International
+//      Security Committee" -> DISEC, which a naive initialism could never
+//      produce (it would give "DISC");
+//   3. initials of the significant words - "United Nations Office on Drugs and
+//      Crime" -> UNODC. Stopwords are dropped and the result is capped at 6
+//      characters, past which an initialism stops reading as an acronym.
+// Returns '' when nothing sensible can be derived, which leaves
+// `committeeDisplayName` showing the full name once.
+const ACRONYM_STOPWORDS = new Set(['and', 'of', 'the', 'for', 'on', 'in', 'to', 'a', 'an', 'at', 'by']);
+
+export function deriveCommitteeAcronym(
+  name: string | null | undefined,
+  abbreviation?: string | null,
+): string {
+  const explicit = (abbreviation ?? '').trim();
+  if (explicit) return explicit;
+  const preset = matchPresetEmblemEntry(name, null);
+  if (preset) return preset.label;
+  const words = (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter((w) => /[A-Za-z0-9]/.test(w))
+    .filter((w) => !ACRONYM_STOPWORDS.has(w.toLowerCase()));
+  if (words.length < 2) return '';
+  const initials = words.map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0] ?? '').join('').toUpperCase();
+  return initials.length >= 2 && initials.length <= 6 ? initials : '';
 }
 
 // Decide what committee NAME a preset should populate / display. Rule:
@@ -185,6 +266,64 @@ export function committeeDisplayName(fullName: string | null | undefined, acrony
   const words = name.split(/\s+/).filter(Boolean);
   if (words.length > 4) return ac || name;
   return name;
+}
+
+// ── Security Council detection ────────────────────────────────────────────────
+// Used to give a Security Council committee the P5 veto BY DEFAULT. The default is
+// applied ONLY where the committee's stored settings carry no `vetoMode` at all —
+// see `impliedSettings` in src/lib/settingsStore.ts — so an explicit chair choice,
+// including deliberately switching the veto OFF, is never overridden.
+//
+// MATCHES (case-insensitive, accent-insensitive, punctuation-insensitive):
+//   • the phrase "security council" anywhere in the name or abbreviation —
+//     "UN Security Council", "United Nations Security Council", "Security Council
+//     of the United Nations", "Historical Security Council", "UNSC (Security
+//     Council)"
+//   • the token "unsc" or "hsc" on a word boundary — "UNSC", "UNSC-A", "HSC 1962"
+//   • the localized phrases the PRESET_NAME_* tables above use:
+//     "conseil de securite" (fr), "consejo de seguridad" (es), "مجلس الأمن" (ar)
+//   • the bare token "sc" ONLY when it is the ENTIRE abbreviation or the ENTIRE
+//     name — never as a token inside something longer
+//
+// DELIBERATELY DOES **NOT** MATCH:
+//   • "sc" inside a longer string. Two letters is far too short to be safe: it
+//     collides with SOCHUM, ECOSOC, "South Carolina" and the ISO code for
+//     Seychelles. Only a field that is exactly "SC" counts.
+//   • the bare words "security" or "council" on their own. "security" alone would
+//     fire on DISEC ("Disarmament and International Security Committee") and on
+//     "International Security"; "council" alone would fire on ECOSOC, the Human
+//     Rights Council and the European Council — none of which have a P5.
+//   • "national security council" / "nsc" — a crisis cabinet, not the UNSC. It has
+//     no permanent members and must never silently gain a veto, so it is an
+//     explicit negative guard checked BEFORE the "security council" phrase.
+export function isSecurityCouncil(name?: string | null, abbreviation?: string | null): boolean {
+  // Strip Latin AND Arabic combining marks so "sécurité" → "securite" and
+  // "الأمن" → "الامن". Deliberately not using \p{...} escapes — tsconfig targets
+  // ES2017, which predates unicode property escapes.
+  const deaccent = (s: string) =>
+    s.normalize('NFD').replace(/[\u0300-\u036f\u064B-\u0655\u0670]/g, '').toLowerCase();
+
+  const rawName = (name ?? '').trim();
+  const rawAbbr = (abbreviation ?? '').trim();
+  if (!rawName && !rawAbbr) return false;
+
+  // `raw` keeps non-Latin scripts (for the Arabic phrase); `latin` is the
+  // ASCII-token view used for word-boundary matching.
+  const raw = deaccent(`${rawName} ${rawAbbr}`);
+  const latin = raw.replace(/[^a-z0-9]+/g, ' ').trim();
+  const nameOnly = deaccent(rawName).replace(/[^a-z0-9]+/g, ' ').trim();
+  const abbrOnly = deaccent(rawAbbr).replace(/[^a-z0-9]+/g, ' ').trim();
+
+  // Negative guard first — a National Security Council is a crisis cabinet.
+  if (latin.includes('national security council')) return false;
+
+  if (abbrOnly === 'sc' || nameOnly === 'sc') return true;
+  if (/\b(unsc|hsc)\b/.test(latin)) return true;
+  if (latin.includes('security council')) return true;
+  if (latin.includes('conseil de securite')) return true;
+  if (latin.includes('consejo de seguridad')) return true;
+  if (raw.includes('مجلس الامن')) return true;
+  return false;
 }
 
 // Append an edition year to a name/acronym label, but ONLY when the label does

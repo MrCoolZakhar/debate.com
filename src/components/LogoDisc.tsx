@@ -16,6 +16,9 @@
 //
 // When there is no logo (or the image fails to load) the disc falls back to
 // the house monogram language: forest gradient disc + gold initials.
+// `fallbackTone="plain"` drops that disc so the initials float on their own —
+// for DARK surfaces (the chair sidebar) where a forest disc on forest reads as
+// nothing at all. Everything else keeps the default 'disc'.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from 'react';
@@ -29,6 +32,7 @@ export function LogoDisc({
   className,
   style,
   bare = false,
+  fallbackTone = 'disc',
 }: {
   /** Logo URL. Null/undefined (or a load error) renders the monogram fallback. */
   src?: string | null;
@@ -46,6 +50,16 @@ export function LogoDisc({
    * fallback still renders (for a missing/failed src) but without a heavy rim.
    */
   bare?: boolean;
+  /**
+   * How the MONOGRAM FALLBACK is drawn (the image path is unaffected).
+   * 'disc' (default) is the house treatment — forest gradient disc + gold
+   * initials — which is what every ivory surface needs and what all existing
+   * call sites get.
+   * 'plain' drops the disc entirely and floats the gold initials on their own.
+   * For DARK surfaces only: on the chair sidebar (#1B3828) a forest-gradient
+   * disc is invisible against the panel, so the fallback has to be the letters.
+   */
+  fallbackTone?: 'disc' | 'plain';
 }) {
   // Track failures per-URL so a src change retries the image.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
@@ -90,27 +104,32 @@ export function LogoDisc({
   }
 
   const text = (fallbackText ?? '?').toUpperCase();
+  const plain = fallbackTone === 'plain';
   return (
     <div
       className={className}
       aria-label={alt}
       style={{
         ...base,
-        background: 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
-        border: bare ? 'none' : '1px solid rgba(238,217,138,0.35)',
+        background: plain ? 'none' : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
+        border: bare || plain ? 'none' : '1px solid rgba(238,217,138,0.35)',
+        ...(plain ? { boxShadow: 'none' } : null),
         ...style,
       }}
     >
       <span
         style={{
           fontFamily: "'Outfit', sans-serif",
-          fontWeight: 700,
+          fontWeight: plain ? 900 : 700,
           fontVariantNumeric: 'tabular-nums',
           letterSpacing: '0.06em',
           color: '#EED98A',
-          fontSize: `${Math.max(9, Math.round(size * (text.length > 2 ? 0.24 : 0.3)))}px`,
+          // No disc means no inner margin to respect, so the letters can own
+          // the whole box and still read at a glance.
+          fontSize: `${Math.max(9, Math.round(size * (plain ? (text.length > 2 ? 0.34 : 0.44) : text.length > 2 ? 0.24 : 0.3)))}px`,
           lineHeight: 1,
           userSelect: 'none',
+          ...(plain ? { textShadow: '0 1px 3px rgba(0,0,0,0.45)' } : null),
         }}
       >
         {text}

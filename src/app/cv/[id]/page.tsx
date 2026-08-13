@@ -1,12 +1,8 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import { supabase } from '@/lib/supabase';
 import type { CVEntry } from '@/components/CVEntryModal';
 import PublicCVClient, { type PublicProfile } from './PublicCVClient';
-
-export const metadata: Metadata = {
-  title: 'MUN CV · Gavelling',
-  description: 'A Model UN delegate record on Gavelling.',
-};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -33,6 +29,24 @@ async function resolveCv(idParam: string): Promise<CvPayload | null> {
   } catch {
     return null;
   }
+}
+
+// A public CV is a link people paste into chats and applications, so it needs
+// its OWN og:url (this exact /cv/… path) and its own title — inheriting the
+// root layout's would make every CV share one preview-cache entry.
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const profile = (await resolveCv(id))?.profile ?? null;
+  const name = (profile?.display_name ?? '').trim();
+
+  return pageMetadata({
+    title: { absolute: name ? `${name} · MUN CV · Gavelling` : 'MUN CV · Gavelling' },
+    description: name
+      ? `${name}'s Model UN record on Gavelling: committees, roles, conferences and awards.`
+      : 'A Model UN delegate record on Gavelling.',
+    path: `/cv/${id}`,
+    ogTitle: name ? `${name} · Model UN CV` : 'Model UN CV',
+  });
 }
 
 export default async function PublicCVPage({ params }: { params: Promise<{ id: string }> }) {

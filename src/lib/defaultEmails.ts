@@ -195,6 +195,17 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  // Organizer-facing, unlike every other default here. The custom-destination
+  // button carries no url on purpose: queueRequestReceivedEmail fills it with
+  // the deep link to that specific inbox thread, and the digest fills it with
+  // the inbox itself.
+  request_received: {
+    subject: 'New question from {{delegate_name}} — {{request_subject}}',
+    blocks: [
+      { type: 'paragraph', content: '{{delegate_name}} has asked {{conference_name}} a question on Gavelling.\n\nSubject: {{request_subject}}\n\n{{request_body}}' },
+      { type: 'button', label: 'OPEN THE INBOX', destination: 'custom', url: '' },
+    ],
+  },
   delegation_swap: {
     subject: 'Your committee allocation has been swapped — {{conference_name}}',
     blocks: [
@@ -203,10 +214,10 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     ],
   },
   import_join_invite: {
-    subject: '{{conference_name}} now runs on Gavelling',
+    subject: 'Your {{conference_name}} registration is on Gavelling',
     blocks: [
-      { type: 'paragraph', content: '{{conference_name}} now runs on Gavelling — create your account with this email address and your registration will be attached automatically.' },
-      { type: 'button', label: 'CREATE YOUR ACCOUNT', destination: 'signup_page' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs on Gavelling. Your registration is ready and waiting for you. Open your invitation to activate your account, and everything attaches automatically.' },
+      { type: 'button', label: 'VIEW MY INVITATION', destination: 'import_claim' },
     ],
   },
 };

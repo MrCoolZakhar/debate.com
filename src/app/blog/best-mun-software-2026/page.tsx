@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Best MUN Software in 2026: Full Comparison for Chairs and Directors',
   description:
     'Comparing the best Model UN software in 2026: Gavelling, MUN Command (mymun), Muncoordinated, wxMUN, spreadsheets, and timer apps. Features, pricing, and which is right for your conference.',
+  path: '/blog/best-mun-software-2026',
   keywords: [
     'best MUN software',
     'MUN software 2026',
@@ -19,16 +21,10 @@ export const metadata: Metadata = {
     'MUN conference software',
     'Gavelling',
   ],
-  alternates: { canonical: 'https://gavelling.com/blog/best-mun-software-2026' },
-  openGraph: {
-    title: 'Best MUN Software in 2026: Full Comparison for Chairs and Directors',
-    description: 'Comparing dedicated MUN tools, spreadsheets, and timer apps for 2026.',
-    url: 'https://gavelling.com/blog/best-mun-software-2026',
-    siteName: 'Gavelling',
-    images: [{ url: 'https://gavelling.com/og-image.png', width: 1200, height: 630 }],
-    type: 'article',
-  },
-};
+  ogDescription:
+    'Comparing dedicated MUN tools, spreadsheets, and timer apps for 2026.',
+  type: 'article',
+});
 
 const articleSchema = {
   '@context': 'https://schema.org',
@@ -198,9 +194,12 @@ export default function Article2() {
               The free Session App is limited (3 debate modes, 3 motion types at the time of writing). The full Conference App costs <strong>€1 per user per day</strong>, free for up to 10 users — so a 200-delegate, 3-day conference is looking at roughly €600 in software fees.
             </p>
             <p style={s.p}>
+              MUN Command and mymun are the same operation — MUN Command is mymun&apos;s session software, and the two brands are converging under the mymun name.
+            </p>
+            <p style={s.p}>
               <strong>Best for:</strong> conferences already in the mymun ecosystem that want native mobile apps and are comfortable with per-delegate pricing.<br />
               <strong>Price:</strong> Free (limited) / €1 per user per day.<br />
-              Full breakdown: <Link href="/blog/muncommand-alternative" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Command vs Gavelling</Link>.
+              Full breakdown: <Link href="/blog/muncommand-alternative" style={{ color: '#1B3828', fontWeight: 600 }}>MUN Command vs Gavelling</Link>, or the wider platform comparison with worked pricing at conference scale in <Link href="/blog/mymun-alternative" style={{ color: '#1B3828', fontWeight: 600 }}>mymun and MUN Command vs Gavelling</Link>.
             </p>
 
             <h2 style={s.h2}>5. Option 3: Muncoordinated (muncoordinated.io)</h2>
