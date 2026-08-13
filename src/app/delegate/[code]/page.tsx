@@ -2,11 +2,12 @@
 
 import React, { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
-import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check } from 'lucide-react';
-import { OUTFIT } from '@/components/neu';
+import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen } from 'lucide-react';
+import { OUTFIT, Emoji3D } from '@/components/neu';
 import {
-  DelegateStyles, DG, LIFT, Panel, SectionLabel, FlagDisc, QueueOrdinal, StatTile,
-  RollCallSwitch, ChunkyButton, QueueRow, Sheet, Equalizer, heatFor,
+  DelegateStyles, DG, LIFT, Panel, SectionLabel, FlagDisc, FlagOrdinalDisc, StatRow,
+  RollCallSwitch, ChunkyButton, SquareButton, QueueRow, Sheet, Equalizer,
+  useMeasuredSize, useFitCount, ordinalSuffixFor,
 } from '@/components/delegate/DelegateUI';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -870,6 +871,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     prevPendingRef.current = committee.pendingMotions;
   }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, committee?.delegates, country]);
 
+  /* ── Board sizing ───────────────────────────────────────────────────────
+     Declared above the early returns: hooks must run in the same order on
+     every render, and everything below this point can bail out. `discBox`
+     measures the hero's centre column; the queue measures its own slot and
+     renders only the rows that genuinely fit, because the page never scrolls. */
+  const { ref: discBox, size: discSize } = useMeasuredSize(84, 176);
+  const { ref: queueBox, count: queueFit } = useFitCount(44, 30);
+
+  const statIcon = Math.round(Math.max(20, Math.min(34, discSize * 0.21)));
+  const actionIcon = Math.round(Math.max(18, Math.min(34, discSize * 0.2)));
+
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
   if (accessState === 'signin') {
@@ -996,7 +1008,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     (m) => m.sender === country && m.sender !== '__system__' && m.recipient !== '__log__',
   ).length;
 
-  const heat = heatFor(myQueueIndex, isCurrentSpeaker);
+  /* The escalation ladder that drove the old hero is gone — the ordinal now
+     lives on the flag itself, and `live` on FlagOrdinalDisc carries the only
+     state that still changes the treatment. */
   const inQueue = isCurrentSpeaker || isOnSpeakersList;
 
   // No plural engine — one key per grammatical number.
@@ -1249,6 +1263,131 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     />
   );
 
+  const caucusLive = (committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus') && !!committee.caucus;
+  const votingLive = committee.phase === 'voting';
+
+  const bandLabel = caucusLive
+    ? (committee.caucus?.motionLabel
+        || (committee.phase === 'moderated-caucus' ? (mn.moderated || t('delegate_moderated_caucus_label')) : (mn.unmoderated || t('delegate_unmoderated_caucus_label'))))
+    : votingLive ? t('delegate_voting_procedure')
+      : `${t('delegate_speakers_list_header')}:`;
+
+  const caucusClock = committee.caucus && (
+    <>
+      <div style={{ fontFamily: OUTFIT, fontSize: 'clamp(26px, 8vw, 44px)', fontWeight: 900, color: DG.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+        {formatTime(committee.caucus.remainingTime)}
+      </div>
+      <div style={{ marginTop: 8, height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
+      </div>
+    </>
+  );
+
+  /* Whatever occupies the bottom-left slot: the GSL by default, or the live
+     caucus / voting detail when one of those phases is running. Keeping them
+     in one slot is what lets the board stay a single screen in every phase. */
+  const bottomLeft = (() => {
+    if (votingLive) {
+      const activeDoc = (committee.documents ?? []).find((d) => d.status === 'on-floor' || d.status === 'introduced');
+      return (
+        <Panel className="dgv-queue dgv-rise" style={{ padding: 14, textAlign: 'center', justifyContent: 'center' }}>
+          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(16px,5vw,24px)', fontWeight: 900, letterSpacing: '-0.02em', color: DG.forest }}>
+            {t('delegate_vote_in_progress')}
+          </p>
+          {activeDoc && (
+            <>
+              <p style={{ margin: '8px 0 0', fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: DG.deepGold }}>{activeDoc.docCode}</p>
+              <p style={{ margin: '3px 0 0', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: DG.ink }}>{activeDoc.title}</p>
+            </>
+          )}
+          <p style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: 12, color: DG.body }}>{t('delegate_vote_desc')}</p>
+        </Panel>
+      );
+    }
+
+    if (caucusLive && committee.caucus) {
+      const isMod = committee.phase === 'moderated-caucus';
+      return (
+        <Panel className="dgv-queue dgv-rise" style={{ padding: 14 }}>
+          {committee.caucus.purpose && (
+            <p style={{ margin: '0 0 10px', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: DG.forest, lineHeight: 1.25 }}>
+              {committee.caucus.purpose}
+            </p>
+          )}
+          {caucusClock}
+          {isMod && committee.caucus.currentSpeaker && (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 9 }}>
+              <Equalizer color={DG.forest} size={14} />
+              <FlagDisc code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} name={committee.caucus.currentSpeaker} size={26} ring={DG.ivory} />
+              <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {getCountryDisplayName(committee.caucus.currentSpeaker, language)}
+                {committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
+              </span>
+            </div>
+          )}
+          {isMod && (committee.caucusQueue ?? []).length > 0 && (
+            <div style={{ marginTop: 10, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {committee.caucusQueue.slice(0, 5).map((s, i) => (
+                <QueueRow
+                  key={s.delegateId}
+                  position={i + 1}
+                  compact
+                  code={getCountryByName(s.country)?.code ?? ''}
+                  name={getCountryDisplayName(s.country, language)}
+                  isSelf={s.country === country}
+                  speakingLabel={t('delegate_speaking_chip')}
+                  youLabel={t('delegate_you_chip')}
+                />
+              ))}
+            </div>
+          )}
+          {!isMod && committee.caucus.isConsultation && (
+            <div style={{ marginTop: 12, minHeight: 0, overflow: 'hidden' }}>
+              <CowDelegationBoard committee={committee} />
+            </div>
+          )}
+        </Panel>
+      );
+    }
+
+    /* The current speaker occupies one of the fitted slots, so the number of
+       queue rows we can actually show is one fewer whenever they exist —
+       computing overflow off `queueFit` alone silently dropped the last
+       delegate and hid the "view all" that should have caught them. */
+    const shown = committee.currentSpeaker ? Math.max(1, queueFit - 1) : queueFit;
+    const overflow = Math.max(0, committee.speakersList.length - shown);
+    return (
+      <Panel className="dgv-queue dgv-rise" style={{ padding: 10 }}>
+        <div ref={queueBox} style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {!committee.currentSpeaker && committee.speakersList.length === 0 ? (
+            <p style={{ margin: 'auto', fontFamily: OUTFIT, fontSize: 13, color: DG.faint, textAlign: 'center' }}>
+              {t('delegate_no_speakers')}
+            </p>
+          ) : (
+            <>
+              {currentSpeakerRow}
+              {queueRows(shown)}
+            </>
+          )}
+        </div>
+        {overflow > 0 && (
+          <button
+            type="button"
+            onClick={() => setSheet('queue')}
+            className="dgv-focus"
+            style={{
+              flexShrink: 0, marginTop: 4, border: 'none', background: 'transparent',
+              cursor: 'pointer', textAlign: 'start', padding: '4px 6px',
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: DG.body,
+            }}
+          >
+            {t('delegate_view_all_queue')}
+          </button>
+        )}
+      </Panel>
+    );
+  })();
+
   const docBadge = (label: string, color: string, border?: string, pulse?: boolean) => (
     <span
       className={pulse ? 'animate-pulse' : undefined}
@@ -1293,7 +1432,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
 
   return (
-    <div className="min-h-dvh" style={{ background: DG.ivory }}>
+    /* One screen, no page scroll. Fixed dvh + overflow hidden, and every band
+       inside is flex with min-height:0 so the bottom row absorbs the slack. */
+    <div
+      className="flex flex-col"
+      style={{ height: '100dvh', overflow: 'hidden', background: DG.ivory }}
+    >
       <DelegateStyles />
       {header}
 
@@ -1320,7 +1464,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       )}
 
       {sessionEnded && endedTab === 'ended' ? endedView : (
-        <main className="mx-auto w-full max-w-[1180px] px-4 sm:px-6 py-4 sm:py-6">
+        <main className="mx-auto flex w-full max-w-[900px] flex-1 flex-col px-3 sm:px-5" style={{ minHeight: 0, paddingBlock: 'clamp(8px, 2vw, 18px)' }}>
           {sessionEnded && endedTab === 'session' && (
             <div
               className="text-center"
@@ -1336,264 +1480,153 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
           {isAbsent && !sessionEnded && <AbsentBanner />}
 
-          <div
-            /* lg: hero+stats stack in col 1, the queue takes col 2 at full
-               height, actions hold the 320px right rail. Letting the queue
-               span both rows is what removes the dead space that appeared
-               under the stat tiles when the hero was taller than they were. */
-            className={`grid gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px] lg:grid-rows-[auto_minmax(0,1fr)] lg:items-start ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}
-          >
-            {/* ── HERO column (order 1) ─────────────────────────────────── */}
-            <div className="flex flex-col gap-4 md:col-span-2 lg:col-span-1 lg:col-start-1 lg:row-start-1">
-              <Panel className="dgv-rise">
-                <div style={{ marginBottom: 14 }}>
-                  <SectionLabel>{phaseDisplay}</SectionLabel>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <FlagDisc
-                      code={myIso}
-                      name={myName}
-                      size={96}
-                      ring={heat === 'floor' || heat === 'next' ? DG.gold : DG.hairline}
-                    />
-                    <span
-                      style={{
-                        fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: DG.forest,
-                        textAlign: 'center', maxWidth: 132, lineHeight: 1.2,
-                      }}
-                    >
-                      {myName}
-                    </span>
-                  </div>
-
-                  {inQueue ? (
-                    <QueueOrdinal
-                      position={myQueueIndex + 1}
-                      heat={heat}
-                      label={isCurrentSpeaker ? t('delegate_floor_now') : t('delegate_queue_position_label')}
-                      aheadLabel={aheadLabel}
-                      etaLabel={etaLabel}
-                    />
-                  ) : (
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p
-                        style={{
-                          margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(18px, 5.4vw, 24px)',
-                          fontWeight: 900, letterSpacing: '-0.02em', color: DG.forest, lineHeight: 1.15,
-                        }}
-                      >
-                        {t('delegate_not_in_queue')}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Roll-call switch — same gate as before */}
-                {!isAbsent && !sessionEnded && !lockRollCall && (
-                  <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
-                    <RollCallSwitch
-                      value={myDelegate?.status === 'present-voting' ? 'present-voting' : 'present'}
-                      onChange={(v) => handleStatusChange(v)}
-                      presentLabel={t('delegate_present_btn')}
-                      votingLabel={t('delegate_pv_btn')}
-                      disabled={changesLeft <= 0}
-                    />
-                    <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 11, color: DG.faint }}>
-                      {t('delegate_status_changes_left')
-                        .replace('{n}', String(changesLeft))
-                        .replace('{s}', changesLeft !== 1 ? 's' : '')}
-                    </p>
-                  </div>
-                )}
-
-                <p
-                  aria-live="polite"
-                  style={{ margin: '16px 0 0', fontFamily: OUTFIT, fontSize: 12, fontWeight: 500, color: DG.faint }}
+          <div className={`dgv-board ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
+            {/* ── HERO BAND: tools | flag+ordinal | stats ───────────────── */}
+            <section className="dgv-hero dgv-rise">
+              {/* LEFT — documents tile above the roll-call control */}
+              <div className="dgv-hero-side">
+                <button
+                  type="button"
+                  onClick={() => openSheet('documents', 'view')}
+                  className="dgv-tap dgv-focus"
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                    border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+                    minHeight: 44,
+                  }}
                 >
-                  {t('delegate_place_saved')}
-                </p>
-              </Panel>
-
-              {/* Voting card */}
-              {committee.phase === 'voting' && (() => {
-                const activeDoc = (committee.documents ?? []).find(
-                  (d) => d.status === 'on-floor' || d.status === 'introduced'
-                );
-                return (
-                  <Panel className="dgv-rise" style={{ textAlign: 'center' }}>
-                    <SectionLabel>{t('delegate_voting_procedure')}</SectionLabel>
-                    <p style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, letterSpacing: '-0.02em', color: DG.forest }}>
-                      {t('delegate_vote_in_progress')}
-                    </p>
-                    {activeDoc && (
-                      <>
-                        <p style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: DG.deepGold }}>{activeDoc.docCode}</p>
-                        <p style={{ margin: '4px 0 0', fontFamily: OUTFIT, fontSize: 15, fontWeight: 700, color: DG.ink }}>{activeDoc.title}</p>
-                      </>
-                    )}
-                    <p style={{ margin: '12px 0 0', fontFamily: OUTFIT, fontSize: 13, color: DG.body }}>{t('delegate_vote_desc')}</p>
-                  </Panel>
-                );
-              })()}
-
-              {/* Moderated caucus */}
-              {committee.phase === 'moderated-caucus' && committee.caucus && (
-                <Panel className="dgv-rise">
-                  <SectionLabel>{committee.caucus.motionLabel || mn.moderated || t('delegate_moderated_caucus_label')}</SectionLabel>
-                  {committee.caucus.purpose && (
-                    <p style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: 17, fontWeight: 700, color: DG.forest }}>{committee.caucus.purpose}</p>
-                  )}
-
-                  {committee.caucus.currentSpeaker && (
-                    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <Equalizer color={DG.forest} size={16} />
-                      <FlagDisc code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} name={committee.caucus.currentSpeaker} size={34} ring={DG.ivory} />
-                      <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest }}>
-                        {getCountryDisplayName(committee.caucus.currentSpeaker, language)}
-                        {committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
-                      </span>
-                      <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', color: DG.body }}>{t('delegate_now_speaking')}</span>
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: 16, fontFamily: OUTFIT, fontSize: 34, fontWeight: 900, color: DG.ink, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatTime(committee.caucus.remainingTime)}
-                  </div>
-                  <div style={{ marginTop: 8, height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
-                  </div>
-
-                  {(committee.caucusQueue ?? []).length > 0 && (
-                    <div style={{ marginTop: 18 }}>
-                      <SectionLabel>{t('delegate_upcoming_speakers')}</SectionLabel>
-                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {committee.caucusQueue.slice(0, 8).map((s, i) => (
-                          <QueueRow
-                            key={s.delegateId}
-                            position={i + 1}
-                            compact
-                            code={getCountryByName(s.country)?.code ?? ''}
-                            name={getCountryDisplayName(s.country, language)}
-                            isSelf={s.country === country}
-                            speakingLabel={t('delegate_speaking_chip')}
-                            youLabel={t('delegate_you_chip')}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </Panel>
-              )}
-
-              {/* Unmoderated caucus / Consultation of the Whole */}
-              {committee.phase === 'unmoderated-caucus' && committee.caucus && (
-                <Panel className="dgv-rise">
-                  <SectionLabel>{committee.caucus.motionLabel || mn.unmoderated || t('delegate_unmoderated_caucus_label')}</SectionLabel>
-                  {committee.caucus.purpose && (
-                    <p style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: 17, fontWeight: 700, color: DG.forest }}>{committee.caucus.purpose}</p>
-                  )}
-                  <div style={{ marginTop: 14, fontFamily: OUTFIT, fontSize: 'clamp(38px, 12vw, 54px)', fontWeight: 900, color: DG.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatTime(committee.caucus.remainingTime)}
-                  </div>
-                  <div style={{ marginTop: 10, height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
-                  </div>
-                  <p style={{ margin: '12px 0 0', fontFamily: OUTFIT, fontSize: 13, color: DG.body }}>{t('delegate_unmod_desc')}</p>
-                  {committee.caucus.isConsultation && (
-                    <div style={{ marginTop: 14 }}>
-                      <CowDelegationBoard committee={committee} />
-                    </div>
-                  )}
-                </Panel>
-              )}
-            </div>
-
-            {/* ── STATS (order 2) ───────────────────────────────────────── */}
-            <div className="grid grid-cols-3 gap-2.5 md:col-span-2 lg:col-span-1 lg:col-start-1 lg:row-start-2 self-start">
-              <StatTile
-                icon={<Clock size={18} strokeWidth={2.25} />}
-                value={formatTime(mySpokenSeconds)}
-                label={t('delegate_stat_spoken')}
-                onClick={() => setSheet('stats')}
-              />
-              <StatTile
-                icon={<Mic2 size={18} strokeWidth={2.25} />}
-                value={String(myLogs.length)}
-                label={t('delegate_stat_speeches')}
-                onClick={() => setSheet('stats')}
-              />
-              <StatTile
-                icon={<MessageSquare size={18} strokeWidth={2.25} />}
-                value={String(myMessagesSent)}
-                label={t('delegate_stat_messages')}
-                onClick={() => setSheet('stats')}
-              />
-            </div>
-
-            {/* ── ACTIONS (order 3 on phone, right rail on lg) ──────────── */}
-            <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-1 lg:col-start-3 lg:row-start-1 lg:row-span-2 self-start">
-              <ChunkyButton
-                tone="primary"
-                icon={<Mic size={20} strokeWidth={2.25} />}
-                disabled={speakCta.disabled}
-                onClick={speakCta.onClick}
-              >
-                {speakCta.label}
-              </ChunkyButton>
-              {/* One documents button, not two. The sheet already carries the
-                  submit/view toggle, so a second CTA only lengthened a stack
-                  that has to stay above the fold on a 375px phone. */}
-              <ChunkyButton
-                tone="outline"
-                icon={<FileText size={20} strokeWidth={2.25} />}
-                onClick={() => openSheet('documents', 'submit')}
-              >
-                {t('delegate_docs_sheet_title')}
-              </ChunkyButton>
-              <ChunkyButton
-                tone="gold"
-                icon={<MessageCircle size={20} strokeWidth={2.25} />}
-                badge={chatDisabled ? undefined : unreadTotal}
-                onClick={() => setSheet('chat')}
-              >
-                {t('tab_chat')}
-              </ChunkyButton>
-            </div>
-
-            {/* ── QUEUE (order 4) ───────────────────────────────────────── */}
-            <Panel className="md:col-span-2 lg:col-span-1 lg:col-start-2 lg:row-start-1 lg:row-span-2">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                <SectionLabel>{t('delegate_speakers_list_header')}</SectionLabel>
-                {committee.speakersList.length > 8 && (
-                  <button
-                    type="button"
-                    onClick={() => setSheet('queue')}
-                    className="dgv-tap dgv-focus ms-auto"
+                  <Emoji3D name="File folder" size={discSize * 0.34} fallback={FolderOpen} fallbackColor={DG.forest} />
+                  <span
                     style={{
-                      minHeight: 44, padding: '0 16px', borderRadius: 999, border: 'none',
-                      background: DG.ivory, color: DG.forest, cursor: 'pointer',
-                      boxShadow: LIFT.sm, fontFamily: OUTFIT, fontSize: 12, fontWeight: 800,
+                      fontFamily: OUTFIT, fontWeight: 800, color: DG.body, textAlign: 'center',
+                      fontSize: 'clamp(6.5px, 2vw, 9px)', letterSpacing: '0.04em',
+                      textTransform: 'uppercase', lineHeight: 1.15,
                     }}
                   >
-                    {t('delegate_view_all_queue')}
-                  </button>
+                    {t('delegate_view_documents')}
+                  </span>
+                </button>
+
+                {!isAbsent && !sessionEnded && !lockRollCall && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <span
+                      style={{
+                        fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
+                        fontSize: 'clamp(6.5px, 2vw, 9px)', letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {t('delegate_roll_call_label')}
+                    </span>
+                    <RollCallSwitch
+                      compact
+                      value={myDelegate?.status === 'present-voting' ? 'present-voting' : 'present'}
+                      onChange={(v) => handleStatusChange(v)}
+                      presentLabel="P"
+                      votingLabel="PV"
+                      disabled={changesLeft <= 0}
+                    />
+                  </div>
                 )}
               </div>
 
-              {!committee.currentSpeaker && committee.speakersList.length === 0 ? (
-                <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 14, color: DG.faint }}>{t('delegate_no_speakers')}</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {currentSpeakerRow}
-                  {queueRows(8)}
-                </div>
-              )}
-            </Panel>
+              {/* CENTRE — the delegate's own flag, dimmed, position over it */}
+              <div className="dgv-hero-mid" ref={discBox}>
+                <FlagOrdinalDisc
+                  code={myIso}
+                  name={myName}
+                  size={discSize}
+                  live={isCurrentSpeaker}
+                  primary={
+                    isCurrentSpeaker ? t('delegate_floor_now')
+                      : inQueue ? `${myQueueIndex + 1}${ordinalSuffixFor(myQueueIndex + 1)}`
+                        : '—'
+                  }
+                  caption={inQueue || isCurrentSpeaker ? t('delegate_in_the_queue') : t('delegate_not_in_queue')}
+                />
+                <span
+                  style={{
+                    fontFamily: OUTFIT, fontSize: 'clamp(13px, 4.2vw, 19px)', fontWeight: 900,
+                    color: DG.ink, textAlign: 'center', lineHeight: 1.1, maxWidth: '100%',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {myName}
+                </span>
+              </div>
+
+              {/* RIGHT — the three live stats, beside the flag as drawn */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(4px, 1.6vw, 12px)', minWidth: 0 }}>
+                <StatRow
+                  emoji={<Emoji3D name="Alarm clock" size={statIcon} fallback={Clock} fallbackColor={DG.forest} />}
+                  iconSize={statIcon}
+                  value={formatTime(mySpokenSeconds)}
+                  label={t('delegate_stat_time_spoken')}
+                  onClick={() => setSheet('stats')}
+                />
+                <StatRow
+                  emoji={<Emoji3D name="Megaphone" size={statIcon} fallback={Mic2} fallbackColor={DG.forest} />}
+                  iconSize={statIcon}
+                  value={String(myLogs.length)}
+                  label={t('delegate_stat_speeches_given')}
+                  onClick={() => setSheet('stats')}
+                />
+                <StatRow
+                  emoji={<Emoji3D name="Speech balloon" size={statIcon} fallback={MessageSquare} fallbackColor={DG.forest} />}
+                  iconSize={statIcon}
+                  value={String(myMessagesSent)}
+                  label={t('delegate_stat_messages_sent')}
+                  onClick={() => setSheet('stats')}
+                />
+              </div>
+            </section>
+
+            {/* ── BAND LABEL ────────────────────────────────────────────── */}
+            <div className="flex items-baseline gap-3" style={{ flexShrink: 0 }}>
+              <h2
+                style={{
+                  margin: 0, fontFamily: OUTFIT, fontWeight: 900, color: DG.ink,
+                  fontSize: 'clamp(15px, 4.6vw, 22px)', letterSpacing: '-0.02em',
+                }}
+              >
+                {bandLabel}
+              </h2>
+            </div>
+
+            {/* ── BOTTOM BAND: list | square actions ────────────────────── */}
+            <section className="dgv-bottom">
+              {bottomLeft}
+
+              <div className="dgv-actions">
+                <SquareButton
+                  skin="green"
+                  disabled={speakCta.disabled}
+                  onClick={speakCta.onClick}
+                  emoji={<Emoji3D name="Microphone" size={actionIcon} fallback={Mic} fallbackColor="#FFFFFF" />}
+                >
+                  {speakCta.label}
+                </SquareButton>
+                <SquareButton
+                  skin="blue"
+                  onClick={() => openSheet('documents', 'submit')}
+                  emoji={<Emoji3D name="Page facing up" size={actionIcon} fallback={FileText} fallbackColor="#FFFFFF" />}
+                >
+                  {t('delegate_submit_document')}
+                </SquareButton>
+                <SquareButton
+                  skin="gold"
+                  onClick={() => setSheet('chat')}
+                  badge={chatDisabled ? undefined : unreadTotal}
+                  emoji={<Emoji3D name="Speech balloon" size={actionIcon} fallback={MessageCircle} fallbackColor={DG.forest} />}
+                >
+                  {t('tab_chat')}
+                </SquareButton>
+              </div>
+            </section>
           </div>
         </main>
       )}
+
 
       {/* ── Sheets ─────────────────────────────────────────────────────── */}
       <Sheet open={sheet === 'stats'} onClose={() => setSheet(null)} title={t('delegate_full_stats')}>

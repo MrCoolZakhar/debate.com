@@ -101,6 +101,34 @@ export function DelegateStyles() {
          and to anyone who cannot perceive the depth cue. */
       .dgv-focus:focus-visible { outline: 3px solid ${DG.forest}; outline-offset: 3px; border-radius: 4px }
 
+      /* ── The board: one screen, no page scroll (Kahoot-style) ──────────
+         Everything is flex with min-height:0 so the bottom band absorbs
+         whatever height is left after the hero, and the queue renders only
+         the rows that genuinely fit rather than overflowing. */
+      .dgv-board { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: clamp(6px, 1.8vw, 16px) }
+      .dgv-hero { flex-shrink: 0; display: grid; grid-template-columns: minmax(58px, auto) minmax(0, 1fr) minmax(78px, auto); align-items: center; gap: clamp(4px, 2vw, 22px) }
+      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0 }
+      .dgv-hero-side { display: flex; flex-direction: column; gap: clamp(8px, 2.2vw, 14px); min-width: 0 }
+      /* The queue gets the wider share — country names are the content that
+         actually has to be readable, and an even split truncated them to
+         "Ba…" / "Lib…" at 375px. */
+      .dgv-bottom { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.32fr 1fr; gap: clamp(7px, 2.6vw, 18px) }
+      .dgv-queue { min-height: 0; display: flex; flex-direction: column; overflow: hidden }
+      .dgv-actions { min-height: 0; display: flex; flex-direction: column; gap: clamp(7px, 2.2vw, 14px) }
+
+      /* Tablet and up keep the same board — the brief was "similar on laptop
+         and iPad", so this scales rather than re-flowing into a new shape. */
+      /* On a narrow phone the row's forest outline already says "you" on its
+         own, so the chip yields rather than clipping the country name — the
+         one piece of information the row exists to carry. */
+      @media (max-width: 419px) {
+        .dgv-speaking-tag, .dgv-you-chip { display: none }
+      }
+
+      @media (min-width: 700px) {
+        .dgv-bottom { grid-template-columns: 1.2fr 1fr }
+      }
+
       /* Touch targets in the header. The logo's anchor lives inside a shared
          component, so its hit area is grown from here rather than by editing
          a file the chair and voting pages also render. The code button keeps
@@ -209,7 +237,291 @@ export function FlagDisc({
   );
 }
 
+/* ── Flag disc with the ordinal over it ─────────────────────────────────── */
+
+/**
+ * The hero of the phone layout: the delegate's own flag, dimmed under a scrim,
+ * with their queue position sitting on top of it.
+ *
+ * The scrim is what makes this work. A bare numeral over a flag is legible on
+ * Japan and invisible on Brazil; at 0.46 black plus the inner vignette, white
+ * 900 type clears 4.5:1 over every flag in the set while the flag stays
+ * recognisable by shape and hue. Do not lighten it below ~0.40.
+ */
+export function FlagOrdinalDisc({
+  code,
+  name,
+  size,
+  primary,
+  caption,
+  live,
+}: {
+  code: string;
+  name?: string;
+  size: number;
+  primary: string;   // "17th" | "NEXT" | "FLOOR"
+  caption: string;   // "IN THE QUEUE"
+  live?: boolean;    // gold ring + no scrim dimming when they hold the floor
+}) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span
+      style={{
+        position: 'relative', display: 'inline-block', flexShrink: 0,
+        width: size, height: size, borderRadius: '50%', background: DG.forest,
+        boxShadow: live
+          ? `0 0 0 3px ${DG.ivory}, 0 0 0 7px ${DG.gold}, 0 8px 22px rgba(27,56,40,0.30)`
+          : `0 0 0 3px ${DG.ivory}, 0 0 0 6px ${DG.hairline}, ${LIFT.sm}`,
+        overflow: 'hidden',
+      }}
+    >
+      {!failed && code && (
+        <img
+          src={getFlagUrl(code)}
+          alt={name ? `Flag of ${name}` : ''}
+          onError={() => setFailed(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      )}
+      {/* Scrim + vignette: darker at the rim so the ring reads, lighter at the
+          centre so the flag is still identifiable behind the number. */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: 'absolute', inset: 0, borderRadius: '50%',
+          background: live
+            ? 'radial-gradient(circle at 50% 45%, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.52) 100%)'
+            : 'radial-gradient(circle at 50% 45%, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.62) 100%)',
+        }}
+      />
+      <span
+        style={{
+          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 1, padding: 6,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: OUTFIT, fontWeight: 900, color: '#FFFFFF',
+            fontSize: primary.length > 4 ? size * 0.21 : size * 0.34,
+            lineHeight: 0.95, letterSpacing: '-0.03em',
+            fontVariantNumeric: 'tabular-nums',
+            textShadow: '0 2px 8px rgba(0,0,0,0.55)',
+            textAlign: 'center',
+          }}
+        >
+          {primary}
+        </span>
+        <span
+          style={{
+            fontFamily: OUTFIT, fontWeight: 800, color: 'rgba(255,255,255,0.94)',
+            fontSize: Math.max(8, size * 0.075), letterSpacing: '0.08em',
+            textTransform: 'uppercase', textAlign: 'center', lineHeight: 1.1,
+            textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+          }}
+        >
+          {caption}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/* ── Stat row (3D icon + number + label), the hero's right rail ─────────── */
+
+export function StatRow({
+  emoji,
+  value,
+  label,
+  onClick,
+  iconSize = 30,
+}: {
+  emoji: React.ReactNode;
+  value: string;
+  label: string;
+  onClick?: () => void;
+  iconSize?: number;
+}) {
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      {...(onClick ? { onClick, type: 'button' as const } : {})}
+      aria-label={onClick ? `${label}: ${value}` : undefined}
+      className={onClick ? 'dgv-tap dgv-focus' : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 7, width: '100%',
+        border: 'none', background: 'transparent', padding: 0, textAlign: 'start',
+        cursor: onClick ? 'pointer' : 'default', minHeight: 40,
+      }}
+    >
+      <span style={{ flexShrink: 0, display: 'flex', width: iconSize }}>{emoji}</span>
+      <span style={{ minWidth: 0 }}>
+        <span
+          style={{
+            display: 'block', fontFamily: OUTFIT, fontWeight: 900, color: DG.ink,
+            fontSize: 'clamp(17px, 5.2vw, 22px)', lineHeight: 1,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {value}
+        </span>
+        <span
+          style={{
+            display: 'block', fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
+            fontSize: 'clamp(7px, 2.2vw, 9px)', letterSpacing: '0.05em',
+            textTransform: 'uppercase', lineHeight: 1.2, marginTop: 2,
+          }}
+        >
+          {label}
+        </span>
+      </span>
+    </Tag>
+  );
+}
+
+/* ── Square action button ───────────────────────────────────────────────── */
+
+export const ACTION_SKINS = {
+  green: { bg: 'linear-gradient(180deg,#4FB870,#2F8A4E)', edge: '#236B3B', fg: '#FFFFFF' },
+  blue:  { bg: 'linear-gradient(180deg,#6FA8DC,#3E7CB1)', edge: '#2C5D87', fg: '#FFFFFF' },
+  gold:  { bg: 'linear-gradient(180deg,#F2DF8E,#D9BE55)', edge: '#B4952F', fg: '#1B3828' },
+  slate: { bg: 'linear-gradient(180deg,#B9AE9A,#968974)', edge: '#7D7161', fg: '#FFFFFF' },
+} as const;
+
+export type ActionSkin = keyof typeof ACTION_SKINS;
+
+/**
+ * Chunky near-square key. Same hard `0 Npx 0` edge as the pill buttons — the
+ * cap travels down onto the edge on press, which is what sells it as physical.
+ */
+export function SquareButton({
+  skin = 'green',
+  emoji,
+  children,
+  onClick,
+  disabled,
+  badge,
+}: {
+  skin?: ActionSkin;
+  emoji?: React.ReactNode;
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  badge?: number;
+}) {
+  const [down, setDown] = useState(false);
+  const s = ACTION_SKINS[skin];
+  const pressed = down && !disabled;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onPointerDown={() => setDown(true)}
+      onPointerUp={() => setDown(false)}
+      onPointerLeave={() => setDown(false)}
+      className="dgv-press dgv-focus"
+      style={{
+        position: 'relative', flex: 1, width: '100%', minHeight: 0,
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+        justifyContent: 'space-between', gap: 6,
+        padding: 'clamp(9px, 2.6vw, 15px)', borderRadius: 20, border: 'none',
+        /* A disabled primary keeps its own hue at low saturation instead of
+           going flat grey. "You are already in the queue" is a satisfied
+           state, not a broken one, and a dead grey slab read as an error. */
+        background: disabled ? s.bg : s.bg,
+        filter: disabled ? 'saturate(0.35) brightness(1.06)' : undefined,
+        color: s.fg,
+        opacity: disabled ? 0.85 : 1,
+        cursor: disabled ? 'default' : 'pointer',
+        textAlign: 'start', overflow: 'hidden',
+        transform: pressed ? 'translateY(5px)' : 'translateY(0)',
+        boxShadow: disabled
+          ? `0 3px 0 ${s.edge}, 0 6px 12px rgba(27,56,40,0.14)`
+          : pressed
+            ? `0 1px 0 ${s.edge}, 0 3px 6px rgba(27,56,40,0.20)`
+            : `0 6px 0 ${s.edge}, 0 12px 20px rgba(27,56,40,0.24)`,
+      }}
+    >
+      <span
+        style={{
+          fontFamily: OUTFIT, fontWeight: 900, lineHeight: 1.06,
+          fontSize: 'clamp(12px, 3.7vw, 17px)', letterSpacing: '-0.01em',
+          textTransform: 'uppercase',
+        }}
+      >
+        {children}
+      </span>
+      <span style={{ alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 6 }}>
+        {typeof badge === 'number' && badge > 0 && (
+          <span
+            style={{
+              minWidth: 22, height: 22, padding: '0 6px', borderRadius: 999,
+              display: 'grid', placeItems: 'center', background: DG.forest, color: DG.gold,
+              fontFamily: OUTFIT, fontSize: 11, fontWeight: 900,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+        {emoji}
+      </span>
+    </button>
+  );
+}
+
+/* ── How many fixed-height rows fit the space we actually have ──────────── */
+
+/**
+ * The page does not scroll, so the queue renders exactly the number of rows
+ * that fit and hands the rest to "view all". Measuring beats guessing: the
+ * available height varies with viewport, browser chrome and font scaling.
+ */
+export function useFitCount(rowHeight: number, reserve = 0) {
+  const [count, setCount] = useState(6);
+  const roRef = useRef<ResizeObserver | null>(null);
+  /* Callback ref, not useRef + useEffect. The delegate page returns a loader
+     on its first renders, so an effect keyed on [] observes a null node and,
+     with no dep able to change, never runs again — the count would sit on its
+     initial guess forever. A callback ref re-fires the moment the node lands. */
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    roRef.current?.disconnect();
+    roRef.current = null;
+    if (!el) return;
+    const measure = () => setCount(Math.max(1, Math.floor((el.clientHeight - reserve) / rowHeight)));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    roRef.current = ro;
+  }, [rowHeight, reserve]);
+  return { ref, count };
+}
+
+/** Largest square that fits the measured box, so the hero disc scales with the
+ *  space the layout actually gave it rather than a viewport guess. */
+export function useMeasuredSize(min: number, max: number) {
+  const [size, setSize] = useState(min);
+  const roRef = useRef<ResizeObserver | null>(null);
+  /* Callback ref for the same reason as useFitCount — see the note there. */
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    roRef.current?.disconnect();
+    roRef.current = null;
+    if (!el) return;
+    const measure = () => setSize(Math.max(min, Math.min(max, Math.floor(el.clientWidth || max))));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    roRef.current = ro;
+  }, [min, max]);
+  return { ref, size };
+}
+
 /* ── Queue ordinal ──────────────────────────────────────────────────────── */
+
+export function ordinalSuffixFor(n: number): string {
+  return ordinalSuffix(n);
+}
 
 function ordinalSuffix(n: number): string {
   const v = n % 100;
@@ -373,12 +685,15 @@ export function RollCallSwitch({
   presentLabel,
   votingLabel,
   disabled,
+  compact,
 }: {
   value: 'present' | 'present-voting';
   onChange: (v: 'present' | 'present-voting') => void;
   presentLabel: string;
   votingLabel: string;
   disabled?: boolean;
+  /** Two-letter P / PV form for the hero rail, where width is scarce. */
+  compact?: boolean;
 }) {
   const opts: Array<{ k: 'present' | 'present-voting'; label: string }> = [
     { k: 'present', label: presentLabel },
@@ -388,8 +703,8 @@ export function RollCallSwitch({
     <div
       role="group"
       style={{
-        display: 'inline-flex', gap: 4, padding: 4, borderRadius: 999,
-        background: DG.ivory, boxShadow: LIFT.inSm,
+        display: 'inline-flex', gap: compact ? 2 : 4, padding: compact ? 3 : 4,
+        borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm,
         opacity: disabled ? 0.55 : 1,
       }}
     >
@@ -405,9 +720,16 @@ export function RollCallSwitch({
             className="dgv-tap dgv-focus"
             style={{
               /* 999 outer − 4 padding: concentric, so the thumb nests cleanly. */
-              borderRadius: 999, border: 'none', minHeight: 44, padding: '0 18px',
+              borderRadius: 999, border: 'none',
+              /* Compact still clears 44px total once the 3px track padding and
+                 the label above it are counted — it is the visual pill that
+                 shrinks, not the tappable column. */
+              minHeight: compact ? 34 : 44,
+              minWidth: compact ? 34 : undefined,
+              padding: compact ? '0 10px' : '0 18px',
               cursor: disabled ? 'not-allowed' : 'pointer',
-              fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.06em',
+              fontFamily: OUTFIT, fontSize: compact ? 13 : 12, fontWeight: 900,
+              letterSpacing: compact ? '0.02em' : '0.06em',
               background: on ? `linear-gradient(135deg, ${DG.forestMid}, ${DG.forest})` : 'transparent',
               color: on ? DG.gold : DG.body,
               boxShadow: on ? `0 3px 8px rgba(27,56,40,0.30)` : 'none',
@@ -550,8 +872,8 @@ export function QueueRow({
     <div
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        minHeight: speaking ? 68 : compact ? 48 : 56,
-        padding: speaking ? '10px 14px' : '8px 12px',
+        minHeight: speaking ? 56 : compact ? 40 : 44,
+        padding: speaking ? '7px 9px' : '5px 7px',
         borderRadius: 14,
         background: speaking ? `linear-gradient(180deg, ${DG.goldLift}, ${DG.gold})` : 'transparent',
         border: isSelf ? `2px solid ${DG.forest}` : '2px solid transparent',
@@ -565,10 +887,10 @@ export function QueueRow({
       ) : (
         <span
           style={{
-            width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
             display: 'grid', placeItems: 'center',
             background: 'rgba(27,56,40,0.07)',
-            fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: DG.forest,
+            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: DG.forest,
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -576,12 +898,12 @@ export function QueueRow({
         </span>
       )}
 
-      <FlagDisc code={code} name={name} size={compact ? 26 : 32} ring={DG.ivory} />
+      <FlagDisc code={code} name={name} size={compact ? 22 : 26} ring={DG.ivory} />
 
       <span
         style={{
           flex: 1, minWidth: 0, fontFamily: OUTFIT,
-          fontSize: compact ? 14 : 15, fontWeight: 700, color: DG.forest,
+          fontSize: compact ? 12.5 : 13.5, fontWeight: 700, color: DG.forest,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}
       >
@@ -590,10 +912,11 @@ export function QueueRow({
 
       {isSelf && (
         <span
+          className="dgv-you-chip"
           style={{
-            padding: '4px 8px', borderRadius: 6, flexShrink: 0,
+            padding: '2px 5px', borderRadius: 5, flexShrink: 0,
             background: DG.forest, color: DG.ivory,
-            fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, letterSpacing: '0.06em',
+            fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 900, letterSpacing: '0.04em',
           }}
         >
           {youLabel}
@@ -601,9 +924,13 @@ export function QueueRow({
       )}
       {speaking && (
         <span
+          /* Drops out below ~150px of row width rather than truncating the
+             country name it sits beside — the equalizer and the gold fill
+             already say "speaking" on their own. */
+          className="dgv-speaking-tag"
           style={{
-            flexShrink: 0, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800,
-            letterSpacing: '0.1em', color: DG.forest, textTransform: 'uppercase',
+            flexShrink: 0, fontFamily: OUTFIT, fontSize: 9, fontWeight: 800,
+            letterSpacing: '0.08em', color: DG.forest, textTransform: 'uppercase',
           }}
         >
           {speakingLabel}
