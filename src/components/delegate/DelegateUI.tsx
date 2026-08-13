@@ -1,0 +1,758 @@
+'use client';
+
+/**
+ * DelegateUI — the visual layer for the redesigned delegate view.
+ *
+ * Design contract, and the reasoning behind the parts that look like they
+ * could be simplified:
+ *
+ * 1. GOLD IS NEVER TEXT ON IVORY. #EED98A on #EDE7D8 measures 1.14:1. Gold is
+ *    a FILL behind forest text, or a ring. Forest on gold is 9.09:1 and is the
+ *    pairing to reach for. #9A8A78 muted is 2.71:1 — decorative only, never a
+ *    label you need read. Secondary text is #4A4238 (8.00:1).
+ * 2. GOLD MEANS EXACTLY ONE THING: "live right now / your turn". If gold also
+ *    meant "speeches given" it would stop meaning anything on the row that
+ *    matters. That is why the three stat tiles are deliberately uniform.
+ * 3. THE ORDINAL IS NOT DRAWN ON THE FLAG. A numeral that reads on Japan's
+ *    white field vanishes on Brazil's. Scrimming it dark enough to fix that
+ *    destroys the country identity, which is the whole point of the flag.
+ *    Rank sits beside the crest — the Duolingo/ESPN convention.
+ * 4. THE ACTION BUTTONS ARE FILLED, NOT NEUMORPHIC. Soft ivory-on-ivory
+ *    extrusion is the documented wrong choice for a multi-CTA screen: buttons
+ *    become indistinguishable from inert surfaces. Tiles get the neu treatment;
+ *    buttons get a hard `0 6px 0` edge that collapses on press.
+ * 5. "SPEAKING" AND "YOU" ARE TWO INDEPENDENT CHANNELS — fill+motion vs
+ *    outline+chip. They must stack cleanly, because when you are speaking both
+ *    are true at once.
+ *
+ * Keyframes are namespaced `dgv-` — 28 files in this repo define keyframes in
+ * inline <style> tags, which are global, and `neuFadeIn`/`gvRise` already
+ * collide across files. Do not drop the prefix.
+ */
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { getFlagUrl } from '@/lib/countries';
+import { OUTFIT, EASE } from '@/components/neu';
+
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
+
+export const DG = {
+  ivory: '#EDE7D8',
+  surface: '#F0EBDD',
+  cream: '#FAF8F3',
+  ink: '#1C1410',
+  body: '#4A4238',      // 8.00:1 on ivory — the readable secondary
+  faint: '#6B5F52',     // 4.87:1 — smallest readable tier
+  hairline: '#DDD4C0',
+  forest: '#1B3828',
+  forestMid: '#2A5A3C',
+  forestLift: '#245036',
+  forestEdge: '#0E2117',
+  green: '#3D7A52',
+  gold: '#EED98A',
+  goldLift: '#F3E3A2',
+  goldEdge: '#C9AE58',
+  deepGold: '#B6871F',
+  danger: '#8B2020',
+} as const;
+
+/** Raised/pressed pair, forest-tinted like the rest of the app. */
+export const LIFT = {
+  sm: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px rgba(27,56,40,0.15)',
+  md: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.16)',
+  inSm: 'inset 2px 2px 6px rgba(27,56,40,0.13), inset -2px -2px 6px rgba(255,255,255,0.8)',
+  in: 'inset 4px 4px 10px rgba(27,56,40,0.14), inset -4px -4px 10px rgba(255,255,255,0.8)',
+} as const;
+
+/* Escalation ladder. Position 17 and position 1 are different screens. */
+export type Heat = 'floor' | 'next' | 'alert' | 'warm' | 'calm' | 'off';
+
+export function heatFor(queueIndex: number, isSpeaking: boolean): Heat {
+  if (isSpeaking) return 'floor';
+  if (queueIndex < 0) return 'off';
+  if (queueIndex === 0) return 'next';
+  if (queueIndex === 1) return 'alert';
+  if (queueIndex <= 4) return 'warm';
+  return 'calm';
+}
+
+/* ── Global styles (namespaced) ─────────────────────────────────────────── */
+
+export function DelegateStyles() {
+  return (
+    <style>{`
+      @keyframes dgv-bar { 0%,100% { transform: scaleY(0.35) } 50% { transform: scaleY(1) } }
+      @keyframes dgv-rise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+      @keyframes dgv-sheet { from { transform: translateY(100%) } to { transform: translateY(0) } }
+      @keyframes dgv-fade { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes dgv-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
+
+      .dgv-rise { animation: dgv-rise 460ms ${EASE} both }
+      .dgv-press { transition: transform 90ms cubic-bezier(.2,.8,.3,1), box-shadow 90ms cubic-bezier(.2,.8,.3,1) }
+      .dgv-tap { transition: transform 140ms ${EASE}, box-shadow 200ms ${EASE} }
+      .dgv-tap:active { transform: scale(0.96) }
+
+      .dgv-scroll { scrollbar-width: thin; scrollbar-color: ${DG.hairline} transparent }
+      .dgv-scroll::-webkit-scrollbar { width: 6px }
+      .dgv-scroll::-webkit-scrollbar-thumb { background: ${DG.hairline}; border-radius: 3px }
+
+      /* Focus is never signalled by shadow alone — shadows are invisible to AT
+         and to anyone who cannot perceive the depth cue. */
+      .dgv-focus:focus-visible { outline: 3px solid ${DG.forest}; outline-offset: 3px; border-radius: 4px }
+
+      /* Touch targets in the header. The logo's anchor lives inside a shared
+         component, so its hit area is grown from here rather than by editing
+         a file the chair and voting pages also render. The code button keeps
+         its visual position via matching negative margin — it only ever
+         overlaps the committee name, which is not interactive, so no two
+         tappable areas end up on top of each other. */
+      .dgv-hdr a { min-height: 44px; display: inline-flex; align-items: center }
+      .dgv-hdr .dgv-code { padding: 7px 0; margin: -7px 0 }
+
+      @media (min-width: 768px) {
+        .dgv-sheet-wrap { align-items: center !important; padding: 24px !important }
+        .dgv-sheet-panel { border-radius: 24px !important; animation-name: dgv-rise !important }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .dgv-rise { animation: none }
+        .dgv-press, .dgv-tap { transition-duration: 1ms }
+        .dgv-bar { animation: none !important }
+      }
+    `}</style>
+  );
+}
+
+/* ── Equalizer ──────────────────────────────────────────────────────────── */
+
+/**
+ * Motion is the one channel a static row cannot imitate — it is what makes
+ * "speaking now" unmistakable. Under reduced-motion the bars freeze at uneven
+ * heights, which still reads as audio; a single static dot does not.
+ */
+export function Equalizer({ color = DG.forest, size = 16 }: { color?: string; size?: number }) {
+  const frozen = [0.5, 1, 0.7];
+  return (
+    <span
+      aria-hidden="true"
+      style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 3, height: size }}
+    >
+      {[0, 120, 240].map((delay, i) => (
+        <span
+          key={delay}
+          className="dgv-bar"
+          style={{
+            width: 3,
+            height: size,
+            borderRadius: 2,
+            background: color,
+            transformOrigin: 'bottom',
+            transform: `scaleY(${frozen[i]})`,
+            animation: `dgv-bar 520ms ${delay}ms ease-in-out infinite alternate`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/* ── Flag disc ──────────────────────────────────────────────────────────── */
+
+export function FlagDisc({
+  code,
+  name,
+  size = 96,
+  ring = DG.gold,
+}: { code: string; name?: string; size?: number; ring?: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        position: 'relative',
+        flexShrink: 0,
+        background: DG.surface,
+        /* Surface-coloured stroke first, then the identity ring: the badge
+           technique that keeps an element detached over any background. */
+        boxShadow: `0 0 0 3px ${DG.ivory}, 0 0 0 6px ${ring}, ${LIFT.sm}`,
+      }}
+    >
+      {!failed && code ? (
+        <img
+          src={getFlagUrl(code)}
+          alt={name ? `Flag of ${name}` : ''}
+          onError={() => setFailed(true)}
+          style={{
+            width: '100%', height: '100%', borderRadius: '50%',
+            objectFit: 'cover', display: 'block',
+            /* Pure-black hairline: a tinted one picks up the surface
+               underneath and reads as dirt on the image edge. */
+            outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1,
+          }}
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+            fontSize: size * 0.42, color: DG.faint,
+          }}
+        >
+          ◍
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* ── Queue ordinal ──────────────────────────────────────────────────────── */
+
+function ordinalSuffix(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return 'th';
+  return ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
+}
+
+/**
+ * The hero number. A count alone leaves users tracking progress in their head;
+ * a tracker alone with no dominant number reads as decoration. Both, always.
+ */
+export function QueueOrdinal({
+  position,
+  heat,
+  label,
+  aheadLabel,
+  etaLabel,
+  freshLabel,
+}: {
+  position: number;          // 1-based; 0 = has the floor
+  heat: Heat;
+  label: string;
+  aheadLabel?: string;
+  etaLabel?: string;
+  freshLabel?: string;
+}) {
+  const onFloor = heat === 'floor';
+  const isNext = heat === 'next';
+  const big = onFloor || isNext;
+
+  return (
+    <div style={{ minWidth: 0, flex: 1 }}>
+      <div
+        style={{
+          display: 'flex', alignItems: 'baseline', gap: 4,
+          color: DG.forest, fontFamily: OUTFIT, lineHeight: 0.92,
+          letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {big ? (
+          <span style={{ fontSize: 'clamp(38px, 11vw, 60px)', fontWeight: 900 }}>
+            {onFloor ? 'FLOOR' : 'NEXT'}
+          </span>
+        ) : (
+          <>
+            <span style={{ fontSize: 'clamp(52px, 16vw, 88px)', fontWeight: 900 }}>{position}</span>
+            <span style={{ fontSize: 'clamp(20px, 6vw, 34px)', fontWeight: 900, color: DG.body }}>
+              {ordinalSuffix(position)}
+            </span>
+          </>
+        )}
+      </div>
+
+      <div
+        style={{
+          marginTop: 6, fontFamily: OUTFIT, fontSize: 11, fontWeight: 700,
+          letterSpacing: '0.08em', textTransform: 'uppercase', color: DG.body,
+        }}
+      >
+        {label}
+      </div>
+
+      {aheadLabel && (
+        <div style={{ marginTop: 8, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: DG.body }}>
+          {aheadLabel}
+        </div>
+      )}
+      {etaLabel && (
+        <div
+          style={{
+            marginTop: 3, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+            color: DG.forest, fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {etaLabel}
+        </div>
+      )}
+      {freshLabel && (
+        <div
+          aria-live="polite"
+          style={{ marginTop: 6, fontFamily: OUTFIT, fontSize: 11, fontWeight: 500, color: DG.faint }}
+        >
+          {freshLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Stat tiles ─────────────────────────────────────────────────────────── */
+
+/**
+ * Each tile is a doorway, not a destination: no sparklines, no charts, tap
+ * opens the detail sheet. Tiles are uniform on purpose — see the gold rule.
+ */
+export function StatTile({
+  icon,
+  value,
+  label,
+  onClick,
+  ariaLabel,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  label: string;
+  onClick?: () => void;
+  /** Spell the tile out for screen readers — "SPOKEN / 4:12" reads as two
+   *  disconnected fragments otherwise, and the tap opens a detail sheet the
+   *  terse visible label gives no hint of. */
+  ariaLabel?: string;
+}) {
+  const [down, setDown] = useState(false);
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      {...(onClick ? { onClick, type: 'button' as const } : {})}
+      aria-label={ariaLabel ?? `${label}: ${value}`}
+      onPointerDown={() => setDown(true)}
+      onPointerUp={() => setDown(false)}
+      onPointerLeave={() => setDown(false)}
+      className="dgv-press dgv-focus"
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 4,
+        padding: '12px 10px', borderRadius: 16, border: 'none',
+        background: DG.ivory, textAlign: 'start', width: '100%',
+        minHeight: 76, cursor: onClick ? 'pointer' : 'default',
+        boxShadow: down ? LIFT.inSm : LIFT.sm,
+      }}
+    >
+      <span style={{ color: DG.body, display: 'flex' }} aria-hidden="true">{icon}</span>
+      <span
+        style={{
+          fontFamily: OUTFIT, fontSize: 'clamp(20px, 6vw, 26px)', fontWeight: 900,
+          color: DG.forest, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {value}
+      </span>
+      <span
+        style={{
+          fontFamily: OUTFIT, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+          textTransform: 'uppercase', color: DG.body, whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </span>
+    </Tag>
+  );
+}
+
+/* ── Roll-call switch ───────────────────────────────────────────────────── */
+
+/**
+ * Two-state segmented control. The selected state is carried by FILL, never by
+ * shadow — a shadow-only "on" state is silent to assistive tech.
+ */
+export function RollCallSwitch({
+  value,
+  onChange,
+  presentLabel,
+  votingLabel,
+  disabled,
+}: {
+  value: 'present' | 'present-voting';
+  onChange: (v: 'present' | 'present-voting') => void;
+  presentLabel: string;
+  votingLabel: string;
+  disabled?: boolean;
+}) {
+  const opts: Array<{ k: 'present' | 'present-voting'; label: string }> = [
+    { k: 'present', label: presentLabel },
+    { k: 'present-voting', label: votingLabel },
+  ];
+  return (
+    <div
+      role="group"
+      style={{
+        display: 'inline-flex', gap: 4, padding: 4, borderRadius: 999,
+        background: DG.ivory, boxShadow: LIFT.inSm,
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
+      {opts.map((o) => {
+        const on = value === o.k;
+        return (
+          <button
+            key={o.k}
+            type="button"
+            disabled={disabled}
+            aria-pressed={on}
+            onClick={() => !disabled && onChange(o.k)}
+            className="dgv-tap dgv-focus"
+            style={{
+              /* 999 outer − 4 padding: concentric, so the thumb nests cleanly. */
+              borderRadius: 999, border: 'none', minHeight: 44, padding: '0 18px',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.06em',
+              background: on ? `linear-gradient(135deg, ${DG.forestMid}, ${DG.forest})` : 'transparent',
+              color: on ? DG.gold : DG.body,
+              boxShadow: on ? `0 3px 8px rgba(27,56,40,0.30)` : 'none',
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Chunky action button ───────────────────────────────────────────────── */
+
+export type ButtonTone = 'primary' | 'outline' | 'gold';
+
+/**
+ * The hard `0 6px 0` bottom edge (zero blur) is what makes these read as
+ * physical keys rather than floating cards; pressing collapses the edge and
+ * moves the cap down onto it. The ambient forest shadow sits underneath.
+ */
+export function ChunkyButton({
+  tone = 'primary',
+  icon,
+  children,
+  onClick,
+  disabled,
+  badge,
+  full = true,
+}: {
+  tone?: ButtonTone;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  badge?: number;
+  full?: boolean;
+}) {
+  const [down, setDown] = useState(false);
+
+  const skin: Record<ButtonTone, { bg: string; edge: string; fg: string; border?: string }> = {
+    primary: {
+      bg: `linear-gradient(180deg, ${DG.forestLift}, ${DG.forest})`,
+      edge: DG.forestEdge, fg: DG.ivory,
+    },
+    outline: {
+      bg: DG.cream, edge: DG.forest, fg: DG.forest,
+      border: `2px solid ${DG.forest}`,
+    },
+    gold: {
+      bg: `linear-gradient(180deg, ${DG.goldLift}, ${DG.gold})`,
+      edge: DG.goldEdge, fg: DG.forest,
+    },
+  };
+  const s = skin[tone];
+  const pressed = down && !disabled;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onPointerDown={() => setDown(true)}
+      onPointerUp={() => setDown(false)}
+      onPointerLeave={() => setDown(false)}
+      className="dgv-press dgv-focus"
+      style={{
+        position: 'relative',
+        width: full ? '100%' : undefined,
+        minHeight: 60,
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '0 18px', borderRadius: 18,
+        border: s.border ?? 'none',
+        background: disabled ? DG.hairline : s.bg,
+        color: disabled ? DG.faint : s.fg,
+        fontFamily: OUTFIT, fontSize: 'clamp(14px, 4.2vw, 17px)', fontWeight: 900,
+        letterSpacing: '0.01em', textAlign: 'start',
+        /* Normalised here, not at the call site: the labels come from four
+           locales whose casing conventions differ, and `tab_chat` in
+           particular is title case. A no-op for Arabic, which has no case. */
+        textTransform: 'uppercase',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transform: pressed ? 'translateY(5px)' : 'translateY(0)',
+        boxShadow: disabled
+          ? 'none'
+          : pressed
+            ? `0 1px 0 ${s.edge}, 0 3px 6px rgba(27,56,40,0.18)`
+            : `0 6px 0 ${s.edge}, 0 12px 20px rgba(27,56,40,0.22)`,
+      }}
+    >
+      <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
+      {typeof badge === 'number' && badge > 0 && (
+        <span
+          style={{
+            minWidth: 24, height: 24, padding: '0 7px', borderRadius: 999,
+            display: 'grid', placeItems: 'center',
+            background: tone === 'gold' ? DG.forest : DG.gold,
+            color: tone === 'gold' ? DG.gold : DG.forest,
+            fontFamily: OUTFIT, fontSize: 12, fontWeight: 900,
+            fontVariantNumeric: 'tabular-nums',
+            boxShadow: `0 0 0 2px ${tone === 'gold' ? DG.gold : DG.forest}`,
+          }}
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+      {icon && <span aria-hidden="true" style={{ display: 'flex', flexShrink: 0 }}>{icon}</span>}
+    </button>
+  );
+}
+
+/* ── Queue row ──────────────────────────────────────────────────────────── */
+
+/**
+ * "Speaking" and "you" travel on different properties — fill+motion vs
+ * outline+chip — precisely so they can both be true at once without either
+ * cancelling the other out.
+ */
+export function QueueRow({
+  position,
+  code,
+  name,
+  speaking,
+  isSelf,
+  speakingLabel,
+  youLabel,
+  compact,
+}: {
+  position: number;
+  code: string;
+  name: string;
+  speaking?: boolean;
+  isSelf?: boolean;
+  speakingLabel: string;
+  youLabel: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        minHeight: speaking ? 68 : compact ? 48 : 56,
+        padding: speaking ? '10px 14px' : '8px 12px',
+        borderRadius: 14,
+        background: speaking ? `linear-gradient(180deg, ${DG.goldLift}, ${DG.gold})` : 'transparent',
+        border: isSelf ? `2px solid ${DG.forest}` : '2px solid transparent',
+        boxShadow: speaking ? `0 4px 0 ${DG.goldEdge}, 0 8px 16px rgba(27,56,40,0.18)` : 'none',
+      }}
+    >
+      {speaking ? (
+        <span style={{ width: 28, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          <Equalizer color={DG.forest} size={16} />
+        </span>
+      ) : (
+        <span
+          style={{
+            width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+            display: 'grid', placeItems: 'center',
+            background: 'rgba(27,56,40,0.07)',
+            fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: DG.forest,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {position}
+        </span>
+      )}
+
+      <FlagDisc code={code} name={name} size={compact ? 26 : 32} ring={DG.ivory} />
+
+      <span
+        style={{
+          flex: 1, minWidth: 0, fontFamily: OUTFIT,
+          fontSize: compact ? 14 : 15, fontWeight: 700, color: DG.forest,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+      >
+        {name}
+      </span>
+
+      {isSelf && (
+        <span
+          style={{
+            padding: '4px 8px', borderRadius: 6, flexShrink: 0,
+            background: DG.forest, color: DG.ivory,
+            fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, letterSpacing: '0.06em',
+          }}
+        >
+          {youLabel}
+        </span>
+      )}
+      {speaking && (
+        <span
+          style={{
+            flexShrink: 0, fontFamily: OUTFIT, fontSize: 10, fontWeight: 800,
+            letterSpacing: '0.1em', color: DG.forest, textTransform: 'uppercase',
+          }}
+        >
+          {speakingLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ── Section card ───────────────────────────────────────────────────────── */
+
+export function Panel({
+  children,
+  style,
+  className = '',
+}: { children: React.ReactNode; style?: React.CSSProperties; className?: string }) {
+  return (
+    <section
+      className={className}
+      style={{
+        background: DG.surface,
+        borderRadius: 22,
+        padding: 16,
+        boxShadow: LIFT.md,
+        ...style,
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+export function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h2
+      style={{
+        margin: 0, fontFamily: OUTFIT, fontSize: 11, fontWeight: 800,
+        letterSpacing: '0.14em', textTransform: 'uppercase', color: DG.deepGold,
+      }}
+    >
+      {children}
+    </h2>
+  );
+}
+
+/* ── Bottom sheet ───────────────────────────────────────────────────────── */
+
+/**
+ * Portaled so no ancestor's overflow can clip it, per the project's popover
+ * rule. Focus is trapped, Escape closes, and the scrim is opaque enough to
+ * isolate the foreground.
+ */
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+}: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  const stop = useCallback((e: React.MouseEvent) => e.stopPropagation(), []);
+
+  /* `open` only ever becomes true from a click, so this never runs during SSR.
+     The document check is the guard, not a mounted flag — a mounted flag would
+     mean setting state inside an effect for no benefit. */
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(12,20,15,0.52)',
+        /* Bottom sheet on phones where the thumb is; a centred dialog once
+           there is room, so it does not read as a giant docked panel. */
+        display: 'flex', justifyContent: 'center',
+        alignItems: 'flex-end',
+        padding: 0,
+        animation: `dgv-fade 200ms ${EASE} both`,
+      }}
+      className="dgv-sheet-wrap"
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={stop}
+        className="dgv-scroll dgv-sheet-panel"
+        style={{
+          width: '100%', maxWidth: 720, maxHeight: '86vh', overflowY: 'auto',
+          background: DG.surface,
+          borderRadius: '24px 24px 0 0',
+          padding: '10px 16px 24px',
+          boxShadow: '0 -20px 60px rgba(27,56,40,0.32)',
+          animation: `dgv-sheet 300ms ${EASE} both`,
+          outline: 'none',
+        }}
+      >
+        <div
+          style={{
+            width: 44, height: 5, borderRadius: 999, background: DG.hairline,
+            margin: '0 auto 14px',
+          }}
+          aria-hidden="true"
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <h2
+            style={{
+              flex: 1, margin: 0, fontFamily: OUTFIT, fontSize: 20, fontWeight: 900,
+              letterSpacing: '-0.02em', color: DG.ink,
+            }}
+          >
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="dgv-tap dgv-focus"
+            style={{
+              width: 44, height: 44, borderRadius: 999, border: 'none', flexShrink: 0,
+              background: DG.ivory, color: DG.forest, cursor: 'pointer',
+              boxShadow: LIFT.sm, display: 'grid', placeItems: 'center',
+              fontSize: 20, fontWeight: 700, lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
