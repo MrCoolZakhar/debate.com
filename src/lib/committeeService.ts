@@ -304,9 +304,13 @@ export async function setPhase(committeeId: string, phase: SessionPhase, code: s
 // ROLL CALL
 // ============================================================
 
-export async function setDelegateStatus(delegateId: string, status: DelegateStatus, code: string, chairSuffix?: string): Promise<void> {
+// Returns whether the write actually landed. Every caller that only wants fire-and-forget
+// can keep ignoring the value; the delegate page uses it to refund the rate-limit slot and
+// roll its optimistic status back when the write is rejected (e.g. by RLS).
+export async function setDelegateStatus(delegateId: string, status: DelegateStatus, code: string, chairSuffix?: string): Promise<boolean> {
   const { error } = await sessionClient(code, chairSuffix).from('delegates').update({ status }).eq('id', delegateId);
   if (error) console.error('Error setting delegate status:', error);
+  return !error;
 }
 
 export async function setDelegateObserver(delegateId: string, isObserver: boolean, code: string, chairSuffix?: string): Promise<void> {

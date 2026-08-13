@@ -280,18 +280,24 @@ export function FlagOrdinalDisc({
           src={getFlagUrl(code)}
           alt={name ? `Flag of ${name}` : ''}
           onError={() => setFailed(true)}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          /* `contain`, not `cover`. A 3:2 flag cropped to a circle loses its
+             left and right thirds — the exact parts that carry the charge on
+             most designs — so the flag stopped being identifiable. Contained,
+             the whole flag reads, and the forest field behind it becomes the
+             disc rather than an accident of cropping. */
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
         />
       )}
-      {/* Scrim + vignette: darker at the rim so the ring reads, lighter at the
-          centre so the flag is still identifiable behind the number. */}
+      {/* Scrim, weighted UP. It only has to carry the numeral, which sits in
+          the upper half; running it dark all the way to the bottom rim just
+          buried the flag for no legibility gain. */}
       <span
         aria-hidden="true"
         style={{
           position: 'absolute', inset: 0, borderRadius: '50%',
           background: live
-            ? 'radial-gradient(circle at 50% 45%, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.52) 100%)'
-            : 'radial-gradient(circle at 50% 45%, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.62) 100%)',
+            ? 'linear-gradient(180deg, rgba(0,0,0,0.46) 0%, rgba(0,0,0,0.40) 52%, rgba(0,0,0,0.16) 100%)'
+            : 'linear-gradient(180deg, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.44) 52%, rgba(0,0,0,0.18) 100%)',
         }}
       />
       <span
@@ -325,6 +331,24 @@ export function FlagOrdinalDisc({
       </span>
     </span>
   );
+}
+
+/**
+ * How far to pull an item toward the disc so a stack of them follows its
+ * curve instead of forming a straight column.
+ *
+ * An item sitting `d` above or below the centre line should be `sqrt(R²-d²)`
+ * from it, not `R` — so the ones at the top and bottom of the stack tuck in
+ * and the middle one jutts out, and the group reads as wrapped around the
+ * circle. Returns the inset in px, normalised so the outermost item gets
+ * exactly `depth`. Costs no vertical space, which a true radial orbit would.
+ */
+export function arcInset(index: number, count: number, depth = 22): number {
+  if (count < 2) return 0;
+  const span = 0.8; // keep off the pole, where the curve turns vertical
+  const p = ((index - (count - 1) / 2) / ((count - 1) / 2)) * span;
+  const norm = 1 - Math.sqrt(1 - span * span);
+  return Math.round((depth * (1 - Math.sqrt(Math.max(0, 1 - p * p)))) / norm);
 }
 
 /* ── Stat row (3D icon + number + label), the hero's right rail ─────────── */
@@ -381,11 +405,30 @@ export function StatRow({
 
 /* ── Square action button ───────────────────────────────────────────────── */
 
+/**
+ * Key caps. FLAT fills — no gradients anywhere.
+ *
+ * A soft vertical gradient reads as extrusion only above ~15% luminance
+ * spread; below that the eye's cheapest explanation is "flat panel, unevenly
+ * printed", so you pay the gradient's cost (a desaturated top half drifting
+ * toward the ivory background, and a label sitting across two backgrounds)
+ * and buy no depth at all. Worse, a soft gradient beside a razor-sharp edge is
+ * two incompatible rendering models on one object, and the edge starts reading
+ * as a border someone forgot to delete. Depth here comes from silhouette: a
+ * hard unblurred bottom wall plus a small contact shadow.
+ *
+ * `edge` is derived from the fill by one rule — mix(fill, forest, 30%) — never
+ * hand-picked. That single derivation is most of why three different colours
+ * read as three instances of one object rather than three separate designs.
+ * The shared 2px forest border does the rest, and it is load-bearing for gold:
+ * #EED98A on ivory is 1.14:1, so without a border that key has no boundary at
+ * all and cannot read as an object.
+ */
 export const ACTION_SKINS = {
-  green: { bg: 'linear-gradient(180deg,#4FB870,#2F8A4E)', edge: '#236B3B', fg: '#FFFFFF' },
-  blue:  { bg: 'linear-gradient(180deg,#6FA8DC,#3E7CB1)', edge: '#2C5D87', fg: '#FFFFFF' },
-  gold:  { bg: 'linear-gradient(180deg,#F2DF8E,#D9BE55)', edge: '#B4952F', fg: '#1B3828' },
-  slate: { bg: 'linear-gradient(180deg,#B9AE9A,#968974)', edge: '#7D7161', fg: '#FFFFFF' },
+  green: { bg: '#2F8A4E', edge: '#26603B', fg: '#FFFFFF' },
+  blue:  { bg: '#3E7CB1', edge: '#345D7E', fg: '#FFFFFF' },
+  gold:  { bg: '#EED98A', edge: '#B3AC6F', fg: '#1B3828' },
+  slate: { bg: '#B9AE9A', edge: '#8C8874', fg: '#1B3828' },
 } as const;
 
 export type ActionSkin = keyof typeof ACTION_SKINS;
@@ -394,78 +437,118 @@ export type ActionSkin = keyof typeof ACTION_SKINS;
  * Chunky near-square key. Same hard `0 Npx 0` edge as the pill buttons — the
  * cap travels down onto the edge on press, which is what sells it as physical.
  */
+const EDGE = 6;
+
 export function SquareButton({
   skin = 'green',
-  emoji,
+  icon,
   children,
   onClick,
   disabled,
   badge,
+  sub,
 }: {
   skin?: ActionSkin;
-  emoji?: React.ReactNode;
+  /** Flat monochrome glyph, inheriting the label colour. Never 3D — a shaded
+   *  icon brings its own light source and depth story, and two depth models on
+   *  one object destroys both. The cap is the object; the glyph is printed on
+   *  it, and printed markings are flat. */
+  icon?: React.ReactNode;
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   badge?: number;
+  sub?: string;
 }) {
   const [down, setDown] = useState(false);
   const s = ACTION_SKINS[skin];
   const pressed = down && !disabled;
+
   return (
+    /* Two layers: the base IS the side wall, and the face compresses down onto
+       it. The footprint never changes, so three stacked keys cannot reflow. */
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      onPointerDown={() => setDown(true)}
+      onPointerDown={() => !disabled && setDown(true)}
       onPointerUp={() => setDown(false)}
       onPointerLeave={() => setDown(false)}
-      className="dgv-press dgv-focus"
+      /* Safari only fires :active on touch when a touch listener exists, and
+         this is a phone-first screen — without it iPhone gets no press at all. */
+      onTouchStart={() => {}}
+      className="dgv-focus"
       style={{
         position: 'relative', flex: 1, width: '100%', minHeight: 0,
-        display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-        justifyContent: 'space-between', gap: 6,
-        padding: 'clamp(9px, 2.6vw, 15px)', borderRadius: 20, border: 'none',
-        /* A disabled primary keeps its own hue at low saturation instead of
-           going flat grey. "You are already in the queue" is a satisfied
-           state, not a broken one, and a dead grey slab read as an error. */
-        background: disabled ? s.bg : s.bg,
-        filter: disabled ? 'saturate(0.35) brightness(1.06)' : undefined,
-        color: s.fg,
-        opacity: disabled ? 0.85 : 1,
+        display: 'block', padding: `0 0 ${EDGE}px`, border: 'none',
+        background: s.edge, borderRadius: 18, overflow: 'hidden',
         cursor: disabled ? 'default' : 'pointer',
-        textAlign: 'start', overflow: 'hidden',
-        transform: pressed ? 'translateY(5px)' : 'translateY(0)',
-        boxShadow: disabled
-          ? `0 3px 0 ${s.edge}, 0 6px 12px rgba(27,56,40,0.14)`
-          : pressed
-            ? `0 1px 0 ${s.edge}, 0 3px 6px rgba(27,56,40,0.20)`
-            : `0 6px 0 ${s.edge}, 0 12px 20px rgba(27,56,40,0.24)`,
+        touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
+        boxShadow: disabled ? 'none' : '0 2px 3px rgba(27,56,40,0.16)',
+        opacity: disabled ? 0.72 : 1,
       }}
     >
       <span
+        className="dgv-key-face"
         style={{
-          fontFamily: OUTFIT, fontWeight: 900, lineHeight: 1.06,
-          fontSize: 'clamp(12px, 3.7vw, 17px)', letterSpacing: '-0.01em',
-          textTransform: 'uppercase',
+          /* Grouped, not pushed to opposite ends. On a tall key, space-between
+             strands the glyph and the label at the extremes with a void
+             between them and they stop reading as one control. */
+          display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+          justifyContent: 'center', gap: 'clamp(6px, 1.6vw, 10px)', height: '100%',
+          padding: 'clamp(10px, 2.8vw, 16px)', borderRadius: 18,
+          background: s.bg, color: s.fg,
+          border: `2px solid ${DG.forest}`,
+          filter: disabled ? 'saturate(0.4)' : undefined,
+          /* Instant on the way down, eased on the way back up. That asymmetry
+             is what makes it feel like a mechanism rather than an animation. */
+          transform: pressed ? `translateY(${EDGE}px)` : 'translateY(0)',
+          transitionProperty: 'transform, filter',
+          transitionDuration: pressed ? '0s' : '120ms',
+          transitionTimingFunction: 'cubic-bezier(.2,.8,.3,1)',
         }}
       >
-        {children}
-      </span>
-      <span style={{ alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 6 }}>
-        {typeof badge === 'number' && badge > 0 && (
+        <span style={{ display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%' }}>
+          {icon && (
+            <span style={{ flexShrink: 0, display: 'flex', marginTop: -1 }} aria-hidden="true">
+              {icon}
+            </span>
+          )}
+          {typeof badge === 'number' && badge > 0 && (
+            <span
+              style={{
+                marginInlineStart: 'auto', minWidth: 22, height: 22, padding: '0 6px',
+                borderRadius: 999, display: 'grid', placeItems: 'center',
+                background: DG.forest, color: DG.gold,
+                fontFamily: OUTFIT, fontSize: 11, fontWeight: 900,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
+        </span>
+
+        <span style={{ display: 'block', textAlign: 'start', width: '100%' }}>
           <span
             style={{
-              minWidth: 22, height: 22, padding: '0 6px', borderRadius: 999,
-              display: 'grid', placeItems: 'center', background: DG.forest, color: DG.gold,
-              fontFamily: OUTFIT, fontSize: 11, fontWeight: 900,
-              fontVariantNumeric: 'tabular-nums',
+              display: 'block', fontFamily: OUTFIT, fontWeight: 800, lineHeight: 1.12,
+              fontSize: 'clamp(13px, 4vw, 18px)', letterSpacing: '-0.01em',
             }}
           >
-            {badge > 99 ? '99+' : badge}
+            {children}
           </span>
-        )}
-        {emoji}
+          {sub && (
+            <span
+              style={{
+                display: 'block', marginTop: 2, fontFamily: OUTFIT, fontWeight: 600,
+                fontSize: 'clamp(9px, 2.7vw, 12px)', opacity: 0.78, lineHeight: 1.15,
+              }}
+            >
+              {sub}
+            </span>
+          )}
+        </span>
       </span>
     </button>
   );

@@ -2,25 +2,24 @@
 
 import React, { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
-import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen } from 'lucide-react';
+import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen, Hand } from 'lucide-react';
 import { OUTFIT, Emoji3D } from '@/components/neu';
 import {
   DelegateStyles, DG, LIFT, Panel, SectionLabel, FlagDisc, FlagOrdinalDisc, StatRow,
   RollCallSwitch, ChunkyButton, SquareButton, QueueRow, Sheet, Equalizer,
-  useMeasuredSize, useFitCount, ordinalSuffixFor,
+  useMeasuredSize, useFitCount, ordinalSuffixFor, arcInset,
 } from '@/components/delegate/DelegateUI';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { Committee, DocumentType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
+import { Committee, Delegate, DocumentType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
-import { computeObjectiveScore, getScoringConfig } from '@/lib/scoring';
+import { getScoringConfig } from '@/lib/scoring';
 import { selectDelegateTips } from '@/lib/delegateTips';
 import { getDelegateFeedback } from '@/lib/committeeService';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
 import { Emoji } from '@/components/Emoji';
-import { FlagImg } from '@/components/FlagImg';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFlags';
@@ -114,6 +113,12 @@ const PHASE_LABELS: Record<string, string> = {
   'adjourned': 'Debate Closed',
 };
 
+// How long a locally-written delegate status stays pinned against an incoming refetch before
+// control goes back to the DB row. Same number as the chair page's STATUS_PIN_TTL_MS — both
+// are the backstop for a status write that never lands, and the two surfaces should not give
+// up at different moments.
+const STATUS_PIN_TTL_MS = 8000;
+
 // Rate limit key in localStorage
 function getRateLimitKey(committeeId: string, country: string): string {
   return `status-changes:${committeeId}:${country}`;
@@ -132,6 +137,20 @@ function recordStatusChange(committeeId: string, country: string): void {
   const THREE_HOURS = 3 * 60 * 60 * 1000;
   const recent = getStatusChangeTimes(committeeId, country).filter((t) => now - t < THREE_HOURS);
   localStorage.setItem(key, JSON.stringify([...recent, now]));
+}
+
+// Give back the slot burned by a status change whose DB write was rejected. Pops the most
+// recent timestamp only — the optimistic `recordStatusChange` stays where it is (moving it
+// behind an await would reopen the double-click hole it exists to close).
+function refundStatusChange(committeeId: string, country: string): void {
+  try {
+    const key = getRateLimitKey(committeeId, country);
+    const now = Date.now();
+    const THREE_HOURS = 3 * 60 * 60 * 1000;
+    const recent = getStatusChangeTimes(committeeId, country).filter((t) => now - t < THREE_HOURS);
+    recent.pop();
+    localStorage.setItem(key, JSON.stringify(recent));
+  } catch {}
 }
 
 function statusChangesRemaining(committeeId: string, country: string): number {
@@ -389,26 +408,38 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 }
 
 // ── Statistics Tab ────────────────────────────────────────────────────────────
+/**
+ * Speeches only. Points, the category ledger, the by-time rank and the leaderboard are
+ * deliberately gone: a delegate sees WHAT they said, under which topic or motion, and for
+ * how long. The qualitative surfaces (the chair's factor recap, the coaching tips) stay —
+ * neither states a score.
+ */
 function StatisticsTab({ committee, country }: { committee: Committee; country: string }) {
   const { language } = useLanguage();
   const t = useT();
   const cfg = getScoringConfig(committee);
-  const hideScores = cfg.hideScoresFromDelegates === true;
-  const logs = parseSpeakingLogs(committee);
-  const { total, rows } = computeObjectiveScore(committee, country);
-  // Guidance is deliberately NOT gated on `hideScores` — it never states a number or a
-  // rank, so a chair who hides scores still gets their delegates coached. The one key
-  // that would surface a scoring-config label they cannot otherwise see
+  // Guidance never states a number or a rank, so it survives the removal of the score UI.
+  // The one key that would surface a scoring-config label a delegate cannot otherwise see
   // (`delegate_tip_custom_source`) is suppressed inside the selector.
   const tips = selectDelegateTips(committee, country, language, t);
-  const myLogs = logs.filter((l) => l.country === country);
+  // Renamed / localized motion labels, read off the committee row (never getSettings here).
+  const mn = motionNames(committee, language);
 
-  // Category subtotals (summary) — delegates see grouped categories, never the chair's itemized ledger.
-  const categories: { label: string; pts: number }[] = [];
-  for (const r of rows) {
-    const existing = categories.find((c) => c.label === r.label);
-    if (existing) existing.pts += r.pts; else categories.push({ label: r.label, pts: r.pts });
-  }
+  // Newest first. Reverse first so entries that share (or lack) a timestamp keep a stable
+  // newest-first order under the sort rather than falling back to chronological.
+  const myLogs = parseSpeakingLogs(committee)
+    .filter((l) => l.country === country)
+    .slice()
+    .reverse()
+    .sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''));
+  const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
+
+  const contextLabel = (ctx: SpeakingLogEntry['context']): string => {
+    if (ctx === 'moderated-caucus') return mn.moderated;
+    if (ctx === 'unmoderated-caucus') return mn.unmoderated;
+    if (ctx === 'tour-de-table') return mn.tour;
+    return t('delegate_gsl_fallback');
+  };
 
   // End recap — factor scores only (never the chair's private notes).
   const [recap, setRecap] = useState<{ level: string; factorScores: Record<string, number>; createdAt: string }[]>([]);
@@ -420,175 +451,105 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0]
     ?? [...recap].filter((f) => f.level === 'session').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
   const recapFactors = cfg.factors.filter((f) => f.enabled && latestRecap && typeof latestRecap.factorScores[f.id] === 'number');
-  const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
 
-  // Top speakers by time
-  const byCountry: Record<string, number> = {};
-  logs.forEach((l) => { byCountry[l.country] = (byCountry[l.country] ?? 0) + l.seconds; });
-  const ranking = Object.entries(byCountry)
-    .sort((a, b) => b[1] - a[1])
-    .map(([c, s]) => ({ country: c, seconds: s }));
-  const myRank = ranking.findIndex((r) => r.country === country) + 1;
-
-  // Points per country for leaderboard
-  const pointsByCountry: Record<string, number> = {};
-  ranking.slice(0, 10).forEach(({ country: c }) => {
-    pointsByCountry[c] = computeObjectiveScore(committee, c).total;
-  });
+  const num: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-5">
-      {/* Score card — hidden when chairs disable scores for delegates */}
-      {hideScores ? (
-        <div className="rounded-2xl p-4 text-sm" style={{ border: '1px solid #DDD4C0', backgroundColor: '#EDE7D8', color: '#6A5A4A' }}>
-          {t('delegate_scores_hidden')}
-        </div>
-      ) : (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_score_header')}</span>
-          </div>
-          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="flex items-end gap-3 mb-3">
-            <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
-            <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>{t('delegate_pts_label')}</span>
-          </div>
-          {/* Category subtotals — summary, not the chair's itemized ledger */}
-          {categories.length > 0 && (
-            <div className="mt-4 space-y-1.5">
-              {categories.map((c) => (
-                <div key={c.label} className="flex justify-between text-xs gap-2">
-                  <span className="truncate" style={{ color: '#6A5A4A' }}>{c.label}</span>
-                  <span className="font-bold shrink-0" style={{ color: c.pts < 0 ? '#8B2020' : '#1B3828' }}>{c.pts < 0 ? '' : '+'}{c.pts}</span>
-                </div>
-              ))}
+    <div className="w-full max-w-2xl mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Compact summary — count + total time, nothing scored */}
+      <Panel style={{ display: 'flex', gap: 12 }}>
+        {[
+          { value: String(myLogs.length), label: t('delegate_speeches_label') },
+          { value: formatTime(totalSeconds), label: t('delegate_total_time_label') },
+        ].map((s) => (
+          <div key={s.label} style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+            <div style={{ ...num, fontFamily: OUTFIT, fontSize: 28, fontWeight: 900, color: DG.forest, lineHeight: 1.1 }}>
+              {s.value}
             </div>
-          )}
+            <div style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: DG.faint, marginTop: 2 }}>
+              {s.label}
+            </div>
           </div>
-        </div>
-      )}
+        ))}
+      </Panel>
 
-      {/* Speaking stats */}
-      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-        <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_speaking_history')}</span>
-        </div>
-        <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className={`grid ${hideScores ? 'grid-cols-2' : 'grid-cols-3'} gap-3 mb-4`}>
-          <div className="text-center">
-            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myLogs.length}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_speeches_label')}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{formatTime(totalSeconds)}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_total_time_label')}</div>
-          </div>
-          {!hideScores && (
-            <div className="text-center">
-              <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
-              <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_rank_label')}</div>
-            </div>
-          )}
-        </div>
-        {myLogs.length > 0 ? (
-          <div className="space-y-1.5">
-            {myLogs.map((l, i) => (
-              <div key={i} className="flex items-center justify-between text-xs rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3' }}>
-                <span className="truncate flex-1" style={{ color: '#6A5A4A' }}>{l.topic || t('delegate_gsl_fallback')}</span>
-                <span className="shrink-0 ms-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
-                <span className="font-mono shrink-0 ms-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
-              </div>
-            ))}
-          </div>
+      {/* Every speech: what it was under, and how long it ran */}
+      <Panel style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <SectionLabel>{t('delegate_speaking_history')}</SectionLabel>
+        {myLogs.length === 0 ? (
+          <p style={{ margin: 0, padding: '10px 0', textAlign: 'center', fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: DG.faint }}>
+            {t('delegate_no_speeches')}
+          </p>
         ) : (
-          <p className="text-sm text-center py-2" style={{ color: '#9A8A78' }}>{t('delegate_no_speeches')}</p>
-        )}
-        </div>
-      </div>
-
-      {/* Committee leaderboard — hidden when chairs disable scores */}
-      {!hideScores && ranking.length > 0 && (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_committee_time')}</span>
-          </div>
-          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-          {/* Column headers */}
-          <div className="flex items-center gap-2 text-[10px] text-[#7A5A38] font-mono mb-1.5 px-2">
-            <span className="w-4 shrink-0" />
-            <span className="flex-1">{t('delegate_country_col')}</span>
-            <span className="w-16 text-end">{t('delegate_time_col')}</span>
-            <span className="w-8 text-end">{t('delegate_pts_col')}</span>
-          </div>
-          <div className="space-y-1.5">
-            {ranking.slice(0, 10).map((r, i) => (
-              <div key={r.country} className={`flex items-center gap-2 text-sm ${r.country === country ? 'bg-[#1B3828]/10 border border-[#1B3828]/20 rounded-lg px-2 py-1' : 'px-2 py-1'}`}>
-                <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
-                <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} className="shrink-0" />
-                <span className="flex-1 truncate font-semibold" style={{ color: r.country === country ? '#1B3828' : '#6A5A4A', fontWeight: r.country === country ? 700 : 400 }}>{getCountryDisplayName(r.country, language)}</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-16 h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
-                    <div className="h-full bg-[#1B3828] rounded-full" style={{ width: `${(r.seconds / ranking[0].seconds) * 100}%` }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {myLogs.map((l, i) => (
+              <div
+                key={`${l.timestamp ?? ''}-${i}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: DG.cream, borderRadius: 14, padding: '10px 12px',
+                  border: `1px solid ${DG.hairline}`,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    className="text-start"
+                    style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: DG.ink, lineHeight: 1.25, overflowWrap: 'anywhere' }}
+                  >
+                    {l.topic || contextLabel(l.context)}
                   </div>
-                  <span className="text-xs font-mono text-[#9A8A78] w-10 text-end">{formatTime(r.seconds)}</span>
+                  <div
+                    className="text-start"
+                    style={{ marginTop: 2, fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: DG.deepGold }}
+                  >
+                    {contextLabel(l.context)}
+                  </div>
                 </div>
-                <span className="text-xs font-black w-8 text-end shrink-0" style={{ color: '#1B3828' }}>
-                  {pointsByCountry[r.country] ?? 0}
+                <span style={{ ...num, flexShrink: 0, fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: DG.forest }}>
+                  {formatTime(l.seconds)}
                 </span>
               </div>
             ))}
           </div>
-        </div>
-        </div>
-      )}
+        )}
+      </Panel>
 
-      {/* Chair recap — factor scores only, never the chair's private notes */}
+      {/* Chair recap — factor bars only, never the chair's private notes */}
       {latestRecap && recapFactors.length > 0 && (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_recap_header')}</span>
-          </div>
-          <div className="p-5 space-y-2.5" style={{ backgroundColor: '#EDE7D8' }}>
+        <Panel style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <SectionLabel>{t('delegate_recap_header')}</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {recapFactors.map((f) => {
               const v = latestRecap.factorScores[f.id];
               return (
                 <div key={f.id}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span style={{ color: '#6A5A4A' }}>{f.name}</span>
-                    <span className="font-bold" style={{ color: '#1B3828' }}>{v}/{cfg.factorScaleMax}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: DG.body, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
+                    <span style={{ ...num, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: DG.forest }}>{v}/{cfg.factorScaleMax}</span>
                   </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (v / cfg.factorScaleMax) * 100)}%`, backgroundColor: '#1B3828' }} />
+                  <div style={{ height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${Math.min(100, (v / cfg.factorScaleMax) * 100)}%` }} />
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Panel>
       )}
 
       {/* Tips */}
       {tips.length > 0 && (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_tips_header')}</span>
-          </div>
-          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="space-y-2">
+        <Panel style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <SectionLabel>{t('delegate_tips_header_plain')}</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {tips.map((tip) => (
-              <div key={tip.key} className="flex gap-2 text-sm" style={{ color: '#6A5A4A' }}>
-                <span className="shrink-0">→</span>
+              <div key={tip.key} className="text-start" style={{ display: 'flex', gap: 8, fontFamily: OUTFIT, fontSize: 13, color: DG.body, lineHeight: 1.4 }}>
+                <span style={{ flexShrink: 0, color: DG.deepGold }}>&rarr;</span>
                 <span>{tip.text}</span>
               </div>
             ))}
           </div>
-          </div>
-        </div>
+        </Panel>
       )}
     </div>
   );
@@ -629,6 +590,37 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   const committeeIdRef = useRef('');
   const wasEverSuspended = useRef(false);
+  // Serialises concurrent refetches fired from the realtime subscription. Two rapid events
+  // produce two in-flight fetches; without a ticket an OLDER snapshot resolving last would
+  // overwrite the newer one with stale rows. Each fetch takes a ticket and only applies if
+  // it is still the newest. Mirrors the chair page.
+  const fetchSeq = useRef(0);
+  // Statuses this delegate has written but not yet seen confirmed by a refetch. Without the
+  // pin, ANY snapshot that predates the write — including one triggered by a completely
+  // unrelated event (the chair pressing All Present, a phase change) — repaints the
+  // roll-call switch with the pre-click status.
+  const pendingStatusWrites = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
+  // Surfaced beneath the roll-call control when the delegate's own status write is rejected.
+  const [statusError, setStatusError] = useState(false);
+
+  // Merge a freshly fetched delegates array over this device's still-unconfirmed status
+  // writes. Only rows written here are pinned; every other row is taken from the DB, so a
+  // chair's roll call still lands. Each pin releases the moment DB truth agrees with it —
+  // or after the TTL, if the write never landed at all.
+  const applyPinnedStatuses = (fresh: Delegate[]): Delegate[] => {
+    const pins = pendingStatusWrites.current;
+    if (Object.keys(pins).length === 0) return fresh;
+    const now = Date.now();
+    return fresh.map((d) => {
+      const pin = pins[d.id];
+      if (!pin) return d;
+      if (d.status === pin.value || now - pin.at >= STATUS_PIN_TTL_MS) {
+        delete pins[d.id];
+        return d;
+      }
+      return { ...d, status: pin.value };
+    });
+  };
 
   // Join request state
   const [joinRequesting, setJoinRequesting] = useState(false);
@@ -669,7 +661,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           // keeps the full refetch and its setSessionEnded/Suspended logic. All other tables
           // can never change session state, so a scoped patch is safe.
           if (table === 'current_speaker') {
+            // Every awaited fetch below takes a ticket off the same counter: whichever fetch
+            // is newest wins, so an older snapshot can never resolve last and land.
+            const seq = ++fetchSeq.current;
             const cs = await getCurrentSpeakerRow(cid);
+            if (seq !== fetchSeq.current) return;
             if (!cs) return;
             setCommittee((prev) => {
               if (!prev) return prev;
@@ -695,7 +691,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             return;
           }
           if (table === 'speakers_list') {
+            const seq = ++fetchSeq.current;
             const { speakersList, caucusQueue } = await getSpeakersLists(cid);
+            if (seq !== fetchSeq.current) return;
             setCommittee((prev) => prev ? {
               ...prev,
               speakersList: prev.currentSpeaker
@@ -706,8 +704,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             return;
           }
           if (table === 'delegates') {
+            const seq = ++fetchSeq.current;
             const delegates = await getDelegatesList(cid);
-            setCommittee((prev) => prev ? { ...prev, delegates } : prev);
+            if (seq !== fetchSeq.current) return;
+            // Keep this delegation's own just-written status until the DB confirms it.
+            setCommittee((prev) => prev ? { ...prev, delegates: applyPinnedStatuses(delegates) } : prev);
             return;
           }
           if (table === 'messages') {
@@ -715,18 +716,24 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             return;
           }
           if (table === 'documents') {
+            const seq = ++fetchSeq.current;
             const documents = await getDocumentsList(cid);
+            if (seq !== fetchSeq.current) return;
             setCommittee((prev) => prev ? { ...prev, documents } : prev);
             return;
           }
           if (table === 'motions') {
+            const seq = ++fetchSeq.current;
             const pendingMotions = await getPendingMotionsList(cid);
+            if (seq !== fetchSeq.current) return;
             setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
             return;
           }
 
           // table === 'committees' (and any fallback): session state may have changed.
+          const seq = ++fetchSeq.current;
           const updated = await getCommitteeByCode(code.toUpperCase());
+          if (seq !== fetchSeq.current) return;   // a newer refetch already applied
           if (updated) {
             if (updated.endedAt) {
               setSessionEnded(true);
@@ -744,9 +751,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             }
             // Messages are append-only: merge rather than replace so this full refetch can
             // never drop a message that the scoped messages handler already delivered.
+            // Delegates go through the same pin as the scoped branch above — this fallback
+            // fires on every phase change, so without it any unrelated `committees` event
+            // would repaint this delegation's just-written status from a stale snapshot.
             setCommittee((prev) => prev
-              ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages) }
-              : updated);
+              ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
+              : { ...updated, delegates: applyPinnedStatuses(updated.delegates) });
           }
         }, (status) => onRealtimeStatus(cid, status));
       }
@@ -880,7 +890,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const { ref: queueBox, count: queueFit } = useFitCount(44, 30);
 
   const statIcon = Math.round(Math.max(20, Math.min(34, discSize * 0.21)));
-  const actionIcon = Math.round(Math.max(18, Math.min(34, discSize * 0.2)));
+  const actionIcon = Math.round(Math.max(20, Math.min(30, discSize * 0.18)));
+  /* How far the outermost satellite tucks toward the disc. Scaled off the disc
+     so the curve stays proportional from phone to laptop. */
+  const arcDepth = Math.round(Math.max(6, Math.min(26, discSize * 0.14)));
 
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
@@ -950,12 +963,31 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const handleStatusChange = async (newStatus: DelegateStatus) => {
     if (!myDelegate) return;
     if (changesLeft <= 0) return;
+    const delegateId = myDelegate.id;
+    const previousStatus = myDelegate.status;
+    setStatusError(false);
+    // Pin this row against any refetch whose snapshot predates the write below — including
+    // refetches fired by events this delegation had nothing to do with.
+    pendingStatusWrites.current[delegateId] = { value: newStatus, at: Date.now() };
     setCommittee((prev) => prev ? {
       ...prev,
-      delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: newStatus } : d),
+      delegates: prev.delegates.map((d) => d.id === delegateId ? { ...d, status: newStatus } : d),
     } : prev);
+    // Recorded up front, NOT after the await: a delegate double-tapping the switch would
+    // otherwise spend two writes against one slot. A write that fails refunds it below.
     recordStatusChange(committee.id, country);
-    setDelegateStatusInDB(myDelegate.id, newStatus, committee.code);
+    setDelegateStatusInDB(delegateId, newStatus, committee.code).then((ok) => {
+      if (ok) return;
+      // The write never landed: give the slot back, drop the pin, and put the switch back
+      // where it was so the delegate is not looking at a status the committee never saw.
+      refundStatusChange(committee.id, country);
+      delete pendingStatusWrites.current[delegateId];
+      setCommittee((prev) => prev ? {
+        ...prev,
+        delegates: prev.delegates.map((d) => d.id === delegateId ? { ...d, status: previousStatus } : d),
+      } : prev);
+      setStatusError(true);
+    });
   };
 
   // ── Join request handler (absent → P or PV)
@@ -964,6 +996,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     setJoinDenied(false);
     // Chair approval OFF → delegates self-admit instantly (no waiting room).
     if (!requireChairApproval) {
+      // Same pin as handleStatusChange — self-admitting is a status write like any other,
+      // and an in-flight refetch would otherwise drop the delegate straight back to absent.
+      pendingStatusWrites.current[myDelegate.id] = { value: desiredStatus, at: Date.now() };
       setCommittee((prev) => prev ? {
         ...prev,
         delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: desiredStatus } : d),
@@ -1483,7 +1518,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           <div className={`dgv-board ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
             {/* ── HERO BAND: tools | flag+ordinal | stats ───────────────── */}
             <section className="dgv-hero dgv-rise">
-              {/* LEFT — documents tile above the roll-call control */}
+              {/* LEFT — documents tile above the roll-call control, both
+                  tucked toward the disc so the pair follows its curve */}
               <div className="dgv-hero-side">
                 <button
                   type="button"
@@ -1492,7 +1528,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
                     border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
-                    minHeight: 44,
+                    minHeight: 44, marginInlineEnd: arcInset(0, 2, arcDepth),
                   }}
                 >
                   <Emoji3D name="File folder" size={discSize * 0.34} fallback={FolderOpen} fallbackColor={DG.forest} />
@@ -1508,7 +1544,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 </button>
 
                 {!isAbsent && !sessionEnded && !lockRollCall && (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginInlineEnd: arcInset(1, 2, arcDepth) }}>
                     <span
                       style={{
                         fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
@@ -1555,31 +1591,56 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 </span>
               </div>
 
-              {/* RIGHT — the three live stats, beside the flag as drawn */}
+              {/* RIGHT — the three live stats, curved around the disc */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(4px, 1.6vw, 12px)', minWidth: 0 }}>
-                <StatRow
-                  emoji={<Emoji3D name="Alarm clock" size={statIcon} fallback={Clock} fallbackColor={DG.forest} />}
-                  iconSize={statIcon}
-                  value={formatTime(mySpokenSeconds)}
-                  label={t('delegate_stat_time_spoken')}
-                  onClick={() => setSheet('stats')}
-                />
-                <StatRow
-                  emoji={<Emoji3D name="Megaphone" size={statIcon} fallback={Mic2} fallbackColor={DG.forest} />}
-                  iconSize={statIcon}
-                  value={String(myLogs.length)}
-                  label={t('delegate_stat_speeches_given')}
-                  onClick={() => setSheet('stats')}
-                />
-                <StatRow
-                  emoji={<Emoji3D name="Speech balloon" size={statIcon} fallback={MessageSquare} fallbackColor={DG.forest} />}
-                  iconSize={statIcon}
-                  value={String(myMessagesSent)}
-                  label={t('delegate_stat_messages_sent')}
-                  onClick={() => setSheet('stats')}
-                />
+                {[
+                  { emoji: 'Alarm clock' as const, fb: Clock, value: formatTime(mySpokenSeconds), label: t('delegate_stat_time_spoken') },
+                  { emoji: 'Megaphone' as const, fb: Mic2, value: String(myLogs.length), label: t('delegate_stat_speeches_given') },
+                  { emoji: 'Speech balloon' as const, fb: MessageSquare, value: String(myMessagesSent), label: t('delegate_stat_messages_sent') },
+                ].map((s, i, arr) => (
+                  /* Pushed OUT at the middle, tucked in at top and bottom —
+                     the disc's widest point is on the centre line, so that is
+                     the item that sits furthest from it. */
+                  <div key={s.label} style={{ marginInlineStart: arcDepth - arcInset(i, arr.length, arcDepth) }}>
+                    <StatRow
+                      emoji={<Emoji3D name={s.emoji} size={statIcon} fallback={s.fb} fallbackColor={DG.forest} />}
+                      iconSize={statIcon}
+                      value={s.value}
+                      label={s.label}
+                      onClick={() => setSheet('stats')}
+                    />
+                  </div>
+                ))}
               </div>
             </section>
+
+            {/* ── ROLL-CALL FOOTNOTE ─────────────────────────────────────
+                The remaining-changes counter the redesign dropped, plus the
+                reason the control is missing when chairs lock roll call. It
+                sits under the whole hero, not in the left rail: that rail is
+                58px at 375px, where the sentence is unreadable. Always
+                rendered while the control is relevant — including at n=0, the
+                moment a delegate most needs to know why the switch is dead. */}
+            {!isAbsent && !sessionEnded && (
+              <div className="text-center" style={{ flexShrink: 0 }}>
+                {statusError && !lockRollCall && (
+                  <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)', fontWeight: 800, lineHeight: 1.25, color: DG.danger }}>
+                    {t('delegate_status_change_failed')}
+                  </p>
+                )}
+                <p
+                  style={{
+                    margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)',
+                    fontWeight: 700, lineHeight: 1.25,
+                    color: !lockRollCall && changesLeft <= 0 ? DG.danger : DG.faint,
+                  }}
+                >
+                  {lockRollCall
+                    ? t('delegate_roll_call_locked')
+                    : t('delegate_status_changes_left', { n: changesLeft, s: changesLeft === 1 ? '' : 's' })}
+                </p>
+              </div>
+            )}
 
             {/* ── BAND LABEL ────────────────────────────────────────────── */}
             <div className="flex items-baseline gap-3" style={{ flexShrink: 0 }}>
@@ -1598,18 +1659,22 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               {bottomLeft}
 
               <div className="dgv-actions">
+                {/* Flat monochrome glyphs, and the three silhouettes are
+                    deliberately distinct at a squint — tall/pointed, blocky,
+                    round — so a delegate watching the speakers list can hit
+                    the right key in peripheral vision. */}
                 <SquareButton
                   skin="green"
                   disabled={speakCta.disabled}
                   onClick={speakCta.onClick}
-                  emoji={<Emoji3D name="Microphone" size={actionIcon} fallback={Mic} fallbackColor="#FFFFFF" />}
+                  icon={<Hand size={actionIcon} strokeWidth={2.25} />}
                 >
                   {speakCta.label}
                 </SquareButton>
                 <SquareButton
                   skin="blue"
                   onClick={() => openSheet('documents', 'submit')}
-                  emoji={<Emoji3D name="Page facing up" size={actionIcon} fallback={FileText} fallbackColor="#FFFFFF" />}
+                  icon={<FileText size={actionIcon} strokeWidth={2.25} />}
                 >
                   {t('delegate_submit_document')}
                 </SquareButton>
@@ -1617,7 +1682,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   skin="gold"
                   onClick={() => setSheet('chat')}
                   badge={chatDisabled ? undefined : unreadTotal}
-                  emoji={<Emoji3D name="Speech balloon" size={actionIcon} fallback={MessageCircle} fallbackColor={DG.forest} />}
+                  icon={<MessageCircle size={actionIcon} strokeWidth={2.25} />}
                 >
                   {t('tab_chat')}
                 </SquareButton>
