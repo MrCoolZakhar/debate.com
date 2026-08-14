@@ -1415,6 +1415,7 @@ export default function ApplicationsPage() {
         country_name: slot.country_name,
         application_id: app.id,
         allocation_sent: false,
+        assigned_by: session.user.id,
       });
       if (insErr) throw insErr;
       const { error } = await supabase.from('applications').update({
@@ -1422,6 +1423,7 @@ export default function ApplicationsPage() {
         assigned_committee_id: committee.id,
         assigned_country_code: slot.country_code,
         assigned_country_name: slot.country_name,
+        decided_by: session.user.id, decided_at: new Date().toISOString(),
       }).eq('id', app.id);
       if (error) throw error;
     })()
@@ -1458,7 +1460,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
+      const { error } = await supabase.from('applications').update({ status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
 
       // Secondary effects, a failure here must NOT roll back the accept.
@@ -1523,7 +1525,9 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update(updates).eq('id', appId);
+      // decided_by is DB-only (never part of the optimistic row patch): the
+      // Application type carries no actor field, the feed reads it from the DB.
+      const { error } = await supabase.from('applications').update({ ...updates, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
 
       try {
@@ -1636,7 +1640,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ status: 'submitted', organizer_note: null }).eq('id', appId);
+      const { error } = await supabase.from('applications').update({ status: 'submitted', organizer_note: null, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
     })()
       .catch(() => {
@@ -1717,6 +1721,7 @@ export default function ApplicationsPage() {
         assigned_country_code: null,
         assigned_country_name: null,
         society_id: null,
+        decided_by: session.user.id, decided_at: new Date().toISOString(),
       };
       if (dropToUnpaid) updates.payment_status = 'unpaid';
 
@@ -1772,7 +1777,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
+      const { error } = await supabase.from('applications').update({ status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
     })()
       .catch(() => {
@@ -1821,7 +1826,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const result = await markNotAttending(supabase, conference.id, prevRow);
+      const result = await markNotAttending(supabase, conference.id, prevRow, session.user.id);
       if (result.error) throw new Error(result.error);
       notifyIfNeeded(result.result, pushDraftNotice);
     })()
@@ -2084,7 +2089,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await checkInApplication(supabase, app.id);
+      const { error } = await checkInApplication(supabase, app.id, session.user.id);
       if (error) throw new Error(error);
     })()
       .catch(() => {
@@ -2107,7 +2112,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await undoCheckIn(supabase, app.id, revertTo);
+      const { error } = await undoCheckIn(supabase, app.id, revertTo, session.user.id);
       if (error) throw new Error(error);
     })()
       .catch(() => {

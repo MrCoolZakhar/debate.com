@@ -283,7 +283,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
     (async () => {
       // transfer=false always, allocations are managed in the Delegates tab
       // and are never read, written, transferred, or deleted from this tab.
-      const emailResult = await performSwap(supabase, conference.id, recipient, holder, false);
+      const emailResult = await performSwap(supabase, conference.id, recipient, holder, false, session.user.id);
       if (emailResult.error) {
         rollback();
         showFlash('err', 'Could not transfer this spot.');
@@ -330,7 +330,7 @@ export default function IndependentsView({ conference, showFlash }: Independents
     });
 
     (async () => {
-      const result = await markNotAttending(supabase, conference.id, app);
+      const result = await markNotAttending(supabase, conference.id, app, session.user.id);
       if (result.error) {
         restoreIndependent(snapshot);
         showFlash('err', `Could not mark ${name} as not attending.`);

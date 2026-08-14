@@ -13,6 +13,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { formatFee } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
+import Avatar from '@/components/Avatar';
 import {
   NeuCard, NeuInset, NeuIconDisc, NeuStatTile, NeuProgress, NeuRing,
   NeuPill, NeuButton, NeuChecklistRow, Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE,
@@ -714,7 +715,31 @@ interface DashData {
 // happened" timeline built from the timestamps that already exist on
 // applications (submitted / paid / checked-in / resubmitted) and allocations.
 
-type ActivityKind = 'application' | 'payment' | 'checkin' | 'resubmit' | 'allocation';
+type ActivityKind = 'application' | 'payment' | 'checkin' | 'resubmit' | 'allocation'
+  | 'accepted' | 'rejected' | 'decision';
+
+/**
+ * Organiser decisions, keyed by the status the row LANDED on. The word is what
+ * the feed prints, so it reads as an outcome rather than a database value.
+ * A status missing from this map produces no row at all — better silent than
+ * a line nobody can parse.
+ *
+ * 'checked-in' is absent on purpose: check-in has its own event (checked_in_at)
+ * and nothing writes decided_at for it. 'assigned' is here for chair seatings,
+ * but is suppressed below whenever an allocation event already tells it better.
+ */
+const DECISION_WORD: Record<string, string> = {
+  accepted: 'accepted',
+  rejected: 'rejected',
+  waitlisted: 'waitlisted',
+  assigned: 'assigned',
+  withdrawn: 'withdrawn',
+  submitted: 'reopened for review',
+};
+
+function decisionKind(status: string): ActivityKind {
+  return status === 'accepted' ? 'accepted' : status === 'rejected' ? 'rejected' : 'decision';
+}
 
 interface ActivityEvent {
   key: string;
@@ -722,6 +747,14 @@ interface ActivityEvent {
   kind: ActivityKind;
   name: string;
   detail?: string;
+  /**
+   * The ORGANISER who performed the action, when one is recorded and they are
+   * not the subject of the row themselves. Self-service events (a delegate
+   * applying, paying, resubmitting) never carry one — nor do rows written
+   * before applications.checked_in_by / conference_allocations.assigned_by
+   * existed, which are all null. Absent → the row renders exactly as before.
+   */
+  actor?: { name: string; avatarUrl: string | null };
 }
 
 const ACTIVITY_META: Record<ActivityKind, { icon: typeof Inbox; gradient: [string, string]; verb: string }> = {
@@ -730,6 +763,10 @@ const ACTIVITY_META: Record<ActivityKind, { icon: typeof Inbox; gradient: [strin
   checkin:     { icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   verb: 'checked in' },
   resubmit:    { icon: RotateCcw,      gradient: NEU_GRADIENTS.amber,  verb: 'resubmitted' },
   allocation:  { icon: MapPin,         gradient: NEU_GRADIENTS.gold,   verb: 'allocated' },
+  accepted:    { icon: CheckCircle2,   gradient: NEU_GRADIENTS.green,  verb: 'accepted' },
+  // Shares amber with resubmit; the AlertCircle glyph is what separates them.
+  rejected:    { icon: AlertCircle,    gradient: NEU_GRADIENTS.amber,  verb: 'rejected' },
+  decision:    { icon: Gavel,          gradient: NEU_GRADIENTS.forest, verb: 'decided' },
 };
 
 /** Compact relative time: "just now", "5m", "3h", "2d", "3w". */
@@ -760,6 +797,9 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
     : ev.kind === 'payment'   ? <>Payment received{ev.detail ? ` — ${ev.detail}` : ''} from <b style={{ color: NEU.ink }}>{ev.name}</b></>
     : ev.kind === 'checkin'   ? <><b style={{ color: NEU.ink }}>{ev.name}</b> checked in</>
     : ev.kind === 'resubmit'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> edited and resubmitted their application</>
+    : ev.kind === 'accepted'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> was accepted</>
+    : ev.kind === 'rejected'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> was rejected</>
+    : ev.kind === 'decision'  ? <><b style={{ color: NEU.ink }}>{ev.name}</b> was {ev.detail}</>
     :                           <><b style={{ color: NEU.ink }}>{ev.name}</b> allocated{ev.detail ? ` to ${ev.detail}` : ''}</>;
   return (
     <div className="flex items-center gap-3">
@@ -767,6 +807,17 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
       <p className="flex-1 min-w-0 truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
         {label}
       </p>
+      {/* Who did it. Only rendered for organiser actions on someone ELSE's
+          row, so the common "you accepted them" case stays quiet. Logical
+          gap/flex only, so it mirrors cleanly in RTL. */}
+      {ev.actor && (
+        <span className="flex items-center gap-1.5 flex-shrink-0 max-w-[40%]" title={`by ${ev.actor.name}`}>
+          <Avatar url={ev.actor.avatarUrl} name={ev.actor.name} size={20} />
+          <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted }}>
+            {ev.actor.name}
+          </span>
+        </span>
+      )}
       <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
         {timeAgo(ev.ts, now)}
       </span>
@@ -917,43 +968,119 @@ export default function DashboardPage() {
     const currency = conference.fee_currency;
     let cancelled = false;
     (async () => {
-      const [appsRes, allocRes] = await Promise.all([
+      const [appsRes, allocRes, decisionRes] = await Promise.all([
         supabase
           .from('applications')
-          .select('id, role, submitted_at, paid_at, paid_amount, amount_paid, checked_in_at, resubmitted_at, invited_name, profiles(display_name)')
+          .select('id, user_id, role, submitted_at, paid_at, paid_amount, amount_paid, checked_in_at, checked_in_by, resubmitted_at, invited_name, profiles(display_name)')
           .eq('conference_id', confId)
           .order('submitted_at', { ascending: false })
           .limit(25),
         supabase
           .from('conference_allocations')
-          .select('id, created_at, country_name, conference_committees:conference_committee_id(name, abbreviation), profiles:user_id(display_name), societies:society_id(name)')
+          .select('id, created_at, country_name, user_id, application_id, assigned_by, conference_committees:conference_committee_id(name, abbreviation), profiles:user_id(display_name), societies:society_id(name)')
           .eq('conference_id', confId)
           .order('created_at', { ascending: false })
+          .limit(15),
+        // Decisions get their OWN window rather than riding along on the query
+        // above. That one takes the newest 25 by submitted_at, so accepting a
+        // six-month-old application — exactly the case a "who did this" feed
+        // exists for — would fall outside it and never show. Ordering by
+        // decided_at is also what the partial index is built for.
+        supabase
+          .from('applications')
+          .select('id, user_id, status, decided_at, decided_by, invited_name, profiles(display_name)')
+          .eq('conference_id', confId)
+          .not('decided_at', 'is', null)
+          .order('decided_at', { ascending: false })
           .limit(15),
       ]);
       if (cancelled) return;
       const evs: ActivityEvent[] = [];
-      type ActApp = { id: string; role: string; submitted_at: string | null; paid_at: string | null; paid_amount: number | null; amount_paid: number | null; checked_in_at: string | null; resubmitted_at: string | null; invited_name: string | null; profiles: { display_name: string } | null };
+      // Actor id -> subject id, collected as events are built. The actor
+      // columns are FKs to auth.users, NOT to public.profiles, so PostgREST
+      // has no relationship to embed a second profiles join through — the
+      // names/avatars come from one follow-up lookup keyed by these ids.
+      const actorBySubject: { key: string; actorId: string; subjectId: string | null }[] = [];
+
+      type ActApp = { id: string; user_id: string | null; role: string; submitted_at: string | null; paid_at: string | null; paid_amount: number | null; amount_paid: number | null; checked_in_at: string | null; checked_in_by: string | null; resubmitted_at: string | null; invited_name: string | null; profiles: { display_name: string } | null };
       for (const a of (appsRes.data ?? []) as unknown as ActApp[]) {
         const name = a.profiles?.display_name ?? a.invited_name ?? 'Someone';
+        // submitted / paid / resubmitted are the applicant's OWN doing —
+        // self-service, so they deliberately carry no actor.
         if (a.submitted_at) evs.push({ key: `sub-${a.id}`, ts: new Date(a.submitted_at).getTime(), kind: 'application', name, detail: roleWord(a.role).toLowerCase() });
         if (a.paid_at) {
           const amt = a.paid_amount ?? a.amount_paid;
           evs.push({ key: `pay-${a.id}`, ts: new Date(a.paid_at).getTime(), kind: 'payment', name, detail: amt != null ? formatFee(Number(amt), currency) : undefined });
         }
-        if (a.checked_in_at) evs.push({ key: `chk-${a.id}`, ts: new Date(a.checked_in_at).getTime(), kind: 'checkin', name });
+        if (a.checked_in_at) {
+          const key = `chk-${a.id}`;
+          evs.push({ key, ts: new Date(a.checked_in_at).getTime(), kind: 'checkin', name });
+          if (a.checked_in_by) actorBySubject.push({ key, actorId: a.checked_in_by, subjectId: a.user_id });
+        }
         if (a.resubmitted_at) evs.push({ key: `res-${a.id}`, ts: new Date(a.resubmitted_at).getTime(), kind: 'resubmit', name });
       }
-      type ActAlloc = { id: string; created_at: string | null; country_name: string | null; conference_committees: { name: string; abbreviation: string | null } | null; profiles: { display_name: string } | null; societies: { name: string } | null };
+
+      type ActAlloc = { id: string; created_at: string | null; country_name: string | null; user_id: string | null; application_id: string | null; assigned_by: string | null; conference_committees: { name: string; abbreviation: string | null } | null; profiles: { display_name: string } | null; societies: { name: string } | null };
+      // Applications that already have an allocation event this pass; their
+      // 'assigned' decision is the same moment told twice, so it is dropped.
+      const allocatedAppIds = new Set<string>();
       for (const al of (allocRes.data ?? []) as unknown as ActAlloc[]) {
         if (!al.created_at) continue;
         const who = al.profiles?.display_name ?? al.societies?.name ?? 'A delegation';
         const committee = al.conference_committees?.abbreviation ?? al.conference_committees?.name;
         const detail = [al.country_name, committee].filter(Boolean).join(' · ') || undefined;
-        evs.push({ key: `alloc-${al.id}`, ts: new Date(al.created_at).getTime(), kind: 'allocation', name: who, detail });
+        const key = `alloc-${al.id}`;
+        evs.push({ key, ts: new Date(al.created_at).getTime(), kind: 'allocation', name: who, detail });
+        if (al.application_id) allocatedAppIds.add(al.application_id);
+        if (al.assigned_by) actorBySubject.push({ key, actorId: al.assigned_by, subjectId: al.user_id });
       }
+
+      // Organiser decisions — the "someone else did this" case the actor chip
+      // exists for. Built from their own query so an old application decided
+      // today is never outside the window.
+      type ActDecision = { id: string; user_id: string | null; status: string; decided_at: string | null; decided_by: string | null; invited_name: string | null; profiles: { display_name: string } | null };
+      for (const d of (decisionRes.data ?? []) as unknown as ActDecision[]) {
+        if (!d.decided_at) continue;
+        const word = DECISION_WORD[d.status];
+        if (!word) continue;
+        // The allocation event already says this, with country and committee.
+        // Chair seatings have no allocation row, so they still come through.
+        if (d.status === 'assigned' && allocatedAppIds.has(d.id)) continue;
+        const key = `dec-${d.id}`;
+        evs.push({
+          key,
+          ts: new Date(d.decided_at).getTime(),
+          kind: decisionKind(d.status),
+          name: d.profiles?.display_name ?? d.invited_name ?? 'Someone',
+          detail: word,
+        });
+        if (d.decided_by) actorBySubject.push({ key, actorId: d.decided_by, subjectId: d.user_id });
+      }
+
       evs.sort((x, y) => y.ts - x.ts);
-      setActivity(evs.slice(0, 8));
+      const top = evs.slice(0, 8);
+
+      // One lookup for the handful of actors actually on screen. Runs after
+      // the slice so a busy conference never fetches profiles it won't show.
+      const shown = new Set(top.map(e => e.key));
+      const pending = actorBySubject.filter(r => shown.has(r.key) && r.actorId !== r.subjectId);
+      if (pending.length > 0) {
+        const { data: actorRows } = await supabase
+          .from('profiles')
+          .select('id, display_name, avatar_url')
+          .in('id', Array.from(new Set(pending.map(r => r.actorId))));
+        if (cancelled) return;
+        const byId = new Map(
+          ((actorRows ?? []) as { id: string; display_name: string | null; avatar_url: string | null }[])
+            .map(p => [p.id, { name: p.display_name ?? 'An organiser', avatarUrl: p.avatar_url }]),
+        );
+        const actorByKey = new Map(pending.map(r => [r.key, byId.get(r.actorId)]));
+        for (const ev of top) {
+          const actor = actorByKey.get(ev.key);
+          if (actor) ev.actor = actor;
+        }
+      }
+      setActivity(top);
     })();
     return () => { cancelled = true; };
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps

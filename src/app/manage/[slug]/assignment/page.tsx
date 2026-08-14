@@ -942,6 +942,9 @@ function RailSourceToggle({ value, onChange }: { value: 'delegates' | 'delegatio
 // Single write path for every allocation on this page: insert into
 // conference_allocations (incl. conference_id), friendly duplicate errors,
 // then round-trip the application status to 'assigned'.
+// `actorId` is the organiser doing the seating (auth user id) — stamped on
+// conference_allocations.assigned_by and applications.decided_by so the
+// dashboard activity feed can show who made the change.
 // Returns an error message, or null on success.
 async function insertAllocation(
   supabase: ReturnType<typeof getAuthedClient>,
@@ -950,6 +953,7 @@ async function insertAllocation(
   app: AcceptedApp,
   slot: SlotRow,
   seat: number,
+  actorId: string,
 ): Promise<string | null> {
   // An imported applicant has no account yet, so app.profiles is null and
   // user_id stays null until they claim their invite. conference_allocations
@@ -967,6 +971,7 @@ async function insertAllocation(
     application_id: app.id,
     allocation_sent: false,
     seat,
+    assigned_by: actorId,
   });
   if (insertErr) {
     if (insertErr.message.includes('SEAT_UNAVAILABLE')) {
@@ -991,6 +996,8 @@ async function insertAllocation(
     assigned_committee_id: committee.id,
     assigned_country_code: slot.country_code,
     assigned_country_name: slot.country_name,
+    decided_by: actorId,
+    decided_at: new Date().toISOString(),
   }).eq('id', app.id);
 
   return null;
@@ -1007,6 +1014,7 @@ async function insertSocietyAllocation(
   society: DelegationSource,
   slot: SlotRow,
   seat: number,
+  actorId: string,
 ): Promise<string | null> {
   const { error: insertErr } = await supabase.from('conference_allocations').insert({
     conference_id: conferenceId,
@@ -1018,6 +1026,7 @@ async function insertSocietyAllocation(
     application_id: null,
     allocation_sent: false,
     seat,
+    assigned_by: actorId,
   });
   if (insertErr) {
     if (insertErr.message.includes('SEAT_UNAVAILABLE')) {
@@ -1045,6 +1054,7 @@ async function insertSocietyBlockAllocation(
   committee: CommitteeData,
   society: DelegationSource,
   slot: SlotRow,
+  actorId: string,
 ): Promise<string | null> {
   const existing = committee.conference_allocations.filter(a => a.country_code === slot.country_code);
   if (existing.length > 0) {
@@ -1053,11 +1063,11 @@ async function insertSocietyBlockAllocation(
       : 'This country is already allocated in this committee.';
   }
   if (slot.delegation_size < 2) {
-    return insertSocietyAllocation(supabase, conferenceId, committee, society, slot, 1);
+    return insertSocietyAllocation(supabase, conferenceId, committee, society, slot, 1, actorId);
   }
-  const err1 = await insertSocietyAllocation(supabase, conferenceId, committee, society, slot, 1);
+  const err1 = await insertSocietyAllocation(supabase, conferenceId, committee, society, slot, 1, actorId);
   if (err1) return err1;
-  const err2 = await insertSocietyAllocation(supabase, conferenceId, committee, society, slot, 2);
+  const err2 = await insertSocietyAllocation(supabase, conferenceId, committee, society, slot, 2, actorId);
   if (err2) {
     const { error: rollbackErr } = await supabase.from('conference_allocations')
       .delete()
@@ -1376,7 +1386,7 @@ function DropAllocateModal({ committee, app, needy = false, onClose, onConflict,
     setBusySlotId(slot.id);
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat);
+    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat, session.user.id);
     setBusySlotId(null);
     if (err) { setError(err); return; }
     onAssigned(slot, seat, `${app.profiles?.display_name ?? app.invited_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
@@ -1478,7 +1488,7 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
     setBusySlotId(slot.id);
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertSocietyBlockAllocation(supabase, conference.id, committee, society, slot);
+    const err = await insertSocietyBlockAllocation(supabase, conference.id, committee, society, slot, session.user.id);
     setBusySlotId(null);
     if (err) { setError(err); return; }
     onAssigned(slot, `${slot.country_name} allocated to ${society.name} in ${committee.abbreviation ?? committee.name}.`);
@@ -1609,7 +1619,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
     setError('');
     const supabase = getAuthedClient(session.access_token);
 
-    const insertErr = await insertAllocation(supabase, conference.id, committee, selectedApp, selectedSlot, seat);
+    const insertErr = await insertAllocation(supabase, conference.id, committee, selectedApp, selectedSlot, seat, session.user.id);
     if (insertErr) {
       setError(insertErr);
       setSaving(false);
@@ -1891,7 +1901,7 @@ function DelegationConflictModal({
     setBusy('remove');
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat);
+    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat, session.user.id);
     if (err) { setBusy(null); setError(err); return; }
     const { error: delErr } = await supabase.from('conference_allocations').delete().eq('id', sibling.id);
     if (delErr) {
@@ -1905,6 +1915,7 @@ function DelegationConflictModal({
         assigned_committee_id: null,
         assigned_country_code: null,
         assigned_country_name: null,
+        decided_by: session.user.id, decided_at: new Date().toISOString(),
       }).eq('id', sibling.application_id);
       try {
         const result = await queueEventEmail(supabase, conference.id, 'allocation_removed', [sibling.application_id]);
@@ -1922,7 +1933,7 @@ function DelegationConflictModal({
     setBusy('add');
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertAllocation(supabase, conference.id, committee, { ...app, society_id: siblingSocId }, slot, seat);
+    const err = await insertAllocation(supabase, conference.id, committee, { ...app, society_id: siblingSocId }, slot, seat, session.user.id);
     if (err) { setBusy(null); setError(err); return; }
     const { data, error: socErr } = await supabase
       .from('applications')
@@ -1949,7 +1960,7 @@ function DelegationConflictModal({
     setBusy('add');
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat);
+    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat, session.user.id);
     if (err) { setBusy(null); setError(err); return; }
     const { data, error: socErr } = await supabase
       .from('applications')
@@ -3218,7 +3229,7 @@ export default function AssignmentPage() {
     showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${sug.committee.abbreviation ?? sug.committee.name}.`);
 
     (async () => {
-      const err = await insertAllocation(supabase, conferenceId, sug.committee, sug.app, sug.slot, seat);
+      const err = await insertAllocation(supabase, conferenceId, sug.committee, sug.app, sug.slot, seat, session.user.id);
       if (err) {
         rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
         showFlash('err', err);
@@ -3317,6 +3328,7 @@ export default function AssignmentPage() {
           assigned_committee_id: null,
           assigned_country_code: null,
           assigned_country_name: null,
+          decided_by: session.user.id, decided_at: new Date().toISOString(),
         }).eq('id', allocation.application_id);
 
         try {
@@ -3422,7 +3434,7 @@ export default function AssignmentPage() {
         return;
       }
       if (chairApp.status === 'accepted') {
-        await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committee.id }).eq('id', chairApp.id);
+        await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committee.id, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', chairApp.id);
       }
       // Only newly added chairs get the email, not everyone already on the
       // dais, they'd get spammed one more time on every unrelated re-save.
@@ -3493,7 +3505,7 @@ export default function AssignmentPage() {
       }
       if (!chairsElsewhere) {
         await supabase.from('applications')
-          .update({ status: 'accepted', assigned_committee_id: null })
+          .update({ status: 'accepted', assigned_committee_id: null, decided_by: session.user.id, decided_at: new Date().toISOString() })
           .eq('conference_id', conferenceId)
           .eq('user_id', userId)
           .eq('role', 'chair');
@@ -4372,6 +4384,7 @@ export default function AssignmentPage() {
             if (alloc.application_id) {
               await supabase.from('applications').update({
                 status: 'accepted', assigned_committee_id: null, assigned_country_code: null, assigned_country_name: null,
+                decided_by: session.user.id, decided_at: new Date().toISOString(),
               }).eq('id', alloc.application_id);
             }
             setCommittees(prev => prev.map(c => c.id === committeeId

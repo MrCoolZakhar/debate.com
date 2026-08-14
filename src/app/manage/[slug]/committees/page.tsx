@@ -1012,7 +1012,7 @@ export default function CommitteesPage() {
         return;
       }
       const { error: appError } = await supabase.from('applications')
-        .update({ status: 'accepted', assigned_committee_id: null })
+        .update({ status: 'accepted', assigned_committee_id: null, decided_by: session.user.id, decided_at: new Date().toISOString() })
         .eq('conference_id', conference.id)
         .eq('user_id', userId)
         .eq('role', 'chair');
@@ -1049,7 +1049,7 @@ export default function CommitteesPage() {
         setActionError(`Couldn't add ${app.profiles?.display_name ?? 'that chair'} to the dais. The change was reverted.`);
         return;
       }
-      const { error: appError } = await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: c.id }).eq('id', app.id);
+      const { error: appError } = await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: c.id, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', app.id);
       if (appError) {
         setActionError(`${app.profiles?.display_name ?? 'The chair'} was added to the dais, but their application couldn't be marked assigned.`);
       }
