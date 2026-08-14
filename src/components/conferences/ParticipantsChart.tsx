@@ -250,17 +250,26 @@ export default function ParticipantsChart({
             </g>
           ))}
 
-          {/* Back to front: Total is the widest area and must not cover the rest. */}
-          {SERIES.map((s) => {
+          {/* Back to front: Total is the widest area and must not cover the rest.
+              Where a stage exactly equals the one above it — every applicant
+              accepted, say — the two paths are byte-identical and the darker
+              one drawn later hides the lighter completely, so a series appears
+              to have vanished. The covering line is dashed instead, which lets
+              the one underneath show through the gaps and reads honestly as
+              "these two coincide" rather than as a missing series. */}
+          {SERIES.map((s, si) => {
             const pts = points.map((p, i) => ({ x: x(i), y: y(p[s.key]) }));
             const line = smooth(pts);
             const area = `${line} L${pts[pts.length - 1].x},${PAD.top + plotH} L${pts[0].x},${PAD.top + plotH} Z`;
+            const prev = si > 0 ? SERIES[si - 1].key : null;
+            const coincides = prev != null && points.every((p) => p[s.key] === p[prev]);
             return (
               <g key={s.key}>
-                <path d={area} fill={`url(#pc-${s.key})`} />
+                {!coincides && <path d={area} fill={`url(#pc-${s.key})`} />}
                 <path
                   d={line} fill="none" stroke={s.color} strokeWidth={2}
                   strokeLinecap="round" strokeLinejoin="round"
+                  strokeDasharray={coincides ? '7 5' : undefined}
                 />
               </g>
             );

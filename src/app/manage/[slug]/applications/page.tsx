@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
@@ -890,6 +891,41 @@ const PAYMENT_OPTIONS = [
   { label: 'Waived', value: 'waived' },
 ];
 
+// Status GROUPS, module scope so the stat tiles and the ?status= deep link can
+// never drift apart. "Accepted" means accepted-or-beyond and "Allocated" means
+// allocated-or-beyond, exactly as the stat tiles count them.
+const ACCEPTED_GROUP = ['accepted', 'assigned', 'checked-in'];
+const ALLOCATED_GROUP = ['assigned', 'checked-in'];
+
+/**
+ * Query params this page understands, so other surfaces (the dashboard's
+ * applicants dial) can deep-link straight into a pre-filtered view:
+ *   ?status=accepted | assigned | checked-in | submitted | rejected | withdrawn
+ *   ?payment=paid | unpaid | waived
+ * `accepted` and `assigned` expand to their groups above, so a link lands on
+ * exactly the rows the linking surface counted. Unrecognised values are
+ * ignored and the page opens on its normal unfiltered default.
+ */
+const URL_STATUS_GROUPS: Record<string, string[]> = {
+  accepted: ACCEPTED_GROUP,
+  assigned: ALLOCATED_GROUP,
+  'checked-in': ['checked-in'],
+  submitted: ['submitted'],
+  rejected: ['rejected'],
+  withdrawn: ['withdrawn'],
+};
+
+function filtersFromUrl(status: string | null, payment: string | null): FilterState {
+  const seeded: FilterState = {
+    status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(),
+    dateFrom: '', dateTo: '', notAttending: false,
+  };
+  const group = status ? URL_STATUS_GROUPS[status] : undefined;
+  if (group) seeded.status = new Set(group);
+  if (payment && PAYMENT_OPTIONS.some(o => o.value === payment)) seeded.payment = new Set([payment]);
+  return seeded;
+}
+
 // ── Filter panel ──────────────────────────────────────────────────────────────
 // Peter: "the filters could be more of a hover and they appear". A single
 // neumorphic FILTERS control reveals the whole rich set on hover (and can be
@@ -1144,6 +1180,9 @@ function FilterPanel({
 export default function ApplicationsPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  const searchParams = useSearchParams();
+  const urlStatus = searchParams.get('status');
+  const urlPayment = searchParams.get('payment');
   const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
   const [applications, setApplications] = useState<Application[]>([]);
   // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
@@ -1153,9 +1192,13 @@ export default function ApplicationsPage() {
   const [loading, setLoading] = useState(true);
   // Empty role set = no constraint, so a fresh page shows every role
   // (including chairs) in both the row list and the stat scope.
-  const [filters, setFilters] = useState<FilterState>({
-    status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false,
-  });
+  // Seeded from the URL on first render (?status=…, ?payment=…) so a deep link
+  // from the dashboard opens on the matching rows with no unfiltered flash.
+  // Lazy initialiser, not an effect: after mount this is ordinary local state
+  // and the filter panel owns it.
+  const [filters, setFilters] = useState<FilterState>(
+    () => filtersFromUrl(urlStatus, urlPayment),
+  );
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
@@ -2321,8 +2364,8 @@ export default function ApplicationsPage() {
   // and allocated-or-beyond), so their filters select the whole matching group
   // rather than a single status — keeping the visible list in step with the
   // number on the tile.
-  const ACCEPTED_GROUP = ['accepted', 'assigned', 'checked-in'];
-  const ALLOCATED_GROUP = ['assigned', 'checked-in'];
+  // ACCEPTED_GROUP / ALLOCATED_GROUP live at module scope — the ?status= deep
+  // link resolves to the same arrays, so tile and link can never disagree.
   const statusTileActive = (v: string) => filters.status.size === 1 && filters.status.has(v) && filters.payment.size === 0;
   const statusGroupTileActive = (group: string[]) => sameSet(filters.status, group) && filters.payment.size === 0;
   const paymentTileActive = (v: string) => filters.payment.size === 1 && filters.payment.has(v) && filters.status.size === 0;
