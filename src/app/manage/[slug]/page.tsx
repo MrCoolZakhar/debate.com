@@ -19,6 +19,8 @@ import {
 } from '@/components/neu';
 import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
+import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/ParticipantsChart';
+import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 
@@ -685,6 +687,14 @@ function PipelineCell({ n, label, href, first }: { n: number; label: string; hre
 interface DashData {
   apps: AppRow[];
   allocated: number;
+  /**
+   * `conference_allocations.created_at` for every allocation, newest or oldest
+   * order irrelevant. The dashboard used to take a head-only COUNT here, which
+   * is enough for a tile but gives the Assigned series no timestamps to plot —
+   * ParticipantsChart needs the actual instants. `allocated` is now derived
+   * from this array's length, so the two can never disagree.
+   */
+  allocatedAt: (string | null)[];
   committees: { id: string; chair_user_ids: string[] | null; committee_country_slots?: { delegation_size: number | null }[] | null }[];
   organizerCount: number;
   enabledEmailCount: number;
@@ -832,9 +842,12 @@ export default function DashboardPage() {
           .from('applications')
           .select('submitted_at, status, payment_status, role, society_id')
           .eq('conference_id', confId),
+        // created_at, not a head-only count: the Assigned series on
+        // ParticipantsChart is plotted from these instants. The count the
+        // tiles use is just this array's length.
         supabase
           .from('conference_allocations')
-          .select('*', { count: 'exact', head: true })
+          .select('created_at')
           .eq('conference_id', confId),
         supabase
           .from('conference_committees')
@@ -866,9 +879,11 @@ export default function DashboardPage() {
           .eq('conference_id', confId)
           .eq('status', 'pending'),
       ]);
+      const allocRows = (allocRes.data ?? []) as { created_at: string | null }[];
       setDash({
         apps: (appsRes.data ?? []) as AppRow[],
-        allocated: allocRes.count ?? 0,
+        allocated: allocRows.length,
+        allocatedAt: allocRows.map(r => r.created_at),
         committees: (committeesRes.data ?? []) as { id: string; chair_user_ids: string[] | null }[],
         organizerCount: orgRes.count ?? 0,
         enabledEmailCount: emailRes.count ?? 0,
@@ -943,6 +958,14 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Cumulative funnel series for ParticipantsChart. Rolled here (before the
+  // loading return, so hook order never changes) and only when the fetched
+  // data actually changes — the roll is O(rows x buckets).
+  const participantSeries = useMemo(
+    () => (dash ? toCumulativeSeries(dash.apps, dash.allocatedAt) : []),
+    [dash],
+  );
+
   // ── Loading skeleton, mirrors the fixed one-viewport grid ───────────────
   if (!conference || !dash) {
     return (
@@ -951,12 +974,14 @@ export default function DashboardPage() {
         <div className="flex flex-col xl:flex-row" style={{ alignItems: 'stretch', gap: 14 }}>
           <div className="rounded-[22px] animate-pulse w-full xl:basis-[32%] xl:shrink-0 xl:min-w-[300px]" style={{ height: 450, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
           <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: 14 }}>
+            <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 202, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
             <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 h-auto xl:h-[166px] xl:[grid-template-columns:minmax(0,1.15fr)_minmax(0,1.7fr)_repeat(3,minmax(0,1fr))]" style={{ gap: 14 }}>
               {[0, 1, 2, 3, 4].map(i => (
                 <div key={i} className="rounded-[22px] animate-pulse" style={{ backgroundColor: NEU.surface, boxShadow: NEU.out }} />
               ))}
             </div>
-            <div className="rounded-[22px] animate-pulse" style={{ flex: 1, minHeight: 270, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+            <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 300, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
+            <div className="rounded-[22px] animate-pulse flex-shrink-0" style={{ height: 214, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
           </div>
         </div>
       </div>
@@ -1009,6 +1034,20 @@ export default function DashboardPage() {
   const allocated = Math.min(dash.allocated, acceptedApps);
   const unallocated = Math.max(0, acceptedApps - allocated);
   const fee = conference.fee_amount ?? 0;
+
+  // Funnel rings, outermost → innermost. Every value is an existing derived
+  // const, so the dial can never contradict the pipeline cells or the stat
+  // tiles beside it. Total ⊇ Accepted ⊇ Assigned holds by construction
+  // (acceptedApps counts accepted/assigned/checked-in, and `allocated` is
+  // already Math.min'd against it). Paid is a subset of Total but NOT of
+  // Assigned — a delegate can pay before a committee seat is picked for them
+  // — which is exactly why it is a separate ring rather than a stacked slice.
+  const dialStages = [
+    { key: 'total', label: 'Applications', value: totalApps },
+    { key: 'accepted', label: 'Accepted', value: acceptedApps },
+    { key: 'assigned', label: 'Assigned', value: allocated },
+    { key: 'paid', label: 'Paid', value: paidApps },
+  ];
 
   // ── Set-up priorities: 8 detection checks, in journey order ──────────────
   // Base order = the natural build journey (page → committees → chairs → email →
@@ -1230,12 +1269,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Main layout, flex, not a stretched grid: the priorities card
-          sizes to its (snug) content and drives the row height; the right
-          column stretches to match, so the revenue graph fills exactly the
-          remaining height with no void anywhere. A slightly shorter-than-
-          viewport page is intentional, snug beats stretched-with-holes. ── */}
-      <div className="flex flex-col xl:flex-row" style={{ alignItems: 'stretch', gap: 14 }}>
+      {/* ── Main layout, flex, not a stretched grid. Both columns are
+          content-sized (items-start at xl, NOT stretch): each card ends at its
+          own last row rather than growing a hole underneath when the other
+          column runs taller — snug beats stretched-with-holes, and the right
+          column is now the taller of the two. Below xl the columns stack and
+          must still stretch to full width, hence items-stretch as the base.
+          The priorities card keeps the top-left corner in both directions:
+          it is first in the DOM, so nothing added to the right column can
+          push it down the page. ── */}
+      <div className="flex flex-col xl:flex-row items-stretch xl:items-start" style={{ gap: 14 }}>
 
         {/* Set-up priorities, left column, content-sized, pending first */}
         <NeuCard className="flex flex-col w-full xl:basis-[32%] xl:shrink-0 xl:min-w-[300px]" style={{ padding: '14px 15px 11px' }}>
@@ -1278,12 +1321,43 @@ export default function DashboardPage() {
           )}
         </NeuCard>
 
-        {/* Right column, stretches to the priorities card height */}
+        {/* Right column: dial → stat tiles → participants → revenue */}
         <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: 14 }}>
 
-        {/* Top-right row: unallocated alert + delegates pipeline + stat tiles.
-            Firm height so the revenue graph below lands clearly shorter; each
-            card fills it via space-between rather than floating a void. */}
+        {/* Applicants against target — the headline read of the whole funnel,
+            so it sits first in the right column. It is deliberately NOT in the
+            left column: the priorities checklist must keep the top-left corner
+            on a 1280x800 laptop, and nothing added here can move it. */}
+        <NeuCard className="flex-shrink-0" style={{ padding: '15px 18px' }}>
+          <div className="flex items-center flex-wrap" style={{ gap: 22 }}>
+            <ApplicantsDial stages={dialStages} expected={expectedDelegates} size={172} />
+            <div className="min-w-0" style={{ flex: 1, minWidth: 180 }}>
+              <h2 style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 900, color: NEU.ink }}>
+                Applicants against target
+              </h2>
+              <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.muted, marginTop: 3, lineHeight: 1.45 }}>
+                {expectedDelegates > 0
+                  ? `Each ring is measured against the ${expectedDelegates} delegates you expect. The stages nest — every paid delegate is also counted in the ring outside it.`
+                  : 'Set an expected delegate count in your conference settings and each ring gets a target to fill.'}
+              </p>
+              <Link
+                href={expectedDelegates > 0 ? `/manage/${slug}/applications` : `/manage/${slug}/settings?tab=conference`}
+                className="inline-flex items-center gap-1.5 transition-opacity hover:opacity-70"
+                style={{
+                  fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+                  color: NEU.deepGold, textDecoration: 'none', marginTop: 8,
+                }}
+              >
+                {expectedDelegates > 0 ? 'REVIEW APPLICATIONS' : 'SET AN EXPECTED HEAD COUNT'}
+                <ArrowRight size={12} />
+              </Link>
+            </div>
+          </div>
+        </NeuCard>
+
+        {/* Stat-tile row: unallocated alert + delegates pipeline + stat tiles.
+            Firm height so the charts below land clearly taller; each card
+            fills it via space-between rather than floating a void. */}
         <div
           className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 h-auto xl:h-[166px] xl:[grid-template-columns:minmax(0,1.15fr)_minmax(0,1.7fr)_repeat(3,minmax(0,1fr))]"
           style={{ gap: 14 }}
@@ -1334,9 +1408,20 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Revenue graph, full right width, fills the height left over under
-            the tile row (shorter now that the priorities card is snug) */}
-        <NeuCard className="flex flex-col" style={{ flex: 1, minHeight: 210, padding: '13px 16px 11px' }}>
+        {/* Participants over time, full right width. It needs the whole column:
+            the SVG is a scaled viewBox, so squeezing it sideways shrinks the
+            axis type with it. Self-sizing (fixed aspect), hence no flex:1. */}
+        <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '13px 16px 12px' }}>
+          <ParticipantsChart points={participantSeries} />
+        </NeuCard>
+
+        {/* Revenue kept as a second, shorter chart. ParticipantsChart answers
+            "how many people", never "how much money", and this is the only
+            revenue-over-time surface on the dashboard — dropping it would have
+            silently removed the organiser's takings graph and the header link
+            into /financials. Explicit height because this chart measures its
+            own box (ResizeObserver) and would collapse in an auto-height card. */}
+        <NeuCard className="flex flex-col flex-shrink-0" style={{ height: 214, padding: '13px 16px 11px' }}>
           <RevenueChart
             rows={dash.apps}
             fee={fee}
