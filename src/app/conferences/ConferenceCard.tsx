@@ -44,6 +44,7 @@ import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
 import { appendEditionYear } from '@/lib/presetNames';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
@@ -88,14 +89,7 @@ export function gradientFor(acronym: string): [string, string] {
 }
 
 function formatDateRange(start: string | null, end: string | null): string {
-  if (!start || !end) return 'TBD';
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()}–${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
-  }
-  return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
+  return formatConferenceDates(start, end, { style: 'dmy-end-year' });
 }
 
 export function ConferenceCard({

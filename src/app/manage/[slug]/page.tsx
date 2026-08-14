@@ -20,6 +20,7 @@ import {
 import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
+import { hasExploredEmails } from '@/lib/emailsExplored';
 
 const RED = '#A8442F';
 
@@ -687,6 +688,14 @@ interface DashData {
   committees: { id: string; chair_user_ids: string[] | null; committee_country_slots?: { delegation_size: number | null }[] | null }[];
   organizerCount: number;
   enabledEmailCount: number;
+  /**
+   * Committee ids with a still-pending chair invite. A dais with an invite out
+   * counts as staffed for the set-up checklist — the organiser has done their
+   * part; the rest is up to the invitee.
+   */
+  pendingChairInviteCommitteeIds: string[];
+  /** Pending co-organizer invites — one is enough to clear the secretariat row. */
+  pendingOrganizerInvites: number;
 }
 
 // ── Recent activity feed ───────────────────────────────────────────────────
@@ -818,7 +827,7 @@ export default function DashboardPage() {
     const supabase = getAuthedClient(session.access_token);
     const confId = conference.id;
     (async () => {
-      const [appsRes, allocRes, committeesRes, orgRes, emailRes] = await Promise.all([
+      const [appsRes, allocRes, committeesRes, orgRes, emailRes, chairInvRes, orgInvRes] = await Promise.all([
         supabase
           .from('applications')
           .select('submitted_at, status, payment_status, role, society_id')
@@ -843,6 +852,19 @@ export default function DashboardPage() {
           .select('*', { count: 'exact', head: true })
           .eq('conference_id', confId)
           .eq('enabled', true),
+        // Chair invites that are still out: their committee counts as staffed
+        // for the "Invite chairs" checklist row. Only the committee id is
+        // needed — never the invitee's email.
+        supabase
+          .from('conference_chair_invites')
+          .select('committee_id')
+          .eq('conference_id', confId)
+          .eq('status', 'pending'),
+        supabase
+          .from('conference_organizer_invites')
+          .select('*', { count: 'exact', head: true })
+          .eq('conference_id', confId)
+          .eq('status', 'pending'),
       ]);
       setDash({
         apps: (appsRes.data ?? []) as AppRow[],
@@ -850,9 +872,25 @@ export default function DashboardPage() {
         committees: (committeesRes.data ?? []) as { id: string; chair_user_ids: string[] | null }[],
         organizerCount: orgRes.count ?? 0,
         enabledEmailCount: emailRes.count ?? 0,
+        pendingChairInviteCommitteeIds: ((chairInvRes.data ?? []) as { committee_id: string | null }[])
+          .map(r => r.committee_id)
+          .filter((id): id is string => !!id),
+        pendingOrganizerInvites: orgInvRes.count ?? 0,
       });
     })();
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Explore emails" is the one checklist item that is NOT a function of the
+  // database: it is ticked once this browser has visited the communications
+  // page (flag written there, see src/lib/emailsExplored.ts). Read in an effect,
+  // never during render, so the server-rendered markup still matches.
+  const [emailsExplored, setEmailsExplored] = useState(false);
+  useEffect(() => {
+    if (!conference) return;
+    // localStorage is an external store; it can only be read after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEmailsExplored(hasExploredEmails(conference.id));
+  }, [conference?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recent-activity feed: recent applications + allocations, expanded into
   // per-timestamp events (submitted / paid / checked-in / resubmitted /
@@ -942,7 +980,13 @@ export default function DashboardPage() {
   const delegateApps = dash.apps.filter(a => a.role === 'delegate' || a.role === 'head-delegate').length;
   const societies = new Set(dash.apps.map(a => a.society_id).filter(Boolean)).size;
   const committeeCount = dash.committees.length;
-  const missingChairs = dash.committees.filter(c => !c.chair_user_ids || c.chair_user_ids.length === 0).length;
+  // A dais counts as handled once a chair is ASSIGNED (chair_user_ids) or
+  // INVITED (a pending conference_chair_invites row). Chasing an organiser about
+  // a committee whose invite is already sitting in someone's inbox is noise.
+  const invitedChairCommittees = new Set(dash.pendingChairInviteCommitteeIds);
+  const committeesNeedingChairs = dash.committees.filter(
+    c => (!c.chair_user_ids || c.chair_user_ids.length === 0) && !invitedChairCommittees.has(c.id)
+  ).length;
   // Seats delegates can actually occupy, vs how many the organiser says they
   // expect. 3 committees x 20 seats does not host 150 people.
   const seatCapacity = dash.committees.reduce(
@@ -950,7 +994,15 @@ export default function DashboardPage() {
     0,
   );
   const expectedDelegates = conference.expected_delegates ?? 0;
-  const seatShortfall = expectedDelegates > 0 ? Math.max(0, expectedDelegates - seatCapacity) : 0;
+  // Seats only need to cover 70% of the expected head count before we stop
+  // flagging it: expected_delegates is an early guess, committees get added
+  // over months, and demanding 100% meant this row nagged conferences that were
+  // in perfectly good shape. The same 0.70 lives in conference_setup_status()
+  // (which drives the nudge emails) and in admin/ConferencesTab isShortOnSeats
+  // — change all three together or they will contradict each other again.
+  const SEAT_COVERAGE = 0.70;
+  const requiredSeats = expectedDelegates > 0 ? Math.ceil(expectedDelegates * SEAT_COVERAGE) : 0;
+  const seatShortfall = expectedDelegates > 0 ? Math.max(0, requiredSeats - seatCapacity) : 0;
   // Allocated (dash.allocated = conference_allocations rows) is now always a
   // subset of Accepted, so unallocated = accepted − allocated is non-negative;
   // the Math.max stays purely as a defensive floor against transient races.
@@ -982,8 +1034,9 @@ export default function DashboardPage() {
       sub: committeeCount === 0
         ? 'Create committees and their topics.'
         : seatShortfall > 0
-          // The gap is the actionable number, so lead with it.
-          ? `Only ${seatCapacity} seats for ${expectedDelegates} expected delegates — ${seatShortfall} short.`
+          // Only ever shown below 70% coverage, so the gap quoted is the gap to
+          // that bar, not to the full expected head count.
+          ? `Only ${seatCapacity} seats for ${expectedDelegates} expected delegates — ${seatShortfall} more covers most of them.`
           : `${committeeCount} committee${committeeCount === 1 ? '' : 's'}, ${seatCapacity} seats.`,
       done: committeeCount > 0 && seatShortfall === 0,
       onClick: () => router.push(`/manage/${slug}/committees`),
@@ -993,14 +1046,16 @@ export default function DashboardPage() {
       icon: Gavel,
       emoji: 'Balance scale',
       gradient: NEU_GRADIENTS.gold,
-      title: 'Add chairs or recruit',
+      title: 'Invite chairs',
       sub: committeeCount === 0
-        ? 'Add committees first, then staff each dais.'
-        : missingChairs > 0
-          ? `${missingChairs} committee${missingChairs === 1 ? '' : 's'} missing chairs.`
-          : 'Every committee has a chair.',
-      done: committeeCount > 0 && missingChairs === 0,
-      onClick: () => router.push(`/manage/${slug}/assignment`),
+        ? 'Add committees first, then invite a chair to each dais.'
+        : committeesNeedingChairs > 0
+          ? `${committeesNeedingChairs} committee${committeesNeedingChairs === 1 ? '' : 's'} with nobody on the dais yet.`
+          : 'Every committee has a chair assigned or invited.',
+      done: committeeCount > 0 && committeesNeedingChairs === 0,
+      // Committees, not assignment: inviting a chair starts from the committee
+      // you are staffing.
+      onClick: () => router.push(`/manage/${slug}/committees`),
       action: (
         <button
           onClick={(e) => { e.stopPropagation(); router.push(`/manage/${slug}/jobs`); }}
@@ -1019,9 +1074,15 @@ export default function DashboardPage() {
       icon: Mail,
       emoji: 'Envelope',
       gradient: NEU_GRADIENTS.gold,
-      title: 'Design an email',
-      sub: 'Set up an automated email template for applicants.',
-      done: dash.enabledEmailCount > 0,
+      title: 'Explore emails',
+      sub: 'See what you can send applicants automatically.',
+      // INTENTIONALLY CLIENT-LOCAL: ticked by visiting the communications page,
+      // recorded in localStorage (src/lib/emailsExplored.ts). This is the only
+      // checklist item the server-side mirror conference_setup_status() cannot
+      // reproduce — a nudge email cannot read a browser's localStorage — so the
+      // SQL keeps this item on `enabled_email_count > 0`. The divergence is
+      // deliberate and documented in both places.
+      done: emailsExplored,
       onClick: () => router.push(`/manage/${slug}/communications`),
     },
     {
@@ -1032,8 +1093,14 @@ export default function DashboardPage() {
       emoji: 'Handshake',
       gradient: NEU_GRADIENTS.sage,
       title: 'Add your secretariat',
-      sub: 'Invite co-organizers and grant them access.',
-      done: dash.organizerCount > 1,
+      sub: dash.organizerCount > 1
+        ? `${dash.organizerCount} organizers on the team.`
+        : dash.pendingOrganizerInvites > 0
+          ? 'Invite sent — waiting for them to accept.'
+          : 'Invite co-organizers and grant them access.',
+      // One invite out is enough: the organiser has done the part they control,
+      // and accepting is not theirs to do.
+      done: dash.organizerCount > 1 || dash.pendingOrganizerInvites > 0,
       onClick: () => router.push(`/manage/${slug}/settings?tab=organizers`),
     },
     {

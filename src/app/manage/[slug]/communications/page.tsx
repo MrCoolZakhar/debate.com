@@ -26,6 +26,7 @@ import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
 import DefaultEmailPreviewModal from '@/components/DefaultEmailPreviewModal';
+import { markEmailsExplored } from '@/lib/emailsExplored';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -478,6 +479,12 @@ function CommunicationsPageInner() {
   const { conference, refreshConferenceQuiet } = useManage();
   const { user, session, profile } = useAuth();
   const searchParams = useSearchParams();
+
+  // Ticks the dashboard's "Explore emails" set-up item. Client-local by design
+  // — see src/lib/emailsExplored.ts for why it is not a DB flag.
+  useEffect(() => {
+    if (conference?.id) markEmailsExplored(conference.id);
+  }, [conference?.id]);
 
   // ── Data state ──
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);

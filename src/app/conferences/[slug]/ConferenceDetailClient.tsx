@@ -22,6 +22,7 @@ import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
 import { appendEditionYear } from '@/lib/presetNames';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
 import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
@@ -195,14 +196,7 @@ interface ConferenceReview {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function formatDateRange(start: string | null, end: string | null): string {
-  if (!start || !end) return 'TBD';
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()} – ${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
-  }
-  return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
+  return formatConferenceDates(start, end, { style: 'dmy-end-year-spaced' });
 }
 
 function capitalize(s: string): string {

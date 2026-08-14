@@ -1,6 +1,7 @@
 'use client';
 
 import { formatFeeAmountCompact } from '@/lib/utils';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 import FooterLegal from '@/components/FooterLegal';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,26 +79,16 @@ export function ratingMap(reviews: LabReview[]): Record<string, RatingSummary> {
 
 // ── Date / fee helpers ───────────────────────────────────────────────────────
 
-const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+/** "30 Aug 2026" · "12–14 Jun 2026" · "30 Jun – 2 Jul 2026". */
 export function formatDateRange(start: string, end: string): string {
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()}–${e.getDate()} ${MONTHS_SHORT[s.getMonth()]} ${s.getFullYear()}`;
-  }
-  return `${s.getDate()} ${MONTHS_SHORT[s.getMonth()]} – ${e.getDate()} ${MONTHS_SHORT[e.getMonth()]} ${e.getFullYear()}`;
+  return formatConferenceDates(start, end, { style: 'dmy-end-year' });
 }
 
-/** "12–14 JUN", compact ledger form. */
+/** "12–14 JUN", compact ledger form. Collapses a one-day run to "12 JUN". */
 export function compactRange(start: string, end: string): string {
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  if (s.getMonth() === e.getMonth()) {
-    return `${s.getDate()}–${e.getDate()} ${MONTHS_SHORT[s.getMonth()].toUpperCase()}`;
-  }
-  return `${s.getDate()} ${MONTHS_SHORT[s.getMonth()].toUpperCase()} – ${e.getDate()} ${MONTHS_SHORT[e.getMonth()].toUpperCase()}`;
+  return formatConferenceDates(start, end, { style: 'dm-upper' });
 }
 
 /** "February 2027", month bucket label for season grouping. */
