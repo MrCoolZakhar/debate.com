@@ -87,11 +87,22 @@ export function DelegateStyles() {
       @keyframes dgv-sheet { from { transform: translateY(100%) } to { transform: translateY(0) } }
       @keyframes dgv-fade { from { opacity: 0 } to { opacity: 1 } }
       @keyframes dgv-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
+      /* Transient reminder: rises, holds, then fades itself out. The element is
+         unmounted just after the animation ends, so the fade is never cut off. */
+      @keyframes dgv-hint { 0% { opacity: 0 } 8% { opacity: 1 } 78% { opacity: 1 } 100% { opacity: 0 } }
+      .dgv-hint { animation: dgv-hint 4200ms ${EASE} both }
 
       .dgv-rise { animation: dgv-rise 460ms ${EASE} both }
       .dgv-press { transition: transform 90ms cubic-bezier(.2,.8,.3,1), box-shadow 90ms cubic-bezier(.2,.8,.3,1) }
       .dgv-tap { transition: transform 140ms ${EASE}, box-shadow 200ms ${EASE} }
       .dgv-tap:active { transform: scale(0.96) }
+
+      /* Roll-call thumb. ONLY transform animates — width/inset-inline-start stay
+         put, so the pill never reflows mid-slide. \`--dgv-dir\` flips the travel
+         direction under RTL, where inset-inline-start anchors to the right edge
+         but translateX is still physical. */
+      .dgv-rc-thumb { --dgv-dir: 1; transition: transform 200ms cubic-bezier(0.22,1,0.36,1) }
+      [dir="rtl"] .dgv-rc-thumb { --dgv-dir: -1 }
 
       .dgv-scroll { scrollbar-width: thin; scrollbar-color: ${DG.hairline} transparent }
       .dgv-scroll::-webkit-scrollbar { width: 6px }
@@ -106,8 +117,18 @@ export function DelegateStyles() {
          whatever height is left after the hero, and the queue renders only
          the rows that genuinely fit rather than overflowing. */
       .dgv-board { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: clamp(6px, 1.8vw, 16px) }
-      .dgv-hero { flex-shrink: 0; display: grid; grid-template-columns: minmax(58px, auto) minmax(0, 1fr) minmax(78px, auto); align-items: center; gap: clamp(4px, 2vw, 22px) }
-      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0 }
+      /* The hero is CAPPED and centred, and that cap is what makes the arc wrap
+         work above phone width. The middle track is 1fr, so on a laptop it would
+         otherwise swallow every spare pixel and strand the two side rails 150px+
+         from a disc that cannot grow to meet them — at which point the arc tuck
+         is a rounding error and the columns read as three unrelated stacks.
+         Capping the hero keeps the rails against the disc at EVERY breakpoint;
+         the bottom band still spans the full board width. */
+      .dgv-hero { flex-shrink: 0; display: grid; grid-template-columns: minmax(58px, auto) minmax(0, 1fr) minmax(78px, auto); align-items: center; gap: clamp(4px, 2vw, 22px); max-inline-size: 560px; margin-inline: auto; inline-size: 100% }
+      /* The disc is measured off this box (useMeasuredSize), so this cap IS the
+         disc's ceiling. 34vh keeps a short laptop window from handing the whole
+         screen to the crest and squeezing the non-scrolling bottom band. */
+      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; max-inline-size: min(300px, 34vh); margin-inline: auto }
       .dgv-hero-side { display: flex; flex-direction: column; gap: clamp(8px, 2.2vw, 14px); min-width: 0 }
       /* The queue gets the wider share — country names are the content that
          actually has to be readable, and an even split truncated them to
@@ -147,6 +168,11 @@ export function DelegateStyles() {
         .dgv-rise { animation: none }
         .dgv-press, .dgv-tap { transition-duration: 1ms }
         .dgv-bar { animation: none !important }
+        /* The thumb still MOVES (it is the fill that carries the selection) —
+           it just stops travelling. Selection was never signalled by motion. */
+        .dgv-rc-thumb { transition-duration: 1ms }
+        /* The hint still appears and still goes away; it just does not fade. */
+        .dgv-hint { animation-duration: 4200ms; animation-timing-function: steps(1, end) }
       }
     `}</style>
   );
@@ -761,6 +787,18 @@ export function StatTile({
 /**
  * Two-state segmented control. The selected state is carried by FILL, never by
  * shadow — a shadow-only "on" state is silent to assistive tech.
+ *
+ * The fill is a single sliding thumb rather than a background swapped between
+ * two buttons. That matters for more than polish: swapping the fill gives no
+ * indication of WHICH way the control moved, so a mis-tap and a deliberate tap
+ * look identical after the fact. A thumb that travels shows the transition
+ * itself. Motion is strictly additive — the thumb is a persistent gradient fill
+ * and `aria-pressed` is on the buttons, so with animation off (or with a screen
+ * reader) the control still states its state.
+ *
+ * Only `transform` animates. Animating width/inset would reflow the pill on
+ * every frame and, in this layout, the pill sits inside a hero rail that other
+ * elements are measured against.
  */
 export function RollCallSwitch({
   value,
@@ -782,15 +820,38 @@ export function RollCallSwitch({
     { k: 'present', label: presentLabel },
     { k: 'present-voting', label: votingLabel },
   ];
+  const pad = compact ? 3 : 4;
+  const idx = value === 'present-voting' ? 1 : 0;
   return (
     <div
       role="group"
       style={{
-        display: 'inline-flex', gap: compact ? 2 : 4, padding: compact ? 3 : 4,
+        position: 'relative',
+        /* Two equal 1fr tracks, no gap: the thumb is exactly half the track's
+           content box, so `translateX(100%)` lands on the second cell with no
+           per-variant arithmetic. */
+        display: 'inline-grid', gridTemplateColumns: '1fr 1fr', gap: 0,
+        padding: pad,
         borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm,
         opacity: disabled ? 0.55 : 1,
       }}
     >
+      <span
+        aria-hidden="true"
+        className="dgv-rc-thumb"
+        style={{
+          position: 'absolute',
+          insetBlock: pad,
+          insetInlineStart: pad,
+          /* % on an absolutely positioned box resolves against the containing
+             block's padding box, so this is exactly one grid cell wide. */
+          inlineSize: `calc((100% - ${pad * 2}px) / 2)`,
+          borderRadius: 999,
+          background: `linear-gradient(135deg, ${DG.forestMid}, ${DG.forest})`,
+          boxShadow: '0 3px 8px rgba(27,56,40,0.30)',
+          transform: `translateX(calc(var(--dgv-dir, 1) * ${idx * 100}%))`,
+        }}
+      />
       {opts.map((o) => {
         const on = value === o.k;
         return (
@@ -800,22 +861,22 @@ export function RollCallSwitch({
             disabled={disabled}
             aria-pressed={on}
             onClick={() => !disabled && onChange(o.k)}
-            className="dgv-tap dgv-focus"
+            className="dgv-focus"
             style={{
-              /* 999 outer − 4 padding: concentric, so the thumb nests cleanly. */
+              /* Above the thumb, transparent, so the thumb is the only fill. */
+              position: 'relative', zIndex: 1, background: 'transparent',
               borderRadius: 999, border: 'none',
               /* Compact still clears 44px total once the 3px track padding and
                  the label above it are counted — it is the visual pill that
                  shrinks, not the tappable column. */
-              minHeight: compact ? 34 : 44,
-              minWidth: compact ? 34 : undefined,
-              padding: compact ? '0 10px' : '0 18px',
+              minHeight: compact ? 38 : 48,
+              minWidth: compact ? 40 : undefined,
+              padding: compact ? '0 12px' : '0 20px',
               cursor: disabled ? 'not-allowed' : 'pointer',
-              fontFamily: OUTFIT, fontSize: compact ? 13 : 12, fontWeight: 900,
+              fontFamily: OUTFIT, fontSize: compact ? 14 : 13, fontWeight: 900,
               letterSpacing: compact ? '0.02em' : '0.06em',
-              background: on ? `linear-gradient(135deg, ${DG.forestMid}, ${DG.forest})` : 'transparent',
               color: on ? DG.gold : DG.body,
-              boxShadow: on ? `0 3px 8px rgba(27,56,40,0.30)` : 'none',
+              transition: `color 200ms cubic-bezier(0.22,1,0.36,1)`,
             }}
           >
             {o.label}

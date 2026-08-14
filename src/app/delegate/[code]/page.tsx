@@ -11,7 +11,7 @@ import {
 } from '@/components/delegate/DelegateUI';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { Committee, Delegate, DocumentType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
+import { Committee, CaucusState, Delegate, DocumentType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
 import { getScoringConfig } from '@/lib/scoring';
 import { selectDelegateTips } from '@/lib/delegateTips';
@@ -29,6 +29,9 @@ import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import {
   getCommitteeByCode,
+  // Explicitly sanctioned on this surface: a pure reader over the committee row,
+  // no store, no localStorage (see its comment banner in committeeService).
+  caucusRemainingNow,
   subscribeToCommittee,
   getCurrentSpeakerRow,
   getDelegatesList,
@@ -158,6 +161,62 @@ function statusChangesRemaining(committeeId: string, country: string): number {
   const THREE_HOURS = 3 * 60 * 60 * 1000;
   const recent = getStatusChangeTimes(committeeId, country).filter((t) => now - t < THREE_HOURS);
   return Math.max(0, 3 - recent.length);
+}
+
+// ── GSL request cooldowns ────────────────────────────────────────────────────
+// Two independent clocks on the "request to speak" button, both persisted so a
+// reload cannot be used to skip either one:
+//
+//  • GSL_RETRY_MS — how long a delegate waits on a chair who has not acted. The
+//    request stays pending the whole time; this only re-enables the button so a
+//    delegate whose request was quietly ignored is not stuck forever.
+//  • GSL_DENIED_MS — the lockout after a chair actually says no. Without it,
+//    "Request Again" is a spam button pointed at the dais.
+//
+// Keyed per committee AND per country, exactly like the status-change limiter
+// above: one browser can hold two delegations (a shared laptop), and the two
+// must not share a cooldown.
+const GSL_RETRY_MS = 60 * 1000;
+const GSL_DENIED_MS = 15 * 60 * 1000;
+
+type GslCooldown = { requestedAt?: number; deniedAt?: number };
+
+function getGslCooldownKey(committeeId: string, country: string): string {
+  return `gsl-request:${committeeId}:${country}`;
+}
+
+function readGslCooldown(committeeId: string, country: string): GslCooldown {
+  try {
+    const raw = localStorage.getItem(getGslCooldownKey(committeeId, country));
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? (parsed as GslCooldown) : {};
+  } catch { return {}; }
+}
+
+function writeGslCooldown(committeeId: string, country: string, value: GslCooldown): void {
+  try {
+    const key = getGslCooldownKey(committeeId, country);
+    if (!value.requestedAt && !value.deniedAt) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+/** ms left on the post-denial lockout, 0 when it is not running. */
+function gslDeniedRemaining(cd: GslCooldown, now: number): number {
+  if (!cd.deniedAt) return 0;
+  return Math.max(0, GSL_DENIED_MS - (now - cd.deniedAt));
+}
+
+/** ms left before an unanswered request may be re-sent, 0 once it has elapsed. */
+function gslRetryRemaining(cd: GslCooldown, now: number): number {
+  if (!cd.requestedAt) return 0;
+  return Math.max(0, GSL_RETRY_MS - (now - cd.requestedAt));
+}
+
+/** "14m" / "45s" — coarse on purpose, this is a wait, not a stopwatch. */
+function formatCooldown(ms: number): string {
+  const secs = Math.ceil(ms / 1000);
+  return secs >= 60 ? `${Math.ceil(secs / 60)}m` : `${secs}s`;
 }
 
 // Speaking log parsing — only SPEECH events (the channel now also carries motion/RTR/manual
@@ -630,6 +689,24 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // GSL denial state
   const [gslDenied, setGslDenied] = useState(false);
   const prevPendingRef = useRef<Committee['pendingMotions']>([]);
+  // Persisted request/denial clocks (see GSL_RETRY_MS / GSL_DENIED_MS above) plus
+  // the coarse clock that drives the countdown on the button. The clock only runs
+  // while one of the two windows is open, so this is never a permanent 1s
+  // re-render of the whole board.
+  const [gslCooldown, setGslCooldown] = useState<GslCooldown>({});
+  const [gslNow, setGslNow] = useState<number>(() => Date.now());
+
+  // Live seconds on the TOTAL caucus clock. The committee row only ever carries
+  // the value AT the anchor instant, so rendering it raw freezes the countdown
+  // between chair writes. Recomputed from the anchor on every tick rather than
+  // decremented, so a phone that was asleep wakes up on the right number.
+  const [caucusSeconds, setCaucusSeconds] = useState(0);
+
+  // Transient "N status changes remaining" reminder — shown when the delegate
+  // actually moves the switch, then faded out. See the footnote block below.
+  const [statusFlash, setStatusFlash] = useState(false);
+  const statusFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (statusFlashTimer.current) clearTimeout(statusFlashTimer.current); }, []);
 
   // NOTE: this page deliberately holds NO reference to useSettingsStore. It never
   // hydrates that store from the DB, so getSettings() here silently returns
@@ -862,9 +939,22 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const hasRequest = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
     if (hadRequest && !hasRequest && !isOnSpeakersListNow && !isCurrentSpeakerNow) {
       setGslDenied(true);
+      // Start the lockout from the moment the chair actually said no. Edge-
+      // triggered by prevPendingRef, so this stamps once per denial and a later
+      // unrelated re-render cannot silently extend the window.
+      const next: GslCooldown = { deniedAt: Date.now() };
+      setGslCooldown(next);
+      writeGslCooldown(committee.id, country, next);
     }
     if (isOnSpeakersListNow || isCurrentSpeakerNow) {
       setGslDenied(false);
+      // On the list: both clocks are moot. Guarded so this does not hand back a
+      // fresh object (and a fresh render) on every unrelated committee event.
+      setGslCooldown((prev) => {
+        if (!prev.requestedAt && !prev.deniedAt) return prev;
+        writeGslCooldown(committee.id, country, {});
+        return {};
+      });
     }
     // Waiting room: a join request that vanished while still absent = the chair declined it.
     const admitted = (committee.delegates.find((d) => d.country === country)?.status ?? 'absent') !== 'absent';
@@ -881,19 +971,78 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     prevPendingRef.current = committee.pendingMotions;
   }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, committee?.delegates, country]);
 
+  // Rehydrate the GSL clocks from localStorage. A reload must not clear a lockout,
+  // so the stored timestamps — not component state — are the source of truth.
+  useEffect(() => {
+    if (!committee?.id || !country) return;
+    setGslCooldown(readGslCooldown(committee.id, country));
+  }, [committee?.id, country]);
+
+  // Countdown clock for the button label. Runs ONLY while a window is open and
+  // stops itself the moment both have elapsed — at most 15 minutes of ticking,
+  // and only after a delegate has actually been denied.
+  useEffect(() => {
+    const open = () => {
+      const now = Date.now();
+      return gslDeniedRemaining(gslCooldown, now) > 0 || gslRetryRemaining(gslCooldown, now) > 0;
+    };
+    if (!open()) return;
+    setGslNow(Date.now());
+    const id = setInterval(() => {
+      setGslNow(Date.now());
+      if (!open()) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [gslCooldown]);
+
+  // ── Live caucus clock ─────────────────────────────────────────────────────
+  // Re-seed whenever the anchor OR the anchored value changes (start, pause,
+  // extend, speaker advance), and tick only while the anchor is set — null
+  // `totalStartedAt` IS the paused signal, so no schema or type change is
+  // needed. Recomputes from caucusRemainingNow each second instead of
+  // decrementing, so a backgrounded phone catches up on wake rather than
+  // drifting behind by however long it was asleep. Reader only: this tick NEVER
+  // writes to the DB (MUST NEVER HAPPEN #4 — a per-second write would re-arm the
+  // realtime debounce for every device in the committee).
+  const caucusAnchor = committee?.caucus?.totalStartedAt ?? null;
+  const caucusAnchoredRemaining = committee?.caucus?.remainingTime ?? null;
+  useEffect(() => {
+    const read = () => caucusRemainingNow(
+      caucusAnchoredRemaining === null
+        ? null
+        : ({ remainingTime: caucusAnchoredRemaining, totalStartedAt: caucusAnchor } as CaucusState),
+    );
+    setCaucusSeconds(read());
+    if (!caucusAnchor) return;
+    const id = setInterval(() => setCaucusSeconds(read()), 1000);
+    return () => clearInterval(id);
+  }, [caucusAnchor, caucusAnchoredRemaining]);
+
   /* ── Board sizing ───────────────────────────────────────────────────────
      Declared above the early returns: hooks must run in the same order on
      every render, and everything below this point can bail out. `discBox`
      measures the hero's centre column; the queue measures its own slot and
      renders only the rows that genuinely fit, because the page never scrolls. */
-  const { ref: discBox, size: discSize } = useMeasuredSize(84, 176);
+  /* The 176 ceiling used to bind on every screen wider than a phone: the disc
+     stopped growing while the middle grid track kept expanding, so the rails
+     drifted out of the disc's orbit and the arc flattened into a straight
+     column. The real ceiling now lives in CSS on `.dgv-hero-mid`
+     (min(300px, 34vh)), which is height-aware; this number just has to stay
+     above it so it is never the binding constraint. */
+  const { ref: discBox, size: discSize } = useMeasuredSize(84, 320);
   const { ref: queueBox, count: queueFit } = useFitCount(44, 30);
 
   const statIcon = Math.round(Math.max(20, Math.min(34, discSize * 0.21)));
   const actionIcon = Math.round(Math.max(20, Math.min(30, discSize * 0.18)));
+  /* The documents tile carries its own clamp rather than riding discSize
+     unbounded — at a 300px disc a raw 0.46 multiplier would put a 138px folder
+     in a rail that is ~94px wide. */
+  const docIcon = Math.round(Math.max(44, Math.min(88, discSize * 0.46)));
   /* How far the outermost satellite tucks toward the disc. Scaled off the disc
-     so the curve stays proportional from phone to laptop. */
-  const arcDepth = Math.round(Math.max(6, Math.min(26, discSize * 0.14)));
+     so the curve stays proportional from phone to laptop — the ceiling is 44,
+     not 26, because a 300px disc needs ~42px of tuck to read the same as ~20px
+     does against a 145px one. */
+  const arcDepth = Math.round(Math.max(6, Math.min(44, discSize * 0.14)));
 
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
@@ -962,10 +1111,24 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // ── Status change handler — optimistic update to avoid visible lag
   const handleStatusChange = async (newStatus: DelegateStatus) => {
     if (!myDelegate) return;
-    if (changesLeft <= 0) return;
     const delegateId = myDelegate.id;
+    // Tapping the status you ALREADY hold is a no-op, and a no-op must cost
+    // nothing: no rate-limit slot, no DB write, no pin. The pin is consulted as
+    // well as the row because a write from a second ago may not be confirmed
+    // yet — without it, the second tap of a double-tap reads the pre-click row
+    // and burns the delegate's next slot on a change that is already in flight.
+    const pin = pendingStatusWrites.current[delegateId];
+    const heldStatus = pin && Date.now() - pin.at < STATUS_PIN_TTL_MS ? pin.value : myDelegate.status;
+    if (heldStatus === newStatus) return;
+    if (changesLeft <= 0) return;
     const previousStatus = myDelegate.status;
     setStatusError(false);
+    // Real change → surface the remaining-changes reminder, briefly. The line is
+    // keyed on the remaining count, so a second change remounts it and the fade
+    // animation restarts from the top instead of resuming mid-fade.
+    if (statusFlashTimer.current) clearTimeout(statusFlashTimer.current);
+    setStatusFlash(true);
+    statusFlashTimer.current = setTimeout(() => setStatusFlash(false), 4300);
     // Pin this row against any refetch whose snapshot predates the write below — including
     // refetches fired by events this delegation had nothing to do with.
     pendingStatusWrites.current[delegateId] = { value: newStatus, at: Date.now() };
@@ -1019,6 +1182,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
   const handleAddMeToSpeakers = () => {
     if (!myDelegate || isAbsent) return;
+    // No duplicate motion is possible: requestGslSpot already short-circuits when
+    // this delegation has a pending gsl-request (committeeService.ts:844), so a
+    // re-request after the no-response window REUSES the motion the chair is
+    // already looking at. Remove-then-recreate was the alternative and it is
+    // strictly worse here — deleting a motion row needs the chair suffix under
+    // RLS, and it would yank the request out of the chair's queue and re-add it
+    // at the bottom, punishing the delegate for the chair's silence.
+    const next: GslCooldown = { requestedAt: Date.now() };
+    setGslCooldown(next);
+    writeGslCooldown(committee.id, country, next);
     requestGslSpot(committee.id, myDelegate.id, myDelegate.country, committee.code);
   };
 
@@ -1072,11 +1245,25 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return t('delegate_eta_about', { t: m ? `${h} hr ${m} min` : `${h} hr` });
   })();
 
-  // Request-to-speak reflects the existing GSL states; the action itself is unchanged.
+  // Request-to-speak reflects the existing GSL states plus the two cooldowns; the
+  // underlying action is unchanged. Order matters: what the committee can see
+  // (on the floor, in the queue) always outranks anything this device remembers.
+  const deniedLeft = gslDeniedRemaining(gslCooldown, gslNow);
+  const retryLeft = gslRetryRemaining(gslCooldown, gslNow);
   const speakCta = (() => {
     if (isCurrentSpeaker) return { label: t('delegate_floor_now'), disabled: true, onClick: undefined as (() => void) | undefined };
     if (isOnSpeakersList) return { label: myQueueIndex === 0 ? t('delegate_up_next_queue') : t('delegate_in_queue'), disabled: true, onClick: undefined as (() => void) | undefined };
-    if (isGslRequestPending) return { label: t('delegate_awaiting_approval'), disabled: true, onClick: undefined as (() => void) | undefined };
+    // Denied: locked out for 15 minutes, with the wait stated on the button so
+    // it reads as a rule rather than a broken control.
+    if (deniedLeft > 0) {
+      return { label: t('delegate_request_retry_in', { t: formatCooldown(deniedLeft) }), disabled: true, onClick: undefined as (() => void) | undefined };
+    }
+    if (isGslRequestPending) {
+      // Still pending and inside the no-response window → wait. Past it, the
+      // chair has not acted, so the delegate may nudge again (same motion).
+      if (retryLeft > 0) return { label: t('delegate_awaiting_approval'), disabled: true, onClick: undefined as (() => void) | undefined };
+      return { label: t('delegate_request_again'), disabled: sessionEnded || isAbsent, onClick: handleAddMeToSpeakers };
+    }
     if (gslDenied) return { label: t('delegate_request_again'), disabled: sessionEnded, onClick: () => setGslDenied(false) };
     return { label: t('delegate_request_gsl'), disabled: sessionEnded || isAbsent, onClick: handleAddMeToSpeakers };
   })();
@@ -1307,13 +1494,17 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     : votingLive ? t('delegate_voting_procedure')
       : `${t('delegate_speakers_list_header')}:`;
 
+  /* `caucusSeconds`, not `caucus.remainingTime` — the row only holds the value at
+     the anchor instant, so the raw field is a clock that moves once per chair
+     write. Both the numerals and the bar read the live value so they can never
+     disagree. */
   const caucusClock = committee.caucus && (
     <>
       <div style={{ fontFamily: OUTFIT, fontSize: 'clamp(26px, 8vw, 44px)', fontWeight: 900, color: DG.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-        {formatTime(committee.caucus.remainingTime)}
+        {formatTime(caucusSeconds)}
       </div>
       <div style={{ marginTop: 8, height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
-        <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%` }} />
+        <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${committee.caucus.totalTime > 0 ? Math.max(0, Math.min(100, (caucusSeconds / committee.caucus.totalTime) * 100)) : 0}%` }} />
       </div>
     </>
   );
@@ -1342,13 +1533,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
     if (caucusLive && committee.caucus) {
       const isMod = committee.phase === 'moderated-caucus';
+      /* The motion's topic is NOT repeated here — it is the secondary line under
+         the band label above, where it sits directly beneath the mode it belongs
+         to. Printing it twice on one screen made the panel look like it was
+         describing something else. */
       return (
         <Panel className="dgv-queue dgv-rise" style={{ padding: 14 }}>
-          {committee.caucus.purpose && (
-            <p style={{ margin: '0 0 10px', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: DG.forest, lineHeight: 1.25 }}>
-              {committee.caucus.purpose}
-            </p>
-          )}
           {caucusClock}
           {isMod && committee.caucus.currentSpeaker && (
             <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -1519,7 +1709,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             {/* ── HERO BAND: tools | flag+ordinal | stats ───────────────── */}
             <section className="dgv-hero dgv-rise">
               {/* LEFT — documents tile above the roll-call control, both
-                  tucked toward the disc so the pair follows its curve */}
+                  tucked toward the disc so the pair follows its curve.
+                  Same convention as the stat rail: `arcDepth − arcInset`, i.e.
+                  the gap to the disc SHRINKS the further an item sits from the
+                  disc's widest point (its centre line). The rail previously used
+                  the raw inset, which is that relationship inverted — it pushed
+                  both controls a full arcDepth AWAY from the disc, which is why
+                  the left side never read as wrapping. The documents tile sits
+                  nearer the centre line than the switch (it is the taller of the
+                  two blocks in a vertically-centred stack), so it takes the
+                  middle slot of a three-point arc and the switch the outer one. */}
               <div className="dgv-hero-side">
                 <button
                   type="button"
@@ -1528,14 +1727,14 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
                     border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
-                    minHeight: 44, marginInlineEnd: arcInset(0, 2, arcDepth),
+                    minHeight: 44, marginInlineEnd: arcDepth - arcInset(1, 3, arcDepth),
                   }}
                 >
-                  <Emoji3D name="File folder" size={discSize * 0.34} fallback={FolderOpen} fallbackColor={DG.forest} />
+                  <Emoji3D name="File folder" size={docIcon} fallback={FolderOpen} fallbackColor={DG.forest} />
                   <span
                     style={{
                       fontFamily: OUTFIT, fontWeight: 800, color: DG.body, textAlign: 'center',
-                      fontSize: 'clamp(6.5px, 2vw, 9px)', letterSpacing: '0.04em',
+                      fontSize: 'clamp(7.5px, 2.3vw, 10.5px)', letterSpacing: '0.04em',
                       textTransform: 'uppercase', lineHeight: 1.15,
                     }}
                   >
@@ -1544,7 +1743,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 </button>
 
                 {!isAbsent && !sessionEnded && !lockRollCall && (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginInlineEnd: arcInset(1, 2, arcDepth) }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginInlineEnd: arcDepth - arcInset(2, 3, arcDepth) }}>
                     <span
                       style={{
                         fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
@@ -1615,35 +1814,56 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             </section>
 
             {/* ── ROLL-CALL FOOTNOTE ─────────────────────────────────────
-                The remaining-changes counter the redesign dropped, plus the
-                reason the control is missing when chairs lock roll call. It
-                sits under the whole hero, not in the left rail: that rail is
-                58px at 375px, where the sentence is unreadable. Always
-                rendered while the control is relevant — including at n=0, the
-                moment a delegate most needs to know why the switch is dead. */}
+                The lock explanation is permanent — it is the reason a missing
+                control is missing, and that reason does not expire.
+                The remaining-changes counter is NOT. A quota a delegate is not
+                spending is noise, and a number parked on screen all session
+                reads as a warning about nothing; it lands when it is actually
+                news. So it appears for ~4s each time the delegate moves the
+                switch, then fades itself out — EXCEPT at zero, where it stays
+                up, because that is the moment it stops being a reminder and
+                becomes the explanation for a dead control.
+                The row reserves its height either way: this board does not
+                scroll, so a line that appears and disappears must not be able
+                to shove the bands below it. */}
             {!isAbsent && !sessionEnded && (
-              <div className="text-center" style={{ flexShrink: 0 }}>
+              <div className="text-center" style={{ flexShrink: 0, minHeight: 15 }}>
                 {statusError && !lockRollCall && (
                   <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)', fontWeight: 800, lineHeight: 1.25, color: DG.danger }}>
                     {t('delegate_status_change_failed')}
                   </p>
                 )}
-                <p
-                  style={{
-                    margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)',
-                    fontWeight: 700, lineHeight: 1.25,
-                    color: !lockRollCall && changesLeft <= 0 ? DG.danger : DG.faint,
-                  }}
-                >
-                  {lockRollCall
-                    ? t('delegate_roll_call_locked')
-                    : t('delegate_status_changes_left', { n: changesLeft, s: changesLeft === 1 ? '' : 's' })}
-                </p>
+                {lockRollCall ? (
+                  <p
+                    style={{
+                      margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)',
+                      fontWeight: 700, lineHeight: 1.25, color: DG.faint,
+                    }}
+                  >
+                    {t('delegate_roll_call_locked')}
+                  </p>
+                ) : (changesLeft <= 0 || statusFlash) && (
+                  <p
+                    key={changesLeft}
+                    className={changesLeft <= 0 ? undefined : 'dgv-hint'}
+                    aria-live="polite"
+                    style={{
+                      margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)',
+                      fontWeight: 700, lineHeight: 1.25,
+                      color: changesLeft <= 0 ? DG.danger : DG.faint,
+                    }}
+                  >
+                    {t('delegate_status_changes_left', { n: changesLeft, s: changesLeft === 1 ? '' : 's' })}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* ── BAND LABEL ────────────────────────────────────────────── */}
-            <div className="flex items-baseline gap-3" style={{ flexShrink: 0 }}>
+            {/* ── BAND LABEL ──────────────────────────────────────────────
+                Mode on top, the motion's own topic as a smaller line directly
+                beneath it — a delegate needs "Moderated Caucus" AND "on the
+                Sahel security corridor" together to know what to prepare. */}
+            <div style={{ flexShrink: 0, minWidth: 0 }}>
               <h2
                 style={{
                   margin: 0, fontFamily: OUTFIT, fontWeight: 900, color: DG.ink,
@@ -1652,6 +1872,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
               >
                 {bandLabel}
               </h2>
+              {caucusLive && committee.caucus?.purpose && (
+                <p
+                  className="text-start"
+                  style={{
+                    margin: '1px 0 0', fontFamily: OUTFIT, fontWeight: 700,
+                    fontSize: 'clamp(11px, 3.2vw, 14px)', lineHeight: 1.2,
+                    color: DG.forest, overflow: 'hidden', textOverflow: 'ellipsis',
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                  }}
+                >
+                  {committee.caucus.purpose}
+                </p>
+              )}
             </div>
 
             {/* ── BOTTOM BAND: list | square actions ────────────────────── */}

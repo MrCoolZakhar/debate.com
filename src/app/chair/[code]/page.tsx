@@ -30,6 +30,14 @@ import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import TutorialOverlay from '@/components/TutorialOverlay';
+import NotificationStack from '@/components/notifications/NotificationStack';
+import {
+  notify,
+  dismiss as dismissNotification,
+  setNotificationsSuppressed,
+  notifyKey,
+  NOTIFY_TTL,
+} from '@/lib/sessionNotifications';
 import {
   getCommitteeByCode,
   subscribeToCommittee,
@@ -1377,6 +1385,24 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Mutable map of delegateId → current status — updated immediately on each cycle
   // so rapid clicks read the post-click status, not the pre-re-render (stale) status.
   const delegateStatusRef = useRef<Map<string, DelegateStatus>>(new Map());
+  // ── Notification plumbing ────────────────────────────────────────────────
+  // The GSL card's buttons must call the SAME approve/deny handlers as the banner,
+  // but those are declared after the loading early-return while the effect that
+  // raises the card must live before it. A ref assigned during render (same pattern
+  // as timerRunningRef above) bridges the two and keeps the closures fresh, so a
+  // card raised minutes ago never fires a stale-committee write.
+  const gslActionsRef = useRef<{
+    approve: (motionId: string, delegateId: string, country: string) => void | Promise<void>;
+    deny: (motionId: string) => void | Promise<void>;
+  }>({ approve: () => {}, deny: () => {} });
+  // Motion ids we have already raised a card for. Presence here means "raised at some
+  // point", NOT "still on screen" — a card that timed out must not be re-raised by the
+  // next render of the same still-pending motion (rule 1: notify() restarts the TTL).
+  const raisedGslKeysRef = useRef<Set<string>>(new Set());
+  // Chat message ids already accounted for. Seeded with the whole backlog on first load
+  // so a refresh does not burst a card for every historical message.
+  const seenChatIdsRef = useRef<Set<string> | null>(null);
+  const seenChatCommitteeRef = useRef<string | null>(null);
   timerRunningRef.current = timerRunning;
   isViewOnlyRef.current = isViewOnly;
   speakerTimeLimitRef.current = speakerTimeLimit;
@@ -2174,6 +2200,127 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     saveChatReadCounts(committee.code, { role: 'chair', identity: myChairName }, chatReadCounts);
   }, [chatReadCounts, committee?.code, myChairName]);
 
+  // ── Notifications ─────────────────────────────────────────────────────────
+  // See src/lib/sessionNotifications.ts for the four rules this obeys. The store is
+  // headless and module-level, so everything below is a pure producer: it never
+  // touches committee state, never arms the structural debounce, and never awaits a
+  // DB write (the actions delegate straight to the existing optimistic handlers).
+
+  // Suppress while a delegate is actually speaking. Keyed on the `timerRunning`
+  // BOOLEAN, never on the per-second `speakerTimeRemaining` atom (RULE 3/4) — this
+  // effect must not re-run once a second. `timerRunning` drives both the GSL clock and
+  // the moderated-caucus speaker clock (they share this atom), so one effect covers
+  // both. Suppression only HIDES: TTLs pause and nothing is dropped (rule 2), so a
+  // request raised mid-speech is still waiting when the gavel comes down.
+  useEffect(() => {
+    setNotificationsSuppressed(timerRunning);
+    return () => setNotificationsSuppressed(false);
+  }, [timerRunning]);
+
+  // GSL speak requests → one card per pending `gsl-request` motion.
+  const pendingMotions = committee?.pendingMotions;
+  useEffect(() => {
+    const requests = (pendingMotions ?? []).filter((m) => (m.type as string) === 'gsl-request');
+    const liveKeys = new Set<string>();
+
+    for (const m of requests) {
+      // Optimistic temp ids are replaced by the real UUID a moment later (AGENTS.md,
+      // MOTIONS MODAL). Keying on a temp id would mint a SECOND card the instant the
+      // UUID lands, and the reject write would fire against an id the DB never had.
+      if (m.id.startsWith('temp-')) continue;
+      const key = notifyKey.gsl(m.id);
+      liveKeys.add(key);
+      if (raisedGslKeysRef.current.has(key)) continue;
+
+      let delegateId = '';
+      try { delegateId = JSON.parse(m.topic).delegateId; } catch {}
+      if (!delegateId) continue;
+
+      const motionId = m.id;
+      const country = m.proposedBy;
+      const found = getCountryByName(country);
+      raisedGslKeysRef.current.add(key);
+      notify({
+        key,
+        kind: 'gsl-request',
+        flagCode: found?.code,
+        title: getCountryDisplayName(country, language),
+        body: t('notif_gsl_wants_to_speak'),
+        ttlMs: NOTIFY_TTL.gslRequest,
+        actions: [
+          {
+            id: 'accept',
+            label: t('notif_accept'),
+            tone: 'accept',
+            run: () => gslActionsRef.current.approve(motionId, delegateId, country),
+          },
+          {
+            id: 'reject',
+            label: t('notif_reject'),
+            tone: 'reject',
+            run: () => gslActionsRef.current.deny(motionId),
+          },
+        ],
+        // Expiry means the CARD left the screen, nothing more. The motion is
+        // deliberately left untouched in the DB: the request stays in the GSL request
+        // banner (and in the motions list) for the chair to action there. Deleting it
+        // here would silently deny a delegate who is still waiting for an answer.
+        onExpire: () => {},
+      });
+    }
+
+    // Anything that left the pending list was approved or denied elsewhere — in
+    // MotionsModal on this device, in the banner, or by a co-chair over realtime.
+    // Pull its card immediately so the stack cannot offer a dead action.
+    for (const key of Array.from(raisedGslKeysRef.current)) {
+      if (liveKeys.has(key)) continue;
+      raisedGslKeysRef.current.delete(key);
+      dismissNotification(key);
+    }
+  }, [pendingMotions, language, t]);
+
+  // Chat → CO-CHAIR ONLY, and never with message content.
+  const chatMessages = committee?.messages;
+  useEffect(() => {
+    const committeeId = committee?.id ?? null;
+    if (!committeeId) return;
+    // Fresh committee (or first load) — adopt the whole backlog as already seen.
+    if (seenChatCommitteeRef.current !== committeeId) {
+      seenChatCommitteeRef.current = committeeId;
+      seenChatIdsRef.current = new Set((chatMessages ?? []).map((m) => m.id));
+      return;
+    }
+    const seen = seenChatIdsRef.current ?? new Set<string>();
+    seenChatIdsRef.current = seen;
+
+    for (const m of chatMessages ?? []) {
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+      // Consumed either way — marking before the guards means closing the chat panel
+      // cannot burst cards for messages the chair already had on screen.
+      if (!isViewOnly) continue;                       // head chair gets no chat cards
+      if (showChat) continue;                          // panel is open over the session
+      if (m.sender === '__system__' || m.content.startsWith('__log__:')) continue;
+      if (!myChairName || m.sender === myChairName) continue;   // never our own
+      // Addressed to this dais: public, to the chairs thread, or a DM to this chair.
+      const forMe = !m.isPrivate || m.recipient === 'Chairs' || m.recipient === myChairName;
+      if (!forMe) continue;
+
+      const found = getCountryByName(m.sender);
+      notify({
+        key: notifyKey.chat(m.sender),   // one card per sender — a burst collapses
+        kind: 'chat',
+        flagCode: found?.code,
+        title: getCountryDisplayName(m.sender, language),
+        // HARD REQUIREMENT: never the message text. The stack is visible to anyone
+        // looking at the dais screen; chat is private.
+        body: t('notif_chat_sent_message'),
+        ttlMs: NOTIFY_TTL.chat,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatMessages, committee?.id, isViewOnly, showChat, myChairName, language, t]);
+
   // A resume latch held by ANOTHER chair is normally a sub-second blink: they claim it and
   // immediately clear it by starting the roll call. If it is still there ~12s later that
   // chair died between the two writes, so offer a take-over rather than leaving every other
@@ -2631,6 +2778,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     await denyGslRequest(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
     localUpdateTime.current = Date.now();
   };
+
+  // The notification card reuses these EXACT handlers — no second DB path.
+  gslActionsRef.current = { approve: handleApproveGslRequest, deny: handleDenyGslRequest };
 
   const isLastGSLSpeaker = committee.speakersList.length === 0;
 
@@ -3470,6 +3620,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {/* RTR OVERLAY — fixed position, completely outside document flow.
           Never render this inside any flex/grid container — it must not
           affect the layout of the GSL centre column in any way. */}
+      {/* Exactly ONE per surface — this host owns the interval that advances every
+          notification's TTL, so a second mount would halve every countdown. */}
+      <NotificationStack />
       {showTutorial && committee && (
         <TutorialOverlay
           committee={committee}
