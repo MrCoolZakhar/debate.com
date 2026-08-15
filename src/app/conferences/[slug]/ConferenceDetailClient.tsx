@@ -1052,7 +1052,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // delegate role config's fee, falling back to the conference-level fee
   // only when no delegate role config exists yet.
   const delegateRoleConfig = roleConfigs.find(r => r.role === 'delegate') ?? null;
-  const heroFeeAmount = delegateRoleConfig ? (delegateRoleConfig.fee_amount ?? 0) : conference.fee_amount;
+  // Phase-aware: a conference whose delegate fee is split into fee_phases has a
+  // flat fee_amount of 0, which would otherwise advertise it as FREE. Resolve
+  // through activePhaseFee so the hero shows today's actual price.
+  const heroFeeAmount = delegateRoleConfig
+    ? activePhaseFee({ fee_amount: delegateRoleConfig.fee_amount, fee_phases: delegateRoleConfig.fee_phases }, now).amount
+    : conference.fee_amount;
   const heroFeeCurrency = delegateRoleConfig ? (delegateRoleConfig.fee_currency ?? conference.fee_currency) : conference.fee_currency;
 
   function getRoleWindowStatus(r: RoleConfig): 'open' | 'closed' | 'opens-soon' | 'open-always' {

@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchDelegateFees, applyDelegateFee } from '@/lib/publicFees';
 import { LabConference, LabReview, ratingMap } from './landing-lab/shared';
 import VariantStagefront from './landing-lab/VariantStagefront';
 
@@ -27,7 +28,12 @@ export default function StagefrontClient() {
           .from('conference_reviews')
           .select('conference_id, rating, review_text, display_name'),
       ]);
-      setConferences((confRes.data as LabConference[]) ?? []);
+      const confs = (confRes.data as LabConference[]) ?? [];
+      // Headline price must come from the delegate role config (phase-aware),
+      // not the stale conferences.fee_amount column. Resolved BEFORE the first
+      // setConferences so a card never flashes a wrong (often "Free") price.
+      const fees = await fetchDelegateFees(supabase, confs.map(c => c.id));
+      setConferences(confs.map(c => applyDelegateFee<LabConference>(c, fees)));
       setReviews((reviewRes.data as LabReview[]) ?? []);
     }
     fetchData();
