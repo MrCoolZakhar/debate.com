@@ -14,9 +14,19 @@
 //   2. only when no delegate role config row exists at all, fall back to the
 //      conference-level columns.
 //
-// RLS note: policy "Role configs readable if conference public or organizer"
-// already lets anon SELECT `application_role_configs` for public conferences,
-// so this works unauthenticated. No DB change is needed.
+// Reads the `conference_public_fees` VIEW, not `application_role_configs`
+// directly, and that distinction matters. The table's SELECT policy is
+// "readable if conference public or organizer", so for an UNPUBLISHED
+// conference an anonymous visitor got nothing back and fell through to the
+// stale conference column — which is exactly the original bug, just narrowed
+// to private conferences. Meanwhile `conferences` itself is readable by anyone
+// with the link (USING (true)), so those pages render, stale price and all.
+//
+// The view is a pricing-only, RLS-bypassing projection that closes that gap.
+// It deliberately excludes `custom_questions` (an organiser's draft application
+// form), which is why the table's own policy was NOT widened instead. Nothing
+// the view exposes is more sensitive than the fee_amount already published on
+// the conferences row.
 
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 
@@ -62,7 +72,7 @@ export async function fetchDelegateFees(
   const ids = Array.from(new Set(conferenceIds.filter(Boolean)));
   if (ids.length === 0) return out;
 
-  const { data } = await (client.from('application_role_configs') as FeeQuery)
+  const { data } = await (client.from('conference_public_fees') as FeeQuery)
     .select('conference_id, fee_amount, fee_currency, fee_phases')
     .eq('role', 'delegate')
     .in('conference_id', ids);
