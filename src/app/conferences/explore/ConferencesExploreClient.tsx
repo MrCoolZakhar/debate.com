@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
-import { activePhaseFee, type FeePhase } from '@/lib/finance';
+import { fetchDelegateFees, applyDelegateFee } from '@/lib/publicFees';
 import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { ConferenceCard } from '../ConferenceCard';
 
@@ -681,26 +681,10 @@ export default function ConferencesExploreClient() {
       const confs = (data as Conference[]) ?? [];
 
       // Single source of truth for the fee shown on cards: the delegate role
-      // config's fee, falling back to the conference-level fee only when no
-      // delegate role config exists yet (mirrors the conference detail hero).
-      const ids = confs.map(c => c.id);
-      const { data: delegateFees } = ids.length > 0
-        ? await supabase
-            .from('application_role_configs')
-            .select('conference_id, fee_amount, fee_currency, fee_phases')
-            .eq('role', 'delegate')
-            .in('conference_id', ids)
-        : { data: [] as { conference_id: string; fee_amount: number | null; fee_currency: string | null; fee_phases: FeePhase[] | null }[] };
-      const feeByConference = new Map((delegateFees ?? []).map(r => [r.conference_id, r]));
-
-      setConferences(confs.map(c => {
-        const df = feeByConference.get(c.id);
-        if (!df) return c;
-        // Phase-aware: show the ACTIVE fee-phase price today (falls back to the
-        // flat fee when no phase covers today) — matches the detail hero.
-        const { amount } = activePhaseFee({ fee_amount: df.fee_amount, fee_phases: df.fee_phases }, new Date());
-        return { ...c, fee_amount: amount, fee_currency: df.fee_currency ?? c.fee_currency };
-      }));
+      // config's fee, phase-aware, falling back to the conference-level fee
+      // only when no delegate role config exists (see src/lib/publicFees.ts).
+      const fees = await fetchDelegateFees(supabase, confs.map(c => c.id));
+      setConferences(confs.map(c => applyDelegateFee(c, fees)));
       setLoading(false);
     }
     fetchConferences();
