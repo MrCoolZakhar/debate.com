@@ -19,6 +19,7 @@ import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 // Checkout/invoice surfaces deliberately keep the exact formatFee.
 import { formatFeeCompact } from '@/lib/utils';
 import { activeFeePhase, activePhaseFee, type FeePhase } from '@/lib/finance';
+import { fetchDelegateFees, type ResolvedFee } from '@/lib/publicFees';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
 import { appendEditionYear } from '@/lib/presetNames';
@@ -431,6 +432,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [conference, setConference] = useState<Conference | null>(null);
   const [committees, setCommittees] = useState<Committee[]>([]);
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
+  /* Pricing read through the RLS-bypassing fees view, so an unpublished
+     conference still shows its real price to a visitor holding the link. */
+  const [viewFee, setViewFee] = useState<ResolvedFee | null>(null);
   const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -710,6 +714,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
     setCommittees((committeesRes.data as Committee[]) ?? []);
     setRoleConfigs((roleConfigsRes.data as RoleConfig[]) ?? []);
+
+    /* Only needed when the role-config read was refused — i.e. an unpublished
+       conference seen by someone who is not an organiser. Skipping it when the
+       configs came through keeps the published path at its current query count. */
+    if (!roleConfigsRes.data || roleConfigsRes.data.length === 0) {
+      const fees = await fetchDelegateFees(supabase, [conf.id]);
+      setViewFee(fees.get(conf.id) ?? null);
+    }
 
     // Paint NOW. The hero, stat strip, committees and apply CTA only need the
     // conference + committees + role configs above. Everything below (partner
@@ -1055,10 +1067,27 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // Phase-aware: a conference whose delegate fee is split into fee_phases has a
   // flat fee_amount of 0, which would otherwise advertise it as FREE. Resolve
   // through activePhaseFee so the hero shows today's actual price.
-  const heroFeeAmount = delegateRoleConfig
-    ? activePhaseFee({ fee_amount: delegateRoleConfig.fee_amount, fee_phases: delegateRoleConfig.fee_phases }, now).amount
-    : conference.fee_amount;
-  const heroFeeCurrency = delegateRoleConfig ? (delegateRoleConfig.fee_currency ?? conference.fee_currency) : conference.fee_currency;
+  //
+  // Three sources, in order. `viewFee` exists because the role-config query
+  // above is RLS-gated on `is_public`, so on an UNPUBLISHED conference it comes
+  // back empty for anonymous visitors — while this page itself still renders,
+  // since `conferences` is readable by anyone with the link. Without the view
+  // the hero silently fell back to the stale conference column and advertised
+  // the wrong price on every private conference. The role config is still
+  // preferred when readable: it is the same data and saves a render pass.
+  const resolvedRoleFee = delegateRoleConfig
+    ? activePhaseFee({ fee_amount: delegateRoleConfig.fee_amount, fee_phases: delegateRoleConfig.fee_phases }, now)
+    : null;
+  const heroFeeAmount = resolvedRoleFee
+    ? resolvedRoleFee.amount
+    : viewFee
+      ? viewFee.amount
+      : conference.fee_amount;
+  const heroFeeCurrency = delegateRoleConfig
+    ? (delegateRoleConfig.fee_currency ?? conference.fee_currency)
+    : viewFee
+      ? viewFee.currency
+      : conference.fee_currency;
 
   function getRoleWindowStatus(r: RoleConfig): 'open' | 'closed' | 'opens-soon' | 'open-always' {
     if (!r.applications_open_at && !r.applications_close_at) return 'open-always';
