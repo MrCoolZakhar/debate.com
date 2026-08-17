@@ -335,6 +335,9 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  /* A failed attachment used to be console-only, so the button just snapped
+     back to "Attach file" and the delegate had no idea why. */
+  const [uploadError, setUploadError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Submission limits were only ever enforced in the chair's DocumentsModal, which
@@ -354,8 +357,20 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
     setUploading(true);
     try {
       const path = committee.id + '/' + Date.now() + '-' + file.name;
-      const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
-      if (error) { console.error('Storage upload error:', error); setFileName(null); return; }
+      // NO upsert. The bucket grants anon INSERT but not UPDATE, and `upsert: true`
+      // needs both — every attachment was being refused with a 403 that only
+      // reached the console, so the button silently snapped back to "Attach file".
+      // Granting anon UPDATE would have been the wrong fix: it would let anyone
+      // overwrite any existing document in any committee. The path already carries
+      // Date.now(), so there is nothing to upsert over.
+      const { error } = await supabase.storage.from('session-documents').upload(path, file);
+      if (error) {
+        console.error('Storage upload error:', error);
+        setFileName(null);
+        setUploadError(true);
+        return;
+      }
+      setUploadError(false);
       const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
       setFileUrl(data.publicUrl);
     } finally {
@@ -432,6 +447,11 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">{t('delegate_doc_remove')}</button>}
           </div>
+          {uploadError && (
+            <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
+              {t('delegate_doc_upload_failed')}
+            </p>
+          )}
           <input ref={fileInputRef} type="file" accept=".pdf" className="hidden"
             onChange={async (e) => {
               const f = e.target.files?.[0];

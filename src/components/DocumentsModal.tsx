@@ -542,6 +542,9 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  /* See the delegate page: a failed attachment was console-only and looked
+     like nothing had happened at all. */
+  const [uploadError, setUploadError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -558,8 +561,17 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
     setIsUploading(true);
     try {
       const path = committee.id + '/' + Date.now() + '-' + file.name;
-      const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
-      if (error) { console.error('Storage upload error:', error); setFileName(null); return; }
+      // NO upsert — see the matching note on the delegate page. The bucket grants
+      // anon INSERT but not UPDATE, so `upsert: true` was refused with a 403 that
+      // never surfaced. Date.now() in the path makes upsert pointless anyway.
+      const { error } = await supabase.storage.from('session-documents').upload(path, file);
+      if (error) {
+        console.error('Storage upload error:', error);
+        setFileName(null);
+        setUploadError(true);
+        return;
+      }
+      setUploadError(false);
       const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
       setFileUrl(data.publicUrl);
     } finally {
@@ -660,6 +672,11 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           </div>
         )}
         <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
+        {uploadError && (
+          <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
+            {t('delegate_doc_upload_failed')}
+          </p>
+        )}
       </div>
       {limitReached && (
         <p className="text-xs text-red-400 text-center">
