@@ -1052,17 +1052,30 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const { ref: discBox, size: discSize } = useMeasuredSize(84, 320);
   const { ref: queueBox, count: queueFit } = useFitCount(44, 30);
 
-  const statIcon = Math.round(Math.max(20, Math.min(34, discSize * 0.21)));
+  /* Capped at 26, NOT scaled freely off the disc. The rails are width-capped so
+     the crest can lead, and an icon that grows with the disc eats that fixed
+     rail from the inside — at 34px it left ~51px for the label and clipped
+     "SPEECHES" to "SPEECH". The glyph is an accent here; the number and its
+     label are the content. */
+  const statIcon = Math.round(Math.max(18, Math.min(22, discSize * 0.12)));
   const actionIcon = Math.round(Math.max(20, Math.min(30, discSize * 0.18)));
   /* The documents tile carries its own clamp rather than riding discSize
      unbounded — at a 300px disc a raw 0.46 multiplier would put a 138px folder
      in a rail that is ~94px wide. */
-  const docIcon = Math.round(Math.max(44, Math.min(88, discSize * 0.46)));
+  /* Capped to the fixed left rail (76px on phone) minus a little breathing
+     room. It still reads far larger than the ~29px it was, but it can no longer
+     widen the rail — which would come straight out of the crest beside it. */
+  const docIcon = Math.round(Math.max(44, Math.min(64, discSize * 0.34)));
   /* How far the outermost satellite tucks toward the disc. Scaled off the disc
      so the curve stays proportional from phone to laptop — the ceiling is 44,
      not 26, because a 300px disc needs ~42px of tuck to read the same as ~20px
      does against a 145px one. */
-  const arcDepth = Math.round(Math.max(6, Math.min(44, discSize * 0.14)));
+  /* How far the outer satellites tuck toward the crest. Bounded by geometry,
+     not taste: a rail sits just past the disc's widest point, so an item at
+     vertical offset h can only move inward by R − sqrt(R² − h²) before it slides
+     under the circle. At R≈97 and h≈55 that is ~17px; 0.14×disc gave 27 and
+     buried "ROLL CALL" and the stat glyphs behind the flag. */
+  const arcDepth = Math.round(Math.max(5, Math.min(16, discSize * 0.07)));
 
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
@@ -1747,7 +1760,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
                     border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
-                    minHeight: 44, marginInlineEnd: arcDepth - arcInset(1, 3, arcDepth),
+                    minHeight: 44,
                   }}
                 >
                   <Emoji3D name="File folder" size={docIcon} fallback={FolderOpen} fallbackColor={DG.forest} />
@@ -1763,7 +1776,15 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 </button>
 
                 {!isAbsent && !sessionEnded && !lockRollCall && (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginInlineEnd: arcDepth - arcInset(2, 3, arcDepth) }}>
+                  /* Outer point of the left arc: tucks toward the crest, i.e.
+                     positive on this side. Transform, not margin — see .dgv-arc. */
+                  <div
+                    className="dgv-arc"
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                      ['--dgv-arc' as string]: `${arcInset(2, 3, arcDepth)}px`,
+                    }}
+                  >
                     <span
                       style={{
                         fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
@@ -1820,7 +1841,15 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   /* Pushed OUT at the middle, tucked in at top and bottom —
                      the disc's widest point is on the centre line, so that is
                      the item that sits furthest from it. */
-                  <div key={s.label} style={{ marginInlineStart: arcDepth - arcInset(i, arr.length, arcDepth) }}>
+                  /* Negative: ends tuck TOWARD the crest, middle stays put. A
+                     positive push would shove the middle row outward into the
+                     screen edge, and as a margin it also stole the width the
+                     label needed. */
+                  <div
+                    key={s.label}
+                    className="dgv-arc"
+                    style={{ ['--dgv-arc' as string]: `-${arcInset(i, arr.length, arcDepth)}px` }}
+                  >
                     <StatRow
                       emoji={<Emoji3D name={s.emoji} size={statIcon} fallback={s.fb} fallbackColor={DG.forest} />}
                       iconSize={statIcon}

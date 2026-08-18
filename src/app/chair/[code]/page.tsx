@@ -2282,6 +2282,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // the moderated-caucus speaker clock (they share this atom), so one effect covers
   // both. Suppression only HIDES: TTLs pause and nothing is dropped (rule 2), so a
   // request raised mid-speech is still waiting when the gavel comes down.
+  //
+  // Every exit from a running clock lands back here because they all go through
+  // `setTimerRunning(false)`: pause (`handleToggleTimer`), Next on the GSL
+  // (`handleNextSpeaker`) and in caucus (`handleNextCaucusSpeaker`), restart
+  // (`handleRestartTime`), and the tick itself when it reaches zero. Unmount is covered
+  // by the cleanup — the store is module-level, so leaving `suppressed` armed on the way
+  // out would hide the stack for good on the next mount.
   useEffect(() => {
     setNotificationsSuppressed(timerRunning);
     return () => setNotificationsSuppressed(false);

@@ -3,7 +3,7 @@
 // ── NotificationStack ──────────────────────────────────────────────────────
 //
 // The chair-facing notification surface: tinted liquid-glass cards stacked at
-// the TOP-LEFT of the viewport. Renderer only — every rule about what appears,
+// the TOP-RIGHT of the viewport. Renderer only — every rule about what appears,
 // how long it lives and what may coexist lives in `@/lib/sessionNotifications`.
 //
 // Mount ONE of these per surface. It owns the single interval that advances
@@ -15,6 +15,21 @@
 // these coordinates are in the scaled frame, not raw viewport pixels. That is
 // correct and intended here: the stack should scale with the cockpit it
 // belongs to, unlike a popover that must align to a real on-screen trigger.
+//
+// The inset is LOGICAL (`insetInlineEnd`), so in the `ar` RTL locale the stack
+// anchors to the left edge along with everything else. The enter animation has
+// to mirror with it — a card that flies away from its own anchor reads as a
+// glitch — so the slide distance is a custom property flipped under
+// `[dir="rtl"]` rather than a hardcoded physical `translateX`.
+//
+// TOP_PX clears everything the chair page already parks in that corner, in the
+// same scaled frame:
+//   • the header (`h-11`, 44px) — join code, scoreboard and settings buttons
+//     sit at its right end
+//   • `GavelChip` (fixed, top 3.75rem = 60px, right 0.85rem) — bottom ≈ 93px
+//   • the gavel handover toast (fixed, top 6.6rem = 105.6px) — bottom ≈ 139px
+// The stack is z-900 and would paint over all three. A static offset has to
+// clear the worst case, so it clears the toast too.
 
 import { useEffect, useState } from 'react';
 import { Check, X, Hand, MessageCircle, Megaphone, Info } from 'lucide-react';
@@ -29,6 +44,9 @@ const OUTFIT = "'Outfit', sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 const TICK_MS = 250;
 const MAX_VISIBLE = 4;
+/** See the header note — clears the header row, the GavelChip and the gavel toast. */
+const TOP_PX = 148;
+const EDGE_PX = 14;
 
 const KIND_ICON: Record<NotificationKind, typeof Hand> = {
   'gsl-request': Hand,
@@ -102,10 +120,13 @@ export default function NotificationStack({ extras }: { extras?: Record<string, 
     <Portal>
       <style>{`
         @keyframes dgn-in {
-          from { opacity: 0; transform: translateX(-14px) scale(0.97) }
+          from { opacity: 0; transform: translateX(var(--dgn-slide)) scale(0.97) }
           to   { opacity: 1; transform: none }
         }
-        .dgn-card { animation: dgn-in 260ms ${EASE} both }
+        /* Slides in from the anchored edge. Mirrored in RTL, where
+           insetInlineEnd puts the stack on the LEFT of the screen. */
+        .dgn-card { --dgn-slide: ${EDGE_PX}px; animation: dgn-in 260ms ${EASE} both }
+        [dir="rtl"] .dgn-card { --dgn-slide: -${EDGE_PX}px }
         .dgn-act { transition: transform 120ms ${EASE}, filter 120ms ${EASE} }
         .dgn-act:active { transform: scale(0.96) }
         .dgn-act:disabled { opacity: 0.55; cursor: progress }
@@ -118,9 +139,9 @@ export default function NotificationStack({ extras }: { extras?: Record<string, 
       <div
         aria-live="polite"
         style={{
-          position: 'fixed', top: 14, insetInlineStart: 14, zIndex: 900,
+          position: 'fixed', top: TOP_PX, insetInlineEnd: EDGE_PX, zIndex: 900,
           display: 'flex', flexDirection: 'column', gap: 10,
-          width: 'min(330px, calc(100vw - 28px))', pointerEvents: 'none',
+          width: `min(330px, calc(100vw - ${EDGE_PX * 2}px))`, pointerEvents: 'none',
         }}
       >
         {visible.map((n) => {
@@ -311,7 +332,9 @@ export default function NotificationStack({ extras }: { extras?: Record<string, 
           <p
             style={{
               margin: 0, fontFamily: OUTFIT, fontSize: 11, fontWeight: 700,
-              color: 'rgba(27,56,40,0.62)', paddingInlineStart: 6,
+              /* Anchored edge is now the inline-end one, so the overflow count
+                 hangs off that side rather than floating away from the stack. */
+              color: 'rgba(27,56,40,0.62)', paddingInlineEnd: 6, textAlign: 'end',
             }}
           >
             +{overflow} more

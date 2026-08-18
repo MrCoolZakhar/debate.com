@@ -104,6 +104,16 @@ export function DelegateStyles() {
       .dgv-rc-thumb { --dgv-dir: 1; transition: transform 200ms cubic-bezier(0.22,1,0.36,1) }
       [dir="rtl"] .dgv-rc-thumb { --dgv-dir: -1 }
 
+      /* The arc wrap, applied as a TRANSFORM rather than a margin. A margin
+         indents the row inside its rail and so takes the offset straight out of
+         the text's available width — that is what clipped "SPEECHES" to
+         "SPEECH", and no amount of tuning the rail width fixed it because the
+         indent scaled with the disc. A transform shifts the row visually and
+         costs the layout nothing. Ends tuck toward the crest, middle sits
+         still, so nothing is ever pushed outward off the screen edge. */
+      .dgv-arc { --dgv-dir: 1; transform: translateX(calc(var(--dgv-arc, 0px) * var(--dgv-dir))) }
+      [dir="rtl"] .dgv-arc { --dgv-dir: -1 }
+
       .dgv-scroll { scrollbar-width: thin; scrollbar-color: ${DG.hairline} transparent }
       .dgv-scroll::-webkit-scrollbar { width: 6px }
       .dgv-scroll::-webkit-scrollbar-thumb { background: ${DG.hairline}; border-radius: 3px }
@@ -124,11 +134,40 @@ export function DelegateStyles() {
          is a rounding error and the columns read as three unrelated stacks.
          Capping the hero keeps the rails against the disc at EVERY breakpoint;
          the bottom band still spans the full board width. */
-      .dgv-hero { flex-shrink: 0; display: grid; grid-template-columns: minmax(58px, auto) minmax(0, 1fr) minmax(78px, auto); align-items: center; gap: clamp(4px, 2vw, 22px); max-inline-size: 560px; margin-inline: auto; inline-size: 100% }
+      /* Tight gap on purpose: the rails are meant to hug the crest, not sit in
+         their own columns across the card. The disc is the hero and everything
+         else orbits it. */
+      /* The side columns are CAPPED, not auto. Left to themselves the labels
+         ("VIEW DOCUMENTS", "SPEECHES GIVEN") sized the rails to their text and
+         squeezed the crest into whatever was left — about 88px on a 375px
+         phone, which is the whole complaint. Capping them hands the middle the
+         space instead, so the disc leads and the rails tuck against it. */
+      /* 106 on the right is set by the longest label the rail must hold —
+         "SPEECHES" beside a 26px glyph. Tightening to 92 bought ~15px of crest
+         and clipped it to "SPEECH", which is a worse trade than a slightly
+         smaller disc. If these labels are ever shortened, this can come down. */
+      /* FIXED rail widths, not minmax(). With a greedy minmax(0,1fr) middle the
+         side columns collapse to their MINIMUM, never their max — the right
+         rail resolved to 63px and gave its label 30px for a 39px word, so
+         "SPEECHES" clipped no matter how the caps were tuned. Fixed widths mean
+         the rails get exactly what their content needs and the crest takes the
+         entire remainder. Sized from measurement: 20px glyph + 7px gap + the
+         39px word + slack. */
+      .dgv-hero { flex-shrink: 0; display: grid; grid-template-columns: 76px minmax(0, 1fr) 74px; align-items: center; gap: clamp(2px, 0.8vw, 10px); max-inline-size: 620px; margin-inline: auto; inline-size: 100% }
+      @media (min-width: 700px) {
+        .dgv-hero { grid-template-columns: 132px minmax(0, 1fr) 150px }
+      }
       /* The disc is measured off this box (useMeasuredSize), so this cap IS the
          disc's ceiling. 34vh keeps a short laptop window from handing the whole
          screen to the crest and squeezing the non-scrolling bottom band. */
-      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; max-inline-size: min(300px, 34vh); margin-inline: auto }
+      /* inline-size:100% is load-bearing, not cosmetic. useMeasuredSize sizes
+         the disc from THIS box, and a shrink-to-fit flex column sizes itself
+         from its content — so the two fed each other and the measurement pinned
+         at the 84px floor forever, leaving a 275px column empty beside a tiny
+         crest. Filling the column breaks the loop and lets the disc actually
+         claim the space. (No backticks in here: this block lives inside a
+         template literal and one would terminate the string.) */
+      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; inline-size: 100%; max-inline-size: min(300px, 36vh); margin-inline: auto }
       .dgv-hero-side { display: flex; flex-direction: column; gap: clamp(8px, 2.2vw, 14px); min-width: 0 }
       /* The queue gets the wider share — country names are the content that
          actually has to be readable, and an even split truncated them to
@@ -302,17 +341,32 @@ export function FlagOrdinalDisc({
       }}
     >
       {!failed && code && (
-        <img
-          src={getFlagUrl(code)}
-          alt={name ? `Flag of ${name}` : ''}
-          onError={() => setFailed(true)}
-          /* `contain`, not `cover`. A 3:2 flag cropped to a circle loses its
-             left and right thirds — the exact parts that carry the charge on
-             most designs — so the flag stopped being identifiable. Contained,
-             the whole flag reads, and the forest field behind it becomes the
-             disc rather than an accident of cropping. */
-          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-        />
+        <>
+          {/* Blurred cover copy fills the letterbox. `contain` keeps the whole
+              flag readable — a 3:2 flag cropped to a circle loses its left and
+              right thirds, which is where most designs carry their charge — but
+              at hero size the bare bands above and below read as dead space and,
+              worse, as part of the flag itself. A scaled, blurred copy behind
+              them is the video-player trick: the disc reads as full-bleed while
+              the flag stays uncropped. Purely decorative, so aria-hidden. */}
+          <img
+            src={getFlagUrl(code)}
+            alt=""
+            aria-hidden="true"
+            onError={() => setFailed(true)}
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover', filter: 'blur(14px) saturate(1.15)',
+              transform: 'scale(1.25)', opacity: 0.85,
+            }}
+          />
+          <img
+            src={getFlagUrl(code)}
+            alt={name ? `Flag of ${name}` : ''}
+            onError={() => setFailed(true)}
+            style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          />
+        </>
       )}
       {/* Scrim, weighted UP. It only has to carry the numeral, which sits in
           the upper half; running it dark all the way to the bottom rim just
@@ -332,24 +386,32 @@ export function FlagOrdinalDisc({
           alignItems: 'center', justifyContent: 'center', gap: 1, padding: 6,
         }}
       >
-        <span
-          style={{
-            fontFamily: OUTFIT, fontWeight: 900, color: '#FFFFFF',
-            fontSize: primary.length > 4 ? size * 0.21 : size * 0.34,
-            lineHeight: 0.95, letterSpacing: '-0.03em',
-            fontVariantNumeric: 'tabular-nums',
-            textShadow: '0 2px 8px rgba(0,0,0,0.55)',
-            textAlign: 'center',
-          }}
-        >
-          {primary}
-        </span>
+        {/* An em-dash standing in for "no position" is noise at hero size — it
+            reads as a redaction bar over the crest. When there is no ordinal the
+            caption carries the whole message on its own. */}
+        {primary !== '—' && (
+          <span
+            style={{
+              fontFamily: OUTFIT, fontWeight: 900, color: '#FFFFFF',
+              fontSize: primary.length > 4 ? size * 0.21 : size * 0.34,
+              lineHeight: 0.95, letterSpacing: '-0.03em',
+              fontVariantNumeric: 'tabular-nums',
+              textShadow: '0 2px 8px rgba(0,0,0,0.55)',
+              textAlign: 'center',
+            }}
+          >
+            {primary}
+          </span>
+        )}
         <span
           style={{
             fontFamily: OUTFIT, fontWeight: 800, color: 'rgba(255,255,255,0.94)',
-            fontSize: Math.max(8, size * 0.075), letterSpacing: '0.08em',
-            textTransform: 'uppercase', textAlign: 'center', lineHeight: 1.1,
-            textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+            /* Bigger when it is carrying the message alone, but still clearly
+               subordinate to an ordinal when one is present. */
+            fontSize: Math.max(8, size * (primary === '—' ? 0.095 : 0.075)),
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase', textAlign: 'center', lineHeight: 1.15,
+            textShadow: '0 1px 4px rgba(0,0,0,0.6)', maxInlineSize: '86%',
           }}
         >
           {caption}
@@ -418,8 +480,11 @@ export function StatRow({
         <span
           style={{
             display: 'block', fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
-            fontSize: 'clamp(7px, 2.2vw, 9px)', letterSpacing: '0.05em',
-            textTransform: 'uppercase', lineHeight: 1.2, marginTop: 2,
+            /* The rail width — and therefore how big the crest can be — is set
+               by the longest word here. Every 1px shaved off this gives ~3px
+               back to the disc across both rails. */
+            fontSize: 'clamp(6.5px, 1.85vw, 9px)', letterSpacing: '0.03em',
+            textTransform: 'uppercase', lineHeight: 1.18, marginTop: 2,
           }}
         >
           {label}
