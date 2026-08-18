@@ -479,9 +479,25 @@ export async function syncSpeakerTime(committeeId: string, timeRemaining: number
     .eq('committee_id', committeeId);
 }
 
-export async function startSpeakerTimer(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
+/** Arm the speaker clock.
+ *
+ *  `timeRemaining` and `startedAt` are written TOGETHER and are the complete anchor:
+ *  every surface renders `speakerRemainingNow(time_remaining, started_at)`, so both
+ *  halves have to describe the same instant or the readers disagree. Writing only
+ *  `started_at` (as this used to) left the base at whatever the last sync happened to
+ *  store, which is why a resumed speaker could jump.
+ *
+ *  `startedAt` is supplied by the caller rather than stamped here so the chair's own
+ *  local anchor and the persisted one are the SAME string — the chair is then just
+ *  another reader of the anchor it wrote, and cannot drift away from its own delegates. */
+export async function startSpeakerTimer(
+  committeeId: string, code: string, chairSuffix?: string,
+  startedAt: string = new Date().toISOString(), timeRemaining?: number,
+): Promise<void> {
+  const patch: Record<string, unknown> = { started_at: startedAt };
+  if (typeof timeRemaining === 'number') patch.time_remaining = Math.max(0, Math.round(timeRemaining));
   await sessionClient(code, chairSuffix).from('current_speaker')
-    .update({ started_at: new Date().toISOString() })
+    .update(patch)
     .eq('committee_id', committeeId);
 }
 

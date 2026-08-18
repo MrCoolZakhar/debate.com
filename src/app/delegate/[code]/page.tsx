@@ -1273,6 +1273,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
   const handleAddMeToSpeakers = () => {
     if (!myDelegate || isAbsent) return;
+    /* Belt and braces with the disabled CTA: a stale render, a queued tap or a
+       phase that changed between paint and press must not slip a request
+       through while a caucus or vote owns the floor. */
+    if (committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus' || committee.phase === 'voting') return;
+    /* Already seated — nothing to request. Guards the double-tap that produced
+       a second queue entry. */
+    if (isOnSpeakersList || isCurrentSpeaker) return;
     // No duplicate motion is possible: requestGslSpot already short-circuits when
     // this delegation has a pending gsl-request (committeeService.ts:844), so a
     // re-request after the no-response window REUSES the motion the chair is
@@ -1341,9 +1348,23 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // (on the floor, in the queue) always outranks anything this device remembers.
   const deniedLeft = gslDeniedRemaining(gslCooldown, gslNow);
   const retryLeft = gslRetryRemaining(gslCooldown, gslNow);
+  /* The GSL is not the live floor during a caucus or a vote, so a request to
+     join it cannot be actioned then — the chair is running a different queue
+     entirely (RULE 1: the caucus queue and the GSL are strictly separate). The
+     button stayed live through both, which is how the same delegation ended up
+     queued more than once: request during a caucus, chair approves it later
+     without noticing they are already seated. Blocked at the source here, and
+     independently guarded at the chair's approve. */
+  const gslRequestsClosed = committee.phase === 'moderated-caucus'
+    || committee.phase === 'unmoderated-caucus'
+    || committee.phase === 'voting';
+
   const speakCta = (() => {
     if (isCurrentSpeaker) return { label: t('delegate_floor_now'), disabled: true, onClick: undefined as (() => void) | undefined };
     if (isOnSpeakersList) return { label: myQueueIndex === 0 ? t('delegate_up_next_queue') : t('delegate_in_queue'), disabled: true, onClick: undefined as (() => void) | undefined };
+    if (gslRequestsClosed) {
+      return { label: t('delegate_request_closed_motion'), disabled: true, onClick: undefined as (() => void) | undefined };
+    }
     // Denied: locked out for 15 minutes, with the wait stated on the button so
     // it reads as a rule rather than a broken control.
     if (deniedLeft > 0) {
