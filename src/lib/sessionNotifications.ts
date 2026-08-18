@@ -80,6 +80,15 @@ export interface SessionNotification {
   actions?: NotificationAction[];
   /** Fired when the TTL runs out — never when dismissed by code or by action. */
   onExpire?: () => void;
+  /**
+   * Shows even while suppressed. Rule 2 holds ordinary notifications back
+   * during a speech so the dais is not distracted mid-speaker, and that is
+   * right for a GSL request — it can wait a minute. It is wrong for an
+   * organiser broadcast that pauses or ends the debate: the chair needs that
+   * BEFORE the speech it interrupts, not after. Use sparingly; a stack that is
+   * always urgent is a stack with no suppression at all.
+   */
+  urgent?: boolean;
 }
 
 interface LiveNotification extends SessionNotification {
@@ -178,11 +187,18 @@ export function setPending(key: string, actionId: string | undefined): void {
  * No-ops while suppressed.
  */
 export function tickNotifications(deltaMs: number): void {
-  if (suppressed || items.length === 0) return;
+  /* Urgent notifications are on screen while suppressed, so their TTLs must
+     keep running — otherwise a broadcast would sit there frozen after the
+     chair has already read and actioned it. Non-urgent ones stay paused, per
+     rule 2, so nothing expires unseen behind a long speech. */
+  if (items.length === 0) return;
+  if (suppressed && !items.some((i) => i.urgent)) return;
   const expired: LiveNotification[] = [];
   const next: LiveNotification[] = [];
   for (const i of items) {
     if (i.ttlMs == null) { next.push(i); continue; }
+    /* Paused while hidden. Only what is actually on screen ages. */
+    if (suppressed && !i.urgent) { next.push(i); continue; }
     const elapsedMs = i.elapsedMs + deltaMs;
     if (elapsedMs >= i.ttlMs) expired.push(i);
     else next.push({ ...i, elapsedMs });
@@ -198,7 +214,10 @@ export function tickNotifications(deltaMs: number): void {
 export function useNotifications(): { items: LiveNotification[]; suppressed: boolean } {
   const list = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const hidden = useSyncExternalStore(subscribe, isSuppressed, () => false);
-  return { items: list, suppressed: hidden };
+  /* While suppressed the renderer still gets the urgent ones — the stack is
+     hidden, not emptied, and an organiser broadcast that ends debate must not
+     wait for the current speaker to finish. */
+  return { items: hidden ? list.filter((i) => i.urgent) : list, suppressed: hidden && !list.some((i) => i.urgent) };
 }
 
 // ── Conventional keys and durations ────────────────────────────────────────

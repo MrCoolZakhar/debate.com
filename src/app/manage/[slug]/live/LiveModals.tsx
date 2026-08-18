@@ -6,6 +6,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
 import Portal from '@/components/Portal';
+import Avatar from '@/components/Avatar';
 import {
   NeuInset, NeuIconDisc, NEU, NEU_GRADIENTS, type NeuGradient, OUTFIT, EASE,
 } from '@/components/neu';
@@ -23,6 +24,33 @@ export interface CaucusJson {
   remainingTime?: number;
   speakingTime?: number;
   currentSpeaker?: string | null;
+  /** Wall-clock anchor for the total caucus countdown; null = paused.
+   *  `remainingTime` is the value AT this instant — see caucusRemainingNow(). */
+  totalStartedAt?: string | null;
+  spokenCountries?: string[];
+  isConsultation?: boolean;
+}
+
+/** A chair on the dais, resolved to a Gavelling profile where one exists.
+ *  `id` is null for a hand-seeded display_chairs entry with no account. */
+export interface ChairPerson {
+  id: string | null;
+  name: string;
+  avatarUrl: string | null;
+}
+
+/** One `feedback` row. All five extra columns beyond the original
+ *  country/chair/content triple are real: `level` ('speech' today), the
+ *  per-factor ratings blob, and the speech the note was attached to. */
+export interface FeedbackEntry {
+  country: string;
+  chairName: string;
+  content: string;
+  createdAt: string;
+  level: string;
+  factorScores: Record<string, number>;
+  speechContext: string | null;
+  speechSeconds: number | null;
 }
 
 export interface LiveCommittee {
@@ -36,6 +64,9 @@ export interface LiveCommittee {
     sessionId: string | null;
     sessionCode: string | null;
     chairUserIds: string[];
+    /** chair_user_ids resolved against profiles, falling back to the
+     *  trigger-maintained display_chairs entry at the same index. */
+    chairs: ChairPerson[];
   };
   session: {
     id: string;
@@ -46,15 +77,19 @@ export interface LiveCommittee {
     chairNames: string[];
     suspendedAt: string | null;
     endedAt: string | null;
+    /** Enabled ranking factors + scale from committees.settings.scoring, so
+     *  feedback ratings can be labelled with the chair's own factor names. */
+    scoringFactors: { id: string; name: string }[];
+    factorScaleMax: number;
   } | null;
   currentSpeaker: { country: string | null; timeRemaining: number; startedAt: string | null } | null;
   delegates: { country: string; status: string }[];
   gslQueue: string[];
   caucusQueue: string[];
   pendingMotions: { type: string; topic: string }[];
-  documents: { type: string; status: string; docCode: string; sponsors: string[] }[];
+  documents: { type: string; status: string; docCode: string; title: string; sponsors: string[] }[];
   speechLogs: { country: string; seconds: number; context: string; topic: string }[];
-  feedback: { country: string; chairName: string; content: string; createdAt: string }[];
+  feedback: FeedbackEntry[];
 }
 
 export type CardStatus = 'no-session' | 'not-started' | 'live' | 'suspended' | 'ended';
@@ -159,6 +194,234 @@ function StatTile({ icon: Icon, emoji, gradient, value, label }: { icon: LucideI
   );
 }
 
+// ── Chair feedback ──────────────────────────────────────────────────────────
+
+/** Short relative age, e.g. "just now", "12m ago", "2h ago", "3 Sep". */
+function timeAgo(iso: string): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return '';
+  const mins = Math.floor((Date.now() - ms) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/** The label a chair's own console shows for the speech a note hangs off. */
+function contextLabel(context: string | null): string | null {
+  if (!context) return null;
+  if (context === 'speakers-list') return 'GSL';
+  if (context === 'unmoderated-caucus') return 'UNMOD';
+  if (context === 'moderated-caucus') return 'CAUCUS';
+  if (context === 'tour-de-table') return 'TOUR';
+  return context.toUpperCase();
+}
+
+interface CountryFeedback {
+  country: string;
+  entries: FeedbackEntry[];
+  notes: FeedbackEntry[];
+  /** Mean rating per factor id — only over rows that actually carry that factor. */
+  factorAvg: Record<string, number>;
+  /** Mean across every rating this delegation has received, or null if unrated. */
+  headline: number | null;
+  latest: number;
+}
+
+/** Fold the raw `feedback` rows into one block per delegation. A chair rates a
+ *  speech factor-by-factor and may leave the note empty (in practice most rows
+ *  are ratings with no prose), so ratings and notes are surfaced separately
+ *  instead of a note list that would render mostly blank. */
+export function foldFeedback(rows: FeedbackEntry[]): CountryFeedback[] {
+  const byCountry = new Map<string, FeedbackEntry[]>();
+  for (const f of rows) {
+    const list = byCountry.get(f.country);
+    if (list) list.push(f);
+    else byCountry.set(f.country, [f]);
+  }
+  const out: CountryFeedback[] = [];
+  for (const [country, entries] of byCountry) {
+    const sums: Record<string, { total: number; n: number }> = {};
+    let all = 0;
+    let allN = 0;
+    for (const e of entries) {
+      for (const [fid, raw] of Object.entries(e.factorScores ?? {})) {
+        const v = Number(raw);
+        if (!Number.isFinite(v)) continue;
+        const cur = sums[fid] ?? { total: 0, n: 0 };
+        cur.total += v;
+        cur.n += 1;
+        sums[fid] = cur;
+        all += v;
+        allN += 1;
+      }
+    }
+    const factorAvg: Record<string, number> = {};
+    for (const [fid, s] of Object.entries(sums)) factorAvg[fid] = s.total / s.n;
+    out.push({
+      country,
+      entries,
+      notes: entries.filter((e) => e.content.trim().length > 0).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+      factorAvg,
+      headline: allN > 0 ? all / allN : null,
+      latest: entries.reduce((max, e) => Math.max(max, Date.parse(e.createdAt) || 0), 0),
+    });
+  }
+  // Most recently touched delegation first — an organiser scanning mid-session
+  // wants what the dais just wrote, not the alphabet.
+  return out.sort((a, b) => b.latest - a.latest || a.country.localeCompare(b.country));
+}
+
+function FeedbackEmpty({ committeeLabel }: { committeeLabel: string }) {
+  return (
+    <NeuInset className="flex items-start gap-3.5 mt-2" style={{ padding: '18px 18px', borderRadius: 16 }}>
+      <NeuIconDisc gradient={NEU_GRADIENTS.sage} emoji="Memo" icon={MessageSquareText} size={40} />
+      <div className="min-w-0">
+        <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+          Nothing written on {committeeLabel} yet
+        </p>
+        <p className="text-xs mt-1" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.5 }}>
+          Co-chairs rate each speech and leave private notes from the feedback dock in their console.
+          Ratings and notes land here the moment they are saved — no action needed from you.
+        </p>
+      </div>
+    </NeuInset>
+  );
+}
+
+/** Live chair feedback for one committee. Replaces the "format changes on the
+ *  production branch" placeholder that used to sit in the recap. */
+export function FeedbackRecap({ data }: { data: LiveCommittee }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const folded = foldFeedback(data.feedback);
+  const factors = data.session?.scoringFactors ?? [];
+  const scaleMax = Math.max(1, data.session?.factorScaleMax ?? 100);
+  const factorName = (id: string) => factors.find((f) => f.id === id)?.name ?? id;
+  const totalNotes = data.feedback.filter((f) => f.content.trim().length > 0).length;
+  const totalRated = data.feedback.filter((f) => Object.keys(f.factorScores ?? {}).length > 0).length;
+  const label = data.conf.abbreviation ?? data.conf.name;
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Eyebrow>Chair feedback</Eyebrow>
+        {data.feedback.length > 0 && (
+          <span
+            className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: NEU.surface, color: NEU.forest, boxShadow: NEU.outSm, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
+          >
+            {totalRated} rated · {totalNotes} note{totalNotes === 1 ? '' : 's'} · {folded.length} delegation{folded.length === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
+
+      {folded.length === 0 ? (
+        <FeedbackEmpty committeeLabel={label} />
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          {folded.map((cf) => {
+            const isOpen = expanded === cf.country;
+            const ratedFactors = factors.filter((f) => cf.factorAvg[f.id] !== undefined);
+            // A factor the chair renamed away, or a custom one not in the
+            // current config, still has stored ratings — show it rather than
+            // silently dropping the chair's work.
+            const orphanIds = Object.keys(cf.factorAvg).filter((id) => !factors.some((f) => f.id === id));
+            return (
+              <NeuInset key={cf.country} style={{ borderRadius: 14, overflow: 'hidden' }}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : cf.country)}
+                  className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT }}
+                >
+                  <FlagImg code={flagCodeFor(cf.country)} size={20} />
+                  <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{cf.country}</span>
+                  {cf.headline !== null && (
+                    <span
+                      className="text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0"
+                      style={{ color: NEU.forest, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
+                      title={`Mean of every factor rating this delegation has received, out of ${scaleMax}`}
+                    >
+                      {Math.round(cf.headline)}/{scaleMax}
+                    </span>
+                  )}
+                  <span className="text-[11px] flex-shrink-0" style={{ color: NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                    {cf.entries.length} {cf.entries.length === 1 ? 'speech' : 'speeches'}
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    style={{ color: NEU.muted, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform 200ms ${EASE}` }}
+                  />
+                </button>
+
+                {isOpen && (
+                  <div className="px-3.5 pb-3.5 pt-3" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                    {/* Per-factor means, using the chair's own factor names. */}
+                    {(ratedFactors.length > 0 || orphanIds.length > 0) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                        {[...ratedFactors.map((f) => ({ id: f.id, name: f.name })), ...orphanIds.map((id) => ({ id, name: factorName(id) }))].map((f) => {
+                          const v = cf.factorAvg[f.id];
+                          const pct = Math.max(0, Math.min(100, (v / scaleMax) * 100));
+                          return (
+                            <div key={f.id}>
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-[10px] font-bold uppercase truncate" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>{f.name}</span>
+                                <span className="text-xs font-black flex-shrink-0" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{Math.round(v)}</span>
+                              </div>
+                              <div className="w-full overflow-hidden mt-1" style={{ height: 6, borderRadius: 6, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+                                <div style={{ inlineSize: `${pct}%`, height: '100%', borderRadius: 6, background: `linear-gradient(90deg, ${NEU_GRADIENTS.sage[1]}, ${NEU_GRADIENTS.forest[0]})` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Written notes. Most rows are ratings only, so say so. */}
+                    <div className="mt-3">
+                      {cf.notes.length === 0 ? (
+                        <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                          Rated, but the dais left no written note for this delegation yet.
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {cf.notes.map((n, i) => {
+                            const ctx = contextLabel(n.speechContext);
+                            return (
+                              <div
+                                key={`${n.createdAt}-${i}`}
+                                className="flex items-start gap-2 rounded-xl px-3 py-2"
+                                style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+                              >
+                                <MessageSquareText size={12} style={{ flexShrink: 0, marginBlockStart: 3, color: NEU.muted }} />
+                                <div className="min-w-0">
+                                  <p className="text-xs" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.5 }}>{n.content}</p>
+                                  <p className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                                    <span className="font-bold">{n.chairName || 'Chair'}</span>
+                                    <span>· {timeAgo(n.createdAt)}</span>
+                                    {ctx && <span>· {ctx}</span>}
+                                    {typeof n.speechSeconds === 'number' && n.speechSeconds > 0 && (
+                                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>· {fmtClock(n.speechSeconds)}</span>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </NeuInset>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Recap modal ─────────────────────────────────────────────────────────────
 
 export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: () => void }) {
@@ -174,13 +437,6 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
   const scores = computeScores(data).sort((a, b) => b.total - a.total);
   const top = scores[0];
   const quietest = scores.length > 1 ? scores[scores.length - 1] : undefined;
-
-  const feedbackByCountry: Record<string, { chairName: string; content: string }[]> = {};
-  for (const f of data.feedback) {
-    if (!feedbackByCountry[f.country]) feedbackByCountry[f.country] = [];
-    feedbackByCountry[f.country].push({ chairName: f.chairName, content: f.content });
-  }
-  const feedbackCountries = Object.keys(feedbackByCountry).sort();
 
   function joinAsSecretariat() {
     if (!session) return;
@@ -250,47 +506,8 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
         </div>
       )}
 
-      {/* Chair feedback recap */}
-      {/* TODO(merge): feedback shape changes on main branch, swap this recap to the new format */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Eyebrow>Chair feedback</Eyebrow>
-          <span
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-            style={{ backgroundColor: 'rgba(238,217,138,0.25)', color: NEU.deepGold, boxShadow: NEU.outSm, fontFamily: OUTFIT }}
-          >
-            Feedback format changes on the production branch (placeholder)
-          </span>
-        </div>
-        {feedbackCountries.length === 0 ? (
-          <p className="text-sm mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No chair feedback recorded yet.</p>
-        ) : (
-          <div className="mt-2 space-y-2.5">
-            {feedbackCountries.map((country) => (
-              <NeuInset key={country} className="px-4 py-3" style={{ borderRadius: 14 }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <FlagImg code={flagCodeFor(country)} size={16} />
-                  <span className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{country}</span>
-                </div>
-                {feedbackByCountry[country].slice(0, 3).map((f, i) => (
-                  <p key={i} className="text-xs flex items-start gap-1.5 mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                    <MessageSquareText size={12} style={{ flexShrink: 0, marginTop: 2, color: NEU.muted }} />
-                    <span>
-                      <span className="font-bold">{f.chairName}:</span>{' '}
-                      {f.content.length > 110 ? f.content.slice(0, 110) + '…' : f.content}
-                    </span>
-                  </p>
-                ))}
-                {feedbackByCountry[country].length > 3 && (
-                  <p className="text-[11px] mt-1" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-                    +{feedbackByCountry[country].length - 3} more
-                  </p>
-                )}
-              </NeuInset>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Chair feedback — live off the `feedback` table (ratings + private notes) */}
+      <FeedbackRecap data={data} />
 
       {/* Join as secretariat */}
       {session && (
@@ -353,25 +570,34 @@ function ChairAvatar({ name, size = 30 }: { name: string; size?: number }) {
   );
 }
 
-/** Committee chairs as small labelled avatars — reused inside the roster detail. */
-function ChairStrip({ chairNames }: { chairNames: string[] }) {
+/** Committee chairs as small labelled avatars — reused inside the roster detail.
+ *  Prefers the conference dais (real profile pictures) and falls back to the
+ *  names that actually joined the session, which may include a chair with no
+ *  Gavelling account. Names stay visible here: this is a detail surface, unlike
+ *  the card corner where the stack is deliberately name-free. */
+function ChairStrip({ chairs, chairNames }: { chairs: ChairPerson[]; chairNames: string[] }) {
+  const people: ChairPerson[] = chairs.length > 0
+    ? chairs
+    : chairNames.map((name) => ({ id: null, name, avatarUrl: null }));
   return (
     <div>
       <Eyebrow>Chairs</Eyebrow>
       <div className="flex items-center gap-2 mt-2 flex-wrap">
-        {chairNames.length === 0 ? (
+        {people.length === 0 ? (
           <span className="inline-flex items-center gap-2 text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
             <Gavel size={14} /> No chairs joined yet
           </span>
         ) : (
-          chairNames.map((name, i) => (
+          people.map((p, i) => (
             <span
-              key={`${name}-${i}`}
+              key={`${p.id ?? p.name}-${i}`}
               className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5"
               style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
             >
-              <ChairAvatar name={name} size={26} />
-              <span className="text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 140 }}>{name}</span>
+              {p.avatarUrl
+                ? <Avatar url={p.avatarUrl} name={p.name} size={26} rounded />
+                : <ChairAvatar name={p.name} size={26} />}
+              <span className="text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 140 }}>{p.name}</span>
             </span>
           ))
         )}
@@ -424,7 +650,7 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
 
       {/* Chairs — names + small avatars (shown with the detail per spec) */}
       <div className="mb-5">
-        <ChairStrip chairNames={chairNames} />
+        <ChairStrip chairs={data.conf.chairs} chairNames={chairNames} />
       </div>
 
       {/* Roster list — click a delegate to expand full detail */}

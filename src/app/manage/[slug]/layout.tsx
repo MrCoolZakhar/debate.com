@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Trophy,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -116,6 +116,7 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
       { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: 0 },
       { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: 0 },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
+      { icon: Trophy,    label: 'Scoreboard',   href: `/manage/${slug}/scoreboard`,   external: false, badge: 0 },
     ],
   },
   {
@@ -767,7 +768,14 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
 
   const SECTION_PERMS: Record<string, string> = {
     committees: 'committees', applications: 'applications', import: 'import', assignment: 'assignment',
-    documents: 'documents', communications: 'email_builder', financials: 'financials',
+    documents: 'documents',
+    // The scoreboard reads the same committees the Committees section governs
+    // (it is that section's live-session performance data), so it reuses that
+    // permission key rather than introducing one the Settings → Organizers
+    // pill list does not yet offer. Give it its own key there first if the
+    // secretariat should ever be able to grant one without the other.
+    scoreboard: 'committees',
+    communications: 'email_builder', financials: 'financials',
     'financial-aid': 'financials',
     settings: 'settings', jobs: 'job_board',
   };

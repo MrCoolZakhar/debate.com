@@ -279,11 +279,11 @@ interface UserHistory {
 // score(applicant, committee, slot) =
 //   preference:  1st choice committee +50, 2nd +30, 3rd +15
 //                +25 more if the slot is the exact country they asked for in that preference
-//   experience:  15 - 6 * |experience level - committee difficulty|  (floor 0).
-//                The term ALWAYS applies: a missing experience level or a
-//                missing committee difficulty falls back to 'intermediate'
-//                (the ladder's midpoint) so legacy/imported committees still
-//                get a sensible, non-punitive fit rather than being skipped.
+//   experience:  a SYMMETRIC difficulty-match term keyed on the gap between the
+//                delegate's experience level and the committee's difficulty:
+//                gap 0 → +20, gap 1 → 0, gap 2 → −15, gap 3 → −30. See
+//                EXPERIENCE_GAP_SCORE / experienceFitScore. Neutral (0, no chip)
+//                when either side is unknown — never a silent penalty.
 //   society:     (suggestions only) +35 to complete a valid same-society double
 //                delegation, −30 to spread a clumping delegation, and a hard
 //                skip for a cross-society sibling seat. See scoreSocietyFit.
@@ -292,18 +292,35 @@ interface UserHistory {
 //                seat, so the algorithm fills seats — and the committees that
 //                still hold them — in order of importance.
 
-// The canonical MUN skill ladder, shared by BOTH an applicant's experience
-// level and a committee's difficulty (they are graded on the same four rungs).
-// beginner→0, intermediate→1, advanced→2, expert→3. Returns `null` for a
-// missing/blank/unrecognised value; the experience-fit caller then defaults it
-// to intermediate (index 1) so the term always applies. Note: `difficulty` is
-// the organiser-set committee field — it is NEVER one of the committee_type
-// values (general-assembly / specialised / crisis), so those never map onto the
-// ladder here (a GA committee is graded by its own `difficulty`, not its type).
-const LEVELS = ['beginner', 'intermediate', 'advanced', 'expert'];
-function levelIdx(s: string | null | undefined): number | null {
-  const i = LEVELS.indexOf((s ?? '').toLowerCase().trim());
-  return i === -1 ? null : i;
+// ── The two skill scales, and how they map onto one another ──────────────────
+// A delegate's EXPERIENCE and a committee's DIFFICULTY are two SEPARATE
+// vocabularies that today happen to spell their rungs with the same four words.
+// The mapping between them is declared EXPLICITLY below — one rank map per
+// scale — rather than inferred from array position, so that if either scale
+// ever grows a rung (say difficulty gains 'crisis-veteran', or experience gains
+// 'novice') only the map changes and the scorer keeps working. Never re-derive
+// the correspondence from an index coincidence.
+//
+// Delegate experience (applications.experience_level, derived from the MUN CV
+// entry count in src/lib/munExperience.ts: 0-1 beginner, 2-4 intermediate,
+// 5-8 advanced, 9+ expert):
+const EXPERIENCE_LEVEL_RANK: Record<string, number> = {
+  beginner: 0, intermediate: 1, advanced: 2, expert: 3,
+};
+// Committee difficulty is the organiser-set `difficulty` field, picked from the
+// four buttons in CommitteeEditorModal — it is NEVER one of the committee_type
+// values (general-assembly / specialised / crisis), so those never map onto a
+// rung here (a GA committee is graded by its own `difficulty`, not its type).
+// Its rank map is DIFFICULTY_RANK, declared below and shared with the board
+// sort. `difficultyLevel` is the scoring-side reader: it converts that map's
+// "unknown sorts last" 99 sentinel into `null`, because for SCORING an unset
+// difficulty must be neutral, not the hardest rung.
+//
+// Both readers return `null` for a missing/blank/unrecognised value, and
+// experienceFitScore then contributes nothing at all — see there.
+function experienceLevelRank(s: string | null | undefined): number | null {
+  const r = EXPERIENCE_LEVEL_RANK[(s ?? '').toLowerCase().trim()];
+  return r === undefined ? null : r;
 }
 
 // Importance-weighted need: an open high/medium-importance seat is a higher
@@ -325,6 +342,91 @@ const DIFFICULTY_RANK: Record<string, number> = {
 function difficultyRank(d: string | null | undefined): number {
   return DIFFICULTY_RANK[(d ?? '').toLowerCase().trim()] ?? 99;
 }
+/** The SCORING-side read of committee difficulty: the same rung map as the
+ *  board sort, but an unset/unrecognised difficulty comes back as `null`
+ *  instead of the sort's "last" sentinel, so the fit term can stay neutral
+ *  rather than treating a blank field as the hardest committee on the board. */
+function difficultyLevel(d: string | null | undefined): number | null {
+  const r = DIFFICULTY_RANK[(d ?? '').toLowerCase().trim()];
+  return r === undefined ? null : r;
+}
+
+// ── Experience ↔ difficulty fit ───────────────────────────────────────────────
+// The single most common allocation mistake organisers report is a delegate
+// landing at the wrong DIFFICULTY — a first-timer dropped into an expert crisis
+// room, or a nine-conference veteran parked in a beginner GA. So the term is
+// scored on the ABSOLUTE gap between the two rungs and is fully SYMMETRIC:
+// over-qualified is exactly as wrong as under-qualified, and neither direction
+// is favoured.
+//
+//   gap 0 (exact match) → +20   a real, decisive reward
+//   gap 1 (one rung)    →   0   acceptable stretch, neither rewarded nor punished
+//   gap 2               → −15
+//   gap 3               → −30
+//
+// Calibration against the rest of the model (preference 50/30/15, exact country
+// pick 25, fill up to 12, seat importance up to 18, society ±35/30): the term
+// now spans 50 points end to end, which is the same width as the single largest
+// signal in the model (a 1st-choice preference). That is deliberate — it makes
+// difficulty match co-equal with preference rather than a rounding error. A
+// 1st-choice seat two rungs off (50 − 15 = 35) no longer beats a 3rd-choice seat
+// that fits perfectly (15 + 20 = 35, a tie), and a 1st choice three rungs off
+// (50 − 30 = 20) loses outright to it. The +20 bonus sits between the 3rd- and
+// 2nd-choice preference tiers: strong enough to reorder seats within a
+// preference tier and to lift a well-fitted lower preference over a badly
+// fitted higher one, but never so large that it alone outranks a whole
+// preference step (a 2nd choice that fits, 30 + 20 = 50, exactly matches a bare
+// 1st choice at the same fit… which is the intended "fit is worth a tier").
+//
+// The four-rung scales cap the gap at 3, so gap ≥ 4 is unreachable today. If a
+// scale ever grows a rung, the penalty EXTRAPOLATES linearly at −15 per rung
+// beyond gap 1 (gap 4 → −45, gap 5 → −60) rather than clamping, keeping the
+// curve consistent in both directions.
+const EXPERIENCE_MATCH_BONUS = 20;
+const EXPERIENCE_GAP_STEP = 15;
+const EXPERIENCE_GAP_SCORE: Record<number, number> = {
+  0: EXPERIENCE_MATCH_BONUS,
+  1: 0,
+  2: -EXPERIENCE_GAP_STEP,
+  3: -2 * EXPERIENCE_GAP_STEP,
+};
+function experienceGapScore(gap: number): number {
+  const table = EXPERIENCE_GAP_SCORE[gap];
+  // Beyond the table (only reachable if a scale grows a rung): keep going at
+  // −15 per level, the same slope the table already describes.
+  return table === undefined ? -EXPERIENCE_GAP_STEP * (gap - 1) : table;
+}
+
+/** Pure scorer for the experience ↔ difficulty match. No I/O, no state.
+ *
+ *  MISSING DATA IS NEUTRAL. If the delegate has no usable experience level, or
+ *  the committee has no difficulty set, we cannot know whether the match is
+ *  good or bad — so the term contributes exactly 0 and adds no chip. It is NOT
+ *  defaulted onto a rung: defaulting an unknown to 'beginner' (rung 0) would
+ *  penalise every legacy/imported committee and every chair-role application
+ *  into never being suggested, and defaulting it to 'intermediate' (the old
+ *  behaviour) silently invented a −15 for any expert or beginner committee. A
+ *  0 here reads as "this seat is decided on preference, fill and importance",
+ *  which is the honest answer.
+ *
+ *  The delegate's level falls back to the profile mirror
+ *  (profiles.mun_experience_level) when the application row carries none —
+ *  same derived value, already loaded on the row, no extra fetch. */
+function experienceFitScore(
+  app: Pick<AcceptedApp, 'experience_level' | 'profiles'>,
+  difficulty: string | null | undefined,
+): { points: number; reasons: string[] } {
+  const expL = experienceLevelRank(app.experience_level ?? app.profiles?.mun_experience_level);
+  const diffL = difficultyLevel(difficulty);
+  if (expL === null || diffL === null) return { points: 0, reasons: [] };
+  const gap = Math.abs(expL - diffL);
+  const points = experienceGapScore(gap);
+  if (points > 0) return { points, reasons: [`EXP MATCH +${points}`] };
+  // ASCII hyphen on purpose: ReasonChip detects a penalty with
+  // reason.includes('-'), which a Unicode minus would not trip.
+  if (points < 0) return { points, reasons: [`EXP GAP ${points}`] };
+  return { points: 0, reasons: [] };
+}
 
 interface ScoreResult {
   score: number;
@@ -343,18 +445,12 @@ function scorePrefAndExp(app: AcceptedApp, committee: CommitteeData, slot: SlotR
     score += 25;
     reasons.push('COUNTRY PICK');
   }
-  // Experience fit always applies. The committee's difficulty is the
-  // organiser-set field (beginner/intermediate/advanced/expert) — never inferred
-  // from committee_type. When either the applicant's experience level or the
-  // committee's difficulty is unset/unrecognised we fall back to 'intermediate'
-  // (index 1, the ladder midpoint) so legacy/imported committees still receive a
-  // sensible, non-punitive fit instead of being skipped.
-  const expL = levelIdx(app.experience_level) ?? 1;
-  const diffL = levelIdx(committee.difficulty) ?? 1;
-  const gap = Math.abs(expL - diffL);
-  const expScore = Math.max(0, 15 - 6 * gap);
-  score += expScore;
-  if (gap === 0) reasons.push('EXP MATCH');
+  // Experience ↔ difficulty fit: symmetric, and decisive in both directions.
+  // A missing level on either side contributes 0 rather than a guessed rung —
+  // see experienceFitScore.
+  const exp = experienceFitScore(app, committee.difficulty);
+  score += exp.points;
+  reasons.push(...exp.reasons);
   return { score, reasons };
 }
 
@@ -850,7 +946,7 @@ function PointsInfo() {
             </span>
             {row('Committee preference  +50 / +30 / +15', 'Their 1st choice committee scores 50, 2nd choice 30, 3rd choice 15.')}
             {row('Exact country pick  +25', 'Added when the open seat is the exact country they asked for in that preference.')}
-            {row('Experience fit  up to +15', 'Full 15 when their level matches the committee difficulty, minus 6 for each level of gap, floored at 0. A committee with no difficulty set counts as intermediate.')}
+            {row('Experience fit  +20 / 0 / −15 / −30', 'An exact match between their experience level and the committee difficulty adds 20. One level apart scores 0. Two apart subtracts 15, three apart 30 — the same either way round, so an expert in a beginner committee is penalised exactly like a beginner in an expert one. Scores 0 if their level or the committee difficulty is unset.')}
             {row('Committee fill  up to +12', 'Emptier committees score higher (12 x share still open), nudging suggestions to where seats are needed.')}
             {row('Seat importance  up to +18', 'An open high-importance seat adds 18, medium 10, low 4, standard 0, so higher-priority seats fill first and delegates with no preferences still slot into where they are most needed.')}
             {row('Delegation coherence  +35 / −30', 'Completing a valid double delegation (their society already holds the country’s other seat) adds 35; placing them where a societymate is already seated but not as a pair subtracts 30 to spread the delegation. Cross-society double seats are never suggested.')}

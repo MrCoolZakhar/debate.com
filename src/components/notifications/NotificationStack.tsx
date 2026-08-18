@@ -44,7 +44,41 @@ const TONE: Record<NotificationTone, { bg: string; fg: string; border: string }>
   neutral: { bg: 'rgba(255,255,255,0.16)', fg: '#F3EFE3', border: 'rgba(255,255,255,0.28)' },
 };
 
-export default function NotificationStack() {
+/**
+ * Per-notification presentation extras, keyed by notification key.
+ *
+ * These deliberately do NOT live on `SessionNotification`. That payload is the store's
+ * contract — it is snapshotted at `notify()` time and only changes when a producer
+ * re-notifies, which is exactly wrong for a value that has to change every second. A
+ * countdown re-notified once a second would restart its own TTL and re-emit to every
+ * subscriber; here the renderer derives it from a fixed target instant on the interval it
+ * already runs.
+ *
+ * The image rides along for the same reason it is not a store concern: it is pure
+ * presentation, and the store must stay drawable by anything.
+ */
+export interface NotificationExtra {
+  /** Rendered inline, height-capped, with an empty alt — the body carries the meaning. */
+  imageUrl?: string;
+  /** ISO instant. While it is in the future the card shows a live countdown. */
+  countdownTo?: string;
+  /** Countdown copy containing a `{time}` placeholder, pre-translated by the producer. */
+  countdownTemplate?: string;
+  /** Static line — shown when there is no countdown, or once the countdown has elapsed. */
+  note?: string;
+}
+
+/** mm:ss, or h:mm:ss past an hour. Never negative. */
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const s = total % 60;
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+export default function NotificationStack({ extras }: { extras?: Record<string, NotificationExtra> }) {
   const { items, suppressed } = useNotifications();
   /* Value is never read — the state exists only to re-render the progress
      hairlines each tick. The authoritative countdown lives in the store. */
@@ -92,6 +126,16 @@ export default function NotificationStack() {
         {visible.map((n) => {
           const Icon = KIND_ICON[n.kind];
           const pct = n.ttlMs == null ? 0 : Math.min(1, n.elapsedMs / n.ttlMs);
+          const extra = extras?.[n.key];
+          /* Recomputed on the same 250ms tick that advances the TTLs — no second
+             interval, and no re-notify (which would restart the TTL every second). */
+          const remainingMs = extra?.countdownTo
+            ? new Date(extra.countdownTo).getTime() - Date.now()
+            : null;
+          const counting = remainingMs != null && remainingMs > 0 && !!extra?.countdownTemplate;
+          const noteLine = counting
+            ? extra!.countdownTemplate!.replace('{time}', formatCountdown(remainingMs!))
+            : extra?.note;
           return (
             <div
               key={n.key}
@@ -156,6 +200,35 @@ export default function NotificationStack() {
                     >
                       {n.body}
                     </p>
+                  )}
+
+                  {noteLine && (
+                    <p
+                      style={{
+                        margin: '5px 0 0', fontFamily: OUTFIT, fontSize: 11.5,
+                        fontWeight: 800, lineHeight: 1.3, color: '#EED98A',
+                        /* Tabular figures so a ticking countdown does not jitter its
+                           own line width once a second. */
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {noteLine}
+                    </p>
+                  )}
+
+                  {extra?.imageUrl && (
+                    /* Height-capped and cropped: an organiser can attach anything, and a
+                       tall upload must not push the acknowledge button off screen. Empty
+                       alt — the message text above carries the meaning. */
+                    <img
+                      src={extra.imageUrl}
+                      alt=""
+                      style={{
+                        display: 'block', marginBlockStart: 8, width: '100%',
+                        maxHeight: 116, objectFit: 'cover', borderRadius: 10,
+                        outline: '1px solid rgba(255,255,255,0.18)', outlineOffset: -1,
+                      }}
+                    />
                   )}
                 </div>
 

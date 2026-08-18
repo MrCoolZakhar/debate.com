@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   RefreshCw, Copy, Check, Gavel, Users, Mic, FileText, ScrollText,
-  FileCheck, Trophy, Radio, PauseCircle, Flag, MessageSquareText, Timer,
+  FileCheck, Trophy, Radio, PauseCircle, Flag, MessageSquareText, Timer, Megaphone,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -16,10 +16,21 @@ import {
   NeuCard, NeuInset, NeuIconDisc, Emoji3D,
   NEU, NEU_GRADIENTS, type NeuGradient, OUTFIT, EASE,
 } from '@/components/neu';
+import AvatarStack from '@/components/AvatarStack';
+import { getScoringConfig } from '@/lib/scoring';
+import type { ScoringConfig } from '@/lib/settingsStore';
 import {
-  type LiveCommittee, type CaucusJson, cardStatus, PHASE_LABELS, fmtClock, flagCodeFor,
+  type LiveCommittee, type CaucusJson, type ChairPerson, cardStatus, PHASE_LABELS, flagCodeFor,
   RecapModal, AwardsModal, RosterModal,
 } from './LiveModals';
+import {
+  cardVariant, UnmoderatedBody, ModeratedBody, VotingBody, feedbackPulse,
+} from './PhaseVariants';
+import {
+  BroadcastComposer, RecentBroadcasts, broadcastTargets, groupBroadcasts,
+  mapBroadcastRow, deleteBroadcastGroup, BROADCAST_COLUMNS,
+  type BroadcastRow, type BroadcastGroup,
+} from './BroadcastComposer';
 
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
@@ -187,19 +198,24 @@ function NotStartedCard({
         )}
       </NeuInset>
 
-      {/* Chair assignment line (greyed) */}
-      <div style={{ opacity: 0.6 }}>
-        <p className="text-xs flex items-center gap-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+      {/* Chair assignment line (greyed) — same avatar stack as the live card,
+          so the dais reads identically before and after the gavel falls. */}
+      <div className="flex items-center justify-between gap-3" style={{ opacity: 0.6 }}>
+        <p className="text-xs flex items-center gap-1.5 min-w-0" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
           <Gavel size={12} style={{ flexShrink: 0 }} />
           <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {data.conf.chairUserIds.length} chair{data.conf.chairUserIds.length === 1 ? '' : 's'} assigned
+            {data.conf.chairs.length} chair{data.conf.chairs.length === 1 ? '' : 's'} assigned
+            {session && session.chairNames.length > 0 && <> · {session.chairNames.length} joined</>}
           </span>
         </p>
-        {session && session.chairNames.length > 0 && (
-          <p className="text-xs mt-1 truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-            Joined: {session.chairNames.join(', ')}
-          </p>
-        )}
+        <AvatarStack
+          people={data.conf.chairs}
+          size={26}
+          max={4}
+          label="Chairs"
+          ringColor={NEU.surface}
+          shadow={NEU.outSm}
+        />
       </div>
     </NeuCard>
   );
@@ -207,17 +223,17 @@ function NotStartedCard({
 
 // ── Live / suspended / ended card ───────────────────────────────────────────
 
-function currentMotionLabel(phase: string, caucus: CaucusJson | null): { label: string; detail: string | null; remaining: number | null } {
+// The clock deliberately does NOT live here any more. A caucus card's countdown
+// is owned by its phase variant, which re-derives it from the persisted anchor
+// every second; the flat `caucus.remainingTime` this used to print was the value
+// at the anchor instant, so it sat frozen until the next chair write.
+function currentMotionLabel(phase: string, caucus: CaucusJson | null): { label: string; detail: string | null } {
   if (caucus && (caucus.active ?? true)) {
     const label = caucus.type === 'unmoderated' ? 'Unmoderated Caucus' : 'Moderated Caucus';
-    return {
-      label: caucus.motionLabel || label,
-      detail: caucus.purpose || null,
-      remaining: typeof caucus.remainingTime === 'number' ? caucus.remainingTime : null,
-    };
+    return { label: caucus.motionLabel || label, detail: caucus.purpose || null };
   }
-  if (phase === 'speakers-list') return { label: "General Speakers' List (GSL)", detail: null, remaining: null };
-  return { label: PHASE_LABELS[phase] ?? phase, detail: null, remaining: null };
+  if (phase === 'speakers-list') return { label: "General Speakers' List (GSL)", detail: null };
+  return { label: PHASE_LABELS[phase] ?? phase, detail: null };
 }
 
 /** 3D glyph for the current motion, so the card reads at a glance. */
@@ -249,6 +265,13 @@ function LiveCard({
   const mv = motionVisual(session.phase, session.caucus);
   const id = committeeIdentity(data.conf);
 
+  // Which body this card renders. Default keeps the original layout untouched;
+  // the other three replace the middle of the card (see PhaseVariants.tsx).
+  const variant = cardVariant(data);
+  const showFloorSpeaker = variant === 'default' || variant === 'moderated';
+  const showQueue = variant === 'default' || variant === 'moderated';
+  const showMotionInset = variant !== 'voting';
+
   const speaker = data.currentSpeaker;
   const speaking = !!speaker?.startedAt;
   const present = data.delegates.filter((d) => d.status !== 'absent').length;
@@ -258,9 +281,14 @@ function LiveCard({
   const wpsPresented = wps.filter((d) => d.status !== 'submitted').length;
   const drsPresented = drs.filter((d) => d.status !== 'submitted').length;
   const passedCount = data.documents.filter((d) => d.status === 'passed').length;
-  // Voting indicator: an introduced DR means the voting page is (about to be) driving —
-  // do NOT rely on phase='voting', the voting page never sets it.
-  const votingDr = drs.find((d) => d.status === 'introduced');
+
+  const pulse = feedbackPulse(data);
+
+  // Chairs for the corner stack: the conference dais (real profile pictures),
+  // falling back to whoever actually joined this session by name.
+  const chairPeople: ChairPerson[] = data.conf.chairs.length > 0
+    ? data.conf.chairs
+    : session.chairNames.map((name) => ({ id: null, name, avatarUrl: null }));
 
   const upNext = caucusActive ? data.caucusQueue : data.gslQueue;
   const shownFlags = upNext.slice(0, 10);
@@ -321,34 +349,47 @@ function LiveCard({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0" style={{ maxWidth: '42%' }}>
+        {/* Chair corner — stacked profile pictures, no names on screen. Each
+            avatar carries title + aria-label, so the dais stays reachable on
+            hover and to a screen reader without eating the header. */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <Gavel size={13} style={{ color: NEU.muted, flexShrink: 0 }} />
-          <span className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-            {session.chairNames.length > 0 ? session.chairNames.join(', ') : 'No chairs joined'}
-          </span>
+          <AvatarStack
+            people={chairPeople}
+            size={28}
+            max={4}
+            label="Chairs"
+            ringColor={NEU.surface}
+            shadow={NEU.outSm}
+            empty={
+              <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No chairs</span>
+            }
+          />
         </div>
       </div>
 
       {/* Current motion */}
-      <NeuInset className="flex items-center gap-3" style={{ padding: '11px 13px', marginTop: 16, borderRadius: 14 }}>
-        <NeuIconDisc gradient={mv.gradient} emoji={mv.emoji} icon={mv.fallback} size={36} />
-        <div className="min-w-0 flex-1">
-          <Eyebrow style={{ fontSize: 10 }}>Current motion</Eyebrow>
-          <div className="flex items-baseline justify-between gap-3">
+      {showMotionInset && (
+        <NeuInset className="flex items-center gap-3" style={{ padding: '11px 13px', marginTop: 16, borderRadius: 14 }}>
+          <NeuIconDisc gradient={mv.gradient} emoji={mv.emoji} icon={mv.fallback} size={36} />
+          <div className="min-w-0 flex-1">
+            <Eyebrow style={{ fontSize: 10 }}>Current motion</Eyebrow>
             <p className="text-sm font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{motion.label}</p>
-            {motion.remaining !== null && (
-              <span className="text-sm font-black flex-shrink-0" style={{ color: NEU.forest, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                {fmtClock(motion.remaining)}
-              </span>
+            {motion.detail && (
+              <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }} title={motion.detail}>{motion.detail}</p>
             )}
           </div>
-          {motion.detail && (
-            <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{motion.detail}</p>
-          )}
-        </div>
-      </NeuInset>
+        </NeuInset>
+      )}
 
-      {/* Current speaker — the focal point, deliberately large */}
+      {/* ── Phase-specific body ── */}
+      {variant === 'unmoderated' && session.caucus && <UnmoderatedBody caucus={session.caucus} />}
+      {variant === 'voting' && <VotingBody data={data} />}
+
+      {/* Current speaker — the focal point, deliberately large.
+          Hidden in an unmod (nobody holds the floor) and during voting
+          (the ballot, not the last speaker, is the story). */}
+      {showFloorSpeaker && (
       <div className="mt-4">
         <Eyebrow style={{ fontSize: 10, marginBottom: 6 }}>On the floor</Eyebrow>
         {speaker?.country ? (
@@ -400,19 +441,10 @@ function LiveCard({
           </NeuInset>
         )}
       </div>
-
-      {/* Voting procedure banner */}
-      {votingDr && (
-        <div
-          className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 mt-3"
-          style={{ backgroundColor: 'rgba(238,217,138,0.22)', boxShadow: NEU.outSm }}
-        >
-          <Emoji3D name="Ballot box with ballot" size={16} fallback={Gavel} fallbackColor={NEU.deepGold} />
-          <p className="text-xs font-extrabold uppercase" style={{ color: NEU.deepGold, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-            Voting procedure: {votingDr.docCode || 'draft resolution'} on the floor
-          </p>
-        </div>
       )}
+
+      {/* Moderated caucus keeps its speaker and queue, and adds the caucus clock. */}
+      {variant === 'moderated' && session.caucus && <ModeratedBody caucus={session.caucus} />}
 
       {/* Doc + delegate chips */}
       <div className="flex flex-wrap gap-2 mt-3.5">
@@ -444,9 +476,21 @@ function LiveCard({
           <Users size={12} style={{ color: NEU.forest }} />
           {present}/{data.delegates.length} present
         </button>
+        {(pulse.rated > 0 || pulse.notes > 0) && (
+          <span
+            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
+            style={chipStyle}
+            title={`${pulse.rated} speech ${pulse.rated === 1 ? 'rating' : 'ratings'} and ${pulse.notes} written ${pulse.notes === 1 ? 'note' : 'notes'} across ${pulse.delegations} delegation${pulse.delegations === 1 ? '' : 's'} — open the card for the recap`}
+          >
+            <MessageSquareText size={12} style={{ color: NEU.forest }} />
+            {pulse.rated + pulse.notes} feedback
+          </span>
+        )}
       </div>
 
-      {/* Up next, flowing speakers strip */}
+      {/* Up next, flowing speakers strip. Removed entirely in an unmod (there is
+          no speakers list) and during voting (the roll, not a queue, is live). */}
+      {showQueue && (
       <div className="mt-4">
         <Eyebrow style={{ fontSize: 10 }}>Up next</Eyebrow>
         <div className="flex items-center mt-1.5" style={{ paddingLeft: 6, minHeight: 24 }}>
@@ -467,6 +511,7 @@ function LiveCard({
           )}
         </div>
       </div>
+      )}
 
       {/* Awards footer */}
       {/* TODO(merge): wire to chair award allocation from production branch */}
@@ -498,6 +543,11 @@ export default function LiveStatusPage() {
   const [awardsFor, setAwardsFor] = useState<string | null>(null);
   const [rosterFor, setRosterFor] = useState<string | null>(null);
   const [refreshHover, setRefreshHover] = useState(false);
+  const [broadcastHover, setBroadcastHover] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [broadcasts, setBroadcasts] = useState<BroadcastRow[]>([]);
+  const [broadcastBusyKey, setBroadcastBusyKey] = useState<string | null>(null);
+  const [broadcastError, setBroadcastError] = useState('');
   const loadingRef = useRef(false);
 
   const loadAll = useCallback(async () => {
@@ -509,12 +559,28 @@ export default function LiveStatusPage() {
       const authed = getAuthedClient(authSession.access_token);
       const { data: confCommittees } = await authed
         .from('conference_committees')
-        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids')
+        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs')
         .eq('conference_id', conference.id)
         .order('name', { ascending: true });
 
       const confRows = confCommittees ?? [];
       const sessionIds = confRows.map((c) => c.session_id).filter((id): id is string => !!id);
+
+      // Chair profile pictures. `display_chairs` is a trigger-maintained mirror
+      // index-aligned with chair_user_ids and already carries {name, avatar_url},
+      // so it is the fallback whenever a chair's profile row is not readable
+      // under the organiser's RLS (a chair who never applied to this conference).
+      const chairIds = Array.from(new Set(confRows.flatMap((c) => (c.chair_user_ids as string[] | null) ?? [])));
+      const chairProfiles = new Map<string, { display_name: string; avatar_url: string | null }>();
+      if (chairIds.length > 0) {
+        const { data: profs } = await authed
+          .from('profiles')
+          .select('id, display_name, avatar_url')
+          .in('id', chairIds);
+        for (const p of (profs ?? []) as { id: string; display_name: string; avatar_url: string | null }[]) {
+          chairProfiles.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+        }
+      }
 
       // Batched anon reads, live session tables carry public RLS.
       let sessions: Record<string, unknown>[] = [];
@@ -529,7 +595,7 @@ export default function LiveStatusPage() {
       if (sessionIds.length > 0) {
         const [sRes, csRes, dRes, qRes, mRes, docRes, msgRes, fbRes] = await Promise.all([
           anonSupabase.from('committees')
-            .select('id, code, name, phase, caucus, chair_names, suspended_at, ended_at')
+            .select('id, code, name, phase, caucus, chair_names, suspended_at, ended_at, settings')
             .in('id', sessionIds),
           anonSupabase.from('current_speaker')
             .select('committee_id, country, time_remaining, started_at')
@@ -546,15 +612,19 @@ export default function LiveStatusPage() {
             .eq('status', 'pending')
             .in('committee_id', sessionIds),
           anonSupabase.from('documents')
-            .select('committee_id, type, status, doc_code, sponsors')
+            .select('committee_id, type, status, doc_code, title, sponsors')
             .in('committee_id', sessionIds),
           anonSupabase.from('messages')
             .select('committee_id, sender, content, created_at')
             .eq('sender', '__system__')
             .in('committee_id', sessionIds),
+          // Chair feedback: ratings AND private notes. In practice almost every
+          // row is a factor rating with no prose, so factor_scores is as much
+          // the payload as `content` is.
           anonSupabase.from('feedback')
-            .select('committee_id, country, chair_name, content, created_at')
-            .in('committee_id', sessionIds),
+            .select('committee_id, country, chair_name, content, created_at, level, factor_scores, speech_context, speech_seconds')
+            .in('committee_id', sessionIds)
+            .order('created_at', { ascending: true }),
         ]);
         sessions = sRes.data ?? [];
         speakers = csRes.data ?? [];
@@ -583,6 +653,28 @@ export default function LiveStatusPage() {
               .filter((e): e is { country: string; seconds: number; context: string; topic: string } => e !== null)
           : [];
 
+        const chairUserIds = (c.chair_user_ids as string[] | null) ?? [];
+        const displayChairs = (c.display_chairs as { name: string; avatar_url: string | null }[] | null) ?? [];
+        const chairs: ChairPerson[] = chairUserIds.map((uid, i) => {
+          const prof = chairProfiles.get(uid);
+          const fallback = displayChairs[i];
+          return {
+            id: uid,
+            name: prof?.display_name ?? fallback?.name ?? 'Chair',
+            avatarUrl: prof?.avatar_url ?? fallback?.avatar_url ?? null,
+          };
+        });
+        // A dais seeded straight into display_chairs (no linked account) still
+        // deserves a face in the stack.
+        if (chairs.length === 0 && displayChairs.length > 0) {
+          for (const d of displayChairs) chairs.push({ id: null, name: d.name, avatarUrl: d.avatar_url ?? null });
+        }
+
+        // committees.settings.scoring → the chair's own ranking factors, so the
+        // feedback recap labels ratings the way the dais named them. Read as a
+        // pure function of the row; the settings store is never touched here.
+        const scoring = getScoringConfig({ dbScoring: (sRow?.settings as { scoring?: ScoringConfig } | null)?.scoring ?? null });
+
         return {
           conf: {
             id: c.id as string,
@@ -593,7 +685,8 @@ export default function LiveStatusPage() {
             totalSlots: (c.total_slots as number) ?? 0,
             sessionId: sid,
             sessionCode: (c.session_code as string | null) ?? null,
-            chairUserIds: (c.chair_user_ids as string[] | null) ?? [],
+            chairUserIds,
+            chairs,
           },
           session: sRow
             ? {
@@ -605,6 +698,8 @@ export default function LiveStatusPage() {
                 chairNames: (sRow.chair_names as string[] | null) ?? [],
                 suspendedAt: (sRow.suspended_at as string | null) ?? null,
                 endedAt: (sRow.ended_at as string | null) ?? null,
+                scoringFactors: scoring.factors.filter((f) => f.enabled).map((f) => ({ id: f.id, name: f.name })),
+                factorScaleMax: scoring.factorScaleMax,
               }
             : null,
           currentSpeaker: speakerRow
@@ -627,6 +722,7 @@ export default function LiveStatusPage() {
                 type: d.type as string,
                 status: d.status as string,
                 docCode: (d.doc_code as string) ?? '',
+                title: (d.title as string) ?? '',
                 sponsors: (d.sponsors as string[] | null) ?? [],
               }))
             : [],
@@ -637,6 +733,10 @@ export default function LiveStatusPage() {
                 chairName: (f.chair_name as string) ?? '',
                 content: (f.content as string) ?? '',
                 createdAt: (f.created_at as string) ?? '',
+                level: (f.level as string) ?? 'speech',
+                factorScores: (f.factor_scores as Record<string, number> | null) ?? {},
+                speechContext: (f.speech_context as string | null) ?? null,
+                speechSeconds: (f.speech_seconds as number | null) ?? null,
               }))
             : [],
         };
@@ -650,12 +750,30 @@ export default function LiveStatusPage() {
     }
   }, [conference?.id, authSession?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Broadcasts this conference has sent. Kept out of loadAll so a broadcast
+  // send/withdraw can refresh just this slice without re-fetching every
+  // session table. `expires_at` is the natural horizon: a broadcast past it is
+  // no longer on any dais, so the log stops at the ones that still matter plus
+  // a short tail of history.
+  const loadBroadcasts = useCallback(async () => {
+    if (!conference || !authSession) return;
+    const authed = getAuthedClient(authSession.access_token);
+    const { data } = await authed
+      .from('session_broadcasts')
+      .select(BROADCAST_COLUMNS)
+      .eq('conference_id', conference.id)
+      .order('created_at', { ascending: false })
+      .limit(120);
+    setBroadcasts(((data ?? []) as Record<string, unknown>[]).map(mapBroadcastRow));
+  }, [conference?.id, authSession?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Initial load + 10s polling (kept simple + robust for N committees, no per-committee channels)
   useEffect(() => {
     loadAll();
-    const poll = setInterval(loadAll, 10_000);
+    loadBroadcasts();
+    const poll = setInterval(() => { loadAll(); loadBroadcasts(); }, 10_000);
     return () => clearInterval(poll);
-  }, [loadAll]);
+  }, [loadAll, loadBroadcasts]);
 
   // 1s tick for the "Refreshed Xs ago" label
   useEffect(() => {
@@ -668,7 +786,9 @@ export default function LiveStatusPage() {
   const awardsData = awardsFor ? rows?.find((r) => r.conf.id === awardsFor) ?? null : null;
   const rosterData = rosterFor ? rows?.find((r) => r.conf.id === rosterFor) ?? null : null;
 
-  const allRows = rows ?? [];
+  // Stable identity: `rows ?? []` minted a fresh array on every tick while the
+  // page was still loading, which would re-run every memo hanging off it.
+  const allRows = useMemo(() => rows ?? [], [rows]);
   const liveCount = allRows.filter((r) => cardStatus(r) === 'live').length;
   const chairsJoined = allRows.reduce((sum, r) => sum + (r.session?.chairNames.length ?? 0), 0);
 
@@ -680,6 +800,22 @@ export default function LiveStatusPage() {
   const presentTotal = allRows.reduce((sum, r) => sum + r.delegates.filter((d) => d.status !== 'absent').length, 0);
 
   const secondsAgo = lastRefreshed ? Math.max(0, Math.floor((Date.now() - lastRefreshed) / 1000)) : null;
+
+  // Only a committee with a linked session (and not already adjourned for good)
+  // has a `committees.id` to address, so those are the only broadcast targets.
+  // Memoised: the composer diffs this list to fold in committees that come
+  // online while it is open, so a fresh array on every 1s tick would churn.
+  const targets = useMemo(() => broadcastTargets(allRows), [allRows]);
+  const broadcastGroups = useMemo(() => groupBroadcasts(broadcasts).slice(0, 5), [broadcasts]);
+
+  async function handleWithdraw(g: BroadcastGroup) {
+    setBroadcastBusyKey(g.key);
+    setBroadcastError('');
+    const err = await deleteBroadcastGroup(g.ids);
+    setBroadcastBusyKey(null);
+    if (err) { setBroadcastError("Couldn't withdraw that broadcast: " + err); return; }
+    await loadBroadcasts();
+  }
 
   return (
     <div className="px-6 md:px-10 py-8 max-w-6xl" style={{ fontFamily: OUTFIT }}>
@@ -713,6 +849,29 @@ export default function LiveStatusPage() {
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             Refresh
+          </button>
+          {/* Broadcast — writes session_broadcasts rows, one per targeted
+              committee. Nothing here suspends or ends a session itself. */}
+          <button
+            onClick={() => setComposerOpen(true)}
+            onMouseEnter={() => setBroadcastHover(true)}
+            onMouseLeave={() => setBroadcastHover(false)}
+            className="inline-flex items-center gap-2 rounded-full py-2.5 px-4 text-xs font-bold uppercase focus:outline-none"
+            style={{
+              border: 'none', color: NEU.gold,
+              background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+              fontFamily: OUTFIT, letterSpacing: '0.06em',
+              boxShadow: broadcastHover
+                ? `0 6px 16px ${NEU_GRADIENTS.forest[0]}66, ${NEU.outSmHover}`
+                : `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
+              transform: broadcastHover ? 'translateY(-2px)' : 'translateY(0)',
+              cursor: 'pointer',
+              transition: `box-shadow 220ms ${EASE}, transform 200ms ${EASE}`,
+            }}
+            title="Send a message to every committee on the floor"
+          >
+            <Megaphone size={13} />
+            Broadcast
           </button>
         </div>
       </div>
@@ -774,6 +933,14 @@ export default function LiveStatusPage() {
         </div>
       </NeuCard>
 
+      {/* What the secretariat has already sent to the floor */}
+      <RecentBroadcasts
+        groups={broadcastGroups}
+        onDelete={(g) => { void handleWithdraw(g); }}
+        busyKey={broadcastBusyKey}
+        error={broadcastError}
+      />
+
       {/* Grid */}
       {rows === null ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -819,6 +986,16 @@ export default function LiveStatusPage() {
       {recapData && <RecapModal data={recapData} onClose={() => setRecapFor(null)} />}
       {awardsData && <AwardsModal data={awardsData} onClose={() => setAwardsFor(null)} />}
       {rosterData && <RosterModal data={rosterData} onClose={() => setRosterFor(null)} />}
+      {composerOpen && conference && (
+        <BroadcastComposer
+          conferenceId={conference.id}
+          conferenceLabel={conference.acronym ?? conference.full_name}
+          createdBy={authSession?.user?.id ?? null}
+          targets={targets}
+          onClose={() => setComposerOpen(false)}
+          onSent={() => { void loadBroadcasts(); }}
+        />
+      )}
     </div>
   );
 }

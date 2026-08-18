@@ -30,7 +30,7 @@ import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import TutorialOverlay from '@/components/TutorialOverlay';
-import NotificationStack from '@/components/notifications/NotificationStack';
+import NotificationStack, { type NotificationExtra } from '@/components/notifications/NotificationStack';
 import {
   notify,
   dismiss as dismissNotification,
@@ -72,6 +72,10 @@ import {
   removePendingMotion as removePendingMotionInDB,
   updateSpeakerTimeLimit,
   updateCommitteeHeadChairInDB,
+  getActiveBroadcasts,
+  suspendDebate as suspendDebateInDB,
+  endDebate as endDebateInDB,
+  type SessionBroadcast,
 } from '@/lib/committeeService';
 
 function formatTime(seconds: number) {
@@ -160,6 +164,45 @@ const caucusClockRunning = { current: false };
 // RollCallPanel.tsx — both are the backstop for a status write that never lands, and a chair
 // should not see the two surfaces give up at different moments.
 const STATUS_PIN_TTL_MS = 8000;
+
+// ── Organiser broadcasts: per-device dismissal memory ─────────────────────────
+// A broadcast lives in the DB until it expires, and the chair page refetches the whole
+// active set on every reload and on every realtime event. Without a record of what this
+// device has already dealt with, one refresh would re-raise a card the chair dismissed ten
+// minutes ago. Keyed per committee AND per broadcast id — the same dais laptop can host two
+// committees in a day, and a chair who dismissed a message in one must not have it
+// suppressed in the other.
+const broadcastSeenStorageKey = (code: string) => `gavelling-broadcast-seen-${code}`;
+
+function loadSeenBroadcasts(code: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(broadcastSeenStorageKey(code));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? (parsed as string[]) : []);
+  } catch { return new Set(); }
+}
+
+function markBroadcastSeen(code: string, id: string): void {
+  try {
+    const seen = loadSeenBroadcasts(code);
+    if (seen.has(id)) return;
+    seen.add(id);
+    // Capped: broadcasts are deleted upstream once they expire, so an unbounded list would
+    // only ever accumulate ids for rows that no longer exist.
+    localStorage.setItem(broadcastSeenStorageKey(code), JSON.stringify(Array.from(seen).slice(-120)));
+  } catch {}
+}
+
+// An actionable broadcast whose `action_at` is already well in the past must NOT fire. The
+// effect has either already happened (the committee is suspended/ended, and the guards below
+// catch that) or the committee has deliberately been resumed since — and re-suspending, or
+// worse re-ending, a committee that a chair brought back is destructive and unrecoverable.
+// Inside this window we do fire, so a chair who loads the page moments after the deadline
+// still gets the effect the organiser scheduled.
+const BROADCAST_LATE_FIRE_GRACE_MS = 5 * 60 * 1000;
+// setTimeout clamps anything past 2^31-1 ms to fire immediately. A broadcast scheduled
+// further out than ~24 days is simply not armed on this mount; a later reload will arm it.
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => Committee, structural = false) {
   if (structural) localUpdateTime.current = Date.now();
@@ -1303,6 +1346,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   }, [code, session?.access_token]);
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
+  // Unexpired organiser broadcasts for THIS committee. Refetched on load and on every
+  // `session_broadcasts` realtime event; the notification cards and the scheduled effects
+  // are both derived from it, never from the realtime payload directly.
+  const [broadcasts, setBroadcasts] = useState<SessionBroadcast[]>([]);
   const [suspendTab, setSuspendTab] = useState<'suspend' | 'session'>('suspend');
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
@@ -1399,6 +1446,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // point", NOT "still on screen" — a card that timed out must not be re-raised by the
   // next render of the same still-pending motion (rule 1: notify() restarts the TTL).
   const raisedGslKeysRef = useRef<Set<string>>(new Set());
+  // Broadcast ids this device has already raised a card for, and ids whose action this
+  // device has already executed. Both mean "already handled at some point", not "still on
+  // screen" — a dismissed card must not be re-raised by the next refetch, and a fired
+  // suspend must not fire twice if the row is re-delivered.
+  const raisedBroadcastKeysRef = useRef<Set<string>>(new Set());
+  const firedBroadcastsRef = useRef<Set<string>>(new Set());
+  // Same bridge pattern as gslActionsRef: reassigned every render so a timer armed minutes
+  // ago fires against the CURRENT committee row, gavel state and chair suffix — never a
+  // stale closure that would write to a committee this device has since stopped chairing.
+  const broadcastEffectRef = useRef<(b: SessionBroadcast) => void>(() => {});
   // Chat message ids already accounted for. Seeded with the whole backlog on first load
   // so a refresh does not burst a card for every historical message.
   const seenChatIdsRef = useRef<Set<string> | null>(null);
@@ -1511,7 +1568,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       }
       setLoading(false);
       if (found) {
+        // A chair who joins late, or reloads mid-session, still gets any live organiser
+        // broadcast — realtime only ever delivers what arrives AFTER the socket opens.
+        // Fire-and-forget: nothing about the session waits on an announcement.
+        getActiveBroadcasts(found.id).then(setBroadcasts);
         unsubscribe = subscribeToCommittee(found.id, async (table) => {
+          // Broadcasts first, and outside the debounce entirely. They are organiser-owned:
+          // this device never writes the table, so there is no optimistic state to protect,
+          // and swallowing one because the chair happened to press Next three seconds ago
+          // would drop the message that pauses the committee.
+          if (table === 'session_broadcasts') {
+            setBroadcasts(await getActiveBroadcasts(found.id));
+            return;
+          }
+
           // The head chair owns current_speaker (writes it on start/pause/next) — it must
           // ignore its own echoes. But co-chairs (view-only) don't own it, so they DO need
           // these events to show the current speaker promptly. Patch with a lightweight
@@ -2320,6 +2390,158 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatMessages, committee?.id, isViewOnly, showChat, myChairName, language, t]);
+
+  // ── Organiser broadcasts ──────────────────────────────────────────────────
+  // Delivery, rendering and effect. Three separate concerns, deliberately not fused:
+  //
+  //   1. `runBroadcastEffect` — the ONLY place a broadcast writes to the committee.
+  //   2. the card effect      — what the chair SEES. Every chair sees every broadcast.
+  //   3. the schedule effect  — WHEN the action runs. Armed on every device; gated to one.
+  //
+  // Splitting 2 from 3 is what makes a dismissed card still take effect: acknowledging an
+  // announcement is not the same as cancelling the pause the organiser scheduled.
+
+  // SINGLE EXECUTION. Every chair on the dais receives this identical row over realtime; if
+  // each one called endDebateInDB we would get a write storm and a double state change on a
+  // committee that is, by definition, about to become unrecoverable. The gate is the gavel:
+  // `isViewOnly` is false on exactly one chair identity (the head chair — see AGENTS.md
+  // FEATURE: CHAIR ROLES), so only that device writes. Every other chair still gets the card
+  // and learns what is happening; it just does not perform it. This is NOT a security claim
+  // (isViewOnly never is, MUST NEVER HAPPEN #15) — it is a de-duplication rule, and the
+  // idempotence guards below are what make it safe even when it is wrong.
+  const runBroadcastEffect = (b: SessionBroadcast) => {
+    if (b.kind !== 'actionable' || !b.action) return;
+    if (firedBroadcastsRef.current.has(b.id)) return;     // this device, already done
+    if (isViewOnlyRef.current) return;                    // a co-chair only watches
+    if (!committee) return;
+    // Expired between arming and firing — the organiser's window has closed.
+    if (b.expiresAt && new Date(b.expiresAt).getTime() <= Date.now()) return;
+    // AGENTS.md FEATURE: END DEBATE — `ended_at` is permanent and starts the 1h deletion
+    // clock. Never re-write it, and never suspend a committee that has already ended.
+    if (committee.endedAt) return;
+    if (b.action === 'pause' && committee.suspendedAt) return;   // already suspended
+    firedBroadcastsRef.current.add(b.id);
+
+    const code = committee.code;
+    const suffix = committee.dbChairJoinSuffix ?? undefined;
+    // Optimistic first, DB write fire-and-forget (RULE 5) — exactly the shape MotionsModal
+    // uses for the same two transitions, so the two paths cannot drift.
+    if (b.action === 'pause') {
+      updateLocal(setCommittee, (c) => ({ ...c, suspendedAt: new Date().toISOString(), phase: 'adjourned' as const }), true);
+      setSessionSuspended(true);
+      suspendDebateInDB(committee.id, code, suffix);
+    } else {
+      const now = new Date();
+      // Mirrors endDebate()'s own +1h. If one is ever changed, change both.
+      const expires = new Date(now.getTime() + 1 * 60 * 60 * 1000);
+      updateLocal(setCommittee, (c) => ({ ...c, endedAt: now.toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }), true);
+      setSessionEnded(true);
+      setSessionSuspended(false);
+      endDebateInDB(committee.id, code, suffix);
+    }
+    markBroadcastSeen(code, b.id);
+    dismissNotification(notifyKey.broadcast(b.id));
+  };
+  broadcastEffectRef.current = runBroadcastEffect;
+
+  // Card per broadcast. `urgent: true` on purpose: rule 2 holds ordinary notifications back
+  // while a speaker's clock runs, which is right for a GSL request and wrong for a message
+  // that is about to pause or end the debate — the chair needs it BEFORE the speech it
+  // interrupts. Sticky (`ttlMs: null`) for the same reason: an organiser announcement is not
+  // clutter that should age off unread, and every card carries its own dismiss control.
+  const committeeCode = committee?.code;
+  useEffect(() => {
+    if (!committeeCode) return;
+    const seen = loadSeenBroadcasts(committeeCode);
+    const now = Date.now();
+    const liveKeys = new Set<string>();
+
+    for (const b of broadcasts) {
+      // Re-checked on the client: a row fetched while live can expire with the page open.
+      if (b.expiresAt && new Date(b.expiresAt).getTime() <= now) continue;
+      const key = notifyKey.broadcast(b.id);
+      liveKeys.add(key);
+      if (seen.has(b.id)) continue;                              // dismissed on this device
+      if (raisedBroadcastKeysRef.current.has(key)) continue;     // already shown this session
+      raisedBroadcastKeysRef.current.add(key);
+
+      const actionable = b.kind === 'actionable' && !!b.action;
+      const broadcast = b;
+      notify({
+        key,
+        kind: 'broadcast',
+        urgent: true,
+        title: t('notif_broadcast_title'),
+        body: b.message,
+        ttlMs: null,
+        actions: [{
+          id: actionable ? 'ack' : 'dismiss',
+          label: actionable ? t('notif_broadcast_acknowledge') : t('notif_broadcast_dismiss'),
+          tone: actionable ? 'accept' : 'neutral',
+          run: () => {
+            markBroadcastSeen(committeeCode, broadcast.id);
+            // With no `action_at` the organiser left the timing to the dais, so the
+            // acknowledgement IS the trigger. With one, the schedule effect owns it and
+            // acknowledging only clears the card — the pause still lands when promised.
+            if (actionable && !broadcast.actionAt) broadcastEffectRef.current(broadcast);
+          },
+        }],
+      });
+    }
+
+    // Withdrawn or expired upstream — pull the card so the stack cannot offer an action for
+    // a broadcast that no longer exists.
+    for (const key of Array.from(raisedBroadcastKeysRef.current)) {
+      if (liveKeys.has(key)) continue;
+      raisedBroadcastKeysRef.current.delete(key);
+      dismissNotification(key);
+    }
+  }, [broadcasts, committeeCode, t]);
+
+  // Arm the scheduled actions. Runs on every chair device — `runBroadcastEffect` is what
+  // decides whether this one is the device that actually writes — so a gavel handover
+  // between arming and firing still leaves exactly one executor.
+  useEffect(() => {
+    const timers: NodeJS.Timeout[] = [];
+    const now = Date.now();
+    for (const b of broadcasts) {
+      if (b.kind !== 'actionable' || !b.action) continue;
+      if (!b.actionAt) continue;                  // fires on acknowledgement instead
+      if (b.expiresAt && new Date(b.expiresAt).getTime() <= now) continue;
+      const delay = new Date(b.actionAt).getTime() - now;
+      if (delay <= 0) {
+        if (-delay > BROADCAST_LATE_FIRE_GRACE_MS) continue;   // stale — never re-suspend
+        broadcastEffectRef.current(b);
+        continue;
+      }
+      if (delay > MAX_TIMEOUT_MS) continue;
+      timers.push(setTimeout(() => broadcastEffectRef.current(b), delay));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [broadcasts]);
+
+  // Presentation extras for the stack — the attached image, and the live countdown target.
+  // The countdown is passed as a TARGET INSTANT plus a template, never as pre-rendered text:
+  // re-notifying once a second to advance a clock would restart the notification's own TTL
+  // and re-emit to every subscriber. NotificationStack renders it off the interval it
+  // already owns, and falls back to `note` once the moment passes.
+  const broadcastExtras = useMemo(() => {
+    const map: Record<string, NotificationExtra> = {};
+    for (const b of broadcasts) {
+      const extra: NotificationExtra = {};
+      if (b.imageUrl) extra.imageUrl = b.imageUrl;
+      if (b.kind === 'actionable' && b.action) {
+        const pausing = b.action === 'pause';
+        extra.note = pausing ? t('notif_broadcast_pause_now') : t('notif_broadcast_end_now');
+        if (b.actionAt) {
+          extra.countdownTo = b.actionAt;
+          extra.countdownTemplate = pausing ? t('notif_broadcast_pause_in') : t('notif_broadcast_end_in');
+        }
+      }
+      map[notifyKey.broadcast(b.id)] = extra;
+    }
+    return map;
+  }, [broadcasts, t]);
 
   // A resume latch held by ANOTHER chair is normally a sub-second blink: they claim it and
   // immediately clear it by starting the roll call. If it is still there ~12s later that
@@ -3622,7 +3844,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           affect the layout of the GSL centre column in any way. */}
       {/* Exactly ONE per surface — this host owns the interval that advances every
           notification's TTL, so a second mount would halve every countdown. */}
-      <NotificationStack />
+      <NotificationStack extras={broadcastExtras} />
       {showTutorial && committee && (
         <TutorialOverlay
           committee={committee}
