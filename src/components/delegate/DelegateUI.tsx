@@ -169,7 +169,7 @@ export function DelegateStyles() {
          crest. Filling the column breaks the loop and lets the disc actually
          claim the space. (No backticks in here: this block lives inside a
          template literal and one would terminate the string.) */
-      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; inline-size: 100%; max-inline-size: min(258px, 30vh); margin-inline: auto }
+      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; inline-size: 100%; max-inline-size: min(206px, 24vh); margin-inline: auto }
       .dgv-hero-side { display: flex; flex-direction: column; gap: clamp(8px, 2.2vw, 14px); min-width: 0 }
       /* The queue gets the wider share — country names are the content that
          actually has to be readable, and an even split truncated them to
@@ -335,7 +335,15 @@ export function FlagOrdinalDisc({
     <span
       style={{
         position: 'relative', display: 'inline-block', flexShrink: 0,
-        width: size, height: size, borderRadius: '50%', background: DG.forest,
+        /* maxWidth + aspectRatio, not a bare width/height pair. `size` comes
+           from a measured box, and a measurement can go stale — after a viewport
+           change it was still reporting 216px into a 181px column, so the crest
+           overflowed by 35px and the stat rail rendered ON TOP of the flag. The
+           clamp makes that class of bug impossible: whatever the measurement
+           says, the disc can never be wider than the column it sits in, and
+           aspect-ratio keeps it a circle when the clamp bites. */
+        width: size, maxWidth: '100%', aspectRatio: '1 / 1', height: 'auto',
+        borderRadius: '50%', background: DG.forest,
         boxShadow: live
           ? `0 0 0 3px ${DG.ivory}, 0 0 0 7px ${DG.gold}, 0 8px 22px rgba(27,56,40,0.30)`
           : `0 0 0 3px ${DG.ivory}, 0 0 0 6px ${DG.hairline}, ${LIFT.sm}`,

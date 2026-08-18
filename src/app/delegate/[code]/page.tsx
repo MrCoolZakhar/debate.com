@@ -1096,7 +1096,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      (min(300px, 34vh)), which is height-aware; this number just has to stay
      above it so it is never the binding constraint. */
   const { ref: discBox, size: discSize } = useMeasuredSize(84, 320);
-  const { ref: queueBox, count: queueFit } = useFitCount(44, 30);
+  /* Reserve only what the "view all" link actually occupies (~12px), not 30.
+     The old figure was a guess and it cost most of a row: at typical phone
+     heights it rounded the capacity down by one, leaving visible empty space
+     under the last speaker. The speaking row is 12px taller than a normal one
+     and that surplus is absorbed by the same reserve. */
+  const { ref: queueBox, count: queueFit } = useFitCount(44, 12);
 
   /* Capped at 26, NOT scaled freely off the disc. The rails are width-capped so
      the crest can lead, and an icon that grows with the disc eats that fixed
@@ -1124,7 +1129,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      vertical offset h can only move inward by R − sqrt(R² − h²) before it slides
      under the circle. At R≈97 and h≈55 that is ~17px; 0.14×disc gave 27 and
      buried "ROLL CALL" and the stat glyphs behind the flag. */
-  const arcDepth = Math.round(Math.max(5, Math.min(16, discSize * 0.07)));
+  /* Scales DOWN with the crest, not up. The safe inward tuck for a satellite at
+     vertical offset h is R - sqrt(R^2 - h^2), which SHRINKS as R grows — so a
+     depth proportional to the disc had it backwards and drove the top stat 24px
+     into the flag. Small and constant-ish is the honest bound here. */
+  const arcDepth = Math.round(Math.max(4, Math.min(9, 640 / Math.max(discSize, 1))));
 
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
