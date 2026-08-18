@@ -50,7 +50,16 @@ const ChatComposer = forwardRef<HTMLInputElement, {
               backgroundColor: NEU.base,
               boxShadow: NEU.inSm,
               border: 'none',
-              fontFamily: OUTFIT, fontSize: 13, color: NEU.ink,
+              fontFamily: OUTFIT, color: NEU.ink,
+              /* 16px is a hard floor, not a style choice, and it applies at every
+                 width. iOS Safari auto-zooms the viewport on focus for ANY input
+                 under 16px — that is the "zooms into the message field and cuts
+                 off the right side" report; the page scales up and never scales
+                 back. The other fix, maximum-scale=1 on the viewport, is banned
+                 because it disables pinch zoom for everyone. Kept uniform rather
+                 than mobile-only: a composer at 16px reads fine on desktop, and a
+                 breakpoint here would be one more thing to get wrong. */
+              fontSize: 16,
             }}
           />
           <button
