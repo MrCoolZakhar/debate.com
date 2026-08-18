@@ -2322,8 +2322,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         kind: 'gsl-request',
         flagCode: found?.code,
         title: getCountryDisplayName(country, language),
-        body: t('notif_gsl_wants_to_speak'),
-        ttlMs: NOTIFY_TTL.gslRequest,
+        body: t('notif_gsl_requests_addition'),
+        // STICKY, and it has to be. This card is now the ONLY chair-side affordance for a
+        // GSL request: the full-width banner below the header is gone, and MotionsModal
+        // filters `gsl-request` out of every list it draws. A re-request from the delegate
+        // cannot resurrect an expired card either — `requestGslSpot` is idempotent
+        // (committeeService.ts:844), so it writes nothing, emits no realtime event, and
+        // reuses the motion id this device has already marked as raised. A 60s TTL would
+        // therefore strand the delegate waiting on an answer nobody can still give.
+        // The chair clears it deliberately instead: Accept, Reject, or the card's x.
+        ttlMs: null,
         actions: [
           {
             id: 'accept',
@@ -2338,10 +2346,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             run: () => gslActionsRef.current.deny(motionId),
           },
         ],
-        // Expiry means the CARD left the screen, nothing more. The motion is
-        // deliberately left untouched in the DB: the request stays in the GSL request
-        // banner (and in the motions list) for the chair to action there. Deleting it
-        // here would silently deny a delegate who is still waiting for an answer.
+        // Unreachable while `ttlMs` is null, and kept as the explicit statement of what
+        // must happen if anyone ever puts a TTL back: the CARD leaves, the MOTION does
+        // not. Deleting the row here would silently deny a delegate who is still waiting
+        // for an answer. The same rule governs the card's x — dismissing is not deciding.
         onExpire: () => {},
       });
     }
@@ -3153,7 +3161,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <div
           className="fixed z-50 flex items-center gap-2 px-3.5 py-2 rounded-2xl"
           style={{
-            top: '6.6rem', right: '0.85rem', maxWidth: '19rem',
+            // NotificationStack owns the slot directly under the header now and publishes
+            // its measured height as `--dgn-stack-shift` on <html> (0 / absent when the
+            // stack is empty or suppressed). The toast and the GavelChip both add it, so
+            // they slide down out of the way together and keep their spacing.
+            top: 'calc(6.6rem + var(--dgn-stack-shift, 0px))', right: '0.85rem', maxWidth: '19rem',
+            transition: 'top 240ms cubic-bezier(0.22,1,0.36,1)',
             backgroundColor: gavelToast.tone === 'lost' ? '#F6EEE0' : '#1B3828',
             border: gavelToast.tone === 'lost' ? '1px solid rgba(184,132,74,0.45)' : '1px solid rgba(238,217,138,0.28)',
             boxShadow: '0 12px 30px rgba(27,56,40,0.22)',
@@ -3239,41 +3252,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           </div>
         );
       })()}
-      {/* GSL speak request banner */}
-      {(committee.pendingMotions ?? []).filter((m) => (m.type as string) === 'gsl-request').length > 0 && (
-        <div className="shrink-0 bg-[#1B3828] border-b border-[#3D7A52]/40 px-4 py-2 flex flex-wrap gap-4">
-          {(committee.pendingMotions ?? [])
-            .filter((m) => (m.type as string) === 'gsl-request')
-            .map((m) => {
-              let delegateId = '';
-              try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; } catch {}
-              const found = getCountryByName(m.proposedBy);
-              const flagEl = found
-                ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                : <Emoji size="1.125rem">🌐</Emoji>;
-              return (
-                <div key={m.id} className="flex items-center gap-3 text-sm">
-                  <span className="font-black text-xs uppercase tracking-widest shrink-0" style={{ color: '#EED98A', fontFamily: "'DM Mono', monospace" }}>{t('session_gsl_request')}</span>
-                  <span className="font-mono text-lg">{flagEl}</span>
-                  <span className="font-black text-sm" style={{ color: '#EDE7D8' }}>{m.proposedBy}</span>
-                  <span className="text-xs" style={{ color: 'rgba(237,231,216,0.6)' }}>{t('session_wants_to_speak')}</span>
-                  <button onClick={() => handleApproveGslRequest(m.id, delegateId, m.proposedBy)}
-                    className="ms-2 px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EDE7D8', border: '1px solid #3D7A52' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-                    {t('session_add_to_gsl')}
-                  </button>
-                  <button onClick={() => handleDenyGslRequest(m.id)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#EDE7D8', border: '1px solid rgba(139,32,32,0.6)' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
-                    {t('session_deny')}
-                  </button>
-                </div>
-              );
-            })}
-        </div>
-      )}
+      {/* The full-width "GSL REQUEST … ADD TO GSL / DENY" bar used to live here. It was a
+          second, redundant presentation of the very same pending `gsl-request` motions the
+          NotificationStack already raises a card for, with the same two buttons calling the
+          same two handlers. Only the notification remains.
+
+          NOTHING about the motion itself changed: `handleApproveGslRequest` /
+          `handleDenyGslRequest` are untouched and are what the card's Accept / Reject run,
+          via `gslActionsRef` (see the effect that raises the card). The join-request
+          "Waiting Room" bar directly above is a DIFFERENT motion type and stays. */}
       {sessionEnded && endedTab === 'ended' ? (
         <SessionEndedContent committee={committee} hoursRemaining={hoursRemaining} />
       ) : (!sessionEnded && sessionSuspended && suspendTab === 'suspend') ? (

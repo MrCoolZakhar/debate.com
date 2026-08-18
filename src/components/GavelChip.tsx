@@ -213,7 +213,18 @@ export default function GavelChip({
         }
       `}</style>
 
-      <div className="fixed z-50" style={{ top: '3.75rem', right: '0.85rem', fontFamily: OUTFIT }}>
+      {/* `--dgn-stack-shift` is published on <html> by NotificationStack, which now owns
+          the slot directly under the header in this same top-inline-end column. It is the
+          stack's measured height (absent → 0 when the stack is empty or suppressed), so
+          the chip steps down below the cards and back up when they clear. See the
+          positioning note at the top of NotificationStack.tsx. */}
+      <div
+        className="fixed z-50"
+        style={{
+          top: 'calc(3.75rem + var(--dgn-stack-shift, 0px))', right: '0.85rem',
+          fontFamily: OUTFIT, transition: 'top 240ms cubic-bezier(0.22,1,0.36,1)',
+        }}
+      >
         {pulse > 0 && (
           <span
             key={pulse}
