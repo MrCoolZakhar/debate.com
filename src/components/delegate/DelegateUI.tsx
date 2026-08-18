@@ -153,7 +153,9 @@ export function DelegateStyles() {
          the rails get exactly what their content needs and the crest takes the
          entire remainder. Sized from measurement: 20px glyph + 7px gap + the
          39px word + slack. */
-      .dgv-hero { flex-shrink: 0; display: grid; grid-template-columns: 76px minmax(0, 1fr) 74px; align-items: center; gap: clamp(2px, 0.8vw, 10px); max-inline-size: 620px; margin-inline: auto; inline-size: 100% }
+      /* position:relative anchors the roll-call footnote, which hangs off the
+         hero as an absolute overlay so it costs the layout nothing when idle. */
+      .dgv-hero { position: relative; flex-shrink: 0; display: grid; grid-template-columns: 82px minmax(0, 1fr) 82px; align-items: center; gap: clamp(2px, 0.8vw, 10px); max-inline-size: 620px; margin-inline: auto; inline-size: 100% }
       @media (min-width: 700px) {
         .dgv-hero { grid-template-columns: 132px minmax(0, 1fr) 150px }
       }
@@ -167,7 +169,7 @@ export function DelegateStyles() {
          crest. Filling the column breaks the loop and lets the disc actually
          claim the space. (No backticks in here: this block lives inside a
          template literal and one would terminate the string.) */
-      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; inline-size: 100%; max-inline-size: min(300px, 36vh); margin-inline: auto }
+      .dgv-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; inline-size: 100%; max-inline-size: min(258px, 30vh); margin-inline: auto }
       .dgv-hero-side { display: flex; flex-direction: column; gap: clamp(8px, 2.2vw, 14px); min-width: 0 }
       /* The queue gets the wider share — country names are the content that
          actually has to be readable, and an even split truncated them to

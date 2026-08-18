@@ -1057,7 +1057,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      rail from the inside — at 34px it left ~51px for the label and clipped
      "SPEECHES" to "SPEECH". The glyph is an accent here; the number and its
      label are the content. */
-  const statIcon = Math.round(Math.max(18, Math.min(22, discSize * 0.12)));
+  /* Bigger relative to the crest than before: at 0.12 the glyphs read as
+     afterthoughts beside a 2.3x disc. The rail is fixed-width, so this is
+     bounded by what still leaves room for the longest label beside it. */
+  const statIcon = Math.round(Math.max(22, Math.min(30, discSize * 0.17)));
   const actionIcon = Math.round(Math.max(20, Math.min(30, discSize * 0.18)));
   /* The documents tile carries its own clamp rather than riding discSize
      unbounded — at a 300px disc a raw 0.46 multiplier would put a 138px folder
@@ -1065,7 +1068,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   /* Capped to the fixed left rail (76px on phone) minus a little breathing
      room. It still reads far larger than the ~29px it was, but it can no longer
      widen the rail — which would come straight out of the crest beside it. */
-  const docIcon = Math.round(Math.max(44, Math.min(64, discSize * 0.34)));
+  const docIcon = Math.round(Math.max(52, Math.min(74, discSize * 0.40)));
   /* How far the outermost satellite tucks toward the disc. Scaled off the disc
      so the curve stays proportional from phone to laptop — the ceiling is 44,
      not 26, because a 300px disc needs ~42px of tuck to read the same as ~20px
@@ -1860,7 +1863,6 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   </div>
                 ))}
               </div>
-            </section>
 
             {/* ── ROLL-CALL FOOTNOTE ─────────────────────────────────────
                 The lock explanation is permanent — it is the reason a missing
@@ -1872,11 +1874,21 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 switch, then fades itself out — EXCEPT at zero, where it stays
                 up, because that is the moment it stops being a reminder and
                 becomes the explanation for a dead control.
-                The row reserves its height either way: this board does not
-                scroll, so a line that appears and disappears must not be able
-                to shove the bands below it. */}
-            {!isAbsent && !sessionEnded && (
-              <div className="text-center" style={{ flexShrink: 0, minHeight: 15 }}>
+                It must not shove the bands below it either — this board does not
+                scroll. It used to buy that with a permanently reserved 15px row,
+                which also bought two 16px board gaps: 47px of dead space sitting
+                under the crest whenever there was nothing to say, which was most
+                of the time. Now it is an ABSOLUTE overlay hanging off the hero,
+                so it costs the layout nothing when idle and still cannot reflow
+                anything when it appears. */}
+            {!isAbsent && !sessionEnded && (statusError || lockRollCall || changesLeft <= 0 || statusFlash) && (
+              <div
+                className="text-center"
+                style={{
+                  position: 'absolute', insetInlineStart: 0, insetInlineEnd: 0,
+                  top: '100%', marginTop: 2, pointerEvents: 'none',
+                }}
+              >
                 {statusError && !lockRollCall && (
                   <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)', fontWeight: 800, lineHeight: 1.25, color: DG.danger }}>
                     {t('delegate_status_change_failed')}
@@ -1907,6 +1919,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 )}
               </div>
             )}
+            </section>
 
             {/* ── BAND LABEL ──────────────────────────────────────────────
                 Mode on top, the motion's own topic as a smaller line directly
