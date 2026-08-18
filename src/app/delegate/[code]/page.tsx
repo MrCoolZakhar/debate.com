@@ -178,6 +178,11 @@ function statusChangesRemaining(committeeId: string, country: string): number {
 // must not share a cooldown.
 const GSL_RETRY_MS = 60 * 1000;
 const GSL_DENIED_MS = 15 * 60 * 1000;
+// How long to wait before believing a vanished request was actually refused.
+// An approval writes speakers_list and deletes the motion separately, so the
+// delegate briefly looks refused when the delete arrives first; this outlasts
+// that gap without being long enough for a real refusal to feel unacknowledged.
+const GSL_DENIAL_GRACE_MS = 2500;
 
 type GslCooldown = { requestedAt?: number; deniedAt?: number };
 
@@ -657,6 +662,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
 
   const [committee, setCommittee] = useState<Committee | null>(null);
+  /* Latest committee, for callbacks that fire on a delay. The delayed denial
+     check must re-read CURRENT state, never the closure it was armed in. */
+  const committeeRef = useRef<Committee | null>(null);
   const [loading, setLoading] = useState(true);
   const [sheet, setSheet] = useState<DelegateSheet>(null);
   const [docsSection, setDocsSection] = useState<'submit' | 'view'>('submit');
@@ -714,6 +722,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // while one of the two windows is open, so this is never a permanent 1s
   // re-render of the whole board.
   const [gslCooldown, setGslCooldown] = useState<GslCooldown>({});
+  /* Armed when a request vanishes, cancelled if the delegate turns up on the
+     list before it fires — see the denial-detection effect. */
+  const pendingDenialTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [gslNow, setGslNow] = useState<number>(() => Date.now());
 
   // Live seconds on the TOTAL caucus clock. The committee row only ever carries
@@ -949,6 +960,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
 
+  useEffect(() => { committeeRef.current = committee; }, [committee]);
+
+  /* A pending denial must not fire after this page is gone. */
+  useEffect(() => () => {
+    if (pendingDenialTimer.current !== null) clearTimeout(pendingDenialTimer.current);
+  }, []);
+
   // Detect GSL request denial — and waiting-room (join-request) denial
   useEffect(() => {
     if (!committee) return;
@@ -958,15 +976,43 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const hadRequest = (prev ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
     const hasRequest = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
     if (hadRequest && !hasRequest && !isOnSpeakersListNow && !isCurrentSpeakerNow) {
-      setGslDenied(true);
-      // Start the lockout from the moment the chair actually said no. Edge-
-      // triggered by prevPendingRef, so this stamps once per denial and a later
-      // unrelated re-render cannot silently extend the window.
-      const next: GslCooldown = { deniedAt: Date.now() };
-      setGslCooldown(next);
-      writeGslCooldown(committee.id, country, next);
+      /* DO NOT conclude denial here. "Motion gone and not on the list" is also
+         what an APPROVAL looks like for a moment: approveGslRequest performs two
+         separate writes — the speakers_list insert and the motion delete — which
+         arrive as two independent realtime events in arbitrary order. When the
+         delete wins the race the delegate is transiently in exactly this state,
+         and stamping now told an accepted delegate they had been rejected and
+         locked them out for 15 minutes.
+         (This became reachable when motions got REPLICA IDENTITY FULL. Before
+         that, motion DELETE events were filtered out server-side and never
+         arrived, so this branch almost never fired.)
+         So: wait for the other event. Only the absence of an insert AFTER the
+         grace window is real evidence of a no. */
+      if (pendingDenialTimer.current === null) {
+        pendingDenialTimer.current = setTimeout(() => {
+          pendingDenialTimer.current = null;
+          const c = committeeRef.current;
+          if (!c) return;
+          const onList = c.speakersList.some((s) => s.country === country)
+            || c.currentSpeaker?.country === country;
+          const nowPending = (c.pendingMotions ?? [])
+            .some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
+          /* Landed on the list, or re-requested in the meantime → not a denial. */
+          if (onList || nowPending) return;
+          setGslDenied(true);
+          const next: GslCooldown = { deniedAt: Date.now() };
+          setGslCooldown(next);
+          writeGslCooldown(c.id, country, next);
+        }, GSL_DENIAL_GRACE_MS);
+      }
     }
     if (isOnSpeakersListNow || isCurrentSpeakerNow) {
+      /* The approval won the race after all — cancel any denial still waiting
+         out its grace window, so it can never fire against a queued delegate. */
+      if (pendingDenialTimer.current !== null) {
+        clearTimeout(pendingDenialTimer.current);
+        pendingDenialTimer.current = null;
+      }
       setGslDenied(false);
       // On the list: both clocks are moot. Guarded so this does not hand back a
       // fresh object (and a fresh render) on every unrelated committee event.
