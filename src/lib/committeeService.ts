@@ -304,9 +304,13 @@ export async function setPhase(committeeId: string, phase: SessionPhase, code: s
 // ROLL CALL
 // ============================================================
 
-export async function setDelegateStatus(delegateId: string, status: DelegateStatus, code: string, chairSuffix?: string): Promise<void> {
+// Returns whether the write actually landed. Every caller that only wants fire-and-forget
+// can keep ignoring the value; the delegate page uses it to refund the rate-limit slot and
+// roll its optimistic status back when the write is rejected (e.g. by RLS).
+export async function setDelegateStatus(delegateId: string, status: DelegateStatus, code: string, chairSuffix?: string): Promise<boolean> {
   const { error } = await sessionClient(code, chairSuffix).from('delegates').update({ status }).eq('id', delegateId);
   if (error) console.error('Error setting delegate status:', error);
+  return !error;
 }
 
 export async function setDelegateObserver(delegateId: string, isObserver: boolean, code: string, chairSuffix?: string): Promise<void> {
@@ -1195,6 +1199,69 @@ export async function updateSpeakerTimeLimit(committeeId: string, limitSeconds: 
 }
 
 // ============================================================
+// ORGANISER BROADCASTS
+// ============================================================
+
+// `session_broadcasts` is written by the conferences layer (organiser-only INSERT) and read
+// by every session surface (SELECT is public — the policy qualifier is literally `true`), so
+// the plain anon client is correct here: a chair suffix buys nothing on a read.
+//
+// Rows are FANNED OUT one per committee by the organiser, so a session never has to resolve
+// its conference to find its messages — filtering on `committee_id` is the whole query.
+
+export type BroadcastKind = 'informational' | 'actionable';
+export type BroadcastAction = 'pause' | 'end';
+
+export interface SessionBroadcast {
+  id: string;
+  committeeId: string;
+  conferenceId: string | null;
+  kind: BroadcastKind;
+  message: string;
+  imageUrl: string | null;
+  /** NOT NULL exactly when `kind === 'actionable'` — enforced by a table CHECK. */
+  action: BroadcastAction | null;
+  /** When the action takes effect. Null = on the chair's acknowledgement. */
+  actionAt: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+function rowToBroadcast(r: Record<string, unknown>): SessionBroadcast {
+  return {
+    id: r.id as string,
+    committeeId: r.committee_id as string,
+    conferenceId: (r.conference_id as string) ?? null,
+    kind: r.kind as BroadcastKind,
+    message: r.message as string,
+    imageUrl: (r.image_url as string) ?? null,
+    action: (r.action as BroadcastAction) ?? null,
+    actionAt: (r.action_at as string) ?? null,
+    createdAt: r.created_at as string,
+    expiresAt: (r.expires_at as string) ?? null,
+  };
+}
+
+/**
+ * Every broadcast for this committee that has not yet expired, oldest first.
+ *
+ * The expiry filter is applied in SQL so a chair who joins hours late never even sees a
+ * stale announcement, and re-applied on the client each render — a row fetched while live
+ * can expire while the page is still open.
+ */
+export async function getActiveBroadcasts(committeeId: string): Promise<SessionBroadcast[]> {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('session_broadcasts')
+    .select('*')
+    .eq('committee_id', committeeId)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .order('created_at', { ascending: true });
+  if (error) { console.error('Error loading broadcasts:', error); return []; }
+  return (data ?? []).map((r) => rowToBroadcast(r as Record<string, unknown>));
+}
+
+// ============================================================
 // REAL-TIME SUBSCRIPTIONS
 // ============================================================
 
@@ -1226,6 +1293,9 @@ export function subscribeToCommittee(
     .on('postgres_changes', { event: '*', schema: 'public', table: 'motions', filter: `committee_id=eq.${committeeId}` }, () => onChange('motions'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'documents', filter: `committee_id=eq.${committeeId}` }, () => onChange('documents'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `committee_id=eq.${committeeId}` }, () => onChange('messages'))
+    // Organiser broadcasts are fanned out one row per committee, so the same committee_id
+    // filter every other table uses is all that is needed — no conference lookup.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'session_broadcasts', filter: `committee_id=eq.${committeeId}` }, () => onChange('session_broadcasts'))
     .subscribe((status) => { onStatus?.(status as RealtimeStatus); });
   committeeChannels[committeeId] = channel;
   return () => {

@@ -1,7 +1,9 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
-**Last updated after:** delegate score-gap tips — 2026-08-07 (EN/ES/FR/AR; ar = RTL; **853 keys per locale**, verified identical key sets, 0 missing / 0 extra, 0 duplicate placeholders). The 44-key `delegate_tip_*` corpus was rebuilt around the committee's real scoring sources: 13 keys deleted, 17 rewritten to interpolate chair-renameable document/motion names, 2 added, and **all 33 survivors are now reachable** — no orphans left. See "Recent changes" at the bottom.  
+**Last updated after:** delegate rail micro-labels — 2026-08-13 (EN/ES/FR/AR; ar = RTL; **875 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 5 `delegate_*` micro-label keys for the narrow rail beside the flag: the roll-call and queue captions plus the two-line variants of the three stat labels. See "Recent changes" at the bottom.  
+**Previously:** redesigned delegate view — 2026-08-13 (870 keys). Added 17 `delegate_*` keys for the rebuilt delegate Session view: queue-position header, speakers-ahead / ETA lines, the 3-tile stat strip, the YOU / SPEAKING chips, and the two bottom-sheet titles.  
+**Previously:** delegate score-gap tips — 2026-08-07 (853 keys). The 44-key `delegate_tip_*` corpus was rebuilt around the committee's real scoring sources: 13 keys deleted, 17 rewritten to interpolate chair-renameable document/motion names, 2 added, and **all 33 survivors are now reachable** — no orphans left.  
 **Previously:** resume-failure copy — 2026-08-07 (864 keys). Added 5 `session_resume_*` keys for the resume-deadlock failure paths plus `session_suspended_banner`.  
 **Previously:** GavelChip i18n — 2026-08-06 (858 keys). Added 12 `gavel_*`, 5 `join_chair_role_*` and 3 `settings_view_only_*` keys, translating `GavelChip.tsx` end-to-end, the join-page chair role picker (whose co-chair copy was factually stale) and the SettingsPanel view-only notice.  
 **Previously:** i18n loose-ends close-out — 2026-08-06 (838 keys). Wired the `{wp}` / `{dr}` call sites in `calcPoints`, added `settings_head_chair_label` / `settings_head_chair_note`, and fixed a duplicate-`{s}` render bug in ES/FR `delegate_status_changes_left`.  
@@ -28,7 +30,7 @@
 
 | File | Purpose |
 |------|---------|
-| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (853 keys per locale). New language block goes here. `Language` type is also here. |
+| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (875 keys per locale). New language block goes here. `Language` type is also here. |
 | `src/lib/delegateTips.ts` | `selectDelegateTips()` — picks which `delegate_tip_*` keys a delegate sees, and fills their `{wp}` / `{dr}` / `{mod}` / `{unmod}` / `{tour}` / `{end}` / `{source}` vars. The ONLY consumer of that corpus. |
 | `src/contexts/LanguageContext.tsx` | `LanguageProvider`, `useLanguage()`, `useT()` hooks, localStorage persistence. |
 | `src/app/layout.tsx` | Wrapped in `LanguageProvider`. |
@@ -395,6 +397,36 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 ---
 
 ## RECENT CHANGES
+
+### 2026-08-13 — delegate rail micro-labels (`feature/conferences-auth`) — 870 → 875 keys
+
+**Added, 5 keys × 4 locales**, in the delegate cluster alongside the 17 keys from the redesign below (directly after `delegate_docs_sheet_title` in every block): `delegate_roll_call_label`, `delegate_in_the_queue`, `delegate_stat_time_spoken`, `delegate_stat_speeches_given`, `delegate_stat_messages_sent`.
+
+- **These are the two-line variants of the existing one-word stat labels**, not new concepts. Each keeps the root noun of its short sibling so the two sets read as the same thing: `delegate_stat_time_spoken` keeps ES *TIEMPO* / FR *PAROLE* / AR *الوقت*→*وقت*, `delegate_stat_speeches_given` keeps ES *DISCURSOS* / FR *DISCOURS* / AR *الخطابات*, `delegate_stat_messages_sent` keeps ES *MENSAJES* / FR *MESSAGES* / AR *الرسائل*. Never translate one of a pair without the other.
+- **Extreme width budget.** These render at 6.5–9px in a narrow rail beside the flag. The three `delegate_stat_*` labels get a ~78–100px column and may wrap to two short lines; `delegate_roll_call_label` and `delegate_in_the_queue` must hold **one line** in ~58–70px. Brevity outranks literalness here — do not "improve" any of these into a fuller phrase.
+- **Roll call, per locale, consistent with the rest of the app.** FR **APPEL** and AR **تدقيق الحضور** are exactly what `tab_roll_call` / `feature_rollcall` already use. ES is the deliberate compromise: the full term *lista de asistencia* / *pase de lista* cannot hold one line at this width, so it ships as **ASISTENCIA** — the same short form `tab_roll_call` already uses on the narrow chair tab, so the shortening is not new to the app.
+- **`delegate_in_the_queue` is a caption drawn over the delegate's own flag**, under a large ordinal number. Because the ordinal carries the meaning, the caption is abbreviated hard and each locale reuses its existing queue word: ES **EN LA FILA** (matches `rollcall_queue` *FILA* and `delegate_no_speakers` *en fila*), FR **EN LISTE** (matches `rollcall_queue` *LISTE* and *en liste*), AR **في القائمة** (matches `rollcall_queue` *القائمة*).
+- **MUN register held on the stat labels:** FR *TEMPS DE PAROLE* and *DISCOURS PRONONCÉS* are the standard parliamentary forms; ES *TIEMPO DE PALABRA* and *DISCURSOS PRONUNCIADOS* likewise. ES *DISCURSOS PRONUNCIADOS* is the widest string added (12-char longest word) and was kept only because it wraps to two lines inside the ~78px column.
+- No placeholders and **no `{s}` suffix** in any of the five — nothing here is counted or interpolated.
+- Uppercase held in the Latin-script locales; AR has no case distinction and uses the normal form. No directional marks or trailing punctuation in the AR strings, so nothing flips under RTL.
+
+**Verified:** 875 keys in all four locales, 0 missing / 0 extra, 0 duplicates within a block.
+
+### 2026-08-13 — redesigned delegate view (`feature/conferences-auth`) — 853 → 870 keys
+
+**Added, 17 keys × 4 locales**, inserted in the delegate cluster directly after `delegate_no_speakers` in every block: `delegate_queue_position_label`, `delegate_speakers_ahead`, `delegate_speaker_ahead_one`, `delegate_eta_about`, `delegate_stat_spoken`, `delegate_stat_speeches`, `delegate_stat_messages`, `delegate_you_chip`, `delegate_speaking_chip`, `delegate_place_saved`, `delegate_not_in_queue`, `delegate_on_deck`, `delegate_full_stats`, `delegate_view_all_queue`, `delegate_floor_now`, `delegate_queue_sheet_title`, `delegate_docs_sheet_title`.
+
+- **No `{s}` suffix.** The speakers-ahead line ships as two keys (`delegate_speakers_ahead` / `delegate_speaker_ahead_one`) chosen by a `=== 1` check at the call site, per the no-plural-engine rule. It does not join the three legacy `{s}` audit exceptions.
+- **Each placeholder appears once per string** — `{n}` in the speakers-ahead pair, `{t}` in `delegate_eta_about`. Nothing is reused within a string.
+- **`delegate_eta_about` keeps its hedge in every locale** (EN *About …*, ES *Unos …*, FR *Environ …*, AR *نحو …*). `{t}` arrives pre-formatted ("35 min", "1 hr 10 min"), so the sentence is worded to read naturally around an already-built duration. Do not remove the hedge — an unhedged estimate that slips reads as a broken promise.
+- **The 3-tile stat strip must not wrap** (~105px per tile on a small phone), so each label is ONE short word in every locale. Two deliberate compromises: ES `delegate_stat_spoken` is **TIEMPO** (time) rather than a literal "hablado", and FR is **PAROLE** (from *temps de parole*) rather than "temps parlé" — both name the duration the tile shows and stay to a single short word. AR uses **الوقت** for the same reason.
+- `delegate_stat_speeches` reuses the existing per-locale term for speeches (ES *DISCURSOS*, FR *DISCOURS*, AR *الخطابات*, matching `delegate_speeches_label`).
+- `delegate_floor_now` is a small-caps duplicate of the existing `delegate_you_have_floor` copy and carries the same translations in all four locales — the redesign needed a separate key for a differently styled surface.
+- **Em dash follows each language's convention** in `delegate_place_saved`: EN keeps the em dash, FR keeps it with spaces, ES uses a colon, AR uses a comma plus *ف*.
+- Uppercase held in the Latin-script locales for the small-caps labels (`IN THE SPEAKERS LIST`, `SPOKEN`/`SPEECHES`/`MESSAGES`, `YOU`, `SPEAKING`, `YOU HAVE THE FLOOR`); AR has no case distinction and uses the normal form.
+- Terminology held: speakers list = ES *lista de oradores* / FR *liste des orateurs* / AR *قائمة المتحدثين*.
+
+**Verified:** 870 keys in all four locales, 0 missing / 0 extra, 0 duplicates within a block; `npx tsc --noEmit` exit 0.
 
 ### 2026-08-07 — delegate score-gap tips (`feature/conferences-auth`) — 864 → 853 keys
 

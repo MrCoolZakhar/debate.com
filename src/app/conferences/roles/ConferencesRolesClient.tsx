@@ -18,6 +18,7 @@ import { getCountryByName } from '@/lib/countries';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import Portal from '@/components/Portal';
+import { formatConferenceDates, MONTHS_SHORT_EN_GB } from '@/lib/conferenceDates';
 import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuIconDisc, NeuButton, NeuPill,
   Emoji3D, OUTFIT, EASE, type NeuGradient,
@@ -128,21 +129,16 @@ function normalizeKey(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
 }
 
+// This page rendered its dates through `toLocaleDateString('en-GB', …)`, which
+// spells September "Sept" — so it keeps MONTHS_SHORT_EN_GB to stay visually
+// identical. It also parsed `new Date('2026-08-30')` as UTC midnight, showing
+// the previous day to every viewer west of UTC; the shared helper is date-only.
 function formatDateRange(start: string | null, end: string | null): string {
-  if (!start) return '';
-  const s = new Date(start);
-  const e = end ? new Date(end) : null;
-  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-  if (!e || s.toDateString() === e.toDateString()) {
-    return s.toLocaleDateString('en-GB', { ...opts, year: 'numeric' });
-  }
-  if (s.getFullYear() === e.getFullYear()) {
-    if (s.getMonth() === e.getMonth()) {
-      return `${s.getDate()}–${e.getDate()} ${s.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`;
-    }
-    return `${s.toLocaleDateString('en-GB', opts)} – ${e.toLocaleDateString('en-GB', { ...opts, year: 'numeric' })}`;
-  }
-  return `${s.toLocaleDateString('en-GB', { ...opts, year: 'numeric' })} – ${e.toLocaleDateString('en-GB', { ...opts, year: 'numeric' })}`;
+  return formatConferenceDates(start, end, {
+    style: 'dmy',
+    months: MONTHS_SHORT_EN_GB,
+    fallback: '',
+  });
 }
 
 function daysUntil(iso: string): number {

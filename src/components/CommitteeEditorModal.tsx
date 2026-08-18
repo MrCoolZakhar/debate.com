@@ -283,7 +283,7 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
     const nextIds = Array.from(new Set([...chairIds, app.user_id]));
     const { error } = await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', committeeId);
     if (error) { setBusy(false); setErr('Could not seat that chair.'); return; }
-    await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committeeId }).eq('id', app.id);
+    await supabase.from('applications').update({ status: 'assigned', assigned_committee_id: committeeId, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', app.id);
     // The guard at the top of this function already ensures app.user_id
     // wasn't already seated, so every call here is a genuinely new chair.
     queueEventEmail(supabase, conferenceId, 'chair_assigned', [app.id]);
@@ -668,7 +668,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       const appIds = (seat2Rows ?? []).map(r => r.application_id).filter((id): id is string => !!id);
       if (appIds.length > 0) {
         const { error: appErr } = await supabase.from('applications')
-          .update({ status: 'accepted', assigned_committee_id: null, assigned_country_code: null, assigned_country_name: null })
+          .update({ status: 'accepted', assigned_committee_id: null, assigned_country_code: null, assigned_country_name: null, decided_by: session?.user.id ?? null, decided_at: new Date().toISOString() })
           .in('id', appIds)
           .eq('status', 'assigned');
         if (appErr) {

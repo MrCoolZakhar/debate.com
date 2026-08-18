@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { useSearchParams } from 'next/navigation';
 import {
   Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, Palette, Trash2,
-  BadgeCheck, MessageSquare, CalendarDays, ArrowRight,
+  BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -26,6 +26,10 @@ import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
 import DefaultEmailPreviewModal from '@/components/DefaultEmailPreviewModal';
+import { markEmailsExplored } from '@/lib/emailsExplored';
+import GuidedWalkthrough, {
+  TourGold, TourGreen, OTTER_INTRO, OTTER_OUTRO, type WalkthroughStep,
+} from '@/components/GuidedWalkthrough';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -208,6 +212,15 @@ const OUTFIT = "'Outfit', sans-serif";
 const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
 const BORDER = '#DDD4C0';
 const CARD_STYLE = { backgroundColor: '#FAF8F3', border: `1.5px solid #D8CDB6`, boxShadow: CARD_SHADOW };
+
+/**
+ * "Has this browser been walked through the emails system?" — one flag for the
+ * whole account, not per conference: the tour explains the product, and an
+ * organiser running their third conference does not need it a third time.
+ * Written when the tour is FINISHED OR SKIPPED (see `closeTour`), never when it
+ * merely opens, so a mis-click does not burn the one auto-start.
+ */
+const COMMS_TOUR_SEEN_KEY = 'gv-comms-tour-seen-v1';
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -478,6 +491,12 @@ function CommunicationsPageInner() {
   const { conference, refreshConferenceQuiet } = useManage();
   const { user, session, profile } = useAuth();
   const searchParams = useSearchParams();
+
+  // Ticks the dashboard's "Explore emails" set-up item. Client-local by design
+  // — see src/lib/emailsExplored.ts for why it is not a DB flag.
+  useEffect(() => {
+    if (conference?.id) markEmailsExplored(conference.id);
+  }, [conference?.id]);
 
   // ── Data state ──
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -1509,6 +1528,117 @@ function CommunicationsPageInner() {
     setOutboxBySend(prev => ({ ...prev, [sendId]: (data ?? []) as OutboxDetailRow[] }));
   }
 
+  // ── "Explore emails" walkthrough ──────────────────────────────────────────
+  //
+  // The three "pages" here are three tabs on one route, so the tour drives
+  // `setActiveTab` between steps — no router involvement at all. Each step's
+  // `before()` puts the page into the state the step describes; the overlay
+  // then waits for that step's `data-tutorial` target to exist before measuring
+  // it, and falls back to a centred bubble if it never appears.
+
+  const tourSteps: WalkthroughStep[] = useMemo(() => [
+    {
+      id: 'intro',
+      image: OTTER_INTRO,
+      text: (
+        <>
+          This is <strong>Communications</strong> — every email your conference sends, and every
+          message it gets back. <TourGreen>Emails</TourGreen> you write yourself,{' '}
+          <TourGreen>Notifications</TourGreen> that send themselves, and an{' '}
+          <TourGreen>Inbox</TourGreen> for the replies. Let me show you around.
+        </>
+      ),
+    },
+    {
+      id: 'emails-drafts',
+      targets: ['comms-email-drafts'],
+      radius: 16,
+      before: () => { setActiveTab('emails'); setSelectedRequestId(null); },
+      text: (
+        <>
+          Emails you send by hand start here. Hit <TourGold>+ NEW EMAIL</TourGold> to write one,
+          mark it <strong>Ready</strong> when it reads well, then pick exactly who gets it — by role,
+          delegation, payment status, anything. Past sends stay in <strong>History</strong>.
+        </>
+      ),
+    },
+    {
+      id: 'emails-design',
+      targets: ['comms-email-design'],
+      radius: 16,
+      before: () => { setActiveTab('emails'); setDesignOpen(true); },
+      text: (
+        <>
+          Set the look once and <strong>every</strong> email inherits it — header image or solid bar,
+          accent and button colours, your logo, and a footer line. You are never styling emails
+          one at a time.
+        </>
+      ),
+    },
+    {
+      id: 'notifications',
+      targets: ['comms-notifications'],
+      radius: 16,
+      before: () => { setActiveTab('notifications'); },
+      text: (
+        <>
+          <TourGold>Notifications</TourGold> are the emails that send themselves. Each one is
+          tied to a moment — an application accepted, a payment received, an allocation released —
+          so the delegate hears from you the second it happens. Draft it, then flip it{' '}
+          <TourGreen>on</TourGreen>. That is hundreds of emails you never write again.
+        </>
+      ),
+    },
+    {
+      id: 'inbox',
+      targets: ['comms-inbox'],
+      radius: 16,
+      before: () => { setActiveTab('inbox'); setSelectedRequestId(null); },
+      text: (
+        <>
+          <TourGold>Inbox</TourGold> is the other direction: questions and allocation swap
+          requests from advisors, head delegates and delegates land here as threads. Filter them,
+          reply in place, and approve or decline a swap without leaving the page.
+        </>
+      ),
+    },
+    {
+      id: 'outro',
+      image: OTTER_OUTRO,
+      text: (
+        <>
+          That is the whole system. Turn a couple of <TourGreen>Notifications</TourGreen> on and
+          your conference starts writing its own emails. Come back any time — the tour lives under{' '}
+          <strong>Take the tour</strong> in the header 🎉
+        </>
+      ),
+    },
+  ], []);
+
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // Auto-start once per browser for an organiser who has never seen it. The flag
+  // is written in `closeTour` (i.e. on finish OR skip), never on open, so a
+  // mis-click cannot burn it.
+  useEffect(() => {
+    if (loading || builderOpen || tourOpen) return;
+    try {
+      if (window.localStorage.getItem(COMMS_TOUR_SEEN_KEY) === '1') return;
+    } catch {
+      return; // private mode — never nag
+    }
+    setTourOpen(true);
+    // Intentionally not depending on `tourOpen`: this must only ever fire on the
+    // transition into a loaded page, not when the tour is dismissed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, builderOpen]);
+
+  const closeTour = useCallback(() => {
+    setTourOpen(false);
+    try { window.localStorage.setItem(COMMS_TOUR_SEEN_KEY, '1'); } catch { /* private mode */ }
+    if (conference?.id) markEmailsExplored(conference.id);
+  }, [conference?.id]);
+
   if (!conference) return null;
 
   // ── Stats ─────────────────────────────────────────────────────────────────
@@ -1842,13 +1972,29 @@ function CommunicationsPageInner() {
 
       {/* ── Header ── */}
       {!builderOpen && (
-        <div className="mb-6">
-          <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.12em' }}>
-            {conference.acronym} / Communications
-          </p>
-          <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-            Communications
-          </h1>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs mb-1" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontWeight: 700, letterSpacing: '0.12em' }}>
+              {conference.acronym} / Communications
+            </p>
+            <h1 className="font-black text-2xl" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+              Communications
+            </h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTourOpen(true)}
+            className="flex-shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-1.5 focus:outline-none transition-colors"
+            style={{
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+              color: '#1B3828', backgroundColor: 'transparent', border: `1px solid ${BORDER}`,
+              cursor: 'pointer',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            <Compass size={13} /> TAKE THE TOUR
+          </button>
         </div>
       )}
 
@@ -1999,7 +2145,7 @@ function CommunicationsPageInner() {
           {/* ═══ EMAILS TAB ═══ */}
           {!loading && activeTab === 'emails' && (
             <>
-              <section className="mb-8">
+              <section className="mb-8" data-tutorial="comms-email-design">
                 <button
                   type="button"
                   onClick={() => setDesignOpen(v => !v)}
@@ -2063,7 +2209,7 @@ function CommunicationsPageInner() {
                 )}
               </section>
 
-              <section className="mb-10">
+              <section className="mb-10" data-tutorial="comms-email-drafts">
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                     Drafts
@@ -2258,7 +2404,7 @@ function CommunicationsPageInner() {
 
           {/* ═══ NOTIFICATIONS TAB ═══ */}
           {!loading && activeTab === 'notifications' && (
-            <section>
+            <section data-tutorial="comms-notifications">
               <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                 Conference Notifications
               </p>
@@ -2353,7 +2499,7 @@ function CommunicationsPageInner() {
           {/* ═══ INBOX TAB ═══ */}
           {!loading && activeTab === 'inbox' && (
             !selectedRequest ? (
-              <section>
+              <section data-tutorial="comms-inbox">
                 <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                   Inbox
                 </p>
@@ -3013,6 +3159,14 @@ function CommunicationsPageInner() {
           organizerEmail={profile?.email ?? null}
           testSendContext={testSendContext}
           onClose={() => setPreviewDefaultKey(null)}
+        />
+      )}
+
+      {tourOpen && !builderOpen && (
+        <GuidedWalkthrough
+          steps={tourSteps}
+          onClose={closeTour}
+          label="Explore emails walkthrough"
         />
       )}
     </div>

@@ -246,6 +246,7 @@ export default function ImportPage() {
           country_name: row.assigned_country_name,
           application_id: row.id,
           seat: 1,
+          assigned_by: session.user.id,
         });
         if (error) {
           await supabase.from('applications').update({
@@ -253,6 +254,7 @@ export default function ImportPage() {
             assigned_committee_id: null,
             assigned_country_code: null,
             assigned_country_name: null,
+            decided_by: session.user.id, decided_at: new Date().toISOString(),
           }).eq('id', row.id);
         }
       }
@@ -371,6 +373,9 @@ export default function ImportPage() {
       is_independent: !r.resolved.societyName,
       is_head_delegate: r.resolved.role === 'head-delegate',
       status: 'accepted',
+      // Imported rows land pre-accepted: the organiser running the import is
+      // the one who made that call.
+      decided_by: session.user.id, decided_at: new Date().toISOString(),
       payment_status: r.resolved.paymentStatus,
       self_paid: r.resolved.paymentStatus === 'paid',
       submitted_at: new Date().toISOString(),
@@ -479,6 +484,7 @@ export default function ImportPage() {
         country_name: r.resolved.countryName,
         application_id: appId,
         seat: r.resolved.seat ?? 1,
+        assigned_by: session.user.id,
       });
       if (allocError) {
         results.push({
@@ -493,6 +499,7 @@ export default function ImportPage() {
         assigned_committee_id: r.resolved.committeeId,
         assigned_country_code: r.resolved.countryCode,
         assigned_country_name: r.resolved.countryName,
+        decided_by: session.user.id, decided_at: new Date().toISOString(),
       }).eq('id', appId);
       results.push({ row: r, outcome: r.mode === 'update' ? 'updated' : 'imported', note: null });
     }

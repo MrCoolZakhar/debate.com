@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import Portal from '@/components/Portal';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 import type { ChatMessage } from '@/lib/types';
 import type { OutboxMsg } from '@/lib/chatOutbox';
 import ChatMessageGroup from './ChatMessageGroup';
 import { ChatAvatar, avatarKindFor } from './ChatAvatar';
-import { CHAT, buildChatRows, type TFn } from './chatTokens';
+import { CHAT, buildChatRows, portalFrame, type TFn } from './chatTokens';
 
 function Separator({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 'unread' }) {
   const unread = tone === 'unread';
@@ -31,25 +32,86 @@ function Separator({ label, tone = 'muted' }: { label: string; tone?: 'muted' | 
   );
 }
 
-/** Hover-revealed "i" explainer. UI RULE: informational hints open on HOVER, never on click. */
+/** Hover-revealed "i" explainer. UI RULE: informational hints open on HOVER, never on click.
+ *  The badge sits at the very end of a `px-4` header inside a card with `overflow-hidden`,
+ *  so an in-flow absolute panel is guaranteed to be clipped (and to run off the edge on a
+ *  phone). It is therefore portaled at fixed coordinates measured from the badge, clamped
+ *  into the visible frame and flipped above when there is no room below.
+ *  Coordinates go through portalFrame(): Portal mounts into `#fit-root`, which FitToScreen
+ *  transforms, so raw viewport pixels would land off-anchor by the scale factor. */
+const HINT_W = 210;
+
 function InfoHint({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const panelRef = useRef<HTMLSpanElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const show = () => { if (closeTimer.current) clearTimeout(closeTimer.current); setOpen(true); };
+
+  const place = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const f = portalFrame();
+    const M = 8;
+    const top0 = f.toLocalY(r.top);
+    const bottom0 = f.toLocalY(r.bottom);
+    const left0 = f.toLocalX(r.left);
+    const right0 = f.toLocalX(r.right);
+    // Estimate before the panel exists; re-placed with the measured height once it mounts.
+    const h = panelRef.current?.offsetHeight ?? 68;
+
+    // Centre on the badge, then clamp inside the visible frame.
+    const maxLeft = Math.max(f.minX + M, f.maxX - HINT_W - M);
+    const left = Math.min(Math.max(f.minX + M, left0 + (right0 - left0) / 2 - HINT_W / 2), maxLeft);
+
+    const below = bottom0 + 6;
+    const flip = below + h > f.maxY - M && top0 - 6 - h > f.minY + M;
+    setPos({ top: flip ? top0 - 6 - h : below, left });
+  }, []);
+
+  const show = () => { if (closeTimer.current) clearTimeout(closeTimer.current); place(); setOpen(true); };
   // Small close delay so the pointer can travel from the badge into the panel.
-  const hide = () => { closeTimer.current = setTimeout(() => setOpen(false), 180); };
+  const hide = () => { if (closeTimer.current) clearTimeout(closeTimer.current); closeTimer.current = setTimeout(() => setOpen(false), 180); };
+
+  // Re-place once the panel is in the DOM so the flip uses its real height.
+  useLayoutEffect(() => { if (open) place(); }, [open, place]);
+
+  useEffect(() => {
+    // `pos` is recomputed by show() before every open, so it is never stale on reveal.
+    if (!open) return;
+    const onMove = () => place();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    // Outside click dismisses; the portaled panel is not a DOM descendant of the trigger.
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [open, place]);
+
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
 
   return (
-    <span className="relative inline-flex" onMouseEnter={show} onMouseLeave={hide}>
+    <>
       <span
+        ref={triggerRef}
         tabIndex={0}
         role="note"
         aria-label={text}
         title={text}
+        onMouseEnter={show}
+        onMouseLeave={hide}
         onFocus={show}
         onBlur={hide}
-        className="inline-flex items-center justify-center focus:outline-none"
+        className="inline-flex shrink-0 items-center justify-center focus:outline-none"
         style={{
           width: 16, height: 16, borderRadius: 999, cursor: 'help',
           backgroundColor: NEU.base, boxShadow: NEU.inSm,
@@ -58,20 +120,25 @@ function InfoHint({ text }: { text: string }) {
       >
         i
       </span>
-      {open && (
-        <span
-          className="absolute"
-          style={{
-            top: 22, insetInlineStart: -8, width: 210, zIndex: 30,
-            padding: '8px 11px', borderRadius: 12,
-            backgroundColor: NEU.surface, boxShadow: `${NEU.out}, 0 10px 24px rgba(27,56,40,0.18)`,
-            fontFamily: OUTFIT, fontSize: 10.5, lineHeight: 1.45, color: NEU.ink,
-          }}
-        >
-          {text}
-        </span>
+      {open && pos && (
+        <Portal>
+          <span
+            ref={panelRef}
+            onMouseEnter={show}
+            onMouseLeave={hide}
+            className="fixed block"
+            style={{
+              top: pos.top, left: pos.left, width: HINT_W, zIndex: 70,
+              padding: '8px 11px', borderRadius: 12,
+              backgroundColor: NEU.surface, boxShadow: `${NEU.out}, 0 10px 24px rgba(27,56,40,0.18)`,
+              fontFamily: OUTFIT, fontSize: 10.5, lineHeight: 1.45, color: NEU.ink,
+            }}
+          >
+            {text}
+          </span>
+        </Portal>
       )}
-    </span>
+    </>
   );
 }
 

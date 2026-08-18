@@ -18,7 +18,7 @@ import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { fetchDelegateFees, applyDelegateFee } from '@/lib/publicFees';
-import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
+import { compareStartDate, hasConcluded, splitConferenceDates } from '@/lib/conferenceDates';
 import { ConferenceCard } from '../ConferenceCard';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
@@ -377,17 +377,10 @@ function RegionControl({
 
 // ── List row (myMUN-style directory row) ──────────────────────────────────
 
-// Two-line date range: "Jul 13 – Jul 17" over "2026".
+// Two-line date range: "Jul 13 – Jul 17" over "2026". A one-day conference
+// collapses to just "Aug 30".
 function splitDateRange(start: string | null, end: string | null): { range: string; year: string } {
-  if (!start || !end) return { range: 'TBD', year: '' };
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const range = `${months[s.getMonth()]} ${s.getDate()} – ${months[e.getMonth()]} ${e.getDate()}`;
-  const year = s.getFullYear() === e.getFullYear()
-    ? String(s.getFullYear())
-    : `${s.getFullYear()}–${String(e.getFullYear()).slice(2)}`;
-  return { range, year };
+  return splitConferenceDates(start, end);
 }
 
 function RowChip({ label, icon: Icon }: { label: string; icon?: RowIcon }) {

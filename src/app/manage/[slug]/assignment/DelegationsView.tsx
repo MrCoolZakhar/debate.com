@@ -493,7 +493,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     });
 
     (async () => {
-      const result = await markNotAttending(supabase, conference.id, member);
+      const result = await markNotAttending(supabase, conference.id, member, session.user.id);
       if (result.error) {
         restoreMember(snapshot);
         showFlash('err', `Could not mark ${name} as not attending.`);
@@ -586,7 +586,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     };
 
     (async () => {
-      const result = await removeFromDelegation(supabase, conference.id, member, keepAllocation);
+      const result = await removeFromDelegation(supabase, conference.id, member, keepAllocation, session.user.id);
       if (result.error) {
         rollback();
         showFlash('err', `Could not remove ${name} from the delegation.`);
@@ -631,7 +631,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
 
     (async () => {
       // Advisors never hold committee allocations, so transfer=false always.
-      const emailResult = await performSwap(supabase, conference.id, recipient, paidAdvisor, false);
+      const emailResult = await performSwap(supabase, conference.id, recipient, paidAdvisor, false, session.user.id);
       if (emailResult.error) {
         rollback();
         showFlash('err', 'Could not transfer this spot.');
@@ -714,7 +714,7 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
     };
 
     (async () => {
-      const emailResult = await performSwap(supabase, conference.id, source, target, transfer);
+      const emailResult = await performSwap(supabase, conference.id, source, target, transfer, session.user.id);
       if (emailResult.error) {
         rollback();
         showFlash('err', 'Could not switch these delegates.');

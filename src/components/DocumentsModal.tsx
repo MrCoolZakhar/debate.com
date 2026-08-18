@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import React, { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
 import Portal from '@/components/Portal';
+import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
@@ -65,41 +66,105 @@ function CountryChip({ country, onRemove }: { country: string; onRemove: () => v
   );
 }
 
+const SPONSOR_LIST_MAX_H = 144;
+
 function SponsorSelect({ candidates, selected, onChange, committee }: {
   candidates: string[]; selected: string[]; onChange: (v: string[]) => void; committee: Committee;
 }) {
   const t = useT();
   const { language } = useLanguage();
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; flipped: boolean } | null>(null);
   const available = !query.trim()
     ? candidates.filter((c) => !selected.includes(c))
     : candidates
         .filter((c) => !selected.includes(c) && startsWithCountryQuery(c, query.trim(), language))
         .concat(candidates.filter((c) => !selected.includes(c) && !startsWithCountryQuery(c, query.trim(), language) && matchesCountryQuery(c, query.trim(), language)));
-  const add = (country: string) => { onChange([...selected, country]); setQuery(''); };
+  const add = (country: string) => { onChange([...selected, country]); setQuery(''); setOpen(false); };
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { e.preventDefault(); if (query.trim() && available.length > 0) add(available[0]); }
+    if (e.key === 'Escape') { setOpen(false); }
   };
+
+  // The modal body is `overflow-y-auto` inside a card with `overflow-hidden`, so an in-flow
+  // absolute dropdown gets clipped. Render it through a Portal at fixed coordinates measured
+  // from the field, repositioned on scroll (capture) + resize, flipped upward and clamped near
+  // the edges. Coordinates run through portalFrame() because Portal mounts into the
+  // transformed `#fit-root`, whose local units are not viewport pixels.
+  const listOpen = open && !!query && available.length > 0;
+  const place = useCallback(() => {
+    const w = wrapRef.current;
+    if (!w) return;
+    const r = w.getBoundingClientRect();
+    const f = portalFrame();
+    const M = 8;
+    const left0 = f.toLocalX(r.left);
+    const top0 = f.toLocalY(r.top);
+    const bottom0 = f.toLocalY(r.bottom);
+    const width = Math.min(f.toLocalX(r.right) - left0, Math.max(0, f.maxX - f.minX - 2 * M));
+    const maxLeft = Math.max(f.minX + M, f.maxX - width - M);
+    const left = Math.min(Math.max(f.minX + M, left0), maxLeft);
+    const spaceBelow = f.maxY - bottom0;
+    const flipped = spaceBelow < SPONSOR_LIST_MAX_H + 16 && top0 - f.minY > spaceBelow;
+    setPos({ top: flipped ? top0 - 4 : bottom0 + 4, left, width, flipped });
+  }, []);
+
+  useEffect(() => {
+    if (!listOpen) return;
+    place();
+    const onMove = () => place();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    // Outside click closes, but clicks inside the portaled list must not count.
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target) || listRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [listOpen, place]);
+
   return (
     <div>
       <label className="block text-sm font-semibold text-[#6A5A4A] mb-1.5">{sponsorLabel(committee, t('documents_sponsors_label'))}</label>
-      <div className="relative">
-        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown}
+      <div className="relative" ref={wrapRef}>
+        <input type="text" value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
           placeholder={t('documents_sponsor_placeholder')}
           className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] placeholder-[#9A8A78] text-sm focus:outline-none focus:border-[#1B3828] transition-colors" />
-        {query && available.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-20 shadow-lg max-h-36 overflow-y-auto">
-            {available.slice(0, 6).map((c, i) => {
-              const found = getCountryByName(c);
-              return (
-                <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
-                  {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <span>🌐</span>}
-                  <span className="text-sm">{getCountryDisplayName(c, language)}</span>
-                </button>
-              );
-            })}
-          </div>
+        {listOpen && pos && (
+          <Portal>
+            <div
+              ref={listRef}
+              className="fixed bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden z-[65] overflow-y-auto shadow-lg"
+              style={{
+                top: pos.top, left: pos.left, width: pos.width, maxHeight: SPONSOR_LIST_MAX_H,
+                transform: pos.flipped ? 'translateY(-100%)' : undefined,
+                boxShadow: '0 12px 32px rgba(28,20,16,0.22), 0 2px 6px rgba(28,20,16,0.10)',
+              }}
+            >
+              {available.slice(0, 6).map((c, i) => {
+                const found = getCountryByName(c);
+                return (
+                  <button key={c} onMouseDown={(e) => { e.preventDefault(); add(c); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-start transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
+                    {found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <span>🌐</span>}
+                    <span className="text-sm">{getCountryDisplayName(c, language)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Portal>
         )}
       </div>
       {/* Selected sponsors, flags only, below input */}
@@ -477,6 +542,9 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  /* See the delegate page: a failed attachment was console-only and looked
+     like nothing had happened at all. */
+  const [uploadError, setUploadError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -493,8 +561,17 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
     setIsUploading(true);
     try {
       const path = committee.id + '/' + Date.now() + '-' + file.name;
-      const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
-      if (error) { console.error('Storage upload error:', error); setFileName(null); return; }
+      // NO upsert — see the matching note on the delegate page. The bucket grants
+      // anon INSERT but not UPDATE, so `upsert: true` was refused with a 403 that
+      // never surfaced. Date.now() in the path makes upsert pointless anyway.
+      const { error } = await supabase.storage.from('session-documents').upload(path, file);
+      if (error) {
+        console.error('Storage upload error:', error);
+        setFileName(null);
+        setUploadError(true);
+        return;
+      }
+      setUploadError(false);
       const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
       setFileUrl(data.publicUrl);
     } finally {
@@ -595,6 +672,11 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           </div>
         )}
         <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
+        {uploadError && (
+          <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
+            {t('delegate_doc_upload_failed')}
+          </p>
+        )}
       </div>
       {limitReached && (
         <p className="text-xs text-red-400 text-center">

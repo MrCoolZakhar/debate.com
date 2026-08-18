@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
-  ArrowRight, BadgeCheck, Ban, Building2, Cake, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
-  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, LogOut, MapPin,
+  ArrowRight, BadgeCheck, Ban, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
+  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, Landmark, LogOut, MapPin,
   MessageSquareText, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X,
 } from 'lucide-react';
@@ -323,6 +324,12 @@ function NotAttendingBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
     </span>
   );
 }
+
+/** Reserved width of the row's role/level slot (#4). Wide enough for the
+ *  longest label the RolePill can render at size="sm" — "FACULTY ADVISOR",
+ *  ~143px with its glyph, gap and pill padding — so every value occupies the
+ *  same position and the same width, and none of them is ever truncated. */
+const LEVEL_SLOT_W = 152;
 
 /** Role pill, same upgraded fill treatment. Chairs get the gold accent (forest
  *  glyph on a gold gradient for contrast); delegates read forest, staff slate. */
@@ -890,6 +897,50 @@ const PAYMENT_OPTIONS = [
   { label: 'Waived', value: 'waived' },
 ];
 
+// Status GROUPS, module scope so the stat tiles and the ?status= deep link can
+// never drift apart. "Accepted" means accepted-or-beyond and "Allocated" means
+// allocated-or-beyond, exactly as the stat tiles count them.
+const ACCEPTED_GROUP = ['accepted', 'assigned', 'checked-in'];
+const ALLOCATED_GROUP = ['assigned', 'checked-in'];
+
+// The allocated view (the "Allocated" stat tile, and the ?status=assigned deep
+// link that resolves to the same group) is a DELEGATE view: it answers "who has
+// a committee and a country". Chairs and faculty advisors sit on a dais or
+// travel with a school, they are never allocated a seat, so they are dropped
+// from that list only. Every other tab/filter combination still shows them, and
+// explicitly ticking Chairs / Faculty Advisors in the Participants filter brings
+// them back even inside the allocated view.
+const NON_DELEGATE_ROLES = new Set(['chair', 'faculty-advisor']);
+
+/**
+ * Query params this page understands, so other surfaces (the dashboard's
+ * applicants dial) can deep-link straight into a pre-filtered view:
+ *   ?status=accepted | assigned | checked-in | submitted | rejected | withdrawn
+ *   ?payment=paid | unpaid | waived
+ * `accepted` and `assigned` expand to their groups above, so a link lands on
+ * exactly the rows the linking surface counted. Unrecognised values are
+ * ignored and the page opens on its normal unfiltered default.
+ */
+const URL_STATUS_GROUPS: Record<string, string[]> = {
+  accepted: ACCEPTED_GROUP,
+  assigned: ALLOCATED_GROUP,
+  'checked-in': ['checked-in'],
+  submitted: ['submitted'],
+  rejected: ['rejected'],
+  withdrawn: ['withdrawn'],
+};
+
+function filtersFromUrl(status: string | null, payment: string | null): FilterState {
+  const seeded: FilterState = {
+    status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(),
+    dateFrom: '', dateTo: '', notAttending: false, committee: '',
+  };
+  const group = status ? URL_STATUS_GROUPS[status] : undefined;
+  if (group) seeded.status = new Set(group);
+  if (payment && PAYMENT_OPTIONS.some(o => o.value === payment)) seeded.payment = new Set([payment]);
+  return seeded;
+}
+
 // ── Filter panel ──────────────────────────────────────────────────────────────
 // Peter: "the filters could be more of a hover and they appear". A single
 // neumorphic FILTERS control reveals the whole rich set on hover (and can be
@@ -906,6 +957,10 @@ interface FilterState {
   // still be not-attending) — same baked-in default exclusion as withdrawn,
   // only reachable by explicitly turning this chip on.
   notAttending: boolean;
+  // Allocated committee id, '' = "All committees" (no constraint). Sits on the
+  // header bar next to FILTERS as its own dropdown rather than inside the
+  // filter popover, because it is a single-choice control, not a chip set.
+  committee: string;
 }
 
 function toggleIn(set: Set<string>, value: string): Set<string> {
@@ -1069,7 +1124,7 @@ function FilterPanel({
             </div>
             {activeCount > 0 && (
               <button
-                onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false })}
+                onClick={() => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false, committee: '' })}
                 className="focus:outline-none"
                 style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer' }}
               >
@@ -1139,11 +1194,148 @@ function FilterPanel({
   );
 }
 
+// ── Per-committee filter ──────────────────────────────────────────────────────
+// Narrows the list to one ALLOCATED committee. Sits on the header bar beside
+// FILTERS and wears the same neumorphic pill as FILTERS / EXPORT CSV; the
+// dropdown itself is portaled at fixed viewport coordinates taken from the
+// trigger, repositioned on scroll/resize and flipped near the viewport edge, so
+// it can never be clipped by an ancestor's overflow (same pattern as
+// PaymentMenu / QuickAllocate). '' = "All committees".
+
+interface CommitteeOption { id: string; primary: string; secondary: string | null }
+
+function CommitteeFilter({
+  options, value, onChange,
+}: {
+  options: CommitteeOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const MENU_W = 272;
+  const MENU_H = 340;
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const flip = spaceBelow < MENU_H + 16 && r.top > spaceBelow;
+    // Right-align to the trigger, then clamp so it always stays on screen.
+    let left = r.right - MENU_W;
+    if (left + MENU_W > window.innerWidth - 8) left = window.innerWidth - MENU_W - 8;
+    left = Math.max(8, left);
+    setPos({ top: flip ? Math.max(8, r.top - MENU_H - 6) : r.bottom + 6, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, place]);
+
+  // Nothing has been allocated yet → no dimension to filter on, no control.
+  if (options.length === 0) return null;
+
+  const active = !!value;
+  const current = options.find(o => o.id === value) ?? null;
+  const label = current ? current.primary : 'All committees';
+
+  const row = (id: string, primary: string, secondary: string | null) => {
+    const isCurrent = id === value;
+    return (
+      <button
+        key={id || '__all'}
+        onClick={() => { setOpen(false); onChange(id); }}
+        className="inline-flex items-center gap-2 w-full focus:outline-none"
+        style={{
+          padding: '8px 10px', borderRadius: 11, background: isCurrent ? 'rgba(27,56,40,0.07)' : 'transparent',
+          border: 'none', cursor: 'pointer', textAlign: 'start',
+        }}
+        onMouseEnter={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+        onMouseLeave={e => { if (!isCurrent) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+      >
+        <span className="flex-1 min-w-0">
+          <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink }}>{primary}</span>
+          {secondary && (
+            <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted }}>{secondary}</span>
+          )}
+        </span>
+        {isCurrent && <Check size={13} strokeWidth={3} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
+      </button>
+    );
+  };
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        ref={btnRef}
+        onClick={() => { if (open) { setOpen(false); return; } place(); setOpen(true); }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title="Filter by allocated committee"
+        className="inline-flex items-center gap-2 focus:outline-none"
+        style={{
+          padding: '9px 16px', borderRadius: 999,
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.03em',
+          color: active || open ? '#FFFFFF' : NEU.ink,
+          background: active || open ? `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})` : NEU.surface,
+          boxShadow: active || open ? `0 4px 10px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}` : NEU.outSm,
+          border: 'none', cursor: 'pointer',
+          transition: `box-shadow 200ms ${EASE_LOCAL}`,
+        }}
+      >
+        <Landmark size={14} strokeWidth={2.5} />
+        <span className="truncate" style={{ maxWidth: 150 }}>{label.toUpperCase()}</span>
+        <ChevronDown size={12} strokeWidth={2.6} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms' }} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            role="listbox"
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+              width: MENU_W, maxHeight: MENU_H, overflowY: 'auto',
+              backgroundColor: NEU.surface, borderRadius: 16, boxShadow: NEU.out, padding: 6,
+              animation: `neuFadeIn 160ms ${EASE_LOCAL}`,
+            }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            <div className="flex flex-col gap-0.5">
+              {row('', 'All committees', null)}
+              {options.map(o => row(o.id, o.primary, o.secondary))}
+            </div>
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
 // ── ApplicationsPage ──────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  const searchParams = useSearchParams();
+  const urlStatus = searchParams.get('status');
+  const urlPayment = searchParams.get('payment');
   const paymentsLive = isPaymentsLive(conference?.id, conference?.connect_onboarding_status, conference?.payment_method);
   const [applications, setApplications] = useState<Application[]>([]);
   // Unpaid gating invoices (gates_acceptance=true, status not settled/waived/
@@ -1153,9 +1345,13 @@ export default function ApplicationsPage() {
   const [loading, setLoading] = useState(true);
   // Empty role set = no constraint, so a fresh page shows every role
   // (including chairs) in both the row list and the stat scope.
-  const [filters, setFilters] = useState<FilterState>({
-    status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false,
-  });
+  // Seeded from the URL on first render (?status=…, ?payment=…) so a deep link
+  // from the dashboard opens on the matching rows with no unfiltered flash.
+  // Lazy initialiser, not an effect: after mount this is ordinary local state
+  // and the filter panel owns it.
+  const [filters, setFilters] = useState<FilterState>(
+    () => filtersFromUrl(urlStatus, urlPayment),
+  );
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
@@ -1415,6 +1611,7 @@ export default function ApplicationsPage() {
         country_name: slot.country_name,
         application_id: app.id,
         allocation_sent: false,
+        assigned_by: session.user.id,
       });
       if (insErr) throw insErr;
       const { error } = await supabase.from('applications').update({
@@ -1422,6 +1619,7 @@ export default function ApplicationsPage() {
         assigned_committee_id: committee.id,
         assigned_country_code: slot.country_code,
         assigned_country_name: slot.country_name,
+        decided_by: session.user.id, decided_at: new Date().toISOString(),
       }).eq('id', app.id);
       if (error) throw error;
     })()
@@ -1458,7 +1656,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
+      const { error } = await supabase.from('applications').update({ status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
 
       // Secondary effects, a failure here must NOT roll back the accept.
@@ -1523,7 +1721,9 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update(updates).eq('id', appId);
+      // decided_by is DB-only (never part of the optimistic row patch): the
+      // Application type carries no actor field, the feed reads it from the DB.
+      const { error } = await supabase.from('applications').update({ ...updates, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
 
       try {
@@ -1562,7 +1762,10 @@ export default function ApplicationsPage() {
   // in-flight write. The row-card caller never passes it (that caller wraps
   // ACCEPT+REJECT together in its own outer lock instead), so this stays a
   // no-op there.
-  function renderRejectControls(app: Application, locked = false) {
+  // `variant` only changes presentation: 'compact' is the original small chip,
+  // 'big' is the full-width pre-decision button (#5) and its narrow-column
+  // expanded form. Both run the exact same setRejectingId → handleReject flow.
+  function renderRejectControls(app: Application, locked = false, variant: 'compact' | 'big' = 'compact') {
     const isRejecting = rejectingId === app.id;
     const roleConfig = roleConfigs.find(rc => rc.role === app.role);
     const rowBusy = busyIds.has(app.id);
@@ -1572,9 +1775,27 @@ export default function ApplicationsPage() {
       : rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
     const pool = poolForRole(app.role);
     const releasesSpot = app.payment_status === 'paid' && !app.self_paid && !!app.society_id && !!pool;
+    const big = variant === 'big';
 
     if (!isRejecting) {
-      return (
+      return big ? (
+        <button
+          onClick={() => setRejectingId(app.id)}
+          disabled={disabledNow}
+          className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+          style={{
+            padding: '13px 18px', borderRadius: 14,
+            fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+            color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.09)', border: '1.5px solid rgba(139,32,32,0.3)',
+            cursor: 'pointer', transition: `background-color 160ms ${EASE_LOCAL}`, ...busyStyle,
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.16)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.09)'; }}
+        >
+          <X size={16} strokeWidth={2.8} />
+          REJECT
+        </button>
+      ) : (
         <button
           onClick={() => setRejectingId(app.id)}
           disabled={disabledNow}
@@ -1587,40 +1808,100 @@ export default function ApplicationsPage() {
       );
     }
 
+    const noteField = (
+      <textarea
+        value={rejectNote}
+        onChange={e => setRejectNote(e.target.value)}
+        disabled={disabledNow}
+        rows={2}
+        placeholder={roleConfig?.allow_resubmission ? 'What should they fix before resubmitting?' : 'Optional note to delegate...'}
+        className={`${big ? 'w-full' : 'flex-1'} rounded-lg px-3 py-2 text-xs outline-none resize-none`}
+        style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+      />
+    );
+    const confirmBtn = (
+      <button
+        onClick={() => handleReject(app.id)}
+        disabled={disabledNow}
+        className={`inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
+        style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+      >
+        <Check size={13} />
+        CONFIRM
+      </button>
+    );
+    const cancelBtn = (
+      <button
+        onClick={() => { setRejectingId(null); setRejectNote(''); }}
+        className={`rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
+        style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
+      >
+        CANCEL
+      </button>
+    );
+
     return (
-      <div className="flex flex-col gap-2 flex-1" style={{ minWidth: 260 }}>
+      // The big variant lives inside a narrow fixed-width rail, so it stacks
+      // (and carries no minWidth that would overflow and get clipped).
+      <div className={`flex flex-col gap-2${big ? ' w-full' : ' flex-1'}`} style={{ minWidth: big ? 0 : 260 }}>
         {releasesSpot && (
           <p className="text-[11px]" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
             Their payment used a delegation-purchased spot. Rejecting will release that spot back to the delegation as open.
           </p>
         )}
-        <div className="flex items-start gap-2">
-          <textarea
-            value={rejectNote}
-            onChange={e => setRejectNote(e.target.value)}
-            disabled={disabledNow}
-            rows={2}
-            placeholder={roleConfig?.allow_resubmission ? 'What should they fix before resubmitting?' : 'Optional note to delegate...'}
-            className="flex-1 rounded-lg px-3 py-2 text-xs outline-none resize-none"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
-          />
+        {big ? (
+          <>
+            {noteField}
+            <div className="flex items-center gap-2">
+              {confirmBtn}
+              {cancelBtn}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-start gap-2">
+            {noteField}
+            {confirmBtn}
+            {cancelBtn}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /** Large ACCEPT + REJECT pair shown while an application is still undecided
+   *  (#5). Full-width inside whichever pane renders it; wired to the EXISTING
+   *  handleAccept / reject flow (which set decided_by / decided_at) — no new DB
+   *  logic. Once decided, callers fall back to their compact controls. */
+  function renderBigDecisionControls(app: Application, locked: boolean) {
+    const rowBusy = busyIds.has(app.id);
+    const blocked = isAcceptBlockedByFee(app);
+    const isRejecting = rejectingId === app.id;
+    const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
+    const lockStyle: React.CSSProperties = locked ? { opacity: 0.45, pointerEvents: 'none' } : {};
+
+    return (
+      <div className="flex flex-col gap-2.5 w-full" style={{ minWidth: 0, ...lockStyle }}>
+        {!isRejecting && (
           <button
-            onClick={() => handleReject(app.id)}
-            disabled={disabledNow}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-            style={{ backgroundColor: 'rgba(139,32,32,0.1)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
+            onClick={() => handleAccept(app.id)}
+            disabled={rowBusy || blocked || locked}
+            title={blocked ? ACCEPT_BLOCKED_MESSAGE : undefined}
+            className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+            style={{
+              padding: '13px 18px', borderRadius: 14,
+              fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+              color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+              boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`, border: 'none',
+              cursor: blocked ? 'not-allowed' : 'pointer',
+              opacity: blocked ? 0.5 : 1,
+              ...busyStyle,
+            }}
           >
-            <Check size={13} />
-            CONFIRM
+            <Check size={16} strokeWidth={3} />
+            ACCEPT
           </button>
-          <button
-            onClick={() => { setRejectingId(null); setRejectNote(''); }}
-            className="rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none"
-            style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-          >
-            CANCEL
-          </button>
-        </div>
+        )}
+        {renderRejectControls(app, locked, 'big')}
       </div>
     );
   }
@@ -1636,7 +1917,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ status: 'submitted', organizer_note: null }).eq('id', appId);
+      const { error } = await supabase.from('applications').update({ status: 'submitted', organizer_note: null, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
     })()
       .catch(() => {
@@ -1717,6 +1998,7 @@ export default function ApplicationsPage() {
         assigned_country_code: null,
         assigned_country_name: null,
         society_id: null,
+        decided_by: session.user.id, decided_at: new Date().toISOString(),
       };
       if (dropToUnpaid) updates.payment_status = 'unpaid';
 
@@ -1772,7 +2054,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await supabase.from('applications').update({ status: 'accepted' }).eq('id', appId);
+      const { error } = await supabase.from('applications').update({ status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
     })()
       .catch(() => {
@@ -1821,7 +2103,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const result = await markNotAttending(supabase, conference.id, prevRow);
+      const result = await markNotAttending(supabase, conference.id, prevRow, session.user.id);
       if (result.error) throw new Error(result.error);
       notifyIfNeeded(result.result, pushDraftNotice);
     })()
@@ -2084,7 +2366,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await checkInApplication(supabase, app.id);
+      const { error } = await checkInApplication(supabase, app.id, session.user.id);
       if (error) throw new Error(error);
     })()
       .catch(() => {
@@ -2107,7 +2389,7 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      const { error } = await undoCheckIn(supabase, app.id, revertTo);
+      const { error } = await undoCheckIn(supabase, app.id, revertTo, session.user.id);
       if (error) throw new Error(error);
     })()
       .catch(() => {
@@ -2178,6 +2460,28 @@ export default function ApplicationsPage() {
   // user-applied filter.
   const defaultScopeCount = applications.filter(a => a.status !== 'withdrawn' && a.attending).length;
 
+  // Committee options for the per-committee filter, derived from the
+  // applications ALREADY fetched (each row carries assigned_committee_id plus
+  // the joined conference_committees name/abbreviation) — no extra round trip.
+  // A committee with no allocations yet simply has nothing to filter to.
+  const committeeOptions: CommitteeOption[] = (() => {
+    const seen = new Map<string, { name: string; abbreviation: string | null }>();
+    for (const a of applications) {
+      if (a.assigned_committee_id && a.assigned_committee && !seen.has(a.assigned_committee_id)) {
+        seen.set(a.assigned_committee_id, { name: a.assigned_committee.name, abbreviation: a.assigned_committee.abbreviation });
+      }
+    }
+    return Array.from(seen.entries())
+      .map(([id, c]) => {
+        // Same naming rule as the row cards: long name → ACRONYM with the full
+        // name small beneath it.
+        const disp = committeeDisplay(c);
+        return { id, primary: disp.primary, secondary: disp.secondary, sort: c.name };
+      })
+      .sort((a, b) => a.sort.localeCompare(b.sort))
+      .map(({ id, primary, secondary }) => ({ id, primary, secondary }));
+  })();
+
   // Empty selection = no constraint on that dimension (fresh page shows all)
   // — EXCEPT withdrawn/removed applicants, who stay out of the default view
   // even with no status filter active; they're only reachable by explicitly
@@ -2185,12 +2489,22 @@ export default function ApplicationsPage() {
   // exact same rule via its own independent chip, since `attending` is a
   // separate dimension from `status` (an accepted/assigned/checked-in
   // applicant can still be not attending).
+  // The allocated view = the list narrowed to the ALLOCATED_GROUP statuses,
+  // whether that came from the "Allocated" stat tile or the ?status=assigned
+  // deep link (both resolve to the same array). Only this combination hides
+  // chairs / faculty advisors — see NON_DELEGATE_ROLES.
+  const isAllocatedView = sameSet(filters.status, ALLOCATED_GROUP);
+
   const filtered = applications.filter(a => {
     if (filters.status.size > 0) {
       if (!filters.status.has(a.status)) return false;
     } else if (a.status === 'withdrawn') {
       return false;
     }
+    // Allocated view lists DELEGATES only. An explicit Participants selection
+    // still wins, so an organiser who ticks "Chairs" gets them back here.
+    if (isAllocatedView && NON_DELEGATE_ROLES.has(a.role) && !filters.role.has(a.role)) return false;
+    if (filters.committee && a.assigned_committee_id !== filters.committee) return false;
     if (filters.notAttending) {
       if (a.attending) return false;
     } else if (!a.attending) {
@@ -2236,7 +2550,8 @@ export default function ApplicationsPage() {
     (!sameSet(filters.role, DEFAULT_ROLES) ? 1 : 0) +
     (filters.payment.size > 0 ? 1 : 0) +
     (filters.dateFrom || filters.dateTo ? 1 : 0) +
-    (filters.notAttending ? 1 : 0);
+    (filters.notAttending ? 1 : 0) +
+    (filters.committee ? 1 : 0);
 
   // ── Selection-derived values for the bulk-action bar ──────────────────────
   // Act only on rows that are both selected AND currently visible, so a filter
@@ -2290,6 +2605,9 @@ export default function ApplicationsPage() {
     if (a.status === 'withdrawn') return false;
     if (!a.attending) return false;
     if (filters.role.size > 0 && !filters.role.has(a.role)) return false;
+    // Committee is a scoping dimension like role/date (not something the tiles
+    // let you click into), so the tiles count within it.
+    if (filters.committee && a.assigned_committee_id !== filters.committee) return false;
     if (filters.dateFrom && a.submitted_at && a.submitted_at.slice(0, 10) < filters.dateFrom) return false;
     if (filters.dateTo && a.submitted_at && a.submitted_at.slice(0, 10) > filters.dateTo) return false;
     return true;
@@ -2303,7 +2621,20 @@ export default function ApplicationsPage() {
     // So Accepted = accepted + assigned + checked-in, and Allocated (below) is
     // always a strict subset of it.
     accepted: statScope.filter(a => a.status === 'accepted' || a.status === 'assigned' || a.status === 'checked-in').length,
-    assigned: statScope.filter(a => a.status === 'assigned' || a.status === 'checked-in').length,
+    // Delegates only, matching the rows the Allocated view actually renders.
+    // Chairs get status 'assigned' when they are put on a dais
+    // (assignment/page.tsx), so counting every 'assigned' row made the tile
+    // read higher than the list beneath it — the tile said 12, the view showed
+    // 9, and nothing on screen explained the missing three.
+    assigned: statScope.filter(a =>
+      (a.status === 'assigned' || a.status === 'checked-in')
+      // Mirrors the row predicate at :2506 exactly, so the tile can never
+      // disagree with the list beneath it in either direction. Chairs get
+      // status 'assigned' when put on a dais (assignment/page.tsx), which made
+      // the tile read 12 over a 9-row list; ticking Chairs in Participants
+      // brings them back to both at once.
+      && !(NON_DELEGATE_ROLES.has(a.role) && !filters.role.has(a.role))
+    ).length,
     checkedIn: statScope.filter(a => a.status === 'checked-in').length,
     paid: statScope.filter(a => a.payment_status === 'paid').length,
     // Unpaid excludes chairs unless this conference configured a chair fee.
@@ -2316,15 +2647,15 @@ export default function ApplicationsPage() {
   // and allocated-or-beyond), so their filters select the whole matching group
   // rather than a single status — keeping the visible list in step with the
   // number on the tile.
-  const ACCEPTED_GROUP = ['accepted', 'assigned', 'checked-in'];
-  const ALLOCATED_GROUP = ['assigned', 'checked-in'];
+  // ACCEPTED_GROUP / ALLOCATED_GROUP live at module scope — the ?status= deep
+  // link resolves to the same arrays, so tile and link can never disagree.
   const statusTileActive = (v: string) => filters.status.size === 1 && filters.status.has(v) && filters.payment.size === 0;
   const statusGroupTileActive = (group: string[]) => sameSet(filters.status, group) && filters.payment.size === 0;
   const paymentTileActive = (v: string) => filters.payment.size === 1 && filters.payment.has(v) && filters.status.size === 0;
   const totalTileActive =
     filters.status.size === 0 && filters.payment.size === 0 && !filters.notAttending &&
-    !filters.dateFrom && !filters.dateTo && sameSet(filters.role, DEFAULT_ROLES);
-  const clearToDefault = () => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false });
+    !filters.dateFrom && !filters.dateTo && !filters.committee && sameSet(filters.role, DEFAULT_ROLES);
+  const clearToDefault = () => setFilters({ status: new Set(), role: new Set(DEFAULT_ROLES), payment: new Set(), dateFrom: '', dateTo: '', notAttending: false, committee: '' });
   const toggleStatusTile = (v: string) => setFilters(f => ({ ...f, payment: new Set(), status: (f.status.size === 1 && f.status.has(v)) ? new Set() : new Set([v]) }));
   const toggleStatusGroupTile = (group: string[]) => setFilters(f => ({ ...f, payment: new Set(), status: sameSet(f.status, group) ? new Set() : new Set(group) }));
   const togglePaymentTile = (v: string) => setFilters(f => ({ ...f, status: new Set(), payment: (f.payment.size === 1 && f.payment.has(v)) ? new Set() : new Set([v]) }));
@@ -2384,6 +2715,12 @@ export default function ApplicationsPage() {
               </button>
             )}
           </div>
+          {/* Per-committee filter, alongside the existing filters. */}
+          <CommitteeFilter
+            options={committeeOptions}
+            value={filters.committee}
+            onChange={id => setFilters(f => ({ ...f, committee: id }))}
+          />
           <FilterPanel filters={filters} setFilters={setFilters} activeCount={activeFilterCount} />
           <button
             onClick={handleExportCSV}
@@ -2485,6 +2822,15 @@ export default function ApplicationsPage() {
       {/* Application list */}
       {!loading && filtered.length > 0 && (
         <div className="flex flex-col gap-3" style={{ paddingBottom: selectedApps.length > 0 ? 96 : 0 }}>
+          {/* The whole card is the preview affordance (#1) — the separate
+              PREVIEW button is gone, so it can never be clipped by the card's
+              own overflow again. A tint on hover and an inset ring on
+              keyboard focus make it read as clickable in both modalities. */}
+          <style>{`
+            .appRowOpen { cursor: pointer; outline: none; transition: background-color 180ms ${EASE_LOCAL}; }
+            .appRowOpen:hover { background-color: rgba(27,56,40,0.022); }
+            .appRowOpen:focus-visible { box-shadow: inset 0 0 0 2.5px ${NEU.forest}; background-color: rgba(27,56,40,0.03); }
+          `}</style>
           {filtered.map(app => {
             const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
             const email = app.profiles?.email ?? app.invited_email ?? '';
@@ -2506,11 +2852,11 @@ export default function ApplicationsPage() {
             const rowBusy = busyIds.has(app.id);
             const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
             // Not attending reads as inactive: everything but the NOT
-            // ATTENDING badge and the PREVIEW button (still needed to flip
-            // attendance back via the review modal) fades to ~45% AND is
-            // hard-locked (no pointer events, no handlers firing) — not just
-            // dimmed, genuinely disabled, restored the moment they're marked
-            // attending again.
+            // ATTENDING badge fades to ~45% AND is hard-locked (no pointer
+            // events, no handlers firing) — not just dimmed, genuinely
+            // disabled, restored the moment they're marked attending again.
+            // The card click itself is never locked: opening the preview is
+            // how an organiser flips attendance back on.
             const notAttendingFade: React.CSSProperties = !app.attending ? { opacity: 0.45 } : {};
             const notAttendingLock: React.CSSProperties = !app.attending ? { opacity: 0.45, pointerEvents: 'none' } : {};
             const hasAllocation = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in');
@@ -2533,14 +2879,37 @@ export default function ApplicationsPage() {
               whiteSpace: 'nowrap',
             });
 
+            // Anything that is itself interactive keeps its own behaviour and
+            // must NOT also open the preview. Checked by ancestry rather than
+            // by hoping every control remembers to stopPropagation.
+            const openPreviewFromRow = (e: React.MouseEvent<HTMLElement>) => {
+              const hit = (e.target as HTMLElement | null)?.closest(
+                'button, a, input, textarea, select, label, [role="menu"], [role="listbox"], [data-no-row-open]',
+              );
+              if (hit && hit !== e.currentTarget) return;
+              setReviewId(app.id);
+            };
+
             return (
               <NeuCard
                 key={app.id}
                 hover
-                onClick={() => setReviewId(app.id)}
                 style={{ padding: 0, overflow: 'hidden', position: 'relative', outline: selected ? `2px solid ${NEU.forest}` : 'none', outlineOffset: -2 }}
               >
-                <div className="flex flex-col lg:flex-row lg:items-stretch">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${name}'s application`}
+                  onClick={openPreviewFromRow}
+                  onKeyDown={e => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                      e.preventDefault();
+                      setReviewId(app.id);
+                    }
+                  }}
+                  className="appRowOpen flex flex-col lg:flex-row lg:items-stretch"
+                >
 
                   {/* LEFT · select + identity + facts */}
                   <div className="flex items-start gap-3 p-4 lg:p-5" style={{ flex: '1 1 0', minWidth: 0, ...notAttendingFade }}>
@@ -2562,7 +2931,13 @@ export default function ApplicationsPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 19.5, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em' }}>{name}</p>
+                        {/* Age reads as part of the name: "Ada Lovelace, 23".
+                            Derived from profiles.date_of_birth, falling back to
+                            any date-of-birth custom answer (ageForApp). No age
+                            on file → the name alone, never a trailing comma. */}
+                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 19.5, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em' }}>
+                          {name}{age !== null ? `, ${age}` : ''}
+                        </p>
                         {!app.user_id && <NotRegisteredChip />}
                         {app.is_head_delegate && (
                           <span className="inline-flex items-center gap-1" style={chip('rgba(27,56,40,0.1)', NEU.forest, 'rgba(27,56,40,0.2)')}>
@@ -2595,13 +2970,9 @@ export default function ApplicationsPage() {
                         )
                       )}
 
+                      {/* Age moved up beside the name (#3), so no separate age
+                          fact sits here any more. */}
                       <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 mt-2.5">
-                        {age !== null && (
-                          <span className="inline-flex items-center gap-1.5" style={factStyle}>
-                            <Cake size={13} strokeWidth={2.2} style={{ color: NEU.deepGold }} />
-                            {age} yrs old
-                          </span>
-                        )}
                         {nationality && (
                           <span className="inline-flex items-center gap-1.5" style={factStyle} title={nationality}>
                             <CountryFlag name={nationality} size={15} />
@@ -2622,9 +2993,21 @@ export default function ApplicationsPage() {
 
                     {/* Identity stack: ROLE on top, MUN level beneath it (#5).
                         The chair gavel now lives inside the CHAIR pill itself
-                        (#1), so no separate emblem sits here. */}
-                    <div className="flex flex-col items-center gap-2 flex-shrink-0">
-                      <div className="flex items-center gap-1.5">
+                        (#1), so no separate emblem sits here.
+
+                        FIXED SLOT (#4): the level pill is laid out inside a
+                        reserved, constant-width column, so "Delegate",
+                        "Head Delegate", "Faculty Advisor" and "Chair" all sit
+                        at the same x on every row and none of them reflows the
+                        rest of the card. The width is sized to the longest
+                        label so nothing is ever truncated; longer combinations
+                        (chair + INVITED) wrap inside the slot rather than
+                        widening it. */}
+                    <div
+                      className="flex flex-col items-center gap-2 flex-shrink-0"
+                      style={{ width: LEVEL_SLOT_W, minWidth: LEVEL_SLOT_W, maxWidth: LEVEL_SLOT_W }}
+                    >
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap" style={{ width: '100%' }}>
                         <RolePill role={app.role} size="sm" />
                         {isInvitedChair && <InvitedChip />}
                       </div>
@@ -2723,10 +3106,12 @@ export default function ApplicationsPage() {
                       divider between the middle and this column lands at the
                       same point on every card, and the left/middle columns
                       split the remaining space evenly (their shared divider is
-                      always centered). Clicks here never open the preview — the
-                      whole column is an action zone, so it stops propagation. */}
+                      always centered). Every control in here is a real button,
+                      so the card-level closest() guard (#1) already keeps them
+                      from opening the preview — the column no longer swallows
+                      clicks wholesale, which would have made its empty space
+                      the one dead zone on an otherwise clickable card. */}
                   <div
-                    onClick={e => e.stopPropagation()}
                     className="p-4 lg:p-5 flex flex-col lg:items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l"
                     style={{ flex: '0 0 248px', minWidth: 248, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
@@ -2762,30 +3147,17 @@ export default function ApplicationsPage() {
                       </span>
                     )}
 
-                    {/* Inline accept / reject for submitted applicants — a
-                        status control, locked (not just dimmed) while not
-                        attending. */}
+                    {/* Undecided (#5): ACCEPT and REJECT are the two things this
+                        pane is FOR, so they take it over as full-width buttons
+                        rather than small chips. Once a decision is made the
+                        pane falls back to its existing compact controls (check
+                        in / payment / reinstate). Same handlers as before —
+                        handleAccept and the shared reject flow, both of which
+                        write decided_by / decided_at. Locked (not just dimmed)
+                        while not attending. */}
                     {isSubmitted && (
-                      <div className="flex items-center gap-1.5 flex-wrap lg:justify-end" style={notAttendingLock}>
-                        <button
-                          onClick={() => handleAccept(app.id)}
-                          disabled={rowBusy || isAcceptBlockedByFee(app) || !app.attending}
-                          title={isAcceptBlockedByFee(app) ? ACCEPT_BLOCKED_MESSAGE : undefined}
-                          className="inline-flex items-center gap-1.5 focus:outline-none"
-                          style={{
-                            padding: '7px 14px', borderRadius: 999,
-                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-                            color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-                            boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}44, ${NEU.outSm}`, border: 'none',
-                            cursor: isAcceptBlockedByFee(app) ? 'not-allowed' : 'pointer',
-                            opacity: isAcceptBlockedByFee(app) ? 0.5 : 1,
-                            ...busyStyle,
-                          }}
-                        >
-                          <Check size={13} strokeWidth={2.8} />
-                          ACCEPT
-                        </button>
-                        {renderRejectControls(app)}
+                      <div style={{ width: '100%' }}>
+                        {renderBigDecisionControls(app, !app.attending)}
                       </div>
                     )}
 
@@ -2813,11 +3185,11 @@ export default function ApplicationsPage() {
                       </div>
                     )}
 
-                    {/* Check-in stacked ABOVE a wider Preview button. CHECK
-                        IN / UNDO CHECK-IN / PAID menu lock while not
-                        attending; PREVIEW (and, for unregistered rows,
-                        DELETE stays paired with it visually but locks too)
-                        never does — it's how an organizer flips them back. */}
+                    {/* Check-in stacked above the payment control. CHECK IN /
+                        UNDO CHECK-IN / PAYMENT / DELETE all lock while not
+                        attending; the preview is reached by clicking the card
+                        itself (#1), which never locks — it's how an organizer
+                        flips them back. */}
                     <div className="flex flex-col items-stretch gap-1.5" style={{ minWidth: 176, width: '100%' }}>
                       {canCheckIn && (
                         /* Cream / neutral until checked in — it turns green only
@@ -2854,7 +3226,7 @@ export default function ApplicationsPage() {
                           UNDO CHECK-IN
                         </button>
                       )}
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 lg:justify-end">
                         {showPayControl ? (
                           <span style={notAttendingLock}>
                             <PaymentMenu
@@ -2871,18 +3243,6 @@ export default function ApplicationsPage() {
                         ) : isInvitedChair ? (
                           <WaivedChip />
                         ) : null}
-                        <button
-                          onClick={() => setReviewId(app.id)}
-                          className="inline-flex items-center justify-center gap-1.5 focus:outline-none flex-1"
-                          style={{
-                            padding: '8px 22px', borderRadius: 999,
-                            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.04em',
-                            color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer',
-                          }}
-                        >
-                          <Eye size={14} strokeWidth={2.5} />
-                          PREVIEW
-                        </button>
                         {!app.user_id && (
                           <span style={notAttendingLock}>
                             <button
@@ -3472,25 +3832,18 @@ export default function ApplicationsPage() {
                 </p>
               )}
               <div className="flex flex-wrap gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
+                {/* Undecided (#5): ACCEPT and REJECT dominate the pane as two
+                    large full-width buttons instead of small chips. The moment
+                    the application is accepted or rejected this branch stops
+                    rendering and the existing compact controls below take over.
+                    Wired to handleAccept and the shared reject flow — the same
+                    handlers as before, decided_by / decided_at included. */}
                 {app.status === 'submitted' && (
                   <>
-                    <button
-                      onClick={() => handleAccept(app.id)}
-                      disabled={rowBusy || isAcceptBlockedByFee(app) || !app.attending}
-                      title={isAcceptBlockedByFee(app) ? ACCEPT_BLOCKED_MESSAGE : undefined}
-                      className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                      style={{
-                        backgroundColor: 'rgba(61,122,82,0.12)', color: '#3D7A52', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif",
-                        cursor: isAcceptBlockedByFee(app) ? 'not-allowed' : 'pointer',
-                        opacity: isAcceptBlockedByFee(app) ? 0.5 : 1,
-                        ...busyStyle, ...notAttendingLock,
-                      }}
-                    >
-                      <Check size={13} />
-                      ACCEPT
-                    </button>
+                    <div style={{ width: '100%' }}>
+                      {renderBigDecisionControls(app, !app.attending)}
+                    </div>
                     {paymentControls}
-                    {rejectControls}
                   </>
                 )}
 

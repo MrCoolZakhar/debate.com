@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from '@/components/Portal';
+import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
 import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
@@ -145,14 +146,23 @@ function InfoHint({ head, body }: { head: string; body: string }) {
   const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
 
   const WIDTH = 288;
+  // Portal mounts into the transformed `#fit-root`, so the fixed layer is positioned in that
+  // element's local units — raw viewport pixels would land off-anchor and flip against the
+  // wrong edges. portalFrame() converts the trigger box AND the usable bounds into that space.
   const place = useCallback(() => {
     const b = btnRef.current;
     if (!b) return;
     const r = b.getBoundingClientRect();
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - WIDTH - 8));
-    const spaceBelow = window.innerHeight - r.bottom;
-    const flipped = spaceBelow < 150 && r.top > spaceBelow;
-    setPos({ top: flipped ? r.top - 8 : r.bottom + 8, left, flipped });
+    const f = portalFrame();
+    const M = 8;
+    const top0 = f.toLocalY(r.top);
+    const bottom0 = f.toLocalY(r.bottom);
+    const maxLeft = Math.max(f.minX + M, f.maxX - WIDTH - M);
+    const left = Math.min(Math.max(f.minX + M, f.toLocalX(r.left)), maxLeft);
+    const spaceBelow = f.maxY - bottom0;
+    const spaceAbove = top0 - f.minY;
+    const flipped = spaceBelow < 150 && spaceAbove > spaceBelow;
+    setPos({ top: flipped ? top0 - 8 : bottom0 + 8, left, flipped });
   }, []);
 
   useEffect(() => {
@@ -250,19 +260,27 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
   };
 
   // The modal body is `overflow-y-auto`, so an in-flow absolute dropdown gets
-  // clipped. Render it through a Portal at fixed viewport coordinates measured
-  // from the field, repositioned on scroll (capture) + resize, flipping upward
-  // and clamping horizontally near the viewport edges.
+  // clipped. Render it through a Portal at fixed coordinates measured from the
+  // field, repositioned on scroll (capture) + resize, flipping upward and
+  // clamping horizontally near the edges. Coordinates go through portalFrame()
+  // because Portal mounts into the transformed `#fit-root`, whose local units
+  // are not viewport pixels.
   const LIST_MAX_H = 192;
   const place = useCallback(() => {
     const w = wrapRef.current;
     if (!w) return;
     const r = w.getBoundingClientRect();
-    const width = Math.min(r.width, window.innerWidth - 16);
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
-    const spaceBelow = window.innerHeight - r.bottom;
-    const flipped = spaceBelow < LIST_MAX_H + 16 && r.top > spaceBelow;
-    setPos({ top: flipped ? r.top - 4 : r.bottom + 4, left, width, flipped });
+    const f = portalFrame();
+    const M = 8;
+    const left0 = f.toLocalX(r.left);
+    const top0 = f.toLocalY(r.top);
+    const bottom0 = f.toLocalY(r.bottom);
+    const width = Math.min(f.toLocalX(r.right) - left0, Math.max(0, f.maxX - f.minX - 2 * M));
+    const maxLeft = Math.max(f.minX + M, f.maxX - width - M);
+    const left = Math.min(Math.max(f.minX + M, left0), maxLeft);
+    const spaceBelow = f.maxY - bottom0;
+    const flipped = spaceBelow < LIST_MAX_H + 16 && top0 - f.minY > spaceBelow;
+    setPos({ top: flipped ? top0 - 4 : bottom0 + 4, left, width, flipped });
   }, []);
 
   useEffect(() => {

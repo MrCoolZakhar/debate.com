@@ -17,6 +17,7 @@ import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import { Pill, type PillTone, OUTFIT } from '@/app/account/accountUi';
 import { NEU, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
+import { formatConferenceDates } from '@/lib/conferenceDates';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,17 +69,7 @@ export function startOfToday(): Date {
 }
 
 export function formatDateRange(start: string | null, end: string | null): string {
-  if (!start || !end) return 'TBD';
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()}–${e.getDate()} ${months[s.getMonth()]} ${s.getFullYear()}`;
-  }
-  if (s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()} ${months[s.getMonth()]} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
-  }
-  return `${s.getDate()} ${months[s.getMonth()]} ${s.getFullYear()} – ${e.getDate()} ${months[e.getMonth()]} ${e.getFullYear()}`;
+  return formatConferenceDates(start, end, { style: 'dmy' });
 }
 
 /** Human countdown chip text for upcoming conferences. Returns null when past. */

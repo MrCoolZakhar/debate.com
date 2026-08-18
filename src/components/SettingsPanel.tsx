@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Portal from '@/components/Portal';
+import { portalFrame } from '@/components/chat/chatTokens';
 import { Globe } from 'lucide-react';
 import { useSettingsStore, CommitteeSettings, MotionNames, DEFAULT_SCORING, DEFAULT_MOTION_NAMES, DEFAULT_DOCUMENT_NAMES, type DocumentNames, type ScoringConfig, type ScoreSource, type RankingFactor } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
@@ -70,13 +71,26 @@ function HoverHint({ text, children }: { text: string; children: React.ReactNode
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const WIDTH = 236;
 
+  // Portal mounts into `#fit-root`, which FitToScreen transforms — a transformed ancestor is
+  // the containing block for `position: fixed`, so the layer lives in that element's local
+  // units. portalFrame() converts the trigger box AND the usable bounds into that same space;
+  // mixing a converted anchor with raw window.inner* would flip against the wrong edges.
   const place = () => {
-    const r = triggerRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const left = Math.max(8, Math.min(r.left + r.width / 2 - WIDTH / 2, window.innerWidth - WIDTH - 8));
-    const spaceBelow = window.innerHeight - r.bottom;
-    const flipUp = spaceBelow < 130;
-    setPos({ top: flipUp ? r.top - 8 : r.bottom + 8, left, flipUp });
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const f = portalFrame();
+    const M = 8;
+    const top0 = f.toLocalY(r.top);
+    const bottom0 = f.toLocalY(r.bottom);
+    const left0 = f.toLocalX(r.left);
+    const right0 = f.toLocalX(r.right);
+    const maxLeft = Math.max(f.minX + M, f.maxX - WIDTH - M);
+    const left = Math.min(Math.max(f.minX + M, left0 + (right0 - left0) / 2 - WIDTH / 2), maxLeft);
+    const spaceBelow = f.maxY - bottom0;
+    const spaceAbove = top0 - f.minY;
+    const flipUp = spaceBelow < 130 && spaceAbove > spaceBelow;
+    setPos({ top: flipUp ? top0 - 8 : bottom0 + 8, left, flipUp });
   };
 
   const show = () => {

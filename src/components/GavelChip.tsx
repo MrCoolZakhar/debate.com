@@ -91,7 +91,7 @@ export default function GavelChip({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; flip: boolean } | null>(null);
   const [pulse, setPulse] = useState(0);
   const [hint, setHint] = useState(false);
   const hintTimer = useRef<NodeJS.Timeout | null>(null);
@@ -134,7 +134,7 @@ export default function GavelChip({
     const spaceAbove = top0 - 8 - margin;
     const flip = h > spaceBelow && spaceAbove > spaceBelow;
     const top = flip ? Math.max(margin, top0 - 8 - h) : bottom0 + 8;
-    setPos({ top, left });
+    setPos({ top, left, flip });
   }, [chairNames.length]);
 
   useLayoutEffect(() => { if (open) place(); }, [open, place]);
@@ -213,7 +213,18 @@ export default function GavelChip({
         }
       `}</style>
 
-      <div className="fixed z-50" style={{ top: '3.75rem', right: '0.85rem', fontFamily: OUTFIT }}>
+      {/* `--dgn-stack-shift` is published on <html> by NotificationStack, which now owns
+          the slot directly under the header in this same top-inline-end column. It is the
+          stack's measured height (absent → 0 when the stack is empty or suppressed), so
+          the chip steps down below the cards and back up when they clear. See the
+          positioning note at the top of NotificationStack.tsx. */}
+      <div
+        className="fixed z-50"
+        style={{
+          top: 'calc(3.75rem + var(--dgn-stack-shift, 0px))', right: '0.85rem',
+          fontFamily: OUTFIT, transition: 'top 240ms cubic-bezier(0.22,1,0.36,1)',
+        }}
+      >
         {pulse > 0 && (
           <span
             key={pulse}
@@ -275,8 +286,11 @@ export default function GavelChip({
             }}
           >
             {/* Header + hover-only explainer (UI RULE: informational "i" opens on hover/focus).
-                The panel hangs BELOW the whole card, not over the header — obscuring the very
-                rows the reader is deciding between defeats the purpose of the hint. */}
+                The panel hangs off the whole card, not over the header — obscuring the very
+                rows the reader is deciding between defeats the purpose of the hint. It follows
+                the card's own flip direction: when the card flipped UP because there was no
+                room below it, dropping the hint downward would put it right back in the space
+                that was already too small. */}
             <div className="flex items-center gap-1.5 px-3.5 pt-3 pb-2">
               <span className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: NEU.muted }}>
                 {t('gavel_popover_title')}
@@ -302,7 +316,10 @@ export default function GavelChip({
                 onMouseEnter={openHint} onMouseLeave={closeHint}
                 className="absolute rounded-xl px-3 py-2.5 z-10"
                 style={{
-                  top: 'calc(100% + 6px)', left: 6, right: 6,
+                  ...(pos.flip
+                    ? { bottom: 'calc(100% + 6px)' }
+                    : { top: 'calc(100% + 6px)' }),
+                  left: 6, right: 6,
                   backgroundColor: NEU.forest, color: '#EFE9DB',
                   boxShadow: '0 10px 26px rgba(27,56,40,0.30)',
                   fontSize: 11, lineHeight: 1.45, fontWeight: 500,

@@ -1,21 +1,25 @@
 'use client';
 
 import React, { use, useEffect, useState, useRef, useCallback, Suspense } from 'react';
-import FitToScreen from '@/components/FitToScreen';
 import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
+import { Mic, FileText, MessageCircle, MessageSquare, Clock, Mic2, Languages, LogOut, Check, FolderOpen, Hand } from 'lucide-react';
+import { OUTFIT, Emoji3D } from '@/components/neu';
+import {
+  DelegateStyles, DG, LIFT, Panel, SectionLabel, FlagDisc, FlagOrdinalDisc, StatRow,
+  RollCallSwitch, ChunkyButton, SquareButton, QueueRow, Sheet, Equalizer,
+  useMeasuredSize, useFitCount, ordinalSuffixFor, arcInset,
+} from '@/components/delegate/DelegateUI';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import Link from 'next/link';
-import { Committee, CommitteeDocument, DocumentType, PendingMotionType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
+import { Committee, CaucusState, Delegate, DocumentType, SpeakingLogEntry, DelegateStatus } from '@/lib/types';
 import ChatPanel from '@/components/ChatPanel';
-import { computeObjectiveScore, getScoringConfig } from '@/lib/scoring';
+import { getScoringConfig } from '@/lib/scoring';
 import { selectDelegateTips } from '@/lib/delegateTips';
 import { getDelegateFeedback } from '@/lib/committeeService';
 import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
 import { Emoji } from '@/components/Emoji';
-import { FlagImg } from '@/components/FlagImg';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFlags';
@@ -25,15 +29,16 @@ import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import {
   getCommitteeByCode,
+  // Explicitly sanctioned on this surface: a pure reader over the committee row,
+  // no store, no localStorage (see its comment banner in committeeService).
+  caucusRemainingNow,
   subscribeToCommittee,
   getCurrentSpeakerRow,
   getDelegatesList,
   getSpeakersLists,
   getDocumentsList,
   getPendingMotionsList,
-  addToSpeakersList as addToSpeakersListInDB,
   addDocument as addDocumentInDB,
-  addPendingMotion as addPendingMotionInDB,
   requestJoinSession,
   requestGslSpot,
   setDelegateStatus as setDelegateStatusInDB,
@@ -111,6 +116,12 @@ const PHASE_LABELS: Record<string, string> = {
   'adjourned': 'Debate Closed',
 };
 
+// How long a locally-written delegate status stays pinned against an incoming refetch before
+// control goes back to the DB row. Same number as the chair page's STATUS_PIN_TTL_MS — both
+// are the backstop for a status write that never lands, and the two surfaces should not give
+// up at different moments.
+const STATUS_PIN_TTL_MS = 8000;
+
 // Rate limit key in localStorage
 function getRateLimitKey(committeeId: string, country: string): string {
   return `status-changes:${committeeId}:${country}`;
@@ -131,11 +142,86 @@ function recordStatusChange(committeeId: string, country: string): void {
   localStorage.setItem(key, JSON.stringify([...recent, now]));
 }
 
+// Give back the slot burned by a status change whose DB write was rejected. Pops the most
+// recent timestamp only — the optimistic `recordStatusChange` stays where it is (moving it
+// behind an await would reopen the double-click hole it exists to close).
+function refundStatusChange(committeeId: string, country: string): void {
+  try {
+    const key = getRateLimitKey(committeeId, country);
+    const now = Date.now();
+    const THREE_HOURS = 3 * 60 * 60 * 1000;
+    const recent = getStatusChangeTimes(committeeId, country).filter((t) => now - t < THREE_HOURS);
+    recent.pop();
+    localStorage.setItem(key, JSON.stringify(recent));
+  } catch {}
+}
+
 function statusChangesRemaining(committeeId: string, country: string): number {
   const now = Date.now();
   const THREE_HOURS = 3 * 60 * 60 * 1000;
   const recent = getStatusChangeTimes(committeeId, country).filter((t) => now - t < THREE_HOURS);
   return Math.max(0, 3 - recent.length);
+}
+
+// ── GSL request cooldowns ────────────────────────────────────────────────────
+// Two independent clocks on the "request to speak" button, both persisted so a
+// reload cannot be used to skip either one:
+//
+//  • GSL_RETRY_MS — how long a delegate waits on a chair who has not acted. The
+//    request stays pending the whole time; this only re-enables the button so a
+//    delegate whose request was quietly ignored is not stuck forever.
+//  • GSL_DENIED_MS — the lockout after a chair actually says no. Without it,
+//    "Request Again" is a spam button pointed at the dais.
+//
+// Keyed per committee AND per country, exactly like the status-change limiter
+// above: one browser can hold two delegations (a shared laptop), and the two
+// must not share a cooldown.
+const GSL_RETRY_MS = 60 * 1000;
+const GSL_DENIED_MS = 15 * 60 * 1000;
+// How long to wait before believing a vanished request was actually refused.
+// An approval writes speakers_list and deletes the motion separately, so the
+// delegate briefly looks refused when the delete arrives first; this outlasts
+// that gap without being long enough for a real refusal to feel unacknowledged.
+const GSL_DENIAL_GRACE_MS = 2500;
+
+type GslCooldown = { requestedAt?: number; deniedAt?: number };
+
+function getGslCooldownKey(committeeId: string, country: string): string {
+  return `gsl-request:${committeeId}:${country}`;
+}
+
+function readGslCooldown(committeeId: string, country: string): GslCooldown {
+  try {
+    const raw = localStorage.getItem(getGslCooldownKey(committeeId, country));
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? (parsed as GslCooldown) : {};
+  } catch { return {}; }
+}
+
+function writeGslCooldown(committeeId: string, country: string, value: GslCooldown): void {
+  try {
+    const key = getGslCooldownKey(committeeId, country);
+    if (!value.requestedAt && !value.deniedAt) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+/** ms left on the post-denial lockout, 0 when it is not running. */
+function gslDeniedRemaining(cd: GslCooldown, now: number): number {
+  if (!cd.deniedAt) return 0;
+  return Math.max(0, GSL_DENIED_MS - (now - cd.deniedAt));
+}
+
+/** ms left before an unanswered request may be re-sent, 0 once it has elapsed. */
+function gslRetryRemaining(cd: GslCooldown, now: number): number {
+  if (!cd.requestedAt) return 0;
+  return Math.max(0, GSL_RETRY_MS - (now - cd.requestedAt));
+}
+
+/** "14m" / "45s" — coarse on purpose, this is a wait, not a stopwatch. */
+function formatCooldown(ms: number): string {
+  const secs = Math.ceil(ms / 1000);
+  return secs >= 60 ? `${Math.ceil(secs / 60)}m` : `${secs}s`;
 }
 
 // Speaking log parsing — only SPEECH events (the channel now also carries motion/RTR/manual
@@ -243,37 +329,6 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
   );
 }
 
-// ── Delegate Doc Card (with inline PDF viewer) ────────────────────────────────
-function DelegateDocCard({ doc }: { doc: CommitteeDocument }) {
-  const t = useT();
-  // Chair approval surfaces as the badge while the doc is still awaiting introduction — this is the
-  // delegate's "notification" that their WP/DR was accepted or rejected. Once it advances to
-  // introduced/passed/failed, the real lifecycle status takes over again.
-  const showApproved = doc.approval === 'approved' && (doc.status === 'submitted' || doc.status === 'on-floor');
-  const showRejected = doc.approval === 'rejected';
-  const statusColor = showApproved ? '#1B3828' : showRejected ? '#8B2020' : doc.status === 'passed' ? '#1B3828' : doc.status === 'failed' ? '#8B2020' : doc.status === 'introduced' ? '#B8844A' : doc.status === 'on-floor' ? '#B8844A' : '#9A8A78';
-  const statusBg = showApproved ? 'rgba(27,56,40,0.1)' : showRejected ? 'rgba(139,32,32,0.1)' : doc.status === 'passed' ? 'rgba(27,56,40,0.1)' : doc.status === 'failed' ? 'rgba(139,32,32,0.1)' : 'transparent';
-  const statusLabel = showApproved ? t('documents_status_approved') : showRejected ? t('documents_status_rejected') : doc.status === 'introduced' ? t('documents_status_introduced') : doc.status === 'on-floor' ? t('documents_status_on_floor') : doc.status === 'passed' ? t('documents_status_passed') : doc.status === 'failed' ? t('documents_status_failed') : t('documents_status_submitted');
-  return (
-    <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="font-semibold text-[#1C1410] text-sm">{doc.docCode}: {doc.title}</div>
-        <span className="text-xs font-black ms-2 shrink-0 px-2 py-0.5 rounded-full" style={{ color: statusColor, backgroundColor: statusBg, border: `1px solid ${statusColor}30` }}>{statusLabel}</span>
-      </div>
-      <div className="text-xs text-[#9A8A78]">
-        {doc.sponsors.map((s, i) => (
-          <span key={s} className={i === 0 ? 'text-[#6A5A4A] font-medium' : ''}>
-            {i > 0 ? ', ' : ''}{flagFor(s)} {s}
-          </span>
-        ))}
-      </div>
-      {doc.fileUrl && doc.fileName && (
-        <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
-      )}
-    </div>
-  );
-}
-
 // ── Documents Tab ─────────────────────────────────────────────────────────────
 function DelegateDocumentsTab({ committee, country }: { committee: Committee; country: string }) {
   const t = useT();
@@ -285,6 +340,9 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  /* A failed attachment used to be console-only, so the button just snapped
+     back to "Attach file" and the delegate had no idea why. */
+  const [uploadError, setUploadError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Submission limits were only ever enforced in the chair's DocumentsModal, which
@@ -304,8 +362,20 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
     setUploading(true);
     try {
       const path = committee.id + '/' + Date.now() + '-' + file.name;
-      const { error } = await supabase.storage.from('session-documents').upload(path, file, { upsert: true });
-      if (error) { console.error('Storage upload error:', error); setFileName(null); return; }
+      // NO upsert. The bucket grants anon INSERT but not UPDATE, and `upsert: true`
+      // needs both — every attachment was being refused with a 403 that only
+      // reached the console, so the button silently snapped back to "Attach file".
+      // Granting anon UPDATE would have been the wrong fix: it would let anyone
+      // overwrite any existing document in any committee. The path already carries
+      // Date.now(), so there is nothing to upsert over.
+      const { error } = await supabase.storage.from('session-documents').upload(path, file);
+      if (error) {
+        console.error('Storage upload error:', error);
+        setFileName(null);
+        setUploadError(true);
+        return;
+      }
+      setUploadError(false);
       const { data } = supabase.storage.from('session-documents').getPublicUrl(path);
       setFileUrl(data.publicUrl);
     } finally {
@@ -335,7 +405,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   };
 
   return (
-    <div className="p-4 max-w-2xl mx-auto space-y-4">
+    <div className="w-full max-w-2xl mx-auto space-y-4">
       <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_doc_submit_heading')}</h2>
       {submitted && (
         <div className="rounded-xl p-3 text-sm font-semibold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828' }}>
@@ -382,6 +452,11 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">{t('delegate_doc_remove')}</button>}
           </div>
+          {uploadError && (
+            <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
+              {t('delegate_doc_upload_failed')}
+            </p>
+          )}
           <input ref={fileInputRef} type="file" accept=".pdf" className="hidden"
             onChange={async (e) => {
               const f = e.target.files?.[0];
@@ -417,26 +492,38 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 }
 
 // ── Statistics Tab ────────────────────────────────────────────────────────────
+/**
+ * Speeches only. Points, the category ledger, the by-time rank and the leaderboard are
+ * deliberately gone: a delegate sees WHAT they said, under which topic or motion, and for
+ * how long. The qualitative surfaces (the chair's factor recap, the coaching tips) stay —
+ * neither states a score.
+ */
 function StatisticsTab({ committee, country }: { committee: Committee; country: string }) {
   const { language } = useLanguage();
   const t = useT();
   const cfg = getScoringConfig(committee);
-  const hideScores = cfg.hideScoresFromDelegates === true;
-  const logs = parseSpeakingLogs(committee);
-  const { total, rows } = computeObjectiveScore(committee, country);
-  // Guidance is deliberately NOT gated on `hideScores` — it never states a number or a
-  // rank, so a chair who hides scores still gets their delegates coached. The one key
-  // that would surface a scoring-config label they cannot otherwise see
+  // Guidance never states a number or a rank, so it survives the removal of the score UI.
+  // The one key that would surface a scoring-config label a delegate cannot otherwise see
   // (`delegate_tip_custom_source`) is suppressed inside the selector.
   const tips = selectDelegateTips(committee, country, language, t);
-  const myLogs = logs.filter((l) => l.country === country);
+  // Renamed / localized motion labels, read off the committee row (never getSettings here).
+  const mn = motionNames(committee, language);
 
-  // Category subtotals (summary) — delegates see grouped categories, never the chair's itemized ledger.
-  const categories: { label: string; pts: number }[] = [];
-  for (const r of rows) {
-    const existing = categories.find((c) => c.label === r.label);
-    if (existing) existing.pts += r.pts; else categories.push({ label: r.label, pts: r.pts });
-  }
+  // Newest first. Reverse first so entries that share (or lack) a timestamp keep a stable
+  // newest-first order under the sort rather than falling back to chronological.
+  const myLogs = parseSpeakingLogs(committee)
+    .filter((l) => l.country === country)
+    .slice()
+    .reverse()
+    .sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''));
+  const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
+
+  const contextLabel = (ctx: SpeakingLogEntry['context']): string => {
+    if (ctx === 'moderated-caucus') return mn.moderated;
+    if (ctx === 'unmoderated-caucus') return mn.unmoderated;
+    if (ctx === 'tour-de-table') return mn.tour;
+    return t('delegate_gsl_fallback');
+  };
 
   // End recap — factor scores only (never the chair's private notes).
   const [recap, setRecap] = useState<{ level: string; factorScores: Record<string, number>; createdAt: string }[]>([]);
@@ -448,186 +535,117 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0]
     ?? [...recap].filter((f) => f.level === 'session').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
   const recapFactors = cfg.factors.filter((f) => f.enabled && latestRecap && typeof latestRecap.factorScores[f.id] === 'number');
-  const totalSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
 
-  // Top speakers by time
-  const byCountry: Record<string, number> = {};
-  logs.forEach((l) => { byCountry[l.country] = (byCountry[l.country] ?? 0) + l.seconds; });
-  const ranking = Object.entries(byCountry)
-    .sort((a, b) => b[1] - a[1])
-    .map(([c, s]) => ({ country: c, seconds: s }));
-  const myRank = ranking.findIndex((r) => r.country === country) + 1;
-
-  // Points per country for leaderboard
-  const pointsByCountry: Record<string, number> = {};
-  ranking.slice(0, 10).forEach(({ country: c }) => {
-    pointsByCountry[c] = computeObjectiveScore(committee, c).total;
-  });
+  const num: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };
 
   return (
-    <div className="p-4 max-w-2xl mx-auto space-y-5">
-      {/* Score card — hidden when chairs disable scores for delegates */}
-      {hideScores ? (
-        <div className="rounded-2xl p-4 text-sm" style={{ border: '1px solid #DDD4C0', backgroundColor: '#EDE7D8', color: '#6A5A4A' }}>
-          {t('delegate_scores_hidden')}
-        </div>
-      ) : (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_score_header')}</span>
-          </div>
-          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="flex items-end gap-3 mb-3">
-            <span className="text-6xl font-black" style={{ color: '#1B3828' }}>{total}</span>
-            <span className="text-lg font-medium mb-1" style={{ color: '#6A5A4A' }}>{t('delegate_pts_label')}</span>
-          </div>
-          {/* Category subtotals — summary, not the chair's itemized ledger */}
-          {categories.length > 0 && (
-            <div className="mt-4 space-y-1.5">
-              {categories.map((c) => (
-                <div key={c.label} className="flex justify-between text-xs gap-2">
-                  <span className="truncate" style={{ color: '#6A5A4A' }}>{c.label}</span>
-                  <span className="font-bold shrink-0" style={{ color: c.pts < 0 ? '#8B2020' : '#1B3828' }}>{c.pts < 0 ? '' : '+'}{c.pts}</span>
-                </div>
-              ))}
+    <div className="w-full max-w-2xl mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Compact summary — count + total time, nothing scored */}
+      <Panel style={{ display: 'flex', gap: 12 }}>
+        {[
+          { value: String(myLogs.length), label: t('delegate_speeches_label') },
+          { value: formatTime(totalSeconds), label: t('delegate_total_time_label') },
+        ].map((s) => (
+          <div key={s.label} style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+            <div style={{ ...num, fontFamily: OUTFIT, fontSize: 28, fontWeight: 900, color: DG.forest, lineHeight: 1.1 }}>
+              {s.value}
             </div>
-          )}
+            <div style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: DG.faint, marginTop: 2 }}>
+              {s.label}
+            </div>
           </div>
-        </div>
-      )}
+        ))}
+      </Panel>
 
-      {/* Speaking stats */}
-      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-        <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-          <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_speaking_history')}</span>
-        </div>
-        <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-        <div className={`grid ${hideScores ? 'grid-cols-2' : 'grid-cols-3'} gap-3 mb-4`}>
-          <div className="text-center">
-            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myLogs.length}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_speeches_label')}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{formatTime(totalSeconds)}</div>
-            <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_total_time_label')}</div>
-          </div>
-          {!hideScores && (
-            <div className="text-center">
-              <div className="text-2xl font-black" style={{ color: '#1B3828' }}>{myRank > 0 ? `#${myRank}` : '—'}</div>
-              <div className="text-xs" style={{ color: '#9A8A78' }}>{t('delegate_rank_label')}</div>
-            </div>
-          )}
-        </div>
-        {myLogs.length > 0 ? (
-          <div className="space-y-1.5">
-            {myLogs.map((l, i) => (
-              <div key={i} className="flex items-center justify-between text-xs rounded-lg px-3 py-2" style={{ backgroundColor: '#FAF8F3' }}>
-                <span className="truncate flex-1" style={{ color: '#6A5A4A' }}>{l.topic || t('delegate_gsl_fallback')}</span>
-                <span className="shrink-0 ms-2 capitalize" style={{ color: '#9A8A78' }}>{l.context.replace(/-/g, ' ')}</span>
-                <span className="font-mono shrink-0 ms-2" style={{ color: '#1C1410' }}>{l.seconds}s</span>
-              </div>
-            ))}
-          </div>
+      {/* Every speech: what it was under, and how long it ran */}
+      <Panel style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <SectionLabel>{t('delegate_speaking_history')}</SectionLabel>
+        {myLogs.length === 0 ? (
+          <p style={{ margin: 0, padding: '10px 0', textAlign: 'center', fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: DG.faint }}>
+            {t('delegate_no_speeches')}
+          </p>
         ) : (
-          <p className="text-sm text-center py-2" style={{ color: '#9A8A78' }}>{t('delegate_no_speeches')}</p>
-        )}
-        </div>
-      </div>
-
-      {/* Committee leaderboard — hidden when chairs disable scores */}
-      {!hideScores && ranking.length > 0 && (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_committee_time')}</span>
-          </div>
-          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-          {/* Column headers */}
-          <div className="flex items-center gap-2 text-[10px] text-[#7A5A38] font-mono mb-1.5 px-2">
-            <span className="w-4 shrink-0" />
-            <span className="flex-1">{t('delegate_country_col')}</span>
-            <span className="w-16 text-end">{t('delegate_time_col')}</span>
-            <span className="w-8 text-end">{t('delegate_pts_col')}</span>
-          </div>
-          <div className="space-y-1.5">
-            {ranking.slice(0, 10).map((r, i) => (
-              <div key={r.country} className={`flex items-center gap-2 text-sm ${r.country === country ? 'bg-[#1B3828]/10 border border-[#1B3828]/20 rounded-lg px-2 py-1' : 'px-2 py-1'}`}>
-                <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
-                <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} className="shrink-0" />
-                <span className="flex-1 truncate font-semibold" style={{ color: r.country === country ? '#1B3828' : '#6A5A4A', fontWeight: r.country === country ? 700 : 400 }}>{getCountryDisplayName(r.country, language)}</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-16 h-1.5 bg-[#DDD4C0] rounded-full overflow-hidden">
-                    <div className="h-full bg-[#1B3828] rounded-full" style={{ width: `${(r.seconds / ranking[0].seconds) * 100}%` }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {myLogs.map((l, i) => (
+              <div
+                key={`${l.timestamp ?? ''}-${i}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: DG.cream, borderRadius: 14, padding: '10px 12px',
+                  border: `1px solid ${DG.hairline}`,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    className="text-start"
+                    style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: DG.ink, lineHeight: 1.25, overflowWrap: 'anywhere' }}
+                  >
+                    {l.topic || contextLabel(l.context)}
                   </div>
-                  <span className="text-xs font-mono text-[#9A8A78] w-10 text-end">{formatTime(r.seconds)}</span>
+                  <div
+                    className="text-start"
+                    style={{ marginTop: 2, fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: DG.deepGold }}
+                  >
+                    {contextLabel(l.context)}
+                  </div>
                 </div>
-                <span className="text-xs font-black w-8 text-end shrink-0" style={{ color: '#1B3828' }}>
-                  {pointsByCountry[r.country] ?? 0}
+                <span style={{ ...num, flexShrink: 0, fontFamily: OUTFIT, fontSize: 15, fontWeight: 800, color: DG.forest }}>
+                  {formatTime(l.seconds)}
                 </span>
               </div>
             ))}
           </div>
-        </div>
-        </div>
-      )}
+        )}
+      </Panel>
 
-      {/* Chair recap — factor scores only, never the chair's private notes */}
+      {/* Chair recap — factor bars only, never the chair's private notes */}
       {latestRecap && recapFactors.length > 0 && (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_recap_header')}</span>
-          </div>
-          <div className="p-5 space-y-2.5" style={{ backgroundColor: '#EDE7D8' }}>
+        <Panel style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <SectionLabel>{t('delegate_recap_header')}</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {recapFactors.map((f) => {
               const v = latestRecap.factorScores[f.id];
               return (
                 <div key={f.id}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span style={{ color: '#6A5A4A' }}>{f.name}</span>
-                    <span className="font-bold" style={{ color: '#1B3828' }}>{v}/{cfg.factorScaleMax}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: DG.body, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
+                    <span style={{ ...num, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: DG.forest }}>{v}/{cfg.factorScaleMax}</span>
                   </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (v / cfg.factorScaleMax) * 100)}%`, backgroundColor: '#1B3828' }} />
+                  <div style={{ height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${Math.min(100, (v / cfg.factorScaleMax) * 100)}%` }} />
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Panel>
       )}
 
       {/* Tips */}
       {tips.length > 0 && (
-        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
-          <div className="px-5 py-3 flex items-center gap-3" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52' }}>
-            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
-            <span className="text-xs font-mono font-bold tracking-widest" style={{ color: '#EED98A' }}>{t('delegate_tips_header')}</span>
-          </div>
-          <div className="p-5" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="space-y-2">
+        <Panel style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <SectionLabel>{t('delegate_tips_header_plain')}</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {tips.map((tip) => (
-              <div key={tip.key} className="flex gap-2 text-sm" style={{ color: '#6A5A4A' }}>
-                <span className="shrink-0">→</span>
+              <div key={tip.key} className="text-start" style={{ display: 'flex', gap: 8, fontFamily: OUTFIT, fontSize: 13, color: DG.body, lineHeight: 1.4 }}>
+                <span style={{ flexShrink: 0, color: DG.deepGold }}>&rarr;</span>
                 <span>{tip.text}</span>
               </div>
             ))}
           </div>
-          </div>
-        </div>
+        </Panel>
       )}
     </div>
   );
 }
 
 // ── Main Delegate Session ─────────────────────────────────────────────────────
-type DelegateTab = 'session' | 'documents' | 'chat' | 'stats';
+/** The tabs are gone: every secondary surface is now a bottom sheet. */
+type DelegateSheet = null | 'stats' | 'documents' | 'chat' | 'queue';
 
 function DelegateSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const t = useT();
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const PHASE_LABEL: Record<string, string> = {
     'pre-session': t('delegate_phase_pre_session'),
     'roll-call': t('delegate_phase_roll_call'),
@@ -644,18 +662,52 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
 
   const [committee, setCommittee] = useState<Committee | null>(null);
+  /* Latest committee, for callbacks that fire on a delay. The delayed denial
+     check must re-read CURRENT state, never the closure it was armed in. */
+  const committeeRef = useRef<Committee | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<DelegateTab>('session');
+  const [sheet, setSheet] = useState<DelegateSheet>(null);
   const [docsSection, setDocsSection] = useState<'submit' | 'view'>('submit');
   const [sessionSuspended, setSessionSuspended] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [endedTab, setEndedTab] = useState<'ended' | 'session'>('ended');
   const [hoursRemaining, setHoursRemaining] = useState<number | null>(null);
-  const [showChat, setShowChat] = useState(false); // kept for chatReadCounts compat only
+  const [langOpen, setLangOpen] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
 
   const committeeIdRef = useRef('');
   const wasEverSuspended = useRef(false);
+  // Serialises concurrent refetches fired from the realtime subscription. Two rapid events
+  // produce two in-flight fetches; without a ticket an OLDER snapshot resolving last would
+  // overwrite the newer one with stale rows. Each fetch takes a ticket and only applies if
+  // it is still the newest. Mirrors the chair page.
+  const fetchSeq = useRef(0);
+  // Statuses this delegate has written but not yet seen confirmed by a refetch. Without the
+  // pin, ANY snapshot that predates the write — including one triggered by a completely
+  // unrelated event (the chair pressing All Present, a phase change) — repaints the
+  // roll-call switch with the pre-click status.
+  const pendingStatusWrites = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
+  // Surfaced beneath the roll-call control when the delegate's own status write is rejected.
+  const [statusError, setStatusError] = useState(false);
+
+  // Merge a freshly fetched delegates array over this device's still-unconfirmed status
+  // writes. Only rows written here are pinned; every other row is taken from the DB, so a
+  // chair's roll call still lands. Each pin releases the moment DB truth agrees with it —
+  // or after the TTL, if the write never landed at all.
+  const applyPinnedStatuses = (fresh: Delegate[]): Delegate[] => {
+    const pins = pendingStatusWrites.current;
+    if (Object.keys(pins).length === 0) return fresh;
+    const now = Date.now();
+    return fresh.map((d) => {
+      const pin = pins[d.id];
+      if (!pin) return d;
+      if (d.status === pin.value || now - pin.at >= STATUS_PIN_TTL_MS) {
+        delete pins[d.id];
+        return d;
+      }
+      return { ...d, status: pin.value };
+    });
+  };
 
   // Join request state
   const [joinRequesting, setJoinRequesting] = useState(false);
@@ -665,6 +717,27 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // GSL denial state
   const [gslDenied, setGslDenied] = useState(false);
   const prevPendingRef = useRef<Committee['pendingMotions']>([]);
+  // Persisted request/denial clocks (see GSL_RETRY_MS / GSL_DENIED_MS above) plus
+  // the coarse clock that drives the countdown on the button. The clock only runs
+  // while one of the two windows is open, so this is never a permanent 1s
+  // re-render of the whole board.
+  const [gslCooldown, setGslCooldown] = useState<GslCooldown>({});
+  /* Armed when a request vanishes, cancelled if the delegate turns up on the
+     list before it fires — see the denial-detection effect. */
+  const pendingDenialTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [gslNow, setGslNow] = useState<number>(() => Date.now());
+
+  // Live seconds on the TOTAL caucus clock. The committee row only ever carries
+  // the value AT the anchor instant, so rendering it raw freezes the countdown
+  // between chair writes. Recomputed from the anchor on every tick rather than
+  // decremented, so a phone that was asleep wakes up on the right number.
+  const [caucusSeconds, setCaucusSeconds] = useState(0);
+
+  // Transient "N status changes remaining" reminder — shown when the delegate
+  // actually moves the switch, then faded out. See the footnote block below.
+  const [statusFlash, setStatusFlash] = useState(false);
+  const statusFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (statusFlashTimer.current) clearTimeout(statusFlashTimer.current); }, []);
 
   // NOTE: this page deliberately holds NO reference to useSettingsStore. It never
   // hydrates that store from the DB, so getSettings() here silently returns
@@ -696,7 +769,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           // keeps the full refetch and its setSessionEnded/Suspended logic. All other tables
           // can never change session state, so a scoped patch is safe.
           if (table === 'current_speaker') {
+            // Every awaited fetch below takes a ticket off the same counter: whichever fetch
+            // is newest wins, so an older snapshot can never resolve last and land.
+            const seq = ++fetchSeq.current;
             const cs = await getCurrentSpeakerRow(cid);
+            if (seq !== fetchSeq.current) return;
             if (!cs) return;
             setCommittee((prev) => {
               if (!prev) return prev;
@@ -722,7 +799,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             return;
           }
           if (table === 'speakers_list') {
+            const seq = ++fetchSeq.current;
             const { speakersList, caucusQueue } = await getSpeakersLists(cid);
+            if (seq !== fetchSeq.current) return;
             setCommittee((prev) => prev ? {
               ...prev,
               speakersList: prev.currentSpeaker
@@ -733,8 +812,11 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             return;
           }
           if (table === 'delegates') {
+            const seq = ++fetchSeq.current;
             const delegates = await getDelegatesList(cid);
-            setCommittee((prev) => prev ? { ...prev, delegates } : prev);
+            if (seq !== fetchSeq.current) return;
+            // Keep this delegation's own just-written status until the DB confirms it.
+            setCommittee((prev) => prev ? { ...prev, delegates: applyPinnedStatuses(delegates) } : prev);
             return;
           }
           if (table === 'messages') {
@@ -742,18 +824,24 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             return;
           }
           if (table === 'documents') {
+            const seq = ++fetchSeq.current;
             const documents = await getDocumentsList(cid);
+            if (seq !== fetchSeq.current) return;
             setCommittee((prev) => prev ? { ...prev, documents } : prev);
             return;
           }
           if (table === 'motions') {
+            const seq = ++fetchSeq.current;
             const pendingMotions = await getPendingMotionsList(cid);
+            if (seq !== fetchSeq.current) return;
             setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
             return;
           }
 
           // table === 'committees' (and any fallback): session state may have changed.
+          const seq = ++fetchSeq.current;
           const updated = await getCommitteeByCode(code.toUpperCase());
+          if (seq !== fetchSeq.current) return;   // a newer refetch already applied
           if (updated) {
             if (updated.endedAt) {
               setSessionEnded(true);
@@ -771,9 +859,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
             }
             // Messages are append-only: merge rather than replace so this full refetch can
             // never drop a message that the scoped messages handler already delivered.
+            // Delegates go through the same pin as the scoped branch above — this fallback
+            // fires on every phase change, so without it any unrelated `committees` event
+            // would repaint this delegation's just-written status from a stale snapshot.
             setCommittee((prev) => prev
-              ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages) }
-              : updated);
+              ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
+              : { ...updated, delegates: applyPinnedStatuses(updated.delegates) });
           }
         }, (status) => onRealtimeStatus(cid, status));
       }
@@ -869,6 +960,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => clearInterval(id);
   }, [committee?.expiresAt]);
 
+  useEffect(() => { committeeRef.current = committee; }, [committee]);
+
+  /* A pending denial must not fire after this page is gone. */
+  useEffect(() => () => {
+    if (pendingDenialTimer.current !== null) clearTimeout(pendingDenialTimer.current);
+  }, []);
+
   // Detect GSL request denial — and waiting-room (join-request) denial
   useEffect(() => {
     if (!committee) return;
@@ -878,10 +976,51 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     const hadRequest = (prev ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
     const hasRequest = (committee.pendingMotions ?? []).some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
     if (hadRequest && !hasRequest && !isOnSpeakersListNow && !isCurrentSpeakerNow) {
-      setGslDenied(true);
+      /* DO NOT conclude denial here. "Motion gone and not on the list" is also
+         what an APPROVAL looks like for a moment: approveGslRequest performs two
+         separate writes — the speakers_list insert and the motion delete — which
+         arrive as two independent realtime events in arbitrary order. When the
+         delete wins the race the delegate is transiently in exactly this state,
+         and stamping now told an accepted delegate they had been rejected and
+         locked them out for 15 minutes.
+         (This became reachable when motions got REPLICA IDENTITY FULL. Before
+         that, motion DELETE events were filtered out server-side and never
+         arrived, so this branch almost never fired.)
+         So: wait for the other event. Only the absence of an insert AFTER the
+         grace window is real evidence of a no. */
+      if (pendingDenialTimer.current === null) {
+        pendingDenialTimer.current = setTimeout(() => {
+          pendingDenialTimer.current = null;
+          const c = committeeRef.current;
+          if (!c) return;
+          const onList = c.speakersList.some((s) => s.country === country)
+            || c.currentSpeaker?.country === country;
+          const nowPending = (c.pendingMotions ?? [])
+            .some((m) => (m.type as string) === 'gsl-request' && m.proposedBy === country);
+          /* Landed on the list, or re-requested in the meantime → not a denial. */
+          if (onList || nowPending) return;
+          setGslDenied(true);
+          const next: GslCooldown = { deniedAt: Date.now() };
+          setGslCooldown(next);
+          writeGslCooldown(c.id, country, next);
+        }, GSL_DENIAL_GRACE_MS);
+      }
     }
     if (isOnSpeakersListNow || isCurrentSpeakerNow) {
+      /* The approval won the race after all — cancel any denial still waiting
+         out its grace window, so it can never fire against a queued delegate. */
+      if (pendingDenialTimer.current !== null) {
+        clearTimeout(pendingDenialTimer.current);
+        pendingDenialTimer.current = null;
+      }
       setGslDenied(false);
+      // On the list: both clocks are moot. Guarded so this does not hand back a
+      // fresh object (and a fresh render) on every unrelated committee event.
+      setGslCooldown((prev) => {
+        if (!prev.requestedAt && !prev.deniedAt) return prev;
+        writeGslCooldown(committee.id, country, {});
+        return {};
+      });
     }
     // Waiting room: a join request that vanished while still absent = the chair declined it.
     const admitted = (committee.delegates.find((d) => d.country === country)?.status ?? 'absent') !== 'absent';
@@ -898,46 +1037,134 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     prevPendingRef.current = committee.pendingMotions;
   }, [committee?.pendingMotions, committee?.speakersList, committee?.currentSpeaker, committee?.delegates, country]);
 
+  // Rehydrate the GSL clocks from localStorage. A reload must not clear a lockout,
+  // so the stored timestamps — not component state — are the source of truth.
+  useEffect(() => {
+    if (!committee?.id || !country) return;
+    setGslCooldown(readGslCooldown(committee.id, country));
+  }, [committee?.id, country]);
+
+  // Countdown clock for the button label. Runs ONLY while a window is open and
+  // stops itself the moment both have elapsed — at most 15 minutes of ticking,
+  // and only after a delegate has actually been denied.
+  useEffect(() => {
+    const open = () => {
+      const now = Date.now();
+      return gslDeniedRemaining(gslCooldown, now) > 0 || gslRetryRemaining(gslCooldown, now) > 0;
+    };
+    if (!open()) return;
+    setGslNow(Date.now());
+    const id = setInterval(() => {
+      setGslNow(Date.now());
+      if (!open()) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [gslCooldown]);
+
+  // ── Live caucus clock ─────────────────────────────────────────────────────
+  // Re-seed whenever the anchor OR the anchored value changes (start, pause,
+  // extend, speaker advance), and tick only while the anchor is set — null
+  // `totalStartedAt` IS the paused signal, so no schema or type change is
+  // needed. Recomputes from caucusRemainingNow each second instead of
+  // decrementing, so a backgrounded phone catches up on wake rather than
+  // drifting behind by however long it was asleep. Reader only: this tick NEVER
+  // writes to the DB (MUST NEVER HAPPEN #4 — a per-second write would re-arm the
+  // realtime debounce for every device in the committee).
+  const caucusAnchor = committee?.caucus?.totalStartedAt ?? null;
+  const caucusAnchoredRemaining = committee?.caucus?.remainingTime ?? null;
+  useEffect(() => {
+    const read = () => caucusRemainingNow(
+      caucusAnchoredRemaining === null
+        ? null
+        : ({ remainingTime: caucusAnchoredRemaining, totalStartedAt: caucusAnchor } as CaucusState),
+    );
+    setCaucusSeconds(read());
+    if (!caucusAnchor) return;
+    const id = setInterval(() => setCaucusSeconds(read()), 1000);
+    return () => clearInterval(id);
+  }, [caucusAnchor, caucusAnchoredRemaining]);
+
+  /* ── Board sizing ───────────────────────────────────────────────────────
+     Declared above the early returns: hooks must run in the same order on
+     every render, and everything below this point can bail out. `discBox`
+     measures the hero's centre column; the queue measures its own slot and
+     renders only the rows that genuinely fit, because the page never scrolls. */
+  /* The 176 ceiling used to bind on every screen wider than a phone: the disc
+     stopped growing while the middle grid track kept expanding, so the rails
+     drifted out of the disc's orbit and the arc flattened into a straight
+     column. The real ceiling now lives in CSS on `.dgv-hero-mid`
+     (min(300px, 34vh)), which is height-aware; this number just has to stay
+     above it so it is never the binding constraint. */
+  const { ref: discBox, size: discSize } = useMeasuredSize(84, 320);
+  const { ref: queueBox, count: queueFit } = useFitCount(44, 30);
+
+  /* Capped at 26, NOT scaled freely off the disc. The rails are width-capped so
+     the crest can lead, and an icon that grows with the disc eats that fixed
+     rail from the inside — at 34px it left ~51px for the label and clipped
+     "SPEECHES" to "SPEECH". The glyph is an accent here; the number and its
+     label are the content. */
+  /* Bigger relative to the crest than before: at 0.12 the glyphs read as
+     afterthoughts beside a 2.3x disc. The rail is fixed-width, so this is
+     bounded by what still leaves room for the longest label beside it. */
+  const statIcon = Math.round(Math.max(22, Math.min(30, discSize * 0.17)));
+  const actionIcon = Math.round(Math.max(20, Math.min(30, discSize * 0.18)));
+  /* The documents tile carries its own clamp rather than riding discSize
+     unbounded — at a 300px disc a raw 0.46 multiplier would put a 138px folder
+     in a rail that is ~94px wide. */
+  /* Capped to the fixed left rail (76px on phone) minus a little breathing
+     room. It still reads far larger than the ~29px it was, but it can no longer
+     widen the rail — which would come straight out of the crest beside it. */
+  const docIcon = Math.round(Math.max(52, Math.min(74, discSize * 0.40)));
+  /* How far the outermost satellite tucks toward the disc. Scaled off the disc
+     so the curve stays proportional from phone to laptop — the ceiling is 44,
+     not 26, because a 300px disc needs ~42px of tuck to read the same as ~20px
+     does against a 145px one. */
+  /* How far the outer satellites tuck toward the crest. Bounded by geometry,
+     not taste: a rail sits just past the disc's widest point, so an item at
+     vertical offset h can only move inward by R − sqrt(R² − h²) before it slides
+     under the circle. At R≈97 and h≈55 that is ~17px; 0.14×disc gave 27 and
+     buried "ROLL CALL" and the stat glyphs behind the flag. */
+  const arcDepth = Math.round(Math.max(5, Math.min(16, discSize * 0.07)));
+
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
   if (accessState === 'signin') {
     return (
-      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
-        <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Sign in to join this session</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify your allocation.</p>
-          <button
-            onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code))}
-            className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
-            style={{ backgroundColor: '#1B3828' }}
-          >
+      <div className="min-h-dvh flex items-center justify-center px-6" style={{ background: DG.ivory }}>
+        <DelegateStyles />
+        <Panel className="dgv-rise w-full max-w-sm text-center">
+          <h1 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, color: DG.forest }}>Sign in to join this session</h1>
+          <p style={{ margin: '10px 0 20px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>This is a conference session. Sign in to verify your allocation.</p>
+          <ChunkyButton onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code))}>
             SIGN IN
-          </button>
-        </div>
+          </ChunkyButton>
+        </Panel>
       </div>
     );
   }
 
   if (accessState === 'denied') {
     return (
-      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center px-6">
-        <div className="text-center max-w-sm">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>Allocation does not match account</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>This session allocation is not associated with your account. Please try again, or contact your conference organisers.</p>
-          <Link href="/sessions" className="inline-block font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>BACK TO HOME</Link>
-        </div>
+      <div className="min-h-dvh flex items-center justify-center px-6" style={{ background: DG.ivory }}>
+        <DelegateStyles />
+        <Panel className="dgv-rise w-full max-w-sm text-center">
+          <h1 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, color: DG.forest }}>Allocation does not match account</h1>
+          <p style={{ margin: '10px 0 20px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>This session allocation is not associated with your account. Please try again, or contact your conference organisers.</p>
+          <ChunkyButton onClick={() => router.push('/sessions')}>BACK TO HOME</ChunkyButton>
+        </Panel>
       </div>
     );
   }
 
   if (!committee) {
     return (
-      <div className="min-h-screen bg-[#EDE7D8] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-black mb-2" style={{ color: '#1B3828' }}>{t('delegate_session_not_found')}</h1>
-          <p className="mb-6" style={{ color: '#6A5A4A' }}>Code "{code}" is invalid or the session has ended.</p>
-          <Link href="/join" className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828' }}>TRY AGAIN</Link>
-        </div>
+      <div className="min-h-dvh flex items-center justify-center px-6" style={{ background: DG.ivory }}>
+        <DelegateStyles />
+        <Panel className="dgv-rise w-full max-w-sm text-center">
+          <h1 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, color: DG.forest }}>{t('delegate_session_not_found')}</h1>
+          <p style={{ margin: '10px 0 20px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>Code &quot;{code}&quot; is invalid or the session has ended.</p>
+          <ChunkyButton onClick={() => router.push('/join')}>TRY AGAIN</ChunkyButton>
+        </Panel>
       </div>
     );
   }
@@ -963,18 +1190,49 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return PHASE_LABEL[committee.phase] ?? PHASE_LABELS[committee.phase] ?? committee.phase;
   })();
 
-  const isAdjourned = committee.phase === 'adjourned';
-
   // ── Status change handler — optimistic update to avoid visible lag
   const handleStatusChange = async (newStatus: DelegateStatus) => {
     if (!myDelegate) return;
+    const delegateId = myDelegate.id;
+    // Tapping the status you ALREADY hold is a no-op, and a no-op must cost
+    // nothing: no rate-limit slot, no DB write, no pin. The pin is consulted as
+    // well as the row because a write from a second ago may not be confirmed
+    // yet — without it, the second tap of a double-tap reads the pre-click row
+    // and burns the delegate's next slot on a change that is already in flight.
+    const pin = pendingStatusWrites.current[delegateId];
+    const heldStatus = pin && Date.now() - pin.at < STATUS_PIN_TTL_MS ? pin.value : myDelegate.status;
+    if (heldStatus === newStatus) return;
     if (changesLeft <= 0) return;
+    const previousStatus = myDelegate.status;
+    setStatusError(false);
+    // Real change → surface the remaining-changes reminder, briefly. The line is
+    // keyed on the remaining count, so a second change remounts it and the fade
+    // animation restarts from the top instead of resuming mid-fade.
+    if (statusFlashTimer.current) clearTimeout(statusFlashTimer.current);
+    setStatusFlash(true);
+    statusFlashTimer.current = setTimeout(() => setStatusFlash(false), 4300);
+    // Pin this row against any refetch whose snapshot predates the write below — including
+    // refetches fired by events this delegation had nothing to do with.
+    pendingStatusWrites.current[delegateId] = { value: newStatus, at: Date.now() };
     setCommittee((prev) => prev ? {
       ...prev,
-      delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: newStatus } : d),
+      delegates: prev.delegates.map((d) => d.id === delegateId ? { ...d, status: newStatus } : d),
     } : prev);
+    // Recorded up front, NOT after the await: a delegate double-tapping the switch would
+    // otherwise spend two writes against one slot. A write that fails refunds it below.
     recordStatusChange(committee.id, country);
-    setDelegateStatusInDB(myDelegate.id, newStatus, committee.code);
+    setDelegateStatusInDB(delegateId, newStatus, committee.code).then((ok) => {
+      if (ok) return;
+      // The write never landed: give the slot back, drop the pin, and put the switch back
+      // where it was so the delegate is not looking at a status the committee never saw.
+      refundStatusChange(committee.id, country);
+      delete pendingStatusWrites.current[delegateId];
+      setCommittee((prev) => prev ? {
+        ...prev,
+        delegates: prev.delegates.map((d) => d.id === delegateId ? { ...d, status: previousStatus } : d),
+      } : prev);
+      setStatusError(true);
+    });
   };
 
   // ── Join request handler (absent → P or PV)
@@ -983,6 +1241,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     setJoinDenied(false);
     // Chair approval OFF → delegates self-admit instantly (no waiting room).
     if (!requireChairApproval) {
+      // Same pin as handleStatusChange — self-admitting is a status write like any other,
+      // and an in-flight refetch would otherwise drop the delegate straight back to absent.
+      pendingStatusWrites.current[myDelegate.id] = { value: desiredStatus, at: Date.now() };
       setCommittee((prev) => prev ? {
         ...prev,
         delegates: prev.delegates.map((d) => d.id === myDelegate.id ? { ...d, status: desiredStatus } : d),
@@ -1003,53 +1264,230 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   );
   const handleAddMeToSpeakers = () => {
     if (!myDelegate || isAbsent) return;
+    // No duplicate motion is possible: requestGslSpot already short-circuits when
+    // this delegation has a pending gsl-request (committeeService.ts:844), so a
+    // re-request after the no-response window REUSES the motion the chair is
+    // already looking at. Remove-then-recreate was the alternative and it is
+    // strictly worse here — deleting a motion row needs the chair suffix under
+    // RLS, and it would yank the request out of the chair's queue and re-add it
+    // at the bottom, punishing the delegate for the chair's silence.
+    const next: GslCooldown = { requestedAt: Date.now() };
+    setGslCooldown(next);
+    writeGslCooldown(committee.id, country, next);
     requestGslSpot(committee.id, myDelegate.id, myDelegate.country, committee.code);
   };
 
-  // Section 7 — shortened tab labels
-  const chatDisabled = getCommitteeFlags(committee).disableChat;
-  const tabs: { key: DelegateTab; label: string }[] = [
-    { key: 'session',   label: t('delegate_tab_session') },
-    { key: 'documents', label: t('delegate_tab_documents') },
-    { key: 'chat',      label: t('delegate_tab_chat') },
-    { key: 'stats',     label: t('delegate_tab_stats') },
-  ];
+  // ── Derived presentation data ─────────────────────────────────────────────
+  const flags = getCommitteeFlags(committee);
+  const chatDisabled = flags.disableChat;
+  const lockRollCall = flags.lockDelegateRollCall;
+
+  const myIso = getCountryByName(country)?.code ?? '';
+  const myName = getCountryDisplayName(country, language);
+  const unreadTotal = chatUnreadTotal(
+    committee.messages, country, false, committee.chairNames ?? [], chatReadCounts,
+  );
+
+  // Speaking + chat counters. The tiles and StatisticsTab both derive from the same
+  // pure helpers over the same committee row, so the two surfaces can never disagree.
+  const myLogs = parseSpeakingLogs(committee).filter((l) => l.country === country);
+  const mySpokenSeconds = myLogs.reduce((s, l) => s + l.seconds, 0);
+  // A speaking log is a '__system__' message on the '__log__' channel (see
+  // parseSpeakingLogs) — everything else this delegation sent is a real chat message.
+  const myMessagesSent = (committee.messages ?? []).filter(
+    (m) => m.sender === country && m.sender !== '__system__' && m.recipient !== '__log__',
+  ).length;
+
+  /* The escalation ladder that drove the old hero is gone — the ordinal now
+     lives on the flag itself, and `live` on FlagOrdinalDisc carries the only
+     state that still changes the treatment. */
+  const inQueue = isCurrentSpeaker || isOnSpeakersList;
+
+  // No plural engine — one key per grammatical number.
+  const aheadLabel = isCurrentSpeaker
+    ? undefined
+    : myQueueIndex === 0
+      ? t('delegate_on_deck')
+      : myQueueIndex === 1
+        ? t('delegate_speaker_ahead_one')
+        : myQueueIndex > 1
+          ? t('delegate_speakers_ahead', { n: myQueueIndex })
+          : undefined;
+
+  // ETA is a pure function of (speakers ahead × the committee's configured per-speaker
+  // seconds), so it recomputes only when the committee row changes — never on a per-second
+  // tick. With no configured speaking time the line is omitted entirely rather than guessed.
+  const etaLabel = (() => {
+    const per = committee.speakerTimeLimit;
+    if (isCurrentSpeaker || myQueueIndex < 1 || !per || per <= 0) return undefined;
+    const mins = Math.max(5, Math.round((myQueueIndex * per) / 60 / 5) * 5);
+    if (mins <= 60) return t('delegate_eta_about', { t: `${mins} min` });
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return t('delegate_eta_about', { t: m ? `${h} hr ${m} min` : `${h} hr` });
+  })();
+
+  // Request-to-speak reflects the existing GSL states plus the two cooldowns; the
+  // underlying action is unchanged. Order matters: what the committee can see
+  // (on the floor, in the queue) always outranks anything this device remembers.
+  const deniedLeft = gslDeniedRemaining(gslCooldown, gslNow);
+  const retryLeft = gslRetryRemaining(gslCooldown, gslNow);
+  const speakCta = (() => {
+    if (isCurrentSpeaker) return { label: t('delegate_floor_now'), disabled: true, onClick: undefined as (() => void) | undefined };
+    if (isOnSpeakersList) return { label: myQueueIndex === 0 ? t('delegate_up_next_queue') : t('delegate_in_queue'), disabled: true, onClick: undefined as (() => void) | undefined };
+    // Denied: locked out for 15 minutes, with the wait stated on the button so
+    // it reads as a rule rather than a broken control.
+    if (deniedLeft > 0) {
+      return { label: t('delegate_request_retry_in', { t: formatCooldown(deniedLeft) }), disabled: true, onClick: undefined as (() => void) | undefined };
+    }
+    if (isGslRequestPending) {
+      // Still pending and inside the no-response window → wait. Past it, the
+      // chair has not acted, so the delegate may nudge again (same motion).
+      if (retryLeft > 0) return { label: t('delegate_awaiting_approval'), disabled: true, onClick: undefined as (() => void) | undefined };
+      return { label: t('delegate_request_again'), disabled: sessionEnded || isAbsent, onClick: handleAddMeToSpeakers };
+    }
+    if (gslDenied) return { label: t('delegate_request_again'), disabled: sessionEnded, onClick: () => setGslDenied(false) };
+    return { label: t('delegate_request_gsl'), disabled: sessionEnded || isAbsent, onClick: handleAddMeToSpeakers };
+  })();
+
+  const openSheet = (next: DelegateSheet, section?: 'submit' | 'view') => {
+    if (section) setDocsSection(section);
+    setSheet(next);
+  };
+
+  // ── Shared chrome ─────────────────────────────────────────────────────────
+  const iconBtn: React.CSSProperties = {
+    width: 44, height: 44, borderRadius: 14, border: 'none', flexShrink: 0,
+    background: DG.ivory, color: DG.forest, cursor: 'pointer',
+    display: 'grid', placeItems: 'center', boxShadow: LIFT.sm,
+  };
+
+  const header = (
+    <header
+      className="dgv-hdr sticky top-0 z-30 flex items-center gap-2 px-3 sm:px-5"
+      style={{ height: 56, background: DG.cream, borderBottom: `1px solid ${DG.hairline}` }}
+    >
+      <SessionsHeaderLogo height={24} />
+      <div className="min-w-0 flex-1 text-start">
+        <div
+          className="truncate"
+          style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: DG.forest, lineHeight: 1.15 }}
+        >
+          {getCommitteeDisplayName(committee.name, language)}
+        </div>
+        <button
+          type="button"
+          onClick={() => { navigator.clipboard.writeText(committee.code); }}
+          className="dgv-focus dgv-code truncate"
+          style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
+            color: DG.faint, maxWidth: '100%',
+          }}
+        >
+          {committee.code}
+        </button>
+      </div>
+
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          aria-label="Language"
+          aria-expanded={langOpen}
+          onClick={() => setLangOpen((v) => !v)}
+          className="dgv-tap dgv-focus"
+          style={iconBtn}
+        >
+          <Languages size={19} strokeWidth={2.25} />
+        </button>
+        {langOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setLangOpen(false)} />
+            <div
+              className="absolute end-0 top-full z-50 overflow-hidden"
+              style={{
+                marginTop: 8, minWidth: 168, borderRadius: 16,
+                background: DG.cream, border: `1px solid ${DG.hairline}`,
+                boxShadow: '0 18px 40px rgba(27,56,40,0.24)',
+              }}
+            >
+              {([['en', t('settings_english')], ['es', t('settings_spanish')], ['fr', t('settings_french')], ['ar', 'العربية']] as [string, string][]).map(([lc, label], i) => {
+                const on = language === lc;
+                return (
+                  <button
+                    key={lc}
+                    type="button"
+                    onClick={() => { setLanguage(lc as 'en' | 'es' | 'fr' | 'ar'); setLangOpen(false); }}
+                    className="dgv-focus w-full flex items-center gap-2.5 px-4 text-start"
+                    style={{
+                      minHeight: 44, border: 'none', cursor: 'pointer',
+                      borderTop: i > 0 ? `1px solid ${DG.hairline}` : 'none',
+                      background: on ? 'rgba(27,56,40,0.07)' : 'transparent',
+                      fontFamily: OUTFIT, fontSize: 13, fontWeight: on ? 800 : 600,
+                      color: on ? DG.forest : DG.body,
+                    }}
+                  >
+                    <span style={{ fontFamily: OUTFIT, fontSize: 11, color: DG.faint }}>{lc.toUpperCase()}</span>
+                    <span className="flex-1">{label}</span>
+                    {on && <Check size={15} strokeWidth={2.25} style={{ color: DG.deepGold }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      <button
+        type="button"
+        aria-label={t('delegate_adjourned_esc')}
+        onClick={() => router.push('/sessions')}
+        className="dgv-tap dgv-focus"
+        style={iconBtn}
+      >
+        <LogOut size={19} strokeWidth={2.25} />
+      </button>
+    </header>
+  );
 
   // ── Absent banner (blocks active interaction)
   const AbsentBanner = () => (
-    <div className="mx-4 mt-4 rounded-xl p-4" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
-      <div className="text-sm font-black mb-1" style={{ color: '#1B3828' }}>{t('delegate_absent_title')}</div>
-      <div className="text-xs mb-3" style={{ color: '#6A5A4A' }}>{t('delegate_absent_desc')}</div>
+    <Panel className="dgv-rise" style={{ marginBottom: 16 }}>
+      <div style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: DG.forest }}>{t('delegate_absent_title')}</div>
+      <div style={{ fontFamily: OUTFIT, fontSize: 13, color: DG.body, margin: '4px 0 14px' }}>{t('delegate_absent_desc')}</div>
       {joinStatus && !joinDenied ? (
-        <div className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#1B3828' }}>
-          <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#1B3828' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: DG.forest }}>
+          <span className="animate-spin" style={{ width: 12, height: 12, borderRadius: '50%', border: `2px solid ${DG.forest}`, borderTopColor: 'transparent', display: 'inline-block' }} />
           {t('delegate_join_waiting')}
         </div>
       ) : (
-        <div className="flex gap-2">
-          <button onClick={() => handleRequestJoin('present')} disabled={joinRequesting}
-            className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
-            style={{ backgroundColor: 'transparent', border: '1px solid #DDD4C0', color: '#6A5A4A' }}>
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          <ChunkyButton tone="outline" disabled={joinRequesting} onClick={() => handleRequestJoin('present')}>
             {t('delegate_present_btn')}
-          </button>
-          <button onClick={() => handleRequestJoin('present-voting')} disabled={joinRequesting}
-            className="flex-1 py-2 rounded-xl text-xs font-black text-white transition-colors focus:outline-none"
-            style={{ backgroundColor: '#1B3828' }}>
+          </ChunkyButton>
+          <ChunkyButton tone="primary" disabled={joinRequesting} onClick={() => handleRequestJoin('present-voting')}>
             {t('delegate_pv_btn')}
-          </button>
+          </ChunkyButton>
         </div>
       )}
-      {joinDenied && <p className="text-xs mt-2 font-semibold" style={{ color: '#8B2020' }}>{t('delegate_join_denied')}</p>}
-    </div>
+      {joinDenied && (
+        <p style={{ marginTop: 10, fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: DG.danger }}>{t('delegate_join_denied')}</p>
+      )}
+    </Panel>
   );
 
   if (sessionSuspended && (committee.suspendedAt || wasEverSuspended.current)) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-center px-8" style={{ backgroundColor: '#EDE7D8' }}>
-        <p className="text-xs font-mono font-bold tracking-widest mb-2" style={{ color: '#1B3828' }}>{getCommitteeDisplayName(committee.name, language)} · {committee.code}</p>
-        <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_adjourned_title')}</h1>
-        <p className="text-lg" style={{ color: '#6A5A4A' }}>{t('delegate_adjourned_desc')}</p>
-        <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('delegate_adjourned_esc')}</p>
+      <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6" style={{ background: DG.ivory }}>
+        <DelegateStyles />
+        <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: DG.deepGold }}>
+          {getCommitteeDisplayName(committee.name, language)} · {committee.code}
+        </p>
+        <h1 className="dgv-rise" style={{ margin: '12px 0 14px', fontFamily: OUTFIT, fontSize: 'clamp(30px, 9vw, 46px)', fontWeight: 900, letterSpacing: '-0.02em', color: DG.forest }}>
+          {t('delegate_adjourned_title')}
+        </h1>
+        <p style={{ fontFamily: OUTFIT, fontSize: 17, color: DG.body }}>{t('delegate_adjourned_desc')}</p>
+        <p style={{ marginTop: 32, fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>{t('delegate_adjourned_esc')}</p>
       </div>
     );
   }
@@ -1057,560 +1495,697 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // ── Waiting Room — chair-approval gate (blocks the session until admitted) ──
   if (requireChairApproval && isAbsent && !sessionEnded) {
     const waitingHeading = language === 'ar' ? 'غرفة الانتظار' : language === 'fr' ? "Salle d'attente" : language === 'es' ? 'Sala de Espera' : 'Waiting Room';
-    const myFlag = getCountryByName(country);
     return (
-      <FitToScreen>
-        <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
-          <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-          <div className="relative z-[2] flex-1 flex flex-col items-center justify-center text-center px-6">
-            <p className="text-xs font-mono font-bold uppercase tracking-widest mb-1" style={{ color: '#9A8A78' }}>{getCommitteeDisplayName(committee.name, language)}</p>
-            {committee.topic && <p className="text-xs mb-6" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
-            <div className="flex flex-col items-center gap-3 mb-6">
-              {myFlag
-                ? <img src={getFlagUrl(myFlag.code)} alt={country} style={{ width: '104px', height: '74px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.12)', boxShadow: '0 6px 20px rgba(27,56,40,0.14)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                : <Emoji size="3.5rem">🌐</Emoji>}
-              <p className="font-black text-2xl" style={{ color: '#1C1410' }}>{getCountryDisplayName(country, language)}</p>
-            </div>
-            <div className="w-full max-w-sm rounded-2xl p-6 relative overflow-hidden" style={{ backgroundColor: '#1B3828', border: '1.5px solid #3D7A52', boxShadow: '0 24px 60px rgba(27,56,40,0.35)' }}>
-              <h1 className="text-2xl font-black mb-2" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{waitingHeading}</h1>
-              {joinDenied ? (
-                <>
-                  <p className="text-sm mb-4" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_join_denied')}</p>
-                  <button onClick={() => setJoinDenied(false)}
-                    className="w-full py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none"
-                    style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>
-                    {t('delegate_request_again')}
-                  </button>
-                </>
-              ) : joinStatus ? (
-                <div className="flex flex-col items-center gap-3 py-2">
-                  <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#EED98A' }} />
-                  <p className="text-sm" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_join_waiting')}</p>
-                </div>
-              ) : (
-                <>
-                  <p className="text-sm mb-4" style={{ color: 'rgba(237,231,216,0.85)' }}>{t('delegate_absent_desc')}</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleRequestJoin('present')} disabled={joinRequesting}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors focus:outline-none"
-                      style={{ backgroundColor: 'transparent', border: '1px solid rgba(238,217,138,0.4)', color: '#EED98A' }}>
-                      {t('delegate_present_btn')}
-                    </button>
-                    <button onClick={() => handleRequestJoin('present-voting')} disabled={joinRequesting}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none"
-                      style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>
-                      {t('delegate_pv_btn')}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-            <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('delegate_adjourned_esc')}</p>
-          </div>
+      <div className="min-h-dvh flex flex-col items-center justify-center text-center px-6 py-10" style={{ background: DG.ivory }}>
+        <DelegateStyles />
+        <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: DG.deepGold }}>
+          {getCommitteeDisplayName(committee.name, language)}
+        </p>
+        {committee.topic && (
+          <p style={{ marginTop: 6, fontFamily: OUTFIT, fontSize: 13, color: DG.body, maxWidth: 460 }}>{committee.topic}</p>
+        )}
+
+        <div className="dgv-rise" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, margin: '26px 0' }}>
+          <FlagDisc code={myIso} name={myName} size={104} ring={DG.hairline} />
+          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: DG.ink }}>{myName}</p>
         </div>
-      </FitToScreen>
+
+        <Panel className="w-full max-w-sm">
+          <h1 style={{ margin: '0 0 10px', fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: DG.forest }}>{waitingHeading}</h1>
+          {joinDenied ? (
+            <>
+              <p style={{ margin: '0 0 16px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>{t('delegate_join_denied')}</p>
+              <ChunkyButton tone="gold" onClick={() => setJoinDenied(false)}>{t('delegate_request_again')}</ChunkyButton>
+            </>
+          ) : joinStatus ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+              <span className="animate-spin" style={{ width: 24, height: 24, borderRadius: '50%', border: `3px solid ${DG.forest}`, borderTopColor: 'transparent' }} />
+              <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>{t('delegate_join_waiting')}</p>
+            </div>
+          ) : (
+            <>
+              <p style={{ margin: '0 0 16px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>{t('delegate_absent_desc')}</p>
+              <div className="flex flex-col gap-2.5">
+                <ChunkyButton tone="outline" disabled={joinRequesting} onClick={() => handleRequestJoin('present')}>
+                  {t('delegate_present_btn')}
+                </ChunkyButton>
+                <ChunkyButton tone="primary" disabled={joinRequesting} onClick={() => handleRequestJoin('present-voting')}>
+                  {t('delegate_pv_btn')}
+                </ChunkyButton>
+              </div>
+            </>
+          )}
+        </Panel>
+        <p style={{ marginTop: 30, fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>{t('delegate_adjourned_esc')}</p>
+      </div>
     );
   }
 
-  return (
-    <FitToScreen>
-    <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
-      <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-      {/* Header */}
-      <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2 relative z-[2] shrink-0">
-        <SessionsHeaderLogo />
-        <div className="flex flex-1 min-w-0 h-full">
-          {(['session', 'documents', 'chat', 'stats'] as DelegateTab[]).map((tab2, i) => {
-            const labels: Record<DelegateTab, string> = { session: t('delegate_session_tab'), documents: t('delegate_documents_tab'), chat: t('tab_chat'), stats: t('delegate_stats_tab') };
-            const isActive = tab === tab2;
-            const chatUnread = tab2 === 'chat'
-              ? chatUnreadTotal(committee.messages, country, false, committee.chairNames ?? [], chatReadCounts)
-              : 0;
-            return (
-              <React.Fragment key={tab2}>
-                {i > 0 && <div style={{ width: '1px', height: '28px', alignSelf: 'center', backgroundColor: 'rgba(28,20,16,0.2)', flexShrink: 0 }} />}
-                <button
-                  onClick={() => { setTab(tab2); }}
-                  className="flex-1 min-w-0 flex items-center justify-center text-sm sm:text-[18px] font-bold px-1.5 sm:px-3 relative h-full transition-all duration-200"
-                  style={{ color: isActive ? '#1B3828' : '#1C1410', backgroundColor: isActive ? 'rgba(27,56,40,0.07)' : 'transparent', fontWeight: isActive ? 900 : 700 }}
-                  onMouseEnter={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.transform = 'translateY(-1px)'; } }}
-                  onMouseLeave={(e) => { if (!isActive) { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.backgroundColor = 'transparent'; el.style.transform = 'translateY(0)'; } }}>
-                  <span className="truncate">{labels[tab2]}</span>
-                  {chatUnread > 0 && tab !== 'chat' && (
-                    <span className="absolute top-1 right-1 w-4 h-4 bg-[#1B3828] rounded-full text-white text-[10px] flex items-center justify-center">{chatUnread}</span>
-                  )}
-                  <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: isActive ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
-                </button>
-              </React.Fragment>
-            );
-          })}
+  // ── Queue rows ────────────────────────────────────────────────────────────
+  const queueRows = (limit?: number) =>
+    (typeof limit === 'number' ? committee.speakersList.slice(0, limit) : committee.speakersList).map((s, i) => (
+      <QueueRow
+        key={s.delegateId}
+        position={i + 1}
+        code={getCountryByName(s.country)?.code ?? ''}
+        name={getCountryDisplayName(s.country, language)}
+        isSelf={s.country === country}
+        speakingLabel={t('delegate_speaking_chip')}
+        youLabel={t('delegate_you_chip')}
+      />
+    ));
+
+  const currentSpeakerRow = committee.currentSpeaker && (
+    <QueueRow
+      position={0}
+      speaking
+      code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''}
+      name={getCountryDisplayName(committee.currentSpeaker.country, language)}
+      isSelf={isCurrentSpeaker}
+      speakingLabel={t('delegate_speaking_chip')}
+      youLabel={t('delegate_you_chip')}
+    />
+  );
+
+  const caucusLive = (committee.phase === 'moderated-caucus' || committee.phase === 'unmoderated-caucus') && !!committee.caucus;
+  const votingLive = committee.phase === 'voting';
+
+  const bandLabel = caucusLive
+    ? (committee.caucus?.motionLabel
+        || (committee.phase === 'moderated-caucus' ? (mn.moderated || t('delegate_moderated_caucus_label')) : (mn.unmoderated || t('delegate_unmoderated_caucus_label'))))
+    : votingLive ? t('delegate_voting_procedure')
+      : `${t('delegate_speakers_list_header')}:`;
+
+  /* `caucusSeconds`, not `caucus.remainingTime` — the row only holds the value at
+     the anchor instant, so the raw field is a clock that moves once per chair
+     write. Both the numerals and the bar read the live value so they can never
+     disagree. */
+  const caucusClock = committee.caucus && (
+    <>
+      <div style={{ fontFamily: OUTFIT, fontSize: 'clamp(26px, 8vw, 44px)', fontWeight: 900, color: DG.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+        {formatTime(caucusSeconds)}
+      </div>
+      <div style={{ marginTop: 8, height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${committee.caucus.totalTime > 0 ? Math.max(0, Math.min(100, (caucusSeconds / committee.caucus.totalTime) * 100)) : 0}%` }} />
+      </div>
+    </>
+  );
+
+  /* Whatever occupies the bottom-left slot: the GSL by default, or the live
+     caucus / voting detail when one of those phases is running. Keeping them
+     in one slot is what lets the board stay a single screen in every phase. */
+  const bottomLeft = (() => {
+    if (votingLive) {
+      const activeDoc = (committee.documents ?? []).find((d) => d.status === 'on-floor' || d.status === 'introduced');
+      return (
+        <Panel className="dgv-queue dgv-rise" style={{ padding: 14, textAlign: 'center', justifyContent: 'center' }}>
+          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(16px,5vw,24px)', fontWeight: 900, letterSpacing: '-0.02em', color: DG.forest }}>
+            {t('delegate_vote_in_progress')}
+          </p>
+          {activeDoc && (
+            <>
+              <p style={{ margin: '8px 0 0', fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: DG.deepGold }}>{activeDoc.docCode}</p>
+              <p style={{ margin: '3px 0 0', fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: DG.ink }}>{activeDoc.title}</p>
+            </>
+          )}
+          <p style={{ margin: '10px 0 0', fontFamily: OUTFIT, fontSize: 12, color: DG.body }}>{t('delegate_vote_desc')}</p>
+        </Panel>
+      );
+    }
+
+    if (caucusLive && committee.caucus) {
+      const isMod = committee.phase === 'moderated-caucus';
+      /* The motion's topic is NOT repeated here — it is the secondary line under
+         the band label above, where it sits directly beneath the mode it belongs
+         to. Printing it twice on one screen made the panel look like it was
+         describing something else. */
+      return (
+        <Panel className="dgv-queue dgv-rise" style={{ padding: 14 }}>
+          {caucusClock}
+          {isMod && committee.caucus.currentSpeaker && (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 9 }}>
+              <Equalizer color={DG.forest} size={14} />
+              <FlagDisc code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} name={committee.caucus.currentSpeaker} size={26} ring={DG.ivory} />
+              <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {getCountryDisplayName(committee.caucus.currentSpeaker, language)}
+                {committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
+              </span>
+            </div>
+          )}
+          {isMod && (committee.caucusQueue ?? []).length > 0 && (
+            <div style={{ marginTop: 10, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {committee.caucusQueue.slice(0, 5).map((s, i) => (
+                <QueueRow
+                  key={s.delegateId}
+                  position={i + 1}
+                  compact
+                  code={getCountryByName(s.country)?.code ?? ''}
+                  name={getCountryDisplayName(s.country, language)}
+                  isSelf={s.country === country}
+                  speakingLabel={t('delegate_speaking_chip')}
+                  youLabel={t('delegate_you_chip')}
+                />
+              ))}
+            </div>
+          )}
+          {!isMod && committee.caucus.isConsultation && (
+            <div style={{ marginTop: 12, minHeight: 0, overflow: 'hidden' }}>
+              <CowDelegationBoard committee={committee} />
+            </div>
+          )}
+        </Panel>
+      );
+    }
+
+    /* The current speaker occupies one of the fitted slots, so the number of
+       queue rows we can actually show is one fewer whenever they exist —
+       computing overflow off `queueFit` alone silently dropped the last
+       delegate and hid the "view all" that should have caught them. */
+    const shown = committee.currentSpeaker ? Math.max(1, queueFit - 1) : queueFit;
+    const overflow = Math.max(0, committee.speakersList.length - shown);
+    return (
+      <Panel className="dgv-queue dgv-rise" style={{ padding: 10 }}>
+        <div ref={queueBox} style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {!committee.currentSpeaker && committee.speakersList.length === 0 ? (
+            <p style={{ margin: 'auto', fontFamily: OUTFIT, fontSize: 13, color: DG.faint, textAlign: 'center' }}>
+              {t('delegate_no_speakers')}
+            </p>
+          ) : (
+            <>
+              {currentSpeakerRow}
+              {queueRows(shown)}
+            </>
+          )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => { navigator.clipboard.writeText(committee.code); }}
-            className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0 focus:outline-none">
-            {committee.code}
+        {overflow > 0 && (
+          <button
+            type="button"
+            onClick={() => setSheet('queue')}
+            className="dgv-focus"
+            style={{
+              flexShrink: 0, marginTop: 4, border: 'none', background: 'transparent',
+              cursor: 'pointer', textAlign: 'start', padding: '4px 6px',
+              fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: DG.body,
+            }}
+          >
+            {t('delegate_view_all_queue')}
           </button>
-        </div>
-      </header>
+        )}
+      </Panel>
+    );
+  })();
+
+  const docBadge = (label: string, color: string, border?: string, pulse?: boolean) => (
+    <span
+      className={pulse ? 'animate-pulse' : undefined}
+      style={{
+        flexShrink: 0, padding: '3px 9px', borderRadius: 999,
+        fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, letterSpacing: '0.06em',
+        color, border: border ?? `1px solid ${color}`,
+      }}
+    >
+      {label}
+    </span>
+  );
+
+  const docSponsors = (sponsors: string[]) => (
+    <div style={{ fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>
+      {sponsors.map((s, i) => (
+        <span key={s} style={{ color: i === 0 ? DG.body : DG.faint, fontWeight: i === 0 ? 600 : 400 }}>
+          {i > 0 ? ', ' : ''}{flagFor(s)} {getCountryDisplayName(s, language)}
+        </span>
+      ))}
+    </div>
+  );
+
+  const drs = (committee.documents ?? []).filter((d) => d.type === 'draft-resolution');
+  const wps = (committee.documents ?? []).filter((d) => d.type === 'working-paper');
+
+  // ── Session-ended full-screen view ────────────────────────────────────────
+  const endedView = (
+    <div className="flex flex-col items-center justify-center text-center px-6" style={{ minHeight: 'calc(100dvh - 56px - 52px)' }}>
+      <h1 className="dgv-rise" style={{ margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(30px, 9vw, 46px)', fontWeight: 900, letterSpacing: '-0.02em', color: DG.forest }}>
+        {t('session_ended_title').toUpperCase()}
+      </h1>
+      <p style={{ margin: '14px 0 2px', fontFamily: OUTFIT, fontSize: 19, color: DG.body }}>{getCommitteeDisplayName(committee.name, language)}</p>
+      <p style={{ margin: '0 0 28px', fontFamily: OUTFIT, fontSize: 15, color: DG.faint }}>{committee.topic}</p>
+      {hoursRemaining !== null && (
+        <p style={{ fontFamily: OUTFIT, fontSize: 13, color: DG.body }}>
+          {t('session_hours_until_delete', { n: hoursRemaining, s: hoursRemaining !== 1 ? 's' : '' })}
+        </p>
+      )}
+      <p style={{ marginTop: 30, fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>{t('session_ended_hint')}</p>
+    </div>
+  );
+
+  return (
+    /* One screen, no page scroll. Fixed dvh + overflow hidden, and every band
+       inside is flex with min-height:0 so the bottom row absorbs the slack. */
+    <div
+      className="flex flex-col"
+      style={{ height: '100dvh', overflow: 'hidden', background: DG.ivory }}
+    >
+      <DelegateStyles />
+      {header}
 
       {/* Ended tab bar */}
       {sessionEnded && (
-        <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
-          <button onClick={() => setEndedTab('ended')}
-            className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
-            style={{ color: endedTab === 'ended' ? '#1B3828' : '#9A8A78', borderBottom: endedTab === 'ended' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif" }}>
-            {t('session_end_view')}
-          </button>
-          <button onClick={() => setEndedTab('session')}
-            className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
-            style={{ color: endedTab === 'session' ? '#1B3828' : '#9A8A78', borderBottom: endedTab === 'session' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif" }}>
-            {t('session_view')}
-          </button>
+        <div className="flex" style={{ background: DG.cream, borderBottom: `1px solid ${DG.hairline}` }}>
+          {(['ended', 'session'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setEndedTab(k)}
+              className="dgv-focus flex-1"
+              style={{
+                minHeight: 44, border: 'none', cursor: 'pointer', background: 'transparent',
+                fontFamily: OUTFIT, fontSize: 12, fontWeight: 900, letterSpacing: '0.06em',
+                color: endedTab === k ? DG.forest : DG.faint,
+                boxShadow: endedTab === k ? `inset 0 -2px 0 ${DG.forest}` : 'none',
+              }}
+            >
+              {k === 'ended' ? t('session_end_view') : t('session_view')}
+            </button>
+          ))}
         </div>
       )}
 
-      {sessionEnded && endedTab === 'ended' ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <h1 className="text-4xl font-black mb-4 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('session_ended_title').toUpperCase()}</h1>
-          <p className="text-xl mb-1" style={{ color: '#6A5A4A' }}>{getCommitteeDisplayName(committee.name, language)}</p>
-          <p className="text-base mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
-          {hoursRemaining !== null && (
-            <p className="text-sm" style={{ color: '#9A8A78' }}>{t('session_hours_until_delete', { n: hoursRemaining, s: hoursRemaining !== 1 ? 's' : '' })}</p>
+      {sessionEnded && endedTab === 'ended' ? endedView : (
+        <main className="mx-auto flex w-full max-w-[900px] flex-1 flex-col px-3 sm:px-5" style={{ minHeight: 0, paddingBlock: 'clamp(8px, 2vw, 18px)' }}>
+          {sessionEnded && endedTab === 'session' && (
+            <div
+              className="text-center"
+              style={{
+                marginBottom: 16, padding: '10px 16px', borderRadius: 14,
+                background: DG.forest, color: DG.gold,
+                fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
+              }}
+            >
+              {t('session_ended_banner')}
+            </div>
           )}
-          <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_ended_hint')}</p>
-        </div>
-      ) : (
-      <>
-      {sessionEnded && endedTab === 'session' && (
-        <div className="shrink-0 px-4 py-2 text-center text-sm font-bold" style={{ backgroundColor: '#1B3828', borderBottom: '1px solid #3D7A52', color: '#EED98A' }}>
-          {t('session_ended_banner')}
-        </div>
-      )}
-      <div className="flex-1 flex overflow-hidden relative z-[2]">
-      {tab !== 'chat' && <div className="flex-1 overflow-y-auto">
 
-        {/* ── Session tab ── */}
-        {tab === 'session' && (
-          <div>
-            {/* Committee info strip */}
-            <div className="px-4 pt-4 pb-2 text-center">
-              <p className="text-xs font-mono font-bold uppercase tracking-widest mb-0.5" style={{ color: '#9A8A78' }}>{t('delegate_committee_label')}</p>
-              <p className="font-black text-base" style={{ color: '#1B3828' }}>{getCommitteeDisplayName(committee.name, language)}</p>
-              {committee.topic && <p className="text-xs mt-0.5" style={{ color: '#9A8A78' }}>{committee.topic}</p>}
-            </div>
-            {isAbsent && !sessionEnded && <AbsentBanner />}
+          {isAbsent && !sessionEnded && <AbsentBanner />}
 
-            {/* Moderated caucus special view */}
-            {committee.phase === 'moderated-caucus' && committee.caucus && (
-              <div className="p-4 max-w-2xl mx-auto space-y-4">
-                {/* Section 1: FlagImg replaces text-8xl emoji */}
-                <div className="flex justify-center">
-                  <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
-                </div>
-                <div className="rounded-xl p-5 text-center" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{committee.caucus.motionLabel || mn.moderated || t('delegate_moderated_caucus_label')}</p>
-                  <p className="text-xl mt-2" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
-                  {committee.caucus.currentSpeaker && (
-                    <div className="mt-4">
-                      <div className="text-xs text-[#9A8A78] mb-2 font-mono">{t('delegate_now_speaking')}</div>
-                      {/* Section 1: FlagImg replaces text-6xl emoji */}
-                      <div className="flex justify-center">
-                        <FlagImg code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} size={64} />
-                      </div>
-                      <div className={`text-xl font-bold mt-1 ${committee.caucus.currentSpeaker === country ? 'text-[#B6871F]' : 'text-[#1C1410]'}`}>
-                        {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
-                      </div>
-                    </div>
-                  )}
-                  <div className="text-3xl font-black font-mono mt-4" style={{ color: '#1C1410' }}>
-                    {formatTime(committee.caucus.remainingTime)}
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#DDD4C0' }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%`, backgroundColor: '#1B3828' }} />
-                  </div>
-                </div>
-                {/* Upcoming speakers in caucus queue */}
-                {(committee.caucusQueue ?? []).length > 0 && (
-                  <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
-                    <div className="text-xs text-[#9A8A78] font-mono mb-2">{t('delegate_upcoming_speakers')}</div>
-                    <div className="space-y-1.5">
-                      {committee.caucusQueue.slice(0, 8).map((s, i) => (
-                        <div key={s.delegateId} className={`flex items-center gap-3 py-1.5 px-2 rounded-lg text-sm ${s.country === country ? 'bg-[#1B3828]/20 border border-[#1B3828]/30' : ''}`}>
-                          <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
-                          {/* Section 1: FlagImg replaces text-lg emoji */}
-                          <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
-                          <span className={s.country === country ? 'text-[#B6871F] font-bold' : 'text-[#6A5A4A]'}>
-                            {getCountryDisplayName(s.country, language)}{s.country === country && t('delegate_you_suffix')}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+          <div className={`dgv-board ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
+            {/* ── HERO BAND: tools | flag+ordinal | stats ───────────────── */}
+            <section className="dgv-hero dgv-rise">
+              {/* LEFT — documents tile above the roll-call control, both
+                  tucked toward the disc so the pair follows its curve.
+                  Same convention as the stat rail: `arcDepth − arcInset`, i.e.
+                  the gap to the disc SHRINKS the further an item sits from the
+                  disc's widest point (its centre line). The rail previously used
+                  the raw inset, which is that relationship inverted — it pushed
+                  both controls a full arcDepth AWAY from the disc, which is why
+                  the left side never read as wrapping. The documents tile sits
+                  nearer the centre line than the switch (it is the taller of the
+                  two blocks in a vertically-centred stack), so it takes the
+                  middle slot of a three-point arc and the switch the outer one. */}
+              <div className="dgv-hero-side">
+                <button
+                  type="button"
+                  onClick={() => openSheet('documents', 'view')}
+                  className="dgv-tap dgv-focus"
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                    border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+                    minHeight: 44,
+                  }}
+                >
+                  <Emoji3D name="File folder" size={docIcon} fallback={FolderOpen} fallbackColor={DG.forest} />
+                  <span
+                    style={{
+                      fontFamily: OUTFIT, fontWeight: 800, color: DG.body, textAlign: 'center',
+                      fontSize: 'clamp(7.5px, 2.3vw, 10.5px)', letterSpacing: '0.04em',
+                      textTransform: 'uppercase', lineHeight: 1.15,
+                    }}
+                  >
+                    {t('delegate_view_documents')}
+                  </span>
+                </button>
+
+                {!isAbsent && !sessionEnded && !lockRollCall && (
+                  /* Outer point of the left arc: tucks toward the crest, i.e.
+                     positive on this side. Transform, not margin — see .dgv-arc. */
+                  <div
+                    className="dgv-arc"
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                      ['--dgv-arc' as string]: `${arcInset(2, 3, arcDepth)}px`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: OUTFIT, fontWeight: 800, color: DG.body,
+                        fontSize: 'clamp(6.5px, 2vw, 9px)', letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {t('delegate_roll_call_label')}
+                    </span>
+                    <RollCallSwitch
+                      compact
+                      value={myDelegate?.status === 'present-voting' ? 'present-voting' : 'present'}
+                      onChange={(v) => handleStatusChange(v)}
+                      presentLabel="P"
+                      votingLabel="PV"
+                      disabled={changesLeft <= 0}
+                    />
                   </div>
                 )}
               </div>
-            )}
 
-            {/* Section 3: Unmoderated caucus dedicated view */}
-            {committee.phase === 'unmoderated-caucus' && committee.caucus && (
-              <div className="p-4 max-w-2xl mx-auto space-y-4">
-                <div className="flex justify-center">
-                  <FlagImg code={getCountryByName(country)?.code ?? ''} size={88} className="rounded-full shadow-lg" />
-                </div>
-                <div className="rounded-xl p-6 text-center space-y-3" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-                  <p className="text-3xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{committee.caucus.motionLabel || mn.unmoderated || t('delegate_unmoderated_caucus_label')}</p>
-                  {committee.caucus.purpose && (
-                    <p className="text-xl" style={{ color: '#6A5A4A' }}>{committee.caucus.purpose}</p>
-                  )}
-                  <div className="text-5xl font-black font-mono" style={{ color: '#1C1410' }}>
-                    {formatTime(committee.caucus.remainingTime)}
+              {/* CENTRE — the delegate's own flag, dimmed, position over it */}
+              <div className="dgv-hero-mid" ref={discBox}>
+                <FlagOrdinalDisc
+                  code={myIso}
+                  name={myName}
+                  size={discSize}
+                  live={isCurrentSpeaker}
+                  primary={
+                    isCurrentSpeaker ? t('delegate_floor_now')
+                      : inQueue ? `${myQueueIndex + 1}${ordinalSuffixFor(myQueueIndex + 1)}`
+                        : '—'
+                  }
+                  caption={inQueue || isCurrentSpeaker ? t('delegate_in_the_queue') : t('delegate_not_in_queue')}
+                />
+                <span
+                  style={{
+                    fontFamily: OUTFIT, fontSize: 'clamp(13px, 4.2vw, 19px)', fontWeight: 900,
+                    color: DG.ink, textAlign: 'center', lineHeight: 1.1, maxWidth: '100%',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {myName}
+                </span>
+              </div>
+
+              {/* RIGHT — the three live stats, curved around the disc */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(4px, 1.6vw, 12px)', minWidth: 0 }}>
+                {[
+                  { emoji: 'Alarm clock' as const, fb: Clock, value: formatTime(mySpokenSeconds), label: t('delegate_stat_time_spoken') },
+                  { emoji: 'Megaphone' as const, fb: Mic2, value: String(myLogs.length), label: t('delegate_stat_speeches_given') },
+                  { emoji: 'Speech balloon' as const, fb: MessageSquare, value: String(myMessagesSent), label: t('delegate_stat_messages_sent') },
+                ].map((s, i, arr) => (
+                  /* Pushed OUT at the middle, tucked in at top and bottom —
+                     the disc's widest point is on the centre line, so that is
+                     the item that sits furthest from it. */
+                  /* Negative: ends tuck TOWARD the crest, middle stays put. A
+                     positive push would shove the middle row outward into the
+                     screen edge, and as a margin it also stole the width the
+                     label needed. */
+                  <div
+                    key={s.label}
+                    className="dgv-arc"
+                    style={{ ['--dgv-arc' as string]: `-${arcInset(i, arr.length, arcDepth)}px` }}
+                  >
+                    <StatRow
+                      emoji={<Emoji3D name={s.emoji} size={statIcon} fallback={s.fb} fallbackColor={DG.forest} />}
+                      iconSize={statIcon}
+                      value={s.value}
+                      label={s.label}
+                      onClick={() => setSheet('stats')}
+                    />
                   </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#DDD4C0' }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${committee.caucus.totalTime > 0 ? (committee.caucus.remainingTime / committee.caucus.totalTime) * 100 : 0}%`, backgroundColor: '#1B3828' }} />
-                  </div>
-                  <p className="text-sm" style={{ color: '#9A8A78' }}>{t('delegate_unmod_desc')}</p>
-                </div>
-                {committee.caucus.isConsultation && <CowDelegationBoard committee={committee} />}
+                ))}
+              </div>
+
+            {/* ── ROLL-CALL FOOTNOTE ─────────────────────────────────────
+                The lock explanation is permanent — it is the reason a missing
+                control is missing, and that reason does not expire.
+                The remaining-changes counter is NOT. A quota a delegate is not
+                spending is noise, and a number parked on screen all session
+                reads as a warning about nothing; it lands when it is actually
+                news. So it appears for ~4s each time the delegate moves the
+                switch, then fades itself out — EXCEPT at zero, where it stays
+                up, because that is the moment it stops being a reminder and
+                becomes the explanation for a dead control.
+                It must not shove the bands below it either — this board does not
+                scroll. It used to buy that with a permanently reserved 15px row,
+                which also bought two 16px board gaps: 47px of dead space sitting
+                under the crest whenever there was nothing to say, which was most
+                of the time. Now it is an ABSOLUTE overlay hanging off the hero,
+                so it costs the layout nothing when idle and still cannot reflow
+                anything when it appears. */}
+            {!isAbsent && !sessionEnded && (statusError || lockRollCall || changesLeft <= 0 || statusFlash) && (
+              <div
+                className="text-center"
+                style={{
+                  position: 'absolute', insetInlineStart: 0, insetInlineEnd: 0,
+                  top: '100%', marginTop: 2, pointerEvents: 'none',
+                }}
+              >
+                {statusError && !lockRollCall && (
+                  <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)', fontWeight: 800, lineHeight: 1.25, color: DG.danger }}>
+                    {t('delegate_status_change_failed')}
+                  </p>
+                )}
+                {lockRollCall ? (
+                  <p
+                    style={{
+                      margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)',
+                      fontWeight: 700, lineHeight: 1.25, color: DG.faint,
+                    }}
+                  >
+                    {t('delegate_roll_call_locked')}
+                  </p>
+                ) : (changesLeft <= 0 || statusFlash) && (
+                  <p
+                    key={changesLeft}
+                    className={changesLeft <= 0 ? undefined : 'dgv-hint'}
+                    aria-live="polite"
+                    style={{
+                      margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(9px, 2.6vw, 11px)',
+                      fontWeight: 700, lineHeight: 1.25,
+                      color: changesLeft <= 0 ? DG.danger : DG.faint,
+                    }}
+                  >
+                    {t('delegate_status_changes_left', { n: changesLeft, s: changesLeft === 1 ? '' : 's' })}
+                  </p>
+                )}
               </div>
             )}
+            </section>
 
-            {/* Section 3: exclude both moderated and unmoderated caucus phases */}
-            {committee.phase !== 'moderated-caucus' && committee.phase !== 'unmoderated-caucus' && (
-            <div className={`p-4 space-y-4 max-w-2xl mx-auto ${isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}`}>
-              {/* Flag — larger, rectangular, with country name below */}
-              <div className="flex flex-col items-center gap-2 py-2">
-                {(() => { const c = getCountryByName(country); return c ? <img src={getFlagUrl(c.code)} alt={country} style={{ width: '120px', height: '86px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.12)', boxShadow: '0 4px 16px rgba(27,56,40,0.12)' }} /> : null; })()}
-                <p className="font-black text-3xl" style={{ color: '#1C1410' }}>{getCountryDisplayName(country, language)}</p>
-              </div>
-
-              {/* Section 5: Voting card */}
-              {committee.phase === 'voting' && (() => {
-                const activeDoc = (committee.documents ?? []).find(
-                  (d) => d.status === 'on-floor' || d.status === 'introduced'
-                );
-                return (
-                  <div className="rounded-xl p-5 text-center space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #1B3828' }}>
-                    <p className="text-xs font-mono font-bold" style={{ color: '#1B3828' }}>{t('delegate_voting_procedure')}</p>
-                    <p className="text-2xl font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('delegate_vote_in_progress')}</p>
-                    {activeDoc && (
-                      <>
-                        <p className="text-sm font-mono text-[#7B4A1E]">{activeDoc.docCode}</p>
-                        <p className="text-base font-bold text-white">{activeDoc.title}</p>
-                      </>
-                    )}
-                    <p className="text-xs text-[#7A5A38] mt-2">
-                      {t('delegate_vote_desc')}
-                    </p>
-                  </div>
-                );
-              })()}
-
-              {/* Status card */}
-              <div className="rounded-xl p-5 border bg-[#EDE7D8] border-[#DDD4C0]">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-mono text-[#9A8A78] mb-2">{t('delegate_session_status')}</div>
-                  <div className="text-2xl font-black mb-1" style={{ color: isCurrentSpeaker ? '#1B3828' : isAdjourned ? '#8B2020' : '#1C1410' }}>
-                    {isCurrentSpeaker ? t('delegate_you_have_floor') : phaseDisplay}
-                  </div>
-                  {/* queue position text removed */}
-
-                  {!isCurrentSpeaker && committee.currentSpeaker && committee.phase === 'speakers-list' && (
-                    <div className="mt-3">
-                      <div className="text-xs text-[#9A8A78] mb-1">{t('delegate_now_speaking')}</div>
-                      <div className="flex items-center gap-2">
-                        <FlagImg code={getCountryByName(committee.currentSpeaker.country)?.code ?? ''} size={24} />
-                        <span className="font-bold text-[#1C1410]">{getCountryDisplayName(committee.currentSpeaker.country, language)}</span>
-                      </div>
-                      {isOnSpeakersList && myQueueIndex === 0 && (
-                        <p className="text-sm font-black mt-2" style={{ color: '#B8844A' }}>
-                          {t('delegate_up_next')}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {committee.caucus && (
-                    <div className="mt-3">
-                      <div className="text-sm text-[#6A5A4A] mb-2">
-                        {committee.caucus.motionLabel || (committee.caucus.type === 'moderated' ? mn.moderated : mn.unmoderated)}
-                        {committee.caucus.purpose && `: ${committee.caucus.purpose}`}
-                      </div>
-                      <div className="text-3xl font-black font-mono text-[#1C1410]">
-                        {formatTime(committee.caucus.remainingTime)}
-                      </div>
-                      <div className="h-2 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#DDD4C0' }}>
-                        <div className="h-full rounded-full transition-all" style={{ width: `${(committee.caucus.remainingTime / committee.caucus.totalTime) * 100}%`, backgroundColor: '#1B3828' }} />
-                      </div>
-                      {committee.caucus.currentSpeaker && (
-                        <div className="mt-3 text-sm flex items-center gap-2">
-                          <span className="text-[#6A5A4A]">{t('delegate_speaking_label')}</span>
-                          {/* Section 1: FlagImg replaces text-xl */}
-                          <FlagImg code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} size={20} />
-                          <span className={`font-bold ${committee.caucus.currentSpeaker === country ? 'text-[#B6871F]' : 'text-[#1C1410]'}`}>
-                            {committee.caucus.currentSpeaker}{committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Speakers list */}
-              {committee.phase === 'speakers-list' && (
-                <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-xs text-[#9A8A78] font-mono">{t('delegate_speakers_list_header')}</div>
-                    {!isOnSpeakersList && !isCurrentSpeaker && myDelegate?.status !== 'absent' && !sessionEnded && (
-                      isGslRequestPending ? (
-                        <span className="text-xs font-semibold" style={{ color: '#B8844A' }}>{t('delegate_awaiting_approval')}</span>
-                      ) : gslDenied ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-red-400">{t('delegate_gsl_denied')}</span>
-                          <button onClick={() => setGslDenied(false)}
-                            className="text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#1B3828]/30 text-[#6A5A4A] px-2 py-1 rounded-lg font-medium transition-colors">
-                            {t('delegate_request_again')}
-                          </button>
-                        </div>
-                      ) : (
-                        <button onClick={handleAddMeToSpeakers}
-                          className="text-xs text-white px-3 py-1.5 rounded-lg font-black transition-colors focus:outline-none"
-                          style={{ backgroundColor: '#1B3828', letterSpacing: '0.04em' }}>
-                          + {t('delegate_request_gsl')}
-                        </button>
-                      )
-                    )}
-                    {isOnSpeakersList && (
-                      <span className="text-xs font-bold" style={{ color: '#1B3828' }}>
-                        {myQueueIndex === 0 ? t('delegate_up_next_queue') : t('delegate_after_speakers').replace('{n}', String(myQueueIndex)).replace('{s}', myQueueIndex !== 1 ? 's' : '')}
-                      </span>
-                    )}
-                  </div>
-                  {committee.speakersList.length === 0 ? (
-                    <p className="text-sm text-[#9A8A78]">{t('delegate_no_speakers')}</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {committee.speakersList.map((s, i) => (
-                        <div key={s.delegateId} className={`flex items-center gap-3 py-1.5 px-2 rounded-lg text-sm ${s.country === country ? 'bg-[#1B3828]/20 border border-[#1B3828]/30' : ''}`}>
-                          <span className="text-[#9A8A78] text-xs w-4 font-mono shrink-0">{i + 1}</span>
-                          {/* Section 1: FlagImg replaces text-lg */}
-                          <FlagImg code={getCountryByName(s.country)?.code ?? ''} size={20} className="shrink-0" />
-                          <span className="font-semibold" style={{ color: s.country === country ? '#1B3828' : '#1C1410', fontWeight: s.country === country ? 700 : 600 }}>
-                            {getCountryDisplayName(s.country, language)}{s.country === country && t('delegate_you_suffix')}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+            {/* ── BAND LABEL ──────────────────────────────────────────────
+                Mode on top, the motion's own topic as a smaller line directly
+                beneath it — a delegate needs "Moderated Caucus" AND "on the
+                Sahel security corridor" together to know what to prepare. */}
+            <div style={{ flexShrink: 0, minWidth: 0 }}>
+              <h2
+                style={{
+                  margin: 0, fontFamily: OUTFIT, fontWeight: 900, color: DG.ink,
+                  fontSize: 'clamp(15px, 4.6vw, 22px)', letterSpacing: '-0.02em',
+                }}
+              >
+                {bandLabel}
+              </h2>
+              {caucusLive && committee.caucus?.purpose && (
+                <p
+                  className="text-start"
+                  style={{
+                    margin: '1px 0 0', fontFamily: OUTFIT, fontWeight: 700,
+                    fontSize: 'clamp(11px, 3.2vw, 14px)', lineHeight: 1.2,
+                    color: DG.forest, overflow: 'hidden', textOverflow: 'ellipsis',
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                  }}
+                >
+                  {committee.caucus.purpose}
+                </p>
               )}
-
-              {/* My delegation + status toggle */}
-              <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4">
-                <div className="text-xs text-[#9A8A78] font-mono mb-3">{t('delegate_your_delegation')}</div>
-                <div className="flex items-center gap-3 mb-3">
-                  {/* Section 1: FlagImg replaces text-3xl */}
-                  <FlagImg code={getCountryByName(country)?.code ?? ''} size={36} />
-                  <div>
-                    <div className="font-black text-base" style={{ color: '#1C1410' }}>{getCountryDisplayName(country, language)}</div>
-                    <div className="text-xs font-semibold mt-0.5" style={{ color: myDelegate?.status === 'absent' ? '#8B2020' : '#1B3828' }}>
-                      {myDelegate?.status === 'present' ? t('delegate_status_present') :
-                       myDelegate?.status === 'present-voting' ? t('delegate_status_pv') : t('delegate_status_absent')}
-                    </div>
-                  </div>
-                </div>
-                {/* Status toggle — only when already present/PV and session not ended */}
-                {!isAbsent && !sessionEnded && !getCommitteeFlags(committee).lockDelegateRollCall && (
-                  <div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleStatusChange('present')}
-                        disabled={myDelegate?.status === 'present' || changesLeft <= 0}
-                        className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
-                        style={{
-                          backgroundColor: myDelegate?.status === 'present' ? '#1B3828' : 'transparent',
-                          border: `1px solid ${myDelegate?.status === 'present' ? '#1B3828' : '#DDD4C0'}`,
-                          color: myDelegate?.status === 'present' ? '#EDE7D8' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
-                          cursor: changesLeft <= 0 && myDelegate?.status !== 'present' ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        {t('delegate_present_btn')}
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange('present-voting')}
-                        disabled={myDelegate?.status === 'present-voting' || changesLeft <= 0}
-                        className="flex-1 py-2 rounded-xl text-xs font-bold transition-colors focus:outline-none"
-                        style={{
-                          backgroundColor: myDelegate?.status === 'present-voting' ? '#1B3828' : 'transparent',
-                          border: `1px solid ${myDelegate?.status === 'present-voting' ? '#1B3828' : '#DDD4C0'}`,
-                          color: myDelegate?.status === 'present-voting' ? '#EDE7D8' : changesLeft <= 0 ? '#9A8A78' : '#6A5A4A',
-                          cursor: changesLeft <= 0 && myDelegate?.status !== 'present-voting' ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        {t('delegate_pv_btn')}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-[#9A8A78] mt-1.5 text-center">
-                      {t('delegate_status_changes_left').replace('{n}', String(changesLeft)).replace('{s}', changesLeft !== 1 ? 's' : '')}
-                    </p>
-                  </div>
-                )}
-              </div>
             </div>
-            )}{/* end phase !== moderated-caucus && !== unmoderated-caucus */}
+
+            {/* ── BOTTOM BAND: list | square actions ────────────────────── */}
+            <section className="dgv-bottom">
+              {bottomLeft}
+
+              <div className="dgv-actions">
+                {/* Flat monochrome glyphs, and the three silhouettes are
+                    deliberately distinct at a squint — tall/pointed, blocky,
+                    round — so a delegate watching the speakers list can hit
+                    the right key in peripheral vision. */}
+                <SquareButton
+                  skin="green"
+                  disabled={speakCta.disabled}
+                  onClick={speakCta.onClick}
+                  icon={<Hand size={actionIcon} strokeWidth={2.25} />}
+                >
+                  {speakCta.label}
+                </SquareButton>
+                <SquareButton
+                  skin="blue"
+                  onClick={() => openSheet('documents', 'submit')}
+                  icon={<FileText size={actionIcon} strokeWidth={2.25} />}
+                >
+                  {t('delegate_submit_document')}
+                </SquareButton>
+                <SquareButton
+                  skin="gold"
+                  onClick={() => setSheet('chat')}
+                  badge={chatDisabled ? undefined : unreadTotal}
+                  icon={<MessageCircle size={actionIcon} strokeWidth={2.25} />}
+                >
+                  {t('tab_chat')}
+                </SquareButton>
+              </div>
+            </section>
+          </div>
+        </main>
+      )}
+
+
+      {/* ── Sheets ─────────────────────────────────────────────────────── */}
+      <Sheet open={sheet === 'stats'} onClose={() => setSheet(null)} title={t('delegate_full_stats')}>
+        <StatisticsTab committee={committee} country={country} />
+      </Sheet>
+
+      <Sheet open={sheet === 'queue'} onClose={() => setSheet(null)} title={t('delegate_queue_sheet_title')}>
+        {!committee.currentSpeaker && committee.speakersList.length === 0 ? (
+          <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 14, color: DG.faint }}>{t('delegate_no_speakers')}</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {currentSpeakerRow}
+            {queueRows()}
           </div>
         )}
+      </Sheet>
 
-        {/* Motions tab removed */}
-
-        {/* Resolutions tab removed — merged into Documents tab */}
-
-        {/* ── Documents tab (merged Submit + View DRs) ── */}
-        {tab === 'documents' && (
-          <div>
-            {(() => {
-              const drs = (committee.documents ?? []).filter(
-                (d) => d.type === 'draft-resolution'
-              );
-              return (
-                <>
-                  {/* Tab-style subdirectory bar */}
-                  <div className="flex shrink-0" style={{ borderBottom: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
-                    <button
-                      onClick={() => setDocsSection('submit')}
-                      className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
-                      style={{ color: docsSection === 'submit' ? '#1B3828' : '#9A8A78', borderBottom: docsSection === 'submit' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
-                      {t('delegate_submit_document')}
-                    </button>
-                    <button
-                      onClick={() => setDocsSection('view')}
-                      className="flex-1 py-2.5 text-xs font-black transition-colors focus:outline-none"
-                      style={{ color: docsSection === 'view' ? '#1B3828' : '#9A8A78', borderBottom: docsSection === 'view' ? '2px solid #1B3828' : '2px solid transparent', marginBottom: '-1px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
-                      {t('delegate_view_documents')}
-                    </button>
-                  </div>
-
-                  {/* Submit section */}
-                  {docsSection === 'submit' && (
-                    <>
-                      {isAbsent && !sessionEnded && <AbsentBanner />}
-                      {!sessionEnded ? (
-                        <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
-                          <DelegateDocumentsTab committee={committee} country={country} />
-                        </div>
-                      ) : (
-                        <div className="p-8 text-center font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_session_closed_docs')}</div>
-                      )}
-                    </>
-                  )}
-
-                  {/* View DRs + WPs section */}
-                  {docsSection === 'view' && (() => {
-                    const wps = (committee.documents ?? []).filter((d) => d.type === 'working-paper');
-                    return (
-                      <div className="p-4 max-w-2xl mx-auto space-y-6">
-                        <div className="space-y-3">
-                          <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{docName(committee, 'draft-resolution', 'plural', t('delegate_draft_resolutions')).toUpperCase()}</h2>
-                          {drs.length === 0 ? (
-                            <div className="text-center py-4 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_docs_floor', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab')) })}</div>
-                          ) : (
-                            drs.map((doc) => {
-                              const isPresenting = doc.status === 'introduced';
-                              const isPassed = doc.status === 'passed';
-                              const isFailed = doc.status === 'failed';
-                              const isPendingVote = doc.status === 'on-floor';
-                              return (
-                                <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: `1.5px solid ${isPassed ? '#1B3828' : isFailed ? 'rgba(139,32,32,0.4)' : '#DDD4C0'}` }}>
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <span className="text-xs font-mono font-bold me-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
-                                      <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
-                                    </div>
-                                    {isPassed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>{t('delegate_passed_badge')}</span>}
-                                    {isFailed && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#8B2020', border: '1px solid rgba(139,32,32,0.3)' }}>{t('delegate_failed_badge')}</span>}
-                                    {isPresenting && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full animate-pulse" style={{ color: '#B8844A', border: '1px solid #B8844A' }}>{t('delegate_now_presenting')}</span>}
-                                    {isPendingVote && <span className="shrink-0 text-xs font-black px-2 py-0.5 rounded-full" style={{ color: '#B8844A', border: '1px solid rgba(184,132,74,0.5)' }}>{t('delegate_pending_vote')}</span>}
-                                  </div>
-                                  <div className="text-xs" style={{ color: '#9A8A78' }}>
-                                    {doc.sponsors.map((s, i) => (
-                                      <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
-                                        {i > 0 ? ', ' : ''}{flagFor(s)} {getCountryDisplayName(s, language)}
-                                      </span>
-                                    ))}
-                                  </div>
-                                  {doc.fileUrl && doc.fileName && (
-                                    <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                        <div className="space-y-3">
-                          <h2 className="text-lg font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{docName(committee, 'working-paper', 'plural', t('delegate_working_papers')).toUpperCase()}</h2>
-                          {wps.length === 0 ? (
-                            <div className="text-center py-4 font-semibold" style={{ color: '#9A8A78' }}>{t('delegate_no_docs_submitted', { doc: docName(committee, 'working-paper', 'plural', t('documents_working_papers_tab')) })}</div>
-                          ) : (
-                            wps.map((doc) => (
-                              <div key={doc.id} className="rounded-xl p-4 space-y-2" style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}>
-                                <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <span className="text-xs font-mono font-bold me-2" style={{ color: '#1B3828' }}>{doc.docCode}</span>
-                                    <span className="font-semibold text-sm" style={{ color: '#1C1410' }}>{doc.title}</span>
-                                  </div>
-                                  {doc.status === 'submitted' && <span className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828' }}>{t('documents_status_submitted')}</span>}
-                                </div>
-                                <div className="text-xs" style={{ color: '#9A8A78' }}>
-                                  {doc.sponsors.map((s, i) => (
-                                    <span key={s} style={{ color: i === 0 ? '#6A5A4A' : '#9A8A78', fontWeight: i === 0 ? 600 : 400 }}>
-                                      {i > 0 ? ', ' : ''}{flagFor(s)} {getCountryDisplayName(s, language)}
-                                    </span>
-                                  ))}
-                                </div>
-                                {doc.fileUrl && doc.fileName && (
-                                  <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
-                                )}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* ── Stats tab ── */}
-        {tab === 'stats' && (
-          <StatisticsTab committee={committee} country={country} />
-        )}
-      </div>}
-      {/* ── Chat tab ── */}
-      {tab === 'chat' && chatDisabled && (
-        <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
+      <Sheet open={sheet === 'chat'} onClose={() => setSheet(null)} title={t('tab_chat')}>
+        {chatDisabled ? (
           <ChatDisabledNotice />
+        ) : (
+          // Full-bleed inside the sheet: ChatPanel's conversation rail is a fixed 280px,
+          // so every pixel of sheet padding comes straight off the thread pane.
+          <div className="flex overflow-hidden" style={{ height: '62vh', minHeight: 320, margin: '0 -16px -24px', borderRadius: 0 }}>
+            <ChatPanel
+              committee={committee}
+              senderName={country}
+              isChair={false}
+              onClose={() => setSheet(null)}
+              readCounts={chatReadCounts}
+              onReadCountsChange={setChatReadCounts}
+              readOnly={sessionEnded}
+            />
+          </div>
+        )}
+      </Sheet>
+
+      <Sheet open={sheet === 'documents'} onClose={() => setSheet(null)} title={t('delegate_docs_sheet_title')}>
+        {/* Submit / view toggle — reuses the existing docsSection state */}
+        <div
+          role="group"
+          style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, marginBottom: 16 }}
+        >
+          {(['submit', 'view'] as const).map((k) => {
+            const on = docsSection === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setDocsSection(k)}
+                className="dgv-tap dgv-focus"
+                style={{
+                  flex: 1, minHeight: 40, borderRadius: 999, border: 'none', cursor: 'pointer',
+                  fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                  background: on ? `linear-gradient(135deg, ${DG.forestMid}, ${DG.forest})` : 'transparent',
+                  color: on ? DG.gold : DG.body,
+                }}
+              >
+                {k === 'submit' ? t('delegate_submit_document') : t('delegate_view_documents')}
+              </button>
+            );
+          })}
         </div>
-      )}
-      {tab === 'chat' && !chatDisabled && (
-        <div className="flex-1 flex overflow-hidden" style={{ height: '100%' }}>
-          <ChatPanel
-            committee={committee}
-            senderName={country}
-            isChair={false}
-            onClose={() => setTab('session')}
-            readCounts={chatReadCounts}
-            onReadCountsChange={setChatReadCounts}
-            readOnly={sessionEnded}
-          />
-        </div>
-      )}
-      </div>
-      </>
-      )}
+
+        {docsSection === 'submit' && (
+          sessionEnded ? (
+            <p className="text-center" style={{ padding: '28px 0', fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: DG.faint }}>
+              {t('delegate_session_closed_docs')}
+            </p>
+          ) : (
+            <div className={isAbsent ? 'opacity-60 pointer-events-none select-none' : ''}>
+              <DelegateDocumentsTab committee={committee} country={country} />
+            </div>
+          )
+        )}
+
+        {docsSection === 'view' && (
+          <div className="w-full max-w-2xl mx-auto space-y-6">
+            <div className="space-y-3">
+              <SectionLabel>{docName(committee, 'draft-resolution', 'plural', t('delegate_draft_resolutions')).toUpperCase()}</SectionLabel>
+              {drs.length === 0 ? (
+                <p className="text-center" style={{ padding: '14px 0', fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: DG.faint }}>
+                  {t('delegate_no_docs_floor', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab')) })}
+                </p>
+              ) : (
+                drs.map((doc) => (
+                  <div
+                    key={doc.id}
+                    style={{
+                      background: DG.cream, borderRadius: 16, padding: 14,
+                      border: `1.5px solid ${doc.status === 'passed' ? DG.forest : doc.status === 'failed' ? 'rgba(139,32,32,0.4)' : DG.hairline}`,
+                      display: 'flex', flexDirection: 'column', gap: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: DG.deepGold }}>{doc.docCode}</span>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: DG.ink, marginInlineStart: 8 }}>{doc.title}</span>
+                      </div>
+                      {doc.status === 'passed' && (
+                        <span style={{ flexShrink: 0, padding: '3px 9px', borderRadius: 999, background: DG.forest, color: DG.gold, fontFamily: OUTFIT, fontSize: 10, fontWeight: 900 }}>
+                          {t('delegate_passed_badge')}
+                        </span>
+                      )}
+                      {doc.status === 'failed' && docBadge(t('delegate_failed_badge'), DG.danger)}
+                      {doc.status === 'introduced' && docBadge(t('delegate_now_presenting'), DG.deepGold, undefined, true)}
+                      {doc.status === 'on-floor' && docBadge(t('delegate_pending_vote'), DG.deepGold)}
+                    </div>
+                    {docSponsors(doc.sponsors)}
+                    {doc.fileUrl && doc.fileName && (
+                      <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <SectionLabel>{docName(committee, 'working-paper', 'plural', t('delegate_working_papers')).toUpperCase()}</SectionLabel>
+              {wps.length === 0 ? (
+                <p className="text-center" style={{ padding: '14px 0', fontFamily: OUTFIT, fontSize: 14, fontWeight: 600, color: DG.faint }}>
+                  {t('delegate_no_docs_submitted', { doc: docName(committee, 'working-paper', 'plural', t('documents_working_papers_tab')) })}
+                </p>
+              ) : (
+                wps.map((doc) => (
+                  <div
+                    key={doc.id}
+                    style={{
+                      background: DG.cream, borderRadius: 16, padding: 14,
+                      border: `1.5px solid ${DG.hairline}`,
+                      display: 'flex', flexDirection: 'column', gap: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: DG.deepGold }}>{doc.docCode}</span>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 700, color: DG.ink, marginInlineStart: 8 }}>{doc.title}</span>
+                      </div>
+                      {doc.status === 'submitted' && docBadge(t('documents_status_submitted'), DG.forest, `1px solid ${DG.hairline}`)}
+                    </div>
+                    {docSponsors(doc.sponsors)}
+                    {doc.fileUrl && doc.fileName && (
+                      <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </Sheet>
     </div>
-    </FitToScreen>
   );
 }
 

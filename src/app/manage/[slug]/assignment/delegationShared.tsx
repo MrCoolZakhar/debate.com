@@ -255,7 +255,9 @@ export async function performSwap(
   conferenceId: string,
   source: NamedApp,
   target: PoolMember,
-  transfer: boolean
+  transfer: boolean,
+  /** Organiser running the swap — stamped on the rows whose status/seat moves. */
+  actorId: string
 ): Promise<SwapEmailResult> {
   let firstError: string | null = null;
   const note = (e: { message: string } | null) => { if (e && !firstError) firstError = e.message; };
@@ -275,8 +277,10 @@ export async function performSwap(
       .eq('application_id', target.id)
       .maybeSingle();
     if (allocRow) {
+      // Not an insert, but it re-points an existing seat at a different
+      // person — that IS an allocation decision, so the actor is refreshed.
       const { error } = await supabase.from('conference_allocations')
-        .update({ user_id: source.user_id, application_id: source.id })
+        .update({ user_id: source.user_id, application_id: source.id, assigned_by: actorId })
         .eq('id', (allocRow as { id: string }).id);
       note(error);
     }
@@ -285,6 +289,8 @@ export async function performSwap(
       assigned_committee_id: target.assigned_committee_id,
       assigned_country_code: target.assigned_country_code,
       assigned_country_name: target.assigned_country_name,
+      decided_by: actorId,
+      decided_at: new Date().toISOString(),
     }).eq('id', source.id);
     note(srcAssignErr);
     const { error: tgtClearErr } = await supabase.from('applications').update({
@@ -292,6 +298,8 @@ export async function performSwap(
       assigned_committee_id: null,
       assigned_country_code: null,
       assigned_country_name: null,
+      decided_by: actorId,
+      decided_at: new Date().toISOString(),
     }).eq('id', target.id);
     note(tgtClearErr);
   }
@@ -310,15 +318,23 @@ export async function performSwap(
 export async function markNotAttending(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
-  member: Pick<PoolMember, 'id' | 'assigned_committee_id' | 'status'>
+  member: Pick<PoolMember, 'id' | 'assigned_committee_id' | 'status'>,
+  /** Organiser making the call — recorded only when the status actually flips. */
+  actorId?: string | null
 ): Promise<{ result: QueueEventEmailResult; error: string | null }> {
   const hasAllocation = !!member.assigned_committee_id;
+  const demoted = member.status === 'assigned';
   const { error: updateErr } = await supabase.from('applications').update({
     attending: false,
     assigned_committee_id: null,
     assigned_country_code: null,
     assigned_country_name: null,
-    status: member.status === 'assigned' ? 'accepted' : member.status,
+    status: demoted ? 'accepted' : member.status,
+    // Only a real status change re-stamps the decision; flipping attendance
+    // alone must not overwrite who accepted/assigned them. decided_at and
+    // decided_by ALWAYS travel together — a decided_by with no decided_at is
+    // an event the feed cannot place on the timeline, so it would vanish.
+    ...(demoted ? { decided_by: actorId ?? null, decided_at: new Date().toISOString() } : {}),
   }).eq('id', member.id);
   let firstError: string | null = updateErr?.message ?? null;
   if (hasAllocation) {
@@ -383,7 +399,9 @@ export async function removeFromDelegation(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string,
   member: PoolMember,
-  keepAllocation: boolean
+  keepAllocation: boolean,
+  /** Organiser removing them — recorded only when the status actually flips. */
+  actorId?: string | null
 ): Promise<{ result: QueueEventEmailResult; error: string | null }> {
   const { dropToUnpaid, error: releaseError } = await releasePoolSpot(supabase, member);
 
@@ -399,7 +417,12 @@ export async function removeFromDelegation(
     updates.assigned_committee_id = null;
     updates.assigned_country_code = null;
     updates.assigned_country_name = null;
-    if (member.status === 'assigned') updates.status = 'accepted';
+    if (member.status === 'assigned') {
+      updates.status = 'accepted';
+      // Paired, always — see markNotAttending.
+      updates.decided_by = actorId ?? null;
+      updates.decided_at = new Date().toISOString();
+    }
   }
 
   const { error: updateErr } = await supabase.from('applications').update(updates).eq('id', member.id);

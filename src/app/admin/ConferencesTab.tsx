@@ -118,7 +118,10 @@ function initialsOf(name: string | null, email: string | null): string {
 
 const STALE_DAYS = 14;
 function isStalled(r: AdminConferenceRow) { return !r.is_public && (daysSince(r.updated_at) ?? 0) > STALE_DAYS; }
-function isShortOnSeats(r: AdminConferenceRow) { return r.expected_delegates > 0 && r.seat_capacity < r.expected_delegates; }
+// 70% seat coverage is "fine" — the same bar the organiser dashboard checklist
+// and conference_setup_status() (nudge emails) use. Kept in sync deliberately:
+// a danger chip here that contradicts a green row there is worse than no chip.
+function isShortOnSeats(r: AdminConferenceRow) { return r.expected_delegates > 0 && r.seat_capacity < Math.ceil(r.expected_delegates * 0.70); }
 function hasEmptyDais(r: AdminConferenceRow) { return r.committees > 0 && r.chairs_missing > 0; }
 
 // ── HoverPop, portaled hover explainer ──────────────────────────────────────
