@@ -22,7 +22,30 @@ const ROLE_ALIASES: Record<string, ImportableRole> = {
   'observer': 'observer',
 };
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Mirrors what Resend will actually accept, and what is_sendable_email()
+// enforces in Postgres. The old pattern allowed a one character ending, so a
+// truncated "name@ashoka.e" imported cleanly and then poisoned every email
+// batch it landed in.
+const EMAIL_PATTERN = /^[^@\s,;<>]+@[^@\s,;<>]+\.[A-Za-z]{2,}$/;
+
+// Invisible formatting characters (zero width space, word joiner, BOM, soft
+// hyphen, non breaking space, bidi marks) survive a paste from a doc or chat
+// app, are impossible to see in a cell, and make an address unsendable.
+const INVISIBLE_CODEPOINTS = new Set<number>([
+  0x00ad, 0x00a0, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f,
+  0x2028, 0x2029, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e,
+  0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0xfeff,
+]);
+
+function stripInvisible(raw: string): string {
+  let out = '';
+  for (const ch of raw) {
+    const cp = ch.codePointAt(0);
+    if (cp !== undefined && INVISIBLE_CODEPOINTS.has(cp)) continue;
+    out += ch;
+  }
+  return out;
+}
 
 function normalizeHeaderKey(h: string): string {
   return h.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -87,7 +110,7 @@ function recordsToRows(records: Record<string, string>[]): ParseFileResult {
     const get = (h: CanonicalHeader) => {
       const key = keyForCanonical.get(h);
       const raw = key ? record[key] : '';
-      return (raw ?? '').toString().trim();
+      return stripInvisible((raw ?? '').toString()).trim();
     };
     const row: ParsedImportRow = {
       rowNumber: 0,
@@ -244,7 +267,7 @@ export function classifyImportRows(rows: ParsedImportRow[], ctx: ClassifyContext
     const emailLower = raw.email.trim().toLowerCase();
 
     if (!EMAIL_PATTERN.test(raw.email.trim())) {
-      reasons.push({ severity: 'error', message: 'Invalid email address.' });
+      reasons.push({ severity: 'error', message: `Invalid email address "${raw.email.trim()}". Check for a missing ending such as .com or .edu.in.` });
     }
     if (!raw.name.trim()) {
       reasons.push({ severity: 'error', message: 'Missing name.' });

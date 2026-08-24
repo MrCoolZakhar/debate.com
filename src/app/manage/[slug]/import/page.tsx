@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   Download, Upload as UploadIcon, ArrowLeft, Check,
   AlertTriangle, Mail, Loader2, CircleCheck, CircleX,
-  FileSpreadsheet, Users, Link2, UserCheck, ArrowRight,
+  FileSpreadsheet, Users, Link2, UserCheck, ArrowRight, Pencil, X,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -168,6 +168,10 @@ export default function ImportPage() {
   // outside link (?tab=imported) land straight on the roster, not the wizard.
   const initialTab: Tab = searchParams.get('tab') === 'imported' ? 'imported' : 'import';
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+
+  // ?fix=<applicationId> arrives from a failed delivery row in Communications:
+  // land on the roster, scroll to that person, and open their email for editing.
+  const fixApplicationId = searchParams.get('fix');
 
   const [phase, setPhase] = useState<Phase>('upload');
   const [fileError, setFileError] = useState<string | null>(null);
@@ -582,6 +586,9 @@ export default function ImportPage() {
 
   const summary = summarizeRows(classifiedRows);
   const importableCount = summary.valid + summary.warning;
+  // Error rows whose problem is the email address itself, so the summary can
+  // reassure the organizer they are fixable here rather than a dead end.
+  const emailErrorCount = classifiedRows.filter(r => r.reasons.some(m => m.startsWith('Invalid email address'))).length;
 
   const importedCount = resultRows.filter(r => r.outcome === 'imported').length;
   const importedNoAllocCount = resultRows.filter(r => r.outcome === 'imported-no-allocation').length;
@@ -595,7 +602,7 @@ export default function ImportPage() {
       <ImportTabSwitcher active={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'imported' ? (
-        <ImportedDelegatesTab conference={conference} session={session} confirm={confirm} />
+        <ImportedDelegatesTab conference={conference} session={session} confirm={confirm} fixApplicationId={fixApplicationId} />
       ) : (
       <>
       {/* Header (non-landing only; the landing header lives in the left column) */}
@@ -792,6 +799,15 @@ export default function ImportPage() {
             <SummaryStat label="Warnings" value={summary.warning} tone="warning" />
             <SummaryStat label="Errors" value={summary.error} tone="error" />
           </div>
+
+          {emailErrorCount > 0 && (
+            <p className="text-sm mb-5" style={{ color: '#8B2020', fontFamily: OUTFIT, lineHeight: 1.55 }}>
+              {emailErrorCount === 1
+                ? '1 row has an email address that cannot receive mail.'
+                : `${emailErrorCount} rows have email addresses that cannot receive mail.`}{' '}
+              You can correct these addresses here in the import editor at any time, before or after importing.
+            </p>
+          )}
 
           <RowTable rows={classifiedRows} committees={contextCommittees} />
 
@@ -1061,14 +1077,25 @@ const STATUS_LABEL: Record<string, string> = {
   'not-attending': 'Not attending', waitlisted: 'Waitlisted',
 };
 
-function ImportedDelegatesTab({ conference, session, confirm }: {
+// Same rule as applicantImport.ts's EMAIL_PATTERN and Postgres
+// is_sendable_email(): a real multi-character TLD, so a truncated address is
+// caught in the roster editor exactly as it is at paste time.
+const SENDABLE_EMAIL = /^[^@\s,;<>]+@[^@\s,;<>]+\.[A-Za-z]{2,}$/;
+
+function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }: {
   conference: Conference;
   session: { access_token: string } | null;
   confirm: (config: ConfirmModalConfig) => Promise<ConfirmModalResult>;
+  fixApplicationId?: string | null;
 }) {
   const [rows, setRows] = useState<ImportedDelegateRow[] | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [resentIds, setResentIds] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftEmail, setDraftEmail] = useState('');
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const autoFixedRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -1084,6 +1111,44 @@ function ImportedDelegatesTab({ conference, session, confirm }: {
   }, [conference.id, session?.access_token]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (autoFixedRef.current || !fixApplicationId || !rows) return;
+    const target = rows.find(r => r.id === fixApplicationId);
+    if (!target) return;
+    autoFixedRef.current = true;
+    if (!target.user_id) {
+      setEditingId(target.id);
+      setDraftEmail(target.invited_email);
+    }
+    requestAnimationFrame(() => {
+      document.getElementById(`imported-row-${target.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [fixApplicationId, rows]);
+
+  async function handleSaveEmail(row: ImportedDelegateRow) {
+    if (!session || savingId) return;
+    const next = draftEmail.trim();
+    if (next.toLowerCase() === row.invited_email.toLowerCase()) { setEditingId(null); return; }
+    setSavingId(row.id);
+    setRowError(null);
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const { data, error } = await supabase.rpc('fix_imported_applicant_email', {
+        p_application_id: row.id,
+        p_email: next,
+      });
+      const result = (data ?? null) as { ok: boolean; message?: string; requeued?: number } | null;
+      if (error || !result?.ok) {
+        setRowError({ id: row.id, message: result?.message ?? error?.message ?? 'Could not save that email address.' });
+        return;
+      }
+      setEditingId(null);
+      await load();
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   async function handleResend(row: ImportedDelegateRow) {
     if (!session || resendingId) return;
@@ -1128,6 +1193,7 @@ function ImportedDelegatesTab({ conference, session, confirm }: {
   }
 
   const unclaimed = rows.filter(r => !r.user_id).length;
+  const unsendableCount = rows.filter(r => !r.user_id && !SENDABLE_EMAIL.test(r.invited_email)).length;
 
   return (
     <>
@@ -1135,6 +1201,17 @@ function ImportedDelegatesTab({ conference, session, confirm }: {
         <SummaryStat label="Imported" value={rows.length} tone="valid" />
         <SummaryStat label="Unclaimed" value={unclaimed} tone="warning" />
       </div>
+      {unsendableCount > 0 && (
+        <div
+          className="flex items-center gap-3 rounded-xl px-4 py-3 mb-5"
+          style={{ backgroundColor: 'rgba(139,32,32,0.10)', border: '1px solid rgba(139,32,32,0.30)' }}
+        >
+          <AlertTriangle size={15} style={{ color: '#8B2020', flexShrink: 0 }} />
+          <p className="flex-1 text-sm" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+            {unsendableCount} imported {unsendableCount === 1 ? 'delegate has an email address that' : 'delegates have email addresses that'} cannot receive mail. Fix {unsendableCount === 1 ? 'it' : 'them'} below and their pending emails will send automatically.
+          </p>
+        </div>
+      )}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
         <div className="overflow-x-auto" style={{ maxHeight: 560, overflowY: 'auto' }}>
           <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -1151,10 +1228,71 @@ function ImportedDelegatesTab({ conference, session, confirm }: {
               {rows.map(r => {
                 const claimed = !!r.user_id;
                 const resent = resentIds.has(r.id);
+                const editing = editingId === r.id;
+                const unsendable = !claimed && !SENDABLE_EMAIL.test(r.invited_email);
+                const isFixTarget = r.id === fixApplicationId;
                 return (
-                  <tr key={r.id} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: '#FAF8F3' }}>
+                  <tr id={`imported-row-${r.id}`} key={r.id} style={{ borderTop: '1px solid #F0EDE6', backgroundColor: isFixTarget ? 'rgba(238,217,138,0.30)' : '#FAF8F3' }}>
                     <td className="px-3 py-2.5 text-xs font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.invited_name || '—'}</td>
-                    <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{r.invited_email}</td>
+                    <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                      {claimed ? (
+                        r.invited_email
+                      ) : editing ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <input
+                            type="email"
+                            value={draftEmail}
+                            autoFocus
+                            disabled={savingId === r.id}
+                            onChange={e => setDraftEmail(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') { e.preventDefault(); handleSaveEmail(r); }
+                              else if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); setRowError(null); }
+                            }}
+                            className="rounded-lg px-2 py-1 text-xs focus:outline-none"
+                            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT, minWidth: 180 }}
+                          />
+                          <button
+                            onClick={() => handleSaveEmail(r)}
+                            disabled={savingId === r.id}
+                            aria-label="Save email"
+                            className="inline-flex items-center gap-1 rounded-lg py-1 px-2 text-xs font-bold focus:outline-none"
+                            style={{ border: '1px solid #DDD4C0', color: '#2A5A3C', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: savingId === r.id ? 'not-allowed' : 'pointer' }}
+                          >
+                            {savingId === r.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} SAVE
+                          </button>
+                          <button
+                            onClick={() => { setEditingId(null); setRowError(null); }}
+                            disabled={savingId === r.id}
+                            aria-label="Cancel"
+                            className="inline-flex items-center gap-1 rounded-lg py-1 px-2 text-xs font-bold focus:outline-none"
+                            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: savingId === r.id ? 'not-allowed' : 'pointer' }}
+                          >
+                            <X size={11} /> CANCEL
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span style={{ color: unsendable ? '#8B2020' : '#1C1410' }}>
+                            {r.invited_email}
+                            {unsendable && (
+                              <span className="block" style={{ color: '#8B2020', fontSize: 10, marginTop: 1 }}>Cannot receive email</span>
+                            )}
+                          </span>
+                          <button
+                            onClick={() => { setEditingId(r.id); setDraftEmail(r.invited_email); setRowError(null); }}
+                            aria-label="Edit email"
+                            className="inline-flex items-center justify-center rounded-lg p-1 focus:outline-none"
+                            style={{ border: '1px solid #DDD4C0', color: '#6B5F52', backgroundColor: 'transparent', cursor: 'pointer' }}
+                          >
+                            <Pencil size={11} />
+                          </button>
+                        </span>
+                      )}
+                      {rowError?.id === r.id && (
+                        <p className="mt-1.5" style={{ color: '#8B2020', fontSize: 11, fontFamily: OUTFIT }}>{rowError.message}</p>
+                      )}
+                    </td>
                     <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{roleLabel(r.role)}</td>
                     <td className="px-3 py-2.5 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{STATUS_LABEL[r.status] ?? r.status}</td>
                     <td className="px-3 py-2.5">

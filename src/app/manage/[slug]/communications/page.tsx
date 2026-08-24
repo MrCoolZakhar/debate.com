@@ -2,9 +2,10 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   Mail, AlertTriangle, Send, Bell, Inbox, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, Palette, Trash2,
-  BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass,
+  BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass, Wrench,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -114,6 +115,27 @@ interface OutboxDetailRow {
   status: string;
   error: string | null;
   sent_at: string | null;
+  recipient_application_id: string | null;
+}
+
+/** Provider errors are written for engineers. Organizers need to know which
+ *  address is wrong, that they can fix it themselves, and where. `fixable`
+ *  marks the cases an organizer can actually resolve in the import editor. */
+function friendlyDeliveryError(raw: string, recipient: string | null): { text: string; fixable: boolean } {
+  const address = recipient ? `"${recipient}"` : 'this address';
+  if (/Invalid recipient address/i.test(raw) || /validation_error|Invalid `to` field/i.test(raw)) {
+    return { text: `${address} is not a valid email address, so nothing could be delivered to it. You can correct it yourself in the import editor, and their pending emails will send automatically.`, fixable: true };
+  }
+  if (/No recipient email/i.test(raw)) {
+    return { text: 'No email address on record for this person. Add one in the import editor to reach them.', fixable: true };
+  }
+  if (/statusCode":429|rate limit/i.test(raw)) {
+    return { text: 'Sending was rate limited. This will retry automatically, no action needed.', fixable: false };
+  }
+  if (/No id returned/i.test(raw)) {
+    return { text: 'The email provider did not confirm this one. Resend it.', fixable: false };
+  }
+  return { text: raw, fixable: false };
 }
 
 // ── Inbox (Q&R threads) ──────────────────────────────────────────────────────
@@ -1523,7 +1545,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_outbox')
-      .select('id, recipient_email, status, error, sent_at')
+      .select('id, recipient_email, status, error, sent_at, recipient_application_id')
       .eq('email_send_id', sendId);
     setOutboxBySend(prev => ({ ...prev, [sendId]: (data ?? []) as OutboxDetailRow[] }));
   }
@@ -2369,11 +2391,25 @@ function CommunicationsPageInner() {
                                           {r.recipient_email ?? '—'}
                                         </span>
                                         <div className="flex items-center gap-2 flex-shrink-0">
-                                          {r.status === 'failed' && r.error && (
-                                            <span className="text-xs truncate" style={{ color: '#8B2020', fontFamily: OUTFIT, maxWidth: 260 }} title={r.error}>
-                                              {r.error}
-                                            </span>
-                                          )}
+                                          {r.status === 'failed' && r.error && (() => {
+                                            const failure = friendlyDeliveryError(r.error, r.recipient_email);
+                                            return (
+                                              <>
+                                                <span className="text-xs truncate" style={{ color: '#8B2020', fontFamily: OUTFIT, maxWidth: 300 }} title={r.error}>
+                                                  {failure.text}
+                                                </span>
+                                                {failure.fixable && (
+                                                  <Link
+                                                    href={`/manage/${conference.slug}/import?tab=imported${r.recipient_application_id ? `&fix=${r.recipient_application_id}` : ''}`}
+                                                    className="inline-flex items-center gap-1 rounded-lg py-1 px-2.5 text-xs font-bold flex-shrink-0 focus:outline-none"
+                                                    style={{ border: '1px solid rgba(139,32,32,0.35)', color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', fontFamily: OUTFIT, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                                                  >
+                                                    <Wrench size={11} /> FIX IT NOW
+                                                  </Link>
+                                                )}
+                                              </>
+                                            );
+                                          })()}
                                           {formatSentAt(r.sent_at) && (
                                             <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
                                               {formatSentAt(r.sent_at)}
