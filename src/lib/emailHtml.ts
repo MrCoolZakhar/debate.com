@@ -92,6 +92,14 @@ function renderHeader(conference: EmailRenderConference, siteUrl: string, theme:
   const logoAbs = theme.showLogo ? absolutizeUrl(conference.logo_url, siteUrl) : null;
   const useBanner = theme.headerStyle === 'banner' && !!bannerAbs;
 
+  // 44x44 circular + object-fit:cover — i.e. this cell CROPS its image to a
+  // square. `logo_url` is a per-conference user upload, which is what that
+  // treatment is for. NEVER default it to a Gavelling wide lockup
+  // (/GavellingLogo.png, /Conferences.webp, /GavellingSessionsApp.webp): a
+  // square crop of those keeps the mark plus the left bowl of the "G", which
+  // reads as a crescent bitten out of the logo. If a Gavelling fallback is ever
+  // wanted here it must be the square mark, `${siteUrl}/gavelling-mark.png`.
+  // See public/README.md.
   const logoCell = logoAbs
     ? `<td width="64" valign="middle" align="center" style="background-color:${useBanner ? '#FFFFFF' : theme.accentColor};padding:0 16px;">
          <img src="${escapeHtml(logoAbs)}" width="44" height="44" alt="${escapeHtml(conference.acronym)} logo"

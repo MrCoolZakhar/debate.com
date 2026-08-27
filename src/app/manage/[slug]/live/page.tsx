@@ -164,8 +164,12 @@ export default function LiveStatusPage() {
             .select('committee_id, country, position, list_type')
             .in('committee_id', sessionIds)
             .order('position', { ascending: true }),
+          // `proposed_by`, `total_time` and `created_at` are what turn a motion
+          // row into a sentence ("Germany · 10-minute moderated caucus, raised
+          // 40s ago"). `created_at` also carries the whole "is this motion
+          // being decided right now" judgement — see `motionOnTheFloor`.
           anonSupabase.from('motions')
-            .select('committee_id, type, topic, disruptiveness')
+            .select('committee_id, type, topic, disruptiveness, proposed_by, total_time, created_at')
             .eq('status', 'pending')
             .in('committee_id', sessionIds),
           // file_url / file_name / content are what make a document readable
@@ -397,7 +401,13 @@ export default function LiveStatusPage() {
           pendingMotions: sid
             ? bySession(motions, sid)
                 .filter((m) => m.type !== 'join-request' && m.type !== 'gsl-request')
-                .map((m) => ({ type: m.type as string, topic: (m.topic as string) ?? '' }))
+                .map((m) => ({
+                  type: m.type as string,
+                  topic: (m.topic as string) ?? '',
+                  proposedBy: (m.proposed_by as string) ?? '',
+                  totalTime: (m.total_time as number) ?? 0,
+                  createdAt: (m.created_at as string | null) ?? null,
+                }))
             : [],
           documents: sid
             ? bySession(documents, sid).map((d) => ({

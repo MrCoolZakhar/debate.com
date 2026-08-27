@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { pageMetadata } from '@/lib/seo';
+import { pageMetadata, JSONLD_LOGO } from '@/lib/seo';
 import Link from 'next/link';
 import StagefrontClient from './conferences/StagefrontClient';
 import { supabase } from '@/lib/supabase';
@@ -48,12 +48,7 @@ const organizationSchema = {
   '@type': 'Organization',
   name: 'Gavelling',
   url: 'https://gavelling.com',
-  logo: {
-    '@type': 'ImageObject',
-    url: 'https://gavelling.com/GavellingLogo.png',
-    width: 400,
-    height: 100,
-  },
+  logo: JSONLD_LOGO,
   sameAs: [
     'https://www.instagram.com/wearegavelling/',
     'https://twitter.com/wearegavelling',

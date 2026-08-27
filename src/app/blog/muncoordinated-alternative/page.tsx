@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
-import { pageMetadata } from '@/lib/seo';
+import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Muncoordinated vs Gavelling: Which Free MUN Software in 2026?',
@@ -33,7 +33,7 @@ const articleSchema = {
   datePublished: '2026-07-21',
   dateModified: '2026-07-21',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
-  publisher: { '@type': 'Organization', name: 'Gavelling', logo: { '@type': 'ImageObject', url: 'https://gavelling.com/GavellingLogo.png' } },
+  publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://gavelling.com/blog/muncoordinated-alternative' },
 };

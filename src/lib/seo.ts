@@ -47,6 +47,47 @@ export function absoluteUrl(path = ''): string {
 export const OG_IMAGE_URL = `${SITE_URL}/og-image.jpg`;
 const OG_IMAGE_ALT = 'Gavelling: MUN Conferences & Committee Software';
 
+// ── The brand mark for structured data ───────────────────────────────────────
+//
+// THE SQUARE MARK, NOT THE WIDE LOCKUP. This distinction has cost us real time.
+//
+// `/GavellingLogo.png` is an 800x200 LOCKUP: the gavel-and-wreath mark sits on
+// the left, and the word "GAVELLING" starts at roughly x=185. Structured-data
+// consumers (Google knowledge panels, rich results, link unfurlers) render
+// `Organization.logo` as a SMALL SQUARE and crop it. A left-anchored square
+// crop of that lockup yields the gavel plus the leftmost curve of the capital
+// "G" — which reads as a crescent "C" bitten out of the artwork. That crescent
+// is the recurring "wrong logo" bug; it is not a different logo file, it is the
+// right file cropped wrong.
+//
+// So: anywhere the container is SQUARE, ROUND or CROPPING, use the square mark
+// below. `/GavellingLogo.png` is correct only in a genuinely wide, contained
+// header lockup (`object-contain` with `w-auto`/`h-auto`).
+//
+// Canonical square mark: /gavelling-mark.png (512x512, transparent, byte-
+// identical to src/app/icon.png and src/app/apple-icon.png). See public/README.md.
+export const LOGO_MARK_URL = `${SITE_URL}/gavelling-mark.png`;
+
+/** `Organization.logo` for JSON-LD. Square, so a square crop is a no-op. */
+export const JSONLD_LOGO = {
+  '@type': 'ImageObject',
+  url: LOGO_MARK_URL,
+  width: 512,
+  height: 512,
+};
+
+/**
+ * The `publisher` / `Organization` node for JSON-LD. Import this rather than
+ * re-typing the object: it was previously copy-pasted into ~36 page files, so
+ * every fix to the logo reached one or two of them and left the rest wrong.
+ */
+export const JSONLD_PUBLISHER = {
+  '@type': 'Organization',
+  name: 'Gavelling',
+  url: SITE_URL,
+  logo: JSONLD_LOGO,
+};
+
 // NB: deliberately NOT `as const` — that widens to readonly tuples, which
 // Next's OpenGraph type rejects.
 export const OG_IMAGE = {
