@@ -111,16 +111,11 @@ export interface LiveCommittee {
   delegates: { country: string; status: string; isObserver: boolean }[];
   gslQueue: string[];
   caucusQueue: string[];
-  /** Unruled motions sitting on the chair's desk.
-   *
-   *  `created_at` is carried because it is the ONLY thing on the row that moves.
-   *  `motions.status` is a text column defaulting to 'pending' that NOTHING in
-   *  the codebase ever updates — every write is an insert or a hard delete
-   *  (`committeeService.ts:672, 683, 688, 846, 851, 884`) — so a row's mere
-   *  existence means "raised and not yet ruled on", and its age is the only
-   *  available proxy for "the chair is at the motions modal right now".
-   *  See `motionOnTheFloor` in cardModel.ts. */
-  pendingMotions: { type: string; topic: string; proposedBy: string; totalTime: number; createdAt: string | null }[];
+  // The `motions` table is DELIBERATELY not read by this page. The cards report
+  // the stage a room is in, never what is sitting on the chair's desk, and the
+  // recap's "Motions raised" tile counts `motion-raised` ledger events in
+  // `messages` (see `motionsLogged` below) rather than motion rows — which are
+  // hard-deleted on both accept and reject and so cannot be counted anyway.
   documents: {
     type: string; status: string; docCode: string; title: string; sponsors: string[];
     /** Public Supabase Storage URL, or null — 17 of 23 production rows (74%) have none. */

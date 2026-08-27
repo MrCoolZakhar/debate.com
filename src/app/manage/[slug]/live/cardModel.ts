@@ -156,7 +156,7 @@ export function fmtSpan(minutes: number): string {
  *  facts strip or in the modal — a warning row that cries about ordinary state
  *  is a warning row nobody reads. */
 export type WarningId =
-  | 'below-quorum' | 'no-chair' | 'stalled' | 'caucus-overrun'
+  | 'below-quorum' | 'no-chair' | 'caucus-overrun'
   | 'unresolved-dr' | 'stuck-resume';
 
 export interface CardWarning {
@@ -222,15 +222,13 @@ export function cardWarnings(lc: LiveCommittee, now: number): CardWarning[] {
   }
   if (status === 'not-started' || status === 'ended') return out;
 
-  if (status === 'stalled') {
-    const mins = idleMinutes(lc, now);
-    out.push({
-      id: 'stalled', tone: 'red',
-      text: mins === null
-        ? 'Marked in session but has never shown any activity'
-        : `Nothing has happened in this room for ${fmtSpan(mins)}`,
-    });
-  }
+  // A "nothing has happened for Nm" warning is DELIBERATELY not raised, on the
+  // owner's instruction. It restated, in a red pill, exactly what the status
+  // word ("Stalled"), the rail colour, the "quiet 34m" line and the sort order
+  // were already saying — four sayings of one fact, and the only one of them
+  // that cost the warning slot. Staleness still drives all of those:
+  // `roomStatus` keeps STALLED_MINUTES and `urgencyRank` still floats a stalled
+  // room to the top of the grid. Only the redundant pill is gone.
 
   if (s.chairNames.length === 0) {
     out.push({ id: 'no-chair', tone: 'red', text: 'No chair has joined this session' });
@@ -349,11 +347,11 @@ export function chairFirstNames(lc: LiveCommittee): string[] {
 // grid was rebuilt to fix.
 
 export type NowPlayingKind =
-  | 'motion' | 'speaker' | 'caucus' | 'tour' | 'voting'
+  | 'speaker' | 'caucus' | 'tour' | 'voting'
   | 'roll-call' | 'idle-floor' | 'suspended' | 'not-started' | 'ended';
 
 /** Which glyph fills the art slot when no single delegation is the subject. */
-export type NowGlyph = 'gavel' | 'mic' | 'timer' | 'users' | 'ballot' | 'pause' | 'closed' | 'dormant';
+export type NowGlyph = 'mic' | 'timer' | 'users' | 'ballot' | 'pause' | 'closed' | 'dormant';
 
 /** `live` = a clock or a process is genuinely running. `warn` = running out,
  *  paused, or waiting on a human. `off` = nothing is happening, said plainly. */
@@ -383,116 +381,42 @@ export interface NowPlaying {
    *
    *  `label` states WHICH list this is. RULE 1: the General Speakers' List and
    *  the caucus queue are strictly separate and must never be reported as one
-   *  number, so the panel always says which one it is counting. */
+   *  number, so the panel always says which one it is counting — the label is
+   *  what keeps a row of flags from being read as one merged queue.
+   *
+   *  `names` are the delegations in queue order. The card renders them as FLAGS
+   *  ONLY: dropping the names is exactly what buys the room to show ten instead
+   *  of two, and in a body where every delegation is a country the flag already
+   *  identifies the seat. Each flag still carries its delegation as a `title`,
+   *  so nothing is actually lost — only unstacked. */
   next: { label: string; names: string[]; more: number } | null;
 }
 
-/** Up to two names off a queue, plus however many are left behind them.
- *  `skip` drops the delegations the headline has already named. */
+/** How many delegations the up-next column shows before it starts counting.
+ *  Ten, on the owner's instruction. Ten flags fit because they are flags. */
+export const UP_NEXT_MAX = 10;
+
+/** Up to `UP_NEXT_MAX` delegations off a queue, plus however many are left
+ *  behind them. `skip` drops the delegations the headline has already named. */
 function upNext(label: string, queue: string[], skip: number): NowPlaying['next'] {
   const rest = queue.slice(skip);
   if (rest.length === 0) return null;
-  return { label, names: rest.slice(0, 2), more: Math.max(0, rest.length - 2) };
+  return { label, names: rest.slice(0, UP_NEXT_MAX), more: Math.max(0, rest.length - UP_NEXT_MAX) };
 }
 
-// ── Motions: what can and cannot be known ────────────────────────────────────
+// ── The panel states the STAGE, and nothing else ─────────────────────────────
 //
-// THE FINDING, WRITTEN DOWN SO NOBODY RE-DERIVES IT.
+// The context line answers one question: what stage is this room in. General
+// Speakers' List · Moderated caucus (with its topic) · Consultation of the Whole
+// · Unmoderated caucus · Tour de Table · Voting procedure · Roll call ·
+// Suspended · Adjourned · Not opened.
 //
-// There is NO stored signal anywhere that separates "a motion is being voted on
-// right now" from "a motion is sitting on the chair's desk". Specifically:
-//
-//   • `motions.status` is `text NOT NULL DEFAULT 'pending'` and NOTHING in the
-//     codebase ever updates it. Every write to the table is an INSERT or a hard
-//     DELETE (`committeeService.ts:672, 683, 688, 846, 851, 884, 889`). All nine
-//     production rows read 'pending'.
-//   • Accepting a motion and rejecting one both end in `.delete()`, so a ruled
-//     motion leaves no row and no timestamp behind. The `motion-raised` ledger
-//     event survives an ACCEPT only.
-//   • The chair "voting on a motion" is `ModalView === 'vote'` — React state
-//     inside `MotionsModal.tsx:27, 1105`. It is never persisted, never
-//     broadcast, and never lands in any column this page can read.
-//
-// So the honest reading is narrower than "being decided", and this surface says
-// only what it can prove: a motion row that still EXISTS is a motion no chair
-// has ruled on, and `created_at` is the only field on it that moves. A row
-// raised moments ago, in a room that is demonstrably awake, is the closest a
-// database read can come to "the chair is at the motions modal right now" — so
-// that, and only that, is what takes the panel over. The copy says "Motion on
-// the floor · awaiting the chair's ruling", not "being voted on", because the
-// second claim is not available.
-//
-// A motion older than the window is deliberately shown NOWHERE on the card. The
-// owner's instruction was explicit: a pending count is not information.
-
-/** How long an unruled motion counts as the thing currently happening.
- *
- *  Five minutes. A chair entertains a motion, reads it out and rules within a
- *  minute or two in practice; five gives a stacked "entertaining motions" run
- *  room to breathe without letting a forgotten row squat on the panel. */
-export const MOTION_LIVE_MINUTES = 5;
-
-export interface FloorMotion {
-  /** "10-minute moderated caucus — Climate finance" */
-  label: string;
-  /** The delegation that moved it, or '' when the row does not name one. */
-  proposedBy: string;
-  ageSeconds: number;
-}
-
-const MOTION_NOUNS: Record<string, string> = {
-  moderated: 'moderated caucus',
-  unmoderated: 'unmoderated caucus',
-  consultation: 'Consultation of the Whole',
-  tour: 'Tour de Table',
-};
-
-/** A motion row as a sentence a person can read out.
- *
- *  `topic` is overloaded by the schema: it is the caucus purpose on a moderated
- *  caucus, the optional free-text name on a custom motion, and a JSON blob on
- *  the two pseudo-types — which never reach here, because the page filters
- *  `join-request` and `gsl-request` out at the read. */
-export function motionLabel(m: LiveCommittee['pendingMotions'][number]): string {
-  const topic = (m.topic ?? '').trim();
-  if (m.type === 'suspend-debate') return 'Motion to suspend debate';
-  if (m.type === 'end-debate') return 'Motion to end debate';
-  if (m.type === 'custom') return topic || 'A custom motion';
-  const noun = MOTION_NOUNS[m.type] ?? 'motion';
-  const mins = m.totalTime > 0 ? Math.round(m.totalTime / 60) : 0;
-  const head = mins > 0 ? `${mins}-minute ${noun}` : noun;
-  return topic && m.type === 'moderated' ? `${head} — ${topic}` : head;
-}
-
-/** The freshest unruled motion, when the room is awake and the row is recent
- *  enough to be the thing currently happening. Otherwise null. */
-export function motionOnTheFloor(lc: LiveCommittee, now: number): FloorMotion | null {
-  // A stalled or idle room is not deciding anything; a row sitting in one is
-  // abandoned, not live.
-  if (roomStatus(lc, now) !== 'live') return null;
-  let best: FloorMotion | null = null;
-  for (const m of lc.pendingMotions) {
-    if (!m.createdAt) continue;
-    const t = Date.parse(m.createdAt);
-    if (!Number.isFinite(t)) continue;
-    const age = (now - t) / 1000;
-    // Clock skew between the database and the browser can make a brand-new row
-    // read as slightly in the future. Treat that as "just now", not as invalid.
-    if (age > MOTION_LIVE_MINUTES * 60) continue;
-    const ageSeconds = Math.max(0, age);
-    if (!best || ageSeconds < best.ageSeconds) {
-      best = { label: motionLabel(m), proposedBy: (m.proposedBy ?? '').trim(), ageSeconds };
-    }
-  }
-  return best;
-}
-
-/** "45s ago" / "3m ago". Seconds resolution for the first minute, because a
- *  motion raised eleven seconds ago and one raised fifty are different rooms. */
-export function fmtAgo(seconds: number): string {
-  const s = Math.max(0, Math.round(seconds));
-  return s < 60 ? `${s}s ago` : `${fmtSpan(s / 60)} ago`;
-}
+// Motions are deliberately absent, on the owner's instruction: what is sitting
+// on the chair's desk is not something this board reports. Nor is it a missing
+// stage — a caucus IS the outcome of a motion, so the four caucus stages above
+// already cover it, and a generic "Motion" stage on top of them would count the
+// same event twice. The recap modal's "Motions raised" tile stays where it is;
+// it counts `motion-raised` ledger events in `messages`, not the `motions` table.
 
 /** THE PANEL. One pure function of the row and the page's clock. */
 export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
@@ -549,27 +473,6 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
       left: 'never opened',
       right: lc.conf.sessionCode ? `code ${lc.conf.sessionCode}` : 'no session code',
       next: null,
-    };
-  }
-
-  // ── A motion the chair has not ruled on ──
-  // The ONE thing allowed to displace the floor, and only while it is fresh.
-  // See the block comment above for exactly how much this can and cannot claim.
-  const motion = motionOnTheFloor(lc, now);
-  if (motion) {
-    // Only flag a proposer this room can vouch for. `proposed_by` also carries
-    // chair names and free text, and `flagCodeFor` would answer a globe for both.
-    const isDelegation = !!motion.proposedBy
-      && lc.delegates.some((d) => d.country === motion.proposedBy);
-    return {
-      kind: 'motion', context: 'Motion on the floor',
-      headline: motion.label,
-      flag: isDelegation ? motion.proposedBy : null,
-      glyph: 'gavel', tone: 'warn', dim: false, pct: null,
-      left: motion.proposedBy
-        ? `moved by ${motion.proposedBy} · ${fmtAgo(motion.ageSeconds)}`
-        : `raised ${fmtAgo(motion.ageSeconds)}`,
-      right: "awaiting the chair's ruling", next: null,
     };
   }
 
@@ -767,10 +670,9 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
 //
 // TWO NUMBERS ARE GONE FROM THE CARD ON PURPOSE.
 //
-//   • Motion counts — pending and raised alike. A count of motions on the floor
-//     is not something an organiser can act on; a motion only matters while it
-//     is actually being decided, and when it is, it takes the now-playing panel
-//     over instead (see `motionOnTheFloor`).
+//   • Motion counts — pending and raised alike. Motions are not tracked on this
+//     card at all: the panel above reports the STAGE the room is in, and the
+//     caucus stages already say what a passed motion produced.
 //   • Total speaking time. It is a recap number, not a preview number, and it
 //     stays in the recap modal (`RecapModal`'s "Total speaking time" tile).
 

@@ -31,7 +31,7 @@
 import React, { useState } from 'react';
 import {
   Users, FileText, ScrollText, Trophy, AlertTriangle, Info,
-  Gavel, Mic, Timer, Pause, Flag, Moon,
+  Mic, Timer, Pause, Flag, Moon,
 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
@@ -49,30 +49,60 @@ import {
 // The card surface, its edge and its shadow all come from ./tokens, where the
 // contrast measurements that justify them are written down.
 
-/** Reserved height for the warning slot. Fixed, so a card with a warning and a
- *  card without one are the same height and the grid stays a grid. */
-const WARNING_SLOT_HEIGHT = 26;
+/** Reserved height for the warning slot. A FLOOR, not a cap: warning text is
+ *  allowed to wrap now, and the grid's `items-stretch` absorbs the difference
+ *  so a card with a two-line warning and a card with none still match. */
+const WARNING_SLOT_HEIGHT = 30;
 
 /** Card radius, and the gutter the now-playing panel leaves at the card edge.
  *
- *  CONCENTRIC, exactly: outer = inner + padding. The panel is deliberately
- *  wider than the header text above it (which sits at 18/20) — an 8px gutter
- *  gives it the full width of the card and lets the radii line up at
- *  22 − 8 = 14 instead of being fudged. */
-const CARD_RADIUS = 22;
+ *  CONCENTRIC, exactly: outer = inner + padding. An 8px gutter gives the panel
+ *  the full width of the card and lets the radii line up at 24 − 8 = 16 instead
+ *  of being fudged. */
+const CARD_RADIUS = 24;
 const PANEL_GUTTER = 8;
 const PANEL_RADIUS = CARD_RADIUS - PANEL_GUTTER;
 
-/** The panel's floor. Art disc (54) + its padding (2×14) + the scrubber block
- *  (~28) — a footprint that does not move between a room mid-speech and a room
+/** Card padding. Asymmetric because band 1's 4px rail eats into the start edge. */
+const PAD_START = 22;
+const PAD_END = 20;
+
+/** The panel's floor. Art disc (60) + its padding (2×15) + the scrubber block
+ *  (~30) — a footprint that does not move between a room mid-speech and a room
  *  that was never opened. Spotify does not collapse its now-playing bar; nor
  *  does this. */
-const PANEL_MIN_HEIGHT = 126;
+const PANEL_MIN_HEIGHT = 150;
+
+/** The card's floor. Raised with the rest of the type: the old 300 was sized
+ *  around text that truncated, and nothing on this card truncates any more. */
+const CARD_MIN_HEIGHT = 352;
+
+/** The conference emblem STRADDLES the top edge — `LOGO_OVERHANG` px of it sit
+ *  outside the card, on the page behind it.
+ *
+ *  Three things this has to clear, all verified by measurement:
+ *    • the 4px status rail — the logo starts at PAD_START (22), so it never
+ *      touches it;
+ *    • the grid's top row — the grid carries `paddingBlockStart` ≥ this, or the
+ *      first row of emblems would be cut by the scroll container;
+ *    • the card above it in the same column — the grid's ROW gap is widened
+ *      past this for the same reason.
+ *  `LogoDisc` already paints a near-white disc with a soft forest shadow, which
+ *  is what lets one mark read against the card AND the ivory page at once. */
+const LOGO_SIZE = 60;
+const LOGO_OVERHANG = 22;
+/** How far the header text is pushed in to sit beside the emblem. */
+const HEADER_INDENT = LOGO_SIZE + 12;
+
+/** The up-next column. Sized to fit FIVE 17px flags on a row (5×17 + 4×4 = 101),
+ *  so ten wrap to exactly two rows and the `+N` lands beside the last one.
+ *  Measured against the narrowest card the grid ever produces — 3 columns at a
+ *  1280px viewport. */
+const UP_NEXT_WIDTH = 106;
 
 // ── Now-playing panel ────────────────────────────────────────────────────────
 
 const GLYPH_ICON: Record<NowGlyph, React.ComponentType<{ size?: number; style?: React.CSSProperties }>> = {
-  gavel: Gavel,
   mic: Mic,
   timer: Timer,
   users: Users,
@@ -94,14 +124,15 @@ function toneFill(tone: NowPlaying['tone']): [string, string] {
   return tone === 'warn' ? NEU_GRADIENTS.amber : NEU_GRADIENTS.sage;
 }
 
-/** Headline type scales with its own length rather than truncating. A
- *  delegation name is short and gets the full 21px; a motion read out in full
- *  ("10-minute moderated caucus — Climate finance") steps down instead of
- *  becoming "10-minute moderated…". */
+/** Headline type scales with its own length. It no longer scales to avoid a
+ *  clamp — the headline WRAPS to as many lines as it needs — it scales so a
+ *  delegation name reads as the biggest thing in the panel while a long
+ *  chair-typed caucus purpose stays inside a sane number of lines. Every step
+ *  was raised: the smallest is now 17px, up from 15.5. */
 function headlineSize(text: string): number {
-  if (text.length > 46) return 15.5;
-  if (text.length > 30) return 17.5;
-  return 21;
+  if (text.length > 46) return 17;
+  if (text.length > 30) return 19;
+  return 22;
 }
 
 function NowPlayingPanel({ np }: { np: NowPlaying }) {
@@ -118,37 +149,47 @@ function NowPlayingPanel({ np }: { np: NowPlaying }) {
         backgroundColor: NEU.base,
         boxShadow: NEU.inSm,
         borderRadius: PANEL_RADIUS,
-        padding: '13px 14px 12px',
+        padding: '14px 15px 13px',
         minHeight: PANEL_MIN_HEIGHT,
       }}
     >
       {/* Art + context + headline. The art is RAISED inside a pressed well —
           a token sitting in a slot, which is what neumorphism is for. */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-start gap-3 min-w-0">
         <span
           className="flex items-center justify-center rounded-full flex-shrink-0 overflow-hidden"
-          style={{ width: 54, height: 54, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+          style={{ width: 60, height: 60, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
           aria-hidden
         >
           {np.flag
-            ? <FlagImg code={flagCodeFor(np.flag)} size={34} />
-            : <Glyph size={23} style={{ color: np.tone === 'off' ? SOFT : ink }} />}
+            ? <FlagImg code={flagCodeFor(np.flag)} size={38} />
+            : <Glyph size={26} style={{ color: np.tone === 'off' ? SOFT : ink }} />}
         </span>
 
         <div className="min-w-0 flex-1">
+          {/* The eyebrow WRAPS. It used to clamp to one line and shrink its own
+              type to 9.5px to buy characters, which meant a moderated caucus
+              lost its topic — the one thing that says what the room is doing.
+
+              Long contexts drop the UPPERCASE instead of dropping characters.
+              Caps plus 0.08em tracking cost roughly a third more width per
+              character, and a chair-typed caucus purpose ("Financing loss and
+              damage adaptation in small island developing states") set in caps
+              ran to five lines in this column — a secondary line outweighing
+              the headline it is supposed to introduce. Sentence case at 11px is
+              BIGGER type than the caps it replaces, and it inverts back to the
+              right hierarchy. Nothing is cut either way. */}
           <p
-            className="text-[10px] font-extrabold uppercase"
+            className="font-extrabold"
             style={{
               color: ink, fontFamily: OUTFIT,
-              // Long contexts (a moderated caucus carries its topic) trade
-              // tracking for characters rather than truncating a word earlier.
-              fontSize: np.context.length > 26 ? 9.5 : 10,
-              letterSpacing: np.context.length > 26 ? '0.05em' : '0.11em',
+              textTransform: np.context.length > 34 ? 'none' : 'uppercase',
+              fontSize: np.context.length > 34 ? 11 : 10.5,
+              letterSpacing: np.context.length > 34 ? '0.005em' : '0.08em',
+              lineHeight: 1.3,
               marginBlockEnd: 3,
-              display: '-webkit-box', WebkitBoxOrient: 'vertical',
-              WebkitLineClamp: 1, overflow: 'hidden', overflowWrap: 'anywhere',
+              overflowWrap: 'anywhere',
             }}
-            title={np.context}
           >
             {np.context}
           </p>
@@ -158,54 +199,58 @@ function NowPlayingPanel({ np }: { np: NowPlaying }) {
               color: np.dim ? SOFT : NEU.ink,
               fontFamily: OUTFIT,
               fontSize: headlineSize(np.headline),
-              lineHeight: 1.14,
+              lineHeight: 1.16,
               letterSpacing: '-0.012em',
               textWrap: 'balance',
               fontVariantNumeric: 'tabular-nums',
-              display: '-webkit-box', WebkitBoxOrient: 'vertical',
-              WebkitLineClamp: 2, overflow: 'hidden', overflowWrap: 'anywhere',
+              overflowWrap: 'anywhere',
             }}
-            title={np.headline}
           >
             {np.headline}
           </p>
         </div>
 
-        {/* Who is waiting. Always labelled with WHICH list it is counting —
-            the GSL and the caucus queue are strictly separate lists (RULE 1)
-            and a card that reported one number for both would be lying. It
-            also gives the panel its right-hand mass; without it the whole
-            block reads as one sentence floating in space. */}
+        {/* Who is waiting — up to ten, AS FLAGS.
+            The names are gone on purpose: two names and a "+7" told a reader
+            less than ten flags do, and the names are what made two the ceiling.
+            Every flag keeps its delegation in `title`, so the information is
+            unstacked, not dropped.
+            The LABEL stays, and is not optional. RULE 1: the GSL and the caucus
+            queue are strictly separate lists, and a bare row of flags with no
+            label would read as one merged queue. */}
         {np.next && (() => {
           const q = np.next;
           return (
-            <div className="flex-shrink-0 text-right" style={{ maxWidth: 112 }}>
+            <div className="flex-shrink-0" style={{ maxWidth: UP_NEXT_WIDTH }}>
               <p
-                className="text-[9px] font-extrabold uppercase truncate"
-                style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.1em', marginBlockEnd: 3 }}
+                className="font-extrabold uppercase text-right"
+                style={{
+                  color: SOFT, fontFamily: OUTFIT, fontSize: 9.5,
+                  letterSpacing: '0.08em', lineHeight: 1.3, marginBlockEnd: 4,
+                  overflowWrap: 'anywhere',
+                }}
               >
                 {q.label}
               </p>
-              {q.names.map((n, i) => (
-                <span key={n} className="flex items-center justify-end gap-1.5" style={{ marginBlockStart: i === 0 ? 0 : 2 }}>
-                  <span
-                    className="text-[11.5px] font-bold truncate"
-                    style={{ color: i === 0 ? NEU.ink : SOFT, fontFamily: OUTFIT }}
-                    title={n}
-                  >
-                    {n}
+              <div className="flex flex-wrap justify-end items-center" style={{ gap: 4 }}>
+                {q.names.map((n) => (
+                  <span key={n} className="flex-shrink-0" style={{ lineHeight: 0 }} title={n}>
+                    <FlagImg code={flagCodeFor(n)} size={17} />
                   </span>
-                  <FlagImg code={flagCodeFor(n)} size={13} />
-                  {i === q.names.length - 1 && q.more > 0 && (
-                    <span
-                      className="text-[10px] font-extrabold flex-shrink-0"
-                      style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      +{q.more}
-                    </span>
-                  )}
-                </span>
-              ))}
+                ))}
+                {q.more > 0 && (
+                  <span
+                    className="font-extrabold flex-shrink-0"
+                    style={{
+                      color: SOFT, fontFamily: OUTFIT, fontSize: 10.5,
+                      fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+                    }}
+                    title={`${q.more} more waiting on this list`}
+                  >
+                    +{q.more}
+                  </span>
+                )}
+              </div>
             </div>
           );
         })()}
@@ -236,18 +281,26 @@ function NowPlayingPanel({ np }: { np: NowPlaying }) {
             }}
           />
         </div>
-        <div className="flex items-baseline justify-between gap-3" style={{ marginBlockStart: 6 }}>
+        {/* Both captions WRAP rather than truncate. `align-items: baseline` is
+            wrong once a caption can be two lines — it would hang the second
+            line below the box — so the row aligns to the start and each side
+            keeps its own block. */}
+        <div className="flex items-start justify-between gap-3" style={{ marginBlockStart: 7 }}>
           <span
-            className="text-[10.5px] font-semibold truncate"
-            style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
+            className="font-semibold"
+            style={{
+              color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
+              fontSize: 11.5, lineHeight: 1.3, overflowWrap: 'anywhere',
+            }}
           >
             {np.left}
           </span>
           <span
-            className="text-[11.5px] font-extrabold flex-shrink-0"
+            className="font-extrabold text-right"
             style={{
               color: np.tone === 'off' ? SOFT : NEU.ink,
               fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
+              fontSize: 12.5, lineHeight: 1.3, overflowWrap: 'anywhere',
             }}
           >
             {np.right}
@@ -285,7 +338,12 @@ function Chip({
     color: SOFT,
     fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
   };
-  const cls = 'inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 whitespace-nowrap';
+  // `whitespace-nowrap` SURVIVES here and is not a truncation: there is no
+  // `text-overflow`, so a pill never renders an ellipsis. It only stops "3 WP"
+  // breaking across two lines inside a 12px-tall capsule. The strip that holds
+  // these pills wraps instead, so a pill that will not fit moves to the next
+  // row whole rather than being cut.
+  const cls = 'inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 whitespace-nowrap';
   if (!onClick) {
     return <span className={cls} title={title} style={base}>{children}</span>;
   }
@@ -377,50 +435,79 @@ export function CommitteeCard({
         transitionDuration: '260ms',
         transitionTimingFunction: EASE,
         cursor: 'pointer',
-        overflow: 'hidden',
+        // VISIBLE, so the emblem can straddle the top edge. The clipping the
+        // card still needs — squaring off the rail's ends and the footer's
+        // hover fill at the rounded corners — moved to the inner shell below,
+        // which the emblem is NOT a child of.
+        overflow: 'visible',
         // The card must never be shorter than the shortest useful reading of a
         // room; the grid stretches it up from here, and the panel absorbs the rest.
-        minHeight: 300,
+        minHeight: CARD_MIN_HEIGHT,
       }}
     >
-      {/* ── BAND 1 · status rail ─────────────────────────────────────────────
-          Full height, in the status colour. Never the only signal — the status
-          WORD sits in band 2 right next to it. */}
-      <span
-        aria-hidden
-        className="absolute left-0 top-0 bottom-0"
-        style={{ width: 4, backgroundColor: meta.color }}
+      {/* ── The emblem, straddling the top edge ──────────────────────────────
+          Outside the clipping shell on purpose. It starts at PAD_START, so the
+          4px status rail passes behind it untouched, and `LogoDisc`'s own
+          near-white disc and forest shadow are what let it read against the
+          card below the edge and the ivory page above it. */}
+      <LogoDisc
+        src={data.conf.logoUrl}
+        size={LOGO_SIZE}
+        fallbackText={mono}
+        alt={title}
+        style={{
+          position: 'absolute',
+          insetBlockStart: -LOGO_OVERHANG,
+          insetInlineStart: PAD_START,
+          zIndex: 2,
+        }}
       />
 
-      <div className="flex flex-col flex-1" style={{ padding: '14px 18px 0 20px' }}>
-        {/* ── BAND 2 · identity ───────────────────────────────────────────── */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <LogoDisc src={data.conf.logoUrl} size={38} fallbackText={mono} alt={title} />
-            <div className="min-w-0">
-              {/* A title that is a full name (no trustworthy acronym exists)
-                  WRAPS to two lines rather than being cut mid-word. The old
-                  single-line `truncate` is what produced "Disarmament a…". */}
-              <h3
-                className="font-extrabold"
+      {/* The clipping shell. Everything that must respect the rounded corner
+          lives in here; the emblem above does not. */}
+      <div
+        className="flex flex-col flex-1 relative"
+        style={{ overflow: 'hidden', borderRadius: CARD_RADIUS - 1 }}
+      >
+        {/* ── BAND 1 · status rail ───────────────────────────────────────────
+            Full height, in the status colour. Never the only signal — the
+            status WORD sits in band 2 right next to it. */}
+        <span
+          aria-hidden
+          className="absolute left-0 top-0 bottom-0"
+          style={{ width: 4, backgroundColor: meta.color }}
+        />
+
+        <div className="flex flex-col flex-1" style={{ padding: `14px ${PAD_END}px 0 ${PAD_START}px` }}>
+        {/* ── BAND 2 · identity ─────────────────────────────────────────────
+            Indented past the emblem, which is absolutely positioned and so
+            takes no part in this flow. */}
+        <div className="flex items-start justify-between gap-3" style={{ marginInlineStart: HEADER_INDENT }}>
+          <div className="min-w-0">
+            {/* NOTHING here truncates. A committee whose name has no
+                trustworthy acronym WRAPS to as many lines as it needs — the
+                old two-line clamp is what produced "Disarmament and Inter…". */}
+            <h3
+              className="font-extrabold"
+              style={{
+                color: NEU.ink, fontFamily: OUTFIT,
+                fontSize: subtitle ? 22 : 18, lineHeight: 1.14,
+                letterSpacing: '-0.015em',
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {title}
+            </h3>
+            {subtitle && (
+              <p
                 style={{
-                  color: NEU.ink, fontFamily: OUTFIT,
-                  fontSize: subtitle ? 20 : 16, lineHeight: 1.12,
-                  letterSpacing: '-0.015em',
-                  display: '-webkit-box', WebkitBoxOrient: 'vertical',
-                  WebkitLineClamp: subtitle ? 1 : 2, overflow: 'hidden',
-                  overflowWrap: 'anywhere',
+                  color: SOFT, fontFamily: OUTFIT, fontSize: 12.5,
+                  lineHeight: 1.25, marginBlockStart: 1, overflowWrap: 'anywhere',
                 }}
-                title={data.conf.name}
               >
-                {title}
-              </h3>
-              {subtitle && (
-                <p className="text-[11px] truncate" style={{ color: SOFT, fontFamily: OUTFIT }} title={subtitle}>
-                  {subtitle}
-                </p>
-              )}
-            </div>
+                {subtitle}
+              </p>
+            )}
           </div>
 
           {/* Status word + quiet time. Two facts, stacked, right-aligned. */}
@@ -434,20 +521,56 @@ export function CommitteeCard({
                 }}
               />
               <span
-                className="text-[11px] font-extrabold uppercase"
-                style={{ color: meta.ink, fontFamily: OUTFIT, letterSpacing: '0.09em' }}
+                className="font-extrabold uppercase"
+                style={{ color: meta.ink, fontFamily: OUTFIT, fontSize: 12, letterSpacing: '0.09em' }}
               >
                 {meta.label}
               </span>
             </span>
             <span
-              className="text-[11px]"
-              style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums', marginBlockStart: 2 }}
+              style={{
+                color: SOFT, fontFamily: OUTFIT, fontSize: 12,
+                fontVariantNumeric: 'tabular-nums', marginBlockStart: 2,
+                textAlign: 'end', overflowWrap: 'anywhere',
+              }}
               title="Time since this room last showed any sign of life — a chair action, a logged speech or a chat message"
             >
               {idleLabel(data, now)}
             </span>
           </div>
+        </div>
+
+        {/* ── BAND 2b · the dais ────────────────────────────────────────────
+            Chairs belong at the TOP, with the room's identity: an organiser
+            walking the floor is looking for a PERSON, and hunting for that in a
+            chip strip below the fold made them the least prominent fact on a
+            card about a room they run. Full width — this row sits below the
+            emblem's inner half, so it does not need the header's indent — and
+            it WRAPS, so a four-chair dais is never cut to "Alice, Bob, Ch…". */}
+        <div
+          className="flex items-center gap-2 flex-wrap"
+          style={{ marginBlockStart: 9 }}
+        >
+          <AvatarStack
+            people={chairPeople}
+            size={24}
+            max={4}
+            label="Chairs"
+            ringColor={NEU.surface}
+            shadow={NEU.outSm}
+            empty={null}
+          />
+          <span
+            className="font-semibold min-w-0"
+            style={{
+              color: facts.chairs.length > 0 ? SOFT : AMBER_INK,
+              fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.3,
+              overflowWrap: 'anywhere',
+            }}
+            title={data.conf.chairs.map((c) => c.name).join(', ') || 'No chair assigned'}
+          >
+            {facts.chairs.length > 0 ? facts.chairs.join(', ') : 'No chair assigned'}
+          </span>
         </div>
 
         {/* ── BAND 3 · NOW PLAYING ─────────────────────────────────────────────
@@ -458,8 +581,8 @@ export function CommitteeCard({
           className="flex flex-col flex-1"
           style={{
             marginBlockStart: 12,
-            marginInlineStart: -(20 - PANEL_GUTTER),
-            marginInlineEnd: -(18 - PANEL_GUTTER),
+            marginInlineStart: -(PAD_START - PANEL_GUTTER),
+            marginInlineEnd: -(PAD_END - PANEL_GUTTER),
           }}
         >
           <NowPlayingPanel np={np} />
@@ -467,12 +590,14 @@ export function CommitteeCard({
 
         {/* ── BAND 4 · warning slot ───────────────────────────────────────────
             Reserved height whether or not there is a warning, so two cards side
-            by side stay aligned. NOTHING but the six approved conditions ever
-            enters this slot (see `cardWarnings`). */}
+            by side stay aligned. NOTHING but the five approved conditions ever
+            enters this slot (see `cardWarnings`) — and "nothing has happened
+            here for Nm" is deliberately NOT one of them any more: the status
+            word, the rail and the "quiet" line said it three times over. */}
         <div className="flex items-center" style={{ minHeight: WARNING_SLOT_HEIGHT }}>
           {top && (
             <span
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 min-w-0"
+              className="inline-flex items-start gap-1.5 rounded-2xl px-2.5 py-1 min-w-0"
               style={{
                 backgroundColor: top.tone === 'red' ? 'rgba(139,32,32,0.09)' : 'rgba(184,132,74,0.15)',
                 fontFamily: OUTFIT,
@@ -480,18 +605,28 @@ export function CommitteeCard({
             >
               <AlertTriangle
                 size={12}
-                style={{ color: top.tone === 'red' ? RED : AMBER_INK, flexShrink: 0 }}
+                style={{ color: top.tone === 'red' ? RED : AMBER_INK, flexShrink: 0, marginBlockStart: 2 }}
               />
+              {/* WRAPS. The stuck-resume warning is a full sentence naming a
+                  chair, and truncating it removed the half that said what to
+                  do about it. A pill that grows to two lines is fine — the
+                  slot's height is a floor, and the grid equalises the row. */}
               <span
-                className="text-[11.5px] font-bold truncate"
-                style={{ color: top.tone === 'red' ? RED : AMBER_INK }}
+                className="font-bold"
+                style={{
+                  color: top.tone === 'red' ? RED : AMBER_INK,
+                  fontSize: 12, lineHeight: 1.3, overflowWrap: 'anywhere',
+                }}
               >
                 {top.text}
               </span>
               {extraWarnings > 0 && (
                 <span
-                  className="text-[11px] font-bold flex-shrink-0"
-                  style={{ color: top.tone === 'red' ? RED : AMBER_INK, opacity: 0.8 }}
+                  className="font-bold flex-shrink-0"
+                  style={{
+                    color: top.tone === 'red' ? RED : AMBER_INK, opacity: 0.8,
+                    fontSize: 12, lineHeight: 1.3,
+                  }}
                   title={warnings.slice(1).map((w) => w.text).join(' · ')}
                 >
                   +{extraWarnings}
@@ -504,16 +639,22 @@ export function CommitteeCard({
         {/* ── BAND 5 · what has happened ──────────────────────────────────────
             STATIC. The same three facts on every card in every state, so the
             only thing a reader's eye has to track between cards is the panel
-            above. No motion counts (a motion only matters while it is being
-            decided, and then it IS the panel) and no total speaking time (a
-            recap number, not a preview number). */}
+            above. No motion counts (motions are not tracked on this card at
+            all — the panel states the stage, and a caucus stage already says
+            what a passed motion produced) and no total speaking time (a recap
+            number, not a preview number). The dais used to end this row; it is
+            the room's most human fact and now opens the card instead.
+
+            `flex-wrap`, not `flex-nowrap`: a pill that will not fit drops to a
+            second row WHOLE. The old `nowrap` is what forced every pill to
+            shrink and clip at 1280. */}
         <div
-          className="flex items-center gap-1.5 flex-nowrap min-w-0"
-          style={{ marginBlockEnd: 11 }}
+          className="flex items-center gap-1.5 flex-wrap min-w-0"
+          style={{ marginBlockEnd: 11, rowGap: 6 }}
         >
           <button
             onClick={(e) => { e.stopPropagation(); onOpenRoster(data); }}
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full focus:outline-none active:scale-[0.96] flex-shrink-0 whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full focus:outline-none active:scale-[0.96] flex-shrink-0 whitespace-nowrap"
             style={{
               backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: SOFT,
               fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
@@ -560,31 +701,14 @@ export function CommitteeCard({
             )}
           </Chip>
 
-          {/* The dais, by first name. Names, not just faces: an organiser
-              walking the floor needs to know who to ask for. */}
-          <span className="inline-flex items-center gap-1.5 min-w-0 flex-1 justify-end" style={{ marginInlineStart: 'auto' }}>
-            <AvatarStack
-              people={chairPeople}
-              size={22}
-              max={3}
-              label="Chairs"
-              ringColor={NEU.surface}
-              shadow={NEU.outSm}
-              empty={null}
-            />
-            <span
-              className="text-[11px] font-semibold truncate"
-              style={{ color: facts.chairs.length > 0 ? SOFT : AMBER_INK, fontFamily: OUTFIT, maxWidth: 96, minWidth: 0 }}
-              title={data.conf.chairs.map((c) => c.name).join(', ') || 'No chair assigned'}
-            >
-              {facts.chairs.length > 0 ? facts.chairs.join(', ') : 'No chair assigned'}
-            </span>
-          </span>
         </div>
-      </div>
+        </div>
 
-      {/* ── BAND 6 · footer, one action ─────────────────────────────────────── */}
-      <button
+        {/* ── BAND 6 · footer, one action ─────────────────────────────────────
+            INSIDE the clipping shell, so its hover fill still squares off
+            against the card's bottom corners now that the card itself is
+            `overflow: visible`. */}
+        <button
         onClick={(e) => { e.stopPropagation(); onOpenScoreboard(data); }}
         className="flex items-center gap-2 w-full text-left focus:outline-none"
         style={{
@@ -592,7 +716,7 @@ export function CommitteeCard({
           // order silently wipes the divider.
           border: 'none',
           borderBlockStart: `1px solid ${CARD_BORDER_COLOR}`,
-          padding: '11px 18px 12px 20px',
+          padding: `12px ${PAD_END}px 13px ${PAD_START}px`,
           color: NEU.forest, fontFamily: OUTFIT,
           backgroundColor: 'transparent',
           cursor: 'pointer',
@@ -603,15 +727,16 @@ export function CommitteeCard({
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
         title="Open the per-committee scoreboard — the same delegate performance detail the chairs see"
       >
-        <Trophy size={13} style={{ flexShrink: 0 }} />
-        <span className="text-xs font-bold">Points &amp; performance</span>
+        <Trophy size={14} style={{ flexShrink: 0 }} />
+        <span className="font-bold" style={{ fontSize: 13 }}>Points &amp; performance</span>
         <span
-          className="text-[11px] ml-auto"
-          style={{ color: SOFT, fontVariantNumeric: 'tabular-nums' }}
+          className="ml-auto text-right"
+          style={{ color: SOFT, fontVariantNumeric: 'tabular-nums', fontSize: 12 }}
         >
           {facts.total > 0 ? `${facts.total} delegation${facts.total === 1 ? '' : 's'}` : 'no roll yet'}
         </span>
-      </button>
+        </button>
+      </div>
     </div>
   );
 }
@@ -667,8 +792,8 @@ export function StatusFilterBar({
   );
 }
 
-/** The honest footnote under the grid. Two things on these cards mean something
- *  narrower than they look, and saying so costs one line. */
+/** The honest footnote under the grid. One thing on these cards means something
+ *  narrower than it looks, and saying so costs one line. */
 export function GridFootnote({ style }: { style?: React.CSSProperties }) {
   return (
     <p
@@ -679,9 +804,7 @@ export function GridFootnote({ style }: { style?: React.CSSProperties }) {
       <span>
         Cards are ordered by what needs attention, not by name. <strong>Quiet</strong> is the time
         since the room last did anything visible: a chair action, a logged speech, or a chat
-        message. A <strong>motion</strong> appears only while it is unruled and freshly raised —
-        nothing in the database records a chair actually putting one to the vote, so a count of
-        pending motions is not shown at all.
+        message.
       </span>
     </p>
   );

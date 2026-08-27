@@ -140,13 +140,17 @@ export default function LiveStatusPage() {
       let speakers: Record<string, unknown>[] = [];
       let delegates: Record<string, unknown>[] = [];
       let queues: Record<string, unknown>[] = [];
-      let motions: Record<string, unknown>[] = [];
       let documents: Record<string, unknown>[] = [];
       let sysMessages: Record<string, unknown>[] = [];
       let feedback: Record<string, unknown>[] = [];
 
       if (sessionIds.length > 0) {
-        const [sRes, csRes, dRes, qRes, mRes, docRes, msgRes, fbRes] = await Promise.all([
+        // The `motions` table is NOT read here. The cards state the stage a room
+        // is in, not what is sitting on the chair's desk, and the recap's
+        // "Motions raised" tile counts `motion-raised` ledger events out of
+        // `messages`. Nothing else consumed the rows, so the whole query came
+        // out — one fewer table scan on a poll that runs every 10 seconds.
+        const [sRes, csRes, dRes, qRes, docRes, msgRes, fbRes] = await Promise.all([
           // `updated_at` and `resuming_chair` are the STATUS axis. Without
           // `updated_at` this page had no way to tell a room that is running
           // from a room whose chair walked out three hours ago — "In session"
@@ -164,14 +168,6 @@ export default function LiveStatusPage() {
             .select('committee_id, country, position, list_type')
             .in('committee_id', sessionIds)
             .order('position', { ascending: true }),
-          // `proposed_by`, `total_time` and `created_at` are what turn a motion
-          // row into a sentence ("Germany · 10-minute moderated caucus, raised
-          // 40s ago"). `created_at` also carries the whole "is this motion
-          // being decided right now" judgement — see `motionOnTheFloor`.
-          anonSupabase.from('motions')
-            .select('committee_id, type, topic, disruptiveness, proposed_by, total_time, created_at')
-            .eq('status', 'pending')
-            .in('committee_id', sessionIds),
           // file_url / file_name / content are what make a document readable
           // rather than just countable. The chair console already renders the
           // same `file_url` in its inline viewer (DocumentsModal.tsx:877), and
@@ -206,7 +202,7 @@ export default function LiveStatusPage() {
         // instead of quietly rendering zeroes for it.
         for (const [label, res] of [
           ['sessions', sRes], ['current speaker', csRes], ['delegates', dRes],
-          ['queues', qRes], ['motions', mRes], ['documents', docRes],
+          ['queues', qRes], ['documents', docRes],
           ['speaking log', msgRes], ['feedback', fbRes],
         ] as const) {
           if (res.error) failures.push(label);
@@ -216,14 +212,13 @@ export default function LiveStatusPage() {
         speakers = csRes.data ?? [];
         delegates = dRes.data ?? [];
         queues = qRes.data ?? [];
-        motions = mRes.data ?? [];
         documents = docRes.data ?? [];
         sysMessages = msgRes.data ?? [];
         feedback = fbRes.data ?? [];
 
         // Everything failed: the floor is unknown, not empty. Do not draw it and
         // do not stamp a refresh time over it.
-        if (failures.length === 8) {
+        if (failures.length === 7) {
           setLoadError('Live session data is unreachable. Showing the last known floor.');
           return;
         }
@@ -398,17 +393,6 @@ export default function LiveStatusPage() {
             : [],
           gslQueue: sid ? bySession(queues, sid).filter((q) => q.list_type === 'gsl').map((q) => q.country as string) : [],
           caucusQueue: sid ? bySession(queues, sid).filter((q) => q.list_type === 'caucus').map((q) => q.country as string) : [],
-          pendingMotions: sid
-            ? bySession(motions, sid)
-                .filter((m) => m.type !== 'join-request' && m.type !== 'gsl-request')
-                .map((m) => ({
-                  type: m.type as string,
-                  topic: (m.topic as string) ?? '',
-                  proposedBy: (m.proposed_by as string) ?? '',
-                  totalTime: (m.total_time as number) ?? 0,
-                  createdAt: (m.created_at as string | null) ?? null,
-                }))
-            : [],
           documents: sid
             ? bySession(documents, sid).map((d) => ({
                 type: d.type as string,
@@ -825,7 +809,15 @@ export default function LiveStatusPage() {
               grid still stretches every card to the tallest in its row, but no
               child claims the surplus and it all pools at the bottom as a dead
               band — which is exactly what this page was doing. */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
+          {/* The row gap and the top padding are BOTH sized past the emblem's
+              overhang (22px, `CommitteeCard`'s LOGO_OVERHANG). The emblem sits
+              outside its card's top edge, so without the top padding the first
+              row's marks would be cut by the page, and without the wider row
+              gap a mark would land on the card above it in the same column. */}
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-stretch"
+            style={{ columnGap: 20, rowGap: 40, paddingBlockStart: 26 }}
+          >
             {visibleRows.map((r) => (
               <CommitteeCard
                 key={r.conf.id}
