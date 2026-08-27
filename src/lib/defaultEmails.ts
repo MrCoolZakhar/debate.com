@@ -33,6 +33,23 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  // Queued by the `send_draft_reminder` SQL RPC rather than queueEventEmail
+  // (the organizer sends it against an application_drafts row, which has no
+  // application to resolve recipients from). That function carries a SQL
+  // mirror of this subject + these blocks as its own no-template fallback —
+  // if you change the copy here, change it there too.
+  //
+  // The trailing paragraph carries the two token links as plain text: the
+  // block model has no token-carrying button destination, and extending that
+  // closed union for a footer line isn't worth it.
+  draft_reminder: {
+    subject: 'Your {{conference_name}} application is still unfinished',
+    blocks: [
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou started an application to {{conference_name}} as a {{role}} and haven't finished it yet. Your answers are saved — pick up where you left off." },
+      { type: 'button', label: 'FINISH MY APPLICATION', destination: 'apply_page', role: '{{role}}' },
+      { type: 'paragraph', content: 'Not applying after all? You can delete the draft at {{draft_link}}. To stop reminders about it, use {{draft_stop_link}}.' },
+    ],
+  },
   application_accepted: {
     subject: "You're in! Your {{conference_name}} application has been accepted",
     blocks: [

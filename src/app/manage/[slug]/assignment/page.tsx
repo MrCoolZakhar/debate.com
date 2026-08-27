@@ -8,6 +8,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { reportBlocked } from '@/lib/reportCrash';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
@@ -3328,12 +3329,22 @@ export default function AssignmentPage() {
       const err = await insertAllocation(supabase, conferenceId, sug.committee, sug.app, sug.slot, seat, session.user.id);
       if (err) {
         rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
+        // The seat was shown as filled and then silently vanished. ONE report
+        // per click — inFlightAssignKeys makes a concurrent second call for the
+        // same app/slot impossible, and the .catch below is the other half of
+        // this same branch, never an additional one.
+        reportBlocked('assign delegate to committee', new Error(err), {
+          conferenceId, committeeId: sug.committee.id, applicationId: sug.app.id, slotId: sug.slot.id,
+        });
         showFlash('err', err);
         return;
       }
       loadData({ silent: true }); // swap the temp row for the real UUID
-    })().catch(() => {
+    })().catch((e) => {
       rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
+      reportBlocked('assign delegate to committee', e, {
+        conferenceId, committeeId: sug.committee.id, applicationId: sug.app.id, slotId: sug.slot.id,
+      });
       showFlash('err', 'Could not save this assignment.');
     }).finally(() => {
       inFlightAssignKeys.current.delete(key);
@@ -3368,13 +3379,21 @@ export default function AssignmentPage() {
           ...c,
           conference_allocations: c.conference_allocations.map(a => (flippedIds.has(a.id) ? { ...a, allocation_sent: false } : a)),
         })));
+        // ONE batched .in() update covers every committee, so this is one
+        // report for the whole conference — never one per committee.
+        reportBlocked('send all allocations', error, {
+          committeeCount: committeeIds.length, allocationCount: flippedIds.size,
+        });
         showFlash('err', 'Could not send allocations.');
       }
-    })().catch(() => {
+    })().catch((e) => {
       setCommittees(prev => prev.map(c => ({
         ...c,
         conference_allocations: c.conference_allocations.map(a => (flippedIds.has(a.id) ? { ...a, allocation_sent: false } : a)),
       })));
+      reportBlocked('send all allocations', e, {
+        committeeCount: committeeIds.length, allocationCount: flippedIds.size,
+      });
       showFlash('err', 'Could not send allocations.');
     }).finally(() => setSendingAll(false));
   }
@@ -3415,6 +3434,11 @@ export default function AssignmentPage() {
       const { error: delErr } = await supabase.from('conference_allocations').delete().eq('id', allocation.id);
       if (delErr) {
         rollback();
+        // The seat visibly emptied and then came back. inFlightRemoveIds keeps
+        // this to one report per allocation per click.
+        reportBlocked('remove delegate allocation', delErr, {
+          conferenceId, allocationId: allocation.id, committeeId,
+        });
         showFlash('err', 'Could not remove this allocation.');
         return;
       }
@@ -3436,8 +3460,11 @@ export default function AssignmentPage() {
         }
       }
       loadData({ silent: true }); // brings the delegate back into the unassigned rail
-    })().catch(() => {
+    })().catch((e) => {
       rollback();
+      reportBlocked('remove delegate allocation', e, {
+        conferenceId, allocationId: allocation.id, committeeId,
+      });
       showFlash('err', 'Could not remove this allocation.');
     }).finally(() => inFlightRemoveIds.current.delete(allocation.id));
   }

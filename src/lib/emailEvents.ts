@@ -28,6 +28,7 @@ export interface EventDef {
 
 export const EVENT_REGISTRY = [
   { key: 'application_received', label: 'Application Received', description: 'Sent to a delegate when their application is submitted.', defaultDelivery: 'immediate' },
+  { key: 'draft_reminder', label: 'Unfinished application reminder', description: "Sent to someone who started an application and never submitted it, nudging them back to their saved answers. Queued by the send_draft_reminder RPC (organizer-only, one reminder per draft per 72 hours), not by queueEventEmail. It follows the same superset rule as Question received: with no template row our default still sends, and only a row you have explicitly turned off skips it.", defaultDelivery: 'immediate' },
   { key: 'application_accepted', label: 'Application Accepted', description: 'Sent when an application is accepted.', defaultDelivery: 'immediate' },
   { key: 'application_rejected', label: 'Application Rejected', description: 'Sent when an application is rejected.', defaultDelivery: 'immediate' },
   { key: 'payment_available', label: 'Payment Available', description: "Sent when payment opens up for a delegate. Companion to Application Accepted: on acceptance, this is suppressed for anyone who was actually emailed Application Accepted for the same action. It only sends alone when that email resolved to nothing (off or unconfigured) for them.", defaultDelivery: 'immediate' },
@@ -82,6 +83,10 @@ export type NotificationCategory = 'applications' | 'payments' | 'documents' | '
 
 export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   application_received: 'applications',
+  // Deliberately NOT 'requests': notify_email_reminders is the organizer-side
+  // questions digest, and its profile-page copy says exactly that. An
+  // unfinished-application nudge is a participant application email.
+  draft_reminder: 'applications',
   application_accepted: 'applications',
   application_rejected: 'applications',
   payment_available: 'payments',

@@ -37,6 +37,8 @@ export function WizardShell({
   title,
   sub,
   onBack,
+  labels,
+  subStep,
   children,
 }: {
   /** 1-based current step. */
@@ -45,6 +47,20 @@ export function WizardShell({
   title: string;
   sub?: string;
   onBack?: () => void;
+  /**
+   * OPT-IN. Names for each step, same length and order as `total`. Supplying
+   * them swaps the anonymous dots for the named segmented rail. Omit (the
+   * default, and what every pre-existing caller does) and the dots render
+   * exactly as before — no existing flow changes.
+   */
+  labels?: string[];
+  /**
+   * OPT-IN, only meaningful alongside `labels`. Sub-divides the CURRENT
+   * segment into `total` ticks, for a step that is itself paginated (the
+   * apply flow's Questions step splits on the organiser's section blocks).
+   * Without this the rail is frozen while the applicant moves between pages.
+   */
+  subStep?: { index: number; total: number };
   children: React.ReactNode;
 }) {
   const [backHover, setBackHover] = useState(false);
@@ -53,7 +69,10 @@ export function WizardShell({
       className="w-full flex flex-col items-center"
       style={{ maxWidth: 720, margin: '0 auto', padding: '8px 4px 32px' }}
     >
-      {/* Progress dots */}
+      {labels && labels.length === total ? (
+        <StepRail step={step} total={total} labels={labels} subStep={subStep} />
+      ) : (
+      /* Progress dots */
       <div className="flex items-center gap-2" style={{ marginBottom: 28 }} aria-label={`Step ${step} of ${total}`}>
         {Array.from({ length: total }, (_, i) => {
           const n = i + 1;
@@ -79,6 +98,7 @@ export function WizardShell({
           );
         })}
       </div>
+      )}
 
       {/* Back arrow + title block */}
       <div className="w-full relative" style={{ marginBottom: 26 }}>
@@ -140,6 +160,112 @@ export function WizardShell({
       </div>
 
       <div className="w-full">{children}</div>
+    </div>
+  );
+}
+
+// ── StepRail, the NAMED segmented progress rail ────────────────────────────
+// Opt-in via WizardShell's `labels` prop. Anonymous dots tell an applicant
+// nothing: they cannot see which stage they are in, what is left, or that a
+// stage is itself paginated. The rail names the current stage, ticks off the
+// finished ones, and sub-divides the active segment when the caller passes
+// `subStep`.
+function StepRail({
+  step, total, labels, subStep,
+}: {
+  step: number;
+  total: number;
+  labels: string[];
+  subStep?: { index: number; total: number };
+}) {
+  const current = labels[step - 1] ?? '';
+  return (
+    <div
+      className="w-full"
+      style={{ marginBottom: 26 }}
+      role="group"
+      aria-label={`Step ${step} of ${total}: ${current}${subStep ? `, part ${subStep.index + 1} of ${subStep.total}` : ''}`}
+    >
+      <div className="flex items-center gap-1.5" aria-hidden>
+        {labels.map((label, i) => {
+          const n = i + 1;
+          const done = n < step;
+          const active = n === step;
+          const ticks = active && subStep && subStep.total > 1 ? subStep.total : 1;
+          return (
+            <div
+              key={label + i}
+              className="flex items-center gap-[3px]"
+              style={{ flex: active ? 1.6 : 1, minWidth: 0 }}
+            >
+              {Array.from({ length: ticks }, (_, t) => {
+                const tickDone = done || (active && subStep ? t < subStep.index : false);
+                const tickActive = active && (subStep ? t === subStep.index : true);
+                return (
+                  <span
+                    key={t}
+                    style={{
+                      flex: 1,
+                      height: 6,
+                      borderRadius: 999,
+                      background: tickActive
+                        ? `linear-gradient(90deg, ${NEU.gold}, ${NEU.deepGold})`
+                        : tickDone
+                          ? NEU.forest
+                          : 'rgba(27,56,40,0.14)',
+                      boxShadow: tickActive ? `0 2px 6px ${NEU.deepGold}55` : NEU.inSm,
+                      transition: `background 320ms ${EASE}, box-shadow 320ms ${EASE}`,
+                    }}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: every stage name, the current one lit. Narrow: just the
+          current stage plus its position, because six labels do not fit in
+          319px and a truncated rail is worse than a clear sentence. */}
+      <div className="hidden sm:flex items-center gap-1.5" style={{ marginTop: 8 }} aria-hidden>
+        {labels.map((label, i) => {
+          const n = i + 1;
+          const active = n === step;
+          const done = n < step;
+          return (
+            <span
+              key={label + i}
+              className="truncate"
+              style={{
+                flex: active ? 1.6 : 1,
+                minWidth: 0,
+                fontFamily: OUTFIT,
+                fontWeight: 800,
+                fontSize: 10.5,
+                letterSpacing: '0.13em',
+                textTransform: 'uppercase',
+                // NEU.muted is a 2.71:1 wash — future steps are decorative
+                // here, but anything the applicant must READ uses inkSoft.
+                color: active ? NEU.forest : done ? NEU.inkSoft : 'rgba(27,56,40,0.34)',
+                transition: `color 320ms ${EASE}`,
+              }}
+            >
+              {label}
+            </span>
+          );
+        })}
+      </div>
+      <p
+        className="sm:hidden"
+        style={{
+          marginTop: 8, fontFamily: OUTFIT, fontWeight: 800, fontSize: 11,
+          letterSpacing: '0.12em', textTransform: 'uppercase', color: NEU.forest,
+          textAlign: 'center', fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {current} · {step} of {total}
+        {subStep && subStep.total > 1 ? ` · part ${subStep.index + 1}/${subStep.total}` : ''}
+      </p>
     </div>
   );
 }

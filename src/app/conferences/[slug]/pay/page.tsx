@@ -38,6 +38,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { payInvoiceCheckout, payInvoicesCheckout } from '@/lib/payments';
+import { reportBlocked } from '@/lib/reportCrash';
 import { normalizeBlocks, type FormBlock } from '@/lib/customQuestions';
 import {
   type InvoiceRow, invoiceLabel, invoiceDueCents, centsToFee, isInvoicePayable, isInvoiceSettled,
@@ -1383,6 +1384,9 @@ function ProofUploadModal({
       .upload(path, file, { contentType: file.type });
     if (uploadError) {
       setSubmitting(false);
+      // The payer is holding a receipt for money they have already sent and
+      // cannot hand it over. Nothing about this reaches an error boundary.
+      reportBlocked('upload payment proof', uploadError, { conferenceId, invoiceCount: invoiceIds.length });
       setError(uploadError.message || 'Could not upload your proof. Please try again.');
       return;
     }
@@ -1393,6 +1397,15 @@ function ProofUploadModal({
     const result = data as { ok?: boolean; error?: string } | null;
     setSubmitting(false);
     if (rpcError || !result?.ok) {
+      // The proof is in storage but no batch row covers it, so the money is
+      // gone and no organizer will ever see a payment to confirm. ONE report
+      // for the whole batch — create_manual_payment_batch is a single RPC
+      // covering every invoice id, so this can never fire per invoice.
+      reportBlocked(
+        'confirm manual payment',
+        rpcError ?? new Error(result?.error ?? 'rpc returned ok:false'),
+        { conferenceId, invoiceCount: invoiceIds.length },
+      );
       setError(result?.error || rpcError?.message || 'Could not submit your payment. Please try again.');
       return;
     }
@@ -1771,7 +1784,14 @@ function PayInvoiceAndActions({
       return;
     }
     setPaying(false);
-    if (result.status === 'error') setPayError(result.message ?? 'Something went wrong. Please try again.');
+    if (result.status === 'error') {
+      // Checkout never opened — the delegate cannot pay their registration at
+      // all, and only an inline message says so.
+      reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
+        kind: 'role_fee', invoiceId: roleFeeInvoice.id,
+      });
+      setPayError(result.message ?? 'Something went wrong. Please try again.');
+    }
   }
 
   // Applies (or, with an empty code, removes) a registration voucher upfront
@@ -1810,6 +1830,9 @@ function PayInvoiceAndActions({
     }
     setGenericPayingId(null);
     if (result.status === 'error') {
+      reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
+        kind: 'invoice', invoiceId,
+      });
       setGenericPayError(prev => ({ ...prev, [invoiceId]: result.message ?? 'Something went wrong. Please try again.' }));
     }
   }
@@ -1835,7 +1858,14 @@ function PayInvoiceAndActions({
       return;
     }
     setSelectedPaying(false);
-    if (result.status === 'error') setSelectedPayError(result.message ?? 'Something went wrong. Please try again.');
+    if (result.status === 'error') {
+      // ONE Checkout session covers every selected invoice, so this is one
+      // report for the whole basket, never one per invoice.
+      reportBlocked('start card payment', new Error(result.message ?? 'checkout returned no url'), {
+        kind: 'invoices', invoiceCount: selectedInvoices.length,
+      });
+      setSelectedPayError(result.message ?? 'Something went wrong. Please try again.');
+    }
   }
 
   return (

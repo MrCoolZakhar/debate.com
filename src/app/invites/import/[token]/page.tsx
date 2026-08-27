@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { Landmark } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { supabaseAuthClient } from '@/lib/supabase-auth';
+import { reportBlocked } from '@/lib/reportCrash';
 import SiteNav from '@/components/SiteNav';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, NeuIconDisc, NeuButton } from '@/components/neu';
@@ -158,6 +159,9 @@ export default function ImportInvitePage() {
     const result = (data ?? null) as { ok: boolean; reason?: string; slug?: string } | null;
     if (error || !result) {
       setClaiming(false);
+      // An imported delegate cannot get into the conference they were
+      // registered for, and this page is the only door they have.
+      reportBlocked('claim imported registration', error ?? new Error('claim rpc returned no result'));
       setClaimError('Something went wrong claiming your registration. Please try again.');
       return;
     }
@@ -174,7 +178,14 @@ export default function ImportInvitePage() {
       router.replace(`/auth/signin?next=${encodeURIComponent(nextPath)}`);
       return;
     }
+    // Everything above this line is a NORMAL outcome — claimed already, or a
+    // bounce through sign-in — and is deliberately not reported. Reaching here
+    // means get_import_invite said the invite was open and the claim still
+    // refused, which is a real fault.
     setClaiming(false);
+    reportBlocked('claim imported registration', new Error(`claim refused: ${result.reason ?? 'no reason'}`), {
+      reason: result.reason ?? null,
+    });
     setClaimError('This invitation could not be claimed. Ask your conference organizer to send you a new one.');
   }
 

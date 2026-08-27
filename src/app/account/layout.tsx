@@ -3,14 +3,15 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { User, ScrollText, CalendarDays, Coins, CalendarCheck, ArrowRight, type LucideIcon } from 'lucide-react';
+import { User, ScrollText, CalendarDays, Coins, CalendarCheck, ArrowRight, FileClock, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { useDraftCount } from '@/hooks/useDraftCount';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
-type NavLink = { label: string; href: string; Icon: LucideIcon; highlight?: boolean };
+type NavLink = { label: string; href: string; Icon: LucideIcon; highlight?: boolean; badge?: number };
 
 const NAV_LINKS: NavLink[] = [
   { label: 'MY PROFILE', href: '/account/profile', Icon: User },
@@ -27,6 +28,17 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
   const { user, profile, signOut, loading: authLoading } = useAuth();
+  const { count: draftCount } = useDraftCount();
+
+  // Parity with ProfileDropdown / the mobile sheet: DRAFTS TO COMPLETE slots in
+  // between MUN CV and CONFERENCE CALENDAR, and only when there is one.
+  const navLinks: NavLink[] = draftCount && draftCount > 0
+    ? [
+        ...NAV_LINKS.slice(0, 2),
+        { label: 'DRAFTS TO COMPLETE', href: '/my-conferences?tab=all#drafts', Icon: FileClock, badge: draftCount },
+        ...NAV_LINKS.slice(2),
+      ]
+    : NAV_LINKS;
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -77,7 +89,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
             className="md:hidden flex overflow-x-auto gap-0 mb-6"
             style={{ borderBottom: '1px solid #DDD4C0' }}
           >
-            {NAV_LINKS.map((link) => {
+            {navLinks.map((link) => {
               const active = pathname === link.href;
               const accent = link.highlight ? '#B6871F' : '#1B3828';
               return (
@@ -97,6 +109,18 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                 >
                   <link.Icon size={13} strokeWidth={2.4} />
                   {link.label}
+                  {link.badge !== undefined && (
+                    <span
+                      className="inline-flex items-center justify-center rounded-full"
+                      style={{
+                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
+                      }}
+                    >
+                      {link.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -207,7 +231,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                 </p>
 
                 <nav className="flex flex-col gap-1">
-                  {NAV_LINKS.map((link) => {
+                  {navLinks.map((link) => {
                     const active = pathname === link.href;
 
                     // MY CONFERENCES is a key destination — it gets a warmer,
@@ -271,7 +295,19 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                         }}
                       >
                         <link.Icon size={15} strokeWidth={2.2} style={{ color: active ? '#1B3828' : '#9A8A78', flexShrink: 0 }} />
-                        {link.label}
+                        <span className="flex-1">{link.label}</span>
+                        {link.badge !== undefined && (
+                          <span
+                            className="flex-shrink-0 inline-flex items-center justify-center rounded-full"
+                            style={{
+                              minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                              fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                              backgroundColor: 'rgba(182,135,31,0.16)', color: '#8A6614',
+                            }}
+                          >
+                            {link.badge}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { Check, X, Users2, LogIn, UserPlus, LogOut } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { reportBlocked } from '@/lib/reportCrash';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
@@ -94,9 +95,19 @@ export default function OrganizerInvitePage() {
     const supabase = getAuthedClient(session.access_token);
     const { data, error: rpcErr } = await supabase.rpc('respond_organizer_invite', { p_token: token, p_accept: accept });
     setResponding(null);
-    if (rpcErr) { setError(rpcErr.message || 'Could not respond to this invite.'); return; }
-    const result = data as { ok: boolean; error?: string; slug?: string };
-    if (!result.ok) { setError(result.error ?? 'Could not respond to this invite.'); return; }
+    const result = data as { ok: boolean; error?: string; slug?: string } | null;
+    // One report for both failure branches — see the chair invite page for the
+    // reasoning. Accept only: a failed decline costs nobody their access.
+    if (rpcErr || !result?.ok) {
+      if (accept) {
+        reportBlocked('accept organizer invite', rpcErr ?? new Error(result?.error ?? 'rpc returned ok:false'), {
+          conferenceSlug: invite?.slug ?? null,
+          inviteStatus: invite?.status ?? null,
+        });
+      }
+      setError((rpcErr ? rpcErr.message : result?.error) || 'Could not respond to this invite.');
+      return;
+    }
 
     if (accept) {
       router.push(`/manage/${result.slug ?? invite?.slug ?? ''}?organizerInvite=accepted`);

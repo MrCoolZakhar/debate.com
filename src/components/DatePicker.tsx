@@ -33,6 +33,7 @@ function startOfDay(d: Date): Date {
 
 export function DatePicker({
   value, onChange, min, max, placeholder = 'Select a date', disabled, initialView,
+  id, describedBy, invalid = false, variant = 'default',
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -44,6 +45,20 @@ export function DatePicker({
   // Handy for far-past pickers like date of birth so the calendar doesn't
   // open on today and force a long trek backwards.
   initialView?: string;
+  // ── Additive, all optional. Every pre-existing call site omits them and
+  // renders byte-identically to before. ─────────────────────────────────────
+  /** DOM id for the trigger, so an external <label htmlFor> actually binds. */
+  id?: string;
+  /** id list for help/error copy, announced with the trigger. */
+  describedBy?: string;
+  /** Paints the danger boundary and sets aria-invalid. */
+  invalid?: boolean;
+  /**
+   * 'well' seats the trigger in the pressed-in input well used by the apply
+   * wizard's question cards: 16px type (the iOS no-zoom floor), radius 14,
+   * inset shadow and a focus ring. 'default' is the original inline trigger.
+   */
+  variant?: 'default' | 'well';
 }) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => parseISO(value), [value]);
@@ -123,15 +138,34 @@ export function DatePicker({
     <div style={{ position: 'relative', width: '100%' }}>
       <button
         ref={btnRef}
+        id={id}
         type="button"
+        aria-describedby={describedBy}
+        aria-invalid={invalid || undefined}
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2.5 rounded-xl px-4 py-3 text-left focus:outline-none"
+        className={`w-full flex items-center gap-2.5 text-left focus:outline-none ${variant === 'well' ? '' : 'rounded-xl px-4 py-3'}`}
         style={{
-          fontFamily: OUTFIT, fontSize: 15,
-          backgroundColor: '#FAF8F3', border: `1px solid ${open ? '#1B3828' : '#DDD4C0'}`,
-          color: selected ? '#1C1410' : '#9A8A78', cursor: disabled ? 'default' : 'pointer',
-          transition: 'border-color 180ms cubic-bezier(0.22,1,0.36,1)', fontVariantNumeric: 'tabular-nums',
+          fontFamily: OUTFIT,
+          // 16px in the well: it sits among real text inputs in the apply
+          // wizard and a 15px neighbour would read as a different control.
+          fontSize: variant === 'well' ? 16 : 15,
+          // #8C7E68 clears WCAG 1.4.11 (3:1 non-text contrast) against the ivory
+          // page, the card surface and this trigger's own fill; #DDD4C0 was
+          // 1.19:1 and the control boundary read as no boundary at all.
+          backgroundColor: variant === 'well' ? '#EDE7D8' : '#FAF8F3',
+          border: `${variant === 'well' ? 1.5 : 1}px solid ${invalid ? '#8B2020' : open ? '#1B3828' : '#8C7E68'}`,
+          // #5B4F42 === NEU.inkSoft (6.44:1 on the ivory page). #9A8A78 was 3.15:1.
+          color: selected ? '#1C1410' : '#5B4F42', cursor: disabled ? 'default' : 'pointer',
+          transition: 'border-color 180ms cubic-bezier(0.22,1,0.36,1), box-shadow 220ms cubic-bezier(0.22,1,0.36,1)',
+          fontVariantNumeric: 'tabular-nums',
+          ...(variant === 'well' ? {
+            height: 52, padding: '0 16px', borderRadius: 14,
+            // NEU.in, plus the same 3px focus ring the other wells use.
+            boxShadow: open
+              ? 'inset 4px 4px 10px rgba(27,56,40,0.14), inset -4px -4px 10px rgba(255,255,255,0.8), 0 0 0 3px rgba(27,56,40,0.13)'
+              : 'inset 4px 4px 10px rgba(27,56,40,0.14), inset -4px -4px 10px rgba(255,255,255,0.8)',
+          } : null),
         }}
       >
         <CalendarDays size={17} style={{ color: '#B6871F', flexShrink: 0 }} />

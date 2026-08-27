@@ -5,9 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { Globe } from 'lucide-react';
+import { Globe, FileClock } from 'lucide-react';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import { useCredits } from '@/hooks/useCredits';
+import { useDraftCount } from '@/hooks/useDraftCount';
 
 const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/sessions' },
@@ -42,6 +43,11 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   const { user, profile, signOut } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { balance: creditBalance, loading: creditsLoading } = useCredits();
+  // ProfileDropdown is `hidden md:flex`, so on a phone it never mounts and its
+  // DRAFTS TO COMPLETE row would be invisible exactly where applicants abandon
+  // forms. The hamburger sheet hand-rolls its own account block, so it needs
+  // the entry (and its own lazy count, gated on the sheet being open).
+  const { count: draftCount } = useDraftCount(menuOpen);
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
@@ -419,7 +425,9 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
         className={`md:hidden overflow-hidden transition-[max-height] duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
         style={{
           top: overlay ? '72px' : undefined,
-          maxHeight: menuOpen ? '480px' : '0px',
+          // +56px of headroom when the drafts row is present, or the sheet
+          // clips its own last item (SIGN OUT) at the 480px cap.
+          maxHeight: menuOpen ? (user && draftCount && draftCount > 0 ? '536px' : '480px') : '0px',
           backgroundColor: '#FAF8F3',
           borderBottom: menuOpen ? '1px solid #DDD4C0' : 'none',
         }}
@@ -490,6 +498,38 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   {profile?.email ?? user.email}
                 </p>
               </div>
+
+              {draftCount !== null && draftCount > 0 && (
+                <Link
+                  href="/my-conferences?tab=all#drafts"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 focus:outline-none"
+                  style={{
+                    padding: '10px 16px',
+                    margin: '0 0 4px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(182, 135, 31, 0.12)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <FileClock size={16} strokeWidth={2.2} style={{ color: '#8A6614', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}>
+                    Drafts to complete
+                  </span>
+                  <span
+                    className="flex items-center justify-center rounded-full"
+                    style={{
+                      marginLeft: 'auto',
+                      minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                      fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                      backgroundColor: 'rgba(182,135,31,0.22)',
+                      color: '#8A6614',
+                    }}
+                  >
+                    {draftCount}
+                  </span>
+                </Link>
+              )}
 
               <Link
                 href="/account/unlimited"

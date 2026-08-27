@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   ArrowRight, BadgeCheck, Ban, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
-  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, Landmark, LogOut, MapPin,
-  MessageSquareText, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
+  Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, Info, Landmark, LogOut, MapPin,
+  MessageSquareText, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -25,13 +25,14 @@ import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
 import { isPaymentsLive } from '@/lib/payments';
 import { formatFee } from '@/lib/utils';
 import {
-  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc,
+  NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuStatTile, NeuIconDisc, NeuInset,
 } from '@/components/neu';
 import {
   poolForRole, fillFreeSpots, releasePoolSpot, POOL_SPOTS_COLUMN, MemberAvatar, markNotAttending, undoNotAttending,
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
+import { type ApplyDraftAnswers, normalizeAnswers } from '@/lib/applyDraft';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -421,6 +422,173 @@ function LevelBadge({ level, count }: { level: string; count?: number }) {
  *  The button itself turns GREEN once paid (#9) so no separate PAID badge is
  *  needed. "Remove waiver" stays reachable for any legacy waived rows. Portaled +
  *  edge-flipped so the clipping row card never cuts the menu off. */
+// Status inks for the review dialog. These four carry meaning that no `neu.tsx`
+// token expresses (rejection, aid, on-site check-in, a blocking warning), so
+// they stay literal — but each one is contrast-checked against the surface it
+// actually sits on. Everything else in the dialog comes from NEU.
+const REVIEW_DANGER = '#8B2020';        // 8.51:1 on NEU.surface
+const REVIEW_AID_INK = '#8A6614';       // 4.73:1 on the aid wash
+const REVIEW_CHECKED_INK = '#1F6E52';   // 5.80:1 on NEU.surface
+const REVIEW_WARN_INK = '#7A5320';      // replaces #9A6B2F, which measured 4.38:1
+
+/** Review dialog layout CSS. Inline styles cannot express media queries, and
+ *  the dialog needs exactly two: the two-column body collapses to one column
+ *  on a narrow window, and the padding tightens on a phone. Scoped by the
+ *  `appRev*` class prefix so it cannot leak into the list behind it. */
+const REVIEW_CSS = `
+.appRevGrid { display: grid; gap: 24px; grid-template-columns: 300px minmax(0, 1fr); align-items: start; }
+/* Substance first in the DOM so the phone (and a screen reader) reads the
+   applicant's own words before the metadata; the rail is pulled back to
+   column 1 only once there are two columns to have. */
+.appRevMain { grid-column: 2; min-width: 0; }
+.appRevRail { grid-column: 1; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+/* Nothing to put in the rail (an invited row has no profile, and a faculty
+   advisor has no preferences) — don't reserve a column for a void. */
+.appRevGrid.appRevNoRail { grid-template-columns: minmax(0, 1fr); }
+.appRevGrid.appRevNoRail .appRevMain { grid-column: 1; }
+@media (max-width: 900px) {
+  .appRevGrid { grid-template-columns: 1fr; gap: 18px; }
+  .appRevMain, .appRevRail { grid-column: 1; grid-row: auto; }
+}
+.appRevPad { padding: clamp(16px, 3.2vw, 26px) clamp(16px, 3.2vw, 30px); }
+/* 58ch measured in Outfit's '0' advance, which is wider than the typeface's
+   average glyph — the real measure lands at ~70 characters, inside the 45-75
+   comfortable-reading band. A flat 62ch overshot it at 75. */
+.appRevAnswer { max-width: 58ch; }
+/* Every control in the dialog carries Tailwind's focus:outline-none, which on
+   its own leaves a keyboard user with no visible focus at all. Give it back as
+   a forest ring — outline, not box-shadow, so the neu extrusion underneath is
+   untouched. Element-qualified so it outranks .focus\\:outline-none:focus. */
+.appRevDialog button:focus-visible,
+.appRevDialog a:focus-visible,
+.appRevDialog [tabindex]:focus-visible,
+.appRevMenu button:focus-visible {
+  outline: 2.5px solid ${NEU.forest};
+  outline-offset: 2px;
+}
+/* Enter transition, in the same rise-and-settle language as the neuFadeIn the
+   popovers in this file already use — a touch longer and with a hair of scale,
+   because a full dialog arriving needs more travel than a menu. neuFadeIn is
+   redeclared here (identically) so anything portaled out of the dialog still
+   finds the keyframes it names. */
+@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes appRevScrimIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes appRevCardIn { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.appRevScrim { animation: appRevScrimIn 180ms cubic-bezier(0.22,1,0.36,1); }
+.appRevDialog { animation: appRevCardIn 220ms cubic-bezier(0.22,1,0.36,1); }
+@media (prefers-reduced-motion: reduce) {
+  .appRevScrim, .appRevDialog { animation: none; }
+}
+`;
+
+/** Overflow menu for the review dialog's rarely-used, mostly destructive
+ *  actions (remove from conference, attendance toggle). Keeps them reachable
+ *  without letting them compete with the primary decision, and uses the same
+ *  portal + clamp placement as PaymentMenu so no ancestor overflow can clip
+ *  it. Purely presentational: every item calls a handler it was handed. */
+function ReviewMoreMenu({ items, disabled }: {
+  items: { icon: LucideGlyph; label: string; onClick: () => void; tone?: 'ink' | 'danger'; disabled?: boolean; title?: string }[];
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const menuW = 248;
+    const menuH = 52 + items.length * 44;
+    // Clamp to the viewport and flip above the trigger when the dialog's
+    // footer sits too close to the bottom edge to open downwards.
+    const left = Math.max(8, Math.min(r.right - menuW, window.innerWidth - menuW - 8));
+    const openUp = r.bottom + menuH + 8 > window.innerHeight;
+    setPos({ top: openUp ? Math.max(8, r.top - menuH - 6) : r.bottom + 6, left });
+  }, [items.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        ref={btnRef}
+        onClick={() => { if (open) { setOpen(false); return; } place(); setOpen(true); }}
+        disabled={disabled}
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="inline-flex items-center justify-center focus:outline-none"
+        style={{
+          width: 44, height: 44, borderRadius: 999, border: 'none',
+          backgroundColor: NEU.surface, boxShadow: open ? NEU.inSm : NEU.outSm,
+          color: NEU.inkSoft, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
+          transition: `box-shadow 200ms ${EASE_LOCAL}`,
+        }}
+      >
+        <MoreHorizontal size={18} strokeWidth={2.4} />
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={menuRef}
+            role="menu"
+            className="appRevMenu"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: 248, backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.out, padding: 6, animation: `neuFadeIn 160ms ${EASE_LOCAL}` }}
+          >
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            {items.map(it => {
+              const Icon = it.icon;
+              return (
+                <button
+                  key={it.label}
+                  role="menuitem"
+                  onClick={() => { if (it.disabled) return; setOpen(false); it.onClick(); }}
+                  disabled={it.disabled}
+                  title={it.title}
+                  className="inline-flex items-center gap-2.5 w-full focus:outline-none"
+                  style={{
+                    padding: '11px 12px', borderRadius: 10, background: 'transparent', border: 'none',
+                    cursor: it.disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
+                    fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
+                    color: it.disabled ? NEU.inkSoft : (it.tone === 'danger' ? REVIEW_DANGER : NEU.ink),
+                    opacity: it.disabled ? 0.5 : 1,
+                  }}
+                  onMouseEnter={e => { if (!it.disabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <Icon size={15} strokeWidth={2.4} style={{ color: it.disabled ? NEU.inkSoft : (it.tone === 'danger' ? REVIEW_DANGER : NEU.deepGold) }} />
+                  {it.label}
+                </button>
+              );
+            })}
+          </div>
+        </Portal>
+      )}
+    </div>
+  );
+}
+
 function PaymentMenu({
   app, disabled, paymentsLive, onMarkPaid, onRemind, onMarkUnpaid, onUndoWaive, align = 'left',
 }: {
@@ -821,6 +989,161 @@ function committeeDisplay(c: { name: string; abbreviation: string | null } | nul
 /** Short relative-ish timestamp for the "Checked in …" line. */
 function formatDateTime(d: string) {
   return new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// ── In-progress drafts (public.application_drafts) ───────────────────────────
+//
+// A draft is an application somebody STARTED and never submitted. The owner's
+// requirement was explicit: show them, "but not as part of the total".
+//
+// That is enforced structurally, not by discipline: drafts live in their own
+// `drafts` state fed by its own query, and are NEVER merged into the
+// `applications` array. Every count on this page — statScope, all seven stats,
+// defaultScopeCount, filtered, "Showing X of Y", Select all, the selected pill,
+// the five bulk counts, and handleExportCSV (which maps the RAW applications
+// array, not `filtered`, and would otherwise leak drafts to a registration
+// desk) — derives from `applications`. Keeping the two arrays apart is what
+// makes "not part of the total" true by construction.
+//
+// Organisers hold SELECT on application_drafts and deliberately no UPDATE and
+// no DELETE, so this whole surface is read-only. There is nothing here to
+// accept, reject, bin or bulk-act on, and the UI must never look like there is.
+
+/** One unsubmitted application as the organiser sees it. Deliberately its own
+ *  type: a DraftRow must never be structurally assignable to `Application`,
+ *  because the moment it is, somebody merges the arrays and the totals lie. */
+interface DraftRow {
+  id: string;
+  user_id: string;
+  role: string;
+  answers: ApplyDraftAnswers;
+  step: number;
+  updated_at: string;
+  /** Reminder bookkeeping. Read-only here: the organiser's button calls the
+   *  `send_draft_reminder` RPC, which owns every one of these columns. The
+   *  page holds them only so the button can MIRROR the server's 72h cooldown
+   *  instead of inventing its own. */
+  reminders_sent: number;
+  last_reminder_at: string | null;
+  reminder_opt_out: boolean;
+  profiles: {
+    display_name: string | null;
+    email: string | null;
+    avatar_url: string | null;
+    nationality: string | null;
+  } | null;
+}
+
+/** The apply wizard's stage names, reproduced from `stepSequence` /
+ *  `STEP_LABEL` in ConferenceApplyClient.tsx (:1021, :237) so that "step 3 of
+ *  5" counts the same stages on both sides of the fence. It is a pure function
+ *  of the role, the conference's `delegate_preference_mode` and whether the
+ *  role has custom questions — all three of which this page already holds, so
+ *  no part of the apply flow has to be imported to say how far someone got.
+ *
+ *  If a stage is ever added to the wizard, add it here too; a mismatch shows
+ *  up as an off-by-one in the organiser's "step n of N", nothing worse. */
+function draftStepLabels(role: string, prefMode: string, hasCustomQuestions: boolean): string[] {
+  const showSociety = role !== 'chair' && role !== 'observer';
+  const isInvoicing = role === 'head-delegate' || role === 'faculty-advisor';
+  const showPreferences = (role === 'delegate' || role === 'head-delegate') && prefMode !== 'none';
+  const skipExperience = role === 'faculty-advisor';
+  return [
+    ...(showSociety ? ['Society'] : []),
+    ...(isInvoicing ? ['Invoicing'] : []),
+    ...(showPreferences ? ['Preferences'] : []),
+    ...(skipExperience ? [] : ['Experience']),
+    ...(hasCustomQuestions ? ['Questions'] : []),
+    'Overview',
+  ];
+}
+
+/** Ink for the drafts surface. `NEU.muted` measures 3.15:1 on `NEU.surface` and
+ *  is documented in neu.tsx as decoration-only, so readable draft copy uses
+ *  `NEU.inkSoft` (6.8:1) and `muted` is kept for rules, dashes and glyphs. The
+ *  section is quieter than the list above it by weight, size and a dashed edge
+ *  — never by putting real words below the contrast floor. */
+const DRAFT_DASH = 'rgba(154,138,120,0.55)';
+
+/** Hover-revealed explainer. AGENTS.md UI RULE: informational "i" affordances
+ *  open on HOVER, never on click — click-to-toggle is reserved for menus and
+ *  actions. Focus reveals it too, so it is reachable from the keyboard.
+ *
+ *  Portaled at fixed viewport coordinates measured from the trigger, and
+ *  edge-flipped, per the anti-clipping rule: this sits inside the page's
+ *  scroller and would otherwise be cut by an ancestor's overflow or run off a
+ *  narrow viewport. The panel is never un-clipped by loosening a card's
+ *  overflow — it is fixed here, at the popover. */
+function InfoHint({ label, text }: { label: string; text: string }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const place = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(280, window.innerWidth - 20);
+    // Clamp horizontally so the panel always stays on screen…
+    const left = Math.max(10, Math.min(r.left + r.width / 2 - width / 2, window.innerWidth - width - 10));
+    // …and flip above the trigger when there is not enough room below it.
+    const below = window.innerHeight - r.bottom;
+    const top = below < 130 ? Math.max(10, r.top - 122) : r.bottom + 8;
+    setPos({ top, left, width });
+  }, []);
+
+  useEffect(() => {
+    if (!pos) return;
+    const onMove = () => place();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [pos, place]);
+
+  const open = () => place();
+  const close = () => setPos(null);
+
+  return (
+    <>
+      <span
+        ref={ref}
+        tabIndex={0}
+        role="img"
+        aria-label={label}
+        title={text}
+        onMouseEnter={open}
+        onMouseLeave={close}
+        onFocus={open}
+        onBlur={close}
+        className="inline-flex items-center justify-center rounded-full flex-shrink-0"
+        style={{
+          width: 17, height: 17, backgroundColor: NEU.surface, boxShadow: NEU.inSm,
+          color: NEU.inkSoft, cursor: 'help',
+        }}
+      >
+        <Info size={10.5} strokeWidth={2.8} />
+      </span>
+      {pos && (
+        <Portal>
+          <div
+            role="tooltip"
+            className="fixed z-50"
+            style={{
+              top: pos.top, left: pos.left, width: pos.width,
+              padding: '11px 13px', borderRadius: 13,
+              backgroundColor: NEU.surface, boxShadow: NEU.out,
+              fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, lineHeight: 1.5,
+              color: NEU.inkSoft, pointerEvents: 'none',
+            }}
+          >
+            {text}
+          </div>
+        </Portal>
+      )}
+    </>
+  );
 }
 
 /** Committee shorthand, abbreviation when set, else a monogram of the name. */
@@ -1356,6 +1679,8 @@ export default function ApplicationsPage() {
   const [rejectNote, setRejectNote] = useState('');
   const [roleConfigs, setRoleConfigs] = useState<RoleConfigLite[]>([]);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  // The review dialog card, for the focus trap in the effect below.
+  const reviewCardRef = useRef<HTMLDivElement | null>(null);
   // Conferences done in any capacity, per user, count of their mun_cv_entries
   // rows (the same source profiles.mun_experience_level is derived from).
   const [cvCounts, setCvCounts] = useState<Record<string, number>>({});
@@ -1394,6 +1719,27 @@ export default function ApplicationsPage() {
   // or null when closed. Populated from the already-loaded applications, so no
   // extra fetch is needed.
   const [delegationView, setDelegationView] = useState<{ id: string; name: string } | null>(null);
+  // ── In-progress drafts. Its OWN state, fed by its OWN query, never merged
+  // into `applications` — see the DraftRow comment block. Collapsed by default
+  // so the submitted list stays the page's subject.
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const [draftReviewId, setDraftReviewId] = useState<string | null>(null);
+  // Committee name + abbreviation by id, so a draft's stored preferences can be
+  // rendered by the house naming rule (acronym primary, full name beneath).
+  // The draft blob only carries the name it was written with.
+  const [draftCommittees, setDraftCommittees] = useState<Record<string, { name: string; abbreviation: string | null }>>({});
+  // Per-draft reminder UI state. `remindingId` is an in-flight lock and NOTHING
+  // more — the real rate limit is the 72h cooldown inside send_draft_reminder,
+  // and the button is only its mirror. (handleRemindPay elsewhere in this file
+  // has the in-flight lock and no server-side guard at all; that pattern is
+  // deliberately not repeated here.)
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+  const [remindErr, setRemindErr] = useState<Record<string, string>>({});
+  // conferences.delegate_preference_mode — governs whether the wizard has a
+  // Preferences stage, and so what "of N" is. Not on the manage layout's
+  // Conference type, so it is read here rather than widening shared context.
+  const [prefMode, setPrefMode] = useState<string>('committees_and_countries');
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -1482,12 +1828,189 @@ export default function ApplicationsPage() {
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
+  // ── Drafts loader ─────────────────────────────────────────────────────────
+  // A SEPARATE query into a SEPARATE state atom. It deliberately shares nothing
+  // with loadApplications: no shared array, no shared loading flag, no merge
+  // step that a later edit could turn into one. If this query fails the drafts
+  // section simply stays empty — the submitted list is unaffected either way.
+  //
+  // RLS: organisers hold "Organizers read drafts" (SELECT, scoped by
+  // is_conference_organizer) and nothing else on this table. The embedded
+  // profile comes from the third clause of "Organizers read profiles in their
+  // conferences", added for exactly this — without it a draft renders with no
+  // name and no email.
+  const loadDrafts = useCallback(async () => {
+    if (!conference || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const [draftRes, confRes, cttRes] = await Promise.all([
+      supabase
+        .from('application_drafts')
+        .select('id, user_id, role, answers, step, updated_at, reminders_sent, last_reminder_at, reminder_opt_out, profiles (display_name, email, avatar_url, nationality)')
+        .eq('conference_id', conference.id)
+        .order('updated_at', { ascending: false }),
+      supabase
+        .from('conferences')
+        .select('delegate_preference_mode')
+        .eq('id', conference.id)
+        .maybeSingle(),
+      supabase
+        .from('conference_committees')
+        .select('id, name, abbreviation')
+        .eq('conference_id', conference.id),
+    ]);
+
+    const rows = (draftRes.data ?? []) as unknown as (Omit<DraftRow, 'answers'> & { answers: Partial<ApplyDraftAnswers> | null })[];
+    // normalizeAnswers is the apply flow's own back-fill: a draft written by an
+    // older build is missing whichever fields that build didn't have, and
+    // reading `.preferences.length` off undefined would take the page down.
+    setDrafts(rows.map(r => ({ ...r, answers: normalizeAnswers(r.answers ?? {}) })));
+    setPrefMode((confRes.data as { delegate_preference_mode: string | null } | null)?.delegate_preference_mode ?? 'committees_and_countries');
+    const byId: Record<string, { name: string; abbreviation: string | null }> = {};
+    for (const c of (cttRes.data ?? []) as { id: string; name: string; abbreviation: string | null }[]) {
+      byId[c.id] = { name: c.name, abbreviation: c.abbreviation };
+    }
+    setDraftCommittees(byId);
+  }, [conference, session?.access_token]);
+
+  useEffect(() => { loadDrafts(); }, [loadDrafts]);
+
+  // ── Draft reminder ────────────────────────────────────────────────────────
+  // One draft, one nudge. `send_draft_reminder` is SECURITY DEFINER and owns
+  // every guard that matters: organiser-only, opted-out, a hard ceiling, and a
+  // 72-HOUR COOLDOWN. The button below renders disabled inside that window, but
+  // that is a courtesy, not the limit — clicking a stale button ten times still
+  // produces exactly one email, because the tenth click gets 'cooldown' back
+  // from the database. This is the whole reason not to copy handleRemindPay,
+  // whose only guard is the in-flight lock.
+  //
+  // The RPC also stamps last_reminder_at, so the honest way to refresh the
+  // button is to re-read the row: loadDrafts() rather than a local guess.
+  async function handleSendDraftReminder(d: DraftRow) {
+    if (remindingId) return;
+    setRemindingId(d.id);
+    setRemindErr(p => ({ ...p, [d.id]: '' }));
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setRemindingId(null);
+      setRemindErr(p => ({ ...p, [d.id]: 'Your session has expired. Please reload the page.' }));
+      return;
+    }
+    const { data, error } = await supabase.rpc('send_draft_reminder', { p_draft_id: d.id });
+    const res = (data ?? null) as { ok?: boolean; reason?: string } | null;
+    setRemindingId(null);
+
+    if (error || !res) {
+      setRemindErr(p => ({ ...p, [d.id]: 'Could not send that reminder. Please try again.' }));
+      return;
+    }
+    if (res.ok) {
+      setFlashMsg(`Reminder sent to ${d.profiles?.display_name ?? 'the applicant'}.`);
+      loadDrafts();
+      return;
+    }
+    // Every refusal is stated in the applicant's terms, not the RPC's.
+    const why =
+      res.reason === 'cooldown'        ? 'They were reminded in the last three days. Give it a little longer.'
+      : res.reason === 'opted_out'     ? 'They asked not to be reminded about this application.'
+      : res.reason === 'limit_reached' ? 'They have had as many reminders as we will send.'
+      : res.reason === 'notifications_off' ? 'They have application emails turned off in their account.'
+      : res.reason === 'off'           ? 'Your Unfinished application reminder email is switched off in the Email Builder.'
+      : res.reason === 'no_recipient'  ? 'There is no email address on their account.'
+      : res.reason === 'forbidden'     ? 'You do not have permission to send this.'
+      : 'Could not send that reminder.';
+    setRemindErr(p => ({ ...p, [d.id]: why }));
+    // A cooldown answer is fresher than what this page is holding, so re-read.
+    if (res.reason === 'cooldown' || res.reason === 'opted_out') loadDrafts();
+  }
+
   // Auto-clear the green confirmation flash.
   useEffect(() => {
     if (!flashMsg) return;
     const t = setTimeout(() => setFlashMsg(''), 4000);
     return () => clearTimeout(t);
   }, [flashMsg]);
+
+  // Review dialog behaviour: Escape closes, the list behind is scroll-locked,
+  // and Tab is trapped inside the card. Presentation only — closing goes
+  // through the same setReviewId(null) the X and the backdrop already used.
+  // The read-only draft drawer is the same kind of dialog and shares this
+  // behaviour wholesale (both mount `reviewCardRef`, and only one can be open
+  // at a time), so the effect keys on whichever is open.
+  const openDialogId = reviewId ?? draftReviewId;
+  useEffect(() => {
+    if (!openDialogId) return;
+    // The page's scroller is <html>, not <body>, and `overflow: hidden` only
+    // stops a *user* scroll — the list can still be moved programmatically
+    // behind the dialog. Pinning body at a negative offset removes the
+    // document's scroll range outright; the offset is undone and the exact
+    // position restored on close so nothing jumps.
+    const root = document.documentElement;
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const prev = {
+      rootOverflow: root.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+    };
+    const prevFocus = document.activeElement as HTMLElement | null;
+    root.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+
+    const focusables = () => {
+      const card = reviewCardRef.current;
+      if (!card) return [] as HTMLElement[];
+      return [...card.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )].filter(el => el.offsetParent !== null || el === document.activeElement);
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setReviewId(null);
+        setDraftReviewId(null);
+        setRejectingId(null);
+        setRejectNote('');
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!reviewCardRef.current?.contains(active)) {
+        e.preventDefault();
+        first.focus();
+        return;
+      }
+      if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    };
+
+    document.addEventListener('keydown', onKey, true);
+    // Seat focus inside the dialog so the trap has somewhere to start.
+    const seat = setTimeout(() => { focusables()[0]?.focus(); }, 0);
+    return () => {
+      clearTimeout(seat);
+      document.removeEventListener('keydown', onKey, true);
+      root.style.overflow = prev.rootOverflow;
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+      prevFocus?.focus?.();
+    };
+  }, [openDialogId]);
 
   // Fetch the previewed applicant's MUN CV on demand (#13). Cleared + refetched
   // whenever the review target changes; skipped for unregistered rows.
@@ -3283,6 +3806,210 @@ export default function ApplicationsPage() {
         </div>
       )}
 
+      {/* ── IN PROGRESS ──────────────────────────────────────────────────────
+          Unsubmitted drafts, BELOW the list and outside it. Collapsed by
+          default. Everything about it is deliberately quieter than a real row:
+          a dashed edge instead of the neu extrusion, smaller type, no status
+          pill, no checkbox, no selection, no action menu. There is nothing
+          here an organiser can do but read — organisers hold SELECT on
+          application_drafts and nothing else — and it must be impossible to
+          mistake for a row that can be acted on.
+
+          Counts: this section reads `drafts`. Nothing above it does. */}
+      {!loading && drafts.length > 0 && (
+        <div style={{ marginTop: 26, paddingBottom: selectedApps.length > 0 ? 96 : 0 }}>
+          <div
+            style={{
+              borderRadius: 18,
+              border: `1.5px dashed ${DRAFT_DASH}`,
+              backgroundColor: 'rgba(154,138,120,0.035)',
+              padding: draftsOpen ? '4px 4px 14px' : 4,
+            }}
+          >
+            <button
+              onClick={() => setDraftsOpen(o => !o)}
+              aria-expanded={draftsOpen}
+              className="w-full flex items-center gap-2.5 focus:outline-none"
+              style={{
+                padding: '13px 15px', background: 'transparent', border: 'none',
+                cursor: 'pointer', borderRadius: 15, textAlign: 'left',
+              }}
+            >
+              <ChevronDown
+                size={15}
+                strokeWidth={2.8}
+                style={{
+                  color: NEU.muted, flexShrink: 0,
+                  transform: draftsOpen ? 'none' : 'rotate(-90deg)',
+                  transition: `transform 200ms ${EASE_LOCAL}`,
+                }}
+              />
+              <PencilLine size={13.5} strokeWidth={2.5} style={{ color: NEU.muted, flexShrink: 0 }} />
+              <span
+                style={{
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.13em',
+                  color: NEU.inkSoft, textTransform: 'uppercase',
+                }}
+              >
+                In progress
+              </span>
+              <span style={{ color: NEU.muted, opacity: 0.6 }}>·</span>
+              <span
+                style={{
+                  fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.inkSoft,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {drafts.length}
+              </span>
+              {/* Hover-only, per the AGENTS.md informational-popup rule. */}
+              <span onClick={e => e.stopPropagation()}>
+                <InfoHint
+                  label="About in-progress applications"
+                  text="Started but not submitted. Not counted in your totals, and you cannot accept or reject them."
+                />
+              </span>
+            </button>
+
+            {draftsOpen && (
+              <div className="flex flex-col gap-2.5" style={{ padding: '0 11px' }}>
+                {drafts.map(d => {
+                  const name = d.profiles?.display_name ?? 'Unknown applicant';
+                  const email = d.profiles?.email ?? '';
+                  const a = d.answers;
+                  const roleCfg = roleConfigs.find(rc => rc.role === d.role);
+                  // Matches the apply flow's own gate: the Questions stage
+                  // exists only when the role has LIVE questions, so archived
+                  // ones are excluded here (unlike the answer renderer, which
+                  // includes them so nothing an applicant wrote is lost).
+                  const hasQs = questionsOf(normalizeBlocks(roleCfg?.custom_questions ?? [])).length > 0;
+                  const labels = draftStepLabels(d.role, prefMode, hasQs);
+                  const stepNo = Math.min(Math.max(1, d.step), labels.length);
+                  const where = a.isIndependent
+                    ? 'Independent'
+                    : (a.inviteSocietyName || a.societyInput.trim() || null);
+                  // 72h cooldown, mirrored from the row the RPC stamps. Ceil,
+                  // so "1h" never means "any second now" — it means under an
+                  // hour left, which is the honest reading of a countdown.
+                  const cooldownMs = d.last_reminder_at
+                    ? new Date(d.last_reminder_at).getTime() + 72 * 3600_000 - Date.now()
+                    : 0;
+                  const cooldownH = cooldownMs > 0 ? Math.ceil(cooldownMs / 3600_000) : 0;
+                  const remindDisabled =
+                    d.reminder_opt_out || cooldownH > 0 || d.reminders_sent >= 10 || remindingId === d.id;
+                  const remindLabel =
+                    remindingId === d.id ? 'SENDING…'
+                    : d.reminder_opt_out ? 'REMINDERS OFF'
+                    : d.reminders_sent >= 10 ? 'NO MORE REMINDERS'
+                    : cooldownH > 0 ? `AVAILABLE IN ${cooldownH}H`
+                    : 'REMIND';
+                  return (
+                    <div
+                      key={d.id}
+                      className="draftRow w-full flex items-center gap-3 flex-wrap"
+                      style={{
+                        padding: '11px 13px', borderRadius: 14,
+                        border: `1.5px dashed ${DRAFT_DASH}`,
+                        backgroundColor: 'transparent',
+                      }}
+                    >
+                      {/* The readable part of the row stays one button. The
+                          reminder is its SIBLING, never nested inside it — a
+                          button inside a button is invalid, and an organiser
+                          reaching for "remind" must never open the drawer by
+                          accident. */}
+                      <button
+                        onClick={() => setDraftReviewId(d.id)}
+                        className="draftRowOpen flex items-center gap-3 text-left focus:outline-none min-w-0 flex-1"
+                        style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                      >
+                      <div
+                        className="flex-shrink-0 flex items-center justify-center rounded-xl"
+                        style={{
+                          width: 34, height: 34,
+                          border: `1.5px dashed ${DRAFT_DASH}`,
+                          color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
+                        }}
+                      >
+                        {name.trim().charAt(0).toUpperCase() || '?'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.inkSoft }}>
+                          {name}
+                        </p>
+                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 500, color: NEU.inkSoft, opacity: 0.82, marginTop: 1 }}>
+                          {[roleLabel(d.role), where, email].filter(Boolean).join('  ·  ')}
+                        </p>
+                      </div>
+                      <span
+                        className="flex-shrink-0 text-right"
+                        style={{
+                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.inkSoft,
+                          opacity: 0.85, fontVariantNumeric: 'tabular-nums', lineHeight: 1.45,
+                        }}
+                      >
+                        <span className="block">{formatDateTime(d.updated_at)}</span>
+                        <span className="block">step {stepNo} of {labels.length}</span>
+                      </span>
+                      </button>
+
+                      {/* One reminder, one draft. No bulk affordance: a button
+                          that mails forty half-finished applicants at once is
+                          the exact shape of the thing that gets a sending
+                          domain blocked. */}
+                      <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                        <button
+                          onClick={() => handleSendDraftReminder(d)}
+                          disabled={remindDisabled}
+                          title={
+                            d.reminder_opt_out ? 'They asked not to be reminded about this application.'
+                            : cooldownH > 0 ? 'One reminder per applicant every three days.'
+                            : 'Email them a link back to their saved answers.'
+                          }
+                          className="draftRemind inline-flex items-center gap-1.5 focus:outline-none"
+                          style={{
+                            padding: '6px 11px', borderRadius: 999,
+                            border: `1.5px solid ${remindDisabled ? DRAFT_DASH : NEU.forest}`,
+                            backgroundColor: 'transparent',
+                            color: remindDisabled ? NEU.inkSoft : NEU.forest,
+                            opacity: remindDisabled ? 0.62 : 1,
+                            cursor: remindDisabled ? 'default' : 'pointer',
+                            fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <Send size={11.5} strokeWidth={2.6} />
+                          {remindLabel}
+                        </button>
+                        {d.reminders_sent > 0 && !d.reminder_opt_out && (
+                          <span style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 600, color: NEU.inkSoft, opacity: 0.85 }}>
+                            {d.reminders_sent} sent
+                          </span>
+                        )}
+                      </div>
+
+                      {remindErr[d.id] && (
+                        <p className="w-full" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.45 }}>
+                          {remindErr[d.id]}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <style>{`
+                  .draftRow { transition: background-color 180ms ${EASE_LOCAL}, border-color 180ms ${EASE_LOCAL}; }
+                  .draftRow:hover { background-color: rgba(154,138,120,0.08); border-color: rgba(154,138,120,0.85); }
+                  .draftRowOpen:focus-visible { outline: 2.5px solid ${NEU.forest}; outline-offset: 3px; border-radius: 10px; }
+                  .draftRemind { transition: background-color 180ms ${EASE_LOCAL}; }
+                  .draftRemind:not(:disabled):hover { background-color: rgba(27,56,40,0.08); }
+                  .draftRemind:focus-visible { outline: 2.5px solid ${NEU.forest}; outline-offset: 2px; }
+                `}</style>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Sticky bulk-action bar */}
       {!loading && selectedApps.length > 0 && (
         <div className="fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: 20, pointerEvents: 'none' }}>
@@ -3405,7 +4132,10 @@ export default function ApplicationsPage() {
         </div>
       )}
 
-      {/* Review modal, application details, custom answers and all actions.
+      {/* Applicant review dialog. Three fixed planes — a header that never
+          scrolls, a two-column body (the applicant's own words as the main
+          column, metadata as a pressed-in rail), and a footer that keeps the
+          decision reachable no matter how long the answers run.
           Rendered before confirmModal so confirm dialogs (same z-50) stack on top. */}
       {(() => {
         const app = applications.find(a => a.id === reviewId);
@@ -3444,10 +4174,43 @@ export default function ApplicationsPage() {
         const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
         // Not attending: every status-changing action in this modal fades AND
         // hard-locks (disabled attribute + no pointer events) — only MARK
-        // ATTENDING (attendanceControls flips to that label automatically)
+        // ATTENDING (the attendance menu item flips to that label automatically)
         // and REMOVE FROM CONFERENCE (its own payment guard, untouched) stay
         // fully active. Restores the moment they're marked attending again.
         const notAttendingLock: React.CSSProperties = !app.attending ? { opacity: 0.45, pointerEvents: 'none' } : {};
+
+        // ── Shared presentation tokens for this dialog ────────────────────
+        const sectionLabel: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em',
+          color: NEU.forest, textTransform: 'uppercase',
+        };
+        const railLabel: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em',
+          color: NEU.forest, textTransform: 'uppercase',
+        };
+        const railValue: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink, lineHeight: 1.5,
+        };
+        // Primary action: the one thing this status is asking the organiser to
+        // do. 44px minimum, gradient, sits first in the footer.
+        const primaryBtn: React.CSSProperties = {
+          minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+          color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+          boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+          cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap',
+          transition: `box-shadow 220ms ${EASE_LOCAL}, transform 160ms ${EASE_LOCAL}`,
+        };
+        // Secondary: reachable, clearly not the headline. Extruded neu pill.
+        const secondaryBtn: React.CSSProperties = {
+          minHeight: 40, padding: '0 18px', borderRadius: 999, border: 'none',
+          fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+          color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+          cursor: 'pointer', whiteSpace: 'nowrap',
+          transition: `box-shadow 220ms ${EASE_LOCAL}`,
+        };
+        const liftOn = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; };
+        const liftOff = (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; };
 
         // Chairs are feeless by default — no payment control — unless this
         // conference configured a chair fee, matching any other role (#5).
@@ -3479,103 +4242,172 @@ export default function ApplicationsPage() {
         // payment_status is 'unpaid' or 'waived'. Paid applicants must have
         // their payment handled first (refunds come with finances).
         const canWithdraw = app.payment_status !== 'paid';
-        const withdrawControls = (
-          <button
-            onClick={() => { if (canWithdraw) openWithdrawConfirm(app); }}
-            disabled={rowBusy || !canWithdraw}
-            title={!canWithdraw ? 'Handle their payment before removing' : undefined}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-            style={{
-              backgroundColor: 'rgba(139,32,32,0.08)', color: '#8B2020', border: '1px solid rgba(139,32,32,0.2)',
-              fontFamily: "'Outfit', sans-serif",
-              opacity: !canWithdraw ? 0.4 : rowBusy ? 0.5 : 1,
-              cursor: !canWithdraw ? 'not-allowed' : rowBusy ? 'default' : 'pointer',
-              pointerEvents: rowBusy ? 'none' : undefined,
-            }}
-          >
-            <LogOut size={13} />
-            REMOVE FROM CONFERENCE
-          </button>
-        );
 
-        // Not attending toggle: accepted/assigned/checked-in only, same pool
-        // this action applies to in the Delegations/Independents views.
-        const attendanceControls = app.attending ? (
-          <button
-            onClick={() => openNotAttendingConfirm(app)}
-            disabled={rowBusy}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: 'rgba(154,138,120,0.1)', color: '#6B5F52', border: '1px solid rgba(154,138,120,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(154,138,120,0.18)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(154,138,120,0.1)'; }}
-          >
-            <UserX size={13} />
-            MARK NOT ATTENDING
-          </button>
-        ) : (
-          <button
-            onClick={() => handleMarkAttending(app)}
-            disabled={rowBusy}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#2F6644', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle }}
-          >
-            <Undo2 size={13} />
-            MARK ATTENDING
-          </button>
-        );
+        // Rare + destructive actions live behind the overflow "…" so they stop
+        // competing with the decision. Same handlers, same guards: REMOVE keeps
+        // its own payment guard and MARK ATTENDING stays live while everything
+        // else is locked out by notAttendingLock.
+        const moreItems: { icon: LucideGlyph; label: string; onClick: () => void; tone?: 'ink' | 'danger'; disabled?: boolean; title?: string }[] = [
+          ...(app.attending
+            ? [{ icon: UserX as LucideGlyph, label: 'Mark not attending', onClick: () => openNotAttendingConfirm(app), disabled: rowBusy }]
+            : [{ icon: Undo2 as LucideGlyph, label: 'Mark attending', onClick: () => handleMarkAttending(app), disabled: rowBusy }]),
+          {
+            icon: LogOut as LucideGlyph,
+            label: 'Remove from conference',
+            onClick: () => { if (canWithdraw) openWithdrawConfirm(app); },
+            tone: 'danger' as const,
+            disabled: rowBusy || !canWithdraw,
+            title: !canWithdraw ? 'Handle their payment before removing' : undefined,
+          },
+        ];
 
         // Check-in controls: mark on-site attendance (accepted/assigned) or
         // reverse it (checked-in). Same optimistic handlers as the row buttons.
+        // On accepted/assigned this IS the primary action unless the delegate
+        // still needs allocating, so it renders at primary weight there.
+        const checkInPrimary = (app.status === 'accepted' && !isDelegate) || app.status === 'assigned';
         const checkInControls = (app.status === 'accepted' || app.status === 'assigned') ? (
           <button
             onClick={() => handleCheckIn(app)}
             disabled={rowBusy || !app.attending}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: 'rgba(61,122,82,0.12)', color: '#2F6644', border: '1px solid rgba(61,122,82,0.3)', fontFamily: "'Outfit', sans-serif", ...busyStyle, ...notAttendingLock }}
+            className="inline-flex items-center gap-2 focus:outline-none"
+            style={{ ...(checkInPrimary ? primaryBtn : secondaryBtn), ...busyStyle, ...notAttendingLock }}
+            onMouseEnter={checkInPrimary ? undefined : liftOn}
+            onMouseLeave={checkInPrimary ? undefined : liftOff}
           >
-            <UserRoundCheck size={13} />
+            <UserRoundCheck size={checkInPrimary ? 16 : 14} strokeWidth={2.6} />
             CHECK IN
           </button>
         ) : app.status === 'checked-in' ? (
           <button
             onClick={() => handleUndoCheckIn(app)}
             disabled={rowBusy || !app.attending}
-            className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-            style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle, ...notAttendingLock }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            className="inline-flex items-center gap-2 focus:outline-none"
+            style={{ ...secondaryBtn, color: NEU.inkSoft, ...busyStyle, ...notAttendingLock }}
+            onMouseEnter={liftOn}
+            onMouseLeave={liftOff}
           >
-            <Undo2 size={13} />
+            <Undo2 size={14} strokeWidth={2.4} />
             UNDO CHECK-IN
           </button>
         ) : null;
 
+        const reinstateBtn = (onClick: () => void) => (
+          <button
+            onClick={onClick}
+            disabled={rowBusy || !app.attending}
+            className="inline-flex items-center gap-2 focus:outline-none"
+            style={{ ...primaryBtn, ...busyStyle, ...notAttendingLock }}
+          >
+            <RotateCcw size={16} strokeWidth={2.6} />
+            REINSTATE
+          </button>
+        );
+
+        // A metadata row in the rail: micro-label above, real value below.
+        const railRow = (icon: LucideGlyph, label: string, value: React.ReactNode) => {
+          const Icon = icon;
+          return (
+            <div>
+              <p className="flex items-center gap-1.5 mb-1" style={railLabel}>
+                <Icon size={11} strokeWidth={2.6} />
+                {label}
+              </p>
+              <div style={railValue}>{value}</div>
+            </div>
+          );
+        };
+
+        const hasContextRail = !!app.profiles?.nationality
+          || (isDelegate && prefs.length > 0)
+          || ((app.status === 'assigned' || app.status === 'checked-in') && !!app.assigned_country_name)
+          || (app.status === 'checked-in' && !!app.checked_in_at);
+
+        // Invited/claim-path rows carry no profile at all — no nationality, no
+        // age, no MUN CV — and a faculty advisor has no country preferences
+        // either, so for them every rail block is empty. Reserving a 300px
+        // column for nothing leaves a void beside the answers, so the grid
+        // drops to a single column and the answers start at the left edge.
+        const hasRail = hasContextRail || hasAidRequest || !!app.user_id;
+
+        const answerBody = (ans: string) => (
+          <p
+            className="appRevAnswer whitespace-pre-wrap"
+            style={{
+              fontFamily: OUTFIT,
+              fontSize: ans ? 15 : 13.5,
+              lineHeight: 1.62,
+              color: ans ? NEU.ink : NEU.inkSoft,
+              fontStyle: ans ? 'normal' : 'italic',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {ans || 'No answer provided.'}
+          </p>
+        );
+
         return (
           <Portal><div
-            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
-            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+            className="appRevScrim fixed inset-0 z-50 flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(27,20,16,0.42)', padding: 'clamp(10px, 3vw, 32px)' }}
             onClick={closeReview}
           >
+            <style>{REVIEW_CSS}</style>
             <div
-              className="w-full max-w-2xl rounded-2xl p-8 overflow-y-auto"
-              style={{ maxHeight: '85vh', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
+              ref={reviewCardRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="app-review-name"
+              className="appRevDialog w-full flex flex-col"
+              style={{
+                width: 'min(1080px, 100%)',
+                // Against the scrim's own padding, so the card can never be
+                // taller than the space it is centred in.
+                maxHeight: '100%',
+                backgroundColor: NEU.surface,
+                boxShadow: NEU.out,
+                borderRadius: 22,
+                fontFamily: OUTFIT,
+                overflow: 'hidden',
+              }}
               onClick={e => e.stopPropagation()}
             >
-              {/* Header */}
-              <div className="flex items-start gap-4 mb-5">
+              {/* ── Header, fixed plane ──────────────────────────────────── */}
+              <div
+                className="appRevPad flex items-start gap-4 flex-shrink-0"
+                style={{ backgroundColor: NEU.surface, boxShadow: '0 8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2 }}
+              >
                 {app.profiles?.avatar_url ? (
-                  <img src={app.profiles.avatar_url} alt={name} className="rounded-xl object-cover flex-shrink-0" style={{ width: 56, height: 56 }} />
+                  <img
+                    src={app.profiles.avatar_url}
+                    alt=""
+                    className="rounded-2xl object-cover flex-shrink-0"
+                    style={{ width: 60, height: 60, boxShadow: NEU.outSm }}
+                  />
                 ) : (
-                  <div className="flex-shrink-0 flex items-center justify-center rounded-xl" style={{ width: 56, height: 56, backgroundColor: '#1B3828' }}>
-                    <span className="font-black" style={{ color: '#EED98A', fontSize: 22, fontFamily: "'Outfit', sans-serif" }}>
+                  <div
+                    className="flex-shrink-0 flex items-center justify-center rounded-2xl"
+                    style={{ width: 60, height: 60, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, boxShadow: NEU.outSm }}
+                  >
+                    <span className="font-black" style={{ color: NEU.gold, fontSize: 24, fontFamily: OUTFIT }}>
                       {name.trim().charAt(0).toUpperCase() || '?'}
                     </span>
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <h2 className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{name}</h2>
-                  <p className="text-xs truncate mb-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{email}</p>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <h2
+                    id="app-review-name"
+                    className="font-black truncate"
+                    style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.2 }}
+                  >
+                    {name}
+                  </h2>
+                  {email && (
+                    <p className="truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, marginTop: 1 }}>
+                      {email}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
                     {!app.user_id && <NotRegisteredChip />}
                     <RolePill role={app.role} size="sm" />
                     {app.role === 'chair' && app.fee_waiver_source === 'chair_invite' && <InvitedChip />}
@@ -3589,9 +4421,9 @@ export default function ApplicationsPage() {
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
                         title="The applicant edited and resubmitted this application"
-                        style={{ fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', backgroundColor: 'rgba(182,135,31,0.18)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.4)' }}
+                        style={{ fontSize: 11, fontFamily: OUTFIT, letterSpacing: '0.06em', backgroundColor: 'rgba(182,135,31,0.18)', color: REVIEW_AID_INK, border: '1px solid rgba(182,135,31,0.4)' }}
                       >
-                        <RotateCcw size={10} strokeWidth={2.5} />
+                        <RotateCcw size={11} strokeWidth={2.5} />
                         RESUBMITTED {formatDate(app.resubmitted_at)}
                       </span>
                     )}
@@ -3601,319 +4433,581 @@ export default function ApplicationsPage() {
                 <button
                   onClick={closeReview}
                   aria-label="Close review"
-                  className="flex-shrink-0 flex items-center justify-center rounded-lg focus:outline-none transition-colors"
-                  style={{ width: 30, height: 30, border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  className="flex-shrink-0 inline-flex items-center justify-center rounded-full focus:outline-none"
+                  style={{
+                    width: 32, height: 32, border: 'none', color: NEU.inkSoft,
+                    backgroundColor: NEU.surface, boxShadow: NEU.outSm, cursor: 'pointer',
+                    transition: `box-shadow 200ms ${EASE_LOCAL}, color 200ms ${EASE_LOCAL}`,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; (e.currentTarget as HTMLElement).style.color = NEU.ink; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
                 >
-                  <X size={15} />
+                  <X size={16} strokeWidth={2.4} />
                 </button>
               </div>
 
-              {/* Nationality */}
-              {app.profiles?.nationality && (
-                <p className="flex items-center gap-2 text-xs mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  <Globe size={12} />
-                  <span style={{ fontWeight: 700, letterSpacing: '0.12em' }}>NATIONALITY</span>
-                  <CountryFlag name={app.profiles.nationality} size={16} />
-                </p>
-              )}
+              {/* ── Body, the only scrolling plane ───────────────────────── */}
+              <div className="appRevPad flex-1" style={{ overflowY: 'auto', minHeight: 0, paddingTop: 4 }}>
+                <div className={`appRevGrid${hasRail ? '' : ' appRevNoRail'}`}>
 
-              {/* Preferences (delegates), full list */}
-              {isDelegate && prefs.length > 0 && (
-                <div className="mb-4">
-                  <p className="flex items-center gap-2 text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
-                    <MapPin size={12} />
-                    PREFERENCES
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {prefs.map(p => (
-                      <span
-                        key={p.preference_order}
-                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
-                        title={`${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
-                        style={{ backgroundColor: 'rgba(27,56,40,0.06)', border: '1px solid rgba(27,56,40,0.1)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        {p.preference_order}. <span className="font-semibold">{committeeAbbr(p.conference_committees)}</span>
-                        <CountryFlag name={p.country_name} code={p.country_code} size={14} />
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Assignment (assigned or checked-in) */}
-              {(app.status === 'assigned' || app.status === 'checked-in') && app.assigned_country_name && (
-                <p className="flex items-center gap-2 text-xs mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  <BadgeCheck size={12} />
-                  <span style={{ fontWeight: 700, letterSpacing: '0.12em' }}>ASSIGNED</span>
-                  <span style={{ color: '#1C1410' }}>
-                    {[app.assigned_committee?.name, (app.assigned_committee?.topics ?? []).join(', ')].filter(Boolean).join('  ·  ')}
-                  </span>
-                  <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={14} />
-                </p>
-              )}
-
-              {/* Checked in */}
-              {app.status === 'checked-in' && app.checked_in_at && (
-                <p className="flex items-center gap-2 text-xs mb-4" style={{ color: '#1F6E52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-                  <UserRoundCheck size={12} strokeWidth={2.5} />
-                  <span style={{ fontWeight: 700, letterSpacing: '0.12em' }}>CHECKED IN</span>
-                  <span>{formatDateTime(app.checked_in_at)}</span>
-                </p>
-              )}
-
-              {/* Rejection note (rejected) */}
-              {app.status === 'rejected' && app.organizer_note && (
-                <p className="text-xs italic mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  &ldquo;{app.organizer_note}&rdquo;
-                </p>
-              )}
-
-              {/* Financial aid (read-only — approve/deny still lives on the Financial Aid tab) */}
-              {hasAidRequest && (
-                <div className="rounded-xl px-4 py-3.5 mb-4" style={{ backgroundColor: 'rgba(184,132,74,0.07)', border: '1px solid rgba(184,132,74,0.25)' }}>
-                  <div className="flex items-center justify-between gap-3 mb-2.5">
-                    <p className="flex items-center gap-2 text-xs" style={{ color: '#8A6614', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.1em' }}>
-                      <HeartHandshake size={13} />
-                      FINANCIAL AID REQUESTED
-                    </p>
-                    {aidStatus && (
-                      <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-                        style={{
-                          fontSize: 9, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em',
-                          backgroundColor: (AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).bg,
-                          color: (AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).color,
-                          border: `1px solid ${(AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).border}`,
-                        }}
-                      >
-                        {(AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).label}
-                      </span>
-                    )}
-                  </div>
-                  {aidRequestedAmount != null && (
-                    <p className="text-xs mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      Requested <span className="font-bold">{formatFee(aidRequestedAmount, aidCurrency)}</span>
-                      {previewAid?.status === 'approved' && previewAid.granted_amount != null && (
-                        <> · Granted <span className="font-bold">{formatFee(previewAid.granted_amount, aidCurrency)}</span></>
-                      )}
-                    </p>
-                  )}
-                  <p
-                    className="text-sm whitespace-pre-wrap"
-                    style={{ color: aidStatement ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: aidStatement ? 'normal' : 'italic' }}
-                  >
-                    {aidStatement || 'No statement provided.'}
-                  </p>
-                </div>
-              )}
-
-              {/* Custom answers */}
-              <div className="pt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
-                <p className="flex items-center gap-2 text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
-                  <MessageSquareText size={12} />
-                  APPLICATION ANSWERS
-                </p>
-                {questions.length === 0 && orphanedAnswers.length === 0 ? (
-                  <p className="text-xs italic" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                    No custom questions configured for this role.
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {questions.map(q => {
-                      const ans = displayAnswer(q, answers[q.id]);
-                      return (
-                        <div key={q.id}>
-                          <p className="flex items-center gap-1.5 text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                            {q.label}
-                            {q.archived && (
-                              <span
-                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                                style={{ color: '#9A8A78', backgroundColor: 'rgba(154,138,120,0.14)', letterSpacing: '0.04em' }}
-                              >
-                                ARCHIVED
+                  {/* Metadata rail: pressed-in wells, scannable, never the headline. */}
+                  {hasRail && <div className="appRevRail">
+                    {hasContextRail && (
+                      <NeuInset style={{ padding: '15px 16px', borderRadius: 16 }}>
+                        <div className="flex flex-col gap-3.5">
+                          {app.profiles?.nationality && railRow(Globe, 'Nationality', (
+                            <span className="inline-flex items-center gap-2">
+                              <CountryFlag name={app.profiles.nationality} size={16} />
+                              {app.profiles.nationality}
+                            </span>
+                          ))}
+                          {isDelegate && prefs.length > 0 && railRow(MapPin, 'Preferences', (
+                            <div className="flex flex-col gap-1.5">
+                              {prefs.map(p => (
+                                <span
+                                  key={p.preference_order}
+                                  className="inline-flex items-center gap-2"
+                                  title={`${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
+                                  style={{ fontVariantNumeric: 'tabular-nums' }}
+                                >
+                                  <span style={{ color: NEU.inkSoft, fontWeight: 800, minWidth: 14 }}>{p.preference_order}.</span>
+                                  <span style={{ fontWeight: 700 }}>{committeeAbbr(p.conference_committees)}</span>
+                                  <CountryFlag name={p.country_name} code={p.country_code} size={14} />
+                                  <span style={{ color: NEU.inkSoft, fontWeight: 500 }}>{p.country_name}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ))}
+                          {(app.status === 'assigned' || app.status === 'checked-in') && app.assigned_country_name && railRow(BadgeCheck, 'Assigned', (
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-2" style={{ fontWeight: 800 }}>
+                                <CountryFlag name={app.assigned_country_name} code={app.assigned_country_code} size={14} />
+                                {app.assigned_country_name}
                               </span>
+                              {app.assigned_committee?.name && (
+                                <span style={{ color: NEU.inkSoft, fontSize: 12.5, fontWeight: 500, lineHeight: 1.5 }}>
+                                  {[app.assigned_committee.name, (app.assigned_committee.topics ?? []).join(', ')].filter(Boolean).join('  ·  ')}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                          {app.status === 'checked-in' && app.checked_in_at && railRow(UserRoundCheck, 'Checked in', (
+                            <span style={{ color: REVIEW_CHECKED_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                              {formatDateTime(app.checked_in_at)}
+                            </span>
+                          ))}
+                        </div>
+                      </NeuInset>
+                    )}
+
+                    {/* Financial aid (read-only — approve/deny still lives on the Financial Aid tab) */}
+                    {hasAidRequest && (
+                      <NeuInset style={{ padding: '15px 16px', borderRadius: 16, backgroundColor: 'rgba(184,132,74,0.13)' }}>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="flex items-center gap-1.5" style={{ ...railLabel, color: REVIEW_AID_INK }}>
+                            <HeartHandshake size={12} strokeWidth={2.6} />
+                            Financial aid
+                          </p>
+                          {aidStatus && (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold flex-shrink-0"
+                              style={{
+                                fontSize: 11, fontFamily: OUTFIT, letterSpacing: '0.06em',
+                                backgroundColor: (AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).bg,
+                                color: (AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).color,
+                                border: `1px solid ${(AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).border}`,
+                              }}
+                            >
+                              {(AID_STATUS_STYLES[aidStatus] ?? AID_STATUS_STYLES.pending).label}
+                            </span>
+                          )}
+                        </div>
+                        {aidRequestedAmount != null && (
+                          <p className="mb-2" style={{ ...railValue, fontWeight: 500 }}>
+                            Requested <span style={{ fontWeight: 800 }}>{formatFee(aidRequestedAmount, aidCurrency)}</span>
+                            {previewAid?.status === 'approved' && previewAid.granted_amount != null && (
+                              <> · Granted <span style={{ fontWeight: 800 }}>{formatFee(previewAid.granted_amount, aidCurrency)}</span></>
                             )}
                           </p>
-                          <p className="text-sm whitespace-pre-wrap" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: ans ? 'normal' : 'italic' }}>
-                            {ans || 'No answer provided.'}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {orphanedAnswers.length > 0 && (
-                  <div className="mt-4 pt-4" style={{ borderTop: '1px dashed #DDD4C0' }}>
-                    <p className="flex items-center gap-2 text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.1em' }}>
-                      <MessageSquareText size={12} />
-                      ADDITIONAL ANSWERS (QUESTION SINCE CHANGED)
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      {orphanedAnswers.map(([key, value]) => {
-                        const ans = Array.isArray(value) ? value.join(', ') : value;
-                        return (
-                          <div key={key}>
-                            <p className="text-xs italic mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                              This question no longer exists in the current form.
-                            </p>
-                            <p className="text-sm whitespace-pre-wrap" style={{ color: ans ? '#1C1410' : '#9A8A78', fontFamily: "'Outfit', sans-serif", fontStyle: ans ? 'normal' : 'italic' }}>
-                              {ans || 'No answer provided.'}
-                            </p>
+                        )}
+                        <p
+                          className="whitespace-pre-wrap"
+                          style={{
+                            fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.6,
+                            color: aidStatement ? NEU.ink : NEU.inkSoft,
+                            fontStyle: aidStatement ? 'normal' : 'italic',
+                            overflowWrap: 'anywhere',
+                          }}
+                        >
+                          {aidStatement || 'No statement provided.'}
+                        </p>
+                      </NeuInset>
+                    )}
+
+                    {/* Previous MUN experience (#13) — their MUN CV as a compact list:
+                        conference logo, name, committee/allocation, role, and any award
+                        artwork. Fetched on demand from mun_cv_entries. */}
+                    {app.user_id && (
+                      <NeuInset style={{ padding: '15px 16px', borderRadius: 16 }}>
+                        <p className="flex items-center gap-1.5 mb-2.5" style={railLabel}>
+                          <Trophy size={12} strokeWidth={2.6} />
+                          MUN record
+                        </p>
+                        {previewCvLoading ? (
+                          <div className="flex justify-center py-3">
+                            <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
                           </div>
-                        );
-                      })}
-                    </div>
+                        ) : previewCv && previewCv.length > 0 ? (
+                          <div className="flex flex-col gap-2">
+                            {previewCv.map(e => {
+                              const roleTxt = e.entry_type === 'chair' ? 'Chair'
+                                : e.entry_type === 'secretariat' ? 'Secretariat'
+                                : e.entry_type === 'other' ? 'Other' : 'Delegate';
+                              const where = [e.committee, e.allocation].map(s => (s ?? '').trim()).filter(Boolean).join('  ·  ');
+                              const awardsList = (e.awards && e.awards.length > 0)
+                                ? e.awards
+                                : (e.award && e.award !== 'None' ? [e.award] : []);
+                              return (
+                                <div
+                                  key={e.id}
+                                  className="flex items-center gap-2.5"
+                                  style={{ padding: '9px 10px', borderRadius: 13, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+                                >
+                                  <LogoDisc src={e.logo_url} size={34} fallbackText={monogramFor(e.conference_name)} alt={e.conference_name} />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink }}>{e.conference_name}</p>
+                                    {where && <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, fontWeight: 500 }}>{where}</p>}
+                                    <p style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: NEU.forest, marginTop: 1 }}>{roleTxt}</p>
+                                  </div>
+                                  {awardsList.length > 0 && (
+                                    <span className="inline-flex items-center gap-1 flex-shrink-0">
+                                      {awardsList.map(a => <AwardArtwork key={a} name={a} size={22} />)}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.inkSoft, fontStyle: 'italic' }}>
+                            No MUN experience recorded yet.
+                          </p>
+                        )}
+                      </NeuInset>
+                    )}
+                  </div>}
+
+                  {/* Main column: what the applicant actually wrote. */}
+                  <div className="appRevMain">
+                    {/* Rejection note (rejected) */}
+                    {app.status === 'rejected' && app.organizer_note && (
+                      <div
+                        className="mb-5"
+                        style={{ borderRadius: 14, padding: '13px 15px', backgroundColor: 'rgba(139,32,32,0.07)', boxShadow: NEU.inSm }}
+                      >
+                        <p className="mb-1" style={{ ...railLabel, color: REVIEW_DANGER }}>Note sent to them</p>
+                        <p style={{ fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.6, color: NEU.ink }}>
+                          &ldquo;{app.organizer_note}&rdquo;
+                        </p>
+                      </div>
+                    )}
+
+                    <p className="flex items-center gap-2 mb-4" style={sectionLabel}>
+                      <MessageSquareText size={13} strokeWidth={2.6} />
+                      Their application
+                    </p>
+
+                    {questions.length === 0 && orphanedAnswers.length === 0 ? (
+                      <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, fontStyle: 'italic' }}>
+                        No custom questions configured for this role.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-5">
+                        {questions.map(q => {
+                          const ans = displayAnswer(q, answers[q.id]);
+                          return (
+                            <div key={q.id}>
+                              <p className="flex items-center gap-2 mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, lineHeight: 1.45 }}>
+                                {q.label}
+                                {q.archived && (
+                                  <span
+                                    className="flex-shrink-0 font-bold px-2 py-0.5 rounded-full"
+                                    style={{ fontSize: 11, color: NEU.forest, backgroundColor: 'rgba(27,56,40,0.09)', letterSpacing: '0.05em' }}
+                                  >
+                                    ARCHIVED
+                                  </span>
+                                )}
+                              </p>
+                              {answerBody(ans)}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Answers whose question has since been deleted outright.
+                        The disclaimer is said ONCE for the whole group; each
+                        answer then reads exactly like a matched one, labelled
+                        by the key it was stored under so it stays identifiable. */}
+                    {orphanedAnswers.length > 0 && (
+                      <div className="mt-6 pt-5" style={{ borderTop: `1px solid rgba(27,56,40,0.12)` }}>
+                        <p className="flex items-center gap-2 mb-1" style={sectionLabel}>
+                          <MessageSquareText size={13} strokeWidth={2.6} />
+                          Answers to removed questions
+                        </p>
+                        <p className="mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.55 }}>
+                          These questions are no longer in the form, so their answers are shown under the field they were saved as.
+                        </p>
+                        <div className="flex flex-col gap-5">
+                          {orphanedAnswers.map(([key, value]) => {
+                            const ans = Array.isArray(value) ? value.join(', ') : value;
+                            return (
+                              <div key={key}>
+                                <p className="mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
+                                  {key}
+                                </p>
+                                {answerBody(ans)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Footer, fixed plane. The decision is always reachable. ── */}
+              <div
+                className="appRevPad flex-shrink-0"
+                style={{ backgroundColor: NEU.surface, boxShadow: '0 -8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2, paddingTop: 16, paddingBottom: 16 }}
+              >
+                {actionError && (
+                  <p className="mb-2.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER }}>
+                    {actionError}
+                  </p>
+                )}
+                {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
+                  <p
+                    className="mb-2.5 rounded-xl px-3.5 py-2.5"
+                    style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: REVIEW_WARN_INK, backgroundColor: 'rgba(184,132,74,0.14)', boxShadow: NEU.inSm }}
+                  >
+                    {ACCEPT_BLOCKED_MESSAGE}
+                  </p>
+                )}
+
+                {app.status === 'submitted' ? (
+                  /* Undecided (#5): ACCEPT and REJECT dominate the pane as two
+                     large full-width buttons. Wired to handleAccept and the
+                     shared reject flow — the same handlers as before. */
+                  <div className="flex flex-col gap-3">
+                    {renderBigDecisionControls(app, !app.attending)}
+                    {paymentControls && <div className="flex items-center gap-2">{paymentControls}</div>}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {app.status === 'accepted' && (
+                      <>
+                        {isDelegate && (
+                          <span style={notAttendingLock}>
+                            <Link
+                              href={`/manage/${conference.slug}/assignment`}
+                              className="inline-flex items-center gap-2 focus:outline-none"
+                              style={primaryBtn}
+                            >
+                              ASSIGN
+                              <ArrowRight size={16} strokeWidth={2.6} />
+                            </Link>
+                          </span>
+                        )}
+                        {checkInControls}
+                        {paymentControls}
+                        {rejectControls}
+                      </>
+                    )}
+
+                    {(app.status === 'assigned' || app.status === 'checked-in') && (
+                      <>
+                        {checkInControls}
+                        {paymentControls}
+                      </>
+                    )}
+
+                    {app.status === 'rejected' && reinstateBtn(() => openReinstateConfirm(app))}
+                    {app.status === 'withdrawn' && reinstateBtn(() => handleReinstateFromWithdrawn(app.id))}
+
+                    {(app.status === 'accepted' || app.status === 'assigned' || app.status === 'checked-in') && (
+                      <span style={{ marginLeft: 'auto' }}>
+                        <ReviewMoreMenu items={moreItems} disabled={rowBusy} />
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
+            </div>
+          </div></Portal>
+        );
+      })()}
 
-              {/* Previous MUN experience (#13) — their MUN CV as a compact list:
-                  conference logo, name, committee/allocation, role, and any award
-                  artwork. Fetched on demand from mun_cv_entries. */}
-              {app.user_id && (
-                <div className="pt-4 mt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
-                  <p className="flex items-center gap-2 text-xs mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
-                    <Trophy size={12} />
-                    PREVIOUS MUN EXPERIENCE
-                  </p>
-                  {previewCvLoading ? (
-                    <div className="flex justify-center py-4">
-                      <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                    </div>
-                  ) : previewCv && previewCv.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      {previewCv.map(e => {
-                        const roleTxt = e.entry_type === 'chair' ? 'Chair'
-                          : e.entry_type === 'secretariat' ? 'Secretariat'
-                          : e.entry_type === 'other' ? 'Other' : 'Delegate';
-                        const where = [e.committee, e.allocation].map(s => (s ?? '').trim()).filter(Boolean).join('  ·  ');
-                        const awardsList = (e.awards && e.awards.length > 0)
-                          ? e.awards
-                          : (e.award && e.award !== 'None' ? [e.award] : []);
-                        return (
-                          <div key={e.id} className="flex items-center gap-3" style={{ padding: '8px 10px', borderRadius: 12, backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(221,212,192,0.7)' }}>
-                            <LogoDisc src={e.logo_url} size={38} fallbackText={monogramFor(e.conference_name)} alt={e.conference_name} />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 13, color: '#1C1410' }}>{e.conference_name}</p>
-                              {where && <p className="truncate" style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11.5, color: '#9A8A78' }}>{where}</p>}
-                            </div>
-                            <span className="flex-shrink-0" style={{ fontFamily: "'Outfit', sans-serif", fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#6E5F4E', backgroundColor: 'rgba(154,138,120,0.14)', border: '1px solid rgba(154,138,120,0.32)', borderRadius: 999, padding: '3px 9px' }}>{roleTxt}</span>
-                            {awardsList.length > 0 && (
-                              <span className="inline-flex items-center gap-1 flex-shrink-0">
-                                {awardsList.map(a => <AwardArtwork key={a} name={a} size={22} />)}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-xs italic" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                      No MUN experience recorded yet.
+      {/* ── Draft drawer, READ ONLY ──────────────────────────────────────────
+          The same three-plane dialog as the review drawer above, with every
+          decision affordance removed: no ACCEPT, no REJECT, no payment
+          control, no overflow menu, and a footer that says so rather than
+          offering anything. Organisers have SELECT on application_drafts and
+          deliberately no UPDATE and no DELETE — an organiser must not be able
+          to edit or bin somebody's half-written application — so there is
+          genuinely nothing to put here.
+
+          The answers are rendered by the same `questionsOf(…, { includeArchived: true })`
+          + `displayAnswer` pass the review drawer uses, which already prints
+          "No answer provided." in muted italic for a blank. That IS the
+          partially-answered view: an unanswered question shows as unanswered,
+          in place, rather than vanishing. */}
+      {draftReviewId && (() => {
+        const d = drafts.find(x => x.id === draftReviewId);
+        if (!d) return null;
+        const a = d.answers;
+        const name = d.profiles?.display_name ?? 'Unknown applicant';
+        const email = d.profiles?.email ?? '';
+        const roleCfg = roleConfigs.find(rc => rc.role === d.role);
+        const questions = questionsOf(normalizeBlocks(roleCfg?.custom_questions ?? []), { includeArchived: true });
+        // The wizard's Questions stage is gated on LIVE questions only, so the
+        // step count uses the un-archived set while the answers use both.
+        const hasQs = questionsOf(normalizeBlocks(roleCfg?.custom_questions ?? [])).length > 0;
+        const labels = draftStepLabels(d.role, prefMode, hasQs);
+        const stepNo = Math.min(Math.max(1, d.step), labels.length);
+        const answers = (a.customAnswers ?? {}) as CustomAnswers;
+        const closeDraft = () => setDraftReviewId(null);
+
+        const label: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em',
+          color: NEU.forest, textTransform: 'uppercase',
+        };
+        const value: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink, lineHeight: 1.5,
+        };
+        const railRow = (Icon: LucideGlyph, text: string, node: React.ReactNode) => (
+          <div>
+            <p className="flex items-center gap-1.5 mb-1" style={label}>
+              <Icon size={11} strokeWidth={2.6} />
+              {text}
+            </p>
+            <div style={value}>{node}</div>
+          </div>
+        );
+
+        const delegationLine = a.isIndependent
+          ? 'Independent'
+          : (a.inviteSocietyName || a.societyInput.trim() || null);
+        const pledgeLine = [
+          a.willPledgeSpots ? `${a.spotsPledged === '' ? '—' : a.spotsPledged} delegation spots` : null,
+          a.willPledgeAdvisors ? `${a.advisorsPledged === '' ? '—' : a.advisorsPledged} faculty advisors` : null,
+        ].filter(Boolean).join('  ·  ');
+        const hasRail = !!delegationLine || !!pledgeLine || !!a.experienceLevel
+          || a.preferences.length > 0 || !!d.profiles?.nationality;
+
+        return (
+          <Portal><div
+            className="appRevScrim fixed inset-0 z-50 flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(27,20,16,0.42)', padding: 'clamp(10px, 3vw, 32px)' }}
+            onClick={closeDraft}
+          >
+            <style>{REVIEW_CSS}</style>
+            <div
+              ref={reviewCardRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="draft-review-name"
+              className="appRevDialog w-full flex flex-col"
+              style={{
+                width: 'min(1080px, 100%)', maxHeight: '100%',
+                backgroundColor: NEU.surface, boxShadow: NEU.out, borderRadius: 22,
+                fontFamily: OUTFIT, overflow: 'hidden',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header. Dashed avatar frame and an IN PROGRESS chip in place
+                  of the status pill, so the drawer announces what it is before
+                  a word is read. */}
+              <div
+                className="appRevPad flex items-start gap-4 flex-shrink-0"
+                style={{ backgroundColor: NEU.surface, boxShadow: '0 8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2 }}
+              >
+                <div
+                  className="flex-shrink-0 flex items-center justify-center rounded-2xl"
+                  style={{
+                    width: 60, height: 60, border: `1.5px dashed ${DRAFT_DASH}`,
+                    color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 24,
+                  }}
+                >
+                  {name.trim().charAt(0).toUpperCase() || '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2
+                    id="draft-review-name"
+                    className="font-black truncate"
+                    style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.2 }}
+                  >
+                    {name}
+                  </h2>
+                  {email && (
+                    <p className="truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, marginTop: 1 }}>
+                      {email}
                     </p>
                   )}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <RolePill role={d.role} size="sm" />
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                      style={{
+                        fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
+                        color: NEU.inkSoft, border: `1.5px dashed ${DRAFT_DASH}`, textTransform: 'uppercase',
+                      }}
+                    >
+                      <PencilLine size={11} strokeWidth={2.6} style={{ color: NEU.muted }} />
+                      In progress
+                    </span>
+                    {/* How far they got — the thing the organiser actually
+                        wants to know before deciding whether to nudge. */}
+                    <span
+                      style={{
+                        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.inkSoft,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      Last edited {formatDateTime(d.updated_at)} · step {stepNo} of {labels.length}
+                      {labels[stepNo - 1] ? ` (${labels[stepNo - 1]})` : ''}
+                    </span>
+                  </div>
                 </div>
-              )}
-
-              {/* Actions */}
-              {actionError && (
-                <p className="text-xs font-semibold mt-4" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-                  {actionError}
-                </p>
-              )}
-              {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
-                <p
-                  className="text-xs font-semibold mt-4 rounded-lg px-3 py-2"
-                  style={{ color: '#9A6B2F', backgroundColor: 'rgba(184,132,74,0.1)', border: '1px solid rgba(184,132,74,0.3)', fontFamily: "'Outfit', sans-serif" }}
+                <button
+                  onClick={closeDraft}
+                  aria-label="Close"
+                  className="flex-shrink-0 inline-flex items-center justify-center rounded-full focus:outline-none"
+                  style={{
+                    width: 32, height: 32, border: 'none', color: NEU.inkSoft,
+                    backgroundColor: NEU.surface, boxShadow: NEU.outSm, cursor: 'pointer',
+                  }}
                 >
-                  {ACCEPT_BLOCKED_MESSAGE}
-                </p>
-              )}
-              <div className="flex flex-wrap gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #F0EDE6' }}>
-                {/* Undecided (#5): ACCEPT and REJECT dominate the pane as two
-                    large full-width buttons instead of small chips. The moment
-                    the application is accepted or rejected this branch stops
-                    rendering and the existing compact controls below take over.
-                    Wired to handleAccept and the shared reject flow — the same
-                    handlers as before, decided_by / decided_at included. */}
-                {app.status === 'submitted' && (
-                  <>
-                    <div style={{ width: '100%' }}>
-                      {renderBigDecisionControls(app, !app.attending)}
-                    </div>
-                    {paymentControls}
-                  </>
-                )}
+                  <X size={16} strokeWidth={2.4} />
+                </button>
+              </div>
 
-                {app.status === 'accepted' && (
-                  <>
-                    {isDelegate && (
-                      <span style={notAttendingLock}>
-                        <Link
-                          href={`/manage/${conference.slug}/assignment`}
-                          className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none"
-                          style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
-                        >
-                          ASSIGN
-                          <ArrowRight size={13} />
-                        </Link>
-                      </span>
+              {/* Body */}
+              <div className="appRevPad flex-1" style={{ overflowY: 'auto', minHeight: 0, paddingTop: 4 }}>
+                <div className={`appRevGrid${hasRail ? '' : ' appRevNoRail'}`}>
+                  {hasRail && <div className="appRevRail">
+                    <NeuInset style={{ padding: '15px 16px', borderRadius: 16 }}>
+                      <div className="flex flex-col gap-3.5">
+                        {d.profiles?.nationality && railRow(Globe, 'Nationality', (
+                          <span className="inline-flex items-center gap-2">
+                            <CountryFlag name={d.profiles.nationality} size={16} />
+                            {d.profiles.nationality}
+                          </span>
+                        ))}
+                        {delegationLine && railRow(Building2, 'Delegation', delegationLine)}
+                        {pledgeLine && railRow(HandCoins, 'Pledged', pledgeLine)}
+                        {a.experienceLevel && railRow(GraduationCap, 'Experience', (
+                          <LevelChip level={a.experienceLevel} />
+                        ))}
+                        {/* Preferences, in the order they ranked them, by the
+                            house naming rule: acronym primary with the full
+                            name small beneath. The draft blob stores only the
+                            name it was written with, so the abbreviation is
+                            looked up from conference_committees by id and the
+                            stored name is the fallback if that committee has
+                            since been deleted. */}
+                        {a.preferences.length > 0 && railRow(MapPin, 'Preferences', (
+                          <div className="flex flex-col gap-2">
+                            {a.preferences.map((p, i) => {
+                              const ctt = draftCommittees[p.committeeId] ?? { name: p.committeeName, abbreviation: null };
+                              const disp = committeeDisplay(ctt);
+                              return (
+                                <span key={`${p.committeeId}-${p.countryCode}-${i}`} className="flex items-start gap-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                  <span style={{ color: NEU.inkSoft, fontWeight: 800, minWidth: 14 }}>{i + 1}.</span>
+                                  <span className="min-w-0">
+                                    <span className="flex items-center gap-2">
+                                      <span style={{ fontWeight: 800 }}>{disp.primary}</span>
+                                      {p.countryName && <CountryFlag name={p.countryName} code={p.countryCode} size={14} />}
+                                      {p.countryName && <span style={{ color: NEU.inkSoft, fontWeight: 500 }}>{p.countryName}</span>}
+                                    </span>
+                                    {disp.secondary && (
+                                      <span className="block" style={{ fontSize: 11.5, fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.4 }}>
+                                        {disp.secondary}
+                                      </span>
+                                    )}
+                                  </span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </NeuInset>
+                  </div>}
+
+                  <div className="appRevMain">
+                    <p className="flex items-center gap-2 mb-1" style={{ ...label, letterSpacing: '0.12em' }}>
+                      <MessageSquareText size={13} strokeWidth={2.6} />
+                      What they have filled in so far
+                    </p>
+                    <p className="mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.55 }}>
+                      This application has not been submitted. Anything still blank is shown as unanswered, and they can change any of it before they submit.
+                    </p>
+                    {questions.length === 0 ? (
+                      <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, fontStyle: 'italic' }}>
+                        No custom questions configured for this role.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-5">
+                        {questions.map(q => {
+                          const ans = displayAnswer(q, answers[q.id]);
+                          return (
+                            <div key={q.id}>
+                              <p className="flex items-center gap-2 mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, lineHeight: 1.45 }}>
+                                {q.label}
+                                {q.archived && (
+                                  <span
+                                    className="flex-shrink-0 font-bold px-2 py-0.5 rounded-full"
+                                    style={{ fontSize: 11, color: NEU.forest, backgroundColor: 'rgba(27,56,40,0.09)', letterSpacing: '0.05em' }}
+                                  >
+                                    ARCHIVED
+                                  </span>
+                                )}
+                              </p>
+                              <p
+                                className="appRevAnswer whitespace-pre-wrap"
+                                style={{
+                                  fontFamily: OUTFIT, fontSize: ans ? 15 : 13.5, lineHeight: 1.62,
+                                  color: ans ? NEU.ink : NEU.inkSoft,
+                                  fontStyle: ans ? 'normal' : 'italic',
+                                  overflowWrap: 'anywhere',
+                                }}
+                              >
+                                {ans || 'No answer provided.'}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
-                    {checkInControls}
-                    {paymentControls}
-                    {rejectControls}
-                    {withdrawControls}
-                    {attendanceControls}
-                  </>
-                )}
+                  </div>
+                </div>
+              </div>
 
-                {app.status === 'assigned' && (
-                  <>
-                    {checkInControls}
-                    {paymentControls}
-                    {withdrawControls}
-                    {attendanceControls}
-                  </>
-                )}
-
-                {app.status === 'checked-in' && (
-                  <>
-                    {checkInControls}
-                    {paymentControls}
-                    {withdrawControls}
-                    {attendanceControls}
-                  </>
-                )}
-
-                {app.status === 'rejected' && (
-                  <button
-                    onClick={() => openReinstateConfirm(app)}
-                    disabled={rowBusy || !app.attending}
-                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle, ...notAttendingLock }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    <RotateCcw size={13} />
-                    REINSTATE
-                  </button>
-                )}
-
-                {app.status === 'withdrawn' && (
-                  <button
-                    onClick={() => handleReinstateFromWithdrawn(app.id)}
-                    disabled={rowBusy || !app.attending}
-                    className="inline-flex items-center gap-1.5 rounded-lg py-1.5 px-4 text-xs font-bold focus:outline-none transition-colors"
-                    style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", ...busyStyle, ...notAttendingLock }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    <RotateCcw size={13} />
-                    REINSTATE
-                  </button>
-                )}
+              {/* Footer. Says what this is; offers nothing. The reminder
+                  button lands here in a later step. */}
+              <div
+                className="appRevPad flex-shrink-0 flex items-center gap-2.5"
+                style={{
+                  backgroundColor: NEU.surface, boxShadow: '0 -8px 18px -14px rgba(27,56,40,0.55)',
+                  zIndex: 2, paddingTop: 15, paddingBottom: 15,
+                }}
+              >
+                <Eye size={14} strokeWidth={2.5} style={{ color: NEU.muted, flexShrink: 0 }} />
+                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.5 }}>
+                  View only — an in-progress application cannot be accepted, rejected or edited, and is not counted in your totals.
+                </p>
               </div>
             </div>
           </div></Portal>

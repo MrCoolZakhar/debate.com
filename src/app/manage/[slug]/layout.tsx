@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Trophy,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -116,7 +116,12 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
       { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: 0 },
       { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: 0 },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
-      { icon: Trophy,    label: 'Scoreboard',   href: `/manage/${slug}/scoreboard`,   external: false, badge: 0 },
+      // Scoreboard is deliberately NOT a nav item. Delegate performance is a
+      // property of a committee, not of the dashboard, so it opens from a
+      // committee on Live Status (the card's "Points & performance" footer and
+      // the Points block in its recap). The /manage/[slug]/scoreboard route is
+      // still reachable by URL for the cross-committee comparison and the CSV
+      // export, and is linked from inside the per-committee view.
     ],
   },
   {
@@ -769,11 +774,11 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const SECTION_PERMS: Record<string, string> = {
     committees: 'committees', applications: 'applications', import: 'import', assignment: 'assignment',
     documents: 'documents',
-    // The scoreboard reads the same committees the Committees section governs
-    // (it is that section's live-session performance data), so it reuses that
-    // permission key rather than introducing one the Settings → Organizers
-    // pill list does not yet offer. Give it its own key there first if the
-    // secretariat should ever be able to grant one without the other.
+    // The scoreboard is no longer a nav section, but the route is still
+    // reachable by URL — so its permission mapping MUST stay. Deleting it would
+    // turn a URL that used to be gated into one any organiser could open,
+    // which is the opposite of removing a tab. It reuses the Committees key
+    // because it is that section's live-session performance data.
     scoreboard: 'committees',
     communications: 'email_builder', financials: 'financials',
     'financial-aid': 'financials',

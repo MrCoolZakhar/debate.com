@@ -323,7 +323,11 @@ function useNow(active: boolean, intervalMs = 15_000): number {
 
 const STATUS_TEXT: Record<CardStatus, string> = {
   'no-session': 'No session',
-  'not-started': 'Roll call',
+  // 'not-started' means the session was never opened — it is NOT a roll call.
+  // The two statuses that really are one now say so.
+  'not-started': 'Not started',
+  'roll-call': 'Roll call',
+  resumed: 'Roll call · resuming',
   live: 'In session',
   suspended: 'Suspended',
   ended: 'Adjourned',
@@ -331,6 +335,7 @@ const STATUS_TEXT: Record<CardStatus, string> = {
 
 function statusColor(s: CardStatus): string {
   if (s === 'live') return NEU.green;
+  if (s === 'roll-call' || s === 'resumed') return NEU.deepGold;
   if (s === 'suspended') return NEU.amber;
   return NEU.muted;
 }

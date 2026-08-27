@@ -6,6 +6,7 @@ import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
 import Portal from '@/components/Portal';
 import { useAuth } from '@/components/AuthProvider';
+import { notifyDraftsChanged } from '@/hooks/useDraftCount';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useCredits } from '@/hooks/useCredits';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
@@ -16,15 +17,24 @@ import { experienceProgress, EXPERIENCE_BANDS } from '@/lib/munExperience';
 import { creditPricing, extractFunctionErrorMessage } from '@/lib/payments';
 import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
+import { reportBlocked } from '@/lib/reportCrash';
+import {
+  type ApplyDraftAnswers,
+  loadApplyDraft, saveApplyDraft, discardApplyDraft,
+  saveApplyDraftOnTeardown, resyncDraftRevision,
+  draftHasContent, newDraftClientId, fingerprintDraft,
+} from '@/lib/applyDraft';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { WizardShell, TwoTabPick } from '@/components/wizard';
 import { CVEntryModal } from '@/components/CVEntryModal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
-import CustomQuestionsField from '@/components/CustomQuestionsField';
+import ApplicationQuestionsStage, { ConferencePlate, SectionStrip, MissingSummary, countQuestions } from '@/components/ApplicationQuestionsStage';
+import { focusQuestion } from '@/components/ApplicationQuestionCard';
+import { buildQuestionPages, leadTitleBlock } from '@/lib/applyQuestionPages';
 import Loader from '@/components/Loader';
-import { type CustomAnswers, normalizeBlocks, questionsOf, splitIntoSections, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
+import { type CustomAnswers, normalizeBlocks, questionsOf, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import {
   Gavel, Users, Sprout,
   GraduationCap, Trophy, Crown, Sparkles,
@@ -54,6 +64,9 @@ interface Conference {
   start_date: string;
   min_age: number | null;
   logo_url: string | null;
+  /** Used as the Questions-stage plate image when the conference has one;
+   *  falls back to a deterministic /public/onboarding photo. */
+  banner_url: string | null;
   delegate_preference_mode: PreferenceMode;
   credits_sponsored: boolean;
 }
@@ -196,7 +209,10 @@ function WizardFooter({
           borderRadius: 999,
           border: 'none',
           cursor: disabled ? 'default' : 'pointer',
-          color: primary ? NEU.gold : NEU.muted,
+          // The skip link is a real sentence the applicant has to read to know
+          // they may move on. NEU.muted is 2.71:1 and fails AA; inkSoft is
+          // 6.44:1 on the ivory page.
+          color: primary ? NEU.gold : NEU.inkSoft,
           background: primary ? NEU.forest : 'transparent',
           boxShadow: primary ? (hover ? NEU.outSmHover : NEU.outSm) : 'none',
           textDecoration: primary ? 'none' : 'underline',
@@ -212,6 +228,21 @@ function WizardFooter({
     </div>
   );
 }
+
+/** The wizard's stages. The old inline `as const` array widened to string[]
+ *  through its conditional spreads, so the step kind was never actually
+ *  narrowed — naming the union here fixes that and types the label lookup. */
+type StepKindName = 'society' | 'invoicing' | 'preferences' | 'experience' | 'questions' | 'overview';
+
+/** Human names for the wizard stages, shown on the WizardShell progress rail. */
+const STEP_LABEL: Record<StepKindName, string> = {
+  society: 'Society',
+  invoicing: 'Invoicing',
+  preferences: 'Preferences',
+  experience: 'Experience',
+  questions: 'Questions',
+  overview: 'Overview',
+};
 
 /** Roles a Gavelling credit is charged for at submission — chairs and any
  *  other role are exempt (see consume_credit_for_application). */
@@ -756,10 +787,6 @@ function ConferenceApplyInner() {
   // pre-select the invited delegation (the invite creation + landing route +
   // RPCs are built elsewhere).
   const delegationInviteToken = searchParams.get('delegationInvite');
-  // Snapshot key for the "buy credits mid-apply, come back and resume" flow
-  // (see goBuyCredits / the resume-restore effect below) — namespaced per
-  // conference + role so switching roles never clobbers another draft.
-  const resumeKey = `gavelling-apply-resume:${slug}:${role}`;
   // Edit-and-resubmit: opens the same stepper prefilled from the applicant's
   // own existing application for this role, instead of the fresh-apply flow.
   // Only takes effect once fetchAll confirms the application is actually in
@@ -993,27 +1020,22 @@ function ConferenceApplyInner() {
   // starts straight at the Independent-vs-Delegation ('society') choice; any
   // fee/voucher detail for non-sponsored conferences is now surfaced minimally
   // on the final 'overview' review instead.
-  const stepSequence = [
-    ...(showSocietyStep ? ['society'] : []),
-    ...(isInvoicingRole ? ['invoicing'] : []),
-    ...(showPreferenceStep ? ['preferences'] : []),
-    ...(skipExperience ? [] : ['experience']),
-    ...(hasCustomQuestions ? ['questions'] : []),
+  const stepSequence: StepKindName[] = [
+    ...(showSocietyStep ? (['society'] as const) : []),
+    ...(isInvoicingRole ? (['invoicing'] as const) : []),
+    ...(showPreferenceStep ? (['preferences'] as const) : []),
+    ...(skipExperience ? [] : (['experience'] as const)),
+    ...(hasCustomQuestions ? (['questions'] as const) : []),
     'overview',
-  ] as const;
-  type StepKind = (typeof stepSequence)[number];
+  ];
+  type StepKind = StepKindName;
   const totalSteps = stepSequence.length;
-  const stepLabels = stepSequence.map((kind) => {
-    switch (kind) {
-      case 'society': return 'Society';
-      case 'invoicing': return 'Invoicing';
-      case 'preferences': return 'Preferences';
-      case 'experience': return 'Experience';
-      case 'questions': return 'Questions';
-      case 'overview': return 'Overview';
-    }
-  });
-  const currentStepKind: StepKind = stepSequence[step - 1] ?? 'role';
+  // Surfaced on the WizardShell rail — these names existed here unused while
+  // the applicant saw six anonymous dots.
+  const stepLabels: string[] = stepSequence.map((kind) => STEP_LABEL[kind]);
+  // 'role' used to be a real first step; the fallback outlived it and matched
+  // no render branch. Clamp to the last real stage instead of a dead sentinel.
+  const currentStepKind: StepKind = stepSequence[step - 1] ?? stepSequence[stepSequence.length - 1];
 
   // A role switch mid-flow means a different question set (different pages),
   // so any in-progress section pagination is stale — start over. Forward/back
@@ -1029,7 +1051,12 @@ function ConferenceApplyInner() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      const returnTo = `/conferences/${slug}/apply?role=${role}`;
+      // Round-trip the WHOLE query string, not just ?role. Rebuilding it as
+      // `?role=${role}` dropped ?delegationInvite=<token> (an invited delegate
+      // who had to sign in lost their invite and landed in the generic flow)
+      // and ?edit=1 (an edit link bounced back as a fresh application).
+      const query = searchParams.toString();
+      const returnTo = `/conferences/${slug}/apply?${query || `role=${role}`}`;
       router.replace(`/auth/signin?next=${encodeURIComponent(returnTo)}`);
       return;
     }
@@ -1037,63 +1064,320 @@ function ConferenceApplyInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, slug, role]);
 
-  // Resume an in-progress application after a "buy credits" round trip
-  // (goBuyCredits saved it to localStorage before sending them to the store).
-  // Waits for the same load gate the rest of the flow uses (authLoading/
-  // loading), so roleConfig/committees are already in place before jumping
-  // straight to Overview. Never applies in edit mode — that flow prefills
-  // from the existing application instead. The snapshot is removed the
-  // moment it's read, restored or not, so it can never re-trigger (also
-  // self-guards against React StrictMode's dev-mode double effect firing).
+  // ══ DRAFT AUTOSAVE & RESUME ═══════════════════════════════════════════
+  // The apply flow saves itself to `application_drafts` as it is filled in,
+  // so closing the tab, losing the laptop, or bouncing through a Stripe
+  // checkout all resume where the applicant left off — including the step
+  // they were on. This replaces the old localStorage snapshot entirely (see
+  // the file header of src/lib/applyDraft.ts for why that key had to go).
+  //
+  // Never runs in edit mode: that flow prefills from the existing
+  // application, and `save_application_draft` refuses outright once an
+  // `applications` row exists for the same (conference, user, role).
+
+  /** How long after the last keystroke the draft is written. */
+  const DRAFT_DEBOUNCE_MS = 800;
+
+  /** This tab's id, so the row records which tab last wrote it. Lazily
+   *  initialised once — a new one per tab is exactly the point. */
+  const draftClientIdRef = useRef<string>('');
+  if (!draftClientIdRef.current) draftClientIdRef.current = newDraftClientId();
+
+  /** Optimistic-concurrency counter as this tab last saw it. 0 = no row yet. */
+  const draftRevisionRef = useRef(0);
+  const draftTokenRef = useRef<string | null>(null);
+  /** Once true the creation gate is satisfied for good and every later change
+   *  saves unconditionally — including back to empty. */
+  const draftExistsRef = useRef(false);
+  /** Hard off switch: conflict, submit in flight, or a refusal we can't fix. */
+  const draftOffRef = useRef(false);
+  const draftInFlightRef = useRef(false);
+  const draftPendingRef = useRef(false);
+  const draftFingerprintRef = useRef<string | null>(null);
+  /** Set by the pagehide save, which cannot read back the revision it wrote. */
+  const draftRevisionUnknownRef = useRef(false);
+  const draftLoadStartedRef = useRef(false);
+  /** A delegation invite token carried by the draft rather than the URL. */
+  const draftInviteTokenRef = useRef<string | null>(null);
+  /** Restore has been attempted — autosave stays shut until it has, or a
+   *  first empty render would race the restore and save over the draft. */
+  const [draftReady, setDraftReady] = useState(false);
+  /** Another tab owns this draft. We stop saving and say so — see below. */
+  const [draftConflict, setDraftConflict] = useState(false);
+
+  const draftAnswers: ApplyDraftAnswers = {
+    isIndependent,
+    societyInput,
+    selectedSocietyId,
+    invitedSocietyId,
+    inviteSocietyName,
+    delegationInviteToken: delegationInviteToken ?? draftInviteTokenRef.current,
+    willPledgeSpots,
+    spotsPledged,
+    willPledgeAdvisors,
+    advisorsPledged,
+    preferences,
+    experienceLevel,
+    customAnswers,
+    questionPage,
+    voucherCode,
+  };
+  const draftFingerprint = fingerprintDraft(draftAnswers, step);
+
+  const draftEnabled =
+    !isEditMode && !authLoading && !loading && !draftConflict &&
+    !!session && !!conference && !!user && !existingApp;
+
+  // Live mirrors for the saver, which is called from event listeners and from
+  // async continuations and must never read a stale closure. Declared BEFORE
+  // the flush effects so it has already run for this commit when they fire.
+  const draftStateRef = useRef<{ answers: ApplyDraftAnswers; step: number } | null>(null);
+  const draftEnabledRef = useRef(false);
+  const draftCtxRef = useRef<{ token: string; conferenceId: string; userId: string; role: string } | null>(null);
+  useEffect(() => {
+    draftStateRef.current = { answers: draftAnswers, step };
+    draftEnabledRef.current = draftEnabled;
+    draftCtxRef.current = session && conference && user
+      ? { token: session.access_token, conferenceId: conference.id, userId: user.id, role }
+      : null;
+  });
+
+  /**
+   * Write the draft now. Reads everything from refs, so it is safe to call
+   * from a listener registered once, and safe to leave stale in a closure.
+   * Fire-and-forget by contract (AGENTS.md RULE 5) — the only callers that
+   * await it are the ones about to navigate away to a payment provider.
+   */
+  const saveDraftNow = useCallback(async () => {
+    if (draftOffRef.current || !draftEnabledRef.current) return;
+    if (draftInFlightRef.current) { draftPendingRef.current = true; return; }
+    const ctx = draftCtxRef.current;
+    if (!ctx) return;
+
+    draftInFlightRef.current = true;
+    try {
+      // A teardown save (pagehide) fired blind and never told us the revision
+      // it produced. The page is evidently back — re-sync before writing, or
+      // every later save would present a revision one behind and self-conflict.
+      if (draftRevisionUnknownRef.current) {
+        const sync = await resyncDraftRevision(getAuthedClient(ctx.token), {
+          conferenceId: ctx.conferenceId, userId: ctx.userId, role: ctx.role,
+          clientId: draftClientIdRef.current,
+        });
+        if (sync.status === 'error') return; // try again on the next change
+        if (sync.status === 'conflict') {
+          // Someone else's tab owns the row now — genuinely not ours to write.
+          draftOffRef.current = true;
+          setDraftConflict(true);
+          return;
+        }
+        draftRevisionUnknownRef.current = false;
+        if (sync.status === 'gone') {
+          draftExistsRef.current = false;
+          draftRevisionRef.current = 0;
+        } else {
+          draftRevisionRef.current = sync.revision;
+        }
+      }
+
+      // Coalesce: anything typed while a save was in flight is picked up here
+      // rather than by recursing, so a fast typist can't stack up requests.
+      for (;;) {
+        draftPendingRef.current = false;
+        const snap = draftStateRef.current;
+        if (!snap) return;
+        const print = fingerprintDraft(snap.answers, snap.step);
+        // Nothing actually changed since the last write.
+        if (print === draftFingerprintRef.current) return;
+        // THE CREATION GATE. Opening /apply and walking away must not create
+        // a draft row — otherwise the applicant gets reminder emails about an
+        // application they never began. Only creation is gated; once the row
+        // exists, saving back to empty is a real, persisted act.
+        if (!draftExistsRef.current && !draftHasContent(snap.answers, snap.step)) return;
+
+        draftFingerprintRef.current = print;
+        const res = await saveApplyDraft(getAuthedClient(ctx.token), {
+          conferenceId: ctx.conferenceId,
+          role: ctx.role,
+          answers: snap.answers,
+          step: snap.step,
+          revision: draftRevisionRef.current,
+          clientId: draftClientIdRef.current,
+        });
+
+        if (res.ok) {
+          draftExistsRef.current = true;
+          draftRevisionRef.current = res.revision;
+          if (draftPendingRef.current && !draftOffRef.current) continue;
+          return;
+        }
+
+        // Failed — forget the fingerprint so the next change retries.
+        draftFingerprintRef.current = null;
+        if (res.conflict) {
+          // ANOTHER TAB HAS WRITTEN THIS DRAFT. Re-saving with the fresh
+          // revision would be last-write-wins, which silently eats whatever
+          // was typed in the other tab with nothing on screen to notice it
+          // by. Stop, and tell the applicant instead.
+          draftOffRef.current = true;
+          setDraftConflict(true);
+          return;
+        }
+        // Permanent refusals: retrying can only fail the same way.
+        if (res.reason === 'already_applied' || res.reason === 'unauthenticated'
+          || res.reason === 'invalid_role' || res.reason === 'no_conference') {
+          draftOffRef.current = true;
+        }
+        return; // transient (network) — the next change tries again
+      }
+    } finally {
+      draftInFlightRef.current = false;
+    }
+  }, []);
+
+  // ── Resume. Waits for the same auth/load gate the rest of the flow uses,
+  // so roleConfig/committees are already in place and totalSteps is final.
   useEffect(() => {
     if (isEditMode || authLoading || loading) return;
-    let raw: string | null = null;
-    try {
-      raw = localStorage.getItem(resumeKey);
-    } catch {
-      return;
-    }
-    if (!raw) return;
-    try {
-      localStorage.removeItem(resumeKey);
-    } catch { /* ignore */ }
-    try {
-      const snap = JSON.parse(raw) as {
-        savedAt: number;
-        step: number;
-        isIndependent: boolean;
-        societyInput: string;
-        selectedSocietyId: string | null;
-        willPledgeSpots: boolean | null;
-        spotsPledged: number | '';
-        willPledgeAdvisors: boolean | null;
-        advisorsPledged: number | '';
-        preferences: Preference[];
-        experienceLevel: string;
-        customAnswers: CustomAnswers;
-        voucherCode: string;
-        appliedVoucher: VoucherInput | null;
-      };
-      if (typeof snap.savedAt !== 'number' || Date.now() - snap.savedAt > 2 * 60 * 60 * 1000) return;
-      setIsIndependent(snap.isIndependent);
-      setSocietyInput(snap.societyInput);
-      setSelectedSocietyId(snap.selectedSocietyId);
-      setWillPledgeSpots(snap.willPledgeSpots);
-      setSpotsPledged(snap.spotsPledged);
-      setWillPledgeAdvisors(snap.willPledgeAdvisors ?? null);
-      setAdvisorsPledged(snap.advisorsPledged ?? '');
-      setPreferences(snap.preferences);
-      setExperienceLevel(snap.experienceLevel);
-      setCustomAnswers(snap.customAnswers);
-      setVoucherCode(snap.voucherCode);
-      setAppliedVoucher(snap.appliedVoucher);
-      setStep(totalSteps);
-      refreshCredits();
-    } catch {
-      // Corrupted snapshot — nothing usable to restore.
-    }
+    if (!session || !conference || !user) return;
+    // An applicant who already has an application for this role sees the
+    // "already applied" screen; there is nothing to resume into.
+    if (existingApp) return;
+    if (draftLoadStartedRef.current) return; // also guards StrictMode's double effect
+    draftLoadStartedRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      const row = await loadApplyDraft(getAuthedClient(session.access_token), conference.id, user.id, role);
+      if (cancelled) { draftLoadStartedRef.current = false; return; }
+      if (row) {
+        const a = row.answers;
+        setIsIndependent(a.isIndependent);
+        setSocietyInput(a.societyInput);
+        setSelectedSocietyId(a.selectedSocietyId);
+        if (a.invitedSocietyId) setInvitedSocietyId(a.invitedSocietyId);
+        if (a.inviteSocietyName) setInviteSocietyName(a.inviteSocietyName);
+        if (a.delegationInviteToken) draftInviteTokenRef.current = a.delegationInviteToken;
+        setWillPledgeSpots(a.willPledgeSpots);
+        setSpotsPledged(a.spotsPledged);
+        setWillPledgeAdvisors(a.willPledgeAdvisors);
+        setAdvisorsPledged(a.advisorsPledged);
+        setPreferences(a.preferences);
+        setExperienceLevel(a.experienceLevel);
+        setCustomAnswers(a.customAnswers);
+        setQuestionPage(a.questionPage);
+        // The voucher CODE is restored; the resolved discount deliberately is
+        // not (it may have expired or been revoked meanwhile) — the applicant
+        // re-applies it on Overview and validation runs again.
+        setVoucherCode(a.voucherCode);
+
+        // CLAMP THE STEP. The step sequence is derived per role and per
+        // conference config, so an organiser turning custom questions off
+        // between save and resume SHORTENS it. Restoring the saved number
+        // blind would leave `step` past the end of stepSequence, and the
+        // wizard would render the wrong stage under a "Step 6 of 5" rail
+        // with a back button walking through phantom steps.
+        const restoredStep = Math.min(Math.max(1, Math.trunc(row.step) || 1), totalSteps);
+        setStep(restoredStep);
+
+        draftRevisionRef.current = row.revision;
+        draftTokenRef.current = row.discardToken;
+        draftExistsRef.current = true;
+        // Treat what we just restored as already-saved, so simply resuming
+        // does not immediately burn a revision (which would hand a spurious
+        // conflict to a second tab that had not been touched).
+        draftFingerprintRef.current = fingerprintDraft(a, restoredStep);
+        // A credits round trip may have just topped up their balance.
+        refreshCredits();
+      }
+      setDraftReady(true);
+    })();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditMode, authLoading, loading]);
+  }, [isEditMode, authLoading, loading, session?.access_token, conference?.id, user?.id, role, existingApp, totalSteps]);
+
+  // ── Debounced save on any tracked answer change.
+  useEffect(() => {
+    if (!draftEnabled || !draftReady) return;
+    if (draftFingerprint === draftFingerprintRef.current) return;
+    const t = setTimeout(() => { void saveDraftNow(); }, DRAFT_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftFingerprint, draftEnabled, draftReady]);
+
+  // ── Immediate flush on a step transition. A step change is the moment the
+  // applicant is most likely to leave, and it is never a keystroke, so there
+  // is nothing to debounce.
+  useEffect(() => {
+    if (!draftEnabled || !draftReady) return;
+    void saveDraftNow();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, draftEnabled, draftReady]);
+
+  // ── Immediate flush when the tab is hidden or torn down.
+  //
+  // The two events need DIFFERENT saves. On `visibilitychange → hidden` the
+  // page is still alive (they switched tabs, or locked the phone), so the
+  // ordinary save runs and reads its own revision back. On `pagehide` the
+  // document is being destroyed and an ordinary fetch loses the race — closing
+  // the tab straight after a keystroke dropped it outright when measured — so
+  // that one goes out `keepalive`, blind, and marks the revision unknown.
+  useEffect(() => {
+    if (!draftEnabled || !draftReady) return;
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') void saveDraftNow();
+    };
+
+    const onPageHide = () => {
+      if (draftOffRef.current || !draftEnabledRef.current) return;
+      const snap = draftStateRef.current;
+      const ctx = draftCtxRef.current;
+      if (!snap || !ctx) return;
+      // Same two gates the ordinary save applies: nothing new to write, and
+      // never CREATE a row for someone who only opened the page.
+      if (fingerprintDraft(snap.answers, snap.step) === draftFingerprintRef.current) return;
+      if (!draftExistsRef.current && !draftHasContent(snap.answers, snap.step)) return;
+      draftRevisionUnknownRef.current = true;
+      saveApplyDraftOnTeardown(ctx.token, {
+        conferenceId: ctx.conferenceId,
+        role: ctx.role,
+        answers: snap.answers,
+        step: snap.step,
+        revision: draftRevisionRef.current,
+        clientId: draftClientIdRef.current,
+      });
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftEnabled, draftReady]);
+
+  /** Drop the draft row once the application it drafted actually exists (or
+   *  has been withdrawn). Turns autosave off first so an in-flight debounce
+   *  can never resurrect what we just deleted. */
+  async function discardDraft(client: ReturnType<typeof getAuthedClient>) {
+    draftOffRef.current = true;
+    if (!conference || !user) return;
+    try {
+      await discardApplyDraft(client, {
+        conferenceId: conference.id,
+        userId: user.id,
+        role,
+        token: draftTokenRef.current,
+      });
+    } catch { /* the application is in; a lingering draft must not block the redirect */ }
+    /* Tell the profile badge the count moved. Every caller redirects straight
+       after this, and the route change remounts SiteNav — so the badge already
+       corrected itself by accident. Announcing it explicitly makes that a
+       guarantee rather than a side effect of how we happen to navigate today. */
+    notifyDraftsChanged();
+  }
 
   // ── Pooled/delegation credit balance for the Overview gate, refetched
   // whenever the anticipated society changes (independent/observer → null).
@@ -1115,7 +1399,7 @@ function ConferenceApplyInner() {
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, logo_url, delegate_preference_mode, credits_sponsored')
+      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, logo_url, banner_url, delegate_preference_mode, credits_sponsored')
       .eq('slug', slug)
       .single();
 
@@ -1529,7 +1813,7 @@ function ConferenceApplyInner() {
       // dedicated Questions step — send the applicant back there, to the
       // specific section page holding the first missing answer, so the
       // missing-answer highlight is actually visible (not just on-page).
-      const pages = splitIntoSections(blocks);
+      const pages = buildQuestionPages(blocks);
       const firstMissingId = questionCheck.missingIds[0];
       const targetPage = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === firstMissingId));
       setQuestionPage(targetPage >= 0 ? targetPage : 0);
@@ -1553,6 +1837,10 @@ function ConferenceApplyInner() {
     setSubmitError('');
     if (!session) { setSubmitError('Session expired. Please sign in again.'); setSubmitting(false); return; }
     const supabase = getAuthedClient(session.access_token);
+    // Stop autosaving for the duration of the submit, so a debounce that
+    // was already in flight can't re-create the draft after we delete it.
+    // Re-enabled below if the submit fails and they're still in the flow.
+    draftOffRef.current = true;
 
     try {
       let societyId: string | null = null;
@@ -1666,7 +1954,10 @@ function ConferenceApplyInner() {
         .select('id')
         .single();
 
-      if (appError) throw appError;
+      // A failed insert stops the applicant dead and never reaches an error
+      // boundary — the catch below turns it into a tidy inline message and
+      // nobody is ever told. Report it.
+      if (appError) { reportBlocked('submit application', appError, { conferenceSlug: slug, role }); throw appError; }
       const newAppId = (app as { id: string }).id;
 
       // Consume a Gavelling credit for this application. The Overview step
@@ -1717,13 +2008,18 @@ function ConferenceApplyInner() {
       // (or fail because of) the email queue.
       if (session) void queueParticipantEventEmail(session.access_token, conference!.id, 'application_received', [newAppId]);
 
-      try { localStorage.removeItem(resumeKey); } catch { /* ignore */ }
+      // The application row now supersedes the draft. Leaving it behind would
+      // show the organiser a "still deciding" draft for somebody who has
+      // already applied, and would keep the reminder job emailing them.
+      await discardDraft(supabase);
       const timingParam = roleConfig?.payment_timing ? `&timing=${roleConfig.payment_timing}` : '';
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}${timingParam}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setSubmitError(msg);
       setSubmitting(false);
+      // They're still in the flow with unsaved edits — keep saving them.
+      draftOffRef.current = false;
     }
   }
 
@@ -1741,7 +2037,7 @@ function ConferenceApplyInner() {
       setCustomMissingIds(questionCheck.missingIds);
       // Route to the Questions step / page holding the first missing answer,
       // so the highlight is visible instead of failing silently on Overview.
-      const pages = splitIntoSections(blocks);
+      const pages = buildQuestionPages(blocks);
       const firstMissingId = questionCheck.missingIds[0];
       const targetPage = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === firstMissingId));
       setQuestionPage(targetPage >= 0 ? targetPage : 0);
@@ -1810,9 +2106,14 @@ function ConferenceApplyInner() {
         p_application_id: existingApp.id,
         p_updates: updates,
       });
-      if (error) throw error;
+      // Same reasoning as the fresh-submit insert: this blocks the applicant
+      // and is only ever surfaced as an inline message, so nothing else sees it.
+      if (error) { reportBlocked('resubmit application', error, { conferenceSlug: slug, role }); throw error; }
       const result = data as { ok: boolean; resubmitted?: boolean; error?: string };
-      if (!result.ok) throw new Error(result.error ?? 'Could not resubmit your application. Please try again.');
+      if (!result.ok) {
+        reportBlocked('resubmit application', new Error(result.error ?? 'rpc returned ok:false'), { conferenceSlug: slug, role });
+        throw new Error(result.error ?? 'Could not resubmit your application. Please try again.');
+      }
 
       // Re-consume the credit that was refunded when this application was
       // rejected — resubmission spends it again, same as a fresh submit.
@@ -1837,7 +2138,7 @@ function ConferenceApplyInner() {
       // queueParticipantEventEmail never throws, so no try/catch needed here.
       if (session) await queueParticipantEventEmail(session.access_token, conference!.id, 'application_received', [existingApp.id]);
 
-      try { localStorage.removeItem(resumeKey); } catch { /* ignore */ }
+      await discardDraft(supabase);
       router.push(`/conferences/${slug}/apply/confirmation?role=${role}&resubmitted=1`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
@@ -1868,7 +2169,7 @@ function ConferenceApplyInner() {
       const result = data as { ok: boolean; error?: string } | null;
       if (!result?.ok) throw new Error(result?.error ?? 'Could not withdraw your application. Please try again.');
       refreshCredits();
-      try { localStorage.removeItem(resumeKey); } catch { /* ignore */ }
+      await discardDraft(supabase);
       router.push('/my-conferences');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not withdraw your application. Please try again.';
@@ -1877,41 +2178,24 @@ function ConferenceApplyInner() {
     }
   }
 
-  // Sent to the Credits & Subscription store when the applicant runs out of
-  // credits mid-apply — snapshots every field they've filled in so far to
-  // localStorage, then sends them off to buy a credit. The resume-restore
-  // effect below reads this back once they're returned via ?returnTo.
-  /** Snapshot the in-progress application to localStorage so a checkout /
-   *  upgrade round trip (Stripe redirect, then a fresh mount back on this URL)
-   *  can restore it straight to the Overview step. Shared by the "go buy a
-   *  credit" link, the inline credits stepper, and the Unlimited upgrade card. */
-  function saveResumeSnapshot() {
-    try {
-      const snapshot = {
-        savedAt: Date.now(),
-        step,
-        isIndependent,
-        societyInput,
-        selectedSocietyId,
-        willPledgeSpots,
-        spotsPledged,
-        willPledgeAdvisors,
-        advisorsPledged,
-        preferences,
-        experienceLevel,
-        customAnswers,
-        voucherCode,
-        appliedVoucher,
-      };
-      localStorage.setItem(resumeKey, JSON.stringify(snapshot));
-    } catch {
-      // Quota exceeded / serialization failure — nothing to restore later,
-      // but that must never block the applicant from going to buy a credit.
-    }
+  /**
+   * Flush the draft before a checkout / upgrade round trip hands the browser
+   * to Stripe. This is the ONE place a draft save is awaited: the page is
+   * about to be replaced, so there is no keystroke left to block, and the
+   * whole point of the round trip is coming back to what they had.
+   *
+   * Previously this wrote a two-hour localStorage snapshot. The server draft
+   * beats it on every axis — it survives the TTL, a failed or abandoned
+   * Stripe redirect, a different browser, and it cannot leak into the next
+   * person to use a shared machine. Never let a failure here stop the
+   * applicant from going to buy a credit.
+   */
+  async function flushDraftBeforeCheckout() {
+    try { await saveDraftNow(); } catch { /* best effort, never block checkout */ }
   }
 
-  function goBuyCredits() {
-    saveResumeSnapshot();
+  async function goBuyCredits() {
+    await flushDraftBeforeCheckout();
     router.push(`/account/unlimited?returnTo=${encodeURIComponent(`/conferences/${slug}/apply?role=${role}`)}`);
   }
 
@@ -1939,7 +2223,7 @@ function ConferenceApplyInner() {
     if (buyingCredits) return;
     setBuyingCredits(true);
     setBuyCreditsError('');
-    saveResumeSnapshot();
+    await flushDraftBeforeCheckout();
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setBuyingCredits(false);
@@ -1975,7 +2259,7 @@ function ConferenceApplyInner() {
     if (upgradingUnlimited) return;
     setUpgradingUnlimited(true);
     setUnlimitedError('');
-    saveResumeSnapshot();
+    await flushDraftBeforeCheckout();
     try {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
@@ -2131,6 +2415,7 @@ function ConferenceApplyInner() {
       <WizardShell
         step={step}
         total={totalSteps}
+        labels={stepLabels}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title={!showSociety ? 'A little background' : isInvoicingRole ? 'Your delegation' : 'How are you applying?'}
         sub={
@@ -2314,6 +2599,7 @@ function ConferenceApplyInner() {
       <WizardShell
         step={step}
         total={totalSteps}
+        labels={stepLabels}
         onBack={() => setStep(s => s - 1)}
         title="Paying for delegation spots?"
         sub="Separate from your own registration fee — this only covers spots for your delegates."
@@ -2548,6 +2834,7 @@ function ConferenceApplyInner() {
         <WizardShell
           step={step}
           total={totalSteps}
+          labels={stepLabels}
           onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
           title="Your preferences"
           sub={subtitle}
@@ -2563,6 +2850,7 @@ function ConferenceApplyInner() {
       <WizardShell
         step={step}
         total={totalSteps}
+        labels={stepLabels}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="Your preferences"
         sub={subtitle}
@@ -2753,6 +3041,7 @@ function ConferenceApplyInner() {
       <WizardShell
         step={step}
         total={totalSteps}
+        labels={stepLabels}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="About you"
         sub="Set your MUN experience level, or import it from your MUN CV. The organiser sees it with your application and uses it for allocations."
@@ -3001,23 +3290,40 @@ function ConferenceApplyInner() {
    * Dedicated custom-questions step. Shown for ANY role whose role config has
    * questions (hasCustomQuestions), placed right before Overview — so advisors
    * (and any role that skips Experience) still see and answer their questions
-   * instead of Submit stalling. Each Section block is its own page.
+   * instead of Submit stalling.
+   *
+   * Pagination comes from buildQuestionPages: the organiser's Section blocks
+   * are law when they used any, and only a section-less form gets its essays
+   * split onto their own pages. See src/lib/applyQuestionPages.ts.
    */
   function renderStepQuestions() {
-    const pages = splitIntoSections(normalizeBlocks(roleConfig?.custom_questions ?? []));
+    const allBlocks = normalizeBlocks(roleConfig?.custom_questions ?? []);
+    const pages = buildQuestionPages(allBlocks);
     const page = pages[questionPage] ?? { section: null, blocks: [] };
     const isFirstPage = questionPage === 0;
     const isLastPage = questionPage === pages.length - 1;
+    const pageQuestions = questionsOf(page.blocks);
+
+    // The organiser's own Title block outranks our placeholder copy: promote
+    // it to the H1/subtitle rather than rendering it as 14px body text under a
+    // generic "A few questions" heading that overrode their words.
+    const lead = isFirstPage ? leadTitleBlock(page.blocks) : null;
+    const heading = page.section?.title
+      || lead?.title
+      || (conference ? `${conference.acronym} would like to know you` : 'A few questions');
+    const subheading = page.section?.description
+      || lead?.description
+      || 'Your answers go straight to the selection committee.';
 
     // There's always a step before Questions (society/invoicing/preferences/
-    // experience), but a later section page goes back a page, not a step.
+    // experience), but a later page goes back a page, not a step.
     const canGoBack = !isFirstPage || step > 1;
     function handleBackQuestions() {
       if (!isFirstPage) { setQuestionPage(p => p - 1); return; }
       if (step > 1) setStep(s => s - 1);
     }
     function handleContinueQuestions() {
-      const questionCheck = validateAnswers(questionsOf(page.blocks), customAnswers);
+      const questionCheck = validateAnswers(pageQuestions, customAnswers);
       if (!questionCheck.valid) {
         setCustomMissingIds(questionCheck.missingIds);
         return;
@@ -3027,24 +3333,59 @@ function ConferenceApplyInner() {
       handleContinue();
     }
 
+    // A page with nothing mandatory on it is genuinely skippable — offer the
+    // muted skip link WizardFooter already supports instead of a hard
+    // "Continue", and promote it back to a filled pill the moment they answer.
+    const anyRequired = pageQuestions.some(q => q.required);
+    const anyAnswered = pageQuestions.some(q => !answerIsEmpty(customAnswers[q.id]));
+    const skippable = !anyRequired && !anyAnswered && pageQuestions.length > 0;
+
+    // Exactly one essay on its own page — give the card the roomier treatment.
+    const solo = pageQuestions.length === 1 && pageQuestions[0].type === 'paragraph';
+    const missingHere = customMissingIds.filter(id => pageQuestions.some(q => q.id === id));
+
     return (
       <WizardShell
         step={step}
         total={totalSteps}
+        labels={stepLabels}
+        subStep={pages.length > 1 ? { index: questionPage, total: pages.length } : undefined}
         onBack={canGoBack ? handleBackQuestions : undefined}
-        title={page.section?.title || 'A few questions'}
-        sub={page.section?.description || 'The organiser would like a little more from you.'}
+        title={heading}
+        sub={subheading}
       >
-        {pages.length > 1 && (
-          <p className="mb-3" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.15em', color: NEU.muted }}>
-            SECTION {questionPage + 1} OF {pages.length}
-          </p>
+        {isFirstPage && conference && (
+          <ConferencePlate
+            seed={conference.id}
+            bannerUrl={conference.banner_url}
+            logoUrl={conference.logo_url}
+            acronym={conference.acronym}
+            fullName={conference.full_name}
+            questionCount={countQuestions(allBlocks)}
+            blocks={allBlocks}
+          />
         )}
+        {!isFirstPage && conference && (
+          <SectionStrip
+            seed={conference.id}
+            index={questionPage}
+            total={pages.length}
+            acronym={conference.acronym}
+            bannerUrl={conference.banner_url}
+          />
+        )}
+
+        <MissingSummary
+          count={missingHere.length}
+          onJump={() => { if (missingHere[0]) focusQuestion(missingHere[0]); }}
+        />
 
         {page.blocks.length > 0 && (
           <div className="mb-2">
-            <CustomQuestionsField
+            <ApplicationQuestionsStage
               blocks={page.blocks}
+              hideBlockId={lead?.id ?? null}
+              solo={solo}
               answers={customAnswers}
               onChange={(next) => {
                 setCustomAnswers(next);
@@ -3057,7 +3398,13 @@ function ConferenceApplyInner() {
           </div>
         )}
 
-        <WizardFooter onNext={handleContinueQuestions} nextLabel="Continue" primary />
+        {/* WizardFooter draws its own trailing arrow, so the label must not
+            carry one — "Skip this section →  →" was the first render. */}
+        <WizardFooter
+          onNext={handleContinueQuestions}
+          nextLabel={skippable ? 'Skip this section' : 'Continue'}
+          primary={!skippable}
+        />
       </WizardShell>
     );
   }
@@ -3096,6 +3443,7 @@ function ConferenceApplyInner() {
       <WizardShell
         step={step}
         total={totalSteps}
+        labels={stepLabels}
         onBack={() => {
           // Landing back on Experience (skipped entirely for advisors) always
           // re-opens the Questions step's first section page.
@@ -3718,6 +4066,35 @@ function ConferenceApplyInner() {
           </div>
         )}
 
+        {/* Another tab is writing this same draft. Non-blocking on purpose —
+            they can finish and submit from here, they just aren't being
+            saved. Silently letting the last writer win would eat whatever
+            was typed in the other tab with nothing on screen to notice by. */}
+        {draftConflict && (
+          <div className="w-full mx-auto mb-4" style={{ maxWidth: 720 }}>
+            <div
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-4 py-3"
+              style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.34)' }}
+              role="status"
+            >
+              <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#6E5310', lineHeight: 1.45 }}>
+                This application is open in another tab. Changes here are not being saved.
+              </span>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                style={{
+                  fontFamily: OUTFIT, fontWeight: 700, fontSize: 12.5,
+                  color: NEU.gold, background: NEU.forest, border: 'none',
+                  borderRadius: 999, padding: '6px 14px', cursor: 'pointer',
+                }}
+              >
+                Reload
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Each step now supplies its own WizardShell — the golden segmented
             progress bar, big title/subtitle, top-left back arrow and (optional)
             skip link — so the flow reads exactly like the onboarding wizard.
@@ -3728,6 +4105,22 @@ function ConferenceApplyInner() {
         {currentStepKind === 'experience' && renderStepExperience()}
         {currentStepKind === 'questions' && renderStepQuestions()}
         {currentStepKind === 'overview' && renderStepOverview()}
+
+        {/* Disclosure. Drafts are visible to the organising team — that is the
+            deliberate design, so it is said plainly and once, in the same
+            quiet register as the rest of the flow's helper copy. */}
+        {draftEnabled && !draftConflict && (
+          <p
+            className="text-center mx-auto"
+            style={{
+              maxWidth: 720, marginTop: 4, fontFamily: OUTFIT, fontSize: 12,
+              fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.5,
+            }}
+          >
+            Your progress saves automatically — you can close this and pick it up later.
+            {conference ? ` The ${conference.acronym} team can see your answers before you submit.` : ' The organising team can see your answers before you submit.'}
+          </p>
+        )}
       </div>
 
       {/* Inline "add a conference to my MUN CV" — the shared modal. Saving

@@ -3,9 +3,14 @@
 import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Compass, Check, X, Mail, Plus, ChevronDown, CalendarDays, Globe2, Gavel } from 'lucide-react';
+import { Compass, Check, X, Mail, Plus, ChevronDown, CalendarDays, Globe2, Gavel, FileClock, Trash2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { LogoDisc } from '@/components/LogoDisc';
+import { useConfirmModal } from '@/components/ConfirmModal';
+import { discardApplyDraft } from '@/lib/applyDraft';
+import { notifyDraftsChanged } from '@/hooks/useDraftCount';
+import { committeeDisplayName } from '@/lib/presetNames';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import DecorativeBleed from '@/components/DecorativeBleed';
@@ -69,6 +74,27 @@ interface ImportInvite {
   conference: { slug: string; acronym: string; full_name: string; logo_url: string | null; start_date: string | null; end_date: string | null; dates_tbd: boolean; city: string; country: string };
   allocation: { committee: string; abbreviation: string | null; country_name: string; country_code: string } | null;
 }
+
+/** A half-finished application from `public.application_drafts`. */
+interface DraftRow {
+  id: string;
+  role: string;
+  updatedAt: string;
+  discardToken: string;
+  conferenceId: string;
+  slug: string;
+  acronym: string;
+  fullName: string;
+  logoUrl: string | null;
+}
+
+const DRAFT_ROLE_LABEL: Record<string, string> = {
+  'delegate': 'Delegate',
+  'head-delegate': 'Head Delegate',
+  'chair': 'Chair',
+  'faculty-advisor': 'Faculty Advisor',
+  'observer': 'Observer',
+};
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'all', label: 'ALL' },
@@ -545,6 +571,120 @@ function OrganizerInvitesSection({ invites, onRespond }: { invites: OrganizerInv
   );
 }
 
+// ── Drafts to complete ───────────────────────────────────────────────────────
+// The applicant-side mirror of the organiser "Drafts" section further down this
+// file: same Eyebrow + muted CountChip + helper-copy anatomy, one pattern.
+//
+// Anchored `id="drafts"` so the profile menu's /my-conferences?tab=all#drafts
+// lands here.
+
+/** "3 minutes ago" / "2 days ago" — coarse on purpose, this is a nudge. */
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return 'recently';
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+  const years = Math.round(months / 12);
+  return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: DraftRow) => void }) {
+  const [busy, setBusy] = useState(false);
+  // House UI rule: acronym primary, full name small beneath — and only when the
+  // acronym is a real collapse of the name, never a redundant second line.
+  const primary = committeeDisplayName(draft.fullName, draft.acronym) || draft.fullName;
+  const secondary = primary === draft.fullName ? null : draft.fullName;
+  const roleLabel = DRAFT_ROLE_LABEL[draft.role] ?? draft.role;
+
+  return (
+    <div
+      className="flex items-center gap-3 px-3.5 py-3"
+      style={{ borderRadius: 18, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+    >
+      <LogoDisc
+        src={draft.logoUrl}
+        alt={draft.acronym || draft.fullName}
+        size={40}
+        fallbackText={(draft.acronym || draft.fullName).slice(0, 3)}
+      />
+      <div className="min-w-0 flex-1">
+        <p className="font-black text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '-0.01em' }}>
+          {primary}
+        </p>
+        {secondary && (
+          <p className="text-[11px] truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontWeight: 600 }}>
+            {secondary}
+          </p>
+        )}
+        <p className="text-xs truncate mt-0.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+          {roleLabel} · last edited {relativeTime(draft.updatedAt)}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Link
+          href={`/conferences/${draft.slug}/apply?role=${encodeURIComponent(draft.role)}`}
+          className="inline-flex items-center focus:outline-none"
+          style={{
+            padding: '8px 14px', borderRadius: 999, border: 'none',
+            background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+            boxShadow: `0 3px 8px ${NEU_GRADIENTS.forest[0]}44, ${NEU.outSm}`,
+            color: NEU.gold, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
+            letterSpacing: '0.05em', textDecoration: 'none', whiteSpace: 'nowrap',
+          }}
+        >
+          CONTINUE
+        </Link>
+        <button
+          onClick={async () => { setBusy(true); try { await onDelete(draft); } finally { setBusy(false); } }}
+          disabled={busy}
+          className="inline-flex items-center justify-center focus:outline-none"
+          aria-label={`Delete ${primary} draft`}
+          style={{
+            width: 34, height: 34, borderRadius: 999, border: 'none',
+            backgroundColor: NEU.surface, boxShadow: busy ? NEU.inSm : NEU.outSm,
+            color: busy ? NEU.inkSoft : '#8B2020', cursor: busy ? 'default' : 'pointer',
+            transition: `box-shadow 160ms ${EASE}`,
+          }}
+        >
+          <Trash2 size={15} strokeWidth={2.2} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DraftsToCompleteSection({ drafts, onDelete }: { drafts: DraftRow[]; onDelete: (draft: DraftRow) => void }) {
+  if (drafts.length === 0) return null;
+  return (
+    <section id="drafts" className="mb-8" style={{ scrollMarginTop: 96 }}>
+      <div className="flex items-center gap-2.5 mb-2">
+        <Eyebrow>Drafts to complete</Eyebrow>
+        {/* Not `muted`: the organiser Drafts list below is a de-emphasised
+            archive, this one is a nudge — and NEU.muted on NEU.base is 2.7:1,
+            which is decoration contrast, not readable-number contrast. */}
+        <CountChip n={drafts.length} />
+      </div>
+      <p className="text-xs mb-4" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+        Applications you started but haven&apos;t submitted. Nobody sees these until you send them.
+      </p>
+      <div className="flex flex-col gap-2.5">
+        {drafts.map((d) => (
+          <DraftRowCard key={d.id} draft={d} onDelete={onDelete} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Grid ─────────────────────────────────────────────────────────────────────
 
 function CardGrid({ entries, tab, muted }: { entries: TabEntry[]; tab: TabKey; muted: boolean }) {
@@ -581,6 +721,8 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   const [organizerInvites, setOrganizerInvites] = useState<OrganizerInvite[]>([]);
   const [importInvites, setImportInvites] = useState<ImportInvite[]>([]);
   const [acceptedToast, setAcceptedToast] = useState(false);
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
+  const { confirm, modal: confirmModal } = useConfirmModal();
 
   const tabParam = searchParams.get('tab');
   const activeTab: TabKey = (['all', 'delegate', 'chair', 'advisor', 'organizer'] as const).includes(tabParam as TabKey)
@@ -641,6 +783,62 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     });
     setChairInvites(invites);
   }, [user, session]);
+
+  // ── Drafts to complete — the applicant's own half-finished applications.
+  // RLS ("Users manage own drafts", user_id = auth.uid()) is the real scope;
+  // the explicit filter matches `loadApplyDraft` in src/lib/applyDraft.ts.
+  const loadDrafts = useCallback(async () => {
+    if (!user || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase
+      .from('application_drafts')
+      .select('id, role, updated_at, discard_token, conference_id, conferences (slug, acronym, full_name, logo_url)')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false });
+    const rows = ((data ?? []) as unknown as {
+      id: string; role: string; updated_at: string; discard_token: string; conference_id: string;
+      conferences: { slug: string; acronym: string; full_name: string; logo_url: string | null }
+        | { slug: string; acronym: string; full_name: string; logo_url: string | null }[] | null;
+    }[]).flatMap((r) => {
+      const conf = first(r.conferences);
+      // A draft whose conference we can no longer read is not actionable —
+      // "Continue" would have nowhere to go, so it is simply not listed.
+      if (!conf) return [];
+      return [{
+        id: r.id,
+        role: r.role,
+        updatedAt: r.updated_at,
+        discardToken: r.discard_token,
+        conferenceId: r.conference_id,
+        slug: conf.slug,
+        acronym: conf.acronym,
+        fullName: conf.full_name,
+        logoUrl: conf.logo_url,
+      }];
+    });
+    setDrafts(rows);
+  }, [user, session]);
+
+  async function handleDeleteDraft(draft: DraftRow) {
+    const { confirmed } = await confirm({
+      title: 'Delete this draft?',
+      body: `Your saved answers for ${draft.acronym || draft.fullName} will be permanently deleted. You can always start the application again.`,
+      confirmLabel: 'Delete draft',
+      danger: true,
+    });
+    if (!confirmed || !session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const ok = await discardApplyDraft(supabase, {
+      conferenceId: draft.conferenceId,
+      userId: user!.id,
+      role: draft.role,
+      token: draft.discardToken,
+    });
+    if (!ok) return;
+    setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+    // Drop the profile-menu badge without a reload.
+    notifyDraftsChanged();
+  }
 
   const loadImportInvites = useCallback(async () => {
     if (!user || !session) return;
@@ -908,7 +1106,22 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     loadChairInvites();
     loadOrganizerInvites();
     loadImportInvites();
-  }, [authLoading, user, loadAll, loadChairInvites, loadOrganizerInvites, loadImportInvites]);
+    loadDrafts();
+  }, [authLoading, user, loadAll, loadChairInvites, loadOrganizerInvites, loadImportInvites, loadDrafts]);
+
+  // #drafts from the profile menu: the section only exists once the drafts
+  // query has resolved, so the browser's own hash scroll has already run and
+  // missed it. Scroll once, when the anchor actually exists.
+  const draftsScrolled = useRef(false);
+  useEffect(() => {
+    if (draftsScrolled.current || drafts.length === 0) return;
+    if (typeof window === 'undefined' || window.location.hash !== '#drafts') return;
+    draftsScrolled.current = true;
+    // One frame, so the section is laid out before we measure it.
+    requestAnimationFrame(() => {
+      document.getElementById('drafts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [drafts]);
 
   // ── Filtering (timeframe → continent) within the active tab ────────────────
 
@@ -1034,6 +1247,9 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         </div>
 
         {activeTab === 'all' && <PendingImportInvitesSection invites={importInvites} />}
+        {/* Above the card grid, and outside the loading/empty chain below —
+            a user with drafts but no conferences yet must still see them. */}
+        {activeTab === 'all' && <DraftsToCompleteSection drafts={drafts} onDelete={handleDeleteDraft} />}
         {activeTab === 'chair' && <ChairInvitesSection invites={chairInvites} onRespond={handleRespondInvite} />}
         {activeTab === 'organizer' && <OrganizerInvitesSection invites={organizerInvites} onRespond={handleRespondOrganizerInvite} />}
 
@@ -1080,6 +1296,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         ) : (
           <CardGrid entries={filtered} tab={activeTab} muted={timeframe === 'past'} />
         )}
+        {confirmModal}
     </div>
   );
 

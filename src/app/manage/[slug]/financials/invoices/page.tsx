@@ -15,6 +15,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { isPaymentsLive } from '@/lib/payments';
+import { reportBlocked } from '@/lib/reportCrash';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import Portal from '@/components/Portal';
@@ -318,10 +319,19 @@ export default function FinancialsInvoicesPage() {
     setActionError('');
     markBusy(inv.id, true);
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
+    const { data, error } = await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
     const result = data as { ok?: boolean; error?: string } | null;
     markBusy(inv.id, false);
-    if (!result?.ok) { setActionError(result?.error || 'Could not mark this invoice paid.'); return; }
+    if (error || !result?.ok) {
+      // Money the organizer has already received in hand cannot be recorded,
+      // so the payer keeps being chased for a fee they have paid. One click,
+      // one row — busyIds makes a second concurrent call impossible.
+      reportBlocked('mark invoice paid', error ?? new Error(result?.error ?? 'rpc returned ok:false'), {
+        invoiceId: inv.id, kind: inv.kind,
+      });
+      setActionError(result?.error || error?.message || 'Could not mark this invoice paid.');
+      return;
+    }
     setInvoices(cur => (cur ?? []).map(i => (i.id === inv.id ? { ...i, status: 'settled', amount_paid_cents: i.amount_cents } : i)));
   }
 
@@ -330,10 +340,13 @@ export default function FinancialsInvoicesPage() {
     setActionError('');
     markBusy(inv.id, true);
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
+    // No reportBlocked here on purpose: this is the REVERSAL of a bookkeeping
+    // flag. A failure leaves the invoice exactly as the organizer found it,
+    // nothing is lost and nobody is stopped — so it stays inline-only.
+    const { data, error } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
     const result = data as { ok?: boolean; error?: string } | null;
     markBusy(inv.id, false);
-    if (!result?.ok) { setActionError(result?.error || 'Could not mark this invoice unpaid.'); return; }
+    if (error || !result?.ok) { setActionError(result?.error || error?.message || 'Could not mark this invoice unpaid.'); return; }
     setInvoices(cur => (cur ?? []).map(i => (i.id === inv.id ? { ...i, status: 'open', amount_paid_cents: 0 } : i)));
   }
 
@@ -448,6 +461,12 @@ export default function FinancialsInvoicesPage() {
     const result = data as { ok?: boolean; error?: string } | null;
     markTxBusy(batch.id, false);
     if (error || !result?.ok) {
+      // review_payment_batch settles EVERY invoice under the batch in one RPC,
+      // so this is one report per batch however many invoices it covers. The
+      // organizer has seen the proof and the delegate still reads as unpaid.
+      reportBlocked('approve manual payment', error ?? new Error(result?.error ?? 'rpc returned ok:false'), {
+        batchId: batch.id,
+      });
       setBatches(cur => (cur ?? []).map(b => (b.id === batch.id ? { ...b, status: previous, paid_at: b.paid_at } : b)));
       setTxActionError(result?.error || error?.message || 'Could not approve this payment.');
       return;
@@ -455,6 +474,9 @@ export default function FinancialsInvoicesPage() {
     setInvoices(await fetchInvoicesData());
   }
 
+  // Not reported to reportBlocked, unlike handleApprove: a failed reject
+  // leaves the batch pending and the invoices unpaid, which is where they
+  // already were. Nobody is stopped and no money is unaccounted for.
   async function handleReject(batch: TxBatchRow) {
     if (!session || txBusyIds.has(batch.id)) return;
     const { confirmed } = await confirm({

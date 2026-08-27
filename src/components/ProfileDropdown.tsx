@@ -16,8 +16,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate } from '@/lib/conferenceDates';
-import { User, FileText, CalendarDays, Sparkles, Coins, LogOut, ArrowRight } from 'lucide-react';
+import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight } from 'lucide-react';
 import Portal from '@/components/Portal';
+import { useDraftCount } from '@/hooks/useDraftCount';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
 interface NavConference {
@@ -67,6 +68,10 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   const confsFetched = useRef(false);
 
   const { user, profile, session, signOut } = useAuth();
+
+  // Half-finished applications. Fetched lazily on first open, exactly like the
+  // conference list below; the row is omitted entirely when there are none.
+  const { count: draftCount } = useDraftCount(open);
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
@@ -273,11 +278,16 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
           {/* Menu rows */}
           <div className="py-1">
-            {[
+            {([
               { label: 'MY PROFILE', href: '/account/profile', icon: User },
               { label: 'MUN CV', href: '/account/cv', icon: FileText },
+              // Only when there is something to finish — an always-on row that
+              // usually reads "0" is noise, and this one is a nudge.
+              ...(draftCount && draftCount > 0
+                ? [{ label: 'DRAFTS TO COMPLETE', href: '/my-conferences?tab=all#drafts', icon: FileClock, badge: draftCount }]
+                : []),
               { label: 'CONFERENCE CALENDAR', href: '/account/calendar', icon: CalendarDays },
-            ].map((item) => {
+            ] as { label: string; href: string; icon: typeof User; badge?: number }[]).map((item) => {
               const RowIcon = item.icon;
               return (
                 <Link
@@ -296,7 +306,20 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
                   <RowIcon size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge !== undefined && (
+                    <span
+                      className="flex-shrink-0 flex items-center justify-center rounded-full"
+                      style={{
+                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        backgroundColor: 'rgba(182,135,31,0.16)',
+                        color: '#8A6614',
+                      }}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

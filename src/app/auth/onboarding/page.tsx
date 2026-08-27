@@ -199,14 +199,17 @@ export default function OnboardingPage() {
           className="text-sm font-semibold focus:outline-none"
           style={{
             fontFamily: OUTFIT,
-            color: NEU.muted,
+            // The escape hatch is a sentence the new user has to read to know
+            // they can leave. NEU.muted is 2.71:1 on the ivory page and fails
+            // AA; inkSoft is 6.44:1.
+            color: NEU.inkSoft,
             background: 'none',
             border: 'none',
             cursor: 'pointer',
             transition: `color 180ms ${EASE}`,
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
         >
           I&apos;ll do this later →
         </button>
@@ -389,13 +392,17 @@ function ConfSummaryRow({ entry, onEdit }: { entry: CVEntry; onEdit: () => void 
         {detail && (
           <span
             className="block truncate"
-            style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.muted, marginTop: 2 }}
+            // The only place the saved allocation / committee is read back,
+            // so it has to be legible: NEU.muted is 2.78:1 on the card surface.
+            style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 2 }}
           >
             {detail}
           </span>
         )}
       </div>
-      <Pencil size={15} strokeWidth={2.2} style={{ color: NEU.muted, flexShrink: 0 }} />
+      {/* Not decorative: this glyph is the only standing cue that the row is
+          editable, so it owes the 3:1 non-text minimum. NEU.muted is 2.78:1. */}
+      <Pencil size={15} strokeWidth={2.2} style={{ color: NEU.inkSoft, flexShrink: 0 }} />
     </button>
   );
 }
@@ -430,7 +437,9 @@ function StepFooter({
           borderRadius: 999,
           border: 'none',
           cursor: disabled ? 'default' : 'pointer',
-          color: primary ? NEU.gold : NEU.muted,
+          // Matches WizardFooter in the conference apply flow: the skip link
+          // is real copy, so it takes inkSoft (6.44:1) rather than muted.
+          color: primary ? NEU.gold : NEU.inkSoft,
           background: primary ? NEU.forest : 'transparent',
           boxShadow: primary ? (hover ? NEU.outSmHover : NEU.outSm) : 'none',
           textDecoration: primary ? 'none' : 'underline',
