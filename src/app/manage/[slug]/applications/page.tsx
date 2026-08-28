@@ -33,7 +33,6 @@ import {
 } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
-import { type ApplyDraftAnswers, normalizeAnswers } from '@/lib/applyDraft';
 import { useScrollLock } from '@/hooks/useScrollLock';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1007,19 +1006,40 @@ function formatDateTime(d: string) {
 // desk) — derives from `applications`. Keeping the two arrays apart is what
 // makes "not part of the total" true by construction.
 //
-// Organisers hold SELECT on application_drafts and deliberately no UPDATE and
-// no DELETE, so this whole surface is read-only. There is nothing here to
-// accept, reject, bin or bulk-act on, and the UI must never look like there is.
+// WHAT AN ORGANISER MAY SEE OF A DRAFT — the owner's ruling, verbatim: show
+// "that they are working on them, but nothing else — only being able to access
+// their contact, MUN CV profile and country where they are from."
+//
+// So this surface carries the FACT of an unfinished application and the three
+// permitted identifiers: contact (email), a link to the public MUN CV, and
+// nationality. It carries NOTHING the applicant typed — no custom answers, no
+// committee/country preferences, no society, no pledges, no experience level,
+// and no "step n of N" progress read either. An unsubmitted application is a
+// draft, and a draft is the author's until they press submit.
+//
+// That is enforced at the DATABASE, not here. The blanket "Organizers read
+// drafts" policy on public.application_drafts is DROPPED; organisers read
+// `public.application_draft_status`, a security-barrier definer view whose
+// column list IS this type. `answers`, `step` and `discard_token` are not
+// selectable from it, so narrowing the UI is not the control — the projection
+// is, and no crafted request can widen it. Do not restore a raw-table read
+// here, and do not add a column to that view without the same ruling.
+//
+// The one write path left is `send_draft_reminder` (SECURITY DEFINER, its own
+// organiser check, its own 72h cooldown). It never needed the caller to read
+// the row, so the reminder button survives the policy drop untouched.
 
-/** One unsubmitted application as the organiser sees it. Deliberately its own
- *  type: a DraftRow must never be structurally assignable to `Application`,
- *  because the moment it is, somebody merges the arrays and the totals lie. */
+/** One unsubmitted application as the organiser sees it — one row of
+ *  `public.application_draft_status`, flat, because the view inlines the
+ *  author's profile rather than leaving it to a PostgREST embed.
+ *
+ *  Deliberately its own type: a DraftRow must never be structurally assignable
+ *  to `Application`, because the moment it is, somebody merges the arrays and
+ *  the totals lie. */
 interface DraftRow {
   id: string;
   user_id: string;
   role: string;
-  answers: ApplyDraftAnswers;
-  step: number;
   updated_at: string;
   /** Reminder bookkeeping. Read-only here: the organiser's button calls the
    *  `send_draft_reminder` RPC, which owns every one of these columns. The
@@ -1028,36 +1048,11 @@ interface DraftRow {
   reminders_sent: number;
   last_reminder_at: string | null;
   reminder_opt_out: boolean;
-  profiles: {
-    display_name: string | null;
-    email: string | null;
-    avatar_url: string | null;
-    nationality: string | null;
-  } | null;
-}
-
-/** The apply wizard's stage names, reproduced from `stepSequence` /
- *  `STEP_LABEL` in ConferenceApplyClient.tsx (:1021, :237) so that "step 3 of
- *  5" counts the same stages on both sides of the fence. It is a pure function
- *  of the role, the conference's `delegate_preference_mode` and whether the
- *  role has custom questions — all three of which this page already holds, so
- *  no part of the apply flow has to be imported to say how far someone got.
- *
- *  If a stage is ever added to the wizard, add it here too; a mismatch shows
- *  up as an off-by-one in the organiser's "step n of N", nothing worse. */
-function draftStepLabels(role: string, prefMode: string, hasCustomQuestions: boolean): string[] {
-  const showSociety = role !== 'chair' && role !== 'observer';
-  const isInvoicing = role === 'head-delegate' || role === 'faculty-advisor';
-  const showPreferences = (role === 'delegate' || role === 'head-delegate') && prefMode !== 'none';
-  const skipExperience = role === 'faculty-advisor';
-  return [
-    ...(showSociety ? ['Society'] : []),
-    ...(isInvoicing ? ['Invoicing'] : []),
-    ...(showPreferences ? ['Preferences'] : []),
-    ...(skipExperience ? [] : ['Experience']),
-    ...(hasCustomQuestions ? ['Questions'] : []),
-    'Overview',
-  ];
+  /** Contact, MUN CV identity, country. The permitted set, and all of it. */
+  display_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  nationality: string | null;
 }
 
 /** Ink for the drafts surface. `NEU.muted` measures 3.15:1 on `NEU.surface` and
@@ -1729,11 +1724,9 @@ export default function ApplicationsPage() {
   // so the submitted list stays the page's subject.
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [draftsOpen, setDraftsOpen] = useState(false);
-  const [draftReviewId, setDraftReviewId] = useState<string | null>(null);
-  // Committee name + abbreviation by id, so a draft's stored preferences can be
-  // rendered by the house naming rule (acronym primary, full name beneath).
-  // The draft blob only carries the name it was written with.
-  const [draftCommittees, setDraftCommittees] = useState<Record<string, { name: string; abbreviation: string | null }>>({});
+  // No draft drawer, by ruling: there is nothing inside a draft an organiser
+  // may open. A row is the whole surface. (There used to be a read-only
+  // drawer rendering the partial answers, preferences and pledges — removed.)
   // Per-draft reminder UI state. `remindingId` is an in-flight lock and NOTHING
   // more — the real rate limit is the 72h cooldown inside send_draft_reminder,
   // and the button is only its mirror. (handleRemindPay elsewhere in this file
@@ -1741,10 +1734,6 @@ export default function ApplicationsPage() {
   // deliberately not repeated here.)
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [remindErr, setRemindErr] = useState<Record<string, string>>({});
-  // conferences.delegate_preference_mode — governs whether the wizard has a
-  // Preferences stage, and so what "of N" is. Not on the manage layout's
-  // Conference type, so it is read here rather than widening shared context.
-  const [prefMode, setPrefMode] = useState<string>('committees_and_countries');
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -1839,42 +1828,24 @@ export default function ApplicationsPage() {
   // step that a later edit could turn into one. If this query fails the drafts
   // section simply stays empty — the submitted list is unaffected either way.
   //
-  // RLS: organisers hold "Organizers read drafts" (SELECT, scoped by
-  // is_conference_organizer) and nothing else on this table. The embedded
-  // profile comes from the third clause of "Organizers read profiles in their
-  // conferences", added for exactly this — without it a draft renders with no
-  // name and no email.
+  // SOURCE: `public.application_draft_status`, NOT application_drafts. The raw
+  // table's organiser SELECT policy is dropped — the answers blob is
+  // unreachable to an organiser now, at the database, not just off-screen. The
+  // view is a security-barrier definer projection that emits only the columns
+  // below; it inlines the author's profile, so there is no PostgREST embed and
+  // therefore no select string a future edit could widen.
+  //
+  // If this query fails the drafts section simply stays empty.
   const loadDrafts = useCallback(async () => {
     if (!conference || !session) return;
     const supabase = getAuthedClient(session.access_token);
-    const [draftRes, confRes, cttRes] = await Promise.all([
-      supabase
-        .from('application_drafts')
-        .select('id, user_id, role, answers, step, updated_at, reminders_sent, last_reminder_at, reminder_opt_out, profiles (display_name, email, avatar_url, nationality)')
-        .eq('conference_id', conference.id)
-        .order('updated_at', { ascending: false }),
-      supabase
-        .from('conferences')
-        .select('delegate_preference_mode')
-        .eq('id', conference.id)
-        .maybeSingle(),
-      supabase
-        .from('conference_committees')
-        .select('id, name, abbreviation')
-        .eq('conference_id', conference.id),
-    ]);
+    const { data } = await supabase
+      .from('application_draft_status')
+      .select('id, user_id, role, updated_at, reminders_sent, last_reminder_at, reminder_opt_out, display_name, email, avatar_url, nationality')
+      .eq('conference_id', conference.id)
+      .order('updated_at', { ascending: false });
 
-    const rows = (draftRes.data ?? []) as unknown as (Omit<DraftRow, 'answers'> & { answers: Partial<ApplyDraftAnswers> | null })[];
-    // normalizeAnswers is the apply flow's own back-fill: a draft written by an
-    // older build is missing whichever fields that build didn't have, and
-    // reading `.preferences.length` off undefined would take the page down.
-    setDrafts(rows.map(r => ({ ...r, answers: normalizeAnswers(r.answers ?? {}) })));
-    setPrefMode((confRes.data as { delegate_preference_mode: string | null } | null)?.delegate_preference_mode ?? 'committees_and_countries');
-    const byId: Record<string, { name: string; abbreviation: string | null }> = {};
-    for (const c of (cttRes.data ?? []) as { id: string; name: string; abbreviation: string | null }[]) {
-      byId[c.id] = { name: c.name, abbreviation: c.abbreviation };
-    }
-    setDraftCommittees(byId);
+    setDrafts((data ?? []) as unknown as DraftRow[]);
   }, [conference, session?.access_token]);
 
   useEffect(() => { loadDrafts(); }, [loadDrafts]);
@@ -1909,7 +1880,7 @@ export default function ApplicationsPage() {
       return;
     }
     if (res.ok) {
-      setFlashMsg(`Reminder sent to ${d.profiles?.display_name ?? 'the applicant'}.`);
+      setFlashMsg(`Reminder sent to ${d.display_name ?? 'the applicant'}.`);
       loadDrafts();
       return;
     }
@@ -1938,10 +1909,9 @@ export default function ApplicationsPage() {
   // Review dialog behaviour: Escape closes, the list behind is scroll-locked,
   // and Tab is trapped inside the card. Presentation only — closing goes
   // through the same setReviewId(null) the X and the backdrop already used.
-  // The read-only draft drawer is the same kind of dialog and shares this
-  // behaviour wholesale (both mount `reviewCardRef`, and only one can be open
-  // at a time), so the effect keys on whichever is open.
-  const openDialogId = reviewId ?? draftReviewId;
+  // There is no draft counterpart any more — an in-progress application has no
+  // openable detail view, so `reviewId` is the only dialog this trap serves.
+  const openDialogId = reviewId;
   // Background scroll lock now comes from the shared hook (src/hooks/useScrollLock.ts),
   // which is the same technique this effect used to hand-roll — plus scrollbar-gutter
   // compensation and reference counting so a stacked dialog can't release this one.
@@ -1962,7 +1932,6 @@ export default function ApplicationsPage() {
       if (e.key === 'Escape') {
         e.stopPropagation();
         setReviewId(null);
-        setDraftReviewId(null);
         setRejectingId(null);
         setRejectNote('');
         return;
@@ -3800,10 +3769,15 @@ export default function ApplicationsPage() {
           Unsubmitted drafts, BELOW the list and outside it. Collapsed by
           default. Everything about it is deliberately quieter than a real row:
           a dashed edge instead of the neu extrusion, smaller type, no status
-          pill, no checkbox, no selection, no action menu. There is nothing
-          here an organiser can do but read — organisers hold SELECT on
-          application_drafts and nothing else — and it must be impossible to
-          mistake for a row that can be acted on.
+          pill, no checkbox, no selection, no action menu. It must be
+          impossible to mistake for a row that can be acted on.
+
+          And there is nothing to open. A row states that this person is
+          working on an application and gives the three permitted handles:
+          their name and avatar (linked to their public MUN CV), their email,
+          and their country. Nothing they typed appears anywhere on this page,
+          and the database no longer lets an organiser fetch it either — see
+          the DraftRow comment block.
 
           Counts: this section reads `drafts`. Nothing above it does. */}
       {!loading && drafts.length > 0 && (
@@ -3856,7 +3830,7 @@ export default function ApplicationsPage() {
               <span onClick={e => e.stopPropagation()}>
                 <InfoHint
                   label="About in-progress applications"
-                  text="Started but not submitted. Not counted in your totals, and you cannot accept or reject them."
+                  text="Started but not submitted. You can see who is working on one and nudge them, but not what they have written — an unsubmitted application stays private until they send it. Not counted in your totals."
                 />
               </span>
             </button>
@@ -3864,20 +3838,8 @@ export default function ApplicationsPage() {
             {draftsOpen && (
               <div className="flex flex-col gap-2.5" style={{ padding: '0 11px' }}>
                 {drafts.map(d => {
-                  const name = d.profiles?.display_name ?? 'Unknown applicant';
-                  const email = d.profiles?.email ?? '';
-                  const a = d.answers;
-                  const roleCfg = roleConfigs.find(rc => rc.role === d.role);
-                  // Matches the apply flow's own gate: the Questions stage
-                  // exists only when the role has LIVE questions, so archived
-                  // ones are excluded here (unlike the answer renderer, which
-                  // includes them so nothing an applicant wrote is lost).
-                  const hasQs = questionsOf(normalizeBlocks(roleCfg?.custom_questions ?? [])).length > 0;
-                  const labels = draftStepLabels(d.role, prefMode, hasQs);
-                  const stepNo = Math.min(Math.max(1, d.step), labels.length);
-                  const where = a.isIndependent
-                    ? 'Independent'
-                    : (a.inviteSocietyName || a.societyInput.trim() || null);
+                  const name = d.display_name ?? 'Unknown applicant';
+                  const email = d.email ?? '';
                   // 72h cooldown, mirrored from the row the RPC stamps. Ceil,
                   // so "1h" never means "any second now" — it means under an
                   // hour left, which is the honest reading of a countdown.
@@ -3903,34 +3865,56 @@ export default function ApplicationsPage() {
                         backgroundColor: 'transparent',
                       }}
                     >
-                      {/* The readable part of the row stays one button. The
-                          reminder is its SIBLING, never nested inside it — a
-                          button inside a button is invalid, and an organiser
-                          reaching for "remind" must never open the drawer by
-                          accident. */}
-                      <button
-                        onClick={() => setDraftReviewId(d.id)}
-                        className="draftRowOpen flex items-center gap-3 text-left focus:outline-none min-w-0 flex-1"
-                        style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                      {/* Identity only, and the ONE link an organiser is
+                          allowed: the person's public MUN CV. New tab, so a
+                          half-reviewed applications list is not lost. The row
+                          itself is inert — there is no drawer to open. */}
+                      <ProfileLink
+                        userId={d.user_id}
+                        name={d.display_name}
+                        newTab
+                        className="draftRowOpen flex items-center gap-3 min-w-0 flex-1"
+                        title={`View ${name}'s MUN CV`}
                       >
-                      <div
-                        className="flex-shrink-0 flex items-center justify-center rounded-xl"
-                        style={{
-                          width: 34, height: 34,
-                          border: `1.5px dashed ${DRAFT_DASH}`,
-                          color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
-                        }}
-                      >
-                        {name.trim().charAt(0).toUpperCase() || '?'}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.inkSoft }}>
-                          {name}
-                        </p>
-                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 500, color: NEU.inkSoft, opacity: 0.82, marginTop: 1 }}>
-                          {[roleLabel(d.role), where, email].filter(Boolean).join('  ·  ')}
-                        </p>
-                      </div>
+                        <div
+                          className="flex-shrink-0 flex items-center justify-center rounded-xl"
+                          style={{
+                            width: 34, height: 34,
+                            border: `1.5px dashed ${DRAFT_DASH}`,
+                            color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
+                          }}
+                        >
+                          {name.trim().charAt(0).toUpperCase() || '?'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.inkSoft }}>
+                            {name}
+                          </p>
+                          {/* Role, country, contact. The whole permitted set,
+                              on one line. Nothing from the draft itself. */}
+                          <span className="flex items-center gap-1.5 flex-wrap" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 500, color: NEU.inkSoft, opacity: 0.82, marginTop: 1 }}>
+                            <span>{roleLabel(d.role)}</span>
+                            {d.nationality && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <CountryFlag name={d.nationality} size={13} />
+                                  {d.nationality}
+                                </span>
+                              </>
+                            )}
+                            {email && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="truncate">{email}</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </ProfileLink>
+                      {/* When they last touched it — the "are they still at
+                          it?" signal the reminder decision turns on. It says
+                          nothing about WHAT they wrote. */}
                       <span
                         className="flex-shrink-0 text-right"
                         style={{
@@ -3938,10 +3922,8 @@ export default function ApplicationsPage() {
                           opacity: 0.85, fontVariantNumeric: 'tabular-nums', lineHeight: 1.45,
                         }}
                       >
-                        <span className="block">{formatDateTime(d.updated_at)}</span>
-                        <span className="block">step {stepNo} of {labels.length}</span>
+                        Last edited {formatDateTime(d.updated_at)}
                       </span>
-                      </button>
 
                       {/* One reminder, one draft. No bulk affordance: a button
                           that mails forty half-finished applicants at once is
@@ -4740,280 +4722,6 @@ export default function ApplicationsPage() {
                     )}
                   </div>
                 )}
-              </div>
-            </div>
-          </div></Portal>
-        );
-      })()}
-
-      {/* ── Draft drawer, READ ONLY ──────────────────────────────────────────
-          The same three-plane dialog as the review drawer above, with every
-          decision affordance removed: no ACCEPT, no REJECT, no payment
-          control, no overflow menu, and a footer that says so rather than
-          offering anything. Organisers have SELECT on application_drafts and
-          deliberately no UPDATE and no DELETE — an organiser must not be able
-          to edit or bin somebody's half-written application — so there is
-          genuinely nothing to put here.
-
-          The answers are rendered by the same `questionsOf(…, { includeArchived: true })`
-          + `displayAnswer` pass the review drawer uses, which already prints
-          "No answer provided." in muted italic for a blank. That IS the
-          partially-answered view: an unanswered question shows as unanswered,
-          in place, rather than vanishing. */}
-      {draftReviewId && (() => {
-        const d = drafts.find(x => x.id === draftReviewId);
-        if (!d) return null;
-        const a = d.answers;
-        const name = d.profiles?.display_name ?? 'Unknown applicant';
-        const email = d.profiles?.email ?? '';
-        const roleCfg = roleConfigs.find(rc => rc.role === d.role);
-        const questions = questionsOf(normalizeBlocks(roleCfg?.custom_questions ?? []), { includeArchived: true });
-        // The wizard's Questions stage is gated on LIVE questions only, so the
-        // step count uses the un-archived set while the answers use both.
-        const hasQs = questionsOf(normalizeBlocks(roleCfg?.custom_questions ?? [])).length > 0;
-        const labels = draftStepLabels(d.role, prefMode, hasQs);
-        const stepNo = Math.min(Math.max(1, d.step), labels.length);
-        const answers = (a.customAnswers ?? {}) as CustomAnswers;
-        const closeDraft = () => setDraftReviewId(null);
-
-        const label: React.CSSProperties = {
-          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em',
-          color: NEU.forest, textTransform: 'uppercase',
-        };
-        const value: React.CSSProperties = {
-          fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink, lineHeight: 1.5,
-        };
-        const railRow = (Icon: LucideGlyph, text: string, node: React.ReactNode) => (
-          <div>
-            <p className="flex items-center gap-1.5 mb-1" style={label}>
-              <Icon size={11} strokeWidth={2.6} />
-              {text}
-            </p>
-            <div style={value}>{node}</div>
-          </div>
-        );
-
-        const delegationLine = a.isIndependent
-          ? 'Independent'
-          : (a.inviteSocietyName || a.societyInput.trim() || null);
-        const pledgeLine = [
-          a.willPledgeSpots ? `${a.spotsPledged === '' ? '—' : a.spotsPledged} delegation spots` : null,
-          a.willPledgeAdvisors ? `${a.advisorsPledged === '' ? '—' : a.advisorsPledged} faculty advisors` : null,
-        ].filter(Boolean).join('  ·  ');
-        const hasRail = !!delegationLine || !!pledgeLine || !!a.experienceLevel
-          || a.preferences.length > 0 || !!d.profiles?.nationality;
-
-        return (
-          <Portal><div
-            className="appRevScrim fixed inset-0 z-50 flex items-center justify-center"
-            style={{ backgroundColor: 'rgba(27,20,16,0.42)', padding: 'clamp(10px, 3vw, 32px)' }}
-            onClick={closeDraft}
-          >
-            <style>{REVIEW_CSS}</style>
-            <div
-              ref={reviewCardRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="draft-review-name"
-              className="appRevDialog w-full flex flex-col"
-              style={{
-                width: 'min(1080px, 100%)', maxHeight: '100%',
-                backgroundColor: NEU.surface, boxShadow: NEU.out, borderRadius: 22,
-                fontFamily: OUTFIT, overflow: 'hidden',
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header. Dashed avatar frame and an IN PROGRESS chip in place
-                  of the status pill, so the drawer announces what it is before
-                  a word is read. */}
-              <div
-                className="appRevPad flex items-start gap-4 flex-shrink-0"
-                style={{ backgroundColor: NEU.surface, boxShadow: '0 8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2 }}
-              >
-                {/* Avatar → public MUN CV, new tab: a draft only exists for a
-                    signed-in user, so d.user_id is always a real UUID. New tab
-                    for the same reason as the application drawer — the
-                    organiser is mid-review and must not lose it. */}
-                <ProfileLink userId={d.user_id} name={name} newTab style={{ display: 'block', flexShrink: 0 }}>
-                  <div
-                    className="flex-shrink-0 flex items-center justify-center rounded-2xl"
-                    style={{
-                      width: 60, height: 60, border: `1.5px dashed ${DRAFT_DASH}`,
-                      color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 24,
-                    }}
-                  >
-                    {name.trim().charAt(0).toUpperCase() || '?'}
-                  </div>
-                </ProfileLink>
-                <div className="flex-1 min-w-0">
-                  {/* Name → the same CV, same new-tab reasoning. */}
-                  <ProfileLink userId={d.user_id} name={name} newTab style={{ display: 'block' }}>
-                    <h2
-                      id="draft-review-name"
-                      className="font-black truncate"
-                      style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.2 }}
-                    >
-                      {name}
-                    </h2>
-                  </ProfileLink>
-                  {email && (
-                    <p className="truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, marginTop: 1 }}>
-                      {email}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <RolePill role={d.role} size="sm" />
-                    <span
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-                      style={{
-                        fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em',
-                        color: NEU.inkSoft, border: `1.5px dashed ${DRAFT_DASH}`, textTransform: 'uppercase',
-                      }}
-                    >
-                      <PencilLine size={11} strokeWidth={2.6} style={{ color: NEU.muted }} />
-                      In progress
-                    </span>
-                    {/* How far they got — the thing the organiser actually
-                        wants to know before deciding whether to nudge. */}
-                    <span
-                      style={{
-                        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.inkSoft,
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      Last edited {formatDateTime(d.updated_at)} · step {stepNo} of {labels.length}
-                      {labels[stepNo - 1] ? ` (${labels[stepNo - 1]})` : ''}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={closeDraft}
-                  aria-label="Close"
-                  className="flex-shrink-0 inline-flex items-center justify-center rounded-full focus:outline-none"
-                  style={{
-                    width: 32, height: 32, border: 'none', color: NEU.inkSoft,
-                    backgroundColor: NEU.surface, boxShadow: NEU.outSm, cursor: 'pointer',
-                  }}
-                >
-                  <X size={16} strokeWidth={2.4} />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="appRevPad flex-1" style={{ overflowY: 'auto', minHeight: 0, paddingTop: 4 }}>
-                <div className={`appRevGrid${hasRail ? '' : ' appRevNoRail'}`}>
-                  {hasRail && <div className="appRevRail">
-                    <NeuInset style={{ padding: '15px 16px', borderRadius: 16 }}>
-                      <div className="flex flex-col gap-3.5">
-                        {d.profiles?.nationality && railRow(Globe, 'Nationality', (
-                          <span className="inline-flex items-center gap-2">
-                            <CountryFlag name={d.profiles.nationality} size={16} />
-                            {d.profiles.nationality}
-                          </span>
-                        ))}
-                        {delegationLine && railRow(Building2, 'Delegation', delegationLine)}
-                        {pledgeLine && railRow(HandCoins, 'Pledged', pledgeLine)}
-                        {a.experienceLevel && railRow(GraduationCap, 'Experience', (
-                          <LevelChip level={a.experienceLevel} />
-                        ))}
-                        {/* Preferences, in the order they ranked them, by the
-                            house naming rule: acronym primary with the full
-                            name small beneath. The draft blob stores only the
-                            name it was written with, so the abbreviation is
-                            looked up from conference_committees by id and the
-                            stored name is the fallback if that committee has
-                            since been deleted. */}
-                        {a.preferences.length > 0 && railRow(MapPin, 'Preferences', (
-                          <div className="flex flex-col gap-2">
-                            {a.preferences.map((p, i) => {
-                              const ctt = draftCommittees[p.committeeId] ?? { name: p.committeeName, abbreviation: null };
-                              const disp = committeeDisplay(ctt);
-                              return (
-                                <span key={`${p.committeeId}-${p.countryCode}-${i}`} className="flex items-start gap-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                  <span style={{ color: NEU.inkSoft, fontWeight: 800, minWidth: 14 }}>{i + 1}.</span>
-                                  <span className="min-w-0">
-                                    <span className="flex items-center gap-2">
-                                      <span style={{ fontWeight: 800 }}>{disp.primary}</span>
-                                      {p.countryName && <CountryFlag name={p.countryName} code={p.countryCode} size={14} />}
-                                      {p.countryName && <span style={{ color: NEU.inkSoft, fontWeight: 500 }}>{p.countryName}</span>}
-                                    </span>
-                                    {disp.secondary && (
-                                      <span className="block" style={{ fontSize: 11.5, fontWeight: 500, color: NEU.inkSoft, lineHeight: 1.4 }}>
-                                        {disp.secondary}
-                                      </span>
-                                    )}
-                                  </span>
-                                </span>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    </NeuInset>
-                  </div>}
-
-                  <div className="appRevMain">
-                    <p className="flex items-center gap-2 mb-1" style={{ ...label, letterSpacing: '0.12em' }}>
-                      <MessageSquareText size={13} strokeWidth={2.6} />
-                      What they have filled in so far
-                    </p>
-                    <p className="mb-4" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.inkSoft, lineHeight: 1.55 }}>
-                      This application has not been submitted. Anything still blank is shown as unanswered, and they can change any of it before they submit.
-                    </p>
-                    {questions.length === 0 ? (
-                      <p style={{ fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft, fontStyle: 'italic' }}>
-                        No custom questions configured for this role.
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-5">
-                        {questions.map(q => {
-                          const ans = displayAnswer(q, answers[q.id]);
-                          return (
-                            <div key={q.id}>
-                              <p className="flex items-center gap-2 mb-1.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: NEU.ink, lineHeight: 1.45 }}>
-                                {q.label}
-                                {q.archived && (
-                                  <span
-                                    className="flex-shrink-0 font-bold px-2 py-0.5 rounded-full"
-                                    style={{ fontSize: 11, color: NEU.forest, backgroundColor: 'rgba(27,56,40,0.09)', letterSpacing: '0.05em' }}
-                                  >
-                                    ARCHIVED
-                                  </span>
-                                )}
-                              </p>
-                              <p
-                                className="appRevAnswer whitespace-pre-wrap"
-                                style={{
-                                  fontFamily: OUTFIT, fontSize: ans ? 15 : 13.5, lineHeight: 1.62,
-                                  color: ans ? NEU.ink : NEU.inkSoft,
-                                  fontStyle: ans ? 'normal' : 'italic',
-                                  overflowWrap: 'anywhere',
-                                }}
-                              >
-                                {ans || 'No answer provided.'}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer. Says what this is; offers nothing. The reminder
-                  button lands here in a later step. */}
-              <div
-                className="appRevPad flex-shrink-0 flex items-center gap-2.5"
-                style={{
-                  backgroundColor: NEU.surface, boxShadow: '0 -8px 18px -14px rgba(27,56,40,0.55)',
-                  zIndex: 2, paddingTop: 15, paddingBottom: 15,
-                }}
-              >
-                <Eye size={14} strokeWidth={2.5} style={{ color: NEU.muted, flexShrink: 0 }} />
-                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.5 }}>
-                  View only — an in-progress application cannot be accepted, rejected or edited, and is not counted in your totals.
-                </p>
               </div>
             </div>
           </div></Portal>

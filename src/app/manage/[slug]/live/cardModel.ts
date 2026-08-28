@@ -16,6 +16,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NEU } from '@/components/neu';
+// The per-speech countdown. Derived from the stored anchor
+// (`current_speaker.started_at` + `time_remaining`) on every render, never
+// counted down and never written — the same contract `liveCaucusSeconds` has.
+import { speakerRemainingNow } from '@/lib/committeeService';
 import {
   type LiveCommittee, cardStatus, presence, votingBody, fmtClock,
 } from './LiveModals';
@@ -251,26 +255,37 @@ export function cardWarnings(lc: LiveCommittee, now: number): CardWarning[] {
 
 // ── Sorting: urgency, not the alphabet ───────────────────────────────────────
 
-/** Stalled → Suspended → warned → Live → Idle → Roll call → Not started → Ended.
- *  The rooms that need feet go to the top; `.order('name')` put them wherever
- *  the alphabet happened to leave them. */
+/** LIVE → STALLED → SUSPENDED → Idle → Roll call → Not started → Ended.
+ *
+ *  THE ORDER IS THE OWNER'S, VERBATIM: "cards should be sorted by
+ *  live-stalled-suspended". It used to open Stalled → Suspended → warned → Live,
+ *  i.e. an attention-first board where a room running perfectly well was ranked
+ *  below one nobody had touched in an hour.
+ *
+ *  A WARNING IS NO LONGER A RANK OF ITS OWN. It used to be rank 2, which lifted
+ *  a warned idle room above every live one and so cut across the three-word
+ *  order above. It survives as the TIE-BREAK inside each rank (see
+ *  `sortByUrgency`), so a live room with a warning still sits at the top of the
+ *  live block — the attention is kept, the ordering is not overridden. */
 export function urgencyRank(lc: LiveCommittee, now: number): number {
   const status = roomStatus(lc, now);
-  if (status === 'stalled') return 0;
-  if (status === 'suspended') return 1;
-  if (status === 'ended') return 7;
-  if (status === 'not-started') return 6;
-  if (cardWarnings(lc, now).length > 0) return 2;
+  if (status === 'live') return 0;
+  if (status === 'stalled') return 1;
+  if (status === 'suspended') return 2;
+  if (status === 'ended') return 6;
+  if (status === 'not-started') return 5;
   // A room still taking attendance is on the floor but is not yet doing the
   // thing anyone needs to watch.
   const base = cardStatus(lc);
-  if (base === 'roll-call' || base === 'resumed') return 5;
-  return status === 'live' ? 3 : 4;
+  if (base === 'roll-call' || base === 'resumed') return 4;
+  return 3;
 }
 
 export function sortByUrgency(rows: LiveCommittee[], now: number): LiveCommittee[] {
+  const warned = (lc: LiveCommittee) => (cardWarnings(lc, now).length > 0 ? 0 : 1);
   return [...rows].sort((a, b) =>
     urgencyRank(a, now) - urgencyRank(b, now)
+    || warned(a) - warned(b)
     || a.conf.name.localeCompare(b.conf.name));
 }
 
@@ -394,8 +409,14 @@ export interface NowPlaying {
    *  ONLY: dropping the names is exactly what buys the room to show ten instead
    *  of two, and in a body where every delegation is a country the flag already
    *  identifies the seat. Each flag still carries its delegation as a `title`,
-   *  so nothing is actually lost — only unstacked. */
-  next: { label: string; names: string[]; more: number } | null;
+   *  so nothing is actually lost — only unstacked.
+   *
+   *  `all` is the WHOLE remaining queue, in order — `names` is its first
+   *  `UP_NEXT_MAX`. The card's "+N" is a button that opens the rest, on the
+   *  owner's instruction (">10 speakers add a +X and clicking could see the
+   *  total"), so the tail has to survive the slice rather than be counted and
+   *  thrown away. */
+  next: { label: string; names: string[]; more: number; all: string[] } | null;
 }
 
 /** How many delegations the up-next column shows before it starts counting.
@@ -407,7 +428,12 @@ export const UP_NEXT_MAX = 10;
 function upNext(label: string, queue: string[], skip: number): NowPlaying['next'] {
   const rest = queue.slice(skip);
   if (rest.length === 0) return null;
-  return { label, names: rest.slice(0, UP_NEXT_MAX), more: Math.max(0, rest.length - UP_NEXT_MAX) };
+  return {
+    label,
+    names: rest.slice(0, UP_NEXT_MAX),
+    more: Math.max(0, rest.length - UP_NEXT_MAX),
+    all: rest,
+  };
 }
 
 // ── The panel states the STAGE, and nothing else ─────────────────────────────
@@ -422,11 +448,22 @@ function upNext(label: string, queue: string[], skip: number): NowPlaying['next'
 //
 // TWO RULES, both on the owner's instruction, and the second is the subtle one.
 //
-//   • THE GSL HAS NO CLOCK HERE AT ALL. Not a paused one, not a stopped one.
-//     The speakers'-list branches below set `pct: null` and captions that count
-//     PEOPLE, never seconds. `speakerRemainingNow` is no longer imported by this
-//     module, which is the mechanical guarantee that no per-speaker countdown
-//     can creep back in.
+//   • THE ROOM'S CLOCK SITS IN `right`, THE CAPTION DIRECTLY ABOVE THE QUEUE.
+//     "Add the speaker time or motion time right on top of the queue on the
+//     right side, don't move anything" — so it went into the slot that is
+//     already immediately above the queue strip and already right-aligned,
+//     rather than into a new row that would have pushed the strip down. A
+//     caucus card was already reporting its total clock there and is untouched;
+//     what changed is the GSL, which used to report "14 still on the list" and
+//     now reports the delegate's own countdown.
+//
+//     This REVERSES the earlier "the GSL has no clock here at all" rule, on the
+//     owner's later instruction. `speakerRemainingNow` is imported again — the
+//     seconds are derived from `current_speaker.started_at` on every render, so
+//     a paused speaker (a null anchor) shows a frozen number and says so, and
+//     nothing is counted down or written. `pct` stays null on those branches:
+//     the per-speech TOTAL is a chair-console setting that never reaches this
+//     page, so there is no honest denominator to draw a fill from.
 //
 //   • A CAUCUS SHOWS ITS TOTAL CLOCK, AND ONLY ITS TOTAL CLOCK. The moderated
 //     branch used to prefer a per-SPEECH countdown whenever `current_speaker`
@@ -666,21 +703,28 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
   const context = "General Speakers' List";
   const speaker = lc.currentSpeaker;
 
-  // NO CLOCK ON ANY OF THE THREE BRANCHES BELOW. `pct` is null throughout and
-  // both captions count PEOPLE, which is the only quantity a floor-walker can
-  // act on: how many are still waiting to speak. The seconds left in the current
-  // delegate's speech belong to the chair who is running the timer, and putting
-  // them here made a secretariat board tick over a number nobody at that desk
-  // can change.
+  // THE SPEAKER'S OWN CLOCK, and nothing else in the captions.
+  //
+  // "No need to say has the floor or 6 still on the list" — both are gone. The
+  // flag in the art slot already says who is speaking, and the row of flags
+  // below already says who is waiting, so the two captions were labelling
+  // things the panel had drawn one line above and one line below them.
+  //
+  // What replaces the right-hand one is the number that was genuinely missing:
+  // the seconds left in the speech, derived from the stored anchor. `pct` stays
+  // null — see the note above; the speech's total length is not on this page,
+  // so the track stays an empty one rather than an invented one.
   if (speaker?.country) {
+    const running = !!speaker.startedAt;
+    const rem = speakerRemainingNow(speaker.timeRemaining ?? 0, speaker.startedAt, now);
     return {
       kind: 'speaker', context, contextTopic: null,
       headline: speaker.country, flag: speaker.country,
       glyph: 'mic', tone: 'live', dim: false, pct: null,
-      left: 'has the floor',
-      right: qn > 0
-        ? `${qn} still on the list`
-        : 'last on the list',
+      left: '',
+      // A released anchor is the ordinary state between two speeches, so the
+      // number is frozen and the caption says so rather than implying motion.
+      right: running ? `${fmtClock(rem)} left` : `${fmtClock(rem)} paused`,
       next: upNext("Speakers' list", queue, 0),
     };
   }
@@ -728,21 +772,17 @@ export interface CardFacts {
   chairs: string[];
 }
 
-/** The committee's TOPIC, for the line under its name.
- *
- *  `conference_committees.topics` is a `text[]`, and a committee routinely
- *  carries more than one. The card shows the FIRST and counts the rest rather
- *  than joining them: two spelled-out topics on one line under an acronym is a
- *  paragraph, and this line is an identity line, not an agenda.
- *
- *  Returns null when the array is absent, empty, or holds only blanks — in which
- *  case the card simply has no topic line, which is honest. Nothing is invented
- *  from the committee's name. */
-export function committeeTopic(lc: LiveCommittee): { text: string; more: number } | null {
-  const topics = (lc.conf.topics ?? []).map((t) => (t ?? '').trim()).filter(Boolean);
-  if (topics.length === 0) return null;
-  return { text: topics[0], more: topics.length - 1 };
-}
+// `committeeTopic` LIVED HERE AND IS GONE, on the owner's instruction: "remove
+// topics completely now". It returned `conference_committees.topics[0]` plus a
+// "+N" count of the rest, for the line the card drew under the committee's name.
+//
+// WHEN THE SESSIONS SIDE INTRODUCES TOPIC SELECTION, SHOW ONLY THE SINGLE
+// SELECTED TOPIC HERE — NOT THE ARRAY. `topics` is the committee's whole agenda;
+// what belongs on a live card is the one topic the room is actually debating,
+// which is a fact the session does not record today. The "+N" behaviour above is
+// exactly what should NOT come back: an agenda is not an identity line.
+//
+// See the matching note at the removal point in `CommitteeCard`.
 
 export function cardFacts(lc: LiveCommittee): CardFacts {
   const { present, total } = presence(lc);

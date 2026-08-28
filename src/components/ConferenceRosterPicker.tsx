@@ -195,9 +195,10 @@ const RAW_COMMITTEE_PRESETS: CommitteePreset[] = [
   { name: 'African Union', acronym: 'AU', logoPath: '/logos/AU.png', members: ['Algeria','Angola','Benin','Botswana','Burkina Faso','Burundi','Cabo Verde','Cameroon','Central African Republic','Chad','Comoros','Congo','Côte d\'Ivoire','DR Congo','Djibouti','Egypt','Equatorial Guinea','Eritrea','Eswatini','Ethiopia','Gabon','Gambia','Ghana','Guinea','Guinea-Bissau','Kenya','Lesotho','Liberia','Libya','Madagascar','Malawi','Mali','Mauritania','Mauritius','Morocco','Mozambique','Namibia','Niger','Nigeria','Rwanda','São Tomé and Príncipe','Senegal','Seychelles','Sierra Leone','Somalia','South Africa','South Sudan','Sudan','Tanzania','Togo','Tunisia','Uganda','Zambia','Zimbabwe'] },
   { name: 'Arab League', acronym: 'LAS', logoPath: '/logos/arab-league.png', members: ['Algeria','Bahrain','Comoros','Djibouti','Egypt','Iraq','Jordan','Kuwait','Lebanon','Libya','Mauritania','Morocco','Oman','Palestine','Qatar','Saudi Arabia','Somalia','Sudan','Syria','Tunisia','United Arab Emirates','Yemen'] },
   { name: 'ASEAN', acronym: 'ASEAN', logoPath: '/logos/asean.png', members: ['Brunei','Cambodia','Indonesia','Laos','Malaysia','Myanmar','Philippines','Singapore','Thailand','Timor-Leste','Vietnam'] },
-  // GA main committees. Canonical long-form names so committeeDisplayName's
-  // ">4 words → acronym" rule collapses them to how delegates actually refer to
-  // them (DISEC, SPECPOL, SOCHUM, LEGAL). Emblem still resolves to the UN seal.
+  // GA main committees. Canonical long-form names: the full name is what gets
+  // stored, and committeeDisplayName collapses it at render time to how delegates
+  // actually refer to them (DISEC, SPECPOL, SOCHUM, LEGAL) with the full name
+  // small beneath. Emblem still resolves to the UN seal.
   { name: 'Disarmament and International Security Committee', acronym: 'DISEC',   logoPath: '/logos/un.svg',     members: [] },
   { name: 'Special Political and Decolonization Committee',   acronym: 'SPECPOL', logoPath: '/logos/un.svg',     members: [] },
   { name: 'Social, Humanitarian and Cultural Committee',      acronym: 'SOCHUM',  logoPath: '/logos/un.svg',     members: [] },

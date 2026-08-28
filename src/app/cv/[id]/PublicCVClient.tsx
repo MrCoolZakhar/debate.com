@@ -6,6 +6,7 @@ import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import type { CVEntry } from '@/components/CVEntryModal';
 import { CVStatsRow, TimelineEntry } from '../../account/cv/CVTimeline';
 import { Eyebrow, OUTFIT, MONO } from '../../account/accountUi';
+import PublicCVSignupPrompt from '@/components/PublicCVSignupPrompt';
 
 export interface PublicProfile {
   id: string;
@@ -159,6 +160,13 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
           </Link>
         </div>
       </main>
+
+      {/* Signup ask for logged-out readers, fired only once they have read
+          through the CV. Mounted inside the `profile` branch on purpose — the
+          "This CV isn't available" state above returns early, and asking a
+          stranger to register over a dead link would be the worst possible
+          first impression. It self-suppresses for signed-in visitors. */}
+      <PublicCVSignupPrompt />
     </div>
   );
 }

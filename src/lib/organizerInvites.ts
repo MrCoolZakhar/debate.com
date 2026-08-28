@@ -7,6 +7,7 @@
 
 import type { getAuthedClient } from '@/lib/supabase-auth';
 import { queueOrganizerInviteEmail } from '@/lib/emailEvents';
+import type { BundleId, PermissionMap } from '@/lib/organizerPermissions';
 
 type AuthedClient = ReturnType<typeof getAuthedClient>;
 
@@ -15,6 +16,10 @@ export interface OrganizerInviteRow {
   email: string;
   status: 'pending' | 'accepted' | 'declined' | 'revoked';
   created_at: string;
+  /** Bundle chosen at invite time. Older rows predate the column and default
+   *  to 'custom' with an empty permissions blob. */
+  bundle: BundleId;
+  permissions: PermissionMap;
 }
 
 export interface SendOrganizerInviteArgs {
@@ -23,6 +28,11 @@ export interface SendOrganizerInviteArgs {
   /** Display name of the organizer sending the invite, used in the
    *  create-account email copy when the invitee has no account yet. */
   inviterName: string;
+  /** Privileges the invitee lands with the moment they accept — the RPC stores
+   *  them on the invite row and respond_organizer_invite copies them into the
+   *  new conference_organizers row. */
+  bundle: BundleId;
+  permissions: PermissionMap;
 }
 
 export interface SendOrganizerInviteResult {
@@ -54,6 +64,8 @@ export async function sendOrganizerInvite(
   const { data, error } = await supabase.rpc('create_organizer_invite', {
     p_conference_id: args.conferenceId,
     p_email: args.email.trim(),
+    p_bundle: args.bundle,
+    p_permissions: args.permissions,
   });
   if (error) return { ok: false, error: error.message || 'Could not send that invite.' };
 
@@ -86,11 +98,17 @@ export async function listPendingOrganizerInvites(
 ): Promise<OrganizerInviteRow[]> {
   const { data } = await supabase
     .from('conference_organizer_invites')
-    .select('id, email, status, created_at')
+    .select('id, email, status, created_at, bundle, permissions')
     .eq('conference_id', conferenceId)
     .eq('status', 'pending')
     .order('created_at', { ascending: true });
-  return (data as OrganizerInviteRow[] | null) ?? [];
+  // Rows created before the bundle/permissions columns existed read back as the
+  // column defaults, so no null-guard is needed beyond the empty-blob fallback.
+  return ((data as OrganizerInviteRow[] | null) ?? []).map(r => ({
+    ...r,
+    bundle: r.bundle ?? 'custom',
+    permissions: r.permissions ?? {},
+  }));
 }
 
 /** Withdraw a pending invite (the token link stops working). */

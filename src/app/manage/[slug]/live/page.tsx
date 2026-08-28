@@ -69,6 +69,9 @@ export default function LiveStatusPage() {
   // so the previous chip's choice never leaks into the next room.
   const [recapDocFilter, setRecapDocFilter] = useState<DocFilter>('all');
   const [scoreboardFor, setScoreboardFor] = useState<string | null>(null);
+  /** Set the first time a reader opens the recap's Scoreboard side-tab, which
+   *  shares the conference-wide payload with the standalone Points view. */
+  const [recapWantsScoreboard, setRecapWantsScoreboard] = useState(false);
   /** The committee a SCOPED broadcast is being written to, or null for the
    *  floor-wide composer. Same component either way — see `composerTargets`. */
   const [broadcastFor, setBroadcastFor] = useState<string | null>(null);
@@ -510,7 +513,11 @@ export default function LiveStatusPage() {
   // is opened first pays for the load and the other is instant. The allocation
   // index rides along on the same latch for the same reason — the delegate card
   // needs both halves, and two latches would mean two ways to be half-loaded.
-  const wantsScoreboard = !!scoreboardFor || !!delegateFor;
+  // THREE doors now, not two: the recap modal's Scoreboard side-tab is the
+  // third, and it opens the same payload rather than a thinner copy of it. It is
+  // a separate latch from `recapFor` on purpose — opening a recap must NOT drag
+  // a whole-conference scoreboard read in behind it; only pressing the tab does.
+  const wantsScoreboard = !!scoreboardFor || !!delegateFor || recapWantsScoreboard;
   useEffect(() => {
     if (scoreboardReq.current || !wantsScoreboard || !conferenceId || !accessToken) return;
     scoreboardReq.current = true;
@@ -851,7 +858,7 @@ export default function LiveStatusPage() {
       )}
 
       {/* Modals */}
-      {recapData && (
+      {recapData && conference && (
         <RecapModal
           // Keyed on the committee AND on the section it was asked to open,
           // because the jump-to-documents scroll is a mount effect: without the
@@ -860,6 +867,13 @@ export default function LiveStatusPage() {
           key={`${recapData.conf.id}:${recapDocFilter}`}
           data={recapData}
           initialDocFilter={recapDocFilter}
+          conferenceSlug={conference.slug}
+          // The recap's Scoreboard tab renders the SAME body the standalone
+          // Points modal does, off the same lazily-loaded conference payload.
+          scoreboard={scoreboard}
+          scoreboardLoading={scoreboardLoading}
+          scoreboardError={scoreboardError}
+          onWantScoreboard={() => setRecapWantsScoreboard(true)}
           onClose={() => setRecapFor(null)}
           // The caucus clock, ballot breakdown and unmod countdown moved OFF the
           // card (four card shapes were the cause of the height chaos) and into

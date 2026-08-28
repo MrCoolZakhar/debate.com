@@ -18,9 +18,11 @@ import {
   entry,
   type RosterEntry,
 } from '@/components/ConferenceRosterPicker';
-import { matchPresetEmblem, committeeDisplayName } from '@/lib/presetNames';
+import { matchPresetEmblem } from '@/lib/presetNames';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { LogoDisc } from '@/components/LogoDisc';
+import { LogoCropModal } from '@/components/LogoCropModal';
+import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { queueEventEmail } from '@/lib/emailEvents';
@@ -459,6 +461,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // the default from the name. An existing committee that already has an emblem
   // counts as manually set.
   const [emblemManuallySet, setEmblemManuallySet] = useState<boolean>(!!existing?.logo_url);
+  // The picked file, held while the organiser frames it in LogoCropModal — the
+  // same drag-to-fit step the conference logo upload uses. Nothing is uploaded
+  // until they save the crop.
+  const [emblemCropFile, setEmblemCropFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   // A selected preset can force the roster path (ICC/ICJ/Crisis/HoC/Senate/Press
@@ -476,7 +482,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     setLogoUrl(matchPresetEmblem(name, abbreviation));
   }, [name, abbreviation, emblemManuallySet]);
 
-  // Mirrors the conference logo upload in manage/[slug]/settings, same bucket, own folder.
+  // Mirrors the conference logo upload in manage/[slug]/settings, same bucket, own
+  // folder — including the LogoCropModal step in front of it, so a committee emblem
+  // is framed exactly the way a conference logo is. What arrives here is therefore
+  // always the crop tool's flattened 512×512 transparent PNG.
   async function handleEmblemUpload(file: File) {
     if (!session) return;
     if (file.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
@@ -748,7 +757,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                     value={name}
                     onChange={setName}
                     onPresetSelect={(p) => {
-                      setName(committeeDisplayName(p.name, p.acronym));
+                      // Store the CANONICAL FULL NAME, always — the acronym goes
+                      // in its own column and the display layer collapses the two
+                      // (committeeDisplayName). This used to store the collapsed
+                      // label as the name, which is why production has rows whose
+                      // name and abbreviation are both literally "DISEC": the full
+                      // name was thrown away at creation and no surface could ever
+                      // show it beneath the acronym again.
+                      setName(p.name);
                       setAbbreviation(p.acronym);
                       setPresetRosterMode(p.rosterMode ?? 'country');
                       if (!isEdit) setRoster(p.members.map((m) => entry(m)));
@@ -836,7 +852,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/svg+xml"
                 style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleEmblemUpload(f); e.target.value = ''; }}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  if (f.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
+                  setError('');
+                  setEmblemCropFile(f);
+                }}
               />
             </div>
           </div>
@@ -952,6 +975,25 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           </div>
         </div>
       </ModalOverlay>
+    )}
+    {/* Drag-to-fit crop step, flattens the chosen framing into a square
+        transparent PNG, then hands off to the existing upload path — the same
+        two-step the conference logo uses. Portal'd for the same reason
+        ModalOverlay is: the crop tool is `position: fixed`, and the manage
+        layout's content wrapper is a stacking context that would trap it under
+        the header. It mounts after the editor's own portal, so at equal z-index
+        it paints above the editor rather than behind it. */}
+    {emblemCropFile && (
+      <Portal>
+        <LogoCropModal
+          file={emblemCropFile}
+          onCancel={() => setEmblemCropFile(null)}
+          onSave={(blob) => {
+            setEmblemCropFile(null);
+            handleEmblemUpload(new File([blob], 'emblem.png', { type: 'image/png' }));
+          }}
+        />
+      </Portal>
     )}
     </>
   );

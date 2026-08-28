@@ -216,55 +216,239 @@ export function matchPresetEmblem(name: string | null | undefined, abbreviation?
   return matchPresetEmblemEntry(name, abbreviation)?.logo ?? null;
 }
 
+// ── Well-known bodies ─────────────────────────────────────────────────────────
+// Names every MUN circuit recognises by their acronym, keyed by the WHOLE
+// normalised name. A whole-name lookup, never a substring scan: substring
+// matching is exactly what makes the preset-alias path unsafe ("Programa de las
+// Naciones Unidas…" matching the Arab League alias 'las', "AD HOC: Council of
+// the Gods" matching 'hoc' — both measured on production data, see the note in
+// manage/[slug]/live/identity.ts). A table keyed by the full name cannot fire on
+// a committee it does not actually name.
+//
+// It also reaches bodies the emblem presets do not carry — ECOFIN, UNODC,
+// UNHCR, WTO, WIPO — and beats the naive initialism, which turns "Economic and
+// Financial Committee" into "EFC" and "Disarmament and International Security
+// Committee" into "DISC".
+//
+// A qualified name ("Historical UN Security Council", "DISEC [High School]") is
+// deliberately NOT in here and keeps its full name — the qualifier is the whole
+// reason the organiser wrote it. Only an explicit `abbreviation` collapses those.
+const WELL_KNOWN_ACRONYMS: Record<string, string> = {
+  // UN principal organs and GA main committees
+  'un security council': 'UNSC',
+  'security council': 'UNSC',
+  'un general assembly': 'UNGA',
+  'general assembly': 'UNGA',
+  'economic and social council': 'ECOSOC',
+  'disarmament and international security committee': 'DISEC',
+  'disarmament and international security': 'DISEC',
+  'economic and financial committee': 'ECOFIN',
+  'un economic and financial committee': 'ECOFIN',
+  'social humanitarian and cultural committee': 'SOCHUM',
+  'social humanitarian and cultural': 'SOCHUM',
+  'special political and decolonization committee': 'SPECPOL',
+  'special political and decolonization': 'SPECPOL',
+  // UN funds, programmes and agencies
+  'un human rights council': 'UNHRC',
+  'human rights council': 'UNHRC',
+  'un environment program': 'UNEP',
+  'un environment assembly': 'UNEA',
+  'un children s fund': 'UNICEF',
+  'un childrens fund': 'UNICEF',
+  'un development program': 'UNDP',
+  'un population fund': 'UNFPA',
+  'un office on drugs and crime': 'UNODC',
+  'un high commissioner for refugees': 'UNHCR',
+  'un refugee agency': 'UNHCR',
+  'un educational scientific and cultural organization': 'UNESCO',
+  'un industrial development organization': 'UNIDO',
+  'un framework convention on climate change': 'UNFCCC',
+  'un conference on trade and development': 'UNCTAD',
+  'un relief and works agency': 'UNRWA',
+  'un commission on the status of women': 'UNCSW',
+  'commission on the status of women': 'UNCSW',
+  'un committee on the peaceful uses of outer space': 'COPUOS',
+  'committee on the peaceful uses of outer space': 'COPUOS',
+  // Specialised agencies and other intergovernmental bodies
+  'world health organization': 'WHO',
+  'world trade organization': 'WTO',
+  'world intellectual property organization': 'WIPO',
+  'world meteorological organization': 'WMO',
+  'world food program': 'WFP',
+  'international monetary fund': 'IMF',
+  'international atomic energy agency': 'IAEA',
+  'international labour organization': 'ILO',
+  'international labor organization': 'ILO',
+  'international civil aviation organization': 'ICAO',
+  'international maritime organization': 'IMO',
+  'international organization for migration': 'IOM',
+  'international telecommunication union': 'ITU',
+  'food and agriculture organization': 'FAO',
+  'north atlantic treaty organization': 'NATO',
+  'international criminal court': 'ICC',
+  'international court of justice': 'ICJ',
+  'international press corps': 'IPC',
+  'organization for economic co operation and development': 'OECD',
+  'organization of islamic cooperation': 'OIC',
+  'universal postal union': 'UPU',
+  'parliamentary assembly of the council of europe': 'PACE',
+  'un convention to combat desertification': 'UNCCD',
+  // Standard on the Indian circuit, and one of the most-run rooms in production.
+  'all india political parties meet': 'AIPPM',
+};
+
+/** Normalise a name to a WELL_KNOWN_ACRONYMS key: accents and punctuation out,
+ *  British spellings folded to the American ones the table is keyed on, and the
+ *  "United Nations" prefix collapsed to "UN" so both spellings hit one entry. */
+function wellKnownKey(name: string): string {
+  const words = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((w) => {
+      if (w === 'organisation') return 'organization';
+      if (w === 'organisations') return 'organizations';
+      if (w === 'programme') return 'program';
+      if (w === 'decolonisation') return 'decolonization';
+      if (w === 'centre') return 'center';
+      return w;
+    });
+  const flat = words.join(' ');
+  return flat.startsWith('united nations ') ? `un ${flat.slice('united nations '.length)}` : flat;
+}
+
+/** The universally recognised acronym for a body, or '' — whole-name match only. */
+export function wellKnownAcronym(name: string | null | undefined): string {
+  const key = wellKnownKey((name ?? '').trim());
+  return key ? WELL_KNOWN_ACRONYMS[key] ?? '' : '';
+}
+
+/** An acronym THE NAME ITSELF SPELLS OUT — "… (SCOTUS)", "… – PNUMA",
+ *  "ECOSOC (Economic and Social Council)". Never a guess: this is the
+ *  organiser's own text, lifted out of their own title, and it is the dominant
+ *  real pattern in production. Returns null when the name states no acronym.
+ *
+ *  NOTE: `manage/[slug]/live/identity.ts` carries an equivalent private copy of
+ *  this, written first and measured against all 392 committee rows at the time.
+ *  This is the shared home for it; that copy should be collapsed onto this one. */
+export function acronymInName(name: string | null | undefined): string | null {
+  const t = (name ?? '').trim();
+  if (!t) return null;
+  // An all-uppercase title has no distinguishable acronym token inside it —
+  // every word looks like one. ("SINGLE DELEGATE GENERAL ASSEMBLY: UNICEF")
+  if (t === t.toUpperCase()) return null;
+
+  // "… (DISEC)" / "… [SCOTUS]" — a trailing bracketed acronym.
+  const paren = t.match(/[([]\s*([A-Z][A-Za-z0-9]{1,7})\s*[)\]]\s*$/);
+  if (paren) return paren[1];
+
+  // "… – UNSC" / "… - WHO" / "… — UN WOMEN" — a trailing acronym after a dash.
+  const dash = t.match(/[—–-]\s*([A-Z][A-Za-z0-9 ]{1,10})$/);
+  if (dash) {
+    const tok = dash[1].trim();
+    if (tok.length >= 2 && tok === tok.toUpperCase()) return tok;
+  }
+
+  // "ECOSOC (Economic and Social Council)" — a leading acronym then a gloss.
+  // The lookahead requires whitespace or an opening bracket, so "CRISIS: The
+  // Dancing Plague" (a category prefix, not an acronym) does not match. Three
+  // characters minimum: two-letter leads are qualifiers, not identities ("UN
+  // Commission on the Status of Women" -> UN, "AD HOC: …" -> AD name nothing).
+  const lead = t.match(/^([A-Z][A-Z0-9]{2,7})(?=[\s(])/);
+  if (lead) return lead[1];
+
+  return null;
+}
+
 // The acronym to show for a committee that has NO explicit `abbreviation` - i.e.
 // every standalone session, whose `committees` row has only a free-text name.
 // `committeeDisplayName` needs an acronym to apply the UI RULE (long name ->
 // acronym + full name beneath); without one it silently keeps the long name and
 // the rule never fires.
 //
-// Order:
+// Only sources that CANNOT BE WRONG, in order:
 //   1. the explicit abbreviation, when there is one (conference committees);
-//   2. the matched preset's REAL acronym - "Disarmament and International
-//      Security Committee" -> DISEC, which a naive initialism could never
-//      produce (it would give "DISC");
-//   3. initials of the significant words - "United Nations Office on Drugs and
-//      Crime" -> UNODC. Stopwords are dropped and the result is capped at 6
-//      characters, past which an initialism stops reading as an acronym.
+//   2. the WELL_KNOWN_ACRONYMS whole-name match - "Economic and Financial
+//      Committee" -> ECOFIN, "UN Office on Drugs and Crime" -> UNODC. Neither
+//      the emblem presets nor an initialism can produce those;
+//   3. an acronym the NAME ITSELF SPELLS OUT (`acronymInName`).
+//
+// TWO EARLIER FALLBACKS WERE REMOVED, AND MUST NOT COME BACK:
+//
+//   • the preset emblem's `label`. Alias matching is a SUBSTRING scan, so it
+//     answers for names it does not name. Measured on production session rows:
+//     "National Security Council" -> UNSC (a crisis cabinet handed the UN
+//     Security Council's identity - the very confusion `isSecurityCouncil`
+//     below has an explicit negative guard against), "Future Security Council"
+//     -> UNSC, "Las Cortes de Granada" -> LAS, "Historical ASEAN Regional
+//     Forum" -> ASEAN, "AD HOC: Council of the Gods" -> HoC.
+//   • initials of the significant words. It invents labels for every bespoke
+//     room: "The Cuban Missile Crisis" -> CMC, "Marvel Crisis Committee" ->
+//     MCC, "Fantasy World Committee" -> FWC, "Ministry of Magic (MOM)" -> MMM,
+//     "AIPPM Frozen on 25th June 1975" -> AF2J1. Both were survivable only
+//     while `committeeDisplayName` refused to collapse names of 4 words or
+//     fewer, which hid them; now that an acronym can win at any length, they
+//     are live on every short name.
+//
 // Returns '' when nothing sensible can be derived, which leaves
-// `committeeDisplayName` showing the full name once.
-const ACRONYM_STOPWORDS = new Set(['and', 'of', 'the', 'for', 'on', 'in', 'to', 'a', 'an', 'at', 'by']);
-
+// `committeeDisplayName` showing the full name once. A wrapped long name is
+// honest; an invented acronym, or another committee's, is not.
 export function deriveCommitteeAcronym(
   name: string | null | undefined,
   abbreviation?: string | null,
 ): string {
   const explicit = (abbreviation ?? '').trim();
   if (explicit) return explicit;
-  const preset = matchPresetEmblemEntry(name, null);
-  if (preset) return preset.label;
-  const words = (name ?? '')
-    .trim()
-    .split(/\s+/)
-    .filter((w) => /[A-Za-z0-9]/.test(w))
-    .filter((w) => !ACRONYM_STOPWORDS.has(w.toLowerCase()));
-  if (words.length < 2) return '';
-  const initials = words.map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0] ?? '').join('').toUpperCase();
-  return initials.length >= 2 && initials.length <= 6 ? initials : '';
+  return wellKnownAcronym(name) || acronymInName(name) || '';
 }
 
-// Decide what committee NAME a preset should populate / display. Rule:
-//   • more than 4 words in the full name → use the acronym (e.g. "Disarmament
-//     and International Security Committee" → "DISEC").
-//   • 4 words or fewer → keep the full name (e.g. "United Nations Security
-//     Council", "International Monetary Fund", "World Bank" all stay as-is).
+/** Is this string unmistakably an acronym, rather than a short name or a note?
+ *  All caps and digits, one token, 3-8 characters. This is the guard that keeps
+ *  a committee's OWN `abbreviation` from making its label worse: it rejects
+ *  "GA/UNGA" (two answers separated by a slash, which would have relabelled a
+ *  room actually called "GA2 (ECOFIN)"), "Crisis" and "HoC" (not acronyms), and
+ *  "EU" / "AU" / "WB" (two letters, where the spelled-out name is the form
+ *  people actually recognise). */
+function looksLikeAcronym(s: string): boolean {
+  return /^[A-Z][A-Z0-9]{2,7}$/.test(s);
+}
+
+/** Below this, a name is already short enough that an acronym buys nothing —
+ *  and "Arab League" -> "LAS" or "World Bank" -> "WB" is a loss, not a gain. */
+const COLLAPSE_MIN_NAME_LENGTH = 16;
+
+// Decide what NAME to show for a committee (or a conference), per the AGENTS.md
+// UI RULE: acronym big, full name small beneath. This returns the BIG label —
+// every caller derives the second line as `primary !== fullName ? fullName : null`.
+//
+// Rule:
+//   • more than 4 words in the full name → use the acronym, whatever shape it
+//     is. Long names have to collapse, and this is the long-standing behaviour
+//     conferences depend on ("Hult International Model United Nations" →
+//     "HULTMUN 2026", a label with a space that the acronym test below rejects).
+//   • 4 words or fewer → an EXPLICIT acronym still wins, but only when it is
+//     unmistakably an acronym (`looksLikeAcronym`) and the name is long enough
+//     to be worth collapsing. This is the fix for the bug this rule used to
+//     have: an organiser who typed "UNSC" against "United Nations Security
+//     Council", or "WHO" against "World Health Organization", had already made
+//     the decision, and the word count silently overrode them.
+//   • an acronym that flattens to the name itself ("DISEC"/"DISEC") is shown
+//     once — never as a label with an identical second line beneath it.
 // Null/blank-guarded: a missing name falls back to the acronym, a missing
 // acronym falls back to the full name.
 export function committeeDisplayName(fullName: string | null | undefined, acronym?: string | null): string {
   const name = (fullName ?? '').trim();
   const ac = (acronym ?? '').trim();
   if (!name) return ac;
+  if (!ac) return name;
+  const flat = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (flat(ac) === flat(name)) return name;
   const words = name.split(/\s+/).filter(Boolean);
-  if (words.length > 4) return ac || name;
+  if (words.length > 4) return ac;
+  if (looksLikeAcronym(ac) && name.length >= COLLAPSE_MIN_NAME_LENGTH && ac.length < name.length) return ac;
   return name;
 }
 

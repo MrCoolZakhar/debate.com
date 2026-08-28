@@ -28,18 +28,20 @@
 // the same codebase (`manage/[slug]/committees/page.tsx:1568, 1587`).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Users, FileText, ScrollText, Trophy, AlertTriangle, Info,
-  Mic, Timer, Pause, Flag, Moon, Copy, Check, Send,
+  Mic, Timer, Pause, Flag, Moon, Copy, Check, Send, UserRound,
 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
-import AvatarStack from '@/components/AvatarStack';
+import Avatar from '@/components/Avatar';
+import Portal from '@/components/Portal';
+import ProfileLink from '@/components/ProfileLink';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { type LiveCommittee, type ChairPerson, flagCodeFor } from './LiveModals';
 import {
-  roomStatus, STATUS_META, nowPlaying, cardWarnings, cardFacts, committeeTopic,
+  roomStatus, STATUS_META, nowPlaying, cardWarnings, cardFacts,
   type NowPlaying, type NowGlyph, type CommitteeIdentity,
 } from './cardModel';
 import {
@@ -49,10 +51,18 @@ import {
 // The card surface, its edge and its shadow all come from ./tokens, where the
 // contrast measurements that justify them are written down.
 
-/** Reserved height for the warning slot. A FLOOR, not a cap: warning text is
- *  allowed to wrap now, and the grid's `items-stretch` absorbs the difference
- *  so a card with a two-line warning and a card with none still match. */
-const WARNING_SLOT_HEIGHT = 30;
+/** Reserved height for the warning slot WHEN IT HAS SOMETHING IN IT. A floor,
+ *  not a cap: warning text wraps, and the grid's `items-stretch` absorbs the
+ *  difference between a two-line warning and a one-line one.
+ *
+ *  IT IS NO LONGER RESERVED WHEN THE SLOT IS EMPTY, and that is the single
+ *  biggest piece of the dead space the owner asked to be closed: most rooms have
+ *  no warning at all, so this was 30px of guaranteed blank on the majority of
+ *  cards. Reserving it bought cross-card alignment of the band BELOW it — and
+ *  that band does not need buying: the facts strip and the footer are both
+ *  bottom-anchored, and the now-playing panel above absorbs the surplus (see
+ *  `PANEL_MIN_HEIGHT`), so they line up across a row either way. */
+const WARNING_SLOT_HEIGHT = 26;
 
 /** Card radius, and the gutter the now-playing panel leaves at the card edge.
  *
@@ -67,20 +77,29 @@ const PANEL_RADIUS = CARD_RADIUS - PANEL_GUTTER;
 const PAD_START = 22;
 const PAD_END = 20;
 
-/** The panel's floor. Art disc (60) + its padding (2×15) + the scrubber block
- *  (~30) + the up-next slot (`UP_NEXT_SLOT_HEIGHT` + its 9px lead) — a footprint
- *  that does not move between a room mid-speech and a room that was never
- *  opened. Spotify does not collapse its now-playing bar; nor does this.
+/** The panel's floor: art disc (60) + its padding (2×13) + the scrubber block +
+ *  the up-next slot — a footprint that does not move between a room mid-speech
+ *  and a room that was never opened. Spotify does not collapse its now-playing
+ *  bar; nor does this.
  *
- *  Raised from 150 because the queue moved INSIDE this block. It used to sit in
- *  a column beside the headline, where it cost the panel no height at all and
- *  cost the headline a third of its width. */
-const PANEL_MIN_HEIGHT = 196;
+ *  196 → 168, MEASURED rather than guessed. The panel's natural content at 344px
+ *  (the narrowest card the grid produces) is 163–175px, so 196 was forcing
+ *  20–33px of blank into every single card before the grid stretched anything.
+ *  168 is the same field shape with the padding taken out of it.
+ *
+ *  WHERE THE SURPLUS GOES IS THE OTHER HALF OF THE OWNER'S COMPLAINT — "the gap
+ *  between speaker and the timer is big". The panel used to be
+ *  `justify-between`, so every pixel the grid stretched this card by opened up
+ *  BETWEEN the delegation's name and the clock: measured at 106px on a
+ *  three-card row. It is now a plain column with fixed gaps and one flexible
+ *  spacer at the BOTTOM, so stretch reads as panel padding under the queue
+ *  instead of as a rift through the middle of the thing the panel is for. */
+const PANEL_MIN_HEIGHT = 168;
 
-/** The card's floor, tracking `PANEL_MIN_HEIGHT` up by the same 46px. Nothing on
- *  this card truncates, so this is a floor the grid stretches from, never a cap
- *  anything is squeezed into. */
-const CARD_MIN_HEIGHT = 398;
+/** The card's floor, tracking `PANEL_MIN_HEIGHT` down by the same 28px. Nothing
+ *  on this card truncates, so this is a floor the grid stretches from, never a
+ *  cap anything is squeezed into. */
+const CARD_MIN_HEIGHT = 322;
 
 /** The conference emblem STRADDLES the top edge — `LOGO_OVERHANG` px of it sit
  *  outside the card, on the page behind it.
@@ -94,7 +113,11 @@ const CARD_MIN_HEIGHT = 398;
  *      past this for the same reason.
  *  `LogoDisc` already paints a near-white disc with a soft forest shadow, which
  *  is what lets one mark read against the card AND the ivory page at once. */
-const LOGO_SIZE = 60;
+// 60 → 66, the owner's "increase committee logo size by 10%". The overhang is
+// deliberately NOT scaled with it: 22px is what the grid's `rowGap` and
+// `paddingBlockStart` are sized against (`live/page.tsx:833`), and growing it
+// would push the first row's emblems into the scroll container's edge.
+const LOGO_SIZE = 66;
 const LOGO_OVERHANG = 22;
 /** How far the header text is pushed in to sit beside the emblem. */
 const HEADER_INDENT = LOGO_SIZE + 12;
@@ -156,6 +179,37 @@ function headlineSize(text: string): number {
   return 22;
 }
 
+/** THE MARK FOR ONE DELEGATION — a flag, or a person.
+ *
+ *  A crisis cabinet post, a Room Order seat and a specialised committee's
+ *  character are not countries: `flagCodeFor` finds no ISO code for them and
+ *  `FlagImg` falls back to a GLOBE, so a whole cabinet rendered as a row of
+ *  identical globes — the one thing a globe cannot mean is "this is a person,
+ *  not a country".
+ *
+ *  The replacement is not a new icon. It is exactly what the assignment page
+ *  already draws for a character/custom seat (`manage/[slug]/assignment/page.tsx:741`,
+ *  and the same `UserRound` glyph in its `PersonAvatar` at `:668`): a lucide
+ *  `UserRound` head-and-shoulders in a disc. `NEU.forest` on `NEU.surface` is
+ *  10.73:1, far past the 3:1 a glyph needs. */
+function DelegationMark({ country, size }: { country: string; size: number }) {
+  const code = flagCodeFor(country);
+  if (code) return <FlagImg code={code} size={size} />;
+  return (
+    <span
+      className="inline-flex items-center justify-center flex-shrink-0"
+      aria-hidden
+      style={{
+        width: size, height: size, borderRadius: '50%',
+        backgroundColor: NEU.surface, color: NEU.forest,
+        boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)',
+      }}
+    >
+      <UserRound size={Math.round(size * 0.62)} strokeWidth={2} />
+    </span>
+  );
+}
+
 /** One delegation in the up-next strip: a flag that grows under the pointer and
  *  opens that delegation's performance card.
  *
@@ -185,7 +239,7 @@ function QueueFlag({
   };
   const label = `${country} — ${position === 1 ? 'next to speak' : `number ${position} in the queue`}`;
 
-  const art = <FlagImg code={flagCodeFor(country)} size={UP_NEXT_FLAG} />;
+  const art = <DelegationMark country={country} size={UP_NEXT_FLAG} />;
   if (!onOpen) {
     return (
       <span className="flex-shrink-0" style={{ lineHeight: 0 }} title={label}>{art}</span>
@@ -216,6 +270,182 @@ function QueueFlag({
   );
 }
 
+/** THE "+N" AT THE END OF THE QUEUE STRIP, AND WHAT IT OPENS.
+ *
+ *  ">10 speakers add a +X and clicking could see the total" — the ten flags stay
+ *  exactly as they are; the counter beside them stops being a dead number and
+ *  becomes the door to the rest of the list, named and in queue order.
+ *
+ *  PORTALED AT FIXED VIEWPORT COORDINATES, because the card is
+ *  `overflow: hidden` inside its shell and the grid it sits in scrolls: an
+ *  in-card absolute layer would be clipped by the first and scrolled away by the
+ *  second. Mechanics lifted from the applications `PaymentMenu`
+ *  (`manage/[slug]/applications/page.tsx:594-642`), as AGENTS.md requires — place
+ *  from `getBoundingClientRect()`, reposition on resize, close on scroll and on
+ *  an outside click that accounts for the portaled node, and FLIP rather than
+ *  run off an edge: clamped on the inline axis, opened upward when there is not
+ *  enough room below.
+ *
+ *  A real `<button>` with `stopPropagation`, for the same reason `QueueFlag` is:
+ *  the whole card is `role="button"`, so a nested clickable must be focusable and
+ *  Enter/Space-activatable in its own right, and must not let the click fall
+ *  through and open the recap instead. */
+function QueueOverflow({
+  label, rest, shown, onOpen,
+}: {
+  label: string;
+  /** The delegations the strip did NOT draw, in queue order. */
+  rest: string[];
+  /** How many are already on the strip — so the popover can number correctly. */
+  shown: number;
+  onOpen: ((country: string) => void) | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const W = 236;
+    const wanted = Math.min(300, 34 + rest.length * 26);
+    const below = window.innerHeight - r.bottom - 12;
+    const above = r.top - 12;
+    // Flip upward when the space below cannot hold the list and the space above
+    // is better. Either way the height is clamped to what actually fits.
+    const up = below < wanted && above > below;
+    const maxHeight = Math.max(96, Math.min(wanted, up ? above : below));
+    setPos({
+      top: up ? Math.max(8, r.top - 6 - maxHeight) : r.bottom + 6,
+      left: Math.max(8, Math.min(r.left - W + r.width, window.innerWidth - W - 8)),
+      maxHeight,
+    });
+  }, [rest.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, place]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={`${rest.length} more waiting — open the rest of the list`}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        className="font-extrabold flex-shrink-0 focus:outline-none active:scale-[0.94]"
+        style={{
+          color: SOFT, fontFamily: OUTFIT, fontSize: 11,
+          fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+          marginInlineStart: 2, border: 'none', cursor: 'pointer',
+          backgroundColor: open ? NEU.base : 'transparent',
+          boxShadow: open ? NEU.inSm : 'none',
+          borderRadius: 999, padding: '3px 6px',
+          transitionProperty: 'box-shadow, background-color, scale',
+          transitionDuration: '180ms', transitionTimingFunction: EASE,
+        }}
+      >
+        +{rest.length}
+      </button>
+      {open && pos && (
+        <Portal>
+          <div
+            ref={popRef}
+            role="dialog"
+            aria-label={`${label} — the rest of the queue`}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, width: 236,
+              zIndex: 60, maxHeight: pos.maxHeight, overflowY: 'auto',
+              backgroundColor: NEU.surface, borderRadius: 14,
+              border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: CARD_SHADOW,
+              padding: '9px 10px', fontFamily: OUTFIT,
+            }}
+          >
+            <p
+              className="font-extrabold uppercase"
+              style={{ color: SOFT, fontSize: 9.5, letterSpacing: '0.08em', marginBlockEnd: 6 }}
+            >
+              {label} · {rest.length} more
+            </p>
+            <div className="flex flex-col" style={{ gap: 2 }}>
+              {rest.map((country, i) => {
+                const position = shown + i + 1;
+                const row = (
+                  <>
+                    <span
+                      className="font-bold flex-shrink-0 text-right"
+                      style={{ color: SOFT, fontSize: 10.5, width: 20, fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {position}
+                    </span>
+                    <DelegationMark country={country} size={16} />
+                    {/* Names WRAP here. This popover exists so the tail of the
+                        queue can be read, so a name cut to "United Arab Emir…"
+                        would defeat the whole affordance. */}
+                    <span
+                      className="font-bold min-w-0"
+                      style={{ color: NEU.ink, fontSize: 12, lineHeight: 1.25, overflowWrap: 'anywhere' }}
+                    >
+                      {country}
+                    </span>
+                  </>
+                );
+                if (!onOpen) {
+                  return (
+                    <span key={`${country}-${i}`} className="flex items-center gap-2" style={{ padding: '3px 4px' }}>
+                      {row}
+                    </span>
+                  );
+                }
+                return (
+                  <button
+                    key={`${country}-${i}`}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setOpen(false); onOpen(country); }}
+                    className="flex items-center gap-2 w-full text-left focus:outline-none"
+                    title={`${country} — open their performance card`}
+                    style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer',
+                      padding: '3px 4px', borderRadius: 8,
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    {row}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
+
 function NowPlayingPanel({
   np, onOpenDelegate,
 }: {
@@ -231,12 +461,16 @@ function NowPlayingPanel({
 
   return (
     <div
-      className="flex flex-col justify-between flex-1"
+      // NOT `justify-between` — see PANEL_MIN_HEIGHT. Every pixel the grid
+      // stretched this card by used to open between the delegation's name and
+      // the clock; the column now stacks tightly from the top and one flexible
+      // spacer at the bottom takes the surplus.
+      className="flex flex-col flex-1"
       style={{
         backgroundColor: NEU.base,
         boxShadow: NEU.inSm,
         borderRadius: PANEL_RADIUS,
-        padding: '14px 15px 13px',
+        padding: '12px 13px 11px',
         minHeight: PANEL_MIN_HEIGHT,
       }}
     >
@@ -245,12 +479,14 @@ function NowPlayingPanel({
       <div className="flex items-start gap-3 min-w-0">
         <span
           className="flex items-center justify-center rounded-full flex-shrink-0 overflow-hidden"
-          style={{ width: 60, height: 60, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+          style={{ width: 56, height: 56, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
           aria-hidden
         >
+          {/* `DelegationMark`, not `FlagImg`: a cabinet post or a character seat
+              has no ISO code and must not fall back to a globe. */}
           {np.flag
-            ? <FlagImg code={flagCodeFor(np.flag)} size={38} />
-            : <Glyph size={26} style={{ color: np.tone === 'off' ? SOFT : ink }} />}
+            ? <DelegationMark country={np.flag} size={36} />
+            : <Glyph size={25} style={{ color: np.tone === 'off' ? SOFT : ink }} />}
         </span>
 
         <div className="min-w-0 flex-1">
@@ -325,8 +561,11 @@ function NowPlayingPanel({
 
       {/* The scrubber. Always present — an empty track when there is genuinely
           nothing to measure, never a missing one. Every fill is derived from a
-          stored anchor on each render; nothing here counts down or writes. */}
-      <div style={{ marginBlockStart: 10 }}>
+          stored anchor on each render; nothing here counts down or writes.
+          10 → 8: this is the gap the owner called out as "the gap between
+          speaker and the timer". Most of that gap was the `justify-between`
+          surplus above, but the fixed part shrank with it. */}
+      <div style={{ marginBlockStart: 8 }}>
         <div
           className="w-full overflow-hidden"
           style={{
@@ -352,7 +591,14 @@ function NowPlayingPanel({
             wrong once a caption can be two lines — it would hang the second
             line below the box — so the row aligns to the start and each side
             keeps its own block. */}
-        <div className="flex items-start justify-between gap-3" style={{ marginBlockStart: 7 }}>
+        {/* THE ROOM'S CLOCK IS THE RIGHT-HAND HALF OF THIS ROW, and this row
+            sits directly above the queue strip — which is exactly where the
+            owner asked for it ("right on top of the queue on the right side,
+            don't move anything"). A caucus already reported its total clock
+            here and is untouched; the GSL branch now reports the speaker's own
+            countdown in the slot that used to read "14 still on the list".
+            Nothing was rearranged to make room. */}
+        <div className="flex items-start justify-between gap-3" style={{ marginBlockStart: 6 }}>
           <span
             className="font-semibold"
             style={{
@@ -396,7 +642,7 @@ function NowPlayingPanel({
             without, must still be the same shape. */}
         <div
           className="flex flex-col justify-end"
-          style={{ minHeight: UP_NEXT_SLOT_HEIGHT, marginBlockStart: 9 }}
+          style={{ minHeight: UP_NEXT_SLOT_HEIGHT, marginBlockStart: 7 }}
         >
           {np.next && (
             <>
@@ -415,23 +661,26 @@ function NowPlayingPanel({
                   <QueueFlag key={`${n}-${i}`} country={n} position={i + 1} onOpen={onOpenDelegate} />
                 ))}
                 {np.next.more > 0 && (
-                  <span
-                    className="font-extrabold flex-shrink-0"
-                    style={{
-                      color: SOFT, fontFamily: OUTFIT, fontSize: 11,
-                      fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-                      marginInlineStart: 2,
-                    }}
-                    title={`${np.next.more} more waiting on this list`}
-                  >
-                    +{np.next.more}
-                  </span>
+                  <QueueOverflow
+                    label={np.next.label}
+                    rest={np.next.all.slice(np.next.names.length)}
+                    shown={np.next.names.length}
+                    onOpen={onOpenDelegate}
+                  />
                 )}
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* WHERE THE GRID'S SURPLUS HEIGHT LANDS. `items-stretch` sizes every card
+          in a row to the tallest, and something has to claim the difference —
+          when nothing did, it pooled at the bottom of the CARD as a dead band,
+          and when `justify-between` did, it opened a rift between the speaker
+          and the clock. It lands here instead: below the queue, inside the
+          panel, where it reads as the panel's own bottom padding. */}
+      <div style={{ flex: '1 1 0', minHeight: 0 }} aria-hidden />
     </div>
   );
 }
@@ -648,7 +897,6 @@ export function CommitteeCard({
   const np = nowPlaying(data, now);
   const warnings = cardWarnings(data, now);
   const facts = cardFacts(data);
-  const topic = committeeTopic(data);
 
   // `subtitle` is no longer RENDERED — the full name under the acronym is gone,
   // on the owner's instruction: UNSC, WHO and ECOFIN all read fine alone, and
@@ -669,6 +917,10 @@ export function CommitteeCard({
 
   const top = warnings[0] ?? null;
   const extraWarnings = Math.max(0, warnings.length - 1);
+  // The warning slot reserves height only when it has a tenant — see
+  // WARNING_SLOT_HEIGHT. Its two tenants are mutually exclusive by construction:
+  // `cardWarnings` returns early for `status === 'not-started'`.
+  const hasSlotContent = status === 'not-started' || !!top;
 
   return (
     <div
@@ -756,40 +1008,42 @@ export function CommitteeCard({
             >
               {title}
             </h3>
-            {/* THE COMMITTEE'S TOPIC, in the line the repeated full name used to
-                occupy. An acronym plus its own spelled-out name said one thing
-                twice; an acronym plus what the room is DEBATING says two.
+            {/* ── THE COMMITTEE'S TOPIC LINE WAS HERE AND IS GONE ─────────────
+                "Remove topics completely now." It printed
+                `conference_committees.topics[0]` with a "+N" for the rest of the
+                array, and it was the single most expensive line on the card:
+                measured at 344px (the narrowest column the grid produces) with
+                the status word beside it, one topic wrapped to FIVE lines and
+                made the identity band 164px tall on its own.
 
-                SOFT at 12.5px — 5.55:1 on the card, the same ink the repeated
-                name was set in, so nothing about the contrast of this slot
-                changed when its content did. It wraps; it is never cut. */}
-            {topic && (
-              <p
-                className="font-semibold"
-                style={{
-                  color: SOFT, fontFamily: OUTFIT, fontSize: 12.5,
-                  lineHeight: 1.28, marginBlockStart: 2, overflowWrap: 'anywhere',
-                  textWrap: 'pretty',
-                }}
-                title={topic.more > 0
-                  ? `${topic.text} — and ${topic.more} further topic${topic.more === 1 ? '' : 's'} on this committee's agenda`
-                  : topic.text}
-              >
-                {topic.text}
-                {topic.more > 0 && (
-                  <span style={{ fontWeight: 700 }}> +{topic.more}</span>
-                )}
-              </p>
-            )}
+                WHEN THE SESSIONS SIDE INTRODUCES TOPIC SELECTION, SHOW ONLY THE
+                SINGLE SELECTED TOPIC HERE — NOT THE ARRAY. `topics` is the whole
+                agenda a committee was created with; what belongs on a live card
+                is the one topic the room is actually debating. Until the session
+                records that, there is nothing honest to print, so nothing is
+                printed. The "+N" is specifically what must not come back.
+
+                (The CAUCUS topic is a different fact and is still shown — see
+                `contextTopic` in the now-playing panel. That is the chair's own
+                typed motion purpose, not the committee's agenda.) */}
           </div>
 
-          {/* The status WORD, and only the word.
-              The "quiet 44d" line that used to sit under it is gone on the
-              owner's instruction: "Stalled" over "quiet 44d" was one fact told
-              twice, and the elapsed span was the half that cost a line. The
-              staleness that produced the word still drives the word, the rail
-              colour beside it and the card's position in the grid. */}
-          <div className="flex flex-col items-end flex-shrink-0" style={{ paddingBlockStart: 3 }}>
+          {/* ── The status WORD, and THE DAIS DIRECTLY BENEATH IT ────────────
+              "The chairs should be vertical below the status, so below stalled
+              or suspended right now." So the dais moved out of its own
+              full-width row and became a vertical list in this column, hanging
+              off the status word it now sits under.
+
+              Two things this buys beyond the owner's ask: the card loses a whole
+              band (a 24px row plus its 9px lead), and the chairs stop competing
+              with the committee's name for the same line of the card.
+
+              The "quiet 44d" line that used to sit under the status word is
+              still gone, on an earlier instruction: "Stalled" over "quiet 44d"
+              was one fact told twice. The staleness that produced the word still
+              drives the word, the rail colour beside it and the card's position
+              in the grid. */}
+          <div className="flex flex-col items-end flex-shrink-0" style={{ paddingBlockStart: 3, maxWidth: '52%' }}>
             <span
               className="inline-flex items-center gap-1.5"
               title="Whether this room has shown a sign of life recently — a chair action, a logged speech or a chat message"
@@ -808,46 +1062,76 @@ export function CommitteeCard({
                 {meta.label}
               </span>
             </span>
-          </div>
-        </div>
 
-        {/* ── BAND 2b · the dais ────────────────────────────────────────────
-            Chairs belong at the TOP, with the room's identity: an organiser
-            walking the floor is looking for a PERSON, and hunting for that in a
-            chip strip below the fold made them the least prominent fact on a
-            card about a room they run. Full width — this row sits below the
-            emblem's inner half, so it does not need the header's indent — and
-            it WRAPS, so a four-chair dais is never cut to "Alice, Bob, Ch…". */}
-        <div
-          className="flex items-center gap-2 flex-wrap"
-          style={{ marginBlockStart: 9 }}
-        >
-          {/* `nested` because the whole card is role="button" (:675) — the link
-              must stop propagation or opening a chair's CV would also fire the
-              card's own recap. Chairs with no account carry `id: null` and stay
-              unlinked on their own. */}
-          <AvatarStack
-            people={chairPeople}
-            size={24}
-            max={4}
-            label="Chairs"
-            ringColor={NEU.surface}
-            shadow={NEU.outSm}
-            empty={null}
-            linkToCv
-            nested
-          />
-          <span
-            className="font-semibold min-w-0"
-            style={{
-              color: facts.chairs.length > 0 ? SOFT : AMBER_INK,
-              fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.3,
-              overflowWrap: 'anywhere',
-            }}
-            title={data.conf.chairs.map((c) => c.name).join(', ') || 'No chair assigned'}
-          >
-            {facts.chairs.length > 0 ? facts.chairs.join(', ') : 'No chair assigned'}
-          </span>
+            {/* ONE ROW PER CHAIR, in reading order, right-aligned under the
+                word. Names are the first names `chairFirstNames` already
+                resolves — not a truncation: it is the card's established chair
+                rule (`display_chairs[].name` title-cased, deduplicated), and the
+                full name rides along in `title` and in the link. A name that is
+                too wide WRAPS; nothing here is ever cut.
+
+                No cap and no "+N": a four-chair dais is uncommon and a hidden
+                chair is exactly the person an organiser walking the floor is
+                trying to find. */}
+            <div className="flex flex-col items-end" style={{ marginBlockStart: 5, gap: 3, width: '100%' }}>
+              {chairPeople.length === 0 ? (
+                <span
+                  className="font-semibold text-right"
+                  style={{ color: AMBER_INK, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.25 }}
+                >
+                  No chair assigned
+                </span>
+              ) : (
+                chairPeople.map((c, i) => {
+                  const label = facts.chairs[i] ?? c.name;
+                  const row = (
+                    <>
+                      <span
+                        className="font-semibold text-right min-w-0"
+                        style={{
+                          color: SOFT, fontFamily: OUTFIT, fontSize: 12,
+                          lineHeight: 1.25, overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {label}
+                      </span>
+                      <span
+                        className="inline-flex rounded-full flex-shrink-0"
+                        style={{ boxShadow: `0 0 0 1.5px ${NEU.surface}, ${NEU.outSm}`, borderRadius: '50%' }}
+                      >
+                        <Avatar url={c.avatarUrl} name={c.name} size={18} rounded />
+                      </span>
+                    </>
+                  );
+                  // `nested` because the whole card is role="button" — the link
+                  // must stop propagation or opening a chair's CV would also
+                  // fire the card's own recap. A chair with no account carries
+                  // `id: null`, and ProfileLink renders those children BARE —
+                  // which is why the flex row is an outer span here rather than
+                  // ProfileLink's own className. Without it, an unlinked chair's
+                  // name and face would fall out of the row and stack.
+                  return (
+                    <span
+                      key={`${c.id ?? c.name}-${i}`}
+                      className="flex items-center gap-1.5 justify-end"
+                      style={{ maxWidth: '100%' }}
+                      title={c.name}
+                    >
+                      <ProfileLink
+                        userId={c.id}
+                        name={c.name}
+                        nested
+                        className="inline-flex items-center gap-1.5 justify-end"
+                        style={{ minWidth: 0 }}
+                      >
+                        {row}
+                      </ProfileLink>
+                    </span>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ── BAND 3 · NOW PLAYING ─────────────────────────────────────────────
@@ -857,7 +1141,7 @@ export function CommitteeCard({
         <div
           className="flex flex-col flex-1"
           style={{
-            marginBlockStart: 12,
+            marginBlockStart: 10,
             marginInlineStart: -(PAD_START - PANEL_GUTTER),
             marginInlineEnd: -(PAD_END - PANEL_GUTTER),
           }}
@@ -883,7 +1167,12 @@ export function CommitteeCard({
             slot rather than growing a sixth band because a never-opened room can
             never have a warning to be crowded out by: `cardWarnings` returns
             early for `status === 'not-started'`. */}
-        <div className="flex items-center" style={{ minHeight: WARNING_SLOT_HEIGHT }}>
+        <div
+          className="flex items-center"
+          style={hasSlotContent
+            ? { minHeight: WARNING_SLOT_HEIGHT, marginBlockStart: 8 }
+            : undefined}
+        >
           {status === 'not-started' && <NotStartedNudge data={data} now={now} />}
           {top && (
             <span
@@ -940,7 +1229,7 @@ export function CommitteeCard({
             shrink and clip at 1280. */}
         <div
           className="flex items-center gap-1.5 flex-wrap min-w-0"
-          style={{ marginBlockEnd: 11, rowGap: 6 }}
+          style={{ marginBlockStart: 9, marginBlockEnd: 9, rowGap: 6 }}
         >
           <button
             onClick={(e) => { e.stopPropagation(); onOpenRoster(data); }}
@@ -1006,7 +1295,7 @@ export function CommitteeCard({
           // order silently wipes the divider.
           border: 'none',
           borderBlockStart: `1px solid ${CARD_BORDER_COLOR}`,
-          padding: `12px ${PAD_END}px 13px ${PAD_START}px`,
+          padding: `10px ${PAD_END}px 10px ${PAD_START}px`,
           color: NEU.forest, fontFamily: OUTFIT,
           backgroundColor: 'transparent',
           cursor: 'pointer',

@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
-import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2, Megaphone, FileCheck } from 'lucide-react';
+import { useState } from 'react';
+import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2, Megaphone, FileCheck, Radio } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
@@ -19,6 +19,8 @@ import {
 // `NEU.green` is 4.30:1 and drops to 3.86:1 inside the adopted-resolution tint,
 // so GREEN_INK carries the words and `NEU.green` survives on dots and fills
 // only, where the 3:1 non-text bar applies. See ./tokens for the full sweep.
+import { type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
+import { CommitteeScoreboardBody } from './ScoreboardTable';
 import { SOFT, GREEN_INK } from './tokens';
 import { committeeIdentity } from './identity';
 
@@ -275,8 +277,19 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 
 /** Exported so the per-committee scoreboard and the scoped broadcast composer
  *  open in the SAME shell as the recap, roster and awards modals rather than
- *  each growing their own. `maxWidth` widens it for the scoreboard's table. */
-export function ModalShell({ children, onClose, maxWidth = 672 }: { children: React.ReactNode; onClose: () => void; maxWidth?: number }) {
+ *  each growing their own. `maxWidth` widens it for the scoreboard's table.
+ *
+ *  `rail` is the bookmark strip — see `ModalRail` below. It is rendered OUTSIDE
+ *  the scrolling card on purpose. */
+export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
+  children: React.ReactNode;
+  onClose: () => void;
+  maxWidth?: number;
+  /** Tabs pinned to the modal's edge. MUST NOT scroll with the body and MUST
+   *  NOT be clipped by it, so it is a SIBLING of the scroll container rather
+   *  than a child — see the layout note in the body. */
+  rail?: (side: boolean) => React.ReactNode;
+}) {
   /* The page behind a dialog must not scroll, and Escape must dismiss it.
      Both come from the shared implementations rather than being hand-rolled
      here: the lock is reference counted (a confirm stacked on this must not
@@ -299,10 +312,48 @@ export function ModalShell({ children, onClose, maxWidth = 672 }: { children: Re
         style={{ backgroundColor: 'rgba(27,20,16,0.42)' }}
         onClick={onClose}
       >
+        {/* THE POSITIONING SHELL, and the reason the rail cannot be inside the
+            card. The card is the scroll container (`overflow-y: auto`), so a
+            rail rendered as its child would scroll away with the body — and the
+            card is also rounded, so an absolutely positioned rail inside it
+            would be clipped at the corner. AGENTS.md forbids both. The rail is
+            therefore a SIBLING, anchored to this wrapper.
+
+            BELOW `lg` (1024px) THE RAIL IS NOT A SIDE RAIL AT ALL. There is not
+            enough room beside a 672–760px card on a narrow screen — the tabs
+            would be pushed off-screen or over the backdrop's edge — so it
+            becomes a horizontal strip ABOVE the card. Same component, same
+            always-visible contract, no clipping either way. */}
         <div
-          className="w-full rounded-[22px] p-8 relative overflow-y-auto"
-          style={{ backgroundColor: NEU.surface, boxShadow: NEU.out, maxWidth, maxHeight: 'calc(100vh - 64px)', fontFamily: OUTFIT }}
+          className="w-full relative flex flex-col"
+          style={{ maxWidth }}
           onClick={(e) => e.stopPropagation()}
+        >
+          {rail && (
+            <>
+              <div className="lg:hidden flex flex-wrap gap-1.5" style={{ marginBlockEnd: 8 }}>
+                {rail(false)}
+              </div>
+              <div
+                className="hidden lg:flex flex-col"
+                style={{
+                  position: 'absolute', insetInlineStart: '100%', insetBlockStart: 26,
+                  gap: 6, zIndex: 0, marginInlineStart: -10,
+                }}
+              >
+                {rail(true)}
+              </div>
+            </>
+          )}
+        <div
+          className={`w-full rounded-[22px] p-8 relative overflow-y-auto${rail ? ' max-h-[calc(100vh-170px)] lg:max-h-[calc(100vh-64px)]' : ''}`}
+          style={{
+            backgroundColor: NEU.surface, boxShadow: NEU.out, fontFamily: OUTFIT,
+            // The card paints ON TOP of the rail, so the tabs read as bookmarks
+            // tucked behind its edge rather than as buttons floating beside it.
+            zIndex: 1,
+            ...(rail ? {} : { maxHeight: 'calc(100vh - 64px)' }),
+          }}
         >
           <button
             onClick={onClose}
@@ -316,12 +367,95 @@ export function ModalShell({ children, onClose, maxWidth = 672 }: { children: Re
           </button>
           {children}
         </div>
+        </div>
       </div>
     </Portal>
   );
 }
 
-function StatTile({ icon: Icon, emoji, gradient, value, label, onClick }: { icon: LucideIcon; emoji: string; gradient: NeuGradient; value: string; label: string; onClick?: () => void }) {
+/** ONE BOOKMARK on the rail.
+ *
+ *  A real `<button>` in both orientations — the rail is keyboard-reachable and
+ *  the tabs are in DOM order, which is why the narrow strip can be the same
+ *  component rotated into a row rather than a second implementation.
+ *
+ *  `side` renders the bookmark shape: square on the edge that meets the card,
+ *  rounded on the outside, tucked 10px under the card by the rail's own
+ *  negative margin so the two read as one object. The narrow variant is a
+ *  plain pill, because a bookmark hanging off the top of a card is just a tab.
+ *
+ *  COLOUR: the label is `NEU.forest` (10.73:1) when active and `SOFT` (5.55:1)
+ *  when not. Neither is `NEU.muted`, which is 2.81:1 and decoration only. */
+export function RailTab({
+  icon: Icon, label, count, active, side, onClick, title,
+}: {
+  icon: LucideIcon;
+  label: string;
+  /** Rendered as a small tabular figure after the label. Omit for an action. */
+  count?: number;
+  active?: boolean;
+  side: boolean;
+  onClick: () => void;
+  title?: string;
+}) {
+  const ink = active ? NEU.forest : SOFT;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-current={active ? 'page' : undefined}
+      className="inline-flex items-center gap-2 focus:outline-none"
+      style={{
+        border: 'none', cursor: 'pointer', fontFamily: OUTFIT,
+        fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: ink,
+        backgroundColor: active ? NEU.surface : NEU.base,
+        boxShadow: active
+          ? '6px 4px 12px rgba(27,56,40,0.16), -2px -2px 6px rgba(255,255,255,0.7)'
+          : NEU.outSm,
+        ...(side
+          ? {
+              borderRadius: '0 12px 12px 0',
+              padding: '9px 12px 9px 16px',
+              width: 158, justifyContent: 'flex-start',
+              transform: active ? 'translateX(3px)' : 'translateX(0)',
+            }
+          : { borderRadius: 999, padding: '7px 12px' }),
+        transitionProperty: 'transform, box-shadow, background-color, color',
+        transitionDuration: '200ms', transitionTimingFunction: EASE,
+      }}
+    >
+      <Icon size={13} style={{ flexShrink: 0, color: ink }} />
+      <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{label}</span>
+      {typeof count === 'number' && count > 0 && (
+        <span
+          style={{
+            marginInlineStart: 'auto', fontSize: 10.5, fontWeight: 800,
+            fontVariantNumeric: 'tabular-nums', color: SOFT, flexShrink: 0,
+          }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function StatTile({ icon: Icon, emoji, gradient, value, label, onClick, title }: {
+  icon: LucideIcon; emoji: string; gradient: NeuGradient; value: string; label: string;
+  onClick?: () => void;
+  /** The caveat this figure carries, if it carries one.
+   *
+   *  These used to be a paragraph printed under the tile grid — "Speeches counts
+   *  logged speeches only… Motions raised counts motions a chair accepted…" —
+   *  which the owner asked to remove. The caveats are true and are not dropped;
+   *  they moved here, onto the number they qualify, where a reader who wonders
+   *  can get them and a reader who does not is not made to read them. A native
+   *  `title` is the right affordance for a one-line explainer (AGENTS.md, UI
+   *  RULES: informational hints reveal on hover, never on click) and cannot be
+   *  clipped by the modal's own scroll container. */
+  title?: string;
+}) {
   const body = (
     <>
       <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={36} />
@@ -345,7 +479,7 @@ function StatTile({ icon: Icon, emoji, gradient, value, label, onClick }: { icon
         }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `inset 2px 2px 6px rgba(27,56,40,0.18), inset -2px -2px 6px rgba(255,255,255,0.85)`; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.inSm; }}
-        title="Open this section below"
+        title={title ?? 'Open this section'}
       >
         {body}
       </button>
@@ -353,7 +487,10 @@ function StatTile({ icon: Icon, emoji, gradient, value, label, onClick }: { icon
   }
   return (
     <NeuInset className="flex items-center gap-3" style={{ padding: '13px 14px', borderRadius: 14 }}>
-      {body}
+      {/* The caveat rides on a wrapper rather than on `NeuInset`, which takes no
+          `title` — and `neu.tsx` is a shared surface another workstream is
+          editing, so it is not widened for this. */}
+      <span title={title} className="flex items-center gap-3 w-full min-w-0">{body}</span>
     </NeuInset>
   );
 }
@@ -802,25 +939,74 @@ function DocumentsRecap({
 
 // ── Recap modal ─────────────────────────────────────────────────────────────
 
+export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'feedback' | 'attendance';
+
+/** THE RECAP IS NO LONGER ONE LONG SCROLL.
+ *
+ *  The owner: "opening the committee for the session recap looks messy… I'm
+ *  just cleaning up so it's not that big and scrollable. Add a 'side tab' kinda
+ *  like a bookmark attached to the session recap that opens the documents as
+ *  well as the full scoreboard and chair feedback, and also delegate
+ *  attendance. Add also the broadcast tool into here. Make sure these always
+ *  stay there attached to the status."
+ *
+ *  So the five sections that used to be stacked in one column are five panels
+ *  behind a bookmark rail, and NOT ONE OF THEM WAS REBUILT:
+ *
+ *    Documents   → `DocumentsRecap`            (unchanged, same type filter)
+ *    Scoreboard  → `CommitteeScoreboardBody`   (the exact body the standalone
+ *                                               Points modal renders)
+ *    Feedback    → `FeedbackRecap`             (unchanged)
+ *    Attendance  → `RosterBody`                (the exact body `RosterModal`
+ *                                               renders)
+ *    Broadcast   → `BroadcastComposer`, via `onBroadcast`
+ *
+ *  BROADCAST IS AN ACTION TAB, not a panel, and that is deliberate:
+ *  `BroadcastComposer` is its own portalled full-screen dialog with its own
+ *  backdrop and its own send/confirm flow. Rendering it inside a panel would
+ *  mean rebuilding it, which is exactly what the owner asked not to happen, so
+ *  the tab hands off to the real composer — the same handoff the "MESSAGE THIS
+ *  COMMITTEE" button used to make from the bottom of the scroll.
+ *
+ *  The rail is rendered by `ModalShell` OUTSIDE the scrolling card, so it can
+ *  neither be clipped by the card's rounded overflow nor scroll away from the
+ *  status it is attached to. Below `lg` it becomes a horizontal strip above the
+ *  card — see the layout note in `ModalShell`. Scroll lock and the shared
+ *  Escape stack are untouched; they still come from `ModalShell`. */
 export function RecapModal({
   data, onClose, onOpenScoreboard, onBroadcast, floorDetail = null, initialDocFilter = 'all',
+  scoreboard = null, scoreboardLoading = false, scoreboardError = '', onWantScoreboard,
+  conferenceSlug,
 }: {
   data: LiveCommittee;
   onClose: () => void;
   /** Set when the recap was opened by a WP or DR chip on the card rather than by
-   *  the card body. The modal then opens ALREADY scrolled to Documents and
-   *  already narrowed to that type, instead of dropping the reader at the top of
-   *  a session recap and asking them to find the section themselves. */
+   *  the card body. The modal then opens ON the Documents tab, already narrowed
+   *  to that type.
+   *
+   *  This replaces a scroll-into-view dance that had to be done from a ref
+   *  callback because `Portal` commits nothing on its first pass. With tabs
+   *  there is nothing to scroll to: the section the reader asked for is the only
+   *  one rendered. */
   initialDocFilter?: DocFilter;
   /** The phase-specific body (caucus clock, ballot breakdown, unmod countdown).
    *  Passed IN rather than imported, because `PhaseVariants` already imports
    *  this module and reaching back the other way would make the pair circular. */
   floorDetail?: React.ReactNode;
-  /** Points → the same scoreboard the chairs see. */
+  /** Points → the standalone scoreboard modal. Still reachable, for a reader who
+   *  wants it at its own full width. */
   onOpenScoreboard: (d: LiveCommittee) => void;
   /** Broadcast scoped to THIS room. Absent when the committee has no session to
    *  address. */
   onBroadcast: ((d: LiveCommittee) => void) | null;
+  /** The whole-conference scoreboard, loaded lazily and once by the page. Null
+   *  until the reader opens a Points view — which is what `onWantScoreboard`
+   *  tells the page has happened. */
+  scoreboard?: ConferenceScoreboard | null;
+  scoreboardLoading?: boolean;
+  scoreboardError?: string;
+  onWantScoreboard?: () => void;
+  conferenceSlug: string;
 }) {
   const session = data.session;
   // `phase` is left at whatever the room was last doing when it was gavelled out
@@ -836,45 +1022,20 @@ export function RecapModal({
         : (PHASE_LABELS[session.phase] ?? session.phase);
   const ident = committeeIdentity(data.conf);
 
-  // Documents section, targeted by the WP/DR tiles here AND by the WP/DR chips
-  // on the card, which open this modal with `initialDocFilter` already set.
-  const docsRef = useRef<HTMLDivElement | null>(null);
+  const [tab, setTab] = useState<RecapTab>(initialDocFilter === 'all' ? 'overview' : 'documents');
   const [docFilter, setDocFilter] = useState<DocFilter>(initialDocFilter);
-  function jumpToDocs(type: 'working-paper' | 'draft-resolution') {
+
+  function openDocs(type: DocFilter) {
     setDocFilter(type);
-    // The modal body is the scroll container, so `scrollIntoView` on the section
-    // is the whole job — no manual offset arithmetic.
-    requestAnimationFrame(() => docsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    setTab('documents');
   }
-  // Opened FROM a document chip on a card: land on Documents rather than at the
-  // top of a session recap the reader did not ask for.
-  //
-  // This is a REF CALLBACK, not an effect, and that is load-bearing. `ModalShell`
-  // renders through `Portal`, which resolves its target inside an effect and so
-  // commits NOTHING on its first pass. Every effect in this component therefore
-  // runs while `docsRef.current` is still null — and never runs a second time,
-  // because it is `Portal` that re-renders when the target resolves, not this
-  // component. (A `useLayoutEffect` here silently did nothing at all: verified
-  // against the real page, the modal opened at the top.) A ref callback fires at
-  // the moment the node actually attaches, which is the moment there is
-  // something to scroll to.
-  const jumped = useRef(false);
-  const attachDocs = useCallback((el: HTMLDivElement | null) => {
-    docsRef.current = el;
-    if (!el || jumped.current || initialDocFilter === 'all') return;
-    jumped.current = true;
-    // `auto`, not `smooth`: the reader asked for this section, not for a
-    // scroll-past of everything above it.
-    //
-    // Twice, and the FIRST one is synchronous on purpose. The node is attached
-    // and its scroll container is already laid out, so the immediate call is
-    // what actually positions the modal; the extra frame only corrects for the
-    // logo disc and the flag images resolving their boxes late. A lone
-    // `requestAnimationFrame` would be a silent no-op in a background tab,
-    // where rAF never fires at all.
-    el.scrollIntoView({ behavior: 'auto', block: 'start' });
-    requestAnimationFrame(() => el.scrollIntoView({ behavior: 'auto', block: 'start' }));
-  }, [initialDocFilter]);
+  function openScoreboardTab() {
+    // The page loads the conference scoreboard lazily and once; this is what
+    // tells it a reader has asked for it. Calling it from the click rather than
+    // from an effect keeps it to exactly one call per press.
+    onWantScoreboard?.();
+    setTab('scoreboard');
+  }
 
   // Speech-only: `speechLogs` no longer carries motions, rights of reply or
   // manual point adjustments, so this tile stops over-reporting.
@@ -887,9 +1048,6 @@ export function RecapModal({
   // BOTH accept and reject (`committeeService.ts:683, 688, 846, 851, 884`), which
   // is why that whole table holds about five rows platform-wide. `motion-raised`
   // ledger events survive — 95 of them in production.
-  //
-  // The caveat is printed under the tiles rather than buried here: only motions
-  // a chair ACCEPTED leave a ledger entry, so this is a floor and never a total.
   const motionsLogged = data.eventLogs.filter((e) => e.type === 'motion-raised').length;
 
   // TOTAL SPEAKING TIME — fully derivable, no caveat needed. All 333 production
@@ -911,10 +1069,47 @@ export function RecapModal({
     window.open(`/chair/${session.code}?chairName=Secretariat`, '_blank');
   }
 
+  const rail = (side: boolean) => (
+    <>
+      <RailTab
+        side={side} icon={Radio} label="Overview" active={tab === 'overview'}
+        onClick={() => setTab('overview')}
+        title="What this room has done — speeches, time, motions, top and quietest delegation"
+      />
+      <RailTab
+        side={side} icon={FileText} label="Documents" count={data.documents.length}
+        active={tab === 'documents'} onClick={() => openDocs('all')}
+        title="Working papers and draft resolutions, grouped by where they are in the pipeline"
+      />
+      <RailTab
+        side={side} icon={Trophy} label="Scoreboard" active={tab === 'scoreboard'}
+        onClick={openScoreboardTab}
+        title="The full delegate performance table — the same one the chairs score from"
+      />
+      <RailTab
+        side={side} icon={MessageSquareText} label="Chair feedback" count={data.feedback.length}
+        active={tab === 'feedback'} onClick={() => setTab('feedback')}
+        title="Ratings and private notes the dais has written, per delegation"
+      />
+      <RailTab
+        side={side} icon={Users} label="Attendance" count={votingTotal}
+        active={tab === 'attendance'} onClick={() => setTab('attendance')}
+        title="The roll — present, present & voting, absent, and each delegation's speaking time"
+      />
+      {onBroadcast && (
+        <RailTab
+          side={side} icon={Megaphone} label="Broadcast"
+          onClick={() => onBroadcast(data)}
+          title="Send a message to this committee — opens the broadcast composer"
+        />
+      )}
+    </>
+  );
+
   return (
-    <ModalShell onClose={onClose}>
+    <ModalShell onClose={onClose} maxWidth={760} rail={rail}>
       {/* Header — same acronym-over-full-name rule the cards follow. */}
-      <div className="flex items-center gap-3.5 mb-1">
+      <div className="flex items-center gap-3.5 mb-1" style={{ paddingInlineEnd: 36 }}>
         <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={ident.mono} alt={ident.title} />
         <div className="min-w-0">
           <Eyebrow>Session recap</Eyebrow>
@@ -935,122 +1130,139 @@ export function RecapModal({
         ? <p className="text-sm mb-5" style={{ color: SOFT, fontFamily: OUTFIT }}>{ident.subtitle}</p>
         : <div className="mb-5" />}
 
-      {/* THE LIVE FLOOR, IN FULL.
-          The caucus clock, the ballot breakdown and the unmoderated countdown
-          used to live on the CARD, where they forced four different card shapes
-          and with them the height chaos. They are detail, not scanning
-          information, so they moved here — where a detail view legitimately
-          wants them, and where a caller has already chosen this one room. */}
-      {floorDetail}
+      {tab === 'overview' && (
+        <>
+          {/* THE LIVE FLOOR, IN FULL.
+              The caucus clock, the ballot breakdown and the unmoderated
+              countdown used to live on the CARD, where they forced four
+              different card shapes and with them the height chaos. They are
+              detail, not scanning information, so they moved here. */}
+          {floorDetail}
 
-      {/* Stat tiles. The WP and DR tiles open the documents section below. */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-        <StatTile icon={Mic} emoji="Studio microphone" gradient={NEU_GRADIENTS.forest} value={String(speeches)} label="Speeches given" />
-        <StatTile icon={Clock} emoji="Stopwatch" gradient={NEU_GRADIENTS.sage} value={fmtSpeakingTotal(totalSpeakingSeconds)} label="Total speaking time" />
-        <StatTile icon={Gavel} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.gold} value={String(motionsLogged)} label="Motions raised" />
-        <StatTile icon={Users} emoji="Person raising hand" gradient={NEU_GRADIENTS.sage} value={`${present}/${votingTotal}`} label="Delegates present" />
-        <StatTile icon={FileText} emoji="Page facing up" gradient={NEU_GRADIENTS.green} value={String(wps)} label="Working papers" onClick={wps > 0 ? () => jumpToDocs('working-paper') : undefined} />
-        <StatTile icon={ScrollText} emoji="Scroll" gradient={NEU_GRADIENTS.amber} value={String(drs)} label="Draft resolutions" onClick={drs > 0 ? () => jumpToDocs('draft-resolution') : undefined} />
-      </div>
-      <p className="text-[11px] -mt-4 mb-6" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5 }}>
-        <strong>Speeches</strong> counts logged speeches only — motions, rights of reply and manual
-        point adjustments share the same ledger but are not speeches.{' '}
-        <strong>Motions raised</strong> counts motions a chair accepted: a rejected motion is deleted
-        from the database outright and leaves no record anywhere, so the true total can only be
-        higher than this.
-        {observers > 0 && <> Present excludes {observers} observer{observers === 1 ? '' : 's'}, matching the chair&apos;s roll.</>}
-      </p>
-
-      {/* Points. The heading is now a door: it opens the per-committee
-          scoreboard — the same view the chairs score from — instead of leaving
-          the reader with two rows and no way further in. */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between gap-3">
-          <Eyebrow>Points</Eyebrow>
-          <button
-            onClick={() => onOpenScoreboard(data)}
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1 focus:outline-none"
-            style={{
-              color: NEU.forest, fontFamily: OUTFIT, backgroundColor: NEU.surface,
-              boxShadow: NEU.outSm, border: 'none', cursor: 'pointer',
-              transition: `box-shadow 200ms ${EASE}`,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
-          >
-            <Trophy size={12} />
-            Full delegate performance
-          </button>
-        </div>
-      </div>
-      {scores.length > 0 && (
-        <div className="mb-6" style={{ marginBlockStart: -14 }}>
-          <div className="mt-2 flex flex-col gap-2">
-            {[{ label: 'Top delegate', row: top }, ...(quietest ? [{ label: 'Quietest delegate', row: quietest }] : [])].map((entry) => (
-              <NeuInset
-                key={entry.label}
-                className="flex items-center gap-3"
-                style={{ padding: '11px 14px', borderRadius: 14 }}
-              >
-                <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em', width: 130 }}>
-                  {entry.label}
-                </span>
-                <FlagImg code={flagCodeFor(entry.row.country)} size={20} />
-                <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{entry.row.country}</span>
-                <span className="text-sm font-black" style={{ color: NEU.forest, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                  {entry.row.total} pts
-                </span>
-              </NeuInset>
-            ))}
+          {/* Stat tiles. The WP and DR tiles open the Documents tab.
+              THE PARAGRAPH THAT SAT UNDER THIS GRID IS GONE, on the owner's
+              instruction: "no need for the description below 'speeches counts
+              logged…'". Both caveats it carried are still told — they moved into
+              the tiles' own hover titles, where they are available to a reader
+              who wonders and invisible to one who does not. Nothing was
+              silently dropped. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            <StatTile
+              icon={Mic} emoji="Studio microphone" gradient={NEU_GRADIENTS.forest}
+              value={String(speeches)} label="Speeches given"
+              title="Logged speeches only — motions, rights of reply and manual point adjustments share the same ledger but are not speeches"
+            />
+            <StatTile icon={Clock} emoji="Stopwatch" gradient={NEU_GRADIENTS.sage} value={fmtSpeakingTotal(totalSpeakingSeconds)} label="Total speaking time" />
+            <StatTile
+              icon={Gavel} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.gold}
+              value={String(motionsLogged)} label="Motions raised"
+              title="Motions a chair ACCEPTED: a rejected motion is deleted from the database outright and leaves no record, so the true total can only be higher than this"
+            />
+            <StatTile
+              icon={Users} emoji="Person raising hand" gradient={NEU_GRADIENTS.sage}
+              value={`${present}/${votingTotal}`} label="Delegates present"
+              title={observers > 0
+                ? `Excludes ${observers} observer${observers === 1 ? '' : 's'}, matching the chair's roll`
+                : "The voting body, matching the chair's roll"}
+            />
+            <StatTile icon={FileText} emoji="Page facing up" gradient={NEU_GRADIENTS.green} value={String(wps)} label="Working papers" onClick={wps > 0 ? () => openDocs('working-paper') : undefined} />
+            <StatTile icon={ScrollText} emoji="Scroll" gradient={NEU_GRADIENTS.amber} value={String(drs)} label="Draft resolutions" onClick={drs > 0 ? () => openDocs('draft-resolution') : undefined} />
           </div>
-        </div>
+
+          {/* Points, in summary. The full table is one tab away. */}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <Eyebrow>Points</Eyebrow>
+            <button
+              onClick={openScoreboardTab}
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1 focus:outline-none"
+              style={{
+                color: NEU.forest, fontFamily: OUTFIT, backgroundColor: NEU.surface,
+                boxShadow: NEU.outSm, border: 'none', cursor: 'pointer',
+                transition: `box-shadow 200ms ${EASE}`,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+            >
+              <Trophy size={12} />
+              Full delegate performance
+            </button>
+          </div>
+          {scores.length > 0 && (
+            <div className="mb-6 flex flex-col gap-2">
+              {[{ label: 'Top delegate', row: top }, ...(quietest ? [{ label: 'Quietest delegate', row: quietest }] : [])].map((entry) => (
+                <NeuInset
+                  key={entry.label}
+                  className="flex items-center gap-3"
+                  style={{ padding: '11px 14px', borderRadius: 14 }}
+                >
+                  <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em', width: 130 }}>
+                    {entry.label}
+                  </span>
+                  <FlagImg code={flagCodeFor(entry.row.country)} size={20} />
+                  <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{entry.row.country}</span>
+                  <span className="text-sm font-black" style={{ color: NEU.forest, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                    {entry.row.total} pts
+                  </span>
+                </NeuInset>
+              ))}
+            </div>
+          )}
+
+          {/* Join as secretariat — the one action that belongs on every tab's
+              floor, kept on Overview so it is not repeated five times. */}
+          {session && (
+            <button
+              onClick={joinAsSecretariat}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 font-bold text-sm tracking-widest focus:outline-none"
+              style={{
+                background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+                color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer',
+                boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
+                transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 16px ${NEU_GRADIENTS.forest[0]}66, ${NEU.outSmHover}`; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`; }}
+            >
+              JOIN AS SECRETARIAT
+              <ExternalLink size={14} />
+            </button>
+          )}
+        </>
       )}
 
-      {/* Chair feedback — live off the `feedback` table (ratings + private notes) */}
-      <FeedbackRecap data={data} />
-
-      {/* Working papers + draft resolutions, grouped by where they are in the
-          pipeline. Reachable directly from the WP/DR tiles above. */}
-      <div ref={attachDocs}>
+      {tab === 'documents' && (
         <DocumentsRecap data={data} filter={docFilter} onFilter={setDocFilter} />
-      </div>
-
-      {/* Broadcast to THIS room. `session_broadcasts` holds zero production rows
-          — the feature has never once been used — so the scoped path was walked
-          end to end rather than assumed. */}
-      {onBroadcast && (
-        <button
-          onClick={() => onBroadcast(data)}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 font-bold text-sm tracking-widest focus:outline-none mb-3"
-          style={{
-            backgroundColor: NEU.surface, color: NEU.forest, fontFamily: OUTFIT,
-            letterSpacing: '0.06em', border: 'none', cursor: 'pointer',
-            boxShadow: NEU.outSm, transition: `box-shadow 220ms ${EASE}`,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
-        >
-          <Megaphone size={14} />
-          MESSAGE THIS COMMITTEE
-        </button>
       )}
 
-      {/* Join as secretariat */}
-      {session && (
+      {tab === 'scoreboard' && (
+        <CommitteeScoreboardBody
+          committeeId={data.conf.id}
+          scoreboard={scoreboard}
+          loading={scoreboardLoading}
+          error={scoreboardError}
+          hasSession={!!session}
+          delegationSize={data.conf.delegationSize ?? 1}
+          conferenceSlug={conferenceSlug}
+        />
+      )}
+
+      {tab === 'feedback' && <FeedbackRecap data={data} />}
+
+      {tab === 'attendance' && <RosterBody data={data} />}
+
+      {/* The standalone Points modal stays reachable for a reader who wants the
+          table at its own wider width; the card footer opens it directly. */}
+      {tab === 'scoreboard' && (
         <button
-          onClick={joinAsSecretariat}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 font-bold text-sm tracking-widest focus:outline-none"
+          onClick={() => onOpenScoreboard(data)}
+          className="inline-flex items-center gap-2 mt-3 text-xs font-bold focus:outline-none"
           style={{
-            background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-            color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer',
-            boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
-            transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
+            color: NEU.forest, fontFamily: OUTFIT, background: 'transparent',
+            border: 'none', cursor: 'pointer', padding: 0,
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 16px ${NEU_GRADIENTS.forest[0]}66, ${NEU.outSmHover}`; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`; }}
         >
-          JOIN AS SECRETARIAT
-          <ExternalLink size={14} />
+          <ExternalLink size={12} />
+          Open this scoreboard on its own
         </button>
       )}
     </ModalShell>
@@ -1132,8 +1344,35 @@ function ChairStrip({ chairs, chairNames }: { chairs: ChairPerson[]; chairNames:
 }
 
 export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: () => void }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
   const ident = committeeIdentity(data.conf);
+  return (
+    <ModalShell onClose={onClose}>
+      {/* Header */}
+      <div className="flex items-center gap-3.5 mb-1">
+        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={ident.mono} alt={ident.title} />
+        <div className="min-w-0">
+          <Eyebrow>Roll call · present delegates</Eyebrow>
+          <h2 className="font-black mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.1 }}>
+            {ident.title}
+          </h2>
+        </div>
+      </div>
+      {data.conf.abbreviation && data.conf.abbreviation !== data.conf.name && (
+        <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>{data.conf.name}</p>
+      )}
+      <RosterBody data={data} />
+    </ModalShell>
+  );
+}
+
+/** THE ROLL, WITHOUT A HEADER OF ITS OWN — one implementation, two callers.
+ *
+ *  `RosterModal` above (opened from a card's present/total chip) and the recap
+ *  modal's "Attendance" side-tab, which the owner asked for and which must show
+ *  the same roll rather than a second, thinner version of it. Only the heading
+ *  differs, so only the heading lives outside this. */
+export function RosterBody({ data }: { data: LiveCommittee }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   // Total speaking time + speech count per country, summed from the speaking logs
   // already assembled for this committee (messages sender='__system__' → __log__).
@@ -1160,21 +1399,7 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
   const chairNames = data.session?.chairNames ?? [];
 
   return (
-    <ModalShell onClose={onClose}>
-      {/* Header */}
-      <div className="flex items-center gap-3.5 mb-1">
-        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={ident.mono} alt={ident.title} />
-        <div className="min-w-0">
-          <Eyebrow>Roll call · present delegates</Eyebrow>
-          <h2 className="font-black mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.1 }}>
-            {ident.title}
-          </h2>
-        </div>
-      </div>
-      {data.conf.abbreviation && data.conf.abbreviation !== data.conf.name && (
-        <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>{data.conf.name}</p>
-      )}
-
+    <>
       {/* Present / voting summary */}
       <div className="grid grid-cols-3 gap-3 mt-4 mb-5">
         <StatTile icon={Users} emoji="Person raising hand" gradient={NEU_GRADIENTS.sage} value={`${present}/${total}`} label="Present" />
@@ -1279,7 +1504,7 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
           })}
         </div>
       )}
-    </ModalShell>
+    </>
   );
 }
 
