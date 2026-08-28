@@ -261,6 +261,48 @@ html, body {
   }
 }
 
+/* Conference detail tab panes (src/app/conferences/[slug]/ConferenceDetailClient.tsx).
+   Overview / You / Reviews swap client-side now, so the incoming pane slides in
+   from the direction of travel instead of the whole document reloading.
+   --conf-slide-from is set inline per switch (+ forward, - backward).
+
+   Deliberately no animation-fill-mode: once the 300ms is over the computed
+   transform is back to `none`, so the pane stops being a containing block for
+   the portaled/fixed popovers that render inside it. */
+@keyframes conf-tab-pane-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--conf-slide-from, 26px), 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.conf-tab-pane {
+  animation: conf-tab-pane-in 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The full-width Overview sections below the two columns fade only — they hold
+   the horizontally scrolling committee carousel, and translating a full-bleed
+   block would nudge the page's own horizontal overflow for the duration. */
+@keyframes conf-tab-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.conf-tab-fade {
+  animation: conf-tab-fade-in 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conf-tab-pane,
+  .conf-tab-fade {
+    animation: none;
+  }
+}
+
 /* Typography niceties, site-wide: balance headings so they don't leave a lone
    short last line; pretty body text to avoid single-word orphans.
 

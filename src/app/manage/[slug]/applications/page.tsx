@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   ArrowRight, BadgeCheck, Ban, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, Info, Landmark, LogOut, MapPin,
-  MessageSquareText, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
+  Mail, MessageSquareText, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -13,6 +13,8 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
+import { queueAdHocEmail } from '@/lib/adHocEmail';
+import type { EmailBlock } from '@/lib/emailBlocks';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
@@ -332,6 +334,40 @@ function NotAttendingBadge({ size = 'md' }: { size?: 'sm' | 'md' }) {
  *  ~143px with its glyph, gap and pill padding — so every value occupies the
  *  same position and the same width, and none of them is ever truncated. */
 const LEVEL_SLOT_W = 152;
+
+/** Height of the row's MIDDLE pane content, pinned identically across all
+ *  three states it can be in so a row never changes height when its status
+ *  changes underneath the organiser.
+ *
+ *  Measured, not guessed, from the two states that already had an intrinsic
+ *  height:
+ *    · ALLOCATED — a 92px LogoDisc beside the committee/country text, which is
+ *      shorter than the disc. Block height = 92.
+ *    · PREFERENCES — a 72px LogoDisc beside the preference stack, which is the
+ *      taller of the two: the "PREFERENCES" label (9.5px type ≈ 11.4px line +
+ *      4px margin) over three pills (15px flag + 4px padding top and bottom =
+ *      23px each) with two 4px gaps → 15.4 + 69 + 8 ≈ 92.4. Block height ≈ 92.
+ *  Both land on 92, so that is the number the decision pane matches, and the
+ *  number the preferences/allocate pane is now pinned to rather than left to
+ *  drift with however many preferences a delegate happened to list.
+ *
+ *  It is a MINIMUM, never a fixed height: the reject flow expands a textarea
+ *  in place inside this pane and must be free to grow. */
+const MID_BLOCK_H = 92;
+
+/** The ALLOCATE rail that sits BESIDE the preferences (not under them). Wide
+ *  enough for the button's label at its 12.5px/900 weight plus its glyph and
+ *  18px side padding, and narrow enough to leave the preference pills their
+ *  full three-line stack on a desktop row. Collapses to full width below the
+ *  `sm` breakpoint, where the pane stacks. */
+const ALLOCATE_RAIL_W = 152;
+
+/** Bottom padding the list reserves for the sticky bulk-action bar while a
+ *  selection is live, so the last row is never trapped under it. Was 96, sized
+ *  for a bar that fit on one line; it now carries Remind-to-pay and Email as
+ *  well, which wraps to three or four lines on a 375px phone (~34px per line
+ *  + 20px bar padding + its 20px offset from the bottom). */
+const BULK_BAR_CLEARANCE = 140;
 
 /** Role pill, same upgraded fill treatment. Chairs get the gold accent (forest
  *  glyph on a gold gradient for contrast); delegates read forest, staff slate. */
@@ -802,7 +838,10 @@ function QuickAllocate({
           aria-label="Allocate to a committee"
           className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
           style={{
-            padding: '11px 18px', borderRadius: 999,
+            // minHeight 44: this is a primary action and now sits BESIDE the
+            // preferences rather than as a full-width bar under them, so the
+            // 11px padding alone (38px tall) no longer clears the touch floor.
+            minHeight: 44, padding: '11px 18px', borderRadius: 999,
             fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
             color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
             boxShadow: open ? NEU.inSm : `0 3px 8px ${NEU_GRADIENTS.gold[0]}44, ${NEU.outSm}`,
@@ -810,7 +849,10 @@ function QuickAllocate({
           }}
         >
           <BadgeCheck size={16} strokeWidth={2.6} />
-          ALLOCATE COMMITTEE
+          {/* "ALLOCATE" alone in the narrow rail beside the preferences — the
+              full phrase stays on title/aria-label, which is what a screen
+              reader and a hover both get. */}
+          ALLOCATE
         </button>
       ) : (
         <button
@@ -1734,6 +1776,17 @@ export default function ApplicationsPage() {
   // deliberately not repeated here.)
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [remindErr, setRemindErr] = useState<Record<string, string>>({});
+  // ── Bulk email (remind-to-pay + custom one-off). One in-flight lock covers
+  // both, because both end in an email_outbox insert and neither should ever
+  // be re-entered while the other is mid-queue.
+  const [bulkEmailBusy, setBulkEmailBusy] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  // Frozen at open — see openComposeEmail.
+  const [composeIds, setComposeIds] = useState<string[]>([]);
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [composeError, setComposeError] = useState('');
+  useScrollLock(composeOpen);
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -2256,7 +2309,11 @@ export default function ApplicationsPage() {
           disabled={disabledNow}
           className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
           style={{
-            padding: '13px 18px', borderRadius: 14,
+            // 10px side padding, not 18: in the row layout this button is one
+            // fifth-pair of a 295px pane on a 375px phone (~112px), and 18px
+            // would push "REJECT" past its own edge. Full-width in the stacked
+            // layout, where the label is centred and the padding is invisible.
+            minHeight: 44, padding: '13px 10px', borderRadius: 14,
             fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
             color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.09)', border: '1.5px solid rgba(139,32,32,0.3)',
             cursor: 'pointer', transition: `background-color 160ms ${EASE_LOCAL}`, ...busyStyle,
@@ -2341,39 +2398,104 @@ export default function ApplicationsPage() {
   }
 
   /** Large ACCEPT + REJECT pair shown while an application is still undecided
-   *  (#5). Full-width inside whichever pane renders it; wired to the EXISTING
-   *  handleAccept / reject flow (which set decided_by / decided_at) — no new DB
-   *  logic. Once decided, callers fall back to their compact controls. */
-  function renderBigDecisionControls(app: Application, locked: boolean) {
+   *  (#5). Wired to the EXISTING handleAccept / reject flow (which set
+   *  decided_by / decided_at) — no new DB logic. Once decided, callers fall
+   *  back to their compact controls.
+   *
+   *  Two layouts, same controls and same guards:
+   *    · 'stack' — the original full-width column. Used by the review dialog's
+   *      footer, which is a narrow rail.
+   *    · 'row'   — the row card's MIDDLE pane. ACCEPT and REJECT are the only
+   *      two decisions available before acceptance, so they take the pane the
+   *      preferences would otherwise occupy (2fr each), with a much smaller
+   *      grey REVIEW at 1fr — one fifth of the width, the same full height —
+   *      opening the SAME review drawer (setReviewId), not a second one.
+   *  While the reject flow is expanded, the pane belongs entirely to it in
+   *  both layouts: ACCEPT (and REVIEW) step aside so the note field and its
+   *  CONFIRM/CANCEL are unambiguous. */
+  function renderBigDecisionControls(app: Application, locked: boolean, layout: 'stack' | 'row' = 'stack') {
     const rowBusy = busyIds.has(app.id);
     const blocked = isAcceptBlockedByFee(app);
     const isRejecting = rejectingId === app.id;
     const busyStyle: React.CSSProperties = rowBusy ? { opacity: 0.5, pointerEvents: 'none' } : {};
     const lockStyle: React.CSSProperties = locked ? { opacity: 0.45, pointerEvents: 'none' } : {};
+    const row = layout === 'row';
+
+    const acceptBtn = (
+      <button
+        onClick={() => handleAccept(app.id)}
+        disabled={rowBusy || blocked || locked}
+        title={blocked ? ACCEPT_BLOCKED_MESSAGE : undefined}
+        className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+        style={{
+          // See the REJECT twin below for why this is 10px and not 18px.
+          // minHeight 44 is the touch floor for a primary action; in the row
+          // layout it stretches to MID_BLOCK_H, in the stacked layout 13px
+          // padding around a 16px glyph would otherwise land at 42.
+          minHeight: 44, padding: '13px 10px', borderRadius: 14,
+          fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+          color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+          boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`, border: 'none',
+          cursor: blocked ? 'not-allowed' : 'pointer',
+          opacity: blocked ? 0.5 : 1,
+          ...busyStyle,
+        }}
+      >
+        <Check size={16} strokeWidth={3} />
+        ACCEPT
+      </button>
+    );
+
+    if (!row) {
+      return (
+        <div className="flex flex-col gap-2.5 w-full" style={{ minWidth: 0, ...lockStyle }}>
+          {!isRejecting && acceptBtn}
+          {renderRejectControls(app, locked, 'big')}
+        </div>
+      );
+    }
+
+    if (isRejecting) {
+      return (
+        <div className="flex w-full" style={{ minWidth: 0, minHeight: MID_BLOCK_H, ...lockStyle }}>
+          {renderRejectControls(app, locked, 'big')}
+        </div>
+      );
+    }
 
     return (
-      <div className="flex flex-col gap-2.5 w-full" style={{ minWidth: 0, ...lockStyle }}>
-        {!isRejecting && (
+      // items-stretch (flex default) is what makes all three the SAME height:
+      // each child is a flex box of its own, and each button inside is w-full
+      // and stretches to the pane's minHeight. 2fr / 2fr / 1fr = the REVIEW
+      // button at one fifth of the row.
+      <div className="flex gap-2 w-full" style={{ minWidth: 0, minHeight: MID_BLOCK_H, ...lockStyle }}>
+        <div className="flex" style={{ flex: 2, minWidth: 0 }}>{acceptBtn}</div>
+        <div className="flex" style={{ flex: 2, minWidth: 0 }}>{renderRejectControls(app, locked, 'big')}</div>
+        <div className="flex" style={{ flex: 1, minWidth: 0 }}>
           <button
-            onClick={() => handleAccept(app.id)}
-            disabled={rowBusy || blocked || locked}
-            title={blocked ? ACCEPT_BLOCKED_MESSAGE : undefined}
-            className="inline-flex items-center justify-center gap-2 w-full focus:outline-none"
+            onClick={() => setReviewId(app.id)}
+            title="Open the full application"
+            aria-label="Review this application"
+            className="inline-flex flex-col items-center justify-center gap-1 w-full focus:outline-none"
             style={{
-              padding: '13px 18px', borderRadius: 14,
-              fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
-              color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-              boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`, border: 'none',
-              cursor: blocked ? 'not-allowed' : 'pointer',
-              opacity: blocked ? 0.5 : 1,
+              padding: '13px 8px', borderRadius: 14,
+              // Grey, deliberately quiet against the two decisions — but
+              // NEU.inkSoft (6.8:1 on NEU.surface), never NEU.muted, which is
+              // decoration-only at 3.15:1.
+              fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em',
+              color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+              border: 'none', cursor: 'pointer', transition: `box-shadow 200ms ${EASE_LOCAL}`,
               ...busyStyle,
             }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
           >
-            <Check size={16} strokeWidth={3} />
-            ACCEPT
+            <Eye size={16} strokeWidth={2.5} />
+            {/* Below 640px one fifth of a 375px card is ~65px — too narrow for
+                the word. The glyph carries it there; title/aria-label always do. */}
+            <span className="hidden sm:inline">REVIEW</span>
           </button>
-        )}
-        {renderRejectControls(app, locked, 'big')}
+        </div>
       </div>
     );
   }
@@ -2896,6 +3018,163 @@ export default function ApplicationsPage() {
     clearSelection();
   }
 
+  // ── Bulk: remind to pay ───────────────────────────────────────────────────
+  // The single-row handleRemindPay re-queues 'payment_available', which IS the
+  // "you can pay now" email and so reads as a reminder. Bulk uses the SAME
+  // queueEventEmail path and the same event key — one call with the whole id
+  // list rather than N calls, so it is one template lookup, one outbox insert
+  // and one delivery kick, and the recipientAllowsEvent opt-out gate inside
+  // queueEventEmail still runs per recipient.
+  //
+  // RATE LIMIT. There is NO server-side cooldown for this event — verified: no
+  // RPC (send_draft_reminder's 72h cooldown covers drafts only, nothing else),
+  // no unique constraint, no trigger. handleRemindPay's only guard is its
+  // in-flight busy lock, which is fine for one row and is not fine for fifty.
+  // So this path enforces a 24-hour PER-RECIPIENT cooldown by reading what has
+  // actually been queued: any application that already has a 'payment_available'
+  // outbox row created in the last 24h is dropped from the send and reported as
+  // skipped. Because it reads email_outbox rather than localStorage, the
+  // cooldown holds across devices, browsers and co-organizers. It is still
+  // CLIENT-side — an organizer with the anon key could insert outbox rows
+  // directly — so it is a courtesy limit, not a security control. A real one
+  // belongs in a queue_payment_reminders RPC with the check in SQL.
+  const REMIND_PAY_COOLDOWN_HOURS = 24;
+
+  /** Ids among `ids` that already got a payment reminder inside the cooldown. */
+  async function remindedWithinCooldown(
+    supabase: ReturnType<typeof getAuthedClient>,
+    conferenceId: string,
+    ids: string[],
+  ): Promise<Set<string>> {
+    // Outbox rows carry the template id, not the event key, so the
+    // conference's payment_available template is the handle. No template row
+    // at all means nothing has ever been queued for it — nobody is cooling.
+    const { data: tpl } = await supabase
+      .from('email_templates')
+      .select('id')
+      .eq('conference_id', conferenceId)
+      .eq('event_key', 'payment_available')
+      .maybeSingle();
+    const templateId = (tpl as { id: string } | null)?.id;
+    if (!templateId) return new Set();
+    const since = new Date(Date.now() - REMIND_PAY_COOLDOWN_HOURS * 3_600_000).toISOString();
+    const { data } = await supabase
+      .from('email_outbox')
+      .select('recipient_application_id')
+      .eq('template_id', templateId)
+      .gte('created_at', since)
+      .in('recipient_application_id', ids);
+    return new Set(
+      ((data ?? []) as { recipient_application_id: string | null }[])
+        .map(r => r.recipient_application_id)
+        .filter((id): id is string => !!id),
+    );
+  }
+
+  async function handleBulkRemindPay(apps: Application[]) {
+    if (!session || !conference || apps.length === 0 || bulkEmailBusy) return;
+    setActionError('');
+    setFlashMsg('');
+    setBulkEmailBusy(true);
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const ids = apps.map(a => a.id);
+      const cooling = await remindedWithinCooldown(supabase, conference.id, ids);
+      const fresh = ids.filter(id => !cooling.has(id));
+      if (fresh.length === 0) {
+        setActionError(`Everyone selected was already reminded in the last ${REMIND_PAY_COOLDOWN_HOURS} hours. Nothing was sent.`);
+        return;
+      }
+      const skipped = ids.length - fresh.length;
+      const { confirmed } = await confirm({
+        title: `Send a payment reminder to ${fresh.length}?`,
+        body: skipped > 0
+          ? `${skipped} of the ${ids.length} selected were reminded in the last ${REMIND_PAY_COOLDOWN_HOURS} hours and will be skipped. Anyone who has turned off payment emails is skipped too.`
+          : 'They will each be re-sent the "you can pay now" email. Anyone who has turned off payment emails is skipped.',
+        confirmLabel: `Send ${fresh.length}`,
+      });
+      if (!confirmed) return;
+
+      const result = await queueEventEmail(supabase, conference.id, 'payment_available', fresh);
+      notifyIfNeeded(result, pushDraftNotice);
+      const skipNote = skipped > 0 ? ` ${skipped} skipped (reminded in the last ${REMIND_PAY_COOLDOWN_HOURS}h).` : '';
+      if (result.outcome === 'off') {
+        setActionError(`Payment emails are turned off for this conference, so nothing was sent.${skipNote}`);
+      } else if ((result.queued ?? 0) === 0) {
+        setActionError(`No reminder was queued — everyone left has turned payment emails off.${skipNote}`);
+      } else {
+        setFlashMsg(`Payment reminder queued for ${result.queued}.${skipNote}`);
+        clearSelection();
+      }
+    } catch {
+      setActionError('Could not send the payment reminders. Please try again.');
+    } finally {
+      setBulkEmailBusy(false);
+    }
+  }
+
+  // ── Bulk: custom one-off email ────────────────────────────────────────────
+  // Opens on a SNAPSHOT of the ids, not on live `selectedApps`: a background
+  // refetch (or a filter change behind the modal) must never quietly re-point
+  // a composed message at a different set of people than the one the count
+  // in front of the organiser names.
+  function openComposeEmail(apps: Application[]) {
+    if (apps.length === 0) return;
+    setComposeIds(apps.map(a => a.id));
+    setComposeSubject('');
+    setComposeBody('');
+    setComposeError('');
+    setComposeOpen(true);
+  }
+
+  async function handleSendCustomEmail() {
+    if (!session || !conference || bulkEmailBusy) return;
+    const subject = composeSubject.trim();
+    const body = composeBody.trim();
+    if (!subject) { setComposeError('Give the email a subject.'); return; }
+    if (!body) { setComposeError('Write a message.'); return; }
+    if (composeIds.length === 0) { setComposeError('No recipients.'); return; }
+
+    // Blank-line-separated paragraphs become the composer's own paragraph
+    // blocks, so this renders through exactly the same branded shell
+    // (renderEmailHtml) as anything sent from Communications.
+    const blocks: EmailBlock[] = body
+      .split(/\n{2,}/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(content => ({ type: 'paragraph', content }));
+
+    setComposeError('');
+    setBulkEmailBusy(true);
+    try {
+      const supabase = getAuthedClient(session.access_token);
+      const result = await queueAdHocEmail(supabase, {
+        conferenceId: conference.id,
+        sentBy: session.user.id,
+        subject,
+        blocks,
+        applicationIds: composeIds,
+        recipientFilter: { source: 'applications', selection: 'manual', applicationIds: composeIds },
+      });
+      if (result.error) { setComposeError(result.error); return; }
+      const optNote = result.optedOut > 0
+        ? ` ${result.optedOut} skipped (opted out of these emails).`
+        : '';
+      if (result.queued === 0) {
+        setComposeError(`Nothing was queued — everyone selected has opted out of these emails.`);
+        return;
+      }
+      setComposeOpen(false);
+      setActionError('');
+      setFlashMsg(`Queued ${result.queued} email${result.queued === 1 ? '' : 's'}, sending now.${optNote}`);
+      clearSelection();
+    } catch {
+      setComposeError('Could not queue that email. Please try again.');
+    } finally {
+      setBulkEmailBusy(false);
+    }
+  }
+
   function handleExportCSV() {
     const headers = ['Name', 'Email', 'Age', 'Nationality', 'Role', 'Status', 'Payment', 'Experience', 'Society', 'Head Delegate', 'Submitted', 'Checked In', 'Assigned Committee', 'Assigned Country'];
     const rows = applications.map(a => [
@@ -3060,6 +3339,17 @@ export default function ApplicationsPage() {
   const bulkRejectable = bulkEligibleApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
   const bulkCheckInable = bulkEligibleApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
   const bulkPayable = bulkEligibleApps.filter(payEligible);
+  // Mirrors exactly when the single-row PaymentMenu offers "Remind to pay":
+  // the menu is shown at all (fee-bearing role, a status that can owe money)
+  // and the item itself is rendered (neither paid nor waived). Deliberately
+  // NOT `payEligible`, which additionally excludes conferences with Stripe
+  // live — a reminder is MORE useful there, not less: it is the nudge to go
+  // and pay through checkout.
+  const bulkRemindable = bulkEligibleApps.filter(a =>
+    (a.role !== 'chair' || chairHasFee)
+    && (a.status === 'accepted' || a.status === 'assigned' || a.status === 'submitted' || a.status === 'checked-in')
+    && a.payment_status !== 'paid' && a.payment_status !== 'waived'
+  );
   // Suggested action from the selection composition. Starts pulsing the moment a
   // selection is made, nudging the organiser toward the obvious next step.
   const suggestion: 'accept' | 'pay' | 'checkin' | null =
@@ -3293,7 +3583,7 @@ export default function ApplicationsPage() {
 
       {/* Application list */}
       {!loading && filtered.length > 0 && (
-        <div className="flex flex-col gap-3" style={{ paddingBottom: selectedApps.length > 0 ? 96 : 0 }}>
+        <div className="flex flex-col gap-3" style={{ paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
           {/* The whole card is the preview affordance (#1) — the separate
               PREVIEW button is gone, so it can never be clipped by the card's
               own overflow again. A tint on hover and an inset ring on
@@ -3334,6 +3624,13 @@ export default function ApplicationsPage() {
             const hasAllocation = !!app.assigned_committee && (app.status === 'assigned' || app.status === 'checked-in');
             const canCheckIn = app.status === 'accepted' || app.status === 'assigned';
             const isSubmitted = app.status === 'submitted';
+            // ALLOCATE is offered only once the applicant is actually accepted.
+            // Before that the row has exactly two decisions (accept / reject);
+            // after a rejection or a withdrawal there is nothing to allocate
+            // to. 'assigned' / 'checked-in' keep it so a delegate whose
+            // allocation was removed can be re-allocated from the row.
+            const canAllocate = isDelegate
+              && (app.status === 'accepted' || app.status === 'assigned' || app.status === 'checked-in');
             // Chairs are feeless by default — no payment affordance — unless
             // this conference configured a chair fee, in which case they get
             // the exact same treatment as any other role (#5).
@@ -3497,18 +3794,31 @@ export default function ApplicationsPage() {
                     </div>
                   </div>
 
-                  {/* MIDDLE · allocation / preferences — the focal point of the
-                      row now the role has moved to the identity column (#6). */}
+                  {/* MIDDLE · decision, then allocation / preferences — the
+                      focal point of the row now the role has moved to the
+                      identity column (#6).
+
+                      ORDER MATTERS. While an application is undecided this
+                      pane is the DECISION: big ACCEPT + REJECT filling the
+                      space the preferences would occupy, plus a one-fifth-width
+                      grey REVIEW. Preferences and the ALLOCATE control appear
+                      only AFTER acceptance — allocating someone you have not
+                      accepted was never a real step, and offering it made the
+                      undecided row read as three competing choices instead of
+                      two. Every state is pinned to MID_BLOCK_H so the row does
+                      not jump when a status changes. */}
                   <div
                     className="p-4 lg:p-5 flex flex-col justify-center gap-3 border-t lg:border-t-0 lg:border-l"
                     style={{ flex: '1 1 0', minWidth: 0, borderColor: 'rgba(221,212,192,0.6)' }}
                   >
-                    {hasAllocation ? (() => {
+                    {isSubmitted ? (
+                      renderBigDecisionControls(app, !app.attending, 'row')
+                    ) : hasAllocation ? (() => {
                       // Naming rule (#6): long committee name → big ACRONYM with
                       // the full name small beneath it.
                       const disp = committeeDisplay(app.assigned_committee);
                       return (
-                      <div className="flex items-center gap-4 min-w-0">
+                      <div className="flex items-center gap-4 min-w-0" style={{ minHeight: MID_BLOCK_H }}>
                         <LogoDisc src={app.assigned_committee!.logo_url} size={92} fallbackText={committeeAbbr(app.assigned_committee)} alt={app.assigned_committee!.name} />
                         <div className="min-w-0">
                           <p className="truncate" title={committeeFull(app.assigned_committee)} style={{ fontFamily: OUTFIT, fontSize: 27, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.05 }}>
@@ -3529,13 +3839,16 @@ export default function ApplicationsPage() {
                       </div>
                       );
                     })() : isDelegate && prefs.length > 0 ? (
-                      // Redesign (#4): preferences and the allocate control now
-                      // STACK vertically. Top — a large committee emblem (the
-                      // top-choice committee) with the three preferences laid
-                      // out beside it. Bottom — one clear, full-width allocate
-                      // CTA. All existing allocation logic/handlers unchanged.
-                      <div className="flex flex-col gap-3.5">
-                        <div className="flex items-center gap-4 min-w-0">
+                      // Preferences and the allocate control now sit SIDE BY
+                      // SIDE, not stacked: the emblem + the three ranked
+                      // preferences take the pane, and ALLOCATE is the rail
+                      // immediately to their right, so the choice and the act
+                      // of making it are read together. Below `sm` (a 375px
+                      // phone) there is no room for a rail, so it wraps
+                      // underneath at full width. All existing allocation
+                      // logic/handlers unchanged.
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3" style={{ minHeight: MID_BLOCK_H }}>
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
                           <LogoDisc
                             src={prefs[0].conference_committees?.logo_url ?? null}
                             size={72}
@@ -3562,19 +3875,25 @@ export default function ApplicationsPage() {
                             </div>
                           </div>
                         </div>
-                        <span style={{ display: 'block', ...notAttendingLock }}>
-                          <QuickAllocate big committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
-                        </span>
+                        {canAllocate && (
+                          <span
+                            style={{ display: 'block', width: ALLOCATE_RAIL_W, maxWidth: '100%', flexShrink: 0, ...notAttendingLock }}
+                          >
+                            <QuickAllocate big committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                          </span>
+                        )}
                       </div>
                     ) : isDelegate ? (
-                      <span className="inline-flex items-center gap-2">
-                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.muted }}>Not yet assigned</span>
-                        <span style={notAttendingLock}>
-                          <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
-                        </span>
+                      <span className="inline-flex items-center gap-2" style={{ minHeight: MID_BLOCK_H }}>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft }}>Not yet assigned</span>
+                        {canAllocate && (
+                          <span style={notAttendingLock}>
+                            <QuickAllocate committees={allocCommittees} loading={allocLoading} onOpen={loadAllocCommittees} onAllocate={(c, s) => handleQuickAllocate(app, c, s)} />
+                          </span>
+                        )}
                       </span>
                     ) : (
-                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.muted }}>—</span>
+                      <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontStyle: 'italic', color: NEU.inkSoft, minHeight: MID_BLOCK_H, display: 'flex', alignItems: 'center' }}>—</span>
                     )}
 
                     {app.status === 'rejected' && app.organizer_note && (
@@ -3629,19 +3948,14 @@ export default function ApplicationsPage() {
                       </span>
                     )}
 
-                    {/* Undecided (#5): ACCEPT and REJECT are the two things this
-                        pane is FOR, so they take it over as full-width buttons
-                        rather than small chips. Once a decision is made the
-                        pane falls back to its existing compact controls (check
-                        in / payment / reinstate). Same handlers as before —
-                        handleAccept and the shared reject flow, both of which
-                        write decided_by / decided_at. Locked (not just dimmed)
-                        while not attending. */}
-                    {isSubmitted && (
-                      <div style={{ width: '100%' }}>
-                        {renderBigDecisionControls(app, !app.attending)}
-                      </div>
-                    )}
+                    {/* The undecided ACCEPT/REJECT pair used to live HERE, in
+                        the 248px rail. It has moved to the MIDDLE pane, where
+                        it gets the width the preferences would have had, and
+                        where it cannot be mistaken for one of the small
+                        housekeeping controls below (check in / payment /
+                        reinstate). Same handlers, same guards — see
+                        renderBigDecisionControls('row'). Rendering it in both
+                        places would give a submitted row two ACCEPT buttons. */}
 
                     {/* Reinstate for rejected / awaiting-resubmission applicants —
                         undo a rejection in one click, right where REJECT sits
@@ -3781,7 +4095,7 @@ export default function ApplicationsPage() {
 
           Counts: this section reads `drafts`. Nothing above it does. */}
       {!loading && drafts.length > 0 && (
-        <div style={{ marginTop: 26, paddingBottom: selectedApps.length > 0 ? 96 : 0 }}>
+        <div style={{ marginTop: 26, paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
           <div
             style={{
               borderRadius: 18,
@@ -4088,12 +4402,51 @@ export default function ApplicationsPage() {
                 Reject {bulkRejectable.length}
               </button>
             )}
+            {/* Remind to pay. Same event, same queueEventEmail path as the
+                single-row PaymentMenu item, plus a 24h per-recipient cooldown
+                read off email_outbox — see handleBulkRemindPay. */}
+            {bulkRemindable.length > 0 && (
+              <button
+                onClick={() => handleBulkRemindPay(bulkRemindable)}
+                disabled={bulkEmailBusy}
+                title={`Re-send the payment email to ${bulkRemindable.length} selected. Anyone reminded in the last ${REMIND_PAY_COOLDOWN_HOURS} hours is skipped.`}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  padding: '8px 15px', borderRadius: 999, border: 'none',
+                  cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.5 : 1,
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.ink,
+                  backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+                }}
+              >
+                <Send size={13} strokeWidth={2.6} style={{ color: NEU.deepGold }} />
+                Remind to pay {bulkRemindable.length}
+              </button>
+            )}
+            {/* Custom one-off email to everyone selected (not-attending rows
+                included — a message is not a status change, and "you are down
+                as not attending, is that right?" is exactly the kind of thing
+                this is for). Hence selectedApps, not bulkEligibleApps. */}
+            <button
+              onClick={() => openComposeEmail(selectedApps)}
+              disabled={bulkEmailBusy}
+              title={`Write a one-off email to the ${selectedApps.length} selected`}
+              className="inline-flex items-center gap-1.5 focus:outline-none"
+              style={{
+                padding: '8px 15px', borderRadius: 999, border: 'none',
+                cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.5 : 1,
+                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.ink,
+                backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+              }}
+            >
+              <Mail size={13} strokeWidth={2.6} style={{ color: NEU.deepGold }} />
+              Email {selectedApps.length}
+            </button>
             <button
               onClick={clearSelection}
               className="inline-flex items-center gap-1.5 focus:outline-none"
               style={{
                 padding: '8px 13px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.muted,
+                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: NEU.inkSoft,
                 backgroundColor: 'transparent',
               }}
             >
@@ -4821,6 +5174,169 @@ export default function ApplicationsPage() {
                   })}
                 </div>
               )}
+            </div>
+          </div></Portal>
+        );
+      })()}
+
+      {/* ── Custom one-off email ──────────────────────────────────────────────
+          A compose sheet for the selected applicants. It writes through
+          queueAdHocEmail (src/lib/adHocEmail.ts), which is the SAME
+          email_sends + email_outbox + renderEmailHtml + triggerEmailDelivery
+          path the Communications composer uses, so this send lands in
+          Communications → History beside every other send and honours the same
+          opt-out. There is no second sender and no new EVENT_REGISTRY key —
+          organizer-written copy is a 'marketing' broadcast, gated through the
+          shared recipientAllowsCategory.
+
+          Deliberately NOT a copy of the full block composer: subject + message
+          only. Anything richer (buttons, banners, saved templates, audience
+          filters) is what Communications is for, and the footer links there. */}
+      {composeOpen && (() => {
+        const recipients = composeIds
+          .map(id => applications.find(a => a.id === id))
+          .filter((a): a is Application => !!a);
+        const close = () => { if (!bulkEmailBusy) setComposeOpen(false); };
+        const labelStyle: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.11em',
+          color: NEU.forest, textTransform: 'uppercase',
+        };
+        const fieldStyle: React.CSSProperties = {
+          fontFamily: OUTFIT, fontSize: 14, fontWeight: 500, color: NEU.ink,
+          backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 12,
+          border: 'none', outline: 'none', width: '100%', padding: '11px 14px',
+        };
+        return (
+          <Portal><div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
+            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onClick={close}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Write an email to the selected applicants"
+              className="w-full max-w-xl rounded-2xl overflow-y-auto"
+              style={{ maxHeight: '86vh', backgroundColor: NEU.surface, boxShadow: NEU.out, padding: 26 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div className="min-w-0">
+                  <p style={{ fontFamily: OUTFIT, fontSize: 19, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em' }}>
+                    Email {recipients.length} applicant{recipients.length === 1 ? '' : 's'}
+                  </p>
+                  <p className="mt-1" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.5 }}>
+                    Sent from your conference, in your conference&rsquo;s email design. Anyone who has turned these emails off is skipped automatically.
+                  </p>
+                </div>
+                <button
+                  onClick={close}
+                  aria-label="Close"
+                  className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+                  style={{ width: 34, height: 34, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', cursor: 'pointer', color: NEU.inkSoft }}
+                >
+                  <X size={16} strokeWidth={2.6} />
+                </button>
+              </div>
+
+              {/* Who it is going to. Named, not just counted — an organizer
+                  should never have to trust a number they cannot check. */}
+              <div className="mb-5">
+                <p className="mb-2" style={labelStyle}>Recipients</p>
+                <div
+                  className="flex flex-wrap gap-1.5 overflow-y-auto"
+                  style={{ maxHeight: 96, padding: 10, borderRadius: 12, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
+                >
+                  {recipients.map(a => (
+                    <span
+                      key={a.id}
+                      className="inline-flex items-center truncate"
+                      title={a.profiles?.email ?? a.invited_email ?? ''}
+                      style={{ maxWidth: '100%', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.surface, boxShadow: NEU.outSm, borderRadius: 999, padding: '3px 10px' }}
+                    >
+                      {a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="flex items-center gap-2 mb-2" style={labelStyle} htmlFor="bulkEmailSubject">
+                  Subject
+                </label>
+                <input
+                  id="bulkEmailSubject"
+                  value={composeSubject}
+                  onChange={e => setComposeSubject(e.target.value)}
+                  disabled={bulkEmailBusy}
+                  placeholder="A short, specific subject line"
+                  style={fieldStyle}
+                />
+              </div>
+
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span style={labelStyle}>Message</span>
+                  <InfoHint
+                    label="About placeholders"
+                    text="Use {{delegate_name}}, {{role}}, {{delegation_name}}, {{committee}}, {{country}}, {{payment_status}}, {{fee}}, {{conference_name}} or {{conference_dates}} and each recipient gets their own value. Leave a blank line between paragraphs."
+                  />
+                </div>
+                <textarea
+                  value={composeBody}
+                  onChange={e => setComposeBody(e.target.value)}
+                  disabled={bulkEmailBusy}
+                  rows={8}
+                  placeholder={'Hi {{delegate_name}},\n\n…'}
+                  className="resize-y"
+                  style={{ ...fieldStyle, lineHeight: 1.6 }}
+                />
+              </div>
+
+              {composeError && (
+                <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER, lineHeight: 1.5 }}>
+                  {composeError}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleSendCustomEmail}
+                  disabled={bulkEmailBusy}
+                  className="inline-flex items-center justify-center gap-2 focus:outline-none"
+                  style={{
+                    minHeight: 44, padding: '0 24px', borderRadius: 999, border: 'none',
+                    fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, letterSpacing: '0.05em',
+                    color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+                    boxShadow: `0 4px 12px ${NEU_GRADIENTS.forest[0]}55, ${NEU.outSm}`,
+                    cursor: bulkEmailBusy ? 'default' : 'pointer', opacity: bulkEmailBusy ? 0.6 : 1,
+                  }}
+                >
+                  <Send size={15} strokeWidth={2.7} />
+                  {bulkEmailBusy ? 'SENDING…' : `SEND TO ${recipients.length}`}
+                </button>
+                <button
+                  onClick={close}
+                  disabled={bulkEmailBusy}
+                  className="inline-flex items-center focus:outline-none"
+                  style={{
+                    minHeight: 44, padding: '0 18px', borderRadius: 999, border: 'none',
+                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                    color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm, cursor: 'pointer',
+                  }}
+                >
+                  CANCEL
+                </button>
+                {conference && (
+                  <Link
+                    href={`/manage/${conference.slug}/communications`}
+                    className="focus:outline-none"
+                    style={{ marginLeft: 'auto', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.forest, textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  >
+                    Need buttons or a saved template? Communications
+                  </Link>
+                )}
+              </div>
             </div>
           </div></Portal>
         );

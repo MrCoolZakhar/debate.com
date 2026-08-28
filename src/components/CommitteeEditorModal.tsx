@@ -46,6 +46,16 @@ const inputStyle: React.CSSProperties = {
   fontFamily: "'Outfit', sans-serif",
 };
 
+// Topics are capped at 60 characters. The cap applies per topic entry, not to
+// the topics array as a whole. It is enforced in the app only — 178 of the 325
+// topic entries already in the database are longer than this, so a CHECK
+// constraint would reject every one of those rows on the next write. Legacy
+// topics are grandfathered via baselineTopics below.
+const TOPIC_MAX_LENGTH = 60;
+// Point at which the remaining-characters hint appears, so the limit is visible
+// before it is hit rather than only after.
+const TOPIC_HINT_AT = 45;
+
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 11,
@@ -444,6 +454,13 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   const [abbreviation, setAbbreviation] = useState(existing?.abbreviation ?? '');
   const [topics, setTopics] = useState<string[]>(existing?.topics ?? []);
   const [topicInput, setTopicInput] = useState('');
+  // The topics this committee was opened with. Every entry here is grandfathered:
+  // it predates the 60-character cap, so it stays on the committee untruncated and
+  // never blocks a save. Without this snapshot an organiser editing an old
+  // committee's notification email could not save it because of a topic they did
+  // not touch. Frozen at mount, exactly like baselineRoster below.
+  const [baselineTopics] = useState<string[]>(existing?.topics ?? []);
+  const [topicError, setTopicError] = useState('');
   const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
   const [roster, setRoster] = useState<RosterEntry[]>(initialRoster ?? []);
   const [baselineRoster] = useState<RosterEntry[]>(initialRoster ?? []);
@@ -503,10 +520,21 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
 
   function addTopic() {
     const t = topicInput.trim();
-    if (!t || topics.length >= 3 || topics.includes(t)) return;
+    if (!t || topics.length >= 3) return;
+    if (topics.includes(t)) { setTopicError('That topic is already on the list.'); return; }
+    // Over-length is not reported here: the live counter below the input has
+    // been showing the actionable message since the 61st character.
+    if (t.length > TOPIC_MAX_LENGTH) return;
     setTopics([...topics, t]);
     setTopicInput('');
+    setTopicError('');
   }
+
+  const topicLength = topicInput.trim().length;
+  const topicOverBy = topicLength - TOPIC_MAX_LENGTH;
+  // Only topics added or re-added during this edit are held to the cap. A topic
+  // carried over untouched from the database is exempt, however long it is.
+  const overLimitNewTopics = topics.filter((t) => t.length > TOPIC_MAX_LENGTH && !baselineTopics.includes(t));
 
   async function doCreate(supabase: ReturnType<typeof getAuthedClient>): Promise<boolean> {
     const delegationSize = doubleDelegation ? 2 : 1;
@@ -720,6 +748,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   async function handleSave(forceRemoval = false, forceDoubleOff = false) {
     if (!name.trim()) { setError('Committee name is required.'); return; }
     if (roster.length === 0) { setError(isCharacterRoster ? 'Add at least one character.' : 'Add at least one country.'); return; }
+    // Keyed off which topics changed, never off length alone — a committee whose
+    // saved topic already exceeds the cap must still save fine.
+    if (overLimitNewTopics.length > 0) {
+      setError(`Topics are limited to ${TOPIC_MAX_LENGTH} characters. Shorten or remove "${overLimitNewTopics[0].slice(0, 40)}…".`);
+      return;
+    }
     if (!session) return;
     setSaving(true); setError('');
     const supabase = getAuthedClient(session.access_token);
@@ -866,9 +900,26 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           <div>
             <label style={labelStyle}>Topics (optional, up to 3)</label>
             <div className="flex gap-2">
-              <input value={topicInput} onChange={e => setTopicInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }} placeholder="Type a topic..." style={{ ...inputStyle, flex: 1 }} disabled={topics.length >= 3} />
+              {/* Deliberately no maxLength: swallowing the 61st keystroke reads as a
+                  broken keyboard. Let them type past the cap and say so instead. */}
+              <input value={topicInput} onChange={e => { setTopicInput(e.target.value); if (topicError) setTopicError(''); }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }} placeholder="Type a topic..." aria-invalid={topicOverBy > 0} style={{ ...inputStyle, flex: 1, borderColor: topicOverBy > 0 ? '#8B2020' : '#DDD4C0' }} disabled={topics.length >= 3} />
               <button onClick={addTopic} disabled={topics.length >= 3} className="rounded-xl px-4 font-bold text-sm focus:outline-none" style={{ backgroundColor: topics.length >= 3 ? '#DDD4C0' : '#1B3828', color: topics.length >= 3 ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>Add topic</button>
             </div>
+            {/* One message line: a hard error wins, then the over-limit count,
+                then the approaching-the-limit countdown. Both colours clear 4.5:1
+                on #FAF8F3 — the muted #9A8A78 is not used here because this text
+                carries meaning. */}
+            {topicError ? (
+              <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{topicError}</p>
+            ) : topicOverBy > 0 ? (
+              <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                {topicOverBy} character{topicOverBy === 1 ? '' : 's'} over the {TOPIC_MAX_LENGTH}-character limit — shorten it to add this topic.
+              </p>
+            ) : topicLength >= TOPIC_HINT_AT ? (
+              <p className="text-xs mt-1.5" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                {TOPIC_MAX_LENGTH - topicLength} character{TOPIC_MAX_LENGTH - topicLength === 1 ? '' : 's'} left.
+              </p>
+            ) : null}
             {topics.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {topics.map((t, i) => (

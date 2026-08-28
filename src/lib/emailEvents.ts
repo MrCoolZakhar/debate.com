@@ -136,13 +136,29 @@ export type PreferenceField =
   | 'notify_email_marketing'
   | 'notify_email_reminders';
 
-type PreferenceRow = Partial<Record<PreferenceField, boolean | null>>;
+export type PreferenceRow = Partial<Record<PreferenceField, boolean | null>>;
 
 // Transactional/functional emails a user can't opt out of without breaking
 // the product: clicking INVITE (chair/import) is itself the consent, and a
 // reply to a question the participant asked themselves isn't a marketing
 // choice, it's the answer they're waiting on.
 const ALWAYS_SEND_EVENTS = new Set(['committee_chair_invite', 'organizer_invite', 'import_join_invite', 'request_reply']);
+
+/** True if this recipient should receive an email in `category` given their
+ *  notification preferences. THE one place a notify_email_* column is read at
+ *  send time — `recipientAllowsEvent` (registry events) and the ad-hoc sender
+ *  in `@/lib/adHocEmail` (organizer-composed one-offs, 'marketing') both go
+ *  through here rather than testing the column themselves. Unregistered /
+ *  imported recipients have no profiles row and so no preference to honour
+ *  yet; they stay eligible. */
+export function recipientAllowsCategory(
+  category: NotificationCategory,
+  profiles: PreferenceRow | null
+): boolean {
+  if (!profiles) return true; // imported, unclaimed: no preferences to honour yet
+  const pref = profiles[PREFERENCE_FIELD[category]];
+  return pref !== false; // default true when null/undefined, same as the profile page
+}
 
 /** True if this recipient should receive eventKey given their notification
  *  preferences. Unregistered/imported recipients (no profiles row) and
@@ -152,11 +168,9 @@ function recipientAllowsEvent(
   profiles: PreferenceRow | null
 ): boolean {
   if (ALWAYS_SEND_EVENTS.has(eventKey)) return true;
-  if (!profiles) return true; // imported, unclaimed: no preferences to honour yet
   const category = NOTIFICATION_CATEGORY[eventKey as EventKey];
   if (!category) return true;
-  const pref = profiles[PREFERENCE_FIELD[category]];
-  return pref !== false; // default true when null/undefined, same as the profile page
+  return recipientAllowsCategory(category, profiles);
 }
 
 // ── Three-state send outcome ─────────────────────────────────────────────────

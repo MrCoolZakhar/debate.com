@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock, ScrollText, CreditCard } from 'lucide-react';
@@ -412,16 +412,23 @@ function SectionCard({ children, className = '' }: { children: React.ReactNode; 
 
 // ── Main component ────────────────────────────────────────────────────────
 
+type TabKey = 'overview' | 'participant' | 'reviews';
+/** Left-to-right order of the tab strip. A switch slides the incoming pane in
+ *  from the right when moving forward through this list, from the left when
+ *  moving back. */
+const TAB_ORDER: readonly TabKey[] = ['overview', 'participant', 'reviews'];
+
 export interface ConferenceDetailClientProps {
   /** Which route segment mounted this component: the plain landing page
    *  (description-only), a /role or /role/[role] participant route, or
-   *  /reviews. Drives which section renders, thin page.tsx files pass this
-   *  in explicitly from their own route rather than the component guessing
-   *  it from the URL. */
-  initialView: 'overview' | 'participant' | 'reviews';
+   *  /reviews. Seeds the tab, so every one of those URLs stays a real,
+   *  shareable deep link; thin page.tsx files pass it in explicitly from
+   *  their own route rather than the component guessing it from the URL.
+   *  After mount the tab is client state — see `showTab`. */
+  initialView: TabKey;
   /** The role segment from /conferences/[slug]/role/[role], or null on the
    *  bare /role resolver route (initialView === 'overview' | 'reviews'
-   *  never carry a role). */
+   *  never carry a role). Seeds `activeRole`. */
   initialRole?: string | null;
 }
 
@@ -459,26 +466,142 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // the very first real fetch rather than needing a second reload.
   const claimAttemptedForRef = useRef<string | null>(null);
   const [justClaimedCount, setJustClaimedCount] = useState(0);
-  // Which tab is showing is entirely a function of which route mounted this
-  // component (a tab switch is a real navigation to a different route, which
-  // remounts this component with a new initialView), never local state.
-  const activeTab = initialView;
+  // Which tab is showing is client state, seeded from whichever route mounted
+  // this component. /conferences/[slug], /role[/role] and /reviews all remain
+  // real routes and valid deep links — they just decide where you land.
+  // Switching afterwards never navigates: `showTab` moves this state and
+  // rewrites the URL with history.pushState, so the conference, committees,
+  // reviews, applications and allocation are fetched once per visit rather
+  // than once per tab, and coming back to a tab shows what's already here.
+  const [activeTab, setActiveTab] = useState<TabKey>(initialView);
+  const [activeRole, setActiveRole] = useState<string | null>(initialRole);
+  /** +1 = the incoming pane slides in from the right, -1 from the left. */
+  const [slideDir, setSlideDir] = useState<1 | -1>(1);
+  // The pane animation is for *switching*, not for arriving. Without this the
+  // keyframes (which start at opacity 0) would also run on first paint, giving
+  // every page load a gratuitous fade — and leaving the column invisible until
+  // shown if the page was opened in a background tab, where Chrome freezes
+  // animations. Nothing animates until the reader actually changes tab.
+  const [hasSwitchedTab, setHasSwitchedTab] = useState(false);
+  // Read by popstate and by callbacks that would otherwise close over a stale
+  // tab; assigned eagerly in showTab so back-to-back switches read the truth.
+  const activeTabRef = useRef<TabKey>(initialView);
+  const paneRef = useRef<HTMLDivElement | null>(null);
+
+  const tabHref = useCallback((tab: TabKey, role: string | null) => {
+    if (tab === 'reviews') return `/conferences/${slug}/reviews`;
+    if (tab === 'participant') {
+      return role ? `/conferences/${slug}/role/${encodeURIComponent(role)}` : `/conferences/${slug}/role`;
+    }
+    return `/conferences/${slug}`;
+  }, [slug]);
+
+  /**
+   * Switch tab without navigating.
+   *
+   * `historyMode`: 'push' leaves a history entry so Back returns to the
+   * previous tab, 'replace' rewrites in place (URL cleanups, role resolution),
+   * 'none' skips the write entirely (used when *responding* to popstate).
+   *
+   * Native pushState rather than router.push on purpose: Next patches
+   * pushState/replaceState so usePathname stays in sync and the internal route
+   * tree is copied onto the new entry — which means popstate later restores
+   * (ACTION_RESTORE) instead of reloading, and nothing remounts or refetches.
+   */
+  const showTab = useCallback((
+    tab: TabKey,
+    role: string | null = null,
+    historyMode: 'push' | 'replace' | 'none' = 'push',
+  ) => {
+    const from = TAB_ORDER.indexOf(activeTabRef.current);
+    const to = TAB_ORDER.indexOf(tab);
+    if (to !== from) {
+      setSlideDir(to > from ? 1 : -1);
+      setHasSwitchedTab(true);
+    }
+    activeTabRef.current = tab;
+    setActiveTab(tab);
+    setActiveRole(tab === 'participant' ? role : null);
+    if (historyMode !== 'none') {
+      const href = tabHref(tab, tab === 'participant' ? role : null);
+      // A leftover query (?payment=…, legacy ?tab=…) counts as a difference —
+      // the rewrite is what strips it.
+      if (href !== window.location.pathname || window.location.search) {
+        window.history[historyMode === 'replace' ? 'replaceState' : 'pushState'](null, '', href);
+      }
+    }
+  }, [tabHref]);
+
+  // Scroll correction, AFTER the swap has actually laid out — measuring inside
+  // showTab reads the outgoing pane and is useless. The panes are wildly
+  // different heights (Reviews is short, Overview carries the committee
+  // carousel), and when the short one grows Chrome's scroll anchoring keeps the
+  // footer put by shoving scrollY down — observed jumping a reader from 874 to
+  // 3530, i.e. into the middle of a pane they'd never seen the top of. If the
+  // pane has ended up above the viewport, put them back at its top. Instant,
+  // not smooth: a second-long glide across 2500px reads as the page running
+  // away, and this way there is no motion to reduce. Already-in-view (the
+  // normal case, switching from the top) is left alone.
+  useEffect(() => {
+    if (!hasSwitchedTab) return;
+    const el = paneRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    if (top >= 0) return;
+    window.scrollTo({ top: Math.max(0, window.scrollY + top - 78), behavior: 'auto' });
+  }, [activeTab, hasSwitchedTab]);
+
+  // Stable identities: ParticipantView's role-resolution effect depends on
+  // these, and a fresh arrow every render would re-run it every render.
+  const resolveRole = useCallback((role: string) => showTab('participant', role, 'replace'), [showTab]);
+  const selectRole = useCallback((role: string) => showTab('participant', role), [showTab]);
+
+  // Back/Forward. Next's own popstate handler restores its route tree (which
+  // is identical across these three entries, so it re-renders nothing); this
+  // reads the tab back out of the URL it landed on. Any other path belongs to
+  // a genuinely different route — leave it to Next.
+  useEffect(() => {
+    const base = `/conferences/${slug}`;
+    const onPop = () => {
+      const path = window.location.pathname.replace(/\/+$/, '') || '/';
+      if (path === base) showTab('overview', null, 'none');
+      else if (path === `${base}/reviews`) showTab('reviews', null, 'none');
+      else if (path === `${base}/role`) showTab('participant', null, 'none');
+      else if (path.startsWith(`${base}/role/`)) {
+        showTab('participant', decodeURIComponent(path.slice(`${base}/role/`.length)), 'none');
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [slug, showTab]);
+
+  // NOTE ON <title>: each of the three URLs is still its own route with its own
+  // generateMetadata, and anyone arriving at one directly — a person, a crawler,
+  // a link unfurler — gets that route's server-rendered title, canonical and OG
+  // tags exactly as before. What no longer happens is the title changing as you
+  // move between tabs in a session: the mounted route is the one you entered on,
+  // and React keeps that route's <title> in the head. Setting document.title
+  // imperatively here does NOT fix it (React re-inserts the mounted route's
+  // title above it in tree order, so the browser reads the old one and you're
+  // left with two disagreeing title elements) — don't reach for that again.
+
   // Backward compatibility: the tab/role state used to live in query params
   // on this one URL (?tab=participant, ?tab=reviews, ?role=<x>), so every
   // link already sent in an email or bookmarked still carries them. They can
   // only ever arrive on the plain landing route (the only URL that existed
-  // before /role and /reviews did), translate once, on mount.
+  // before /role and /reviews did), translate once, on mount — in place now,
+  // so an old link costs one render instead of a second page load.
   useEffect(() => {
-    if (activeTab !== 'overview') return;
+    if (initialView !== 'overview') return;
     const qs = new URLSearchParams(window.location.search);
     const tab = qs.get('tab');
     const role = qs.get('role');
     if (tab === 'reviews') {
-      router.replace(`/conferences/${slug}/reviews`);
+      showTab('reviews', null, 'replace');
       return;
     }
     if (tab === 'participant' || role) {
-      router.replace(role ? `/conferences/${slug}/role/${role}` : `/conferences/${slug}/role`);
+      showTab('participant', role, 'replace');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -491,9 +614,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   }, [slug, router]);
   // Stripe checkout return (?payment=success|cancelled from create-checkout's
   // success_url/cancel_url, still targets the plain landing URL). Off the
-  // participant route, forward straight to the role resolver (carrying the
-  // query along) so the confirmation banner below actually has somewhere to
-  // render; on it, consume it once and strip the query so a refresh never
+  // participant tab, switch to it in place so the confirmation banner below
+  // actually has somewhere to render (this used to be a router.replace to
+  // /role, i.e. a second full page load on the way back from Stripe). Either
+  // way the query is consumed once and stripped, so a refresh never
   // re-triggers it.
   const [paymentReturn, setPaymentReturn] = useState<'success' | 'cancelled' | null>(null);
   const [paymentConfirming, setPaymentConfirming] = useState(false);
@@ -503,12 +627,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   useEffect(() => {
     const payment = new URLSearchParams(window.location.search).get('payment');
     if (payment !== 'success' && payment !== 'cancelled') return;
-    if (activeTab !== 'participant') {
-      router.replace(`/conferences/${slug}/role?payment=${payment}`);
-      return;
-    }
+    if (initialView !== 'participant') showTab('participant', null, 'replace');
+    else window.history.replaceState(null, '', window.location.pathname);
     setPaymentReturn(payment);
-    window.history.replaceState(null, '', window.location.pathname);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // The webhook is the only authority on payment state — this just polls the
@@ -1433,7 +1554,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     </p>
                   </div>
                   <button
-                    onClick={() => router.push(`/conferences/${slug}/reviews`)}
+                    onClick={() => showTab('reviews')}
                     className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors"
                     style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
@@ -1467,28 +1588,51 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     boxShadow: '0 8px 28px rgba(27,56,40,0.1)',
                   }}
                 >
+                  {/* Real anchors, so the tab a visitor is on is still copyable,
+                      middle-clickable and openable in a new tab — but a plain
+                      left click is handled in place by showTab and never
+                      navigates. Modified clicks fall through to the browser. */}
                   {([
-                    { key: 'overview' as const, label: 'Overview', icon: Landmark, href: `/conferences/${slug}` },
-                    { key: 'participant' as const, label: 'You', icon: UserRound, href: `/conferences/${slug}/role` },
-                    { key: 'reviews' as const, label: 'Reviews', icon: Star, href: `/conferences/${slug}/reviews` },
-                  ]).map(({ key, label, icon: TabIcon, href }) => (
-                    <button
+                    { key: 'overview' as const, label: 'Overview', icon: Landmark },
+                    { key: 'participant' as const, label: 'You', icon: UserRound },
+                    { key: 'reviews' as const, label: 'Reviews', icon: Star },
+                  ]).map(({ key, label, icon: TabIcon }) => (
+                    <a
                       key={key}
-                      onClick={() => router.push(href)}
+                      href={tabHref(key, key === 'participant' ? activeRole : null)}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                        e.preventDefault();
+                        showTab(key, key === 'participant' ? activeRole : null);
+                      }}
                       aria-label={label}
+                      aria-current={activeTab === key ? 'page' : undefined}
                       title={label}
                       className="relative flex items-center justify-center rounded-full focus:outline-none"
                       style={
                         activeTab === key
-                          ? { width: '72px', height: '46px', backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 10px rgba(27,56,40,0.32)', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
-                          : { width: '72px', height: '46px', backgroundColor: 'transparent', color: '#8A7D6C', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
+                          ? { width: '72px', height: '46px', backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 10px rgba(27,56,40,0.32)', textDecoration: 'none', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
+                          : { width: '72px', height: '46px', backgroundColor: 'transparent', color: '#8A7D6C', textDecoration: 'none', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
                       }
                     >
                       <TabIcon size={21} strokeWidth={1.9} />
-                    </button>
+                    </a>
                   ))}
                 </div>
               </div>
+
+              {/* Tab panes. Only the active one is mounted (as before), but the
+                  swap is now a state change rather than a navigation, so the
+                  incoming pane is animated in from the direction of travel.
+                  overflow-x: clip (not hidden — it must not become a scroll
+                  container, sticky children depend on that) keeps the 26px
+                  slide from widening the page on a narrow screen. */}
+              <div ref={paneRef} style={{ overflowX: 'clip' }}>
+              <div
+                key={activeTab}
+                className={hasSwitchedTab ? 'conf-tab-pane' : undefined}
+                style={{ '--conf-slide-from': slideDir > 0 ? '26px' : '-26px' } as React.CSSProperties}
+              >
 
               {/* About */}
               {activeTab === 'overview' && (conference.description || isOrganizerViewer) && (
@@ -1767,7 +1911,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   financialAidEnabled={conference.financial_aid_enabled}
                   aidBlocks={normalizeBlocks(conference.aid_questions)}
                   aidIntro={conference.aid_intro}
-                  initialRole={initialRole}
+                  initialRole={activeRole}
+                  // Role selection is a URL change inside the same tab. It used
+                  // to be router.replace/router.push, i.e. a reload for what is
+                  // really just picking one of the applications already in
+                  // memory here; both now stay on the page.
+                  onResolveRole={resolveRole}
+                  onSelectRole={selectRole}
                   participantDataLoading={authLoading || participantDataLoading}
                   justClaimedCount={justClaimedCount}
                 />
@@ -1894,6 +2044,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   )}
                 </div>
               )}
+
+              </div>
+              </div>
 
             </div>
 
@@ -2039,15 +2192,23 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 </div>
                               </div>
                             )}
-                            <Link
+                            {/* Still a real link (copy/new-tab work), but a plain
+                                click is the same in-place tab switch as the
+                                strip above rather than a page load. */}
+                            <a
                               href={`/conferences/${slug}/role/${myApp.role}`}
+                              onClick={(e) => {
+                                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                                e.preventDefault();
+                                showTab('participant', myApp.role);
+                              }}
                               className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mt-3 font-bold text-xs transition-colors focus:outline-none"
                               style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textDecoration: 'none' }}
                               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.16)'; }}
                               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
                             >
                               VIEW YOUR DASHBOARD
-                            </Link>
+                            </a>
                           </>
                         );
                       })()
@@ -2296,8 +2457,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             </div>
           </div>
 
+              {/* The rest of Overview, full width below the two columns. Fades
+                  rather than slides — see .conf-tab-fade in globals.css. */}
+              {activeTab === 'overview' && (
+              <div className={hasSwitchedTab ? 'conf-tab-fade' : undefined}>
+
               {/* Committees, sortable horizontal slider */}
-              {activeTab === 'overview' && (() => {
+              {(() => {
                 const committeeStats = (c: Committee) => {
                   const slots = committeeSlots[c.id] ?? [];
                   const occ = committeeOccupied[c.id] ?? {};
@@ -2839,7 +3005,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               })()}
 
               {/* Partner conferences, mutually approved, prestige gold cards */}
-              {activeTab === 'overview' && partners.length > 0 && (
+              {partners.length > 0 && (
                 <div className="mb-6">
                   <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 14px 0' }}>
                     PARTNER CONFERENCES
@@ -2892,6 +3058,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     })}
                   </div>
                 </div>
+              )}
+
+              </div>
               )}
         </div>
 
