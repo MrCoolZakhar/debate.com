@@ -10,7 +10,7 @@
  * where this much furniture would be wrong.
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -18,7 +18,7 @@ import ApplicationQuestionCard from '@/components/ApplicationQuestionCard';
 import {
   type FormBlock, type QuestionBlock, type CustomAnswers, type CustomAnswerValue, questionsOf,
 } from '@/lib/customQuestions';
-import { estimateMinutes, stagePhoto } from '@/lib/applyQuestionPages';
+import { stagePhoto } from '@/lib/applyQuestionPages';
 
 const HELP_INK = NEU.inkSoft;
 
@@ -47,7 +47,7 @@ function pairable(b: FormBlock): b is QuestionBlock {
 // photo otherwise, and a forest gradient if even that fails to paint — no new
 // assets, no external pipeline.
 export function ConferencePlate({
-  seed, bannerUrl, logoUrl, acronym, fullName, questionCount, blocks,
+  seed, bannerUrl, logoUrl, acronym, fullName, questionCount,
 }: {
   seed: string;
   bannerUrl?: string | null;
@@ -55,10 +55,8 @@ export function ConferencePlate({
   acronym: string;
   fullName: string;
   questionCount: number;
-  blocks: FormBlock[];
 }) {
   const photo = bannerUrl || stagePhoto(seed);
-  const minutes = useMemo(() => estimateMinutes(blocks), [blocks]);
   const showFullName = fullName && fullName.trim().toLowerCase() !== acronym.trim().toLowerCase();
 
   return (
@@ -120,7 +118,9 @@ export function ConferencePlate({
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {questionCount} {questionCount === 1 ? 'question' : 'questions'} · about {minutes} min
+            {/* Count only. The "· about N min" estimate was removed on
+                purpose — see the note in src/lib/applyQuestionPages.ts. */}
+            {questionCount} {questionCount === 1 ? 'question' : 'questions'}
           </span>
         </div>
       </div>

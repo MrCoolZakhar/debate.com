@@ -30,8 +30,12 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
   const { user, profile, signOut, loading: authLoading } = useAuth();
   const { count: draftCount } = useDraftCount();
 
-  // Parity with ProfileDropdown / the mobile sheet: DRAFTS TO COMPLETE slots in
-  // between MUN CV and CONFERENCE CALENDAR, and only when there is one.
+  // This is a NAV rail, not a conference list — so unlike ProfileDropdown and
+  // the mobile sheet (which now carry one UNFINISHED entry per draft inside
+  // YOUR CONFERENCES), the drafts stay a single destination row here. What is
+  // kept in parity is the trigger and the number: the row appears only when
+  // there is something to finish, and carries the same count badge, off the
+  // same `useDraftCount` hook.
   const navLinks: NavLink[] = draftCount && draftCount > 0
     ? [
         ...NAV_LINKS.slice(0, 2),

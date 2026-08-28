@@ -9,6 +9,17 @@
  * the kokonutui-style panel (header, menu rows, lazily fetched
  * "YOUR CONFERENCES" section, sign out). Callers only supply the trigger
  * visual via a render prop, so each surface keeps its own trigger styling.
+ *
+ * DRAFTS LIVE INSIDE "YOUR CONFERENCES", AT THE TOP
+ * A half-finished application used to be one aggregate "DRAFTS TO COMPLETE"
+ * menu row, sitting nowhere near the conferences it was about. It is now the
+ * first entry (or entries) of the same list — because a draft is a conference
+ * you are in the middle of, and the list is where you look for one.
+ *
+ * They must NOT read as attendance. An accepted conference row is a plain
+ * ivory row ending in its ROLE; a draft row is gold-washed, carries a
+ * FileClock instead of a role, and is labelled UNFINISHED. Clicking one
+ * resumes the wizard rather than opening the conference page.
  */
 
 import Link from 'next/link';
@@ -18,7 +29,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate } from '@/lib/conferenceDates';
 import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { useDraftCount } from '@/hooks/useDraftCount';
+import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
 interface NavConference {
@@ -70,8 +81,8 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   const { user, profile, session, signOut } = useAuth();
 
   // Half-finished applications. Fetched lazily on first open, exactly like the
-  // conference list below; the row is omitted entirely when there are none.
-  const { count: draftCount } = useDraftCount(open);
+  // conference list below; they are omitted entirely when there are none.
+  const { count: draftCount, drafts } = useDraftCount(open);
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
@@ -281,13 +292,11 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             {([
               { label: 'MY PROFILE', href: '/account/profile', icon: User },
               { label: 'MUN CV', href: '/account/cv', icon: FileText },
-              // Only when there is something to finish — an always-on row that
-              // usually reads "0" is noise, and this one is a nudge.
-              ...(draftCount && draftCount > 0
-                ? [{ label: 'DRAFTS TO COMPLETE', href: '/my-conferences?tab=all#drafts', icon: FileClock, badge: draftCount }]
-                : []),
+              // No DRAFTS row here any more — unfinished applications are the
+              // first entries of YOUR CONFERENCES below, where the conference
+              // they belong to is.
               { label: 'CONFERENCE CALENDAR', href: '/account/calendar', icon: CalendarDays },
-            ] as { label: string; href: string; icon: typeof User; badge?: number }[]).map((item) => {
+            ] as { label: string; href: string; icon: typeof User }[]).map((item) => {
               const RowIcon = item.icon;
               return (
                 <Link
@@ -307,19 +316,6 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                 >
                   <RowIcon size={15} strokeWidth={2.1} style={{ color: '#9A8A78', flexShrink: 0 }} />
                   <span className="flex-1">{item.label}</span>
-                  {item.badge !== undefined && (
-                    <span
-                      className="flex-shrink-0 flex items-center justify-center rounded-full"
-                      style={{
-                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
-                        backgroundColor: 'rgba(182,135,31,0.16)',
-                        color: '#8A6614',
-                      }}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
                 </Link>
               );
             })}
@@ -370,17 +366,84 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             ) : null}
           </div>
 
-          {/* Your conferences, lazily fetched; omitted entirely when empty */}
-          {(confsLoading || (myConfs !== null && myConfs.length > 0)) && (
+          {/* Your conferences, lazily fetched; omitted entirely when empty.
+              Unfinished drafts head the list — see the file header. */}
+          {(confsLoading || drafts.length > 0 || (myConfs !== null && myConfs.length > 0)) && (
             <>
               <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
               <div className="pt-2.5 pb-1">
-                <p
-                  className="px-4 pb-1.5 font-bold"
-                  style={{ color: '#9A8A78', fontSize: '10px', letterSpacing: '0.08em', fontFamily: "'Outfit', sans-serif" }}
-                >
-                  YOUR CONFERENCES
-                </p>
+                <div className="px-4 pb-1.5 flex items-center gap-2">
+                  <p
+                    className="font-bold flex-1"
+                    style={{ color: '#9A8A78', fontSize: '10px', letterSpacing: '0.08em', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    YOUR CONFERENCES
+                  </p>
+                  {/* The old row's count badge, kept — it just moved onto the
+                      section that now holds the drafts. */}
+                  {draftCount !== null && draftCount > 0 && (
+                    <span
+                      className="flex-shrink-0 flex items-center justify-center rounded-full"
+                      style={{
+                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        backgroundColor: 'rgba(182,135,31,0.16)',
+                        color: '#8A6614',
+                      }}
+                      title={draftCount === 1 ? '1 unfinished application' : `${draftCount} unfinished applications`}
+                    >
+                      {draftCount}
+                    </span>
+                  )}
+                </div>
+
+                {/* ── Unfinished drafts, first. Gold wash + UNFINISHED tag so
+                    they never read as a conference this person is going to. ── */}
+                {drafts.slice(0, 3).map((d) => (
+                  <Link
+                    key={d.id}
+                    href={draftResumeHref(d)}
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2 transition-colors"
+                    style={{ textDecoration: 'none', backgroundColor: 'rgba(182,135,31,0.08)' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(182,135,31,0.17)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(182,135,31,0.08)'; }}
+                    title={`Finish your ${d.acronym || d.fullName} application`}
+                  >
+                    <span
+                      style={{
+                        width: '20px', height: '20px', borderRadius: '50%',
+                        backgroundColor: '#FFFEFA', border: '0.5px solid rgba(182,135,31,0.5)',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        overflow: 'hidden', flexShrink: 0,
+                      }}
+                    >
+                      {d.logoUrl ? (
+                        <img
+                          src={d.logoUrl}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <FileClock size={11} strokeWidth={2.4} style={{ color: '#8A6614' }} />
+                      )}
+                    </span>
+                    <span
+                      className="flex-1 truncate font-semibold"
+                      style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      {d.acronym || d.fullName}
+                    </span>
+                    <span
+                      className="font-bold uppercase shrink-0 inline-flex items-center gap-1"
+                      style={{ color: '#8A6614', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      <FileClock size={10} strokeWidth={2.6} />
+                      UNFINISHED
+                    </span>
+                  </Link>
+                ))}
 
                 {confsLoading ? (
                   /* Skeleton rows while the batched fetch is in flight */

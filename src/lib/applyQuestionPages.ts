@@ -10,7 +10,6 @@ import {
   type QuestionBlock,
   type TitleBlock,
   type CustomQuestion,
-  questionsOf,
   splitIntoSections,
 } from '@/lib/customQuestions';
 
@@ -105,26 +104,12 @@ export function leadTitleBlock(blocks: FormBlock[]): TitleBlock | null {
   return null;
 }
 
-/** Per-type time cost in seconds. Rough on purpose — the point is to set an
- *  expectation, not to be a stopwatch. */
-const SECONDS_BY_TYPE: Record<string, number> = {
-  paragraph: 90,
-  short_text: 25,
-  number: 15,
-  date: 15,
-  dropdown: 12,
-  multiple_choice: 12,
-  checkboxes: 12,
-};
-
-/** Whole minutes, floor 2, for the "12 questions · about 8 minutes" plate. */
-export function estimateMinutes(blocks: FormBlock[]): number {
-  const seconds = questionsOf(blocks).reduce(
-    (n, q) => n + (SECONDS_BY_TYPE[q.type] ?? 25) + (isEssayQuestion(q) ? 60 : 0),
-    0,
-  );
-  return Math.max(2, Math.round(seconds / 60));
-}
+// NO TIME ESTIMATE LIVES HERE ANY MORE.
+// The plate used to read "12 questions · about 8 min", off a per-type seconds
+// table. It was a guess dressed as a fact: the same five questions take one
+// applicant three minutes and another twenty, and an under-estimate reads as
+// the form lying to you. The plate now states only what is actually known —
+// the question count. Do not reintroduce an estimator.
 
 /** Photography already in /public/onboarding — no new asset pipeline. */
 const STAGE_PHOTOS = [

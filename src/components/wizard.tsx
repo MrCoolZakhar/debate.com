@@ -39,6 +39,7 @@ export function WizardShell({
   onBack,
   labels,
   subStep,
+  minBodyHeight,
   children,
 }: {
   /** 1-based current step. */
@@ -47,6 +48,27 @@ export function WizardShell({
   title: string;
   sub?: string;
   onBack?: () => void;
+  /**
+   * OPT-IN. Floor (in px) for the title block + body TOGETHER, turning them
+   * into one flex column of at least that height.
+   *
+   * WHY: every step's content is a different height, so the primary action at
+   * the bottom of the column landed somewhere different on each one and moved
+   * out from under the pointer between steps. With this set, a caller whose
+   * footer carries `margin-top: auto` gets that footer parked at the BOTTOM of
+   * a fixed-height column instead — same y on every step short enough to fit.
+   *
+   * The title block is inside the measured column on purpose: a one-line vs
+   * two-line H1 would otherwise shift everything below it by a line.
+   *
+   * Capped at the viewport (`min(Npx, calc(100dvh - 200px))`) so a short
+   * phone screen never gains a scrollbar it did not have before.
+   *
+   * Omit it (the default, and what every pre-existing caller does) and the
+   * markup is byte-for-byte what it was: title block and body as plain
+   * siblings, no wrapper, no flex, no min-height.
+   */
+  minBodyHeight?: number;
   /**
    * OPT-IN. Names for each step, same length and order as `total`. Supplying
    * them swaps the anonymous dots for the named segmented rail. Omit (the
@@ -64,6 +86,7 @@ export function WizardShell({
   children: React.ReactNode;
 }) {
   const [backHover, setBackHover] = useState(false);
+  const pinned = typeof minBodyHeight === 'number';
   return (
     <div
       className="w-full flex flex-col items-center"
@@ -100,7 +123,10 @@ export function WizardShell({
       </div>
       )}
 
-      {/* Back arrow + title block */}
+      {/* Back arrow + title block. When `minBodyHeight` is set this and the
+          body share one min-height flex column, so a caller footer with
+          `margin-top: auto` lands at the same y on every step. */}
+      <PinWrap pinned={pinned} minHeight={minBodyHeight}>
       <div className="w-full relative" style={{ marginBottom: 26 }}>
         {onBack && (
           <button
@@ -159,7 +185,34 @@ export function WizardShell({
         </div>
       </div>
 
-      <div className="w-full">{children}</div>
+      <div className={pinned ? 'w-full flex flex-col flex-1' : 'w-full'}>{children}</div>
+      </PinWrap>
+    </div>
+  );
+}
+
+/**
+ * Wraps the title block + body in one min-height flex column when
+ * `minBodyHeight` was supplied, and renders them as bare siblings (a fragment,
+ * so ZERO extra DOM) when it was not. Existing callers therefore keep exactly
+ * the markup they had.
+ */
+function PinWrap({
+  pinned, minHeight, children,
+}: {
+  pinned: boolean;
+  minHeight?: number;
+  children: React.ReactNode;
+}) {
+  if (!pinned) return <>{children}</>;
+  return (
+    <div
+      className="w-full flex flex-col"
+      // Capped at the viewport so a short screen never gains a scrollbar that
+      // the natural content did not already need.
+      style={{ minHeight: `min(${minHeight}px, calc(100dvh - 200px))` }}
+    >
+      {children}
     </div>
   );
 }

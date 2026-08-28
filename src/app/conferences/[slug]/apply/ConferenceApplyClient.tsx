@@ -40,7 +40,7 @@ import {
   GraduationCap, Trophy, Crown, Sparkles,
   MapPin, Landmark, Check, X, Plus, Minus, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
-  Info, Coins,
+  Info, Coins, Pencil,
 } from 'lucide-react';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
@@ -173,6 +173,13 @@ const DIFFICULTY_META: Record<string, { label: string; accent: string; icon: Ico
  * for a real "Continue" / "Submit", or an underlined muted link when the step
  * is genuinely optional and nothing has been chosen ("Skip this question →").
  * WizardShell already owns the back arrow, so no back button lives here.
+ *
+ * `margin-top: auto` is what makes STEP_MIN_BODY work: inside WizardShell's
+ * opt-in min-height flex column the footer is pushed to the bottom of that
+ * column, so the primary action sits at the same y on every step instead of
+ * wandering with the content height. Without a `minBodyHeight` on the shell
+ * the auto margin resolves to 0 and only the 26px top spacing applies, which
+ * is exactly the old behaviour.
  */
 function WizardFooter({
   onNext,
@@ -189,7 +196,7 @@ function WizardFooter({
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
   return (
-    <div className="flex justify-center" style={{ marginTop: 26 }}>
+    <div className="flex justify-center" style={{ marginTop: 'auto', paddingTop: 26 }}>
       <button
         type="button"
         onClick={onNext}
@@ -229,10 +236,113 @@ function WizardFooter({
   );
 }
 
+/**
+ * One question + answer in the Overview recap, as a control that takes the
+ * applicant back to that exact question.
+ *
+ * Read-only recaps that cannot be acted on are the reason people abandon a
+ * review screen: spotting a typo in answer 4 meant walking the whole Questions
+ * step again to reach it. The whole row is the target (not a tiny "edit" link)
+ * and it is 44px tall at minimum, so it is usable with a thumb at 375px.
+ *
+ * The answer text is `NEU.inkSoft`, never `NEU.muted` — muted is a 2.71:1
+ * wash, and this is the applicant's own words being read back to them.
+ */
+function QuestionRecapRow({
+  label, answer, onEdit,
+}: {
+  label: string;
+  answer: string;
+  onEdit: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const missing = !answer;
+  return (
+    <button
+      type="button"
+      onClick={onEdit}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+      className="w-full flex items-start gap-2.5 text-left focus:outline-none"
+      aria-label={`Edit your answer to: ${label}`}
+      style={{
+        minHeight: 44,
+        padding: '7px 8px',
+        margin: '0 -8px',
+        borderRadius: 10,
+        border: 'none',
+        cursor: 'pointer',
+        backgroundColor: hover ? 'rgba(27,56,40,0.06)' : 'transparent',
+        transition: `background-color 180ms ${EASE}`,
+      }}
+    >
+      <span className="flex-1 min-w-0">
+        <span
+          className="block"
+          style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.ink, marginBottom: 2 }}
+        >
+          {label}
+        </span>
+        <span
+          className="block whitespace-pre-wrap"
+          style={{
+            fontFamily: OUTFIT,
+            fontSize: 12.5,
+            color: missing ? '#8B2020' : NEU.inkSoft,
+            fontStyle: missing ? 'italic' : 'normal',
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {answer || 'No answer provided.'}
+        </span>
+      </span>
+      <span
+        aria-hidden
+        className="flex-shrink-0 inline-flex items-center justify-center"
+        style={{
+          width: 26, height: 26, borderRadius: 999, marginTop: 1,
+          backgroundColor: hover ? 'rgba(27,56,40,0.10)' : 'transparent',
+          color: hover ? NEU.forest : NEU.inkSoft,
+          opacity: hover ? 1 : 0.55,
+          transition: `opacity 180ms ${EASE}, background-color 180ms ${EASE}, color 180ms ${EASE}`,
+        }}
+      >
+        <Pencil size={13} strokeWidth={2.4} />
+      </span>
+    </button>
+  );
+}
+
 /** The wizard's stages. The old inline `as const` array widened to string[]
  *  through its conditional spreads, so the step kind was never actually
  *  narrowed — naming the union here fixes that and types the label lookup. */
 type StepKindName = 'society' | 'invoicing' | 'preferences' | 'experience' | 'questions' | 'overview';
+
+/**
+ * Floor height (px) for a step's title block + body, passed to every
+ * WizardShell in this flow.
+ *
+ * THE PROBLEM IT SOLVES: each step's content is a different height, so the
+ * Continue pill sat at a different y on every screen and slid out from under
+ * the pointer on each advance. Measured on the LIMUN delegate flow at a 936px
+ * viewport, the button's page y ran 694 (Questions, "Logistics") → 794 → 837 →
+ * 769 (Experience) → 744 (Society) → 913 (Preferences) — a 300px+ wander
+ * between consecutive clicks.
+ *
+ * 700 puts the pill at a consistent ~867 for every step whose content fits,
+ * which is all of them except Overview and a Preferences step the applicant
+ * has filled with ranked choices — pages that are genuinely long, scroll
+ * anyway, and were never the ones jumping under the cursor.
+ *
+ * Derivation, if it ever needs retuning: buttonY = railTop(152) + railHeight
+ * (30) + railMargin(26) + STEP_MIN_BODY − footerHeight(49).
+ *
+ * WizardShell caps this at `calc(100dvh - 200px)`, so on a short phone it
+ * simply goes inert rather than inventing a scrollbar.
+ */
+const STEP_MIN_BODY = 700;
 
 /** Human names for the wizard stages, shown on the WizardShell progress rail. */
 const STEP_LABEL: Record<StepKindName, string> = {
@@ -901,6 +1011,15 @@ function ConferenceApplyInner() {
   const [customMissingIds, setCustomMissingIds] = useState<string[]>([]);
   // Custom questions render as one Section per page within this step.
   const [questionPage, setQuestionPage] = useState(0);
+  // ── Jumping to ONE question (Overview → that answer; failed submit → the
+  // first missing one). `pendingFocusQid` survives the step/page switch and is
+  // consumed by an effect once the target card has actually rendered — calling
+  // focusQuestion() at click time would run against the Overview DOM, where
+  // the card does not exist. `returnStepAfterJump` remembers where the jump
+  // came FROM, so finishing that one question lands back on Overview instead
+  // of walking every remaining section page again.
+  const [pendingFocusQid, setPendingFocusQid] = useState<string | null>(null);
+  const [returnStepAfterJump, setReturnStepAfterJump] = useState<number | null>(null);
 
   // ── Checkout: vouchers + fee waivers (finance.ts is the single math source)
   const [financeProfile, setFinanceProfile] = useState({
@@ -1724,6 +1843,52 @@ function ConferenceApplyInner() {
     await refreshCvCount();
   }
 
+  // Consume a pending jump once the target question's card has rendered.
+  //
+  // A zero-delay timeout, NOT requestAnimationFrame. The card only has to
+  // exist in the DOM (scrollIntoView and focus both force layout themselves),
+  // and by the time a macrotask runs React has committed AND the cards' own
+  // effects — the autogrow textarea's initial resize — have already flushed.
+  // rAF additionally never fires in a background/hidden tab, which would leave
+  // `pendingFocusQid` stuck and silently swallow the jump on return.
+  useEffect(() => {
+    if (!pendingFocusQid) return;
+    if (currentStepKind !== 'questions') return;
+    const t = setTimeout(() => {
+      focusQuestion(pendingFocusQid);
+      setPendingFocusQid(null);
+    }, 0);
+    return () => clearTimeout(t);
+    // `currentStepKind` is a plain string, not the freshly-rebuilt
+    // `stepSequence` array — depending on the array would re-run (and so
+    // cancel) this on every unrelated render, e.g. an autosave tick.
+  }, [pendingFocusQid, currentStepKind, questionPage]);
+
+  /**
+   * Send the applicant to ONE specific custom question: the Questions step,
+   * the section page that actually holds it, scrolled to and focused.
+   *
+   * This is the single mechanism for every "take me to that question" in the
+   * flow — the Overview's tappable answers, the failed-submit redirect and
+   * (via `focusQuestion`) the on-page MissingSummary all end up here, rather
+   * than each growing its own half-version of it.
+   *
+   * `returnStep` is the step to come back to when they press Continue on the
+   * jumped-to page. Passing the Overview's own step number is what makes an
+   * Overview edit a round trip instead of a re-walk of the wizard.
+   */
+  function goToQuestion(questionId: string, returnStep: number | null = null) {
+    const blocks = normalizeBlocks(roleConfig?.custom_questions ?? []);
+    const pages = buildQuestionPages(blocks);
+    const target = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === questionId));
+    setQuestionPage(target >= 0 ? target : 0);
+    const questionsIdx = stepSequence.indexOf('questions');
+    if (questionsIdx < 0) return;
+    setPendingFocusQid(questionId);
+    setReturnStepAfterJump(returnStep);
+    setStep(questionsIdx + 1);
+  }
+
   // Advisors skip Experience (F15), so 'invoicing' can now be the final step
   // in their sequence, advance to it normally, but submit instead of
   // stepping past the end when there's nothing left.
@@ -1811,14 +1976,10 @@ function ConferenceApplyInner() {
       setCustomMissingIds(questionCheck.missingIds);
       // Submit happens from the Overview step, but the answers live on the
       // dedicated Questions step — send the applicant back there, to the
-      // specific section page holding the first missing answer, so the
-      // missing-answer highlight is actually visible (not just on-page).
-      const pages = buildQuestionPages(blocks);
-      const firstMissingId = questionCheck.missingIds[0];
-      const targetPage = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === firstMissingId));
-      setQuestionPage(targetPage >= 0 ? targetPage : 0);
-      const questionsIdx = stepSequence.indexOf('questions');
-      if (questionsIdx >= 0) setStep(questionsIdx + 1);
+      // specific section page holding the first missing answer, and put the
+      // cursor in it. No return step: with several answers missing they should
+      // walk the remaining pages rather than bounce straight back to Submit.
+      goToQuestion(questionCheck.missingIds[0]);
       return;
     }
     if (needsDob || underAge) {
@@ -2037,12 +2198,7 @@ function ConferenceApplyInner() {
       setCustomMissingIds(questionCheck.missingIds);
       // Route to the Questions step / page holding the first missing answer,
       // so the highlight is visible instead of failing silently on Overview.
-      const pages = buildQuestionPages(blocks);
-      const firstMissingId = questionCheck.missingIds[0];
-      const targetPage = pages.findIndex(p => questionsOf(p.blocks).some(q => q.id === firstMissingId));
-      setQuestionPage(targetPage >= 0 ? targetPage : 0);
-      const questionsIdx = stepSequence.indexOf('questions');
-      if (questionsIdx >= 0) setStep(questionsIdx + 1);
+      goToQuestion(questionCheck.missingIds[0]);
       return;
     }
     setSubmitting(true);
@@ -2416,6 +2572,7 @@ function ConferenceApplyInner() {
         step={step}
         total={totalSteps}
         labels={stepLabels}
+        minBodyHeight={STEP_MIN_BODY}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title={!showSociety ? 'A little background' : isInvoicingRole ? 'Your delegation' : 'How are you applying?'}
         sub={
@@ -2600,6 +2757,7 @@ function ConferenceApplyInner() {
         step={step}
         total={totalSteps}
         labels={stepLabels}
+        minBodyHeight={STEP_MIN_BODY}
         onBack={() => setStep(s => s - 1)}
         title="Paying for delegation spots?"
         sub="Separate from your own registration fee — this only covers spots for your delegates."
@@ -2835,6 +2993,7 @@ function ConferenceApplyInner() {
           step={step}
           total={totalSteps}
           labels={stepLabels}
+          minBodyHeight={STEP_MIN_BODY}
           onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
           title="Your preferences"
           sub={subtitle}
@@ -2851,6 +3010,7 @@ function ConferenceApplyInner() {
         step={step}
         total={totalSteps}
         labels={stepLabels}
+        minBodyHeight={STEP_MIN_BODY}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="Your preferences"
         sub={subtitle}
@@ -3042,6 +3202,7 @@ function ConferenceApplyInner() {
         step={step}
         total={totalSteps}
         labels={stepLabels}
+        minBodyHeight={STEP_MIN_BODY}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="About you"
         sub="Set your MUN experience level, or import it from your MUN CV. The organiser sees it with your application and uses it for allocations."
@@ -3319,6 +3480,9 @@ function ConferenceApplyInner() {
     // experience), but a later page goes back a page, not a step.
     const canGoBack = !isFirstPage || step > 1;
     function handleBackQuestions() {
+      // Walking back by hand abandons the round trip — from here on they are
+      // moving through the wizard normally again.
+      setReturnStepAfterJump(null);
       if (!isFirstPage) { setQuestionPage(p => p - 1); return; }
       if (step > 1) setStep(s => s - 1);
     }
@@ -3329,6 +3493,15 @@ function ConferenceApplyInner() {
         return;
       }
       setCustomMissingIds([]);
+      // Arrived here from Overview to fix ONE answer: go straight back there
+      // rather than re-walking every remaining section page. Nothing is lost —
+      // answers live in `customAnswers`, which this never touches.
+      if (returnStepAfterJump !== null) {
+        const back = returnStepAfterJump;
+        setReturnStepAfterJump(null);
+        setStep(back);
+        return;
+      }
       if (!isLastPage) { setQuestionPage(p => p + 1); return; }
       handleContinue();
     }
@@ -3349,6 +3522,7 @@ function ConferenceApplyInner() {
         step={step}
         total={totalSteps}
         labels={stepLabels}
+        minBodyHeight={STEP_MIN_BODY}
         subStep={pages.length > 1 ? { index: questionPage, total: pages.length } : undefined}
         onBack={canGoBack ? handleBackQuestions : undefined}
         title={heading}
@@ -3362,7 +3536,6 @@ function ConferenceApplyInner() {
             acronym={conference.acronym}
             fullName={conference.full_name}
             questionCount={countQuestions(allBlocks)}
-            blocks={allBlocks}
           />
         )}
         {!isFirstPage && conference && (
@@ -3402,8 +3575,12 @@ function ConferenceApplyInner() {
             carry one — "Skip this section →  →" was the first render. */}
         <WizardFooter
           onNext={handleContinueQuestions}
-          nextLabel={skippable ? 'Skip this section' : 'Continue'}
-          primary={!skippable}
+          nextLabel={
+            returnStepAfterJump !== null
+              ? 'Back to overview'
+              : skippable ? 'Skip this section' : 'Continue'
+          }
+          primary={returnStepAfterJump !== null || !skippable}
         />
       </WizardShell>
     );
@@ -3444,6 +3621,7 @@ function ConferenceApplyInner() {
         step={step}
         total={totalSteps}
         labels={stepLabels}
+        minBodyHeight={STEP_MIN_BODY}
         onBack={() => {
           // Landing back on Experience (skipped entirely for advisors) always
           // re-opens the Questions step's first section page.
@@ -3508,16 +3686,21 @@ function ConferenceApplyInner() {
               )}
 
               {questions.length > 0 && (
-                <div className="flex flex-col gap-2.5 pt-1" style={{ borderTop: '1px solid rgba(27,56,40,0.1)' }}>
+                <div className="flex flex-col gap-1 pt-1" style={{ borderTop: '1px solid rgba(27,56,40,0.1)' }}>
+                  {/* Every recap answer is a way BACK to the question that
+                      produced it: goToQuestion opens the Questions step on the
+                      right section page, scrolls the card into view and puts
+                      the cursor in the field — then "Back to overview" returns
+                      here with everything still in `customAnswers`. */}
                   {questions.map(q => {
                     const ans = displayAnswer(q, customAnswers[q.id]);
                     return (
-                      <div key={q.id}>
-                        <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.ink, marginBottom: 2 }}>{q.label}</p>
-                        <p className="whitespace-pre-wrap" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: ans ? NEU.muted : '#B08A6A', fontStyle: ans ? 'normal' : 'italic' }}>
-                          {ans || 'No answer provided.'}
-                        </p>
-                      </div>
+                      <QuestionRecapRow
+                        key={q.id}
+                        label={q.label}
+                        answer={ans}
+                        onEdit={() => goToQuestion(q.id, step)}
+                      />
                     );
                   })}
                 </div>

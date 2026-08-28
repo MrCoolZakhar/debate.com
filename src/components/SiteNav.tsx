@@ -8,7 +8,7 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe, FileClock } from 'lucide-react';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import { useCredits } from '@/hooks/useCredits';
-import { useDraftCount } from '@/hooks/useDraftCount';
+import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 
 const NAV_LINKS_CONFIG = [
   { en: 'SESSIONS',    es: 'SESIONES',     fr: 'SESSIONS',        ar: 'الجلسات',    href: '/sessions' },
@@ -44,10 +44,14 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   const { language, setLanguage } = useLanguage();
   const { balance: creditBalance, loading: creditsLoading } = useCredits();
   // ProfileDropdown is `hidden md:flex`, so on a phone it never mounts and its
-  // DRAFTS TO COMPLETE row would be invisible exactly where applicants abandon
-  // forms. The hamburger sheet hand-rolls its own account block, so it needs
-  // the entry (and its own lazy count, gated on the sheet being open).
-  const { count: draftCount } = useDraftCount(menuOpen);
+  // unfinished-application entries would be invisible exactly where applicants
+  // abandon forms. The hamburger sheet hand-rolls its own account block, so it
+  // needs them too (with its own lazy fetch, gated on the sheet being open).
+  //
+  // Mirrors the dropdown's treatment: one gold-washed row PER draft, tagged
+  // UNFINISHED and linking straight back into that application's wizard —
+  // never an aggregate row, and never something that reads like attendance.
+  const { count: draftCount, drafts } = useDraftCount(menuOpen);
   const t = useT();
   const navLinks = NAV_LINKS_CONFIG.map(l => ({ label: l[language], href: l.href }));
 
@@ -425,9 +429,12 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
         className={`md:hidden overflow-hidden transition-[max-height] duration-300 ${overlay ? 'absolute left-0 right-0 z-40' : 'relative z-20'}`}
         style={{
           top: overlay ? '72px' : undefined,
-          // +56px of headroom when the drafts row is present, or the sheet
-          // clips its own last item (SIGN OUT) at the 480px cap.
-          maxHeight: menuOpen ? (user && draftCount && draftCount > 0 ? '536px' : '480px') : '0px',
+          // Headroom for the drafts block (a heading + one row per draft, up
+          // to 3), or the sheet clips its own last item (SIGN OUT) at the
+          // 480px cap.
+          maxHeight: menuOpen
+            ? `${480 + (user && drafts.length > 0 ? 26 + 44 * Math.min(drafts.length, 3) : 0)}px`
+            : '0px',
           backgroundColor: '#FAF8F3',
           borderBottom: menuOpen ? '1px solid #DDD4C0' : 'none',
         }}
@@ -499,36 +506,65 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                 </p>
               </div>
 
-              {draftCount !== null && draftCount > 0 && (
-                <Link
-                  href="/my-conferences?tab=all#drafts"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2 focus:outline-none"
-                  style={{
-                    padding: '10px 16px',
-                    margin: '0 0 4px',
-                    borderRadius: '10px',
-                    backgroundColor: 'rgba(182, 135, 31, 0.12)',
-                    textDecoration: 'none',
-                  }}
-                >
-                  <FileClock size={16} strokeWidth={2.2} style={{ color: '#8A6614', flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}>
-                    Drafts to complete
-                  </span>
-                  <span
-                    className="flex items-center justify-center rounded-full"
-                    style={{
-                      marginLeft: 'auto',
-                      minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
-                      fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
-                      backgroundColor: 'rgba(182,135,31,0.22)',
-                      color: '#8A6614',
-                    }}
-                  >
-                    {draftCount}
-                  </span>
-                </Link>
+              {drafts.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 px-4 pb-1">
+                    <p
+                      className="flex-1"
+                      style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.1em', color: '#8A6614', fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      YOUR CONFERENCES
+                    </p>
+                    {draftCount !== null && draftCount > 0 && (
+                      <span
+                        className="flex items-center justify-center rounded-full"
+                        style={{
+                          minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                          fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                          backgroundColor: 'rgba(182,135,31,0.22)',
+                          color: '#8A6614',
+                        }}
+                      >
+                        {draftCount}
+                      </span>
+                    )}
+                  </div>
+                  {drafts.slice(0, 3).map((d) => (
+                    <Link
+                      key={d.id}
+                      href={draftResumeHref(d)}
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 focus:outline-none"
+                      style={{
+                        // 44px tall — the tap-target floor, and what the
+                        // maxHeight arithmetic above budgets per row.
+                        minHeight: '44px',
+                        padding: '10px 16px',
+                        margin: '0 0 4px',
+                        borderRadius: '10px',
+                        backgroundColor: 'rgba(182, 135, 31, 0.12)',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <FileClock size={16} strokeWidth={2.2} style={{ color: '#8A6614', flexShrink: 0 }} />
+                      <span
+                        className="truncate"
+                        style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+                      >
+                        {d.acronym || d.fullName}
+                      </span>
+                      <span
+                        className="shrink-0"
+                        style={{
+                          marginLeft: 'auto', fontSize: '9px', fontWeight: 800, letterSpacing: '0.06em',
+                          textTransform: 'uppercase', color: '#8A6614', fontFamily: "'Outfit', sans-serif",
+                        }}
+                      >
+                        Unfinished
+                      </span>
+                    </Link>
+                  ))}
+                </>
               )}
 
               <Link
