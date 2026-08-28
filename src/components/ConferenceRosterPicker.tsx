@@ -20,6 +20,7 @@ import {
   ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES,
   US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS,
 } from '@/lib/presets';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 // ── Importance tiers ──────────────────────────────────────────────────────────
 // Mirrors the assignment page's model so tiers set here round-trip through the
@@ -393,6 +394,9 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
   const [review, setReview] = useState<ReviewRow[] | null>(null);
+  // The paste-review overlay is a modal. Ref-counted, so when it opens on top
+  // of the committee editor modal the editor's own lock survives its close.
+  useScrollLock(!!review);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
   // Display-only ordering of the selected list. 'entered' keeps insertion order;

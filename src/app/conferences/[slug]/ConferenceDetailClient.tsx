@@ -35,6 +35,7 @@ import {
   ModalOverlay,
   type EditableCommittee,
 } from '@/components/CommitteeEditorModal';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -564,6 +565,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // can be half-filled, so this needs the count, not just membership.
   const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, Record<string, number>>>({});
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
+  // The committee roster modal is a modal — freeze the conference page behind it.
+  useScrollLock(!!expandedRoster);
   const [pricingOpen, setPricingOpen] = useState(false);
   // Committee carousel + sorting (click: asc -> desc -> reset)
   const carouselRef = useRef<HTMLDivElement>(null);

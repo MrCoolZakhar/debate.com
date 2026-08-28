@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { Brand } from '@/components/Brand';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KILL SWITCH, set to false at public launch to disable the demo gate
@@ -82,15 +83,10 @@ export default function DemoGate() {
     }
   }, [gated]);
 
-  // Keep the underlying page from scrolling while the gate is up.
-  useEffect(() => {
-    if (!gated || unlocked) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [gated, unlocked]);
+  // Keep the underlying page from scrolling while the gate is up. `body {
+  // overflow: hidden }` used to be inlined here — it does not hold on iOS
+  // Safari, so this goes through the shared hook now.
+  useScrollLock(gated && !unlocked);
 
   const handleSubmit = useCallback(() => {
     if (isCorrectCode(value)) {

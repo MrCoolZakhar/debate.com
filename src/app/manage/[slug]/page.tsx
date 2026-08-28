@@ -24,6 +24,7 @@ import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/
 import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const RED = '#A8442F';
 
@@ -38,6 +39,8 @@ function PublishModal({
   onClose: () => void;
   onPublished: () => void;
 }) {
+  // Modal: freeze the dashboard behind it.
+  useScrollLock(true);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
   const { session } = useAuth();
@@ -129,6 +132,8 @@ function ShareModal({
   conference: { slug: string; full_name: string; acronym: string };
   onClose: () => void;
 }) {
+  // Modal: freeze the dashboard behind it.
+  useScrollLock(true);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
 

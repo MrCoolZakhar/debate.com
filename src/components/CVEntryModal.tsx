@@ -30,6 +30,7 @@ import {
   Eyebrow, Pill, LevelBadge, LEVEL_ACCENT, AwardArtwork, AWARD_LIST, isCustomAward,
   monogramFor, OUTFIT, MONO,
 } from '@/app/account/accountUi';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 export type EntryType = 'delegate' | 'chair' | 'faculty-advisor' | 'secretariat' | 'other';
 
@@ -512,6 +513,8 @@ export function CVEntryModal({
   userId: string;
 }) {
   const { session } = useAuth();
+  // Modal: the account page behind must not scroll while this is open.
+  useScrollLock(true);
   const isVerified = existing?.source === 'gavelling_verified';
   const [deleting, setDeleting] = useState(false);
   // Enter/exit motion: play a brief reverse animation before really unmounting.

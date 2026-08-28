@@ -9,6 +9,7 @@ import {
   type CustomQuestion, type QuestionType, type FormBlock, type QuestionBlock, type TitleBlock, type SectionBlock,
   isChoiceType, QUESTION_TYPE_LABELS,
 } from '@/lib/customQuestions';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const QUESTION_TYPES: QuestionType[] = [
   'short_text', 'paragraph', 'dropdown', 'multiple_choice', 'checkboxes', 'number', 'date',
@@ -38,6 +39,8 @@ function QuestionEditModal({ existing, hasApplications, onSave, onClose }: {
   onSave: (q: CustomQuestion) => void;
   onClose: () => void;
 }) {
+  // Modal: freeze the form-builder page behind it.
+  useScrollLock(true);
   const [label, setLabel] = useState(existing?.label ?? '');
   const [type, setType] = useState<QuestionType>(existing?.type ?? 'short_text');
   const [required, setRequired] = useState(existing?.required ?? false);
@@ -290,6 +293,8 @@ function BlockTextEditModal({ kind, existing, onSave, onClose }: {
   onSave: (block: TitleBlock | SectionBlock) => void;
   onClose: () => void;
 }) {
+  // Modal: freeze the form-builder page behind it.
+  useScrollLock(true);
   const [title, setTitle] = useState(existing?.title ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const canSave = title.trim().length > 0;

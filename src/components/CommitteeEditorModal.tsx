@@ -24,7 +24,6 @@ import { LogoDisc } from '@/components/LogoDisc';
 import Loader from '@/components/Loader';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { queueEventEmail } from '@/lib/emailEvents';
-import Portal from '@/components/Portal';
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
@@ -97,24 +96,13 @@ export function MonogramMedallion({ text, isCrisis, size }: { text: string; isCr
 }
 
 // ── Shared modal overlay ──────────────────────────────────────────────────────
+// Moved to @/components/ModalOverlay (background scroll lock + Escape + ARIA
+// live there now, shared by every dialog in the app). Re-exported so the many
+// existing `import { ModalOverlay } from '@/components/CommitteeEditorModal'`
+// call sites keep working.
 
-export function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  // Portal'd to document.body/#fit-root: the manage layout's content wrapper
-  // establishes its own stacking context (`relative z-10`), which traps
-  // `position: fixed` descendants below the header (z-30) and sidebar (z-25).
-  // Portaling out of that subtree is the only way the dim backdrop covers them.
-  return (
-    <Portal>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
-        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-        onClick={onClose}
-      >
-        <div onClick={e => e.stopPropagation()}>{children}</div>
-      </div>
-    </Portal>
-  );
-}
+import { ModalOverlay } from '@/components/ModalOverlay';
+export { ModalOverlay };
 
 // ── Session minting ───────────────────────────────────────────────────────────
 

@@ -26,6 +26,7 @@ import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const OUTFIT = "'Outfit', sans-serif";
 const MONO = 'ui-monospace, monospace';
@@ -385,6 +386,9 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Modal: freeze the user list behind the detail drawer.
+  useScrollLock(true);
 
   const p = detail?.profile;
 

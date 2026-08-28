@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import Portal from '@/components/Portal';
+import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
 import { DatePicker } from '@/components/DatePicker';
 import { PillToggle } from '@/app/account/accountUi';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
@@ -81,19 +81,10 @@ const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.
 // ── Modal overlay ──────────────────────────────────────────────────────────────
 
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
-  // content wrapper and covers the header/sidebar too.
-  return (
-    <Portal>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4"
-        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-        onClick={onClose}
-      >
-        <div onClick={e => e.stopPropagation()}>{children}</div>
-      </div>
-    </Portal>
-  );
+  // Thin wrapper over the shared house backdrop (@/components/ModalOverlay),
+  // which owns the background scroll lock, Escape-to-close and the dialog ARIA.
+  // `px-4` (no vertical padding) preserves this page's original spacing.
+  return <SharedModalOverlay onClose={onClose} paddingClassName="px-4">{children}</SharedModalOverlay>;
 }
 
 // ── UploadStudyGuideModal (unchanged) ───────────────────────────────────────────

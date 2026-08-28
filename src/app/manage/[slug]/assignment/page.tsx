@@ -25,6 +25,7 @@ import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
 import Portal from '@/components/Portal';
+import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
 import { useToast, ToastHost } from '@/components/Toast';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1278,19 +1279,10 @@ function DelegationChip({ app }: { app: AcceptedApp }) {
 }
 
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
-  // content wrapper and covers the header/sidebar too.
-  return (
-    <Portal>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4"
-        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-        onClick={onClose}
-      >
-        <div onClick={e => e.stopPropagation()}>{children}</div>
-      </div>
-    </Portal>
-  );
+  // Thin wrapper over the shared house backdrop (@/components/ModalOverlay),
+  // which owns the background scroll lock, Escape-to-close and the dialog ARIA.
+  // `px-4` (no vertical padding) preserves this page's original spacing.
+  return <SharedModalOverlay onClose={onClose} paddingClassName="px-4">{children}</SharedModalOverlay>;
 }
 
 /** The extruded ivory card every assignment modal sits in. */

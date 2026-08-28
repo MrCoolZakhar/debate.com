@@ -6,6 +6,8 @@ import { FlagImg } from '@/components/FlagImg';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
 import Portal from '@/components/Portal';
+import { useScrollLock } from '@/hooks/useScrollLock';
+import { useModalEscape } from '@/components/ModalOverlay';
 import Avatar from '@/components/Avatar';
 import {
   NeuInset, NeuIconDisc, NEU, NEU_GRADIENTS, type NeuGradient, OUTFIT, EASE,
@@ -259,6 +261,19 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
  *  open in the SAME shell as the recap, roster and awards modals rather than
  *  each growing their own. `maxWidth` widens it for the scoreboard's table. */
 export function ModalShell({ children, onClose, maxWidth = 672 }: { children: React.ReactNode; onClose: () => void; maxWidth?: number }) {
+  /* The page behind a dialog must not scroll, and Escape must dismiss it.
+     Both come from the shared implementations rather than being hand-rolled
+     here: the lock is reference counted (a confirm stacked on this must not
+     release it when IT closes), and the Escape stack is shared with
+     ModalOverlay so one keypress reaches the top-most dialog only, whichever
+     component drew it.
+
+     This keeps its own backdrop markup rather than delegating to ModalOverlay:
+     that component wraps its children in an auto-width div, which would break
+     the `w-full` + maxWidth sizing the card below relies on. */
+  useScrollLock(true);
+  useModalEscape(onClose);
+
   // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
   // content wrapper and covers the header/sidebar too.
   return (

@@ -8,6 +8,7 @@ import { getFlagUrl, getCountryByName, getCountryDisplayName } from '@/lib/count
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 function getCommitteeAcronym(title: string): string {
   const t = title.toUpperCase();
@@ -472,6 +473,8 @@ export default function HomeClient() {
     code: string; chairName: string; committeeTitle: string; savedAt: number; chairSuffix?: string | null;
   } | null>(null);
   const [showDeletedNotice, setShowDeletedNotice] = useState(false);
+  // The "session in progress" rejoin card is a modal — freeze the landing page.
+  useScrollLock(!!rejoinData);
 
   useEffect(() => {
     // Read via window.location rather than useSearchParams, so this stays a

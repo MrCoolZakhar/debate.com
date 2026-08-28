@@ -17,6 +17,7 @@ import { NEU, EASE, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
 import { SectionCard, OUTFIT, useAllocationPartner } from './shared';
 import type { ParticipantAllocation } from './types';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 interface PositionPaper {
   id: string;
@@ -67,6 +68,8 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
   const [ppError, setPPError] = useState('');
   const [isReplacing, setIsReplacing] = useState(false);
   const [showPPWarning, setShowPPWarning] = useState(false);
+  // The replace-paper confirm is a modal — freeze the participant page behind it.
+  useScrollLock(showPPWarning);
   const ppFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadPpEnabled = useCallback(async () => {

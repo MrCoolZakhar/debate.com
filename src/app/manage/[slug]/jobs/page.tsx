@@ -6,6 +6,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import Portal from '@/components/Portal';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -415,6 +416,8 @@ function PostingModal({
   }) => void;
   onClose: () => void;
 }) {
+  // Modal: freeze the job board behind it.
+  useScrollLock(true);
   const [category, setCategory] = useState(posting?.category ? toUiEnum(posting.category) : 'CHAIRS');
   const [roleName, setRoleName] = useState(posting?.role_name ?? '');
   const [committeeId, setCommitteeId] = useState(posting?.conference_committees?.id ?? '');

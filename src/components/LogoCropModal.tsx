@@ -31,6 +31,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ZoomIn, ZoomOut, Move } from 'lucide-react';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const DISC = 280;              // preview disc diameter (px)
 const SAFE = DISC * 0.88;      // safe-area diameter, 6% margin each side (crop less)
@@ -151,6 +152,9 @@ export function LogoCropModal({
   /** Receives the flattened 512×512 transparent PNG. */
   onSave: (blob: Blob) => void;
 }) {
+  // Modal: freeze the page behind while the crop tool is open.
+  useScrollLock(true);
+
   const objectUrl = useMemo(() => URL.createObjectURL(file), [file]);
   useEffect(() => () => URL.revokeObjectURL(objectUrl), [objectUrl]);
 

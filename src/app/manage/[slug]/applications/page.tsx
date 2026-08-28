@@ -33,6 +33,7 @@ import {
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 import { type ApplyDraftAnswers, normalizeAnswers } from '@/lib/applyDraft';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1719,6 +1720,9 @@ export default function ApplicationsPage() {
   // or null when closed. Populated from the already-loaded applications, so no
   // extra fetch is needed.
   const [delegationView, setDelegationView] = useState<{ id: string; name: string } | null>(null);
+  // The delegation/society popup is a modal too. Separate ref-counted lock, so it
+  // can sit on top of the review dialog without releasing that one on close.
+  useScrollLock(!!delegationView);
   // ── In-progress drafts. Its OWN state, fed by its OWN query, never merged
   // into `applications` — see the DraftRow comment block. Collapsed by default
   // so the submitted list stays the page's subject.
@@ -1937,31 +1941,13 @@ export default function ApplicationsPage() {
   // behaviour wholesale (both mount `reviewCardRef`, and only one can be open
   // at a time), so the effect keys on whichever is open.
   const openDialogId = reviewId ?? draftReviewId;
+  // Background scroll lock now comes from the shared hook (src/hooks/useScrollLock.ts),
+  // which is the same technique this effect used to hand-roll — plus scrollbar-gutter
+  // compensation and reference counting so a stacked dialog can't release this one.
+  useScrollLock(!!openDialogId);
   useEffect(() => {
     if (!openDialogId) return;
-    // The page's scroller is <html>, not <body>, and `overflow: hidden` only
-    // stops a *user* scroll — the list can still be moved programmatically
-    // behind the dialog. Pinning body at a negative offset removes the
-    // document's scroll range outright; the offset is undone and the exact
-    // position restored on close so nothing jumps.
-    const root = document.documentElement;
-    const body = document.body;
-    const scrollY = window.scrollY;
-    const prev = {
-      rootOverflow: root.style.overflow,
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width,
-    };
     const prevFocus = document.activeElement as HTMLElement | null;
-    root.style.overflow = 'hidden';
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.left = '0';
-    body.style.right = '0';
-    body.style.width = '100%';
 
     const focusables = () => {
       const card = reviewCardRef.current;
@@ -2001,13 +1987,6 @@ export default function ApplicationsPage() {
     return () => {
       clearTimeout(seat);
       document.removeEventListener('keydown', onKey, true);
-      root.style.overflow = prev.rootOverflow;
-      body.style.position = prev.position;
-      body.style.top = prev.top;
-      body.style.left = prev.left;
-      body.style.right = prev.right;
-      body.style.width = prev.width;
-      window.scrollTo(0, scrollY);
       prevFocus?.focus?.();
     };
   }, [openDialogId]);

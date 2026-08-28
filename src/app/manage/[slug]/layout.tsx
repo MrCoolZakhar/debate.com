@@ -13,6 +13,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import Loader from '@/components/Loader';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import type { EmailTheme } from '@/lib/emailHtml';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -582,6 +583,9 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const [isOwner, setIsOwner] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // The mobile nav drawer is a modal surface — the page behind it must not
+  // scroll while it is open (this is the phone case, so iOS matters).
+  useScrollLock(mobileMenuOpen);
   const [inboxBadge, setInboxBadge] = useState(0);
 
   // Nav badge — same unread definition as the communications inbox
