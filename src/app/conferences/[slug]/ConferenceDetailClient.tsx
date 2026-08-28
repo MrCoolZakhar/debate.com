@@ -1125,10 +1125,24 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const reviewCount = allReviews.length;
   const avgRating = reviewCount > 0 ? allReviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount : 0;
 
+  /* Show the TIME, not just the day.
+     An open moment is a timestamp, and rendering only "28 Aug" for a window
+     that opens at 18:00 that same day reads as broken to anyone looking on the
+     28th: the date has arrived, the button has not. That is not a gate bug —
+     it is this label omitting the half of the value that matters.
+     `new Date(iso)` puts it in the viewer's own timezone, which is what an
+     applicant needs; a Turkish organiser opening at 21:00 local should not
+     have a Spanish applicant reading a UTC time. */
   const fmtWindowDate = (iso: string) => {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const d = new Date(iso);
-    return `${d.getDate()} ${months[d.getMonth()]}`;
+    const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+    const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const days = Math.round((startOfDay(d) - startOfDay(new Date())) / 86400000);
+    if (days === 0) return `today ${time}`;
+    if (days === 1) return `tomorrow ${time}`;
+    return `${d.getDate()} ${months[d.getMonth()]}, ${time}`;
   };
 
   return (
