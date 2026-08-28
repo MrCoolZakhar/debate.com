@@ -13,6 +13,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import Loader from '@/components/Loader';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import type { EmailTheme } from '@/lib/emailHtml';
+import { financialsAreReadOnly } from '@/lib/organizerPermissions';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -69,6 +70,11 @@ export interface Conference {
 
 interface ManageContextType {
   conference: Conference | null;
+  /** True when this organizer's bundle marks financials read-only (the ADMIN
+   *  bundle). Financial pages render, the numbers are all visible, and every
+   *  mutation is refused by can_write_financials() in the database — this flag
+   *  is only so the interface can say so instead of letting a click fail. */
+  financialsReadOnly: boolean;
   refreshConference: () => Promise<void>;
   /** Re-fetches the conference row and updates context state, without the
    *  full-screen loading flag `refreshConference` flips (which unmounts the
@@ -78,6 +84,7 @@ interface ManageContextType {
 
 const ManageContext = createContext<ManageContextType>({
   conference: null,
+  financialsReadOnly: false,
   refreshConference: async () => {},
   refreshConferenceQuiet: async () => {},
 });
@@ -723,9 +730,13 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   // the conference data or the (now-stable, useCallback'd) refresh functions
   // actually change, not on every layout render. Declared before the early
   // returns below, hooks can't run conditionally.
+  // Owners and platform admins (isOwner is set true for staff above) are never
+  // read-only; everyone else takes it from their stored bundle.
+  const financialsReadOnly = !isOwner && financialsAreReadOnly(permissions);
+
   const manageContextValue = useMemo(
-    () => ({ conference, refreshConference, refreshConferenceQuiet }),
-    [conference, refreshConference, refreshConferenceQuiet]
+    () => ({ conference, financialsReadOnly, refreshConference, refreshConferenceQuiet }),
+    [conference, financialsReadOnly, refreshConference, refreshConferenceQuiet]
   );
 
   // Loading state
@@ -943,6 +954,26 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
         className="relative z-10 md:ml-[96px]"
         style={{ marginTop: '56px', minHeight: 'calc(100vh - 56px)', backgroundColor: '#EDE7D8' }}
       >
+        {/* Read-only money banner. The ADMIN bundle opens every financial page
+            in full and can change none of it; saying that up front beats a
+            button that silently fails. */}
+        {financialsReadOnly && (currentSegment === 'financials' || currentSegment === 'financial-aid') && (
+          <div className="px-4 sm:px-6 md:px-10 pt-6">
+            <p
+              role="status"
+              className="rounded-xl px-4 py-3 text-sm"
+              style={{
+                color: '#7A5A10', backgroundColor: 'rgba(182,135,31,0.12)',
+                border: '1px solid rgba(182,135,31,0.32)', fontFamily: "'Outfit', sans-serif",
+                lineHeight: 1.5, textWrap: 'pretty', maxWidth: 1080,
+              }}
+            >
+              <strong style={{ fontWeight: 800 }}>View only.</strong>{' '}
+              Your organizer role can see every financial detail here but cannot change any of
+              them — fees, add-ons, vouchers, payout settings and invoice status are all locked.
+            </p>
+          </div>
+        )}
         {children}
       </div>
     </ManageContext.Provider>

@@ -31,6 +31,8 @@ export const NEU = {
   amber: '#B8844A',
   green: '#3D7A52',
   muted: '#9A8A78',
+  // that is not primary.
+  inkSoft: '#5B4F42',
   // Extruded pair, light top-left, forest-tinted dark bottom-right.
   out: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.16)',
   outHover: '-8px -8px 18px rgba(255,255,255,0.92), 10px 10px 26px rgba(27,56,40,0.21)',
