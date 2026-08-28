@@ -12,6 +12,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { OrganizerPencil } from '@/components/OrganizerPencil';
+import ProfileLink from '@/components/ProfileLink';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
@@ -2598,15 +2599,15 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           </>
                                         );
                                         return uid ? (
-                                          <Link
+                                          <ProfileLink
                                             key={ch.name}
-                                            href={`/cv/${uid}`}
+                                            userId={uid}
+                                            name={ch.name}
                                             className="flex flex-col items-center text-center transition-transform hover:-translate-y-0.5"
-                                            style={{ width: '96px', textDecoration: 'none' }}
-                                            title={`View ${ch.name}'s MUN CV`}
+                                            style={{ width: '96px' }}
                                           >
                                             {inner}
-                                          </Link>
+                                          </ProfileLink>
                                         ) : (
                                           <div key={ch.name} className="flex flex-col items-center text-center" style={{ width: '96px' }}>
                                             {inner}

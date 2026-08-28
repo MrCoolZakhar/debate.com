@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { Compass, ArrowRight, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
 import { FlagImg } from '@/components/FlagImg';
+import ProfileLink from '@/components/ProfileLink';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
 import { NEU } from '@/components/neu';
 import { SectionCard, OUTFIT, capitalize, useAllocationPartner, effectiveReleaseTime, formatReleaseDate } from './shared';
@@ -125,7 +126,11 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
           </p>
           {partner?.name && (
             <p className="text-[12px] mt-1.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-              Representing together with {partner.name}
+              {/* Co-delegate links to their MUN CV. No clickable ancestor here,
+                  so no `nested`. A seat filled by an unclaimed import invite
+                  carries a name but no userId — ProfileLink renders it bare. */}
+              Representing together with{' '}
+              <ProfileLink userId={partner.userId} name={partner.name}>{partner.name}</ProfileLink>
             </p>
           )}
         </div>

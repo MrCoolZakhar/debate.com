@@ -99,6 +99,22 @@ export function CommitteeScoreboardModal({
       <p className="text-[12.5px] mb-4" style={{ color: SOFT, fontFamily: OUTFIT, maxWidth: 620 }}>
         Exactly what the chairs of this committee see from the dais — objective points, speeches,
         factor ratings and written notes. Read-only: only chairs award points.
+        {/* DOUBLE DELEGATION, STATED RATHER THAN SILENTLY MISCOUNTED.
+            Every row below is one DELEGATION, because that is the only unit the
+            live session has: `delegates` is UNIQUE on (committee_id, country),
+            so two delegates sharing a seat produce one roll entry, one place in
+            the speakers' list and one score. That is correct — they speak on one
+            nameplate — but "12 delegations" in a double committee means 24
+            people, and a reader who is not told that will read it as 12.
+            Splitting the score between them would be inventing a number the
+            chairs never recorded. */}
+        {(data.conf.delegationSize ?? 1) >= 2 && (
+          <>
+            {' '}This is a <strong>double-delegation</strong> committee: each row is one delegation
+            shared by two delegates, who are scored together because the chairs score the seat.
+            Open a delegation from its flag on the live card to see both names.
+          </>
+        )}
       </p>
 
       {error && (

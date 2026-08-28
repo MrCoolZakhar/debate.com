@@ -14,6 +14,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionPapers';
 import { NEU, EASE, NeuCard } from '@/components/neu';
+import ProfileLink from '@/components/ProfileLink';
 import { ActionButton } from '@/components/PositionPaperButtons';
 import { SectionCard, OUTFIT, useAllocationPartner } from './shared';
 import type { ParticipantAllocation } from './types';
@@ -256,7 +257,18 @@ export default function PositionPaperCard({ conferenceId, conferenceSlug, myAllo
             <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{myPositionPaper.file_name}</p>
             <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', margin: '2px 0 0 0' }}>
               Submitted {fmtDate(myPositionPaper.submitted_at)}
-              {myPositionPaper.user_id !== user?.id && ` by ${partner?.name ?? 'your co-delegate'}`}
+              {myPositionPaper.user_id !== user?.id && (
+                <>
+                  {/* `nested` — the enclosing NeuCard is given onClick (not href),
+                      so it renders a plain div and an anchor inside it is legal.
+                      Stopping propagation means clicking the co-delegate's name
+                      opens their CV instead of the paper page. */}
+                  {' by '}
+                  <ProfileLink userId={partner?.userId} name={partner?.name} nested>
+                    {partner?.name ?? 'your co-delegate'}
+                  </ProfileLink>
+                </>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">

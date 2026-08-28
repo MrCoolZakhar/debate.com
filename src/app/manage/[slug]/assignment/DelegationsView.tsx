@@ -146,7 +146,8 @@ function AdvisorTransferModal({
           ) : results.map(a => (
             <NeuInset key={a.id} small className="flex items-center justify-between gap-2 px-3 py-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
+                {/* Static NeuInset row; TRANSFER is a sibling button. Plain link. */}
+                <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} userId={a.user_id} />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
                   <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
@@ -878,7 +879,8 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                   className="flex items-center gap-2 rounded-xl px-3 py-2 mb-1.5"
                   style={{ backgroundColor: paid ? '#1B3828' : '#FAF8F3', border: `1.5px solid ${paid ? '#1B3828' : '#DDD4C0'}` }}
                 >
-                  <PersonAvatar name={name} url={a.profiles?.avatar_url ?? null} />
+                  {/* Advisor row: plain <div>, TRANSFER/NOT ATTENDING/REMOVE are siblings. */}
+                  <PersonAvatar name={name} url={a.profiles?.avatar_url ?? null} userId={a.user_id} />
                   <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ fontFamily: OUTFIT, color: paid ? '#EED98A' : '#1C1410' }}>
                     {name}
                   </span>
@@ -962,7 +964,8 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
                   className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-1.5"
                   style={{ backgroundColor: '#1B3828', border: '1.5px solid #1B3828' }}
                 >
-                  <PersonAvatar name={name} url={m.profiles?.avatar_url ?? null} />
+                  {/* Head-delegate card: plain <div>, action buttons are siblings. */}
+                  <PersonAvatar name={name} url={m.profiles?.avatar_url ?? null} userId={m.user_id} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: '#EED98A', fontFamily: OUTFIT }}>{name}</p>
                     {m.assigned_committee_id && (
@@ -1003,7 +1006,8 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <PersonAvatar name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={26} />
+                  {/* Pledge row: plain <div>, MARK RECEIVED is a sibling button. */}
+                  <PersonAvatar name={m.profiles?.display_name ?? m.invited_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={26} userId={m.user_id} />
                   <p className="text-sm min-w-0 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                     <span style={{ fontWeight: 700 }}>{m.profiles?.display_name ?? m.invited_name ?? 'Unknown'}</span> pledged: {pledgeText(m)}
                   </p>
@@ -1049,7 +1053,10 @@ export default function DelegationsView({ conference, showFlash }: DelegationsVi
               {searchResults.map(a => (
                 <NeuInset key={a.id} small className="flex items-center justify-between gap-2 px-3 py-2">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
+                    {/* Cross-conference search result: static NeuInset row, ADD is a
+                        sibling button. This row is NOT the drag source — the draggable
+                        chip below is — so a plain link is safe here. */}
+                    <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} userId={a.user_id} />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
                       <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>

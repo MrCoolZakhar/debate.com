@@ -12,6 +12,7 @@ import { useConfirmModal } from '@/components/ConfirmModal';
 import { PillToggle, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { DatePicker } from '@/components/DatePicker';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset, NeuPill } from '@/components/neu';
+import ProfileLink from '@/components/ProfileLink';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -494,24 +495,30 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
                 : null;
               return (
                 <div key={app.id} className="flex items-center gap-3 rounded-xl px-3 py-2" style={{ border: '1px solid #EDE7D8', backgroundColor: 'rgba(237,231,216,0.3)' }}>
-                  {app.profiles?.avatar_url ? (
-                    <img
-                      src={app.profiles.avatar_url}
-                      alt={name}
-                      style={{ width: 30, height: 30, borderRadius: '9999px', objectFit: 'cover', backgroundColor: '#EDE7D8', flexShrink: 0 }}
-                    />
-                  ) : (
-                    <span
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{ width: 30, height: 30, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 12, fontWeight: 700, fontFamily: "'Outfit', sans-serif" }}
-                    >
-                      {name.charAt(0)}
-                    </span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{name}</p>
-                    <p className="text-[11px] truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
-                  </div>
+                  {/* Avatar + name link to this applicant's public MUN CV. The row is a
+                      plain div and ASSIGN is a sibling button, so no nesting concerns.
+                      An invited-but-unclaimed applicant has no user_id — ProfileLink
+                      then renders the children bare. */}
+                  <ProfileLink userId={app.user_id} name={name} className="flex items-center gap-3 min-w-0 flex-1">
+                    {app.profiles?.avatar_url ? (
+                      <img
+                        src={app.profiles.avatar_url}
+                        alt={name}
+                        style={{ width: 30, height: 30, borderRadius: '9999px', objectFit: 'cover', backgroundColor: '#EDE7D8', flexShrink: 0 }}
+                      />
+                    ) : (
+                      <span
+                        className="flex items-center justify-center flex-shrink-0"
+                        style={{ width: 30, height: 30, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 12, fontWeight: 700, fontFamily: "'Outfit', sans-serif" }}
+                      >
+                        {name.charAt(0)}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{name}</p>
+                      <p className="text-[11px] truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
+                    </div>
+                  </ProfileLink>
                   {app.assigned_committee_id && (
                     <span
                       className="px-2 py-0.5 rounded-full flex-shrink-0"
@@ -1408,6 +1415,13 @@ export default function CommitteesPage() {
               const seats = c.slotCount || c.total_slots;
               const copied = copiedCode === c.session_code && !!c.session_code;
               const dais = c.display_chairs ?? [];
+              // display_chairs and chair_user_ids are SEPARATE arrays, correlated only
+              // by position (the DB trigger keeps them index-aligned). Only link a dais
+              // avatar to a CV when the lengths match — on a mismatch (hand-seeded dais)
+              // index i could point at the wrong person. Same guard as
+              // ConferenceDetailClient.tsx and handleRemoveChair above.
+              const daisIds = c.chair_user_ids ?? [];
+              const daisLinkable = daisIds.length === dais.length;
               const minting = busyIds.has(`mint-${c.id}`);
               const seatLabel = !isCrisis && c.delegation_size === 2
                 ? `${seats} countries · ${seats * 2} seats`
@@ -1464,13 +1478,17 @@ export default function CommitteesPage() {
                     <div className="flex items-center flex-shrink-0" style={{ paddingLeft: 6 }}>
                       {dais.map((ch, chIdx) => (
                         <div key={`${ch.name}-${chIdx}`} className="group relative" style={{ marginLeft: chIdx === 0 ? 0 : -8 }} title={ch.name}>
-                          {ch.avatar_url ? (
-                            <img src={ch.avatar_url} alt={ch.name} style={{ width: 30, height: 30, borderRadius: 9999, objectFit: 'cover', border: '2px solid #F0EBDD', backgroundColor: '#EDE7D8' }} />
-                          ) : (
-                            <span className="flex items-center justify-center" style={{ width: 30, height: 30, borderRadius: 9999, border: '2px solid #F0EBDD', backgroundColor: NEU.forest, color: NEU.gold, fontSize: 12, fontWeight: 700, fontFamily: OUTFIT }}>
-                              {ch.name.charAt(0)}
-                            </span>
-                          )}
+                          {/* Only the avatar is the CV link — the hover X stays a sibling
+                              so removing a chair is unaffected. */}
+                          <ProfileLink userId={daisLinkable ? daisIds[chIdx] : null} name={ch.name} className="block">
+                            {ch.avatar_url ? (
+                              <img src={ch.avatar_url} alt={ch.name} style={{ width: 30, height: 30, borderRadius: 9999, objectFit: 'cover', border: '2px solid #F0EBDD', backgroundColor: '#EDE7D8' }} />
+                            ) : (
+                              <span className="flex items-center justify-center" style={{ width: 30, height: 30, borderRadius: 9999, border: '2px solid #F0EBDD', backgroundColor: NEU.forest, color: NEU.gold, fontSize: 12, fontWeight: 700, fontFamily: OUTFIT }}>
+                                {ch.name.charAt(0)}
+                              </span>
+                            )}
+                          </ProfileLink>
                           <button
                             onClick={() => handleRemoveChair(c, chIdx, ch.name)}
                             title={`Remove ${ch.name} from the dais`}
@@ -1572,6 +1590,13 @@ export default function CommitteesPage() {
               const seats = c.slotCount || c.total_slots;
               const copied = copiedCode === c.session_code && !!c.session_code;
               const dais = c.display_chairs ?? [];
+              // display_chairs and chair_user_ids are SEPARATE arrays, correlated only
+              // by position (the DB trigger keeps them index-aligned). Only link a dais
+              // face to a CV when the lengths match — on a mismatch (hand-seeded dais)
+              // index i could point at the wrong person. Same guard as
+              // ConferenceDetailClient.tsx and handleRemoveChair above.
+              const daisIds = c.chair_user_ids ?? [];
+              const daisLinkable = daisIds.length === dais.length;
               return (
                 <article
                   key={c.id}
@@ -1663,28 +1688,32 @@ export default function CommitteesPage() {
                           {dais.map((ch, chIdx) => (
                             <div key={`${ch.name}-${chIdx}`} className="group relative flex flex-col items-center text-center" style={{ width: 72 }}>
                               <div className="relative">
-                                {ch.avatar_url ? (
-                                  <img
-                                    src={ch.avatar_url}
-                                    alt={ch.name}
-                                    style={{
-                                      width: '44px', height: '44px', borderRadius: '9999px', objectFit: 'cover',
-                                      boxShadow: '0 4px 10px rgba(27,56,40,0.2)',
-                                      backgroundColor: '#EDE7D8',
-                                    }}
-                                  />
-                                ) : (
-                                  <span
-                                    className="flex items-center justify-center"
-                                    style={{
-                                      width: '44px', height: '44px', borderRadius: '9999px',
-                                      backgroundColor: '#1B3828', color: '#EED98A',
-                                      fontSize: '15px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                                    }}
-                                  >
-                                    {ch.name.charAt(0)}
-                                  </span>
-                                )}
+                                {/* Only the avatar is the CV link — the hover X stays a
+                                    sibling so removing a chair is unaffected. */}
+                                <ProfileLink userId={daisLinkable ? daisIds[chIdx] : null} name={ch.name} className="block">
+                                  {ch.avatar_url ? (
+                                    <img
+                                      src={ch.avatar_url}
+                                      alt={ch.name}
+                                      style={{
+                                        width: '44px', height: '44px', borderRadius: '9999px', objectFit: 'cover',
+                                        boxShadow: '0 4px 10px rgba(27,56,40,0.2)',
+                                        backgroundColor: '#EDE7D8',
+                                      }}
+                                    />
+                                  ) : (
+                                    <span
+                                      className="flex items-center justify-center"
+                                      style={{
+                                        width: '44px', height: '44px', borderRadius: '9999px',
+                                        backgroundColor: '#1B3828', color: '#EED98A',
+                                        fontSize: '15px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                                      }}
+                                    >
+                                      {ch.name.charAt(0)}
+                                    </span>
+                                  )}
+                                </ProfileLink>
                                 <button
                                   onClick={() => handleRemoveChair(c, chIdx, ch.name)}
                                   title={`Remove ${ch.name} from the dais`}
@@ -1699,9 +1728,15 @@ export default function CommitteesPage() {
                                   <X size={9} strokeWidth={2.6} />
                                 </button>
                               </div>
-                              <span className="text-[11px] font-semibold mt-1.5 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                                {ch.name}
-                              </span>
+                              {/* mt-1.5 lives on the link too: when linked the anchor is
+                                  the flex item and the inline span's own margin is
+                                  ignored; unlinked, ProfileLink renders the span bare and
+                                  its margin applies. Spacing is identical either way. */}
+                              <ProfileLink userId={daisLinkable ? daisIds[chIdx] : null} name={ch.name} className="mt-1.5">
+                                <span className="text-[11px] font-semibold mt-1.5 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                  {ch.name}
+                                </span>
+                              </ProfileLink>
                             </div>
                           ))}
                           <button

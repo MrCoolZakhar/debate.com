@@ -23,7 +23,6 @@ import {
   activeCaucus, isConsultation, isTourDeTable, isRoomOrderTour,
   liveCaucusSeconds, cardVariant,
 } from './PhaseVariants';
-import { speakerRemainingNow } from '@/lib/committeeService';
 
 // ── Local colour + type tokens ───────────────────────────────────────────────
 //
@@ -124,22 +123,18 @@ export const STATUS_META: Record<RoomStatus, StatusMeta> = {
   ended: { label: 'Adjourned', color: NEU.forest, ink: NEU.forest },
 };
 
-/** "live" while a room is warm; "quiet 14m" once it is not. Deliberately
- *  reported next to the status word rather than instead of it. */
-export function idleLabel(lc: LiveCommittee, now: number): string {
-  const status = roomStatus(lc, now);
-  if (status === 'not-started') return 'never opened';
-  // A gavelled-out room is not "quiet" — it is finished. Report WHEN, not how
-  // long it has been silent since.
-  if (status === 'ended') {
-    const t = lc.session?.endedAt ? Date.parse(lc.session.endedAt) : NaN;
-    return Number.isFinite(t) ? `closed ${fmtSpan((now - t) / 60000)} ago` : 'closed';
-  }
-  const mins = idleMinutes(lc, now);
-  if (mins === null) return 'no activity on record';
-  if (status === 'live') return 'live';
-  return `quiet ${fmtSpan(mins)}`;
-}
+// THE ELAPSED SPAN IS NO LONGER PRINTED ON THE CARD, on the owner's
+// instruction. `idleLabel` used to render "quiet 44d" beneath the status word;
+// the status WORD alone carries it, and a card that says "Stalled" next to
+// "quiet 44d" is saying one thing twice.
+//
+// Staleness is untouched as a SIGNAL — it still decides `roomStatus` (and with
+// it the status word and the rail colour) and it still drives `urgencyRank`,
+// which is what floats a dead room to the top of the grid. Only the printed
+// number went. `idleMinutes` and `fmtSpan` therefore stay exactly as they were;
+// `fmtSpan` is still used by the stuck-resume warning and by the panel's own
+// "suspended 20m" / "closed 3h ago" captions, where the span IS the fact rather
+// than a restatement of the word beside it.
 
 /** Compact, honest duration: 14m · 3h · 2d. Never "0m". */
 export function fmtSpan(minutes: number): string {
@@ -155,9 +150,16 @@ export function fmtSpan(minutes: number): string {
 /** The ONLY things allowed in the warning slot. Anything else belongs in the
  *  facts strip or in the modal — a warning row that cries about ordinary state
  *  is a warning row nobody reads. */
+//
+// 'unresolved-dr' is GONE, on the owner's instruction. `documents.status` is a
+// one-way door — nothing clears 'introduced' except a chair resolving the vote —
+// so the pill fired on every room that had ever introduced a resolution and
+// never got round to recording the verdict, which is most of them. It reported a
+// bookkeeping gap as a live emergency. The draft-resolution count and its
+// passed/failed breakdown are still on the card's DR chip, where they are a fact
+// rather than an alarm.
 export type WarningId =
-  | 'below-quorum' | 'no-chair' | 'caucus-overrun'
-  | 'unresolved-dr' | 'stuck-resume';
+  | 'below-quorum' | 'no-chair' | 'caucus-overrun' | 'stuck-resume';
 
 export interface CardWarning {
   id: WarningId;
@@ -242,10 +244,6 @@ export function cardWarnings(lc: LiveCommittee, now: number): CardWarning[] {
   const caucus = activeCaucus(s);
   if (caucus && liveCaucusSeconds(caucus, now) <= 0) {
     out.push({ id: 'caucus-overrun', tone: 'amber', text: 'Caucus clock has run out' });
-  }
-
-  if (lc.documents.some((d) => d.type === 'draft-resolution' && d.status === 'introduced')) {
-    out.push({ id: 'unresolved-dr', tone: 'amber', text: 'A draft resolution is on the floor unresolved' });
   }
 
   return out;
@@ -359,8 +357,16 @@ export type NowTone = 'live' | 'warn' | 'off';
 
 export interface NowPlaying {
   kind: NowPlayingKind;
-  /** Secondary line. The procedural frame. */
+  /** Secondary line. The procedural frame — the MOTION or stage NAME only, and
+   *  always short: "Moderated caucus", "Unmoderated caucus", "Roll call". */
   context: string;
+  /** The motion's TOPIC, split out of `context` so the card can set it on its
+   *  own line directly below — smaller, and in a different (still AA-passing)
+   *  ink. It used to be glued on as "Moderated caucus — Financing loss and
+   *  damage adaptation…", which made one eyebrow run to four or five lines and
+   *  forced the card to drop its uppercase to buy width. Null whenever the
+   *  stage has no topic, which is every stage except the three caucus kinds. */
+  contextTopic: string | null;
   /** Primary line. Never empty — an honest absence is still a headline. */
   headline: string;
   /** Country whose flag fills the art slot; null → `glyph`. */
@@ -407,9 +413,47 @@ function upNext(label: string, queue: string[], skip: number): NowPlaying['next'
 // ── The panel states the STAGE, and nothing else ─────────────────────────────
 //
 // The context line answers one question: what stage is this room in. General
-// Speakers' List · Moderated caucus (with its topic) · Consultation of the Whole
-// · Unmoderated caucus · Tour de Table · Voting procedure · Roll call ·
-// Suspended · Adjourned · Not opened.
+// Speakers' List · Moderated caucus · Consultation of the Whole · Unmoderated
+// caucus · Tour de Table · Voting procedure · Roll call · Suspended ·
+// Adjourned · Not opened. The TOPIC of a caucus is no longer glued onto that
+// line — it comes back as `contextTopic` and the card sets it underneath.
+//
+// ── WHICH CLOCK THIS PANEL IS ALLOWED TO SHOW ───────────────────────────────
+//
+// TWO RULES, both on the owner's instruction, and the second is the subtle one.
+//
+//   • THE GSL HAS NO CLOCK HERE AT ALL. Not a paused one, not a stopped one.
+//     The speakers'-list branches below set `pct: null` and captions that count
+//     PEOPLE, never seconds. `speakerRemainingNow` is no longer imported by this
+//     module, which is the mechanical guarantee that no per-speaker countdown
+//     can creep back in.
+//
+//   • A CAUCUS SHOWS ITS TOTAL CLOCK, AND ONLY ITS TOTAL CLOCK. The moderated
+//     branch used to prefer a per-SPEECH countdown whenever `current_speaker`
+//     carried an anchor for the delegation on the floor; that branch is gone, so
+//     every caucus kind now reads the one number a corridor-walking organiser
+//     actually wants — how much of the caucus is left.
+//
+// AND THE TOTAL CLOCK MUST NOT TICK WHILE NOBODY IS SPEAKING. That is not a
+// rule this file has to enforce with a condition — it is a property of the data,
+// and it is worth writing down because it looks like a bug until you check:
+//
+//   `liveCaucusSeconds` → `caucusRemainingNow` (committeeService.ts:59-67), and
+//   its FIRST branch is `if (!caucus.totalStartedAt) return Math.max(0, base)`.
+//   A null anchor returns the stored `remainingTime` UNCHANGED — frozen, not
+//   extrapolated. So `leftSecs`, the derived `elapsed`, and `pct` all hold
+//   perfectly still, and the caption says "caucus clock paused" rather than
+//   inventing motion.
+//
+//   In a moderated caucus the chair console clears that anchor constantly. The
+//   total clock advances in LOCKSTEP with the speaker clock — pausing the
+//   speaker timer writes `totalStartedAt: null` (`chair/[code]/page.tsx:2739-2746`),
+//   and so do "next speaker" (`:2772`) and "restart" (`:2850`). Between two
+//   speeches there is no anchor, so the total clock genuinely does not move.
+//
+//   This is also why the paused branch is the one that matters most: measured on
+//   production, MOST caucus blobs carry no `totalStartedAt` at all. The paused
+//   path is the common path, and it renders a still number and says so.
 //
 // Motions are deliberately absent, on the owner's instruction: what is sitting
 // on the chair's desk is not something this board reports. Nor is it a missing
@@ -423,7 +467,7 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
   const s = lc.session;
   if (!s) {
     return {
-      kind: 'not-started', context: 'No session',
+      kind: 'not-started', context: 'No session', contextTopic: null,
       headline: 'No live session linked yet', flag: null, glyph: 'dormant',
       tone: 'off', dim: true, pct: null,
       left: 'never opened', right: 'nothing to show', next: null,
@@ -442,7 +486,7 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
     if (wps > 0) bits.push(`${wps} working paper${wps === 1 ? '' : 's'} passed`);
     const t = s.endedAt ? Date.parse(s.endedAt) : NaN;
     return {
-      kind: 'ended', context: 'Adjourned',
+      kind: 'ended', context: 'Adjourned', contextTopic: null,
       headline: bits.length > 0 ? bits.join(' · ') : 'Nothing passed',
       flag: null, glyph: 'closed', tone: 'off', dim: bits.length === 0, pct: null,
       left: Number.isFinite(t) ? `closed ${fmtSpan((now - t) / 60000)} ago` : 'closed',
@@ -454,7 +498,7 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
   if (base === 'suspended') {
     const mins = s.suspendedAt ? (now - Date.parse(s.suspendedAt)) / 60000 : NaN;
     return {
-      kind: 'suspended', context: 'Suspended',
+      kind: 'suspended', context: 'Suspended', contextTopic: null,
       headline: s.resumingChair
         ? `${firstName(s.resumingChair)} is resuming`
         : 'Waiting for a chair to resume',
@@ -467,7 +511,7 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
   // ── Never opened ──
   if (base === 'no-session' || base === 'not-started') {
     return {
-      kind: 'not-started', context: 'Not opened yet',
+      kind: 'not-started', context: 'Not opened yet', contextTopic: null,
       headline: lc.conf.chairs.length > 0 ? 'Chairs have the code' : 'No chair assigned yet',
       flag: null, glyph: 'dormant', tone: 'off', dim: true, pct: null,
       left: 'never opened',
@@ -481,7 +525,8 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
     const { present, total } = presence(lc);
     return {
       kind: 'roll-call',
-      context: base === 'resumed' ? 'Roll call · resuming after a break' : 'Roll call',
+      context: 'Roll call',
+      contextTopic: base === 'resumed' ? 'Resuming after a break' : null,
       // 286 of 392 production committees have zero delegate rows, so
       // "0 of 0 marked present" is the common case and says nothing.
       headline: total > 0 ? `${present} of ${total} marked present` : 'No delegates have joined yet',
@@ -506,14 +551,13 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
 
     // The delegation on the floor during a caucus lives on the caucus blob;
     // `current_speaker` holds the same delegation once the chair has advanced
-    // through it, and is the row that carries the clock anchor.
+    // through it.
+    //
+    // The per-SPEECH clock that `current_speaker.started_at` anchors is NOT read
+    // here any more. A caucus card shows the total caucus clock and nothing
+    // else, so the delegation's name is all this row still wants from it.
     const floorCountry = (caucus.currentSpeaker ?? '').trim()
       || (lc.currentSpeaker?.country ?? '').trim();
-    const anchored = lc.currentSpeaker
-      && (lc.currentSpeaker.country ?? '').trim() === floorCountry
-      && lc.currentSpeaker.startedAt
-      ? lc.currentSpeaker
-      : null;
 
     // Tour de Table — every delegation speaks once, in order. Progress through
     // the room IS the meter; spare capacity is the wrong reading.
@@ -527,14 +571,18 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
       const roomOrder = isRoomOrderTour(caucus);
       return {
         kind: 'tour',
-        context: roomOrder ? 'Tour de Table · room order' : 'Tour de Table',
+        context: 'Tour de Table',
+        contextTopic: roomOrder ? 'Room order' : null,
         headline: floorCountry || (qn > 0 ? `${lc.caucusQueue[0]} is next` : 'Between speakers'),
         flag: !roomOrder && floorCountry ? floorCountry : null,
-        glyph: 'mic', tone: expired ? 'warn' : 'live', dim: !floorCountry,
+        // A tour whose anchor is released is between speakers, and saying "live"
+        // of a clock that is standing still is the one thing this panel must not
+        // do. Paused reads as `warn`, exactly as the unmod branch already did.
+        glyph: 'mic', tone: expired || !running ? 'warn' : 'live', dim: !floorCountry,
         pct: seats > 0 ? (spoken / seats) * 100 : null,
         left: `${spoken} of ${seats} ${roomOrder ? 'seats called' : 'spoken'}`,
         right: totalSecs > 0
-          ? (expired ? 'tour time is up' : `${fmtClock(leftSecs)} left`)
+          ? (expired ? 'tour time is up' : running ? `${fmtClock(leftSecs)} left` : 'tour clock paused')
           : (qn > 0 ? `${qn} in the caucus queue` : 'caucus queue empty'),
         next: upNext(floorCountry ? 'Caucus queue' : 'Then in caucus', lc.caucusQueue, floorCountry ? 0 : 1),
       };
@@ -548,9 +596,13 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
       return {
         kind: 'caucus',
         context: cow ? 'Consultation of the Whole' : 'Unmoderated caucus',
-        headline: purpose || (cow ? 'The committee is in consultation' : 'The floor is informal'),
+        // The purpose is the motion's TOPIC and now sits on its own line under
+        // the motion name, so the headline goes back to stating what the room is
+        // doing rather than doubling as the topic slot.
+        contextTopic: purpose || null,
+        headline: cow ? 'The committee is in consultation' : 'The floor is informal',
         flag: null, glyph: 'timer',
-        tone: expired || !running ? 'warn' : 'live', dim: !purpose,
+        tone: expired || !running ? 'warn' : 'live', dim: true,
         pct: totalSecs > 0 ? (elapsed / totalSecs) * 100 : null,
         left: totalSecs > 0 ? `${fmtClock(elapsed)} of ${fmtClock(totalSecs)}` : 'no clock set',
         right: expired ? 'time is up' : running ? `${fmtClock(leftSecs)} left` : 'clock paused',
@@ -558,31 +610,27 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
       };
     }
 
-    // Moderated caucus — the topic is the album, the speaker is the track.
-    const topic = caucus.purpose?.trim() || caucus.motionLabel?.trim() || '';
-    const context = topic ? `Moderated caucus — ${topic}` : 'Moderated caucus';
-
-    if (anchored) {
-      // `timeRemaining` is the value AT the anchor, so it IS this speech's
-      // allotment and the elapsed side is derived, never stored.
-      const allotted = Math.max(0, anchored.timeRemaining);
-      const secsLeft = speakerRemainingNow(anchored.timeRemaining, anchored.startedAt, now);
-      const spent = Math.max(0, allotted - secsLeft);
-      return {
-        kind: 'caucus', context, headline: floorCountry, flag: floorCountry,
-        glyph: 'mic', tone: secsLeft > 0 ? 'live' : 'warn', dim: false,
-        pct: allotted > 0 ? (spent / allotted) * 100 : null,
-        left: `${fmtClock(spent)} into this speech`,
-        right: secsLeft > 0 ? `${fmtClock(secsLeft)} left` : 'speech time is up',
-        next: upNext('Caucus queue', lc.caucusQueue, 0),
-      };
-    }
-
+    // Moderated caucus — the motion name is the album, the delegation on the
+    // floor is the track, and the topic sits between them on its own line.
+    //
+    // ONE RETURN, not two. There used to be a preferred branch here that swapped
+    // the total clock for a per-SPEECH countdown whenever `current_speaker`
+    // carried an anchor for the delegation on the floor. That is the countdown
+    // the owner asked to be gone: a caucus card reports the caucus, and the
+    // seconds left in one delegate's speech are a chair-console number.
     return {
-      kind: 'caucus', context,
+      kind: 'caucus',
+      context: 'Moderated caucus',
+      contextTopic: caucus.purpose?.trim() || caucus.motionLabel?.trim() || null,
       headline: floorCountry || (qn > 0 ? `${lc.caucusQueue[0]} is next` : 'Nobody on the floor'),
       flag: floorCountry || (qn > 0 ? lc.caucusQueue[0] : null),
-      glyph: 'mic', tone: expired ? 'warn' : 'live', dim: !floorCountry && qn === 0,
+      // `!running` ⇒ the anchor is released, which in a moderated caucus is the
+      // ordinary state between two speeches. The clock is standing still, so the
+      // panel must not claim to be live while it does.
+      glyph: 'mic', tone: expired || !running ? 'warn' : 'live', dim: !floorCountry && qn === 0,
+      // Frozen when paused: `elapsed` is derived from `leftSecs`, and
+      // `caucusRemainingNow` returns the stored `remainingTime` untouched
+      // whenever `totalStartedAt` is null. The bar does not creep.
       pct: totalSecs > 0 ? (elapsed / totalSecs) * 100 : null,
       left: qn > 0 ? `${qn} in the caucus queue` : 'caucus queue empty',
       right: expired ? 'caucus time is up' : running ? `${fmtClock(leftSecs)} left` : 'caucus clock paused',
@@ -598,7 +646,7 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
     const total = body.length;
     const eligible = body.filter((d) => d.status !== 'absent').length;
     return {
-      kind: 'voting', context: 'Voting procedure',
+      kind: 'voting', context: 'Voting procedure', contextTopic: null,
       headline: dr ? (dr.docCode || dr.title || 'A draft resolution') : 'A draft resolution',
       flag: null, glyph: 'ballot', tone: 'live', dim: false,
       pct: total > 0 ? (eligible / total) * 100 : null,
@@ -618,46 +666,40 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
   const context = "General Speakers' List";
   const speaker = lc.currentSpeaker;
 
-  if (speaker?.country && speaker.startedAt) {
-    const allotted = Math.max(0, speaker.timeRemaining);
-    const secsLeft = speakerRemainingNow(speaker.timeRemaining, speaker.startedAt, now);
-    const spent = Math.max(0, allotted - secsLeft);
-    return {
-      kind: 'speaker', context, headline: speaker.country, flag: speaker.country,
-      glyph: 'mic', tone: secsLeft > 0 ? 'live' : 'warn', dim: false,
-      pct: allotted > 0 ? (spent / allotted) * 100 : null,
-      left: `${fmtClock(spent)} into this speech`,
-      right: secsLeft > 0 ? `${fmtClock(secsLeft)} left` : 'speech time is up',
-      next: upNext("Speakers' list", queue, 0),
-    };
-  }
+  // NO CLOCK ON ANY OF THE THREE BRANCHES BELOW. `pct` is null throughout and
+  // both captions count PEOPLE, which is the only quantity a floor-walker can
+  // act on: how many are still waiting to speak. The seconds left in the current
+  // delegate's speech belong to the chair who is running the timer, and putting
+  // them here made a secretariat board tick over a number nobody at that desk
+  // can change.
   if (speaker?.country) {
-    // A delegation sits in `current_speaker` with no anchor: it has the floor
-    // but the clock is not running.
     return {
-      kind: 'speaker', context, headline: speaker.country, flag: speaker.country,
-      glyph: 'mic', tone: 'warn', dim: false, pct: null,
-      left: 'timer paused',
-      right: `${fmtClock(Math.max(0, speaker.timeRemaining))} on the clock`,
+      kind: 'speaker', context, contextTopic: null,
+      headline: speaker.country, flag: speaker.country,
+      glyph: 'mic', tone: 'live', dim: false, pct: null,
+      left: 'has the floor',
+      right: qn > 0
+        ? `${qn} still on the list`
+        : 'last on the list',
       next: upNext("Speakers' list", queue, 0),
     };
   }
   if (qn > 0) {
     return {
-      kind: 'idle-floor', context, headline: `${queue[0]} is next`, flag: queue[0],
+      kind: 'idle-floor', context, contextTopic: null,
+      headline: `${queue[0]} is next`, flag: queue[0],
       glyph: 'mic', tone: 'off', dim: false, pct: null,
       left: 'nobody on the floor',
       right: `${qn} on the speakers' list`,
       next: upNext('Then on the list', queue, 1),
     };
   }
-  const mins = idleMinutes(lc, now);
-  const quiet = roomStatus(lc, now) !== 'live' && mins !== null;
   return {
-    kind: 'idle-floor', context, headline: 'Nobody on the floor',
+    kind: 'idle-floor', context, contextTopic: null,
+    headline: 'Nobody on the floor',
     flag: null, glyph: 'dormant', tone: 'off', dim: true, pct: null,
     left: "speakers' list empty",
-    right: quiet ? `quiet for ${fmtSpan(mins)}` : 'waiting for the chair',
+    right: 'waiting for the chair',
     next: null,
   };
 }
@@ -684,6 +726,22 @@ export interface CardFacts {
   drsPassed: number;
   drsFailed: number;
   chairs: string[];
+}
+
+/** The committee's TOPIC, for the line under its name.
+ *
+ *  `conference_committees.topics` is a `text[]`, and a committee routinely
+ *  carries more than one. The card shows the FIRST and counts the rest rather
+ *  than joining them: two spelled-out topics on one line under an acronym is a
+ *  paragraph, and this line is an identity line, not an agenda.
+ *
+ *  Returns null when the array is absent, empty, or holds only blanks — in which
+ *  case the card simply has no topic line, which is honest. Nothing is invented
+ *  from the committee's name. */
+export function committeeTopic(lc: LiveCommittee): { text: string; more: number } | null {
+  const topics = (lc.conf.topics ?? []).map((t) => (t ?? '').trim()).filter(Boolean);
+  if (topics.length === 0) return null;
+  return { text: topics[0], more: topics.length - 1 };
 }
 
 export function cardFacts(lc: LiveCommittee): CardFacts {

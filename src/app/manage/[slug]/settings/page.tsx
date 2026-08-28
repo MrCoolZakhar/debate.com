@@ -25,6 +25,7 @@ import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
+import ProfileLink from '@/components/ProfileLink';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -2785,24 +2786,32 @@ export default function SettingsPage() {
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
                 >
                 <div className="flex items-center gap-3">
-                  {org.profiles?.avatar_url ? (
-                    <img
-                      src={org.profiles.avatar_url}
-                      alt={name}
-                      className="rounded-full object-cover flex-shrink-0"
-                      style={{ width: '36px', height: '36px' }}
-                    />
-                  ) : (
-                    <div
-                      className="flex items-center justify-center rounded-full font-bold text-sm flex-shrink-0"
-                      style={{ width: '36px', height: '36px', backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
-                    >
-                      {initials}
-                    </div>
-                  )}
+                  {/* Avatar → the organiser's public MUN CV. No `nested`: the row is a plain
+                      div, its only interactive siblings are the REMOVE button and the
+                      permission toggles, so there is no ancestor click to stop. */}
+                  <ProfileLink userId={org.user_id} name={name} className="flex-shrink-0">
+                    {org.profiles?.avatar_url ? (
+                      <img
+                        src={org.profiles.avatar_url}
+                        alt={name}
+                        className="rounded-full object-cover flex-shrink-0"
+                        style={{ width: '36px', height: '36px' }}
+                      />
+                    ) : (
+                      <div
+                        className="flex items-center justify-center rounded-full font-bold text-sm flex-shrink-0"
+                        style={{ width: '36px', height: '36px', backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}
+                      >
+                        {initials}
+                      </div>
+                    )}
+                  </ProfileLink>
 
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>{name}</p>
+                    {/* Name → same CV. Wrapped inside the <p> so `truncate` keeps working. */}
+                    <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      <ProfileLink userId={org.user_id} name={name}>{name}</ProfileLink>
+                    </p>
                     <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{org.profiles?.email ?? ''}</p>
                   </div>
 

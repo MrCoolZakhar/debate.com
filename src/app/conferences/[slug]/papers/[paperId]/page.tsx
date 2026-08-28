@@ -7,7 +7,7 @@
 // position_paper_messages, no separate permission check here, a paper that
 // fails to load just renders the "not available" state.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Check, Download, Send, X } from 'lucide-react';
@@ -17,6 +17,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByCode } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
+import ProfileLink from '@/components/ProfileLink';
 import { isPaperLate } from '@/lib/positionPapers';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
@@ -316,7 +317,11 @@ export default function PositionPaperPage() {
 
   const committee = paper?.conference_committees ?? null;
   const cName = paper ? (getCountryByCode(paper.country_code)?.name ?? paper.country_code) : '';
-  const submitterNames = submitters.map(s => s.display_name).filter(Boolean).join(' & ');
+  // Each submitter is kept WHOLE (the row, not just its display_name) rather
+  // than pre-joined into one string, so every named seat-holder can link to
+  // their own MUN CV. The ' & ' that used to be the join separator is now
+  // rendered between the links.
+  const namedSubmitters = submitters.filter(s => !!s.display_name);
   const late = paper ? isPaperLate(paper.submitted_at, committee?.position_paper_deadline ?? null) : false;
 
   return (
@@ -370,7 +375,16 @@ export default function PositionPaperPage() {
                   <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 20, color: NEU.ink, margin: 0 }}>{cName}</p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, margin: '2px 0 0 0' }}>
                     {committee?.abbreviation ?? committee?.name}
-                    {submitterNames && ` · ${submitterNames}`}
+                    {namedSubmitters.length > 0 && ' · '}
+                    {namedSubmitters.map((s, i) => (
+                      <Fragment key={`${s.user_id ?? s.display_name}-${i}`}>
+                        {i > 0 && ' & '}
+                        {/* Header line sits in a plain div — no clickable
+                            ancestor, so no `nested`. A seat with no account
+                            has no user_id and stays plain text. */}
+                        <ProfileLink userId={s.user_id} name={s.display_name}>{s.display_name}</ProfileLink>
+                      </Fragment>
+                    ))}
                     {` · Submitted ${fmtDate(paper.submitted_at)}`}
                     {committee?.position_paper_deadline && ` · Due ${fmtDate(committee.position_paper_deadline)}`}
                   </p>
@@ -458,7 +472,13 @@ export default function PositionPaperPage() {
                             <p style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.body}</p>
                           </div>
                           <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, margin: '3px 4px 0 4px' }}>
-                            {senderName} · {fmtTime(m.created_at)}
+                            {/* Sender label links to that person's MUN CV. The
+                                bubble is a plain div, so no `nested`. Passing
+                                null for your own messages keeps "You" as plain
+                                text — a self-link off your own thread is noise. */}
+                            <ProfileLink userId={mine ? null : m.sender_user_id} name={m.profiles?.display_name}>
+                              {senderName}
+                            </ProfileLink> · {fmtTime(m.created_at)}
                           </p>
                         </div>
                       );

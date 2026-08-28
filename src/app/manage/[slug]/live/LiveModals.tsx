@@ -6,6 +6,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
 import Portal from '@/components/Portal';
+import ProfileLink from '@/components/ProfileLink';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { useModalEscape } from '@/components/ModalOverlay';
 import Avatar from '@/components/Avatar';
@@ -73,6 +74,21 @@ export interface LiveCommittee {
     totalSlots: number;
     sessionId: string | null;
     sessionCode: string | null;
+    /** `conference_committees.released_to_chairs_at` — when the chairs' invite
+     *  went (or is scheduled to go) out. Read ONLY so a never-opened room can
+     *  say whether its dais has actually been told; nothing here writes it. The
+     *  committees page owns that write. */
+    releasedToChairsAt: string | null;
+    /** `conference_committees.delegation_size` — 1, or 2 for a DOUBLE
+     *  DELEGATION committee (two people share one country seat).
+     *
+     *  This is the committee-wide mirror of
+     *  `committee_country_slots.delegation_size`, and reading it rather than the
+     *  slot rows is a deliberate, measured choice: in production all 22
+     *  committees with any double slot have EVERY slot double, the two columns
+     *  never disagree, and `committee_country_slots` is 17,189 rows against 393
+     *  committees. See ./allocations for the full model. */
+    delegationSize: number;
     chairUserIds: string[];
     /** chair_user_ids resolved against profiles, falling back to the
      *  trigger-maintained display_chairs entry at the same index. */
@@ -1094,16 +1110,20 @@ function ChairStrip({ chairs, chairNames }: { chairs: ChairPerson[]; chairNames:
           </span>
         ) : (
           people.map((p, i) => (
-            <span
-              key={`${p.id ?? p.name}-${i}`}
-              className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5"
-              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-            >
-              {p.avatarUrl
-                ? <Avatar url={p.avatarUrl} name={p.name} size={26} rounded />
-                : <ChairAvatar name={p.name} size={26} />}
-              <span className="text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 140 }}>{p.name}</span>
-            </span>
+            /* Not `nested`: this strip sits inside the modal body, which has no
+               click target of its own. A chair carried only as a name string
+               (`id: null`) renders bare — ProfileLink handles that itself. */
+            <ProfileLink key={`${p.id ?? p.name}-${i}`} userId={p.id} name={p.name}>
+              <span
+                className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5"
+                style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+              >
+                {p.avatarUrl
+                  ? <Avatar url={p.avatarUrl} name={p.name} size={26} rounded />
+                  : <ChairAvatar name={p.name} size={26} />}
+                <span className="text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 140 }}>{p.name}</span>
+              </span>
+            </ProfileLink>
           ))
         )}
       </div>

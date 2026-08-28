@@ -31,6 +31,7 @@ import { markEmailsExplored } from '@/lib/emailsExplored';
 import GuidedWalkthrough, {
   TourGold, TourGreen, OTTER_INTRO, OTTER_OUTRO, type WalkthroughStep,
 } from '@/components/GuidedWalkthrough';
+import ProfileLink from '@/components/ProfileLink';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2737,8 +2738,17 @@ function CommunicationsPageInner() {
                       </span>
                     </div>
                     <p className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{selectedRequest.subject}</p>
+                    {/* Thread author → their public MUN CV, so an organiser reading a
+                        request can see who is asking. No `nested`: this header sits in a
+                        plain div (the BACK control and the CLOSE/DELETE buttons are
+                        siblings), so there is no ancestor onClick to swallow. */}
                     <p className="text-xs" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-                      {inboxProfiles.get(selectedRequest.user_id)?.display_name ?? 'Unknown'}
+                      <ProfileLink
+                        userId={selectedRequest.user_id}
+                        name={inboxProfiles.get(selectedRequest.user_id)?.display_name}
+                      >
+                        {inboxProfiles.get(selectedRequest.user_id)?.display_name ?? 'Unknown'}
+                      </ProfileLink>
                       {inboxRoles.get(selectedRequest.user_id) ? ` · ${roleLabel(inboxRoles.get(selectedRequest.user_id)!)}` : ''}
                     </p>
                   </div>
@@ -2810,9 +2820,15 @@ function CommunicationsPageInner() {
                     const senderName = mine ? 'You' : (inboxProfiles.get(m.sender_user_id)?.display_name ?? 'Participant');
                     return (
                       <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
+                        {/* Sender label → that participant's public MUN CV. Only for
+                            incoming messages: `mine` renders as "You" with no user to
+                            link to. No `nested` — the message column is a plain div with
+                            no click handler of its own. */}
                         {!mine && (
                           <span className="mb-1" style={{ fontSize: 10, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                            {senderName.toUpperCase()}
+                            <ProfileLink userId={m.sender_user_id} name={senderName}>
+                              {senderName.toUpperCase()}
+                            </ProfileLink>
                           </span>
                         )}
                         <div

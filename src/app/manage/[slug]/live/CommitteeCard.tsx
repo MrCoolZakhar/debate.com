@@ -31,7 +31,7 @@
 import React, { useState } from 'react';
 import {
   Users, FileText, ScrollText, Trophy, AlertTriangle, Info,
-  Mic, Timer, Pause, Flag, Moon,
+  Mic, Timer, Pause, Flag, Moon, Copy, Check, Send,
 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
@@ -39,7 +39,7 @@ import AvatarStack from '@/components/AvatarStack';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { type LiveCommittee, type ChairPerson, flagCodeFor } from './LiveModals';
 import {
-  roomStatus, STATUS_META, idleLabel, nowPlaying, cardWarnings, cardFacts,
+  roomStatus, STATUS_META, nowPlaying, cardWarnings, cardFacts, committeeTopic,
   type NowPlaying, type NowGlyph, type CommitteeIdentity,
 } from './cardModel';
 import {
@@ -68,14 +68,19 @@ const PAD_START = 22;
 const PAD_END = 20;
 
 /** The panel's floor. Art disc (60) + its padding (2×15) + the scrubber block
- *  (~30) — a footprint that does not move between a room mid-speech and a room
- *  that was never opened. Spotify does not collapse its now-playing bar; nor
- *  does this. */
-const PANEL_MIN_HEIGHT = 150;
+ *  (~30) + the up-next slot (`UP_NEXT_SLOT_HEIGHT` + its 9px lead) — a footprint
+ *  that does not move between a room mid-speech and a room that was never
+ *  opened. Spotify does not collapse its now-playing bar; nor does this.
+ *
+ *  Raised from 150 because the queue moved INSIDE this block. It used to sit in
+ *  a column beside the headline, where it cost the panel no height at all and
+ *  cost the headline a third of its width. */
+const PANEL_MIN_HEIGHT = 196;
 
-/** The card's floor. Raised with the rest of the type: the old 300 was sized
- *  around text that truncated, and nothing on this card truncates any more. */
-const CARD_MIN_HEIGHT = 352;
+/** The card's floor, tracking `PANEL_MIN_HEIGHT` up by the same 46px. Nothing on
+ *  this card truncates, so this is a floor the grid stretches from, never a cap
+ *  anything is squeezed into. */
+const CARD_MIN_HEIGHT = 398;
 
 /** The conference emblem STRADDLES the top edge — `LOGO_OVERHANG` px of it sit
  *  outside the card, on the page behind it.
@@ -94,11 +99,27 @@ const LOGO_OVERHANG = 22;
 /** How far the header text is pushed in to sit beside the emblem. */
 const HEADER_INDENT = LOGO_SIZE + 12;
 
-/** The up-next column. Sized to fit FIVE 17px flags on a row (5×17 + 4×4 = 101),
- *  so ten wrap to exactly two rows and the `+N` lands beside the last one.
- *  Measured against the narrowest card the grid ever produces — 3 columns at a
- *  1280px viewport. */
-const UP_NEXT_WIDTH = 106;
+/** The up-next strip, now a full-width row BELOW the timer rather than a narrow
+ *  column beside the headline.
+ *
+ *  Sizing, measured against the narrowest card the grid ever produces — three
+ *  columns at a 1280px viewport. Content width there is 1152 − 80 (px-10) = 1072;
+ *  minus two 20px column gaps that is a 344px card, and the panel is inset to
+ *  8px gutters with 15px of its own padding, leaving ~296px of usable row. Ten
+ *  20px flags with 5px gaps come to 10×20 + 9×5 = 245px, so `UP_NEXT_MAX` still
+ *  fits on ONE row at the tightest breakpoint and the strip's height is stable.
+ *
+ *  `UP_NEXT_SLOT_HEIGHT` is RESERVED whether or not a queue exists — the same
+ *  contract the warning slot has. A card whose list is empty must not be shorter
+ *  than the card beside it whose list is not, or the "fixed field shape" the
+ *  panel exists to provide goes away the moment a chair clears a queue. */
+const UP_NEXT_FLAG = 20;
+const UP_NEXT_SLOT_HEIGHT = 38;
+
+/** How much a queue flag grows under the pointer. Applied as a `transform`, so
+ *  it costs no layout and cannot reflow the row it sits in — which is what lets
+ *  the reserved slot height above stay honest. */
+const FLAG_HOVER_SCALE = 1.28;
 
 // ── Now-playing panel ────────────────────────────────────────────────────────
 
@@ -135,7 +156,73 @@ function headlineSize(text: string): number {
   return 22;
 }
 
-function NowPlayingPanel({ np }: { np: NowPlaying }) {
+/** One delegation in the up-next strip: a flag that grows under the pointer and
+ *  opens that delegation's performance card.
+ *
+ *  A real `<button>`, not a span with a handler. The whole card is already
+ *  `role="button"`, so anything clickable nested inside it MUST be focusable and
+ *  Enter/Space-activatable in its own right or it is mouse-only — and it must
+ *  stop propagation, or the click falls through and opens the room recap
+ *  instead of the person. Growth is applied on FOCUS as well as hover, so the
+ *  affordance exists for a keyboard.
+ *
+ *  `title` still carries the delegation name, so the strip is readable without
+ *  clicking anything and without a name ever being truncated. */
+function QueueFlag({
+  country, position, onOpen,
+}: {
+  country: string;
+  position: number;
+  onOpen: ((country: string) => void) | null;
+}) {
+  const grow = (el: HTMLElement) => {
+    el.style.transform = `scale(${FLAG_HOVER_SCALE})`;
+    el.style.zIndex = '1';
+  };
+  const shrink = (el: HTMLElement) => {
+    el.style.transform = 'scale(1)';
+    el.style.zIndex = '0';
+  };
+  const label = `${country} — ${position === 1 ? 'next to speak' : `number ${position} in the queue`}`;
+
+  const art = <FlagImg code={flagCodeFor(country)} size={UP_NEXT_FLAG} />;
+  if (!onOpen) {
+    return (
+      <span className="flex-shrink-0" style={{ lineHeight: 0 }} title={label}>{art}</span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      title={`${label} · open their performance card`}
+      aria-label={`${label}. Open their performance card.`}
+      onClick={(e) => { e.stopPropagation(); onOpen(country); }}
+      onMouseEnter={(e) => grow(e.currentTarget)}
+      onMouseLeave={(e) => shrink(e.currentTarget)}
+      onFocus={(e) => grow(e.currentTarget)}
+      onBlur={(e) => shrink(e.currentTarget)}
+      className="flex-shrink-0 focus:outline-none"
+      style={{
+        lineHeight: 0, border: 'none', padding: 0, background: 'none',
+        cursor: 'pointer', position: 'relative',
+        transformOrigin: 'center bottom',
+        transitionProperty: 'transform',
+        transitionDuration: '180ms',
+        transitionTimingFunction: EASE,
+      }}
+    >
+      {art}
+    </button>
+  );
+}
+
+function NowPlayingPanel({
+  np, onOpenDelegate,
+}: {
+  np: NowPlaying;
+  /** null when this room has no scoreboard to open (no linked session). */
+  onOpenDelegate: ((country: string) => void) | null;
+}) {
   const Glyph = GLYPH_ICON[np.glyph];
   const ink = toneInk(np.tone);
   const [from, to] = toneFill(np.tone);
@@ -167,32 +254,53 @@ function NowPlayingPanel({ np }: { np: NowPlaying }) {
         </span>
 
         <div className="min-w-0 flex-1">
-          {/* The eyebrow WRAPS. It used to clamp to one line and shrink its own
-              type to 9.5px to buy characters, which meant a moderated caucus
-              lost its topic — the one thing that says what the room is doing.
-
-              Long contexts drop the UPPERCASE instead of dropping characters.
-              Caps plus 0.08em tracking cost roughly a third more width per
-              character, and a chair-typed caucus purpose ("Financing loss and
-              damage adaptation in small island developing states") set in caps
-              ran to five lines in this column — a secondary line outweighing
-              the headline it is supposed to introduce. Sentence case at 11px is
-              BIGGER type than the caps it replaces, and it inverts back to the
-              right hierarchy. Nothing is cut either way. */}
+          {/* THE MOTION NAME. Always short now — the topic that used to be glued
+              on after an em dash has its own line below — so it can hold its
+              uppercase and its tracking at every length instead of dropping
+              them to buy width. 12px/800 in the tone ink: GREEN_INK 5.68:1,
+              AMBER_INK 5.70:1, SOFT 5.55:1, all past AA. It still WRAPS; nothing
+              on this card is ever cut. */}
           <p
-            className="font-extrabold"
+            className="font-extrabold uppercase"
             style={{
               color: ink, fontFamily: OUTFIT,
-              textTransform: np.context.length > 34 ? 'none' : 'uppercase',
-              fontSize: np.context.length > 34 ? 11 : 10.5,
-              letterSpacing: np.context.length > 34 ? '0.005em' : '0.08em',
-              lineHeight: 1.3,
-              marginBlockEnd: 3,
+              fontSize: 12,
+              letterSpacing: '0.075em',
+              lineHeight: 1.25,
               overflowWrap: 'anywhere',
             }}
           >
             {np.context}
           </p>
+          {/* THE MOTION'S TOPIC — directly below the motion name, one step
+              SMALLER (11px against 12px) and in a different ink.
+
+              SOFT #6A5A4A, 5.55:1 on the panel's #E8E1D0 well and 5.55:1 on the
+              card, so it passes AA as body text at this size. `NEU.muted` is the
+              colour this line LOOKS like it should be and it is 2.81:1 —
+              decoration only, never text, and deliberately not used here.
+
+              It cannot collide with the motion name above it: a topic only ever
+              exists on the three caucus stages, and those resolve `tone` to
+              'live' or 'warn', i.e. GREEN_INK or AMBER_INK. SOFT is a genuinely
+              different hue in every state that can render this line.
+
+              Sentence case, because it is the chair's own typed sentence. */}
+          {np.contextTopic && (
+            <p
+              className="font-semibold"
+              style={{
+                color: SOFT, fontFamily: OUTFIT,
+                fontSize: 11,
+                lineHeight: 1.32,
+                marginBlockStart: 2,
+                overflowWrap: 'anywhere',
+                textWrap: 'pretty',
+              }}
+            >
+              {np.contextTopic}
+            </p>
+          )}
           <p
             className="font-extrabold"
             style={{
@@ -204,56 +312,15 @@ function NowPlayingPanel({ np }: { np: NowPlaying }) {
               textWrap: 'balance',
               fontVariantNumeric: 'tabular-nums',
               overflowWrap: 'anywhere',
+              // The gap the motion name used to carry as its own marginBlockEnd.
+              // It moved here because the topic line now sits between the two
+              // and needs the space below it, not above it.
+              marginBlockStart: 4,
             }}
           >
             {np.headline}
           </p>
         </div>
-
-        {/* Who is waiting — up to ten, AS FLAGS.
-            The names are gone on purpose: two names and a "+7" told a reader
-            less than ten flags do, and the names are what made two the ceiling.
-            Every flag keeps its delegation in `title`, so the information is
-            unstacked, not dropped.
-            The LABEL stays, and is not optional. RULE 1: the GSL and the caucus
-            queue are strictly separate lists, and a bare row of flags with no
-            label would read as one merged queue. */}
-        {np.next && (() => {
-          const q = np.next;
-          return (
-            <div className="flex-shrink-0" style={{ maxWidth: UP_NEXT_WIDTH }}>
-              <p
-                className="font-extrabold uppercase text-right"
-                style={{
-                  color: SOFT, fontFamily: OUTFIT, fontSize: 9.5,
-                  letterSpacing: '0.08em', lineHeight: 1.3, marginBlockEnd: 4,
-                  overflowWrap: 'anywhere',
-                }}
-              >
-                {q.label}
-              </p>
-              <div className="flex flex-wrap justify-end items-center" style={{ gap: 4 }}>
-                {q.names.map((n) => (
-                  <span key={n} className="flex-shrink-0" style={{ lineHeight: 0 }} title={n}>
-                    <FlagImg code={flagCodeFor(n)} size={17} />
-                  </span>
-                ))}
-                {q.more > 0 && (
-                  <span
-                    className="font-extrabold flex-shrink-0"
-                    style={{
-                      color: SOFT, fontFamily: OUTFIT, fontSize: 10.5,
-                      fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-                    }}
-                    title={`${q.more} more waiting on this list`}
-                  >
-                    +{q.more}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })()}
       </div>
 
       {/* The scrubber. Always present — an empty track when there is genuinely
@@ -305,6 +372,64 @@ function NowPlayingPanel({ np }: { np: NowPlaying }) {
           >
             {np.right}
           </span>
+        </div>
+
+        {/* ── WHO IS WAITING — below the timer, and each flag is a door ───────
+            It used to sit in a narrow column BESIDE the headline, which cost the
+            headline a third of its width and capped the strip at five flags to a
+            row. Below the clock it gets the panel's full width, so all ten of
+            `UP_NEXT_MAX` fit on one line even in the narrowest card the grid
+            produces, and it reads in the order a person actually asks the card
+            about a room: what is happening → how long is left → who is next.
+
+            The names are flags on purpose: two names and a "+7" told a reader
+            less than ten flags do, and it was the names that made two the
+            ceiling. Every flag keeps its delegation and its queue position in
+            `title` and in `aria-label`, so nothing is dropped, only unstacked.
+
+            The LABEL is not optional. RULE 1: the GSL and the caucus queue are
+            strictly separate lists, and a bare row of flags with no label reads
+            as one merged queue.
+
+            The slot's height is RESERVED even when empty — see
+            UP_NEXT_SLOT_HEIGHT. Two cards side by side, one with a queue and one
+            without, must still be the same shape. */}
+        <div
+          className="flex flex-col justify-end"
+          style={{ minHeight: UP_NEXT_SLOT_HEIGHT, marginBlockStart: 9 }}
+        >
+          {np.next && (
+            <>
+              <p
+                className="font-extrabold uppercase"
+                style={{
+                  color: SOFT, fontFamily: OUTFIT, fontSize: 9.5,
+                  letterSpacing: '0.08em', lineHeight: 1.3, marginBlockEnd: 5,
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {np.next.label}
+              </p>
+              <div className="flex flex-wrap items-center" style={{ gap: 5 }}>
+                {np.next.names.map((n, i) => (
+                  <QueueFlag key={`${n}-${i}`} country={n} position={i + 1} onOpen={onOpenDelegate} />
+                ))}
+                {np.next.more > 0 && (
+                  <span
+                    className="font-extrabold flex-shrink-0"
+                    style={{
+                      color: SOFT, fontFamily: OUTFIT, fontSize: 11,
+                      fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+                      marginInlineStart: 2,
+                    }}
+                    title={`${np.next.more} more waiting on this list`}
+                  >
+                    +{np.next.more}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -367,6 +492,119 @@ function Chip({
   );
 }
 
+// ── The not-started nudge ────────────────────────────────────────────────────
+
+/** What a NEVER-OPENED room gets in the warning slot: the two things that
+ *  actually stand between it and a chair gavelling in.
+ *
+ *  NOTHING WAS INVENTED HERE. The wording, the affordance and the states are
+ *  lifted from the committees page's own session-control well
+ *  (`manage/[slug]/committees/page.tsx:1736-1797`), because an organiser who
+ *  reads "SESSION CODE" and "SENT" there must not meet different words for the
+ *  same two facts one tab over:
+ *
+ *    • the SESSION CODE, click-to-copy, flipping to "COPIED" for two seconds —
+ *      `handleCopyCode` (`:937-941`) and the pill at `:1739-1767`;
+ *    • whether the invite has gone to the chairs — `released_to_chairs_at`
+ *      rendered through `CompactSendButton` (`:308-350`), whose three states are
+ *      SCHEDULED (a future timestamp), SENT (a past one) and unsent.
+ *
+ *  It is READ-ONLY, and that is a hard constraint rather than an omission:
+ *  nothing on this page writes to the database. Copying a code to the clipboard
+ *  is the one thing here that touches no row. Minting a code and sending the
+ *  invite are writes, so this says who still needs one and sends the organiser
+ *  to the page that owns that write instead of growing a second one. */
+function NotStartedNudge({ data, now }: { data: LiveCommittee; now: number }) {
+  const [copied, setCopied] = useState(false);
+  const code = data.conf.sessionCode;
+  const releasedAt = data.conf.releasedToChairsAt;
+  // Mirrors `releaseStatus` on the committees page: a timestamp in the future is
+  // a scheduled release, one in the past has already gone out.
+  //
+  // `now` is the PAGE's clock, handed down like every other time on this card.
+  // Reading `Date.now()` in a render body is impure, lints as such, and would
+  // let this pill disagree with the status word beside it in the same frame.
+  const releasedMs = releasedAt ? Date.parse(releasedAt) : NaN;
+  const sent = Number.isFinite(releasedMs) && releasedMs <= now;
+  const scheduled = Number.isFinite(releasedMs) && releasedMs > now;
+
+  const pill: React.CSSProperties = {
+    fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
+    borderRadius: 999, padding: '3px 8px', flexShrink: 0, lineHeight: 1.4,
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap min-w-0" style={{ rowGap: 5 }}>
+      {code ? (
+        <button
+          type="button"
+          title="Copy session code"
+          onClick={(e) => {
+            e.stopPropagation();
+            void navigator.clipboard?.writeText(code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full focus:outline-none active:scale-[0.96] flex-shrink-0"
+          style={{
+            padding: '4px 10px', border: 'none', cursor: 'pointer',
+            backgroundColor: copied ? 'rgba(47,102,68,0.13)' : NEU.surface,
+            boxShadow: copied ? 'none' : NEU.outSm,
+            fontFamily: OUTFIT,
+            transitionProperty: 'background-color, box-shadow, scale',
+            transitionDuration: '250ms', transitionTimingFunction: EASE,
+          }}
+        >
+          {copied ? (
+            <>
+              {/* GREEN_INK, not `NEU.green`: the committees page sets this word
+                  in NEU.green (4.30:1), which fails AA as 11px text. Same
+                  family, 5.68:1. */}
+              <Check size={11} style={{ color: GREEN_INK, flexShrink: 0 }} />
+              <span style={{ ...pill, padding: 0, color: GREEN_INK }}>COPIED</span>
+            </>
+          ) : (
+            <>
+              <span
+                style={{
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
+                  letterSpacing: '0.11em', color: NEU.forest,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {code}
+              </span>
+              <Copy size={10} style={{ color: SOFT, flexShrink: 0 }} />
+            </>
+          )}
+        </button>
+      ) : (
+        <span style={{ ...pill, color: AMBER_INK, backgroundColor: 'rgba(184,132,74,0.15)' }}>
+          NO SESSION CODE
+        </span>
+      )}
+
+      {scheduled ? (
+        <span style={{ ...pill, color: AMBER_INK, backgroundColor: 'rgba(184,132,74,0.15)' }}>
+          SCHEDULED
+        </span>
+      ) : sent ? (
+        <span style={{ ...pill, color: GREEN_INK, backgroundColor: 'rgba(47,102,68,0.12)' }}>
+          SENT TO CHAIRS
+        </span>
+      ) : (
+        <span
+          className="inline-flex items-center gap-1"
+          style={{ ...pill, color: AMBER_INK, backgroundColor: 'rgba(184,132,74,0.15)' }}
+        >
+          <Send size={9} style={{ flexShrink: 0 }} />
+          CHAIRS NOT INVITED
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── The card ─────────────────────────────────────────────────────────────────
 
 export function CommitteeCard({
@@ -377,6 +615,7 @@ export function CommitteeCard({
   onOpenRoster,
   onOpenScoreboard,
   onOpenDocuments,
+  onOpenDelegate,
 }: {
   data: LiveCommittee;
   /** Acronym-over-full-name identity, resolved for the WHOLE conference at once
@@ -398,6 +637,9 @@ export function CommitteeCard({
   /** The WP / DR chips are doors, not decoration: they open the recap already
    *  scrolled to Documents and already narrowed to that type. */
   onOpenDocuments: (d: LiveCommittee, type: 'working-paper' | 'draft-resolution') => void;
+  /** Open ONE delegation's performance card, from a flag in the queue strip.
+   *  Null for a room with no linked session — there is nothing to open. */
+  onOpenDelegate: (d: LiveCommittee, country: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
 
@@ -406,8 +648,20 @@ export function CommitteeCard({
   const np = nowPlaying(data, now);
   const warnings = cardWarnings(data, now);
   const facts = cardFacts(data);
+  const topic = committeeTopic(data);
 
-  const { title, subtitle, mono } = identity;
+  // `subtitle` is no longer RENDERED — the full name under the acronym is gone,
+  // on the owner's instruction: UNSC, WHO and ECOFIN all read fine alone, and
+  // the line it cost is now the committee's topic instead.
+  //
+  // It is still READ, because it is the only signal that says whether `title` is
+  // an acronym or a full name. `committeeIdentities` sets `subtitle` to the full
+  // name exactly when it managed to find a trustworthy acronym, and to null when
+  // it did not. That is the fallback for a committee with no meaningful
+  // acronym: it keeps its FULL NAME as the title, wrapping to as many lines as
+  // it needs, set two steps smaller so a long one still behaves. Nothing is
+  // invented and nothing is truncated.
+  const { title, subtitle: hasAcronym, mono } = identity;
 
   const chairPeople: ChairPerson[] = data.conf.chairs.length > 0
     ? data.conf.chairs
@@ -478,7 +732,11 @@ export function CommitteeCard({
           style={{ width: 4, backgroundColor: meta.color }}
         />
 
-        <div className="flex flex-col flex-1" style={{ padding: `14px ${PAD_END}px 0 ${PAD_START}px` }}>
+        {/* The block padding opens at 8, not 14. "Move the committee name
+            slightly higher" — the emblem is absolutely positioned and takes no
+            part in this flow, so the header text was free to rise without
+            colliding with it. */}
+        <div className="flex flex-col flex-1" style={{ padding: `8px ${PAD_END}px 0 ${PAD_START}px` }}>
         {/* ── BAND 2 · identity ─────────────────────────────────────────────
             Indented past the emblem, which is absolutely positioned and so
             takes no part in this flow. */}
@@ -491,28 +749,51 @@ export function CommitteeCard({
               className="font-extrabold"
               style={{
                 color: NEU.ink, fontFamily: OUTFIT,
-                fontSize: subtitle ? 22 : 18, lineHeight: 1.14,
+                fontSize: hasAcronym ? 22 : 18, lineHeight: 1.14,
                 letterSpacing: '-0.015em',
                 overflowWrap: 'anywhere',
               }}
             >
               {title}
             </h3>
-            {subtitle && (
+            {/* THE COMMITTEE'S TOPIC, in the line the repeated full name used to
+                occupy. An acronym plus its own spelled-out name said one thing
+                twice; an acronym plus what the room is DEBATING says two.
+
+                SOFT at 12.5px — 5.55:1 on the card, the same ink the repeated
+                name was set in, so nothing about the contrast of this slot
+                changed when its content did. It wraps; it is never cut. */}
+            {topic && (
               <p
+                className="font-semibold"
                 style={{
                   color: SOFT, fontFamily: OUTFIT, fontSize: 12.5,
-                  lineHeight: 1.25, marginBlockStart: 1, overflowWrap: 'anywhere',
+                  lineHeight: 1.28, marginBlockStart: 2, overflowWrap: 'anywhere',
+                  textWrap: 'pretty',
                 }}
+                title={topic.more > 0
+                  ? `${topic.text} — and ${topic.more} further topic${topic.more === 1 ? '' : 's'} on this committee's agenda`
+                  : topic.text}
               >
-                {subtitle}
+                {topic.text}
+                {topic.more > 0 && (
+                  <span style={{ fontWeight: 700 }}> +{topic.more}</span>
+                )}
               </p>
             )}
           </div>
 
-          {/* Status word + quiet time. Two facts, stacked, right-aligned. */}
-          <div className="flex flex-col items-end flex-shrink-0" style={{ paddingBlockStart: 2 }}>
-            <span className="inline-flex items-center gap-1.5">
+          {/* The status WORD, and only the word.
+              The "quiet 44d" line that used to sit under it is gone on the
+              owner's instruction: "Stalled" over "quiet 44d" was one fact told
+              twice, and the elapsed span was the half that cost a line. The
+              staleness that produced the word still drives the word, the rail
+              colour beside it and the card's position in the grid. */}
+          <div className="flex flex-col items-end flex-shrink-0" style={{ paddingBlockStart: 3 }}>
+            <span
+              className="inline-flex items-center gap-1.5"
+              title="Whether this room has shown a sign of life recently — a chair action, a logged speech or a chat message"
+            >
               <span
                 className={`rounded-full flex-shrink-0${meta.pulse ? ' animate-pulse' : ''}`}
                 style={{
@@ -526,16 +807,6 @@ export function CommitteeCard({
               >
                 {meta.label}
               </span>
-            </span>
-            <span
-              style={{
-                color: SOFT, fontFamily: OUTFIT, fontSize: 12,
-                fontVariantNumeric: 'tabular-nums', marginBlockStart: 2,
-                textAlign: 'end', overflowWrap: 'anywhere',
-              }}
-              title="Time since this room last showed any sign of life — a chair action, a logged speech or a chat message"
-            >
-              {idleLabel(data, now)}
             </span>
           </div>
         </div>
@@ -551,6 +822,10 @@ export function CommitteeCard({
           className="flex items-center gap-2 flex-wrap"
           style={{ marginBlockStart: 9 }}
         >
+          {/* `nested` because the whole card is role="button" (:675) — the link
+              must stop propagation or opening a chair's CV would also fire the
+              card's own recap. Chairs with no account carry `id: null` and stay
+              unlinked on their own. */}
           <AvatarStack
             people={chairPeople}
             size={24}
@@ -559,6 +834,8 @@ export function CommitteeCard({
             ringColor={NEU.surface}
             shadow={NEU.outSm}
             empty={null}
+            linkToCv
+            nested
           />
           <span
             className="font-semibold min-w-0"
@@ -585,16 +862,29 @@ export function CommitteeCard({
             marginInlineEnd: -(PAD_END - PANEL_GUTTER),
           }}
         >
-          <NowPlayingPanel np={np} />
+          <NowPlayingPanel
+            np={np}
+            // A room with no linked session has no scoreboard rows and no
+            // roll, so its flags are inert rather than dead-ended. In practice
+            // it also has no queue, so this is belt and braces.
+            onOpenDelegate={data.conf.sessionId ? (country) => onOpenDelegate(data, country) : null}
+          />
         </div>
 
         {/* ── BAND 4 · warning slot ───────────────────────────────────────────
             Reserved height whether or not there is a warning, so two cards side
-            by side stay aligned. NOTHING but the five approved conditions ever
-            enters this slot (see `cardWarnings`) — and "nothing has happened
-            here for Nm" is deliberately NOT one of them any more: the status
-            word, the rail and the "quiet" line said it three times over. */}
+            by side stay aligned. NOTHING but the four approved conditions ever
+            enters this slot (see `cardWarnings`) — "nothing has happened here
+            for Nm" is deliberately not one of them (the status word and the rail
+            say it already), and neither is "a draft resolution is unresolved",
+            which was removed on the owner's instruction.
+
+            The ONE other tenant is the not-started nudge below. It shares this
+            slot rather than growing a sixth band because a never-opened room can
+            never have a warning to be crowded out by: `cardWarnings` returns
+            early for `status === 'not-started'`. */}
         <div className="flex items-center" style={{ minHeight: WARNING_SLOT_HEIGHT }}>
+          {status === 'not-started' && <NotStartedNudge data={data} now={now} />}
           {top && (
             <span
               className="inline-flex items-start gap-1.5 rounded-2xl px-2.5 py-1 min-w-0"
@@ -741,59 +1031,21 @@ export function CommitteeCard({
   );
 }
 
-// ── Status filter legend ─────────────────────────────────────────────────────
+// ── Grid footnote ────────────────────────────────────────────────────────────
+//
+// `StatusFilterBar` USED TO LIVE HERE AND IS GONE, on the owner's instruction:
+// "remove the floor-wide totals strip at the top (all rooms / stalled /
+// suspended counts) — the floor overview alone is enough". Those were its first
+// three pills, in that order.
+//
+// Deleting it is also what makes "show ALL committees, including never-started
+// ones" true rather than merely true-by-default. The bar was the page's only
+// filter, and picking any status off it hid every room that did not match —
+// including all the never-opened ones. With no filter there is no state in
+// which a committee can be missing from this grid.
 
-/** Replaces the five-pill glyph row. Those pills reported floor-wide totals
- *  ("Motions: 3") that named no committee, so they answered nothing an
- *  organiser could act on. These count the STATUS axis and, unlike the pills,
- *  each one is a filter — decoration turned into navigation. */
-export function StatusFilterBar({
-  counts, active, onPick,
-}: {
-  counts: { key: 'all' | ReturnType<typeof roomStatus>; label: string; value: number; color: string; ink: string }[];
-  active: string;
-  onPick: (key: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 mb-4 flex-wrap">
-      {counts.map((c) => {
-        const on = active === c.key;
-        const dim = c.value === 0 && !on;
-        const dead = c.value === 0 && c.key !== 'all';
-        return (
-          <button
-            key={c.key}
-            onClick={() => onPick(c.key)}
-            disabled={dead}
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 focus:outline-none${dead ? '' : ' active:scale-[0.96]'}`}
-            style={{
-              fontFamily: OUTFIT, border: 'none',
-              backgroundColor: on ? NEU.base : NEU.surface,
-              boxShadow: on ? NEU.inSm : NEU.outSm,
-              opacity: dim ? 0.5 : 1,
-              cursor: dead ? 'default' : 'pointer',
-              transitionProperty: 'box-shadow, opacity, scale',
-              transitionDuration: '200ms',
-              transitionTimingFunction: EASE,
-            }}
-            aria-pressed={on}
-          >
-            <span className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, backgroundColor: c.color }} />
-            <span style={{ fontWeight: 900, fontSize: 14, color: c.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-              {c.value}
-            </span>
-            <span style={{ fontWeight: 800, fontSize: 9.5, letterSpacing: '0.11em', textTransform: 'uppercase', color: SOFT }}>
-              {c.label}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** The honest footnote under the grid. One thing on these cards means something
- *  narrower than it looks, and saying so costs one line. */
+/** The honest footnote under the grid. One thing about these cards means
+ *  something narrower than it looks, and saying so costs one line. */
 export function GridFootnote({ style }: { style?: React.CSSProperties }) {
   return (
     <p
@@ -802,9 +1054,9 @@ export function GridFootnote({ style }: { style?: React.CSSProperties }) {
     >
       <Info size={12} style={{ flexShrink: 0, marginBlockStart: 2 }} />
       <span>
-        Cards are ordered by what needs attention, not by name. <strong>Quiet</strong> is the time
-        since the room last did anything visible: a chair action, a logged speech, or a chat
-        message.
+        Every committee in this conference is shown, and cards are ordered by what needs
+        attention rather than by name. The status word is set by when the room last did
+        anything visible: a chair action, a logged speech, or a chat message.
       </span>
     </p>
   );

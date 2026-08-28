@@ -21,6 +21,7 @@ import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { NotRegisteredChip } from '@/app/manage/[slug]/assignment/delegationShared';
 import { LogoDisc } from '@/components/LogoDisc';
+import ProfileLink from '@/components/ProfileLink';
 import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuButton, NeuIconDisc, NeuProgress,
 } from '@/components/neu';
@@ -625,24 +626,35 @@ const FLAG_SHADOW = '0 1px 3px rgba(27,56,40,0.18)';
 // neumorphic user silhouette (a lucide UserRound head-and-shoulders glyph in
 // gold on a forest seat). Custom characters, unregistered invitees and broken
 // image URLs therefore never surface a broken <img> anywhere.
-export function PersonAvatar({ name, url, size = 28 }: { name: string; url: string | null; size?: number }) {
+export function PersonAvatar({ name, url, size = 28, userId, nested }: {
+  name: string; url: string | null; size?: number;
+  /**
+   * profiles.id — OPT-IN ONLY. When passed, the avatar wraps itself in a
+   * <ProfileLink> to that person's public MUN CV. When it is NOT passed the
+   * markup below is byte-identical to what it has always been, and that is
+   * load-bearing: several call sites render this avatar INSIDE a real
+   * <button>, where an <a> would be invalid HTML and break both controls.
+   * Only pass `userId` from a site you have verified has no <button>/<a>
+   * ancestor.
+   */
+  userId?: string | null;
+  /** Forwarded to ProfileLink — set when a clickable (onClick) ancestor exists. */
+  nested?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
   const cleanUrl = typeof url === 'string' && url.trim() ? url.trim() : null;
   const showImage = !!cleanUrl && !failed;
-  if (showImage) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={cleanUrl}
-        alt={name}
-        onError={() => setFailed(true)}
-        draggable={false}
-        className="rounded-full object-cover flex-shrink-0"
-        style={{ width: size, height: size, boxShadow: NEU.outSm }}
-      />
-    );
-  }
-  return (
+  const inner = showImage ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={cleanUrl}
+      alt={name}
+      onError={() => setFailed(true)}
+      draggable={false}
+      className="rounded-full object-cover flex-shrink-0"
+      style={{ width: size, height: size, boxShadow: NEU.outSm }}
+    />
+  ) : (
     <span
       className="inline-flex items-center justify-center rounded-full flex-shrink-0"
       style={{
@@ -655,6 +667,19 @@ export function PersonAvatar({ name, url, size = 28 }: { name: string; url: stri
     >
       <UserRound size={Math.round(size * 0.56)} strokeWidth={2} style={{ color: NEU.gold }} />
     </span>
+  );
+  if (!userId) return inner;
+  // inline-flex + flex-shrink:0 so the anchor occupies exactly the space the
+  // avatar did as a flex item — the link must not change any layout.
+  // draggable={false} always: an <a> is natively draggable, and this avatar
+  // sits inside draggable cards on the unassigned rail. Opting the anchor out
+  // hands the drag straight back to the nearest draggable ancestor (the card),
+  // and costs nothing on the sites that are not drag sources.
+  return (
+    <ProfileLink userId={userId} name={name} nested={nested} draggable={false}
+      style={{ display: 'inline-flex', flexShrink: 0, lineHeight: 0 }}>
+      {inner}
+    </ProfileLink>
   );
 }
 
@@ -1491,7 +1516,8 @@ function DropAllocateModal({ committee, app, needy = false, onClose, onConflict,
               ALLOCATE
             </p>
             <h2 className="font-black text-base flex items-center gap-2 flex-wrap" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-              <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={28} />
+              {/* Static modal header — no clickable ancestor, so a plain link. */}
+              <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={28} userId={app.profiles?.id} />
               <span>{app.profiles?.display_name ?? app.invited_name}</span>
               <ArrowRight size={14} style={{ color: NEU.muted }} />
               <LogoDisc bare src={committee.logo_url} size={30} fallbackText={committeeLabels(committee).big} alt={committee.name} />
@@ -1779,7 +1805,8 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
           <p className="mb-2" style={{ color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontSize: 10, fontWeight: 700 }}>APPLICANT</p>
           {preSelectedApp ? (
             <NeuInset small className="flex items-center gap-3 p-3">
-              <PersonAvatar name={preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name ?? 'Unknown'} url={preSelectedApp.profiles?.avatar_url ?? null} size={34} />
+              {/* Pre-selected applicant: static NeuInset (a div), nothing clickable above it. */}
+              <PersonAvatar name={preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name ?? 'Unknown'} url={preSelectedApp.profiles?.avatar_url ?? null} size={34} userId={preSelectedApp.profiles?.id} />
               <div className="min-w-0">
                 <p className="font-semibold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{preSelectedApp.profiles?.display_name ?? preSelectedApp.invited_name}</p>
                 <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{preSelectedApp.role} · {effectiveLevel(preSelectedApp)}</p>
@@ -1802,7 +1829,9 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
                     }}
                     onClick={() => setSelectedApp(app)}
                   >
-                    <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={30} />
+                    {/* Picker row is a plain <div> with onClick — nested so picking the
+                        applicant still works and only the avatar opens the CV. */}
+                    <PersonAvatar name={app.profiles?.display_name ?? app.invited_name ?? 'Unknown'} url={app.profiles?.avatar_url ?? null} size={30} userId={app.profiles?.id} nested />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{app.profiles?.display_name ?? app.invited_name}</p>
                       <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{app.role} · {effectiveLevel(app)}</p>
@@ -2187,8 +2216,14 @@ function OccupiedSeatChip({ alloc, onRemoveAllocation }: { alloc: AllocationRow;
       style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, padding: 2, paddingRight: removable ? 4 : 9 }}
     >
       {isSociety && <Users size={12} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />}
+      {/* Both consumers of CountrySlotGrid sit inside the committee panel's
+          <div onClick> (a drop target, never a <button>/<a>), so the link is
+          legal — nested so clicking the name does not also open the overview.
+          The link goes INSIDE the truncating span, not around it, so the
+          clipping/max-width geometry is untouched. A delegation-owned seat has
+          no user_id, so ProfileLink renders it as bare text. */}
       <span className="truncate" style={{ fontSize: 12, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT, maxWidth: 120 }}>
-        {name}
+        <ProfileLink userId={alloc.user_id} name={name} nested>{name}</ProfileLink>
       </span>
       {removable && (
         <button
@@ -2677,7 +2712,9 @@ function CommitteeOverviewModal({
                     title="Open application detail"
                   >
                     <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} />
-                    <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={30} />
+                    {/* Seat row is a role="button" <div> (not a real <button>), so the
+                        link is legal; nested keeps the expand/collapse toggle intact. */}
+                    <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={30} userId={alloc.user_id} nested />
                     <div className="flex-1 min-w-0">
                       <p className="truncate" style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
                         {name}
@@ -2960,7 +2997,11 @@ function ChairBoardPanel({
               const userId = idAligned ? chairIds[i] : undefined;
               return (
                 <NeuInset key={`${ch.name}-${i}`} small className="flex items-center gap-2 px-2.5 py-1.5">
-                  <PersonAvatar name={ch.name} url={ch.avatar_url} size={24} />
+                  {/* Reuses the idAligned guard above — a dais entry only links when
+                      chair_user_ids lines up with display_chairs. The enclosing panel
+                      is a <div> with onClick (not a <button>), hence nested; the X
+                      remove button below is a sibling, never inside the link. */}
+                  <PersonAvatar name={ch.name} url={ch.avatar_url} size={24} userId={userId} nested />
                   <span className="truncate flex-1" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}>
                     {ch.name}
                   </span>
@@ -4052,7 +4093,9 @@ export default function AssignmentPage() {
                           style={{ cursor: 'pointer' }}
                           title={expanded ? 'Hide applicant detail' : 'View applicant detail'}
                         >
-                          <PersonAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} />
+                          {/* role="button" <div>, not a real <button> — link is legal;
+                              nested keeps the expand/collapse toggle working. */}
+                          <PersonAvatar name={sug.app.profiles?.display_name ?? sug.app.invited_name ?? 'Unknown'} url={sug.app.profiles?.avatar_url ?? null} size={30} userId={sug.app.profiles?.id} nested />
                           <div className="flex items-center gap-1.5 flex-1 min-w-0">
                             <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                               {sug.app.profiles?.display_name ?? sug.app.invited_name}
@@ -4242,7 +4285,16 @@ export default function AssignmentPage() {
                             {/* Avatar (~40% larger) with the delegate's home flag
                                 tucked into its bottom-right, slightly overlapping. */}
                             <div style={{ position: 'relative', flexShrink: 0 }}>
-                              <PersonAvatar name={displayName} url={app.profiles?.avatar_url ?? null} size={48} />
+                              {/* The card itself is the drag source (a <div draggable>,
+                                  not a <button>), so the link is legal. PersonAvatar
+                                  always renders its ProfileLink with draggable={false},
+                                  which per the HTML drag spec is NOT a drag source — the
+                                  browser walks up to the nearest draggable ancestor, i.e.
+                                  this card, so the card's own dataTransfer payload still
+                                  starts the drag from anywhere on the avatar. Same trick
+                                  the inner <img draggable={false}> already relies on.
+                                  nested keeps the card's select-on-click working. */}
+                              <PersonAvatar name={displayName} url={app.profiles?.avatar_url ?? null} size={48} userId={app.profiles?.id} nested />
                               {natCountry && (
                                 <CountryFlag
                                   code={natCountry.code}

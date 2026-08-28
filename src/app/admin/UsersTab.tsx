@@ -23,6 +23,8 @@ import {
   Search, X, Mail, ArrowUpRight, Copy, Check, ExternalLink, Info,
 } from 'lucide-react';
 import Portal from '@/components/Portal';
+import ProfileLink from '@/components/ProfileLink';
+import { cvHref } from '@/lib/cvLink';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -424,10 +426,17 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
           {p && (
             <>
               <div className="flex items-start gap-3.5 mb-5">
-                <Avatar url={p.avatar_url} name={p.display_name} size={56} />
+                {/* Avatar + name open the public CV, matching the rest of the
+                    product. Opens in a new tab so an admin mid-triage does not
+                    lose the drawer they are reading. */}
+                <ProfileLink userId={p.id} name={p.display_name} newTab className="flex-shrink-0">
+                  <Avatar url={p.avatar_url} name={p.display_name} size={56} />
+                </ProfileLink>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-black truncate" style={{ color: INK, fontFamily: OUTFIT, fontSize: 20, letterSpacing: '-0.01em' }}>
-                    {p.display_name}
+                    <ProfileLink userId={p.id} name={p.display_name} newTab>
+                      {p.display_name}
+                    </ProfileLink>
                   </h2>
                   <p className="truncate" style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 12.5 }}>{p.email}</p>
                   <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
@@ -440,7 +449,7 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Link
-                    href={`/cv/${p.id}`}
+                    href={cvHref(p.id, p.display_name) ?? `/cv/${p.id}`}
                     target="_blank"
                     className="inline-flex items-center gap-1 rounded-full px-3 py-1.5"
                     style={{ border: `1px solid ${LINE}`, color: FOREST, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, textDecoration: 'none' }}

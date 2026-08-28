@@ -19,6 +19,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
+import ProfileLink from '@/components/ProfileLink';
 import { getCountryByName, getFlagUrl, UN_COUNTRIES } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
 import { checkInApplication, undoCheckIn } from '@/lib/checkIn';
@@ -3418,28 +3419,38 @@ export default function ApplicationsPage() {
                     <div className="pt-1"><SelectBox checked={selected} onClick={() => toggleSelected(app.id)} title={selected ? 'Deselect' : 'Select'} /></div>
                     {/* Bigger avatar (#3) with the applicant's nationality flag
                         tucked into its bottom-right, slightly overlapping (#4). */}
-                    <div style={{ position: 'relative', flexShrink: 0 }}>
-                      <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={62} />
-                      {natCode && (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          src={getFlagUrl(natCode)}
-                          alt={nationality ?? ''}
-                          title={nationality ?? ''}
-                          draggable={false}
-                          style={{ position: 'absolute', right: -3, bottom: -3, width: 24, height: 24, borderRadius: 9999, objectFit: 'cover', boxShadow: '0 1px 3px rgba(27,56,40,0.25)', border: `2px solid ${NEU.surface}` }}
-                        />
-                      )}
-                    </div>
+                    {/* Avatar → the applicant's public MUN CV. Unregistered
+                        invitees (user_id NULL) render bare — ProfileLink owns
+                        that case, hence no conditional here. */}
+                    <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', flexShrink: 0 }}>
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <MemberAvatar name={name} url={app.profiles?.avatar_url ?? null} size={62} />
+                        {natCode && (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={getFlagUrl(natCode)}
+                            alt={nationality ?? ''}
+                            title={nationality ?? ''}
+                            draggable={false}
+                            style={{ position: 'absolute', right: -3, bottom: -3, width: 24, height: 24, borderRadius: 9999, objectFit: 'cover', boxShadow: '0 1px 3px rgba(27,56,40,0.25)', border: `2px solid ${NEU.surface}` }}
+                          />
+                        )}
+                      </div>
+                    </ProfileLink>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* Age reads as part of the name: "Ada Lovelace, 23".
                             Derived from profiles.date_of_birth, falling back to
                             any date-of-birth custom answer (ageForApp). No age
                             on file → the name alone, never a trailing comma. */}
-                        <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 19.5, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em' }}>
-                          {name}{age !== null ? `, ${age}` : ''}
-                        </p>
+                        {/* Name → public MUN CV. minWidth:0 on the wrapper so
+                            the anchor stays shrinkable and the <p> still
+                            truncates exactly as it did unwrapped. */}
+                        <ProfileLink userId={app.user_id} name={name} nested style={{ display: 'block', minWidth: 0, maxWidth: '100%' }}>
+                          <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 19.5, fontWeight: 800, color: NEU.ink, maxWidth: '100%', letterSpacing: '-0.01em' }}>
+                            {name}{age !== null ? `, ${age}` : ''}
+                          </p>
+                        </ProfileLink>
                         {!app.user_id && <NotRegisteredChip />}
                         {app.is_head_delegate && (
                           <span className="inline-flex items-center gap-1" style={chip('rgba(27,56,40,0.1)', NEU.forest, 'rgba(27,56,40,0.2)')}>
@@ -4356,31 +4367,38 @@ export default function ApplicationsPage() {
                 className="appRevPad flex items-start gap-4 flex-shrink-0"
                 style={{ backgroundColor: NEU.surface, boxShadow: '0 8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2 }}
               >
-                {app.profiles?.avatar_url ? (
-                  <img
-                    src={app.profiles.avatar_url}
-                    alt=""
-                    className="rounded-2xl object-cover flex-shrink-0"
-                    style={{ width: 60, height: 60, boxShadow: NEU.outSm }}
-                  />
-                ) : (
-                  <div
-                    className="flex-shrink-0 flex items-center justify-center rounded-2xl"
-                    style={{ width: 60, height: 60, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, boxShadow: NEU.outSm }}
-                  >
-                    <span className="font-black" style={{ color: NEU.gold, fontSize: 24, fontFamily: OUTFIT }}>
-                      {name.trim().charAt(0).toUpperCase() || '?'}
-                    </span>
-                  </div>
-                )}
+                {/* Avatar → public MUN CV, in a new tab: the organiser is
+                    mid-review here and must not lose the open drawer. */}
+                <ProfileLink userId={app.user_id} name={name} newTab style={{ display: 'block', flexShrink: 0 }}>
+                  {app.profiles?.avatar_url ? (
+                    <img
+                      src={app.profiles.avatar_url}
+                      alt=""
+                      className="rounded-2xl object-cover flex-shrink-0"
+                      style={{ width: 60, height: 60, boxShadow: NEU.outSm }}
+                    />
+                  ) : (
+                    <div
+                      className="flex-shrink-0 flex items-center justify-center rounded-2xl"
+                      style={{ width: 60, height: 60, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, boxShadow: NEU.outSm }}
+                    >
+                      <span className="font-black" style={{ color: NEU.gold, fontSize: 24, fontFamily: OUTFIT }}>
+                        {name.trim().charAt(0).toUpperCase() || '?'}
+                      </span>
+                    </div>
+                  )}
+                </ProfileLink>
                 <div className="flex-1 min-w-0">
-                  <h2
-                    id="app-review-name"
-                    className="font-black truncate"
-                    style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.2 }}
-                  >
-                    {name}
-                  </h2>
+                  {/* Name → the same CV, same new-tab reasoning. */}
+                  <ProfileLink userId={app.user_id} name={name} newTab style={{ display: 'block' }}>
+                    <h2
+                      id="app-review-name"
+                      className="font-black truncate"
+                      style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.2 }}
+                    >
+                      {name}
+                    </h2>
+                  </ProfileLink>
                   {email && (
                     <p className="truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, marginTop: 1 }}>
                       {email}
@@ -4812,23 +4830,32 @@ export default function ApplicationsPage() {
                 className="appRevPad flex items-start gap-4 flex-shrink-0"
                 style={{ backgroundColor: NEU.surface, boxShadow: '0 8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2 }}
               >
-                <div
-                  className="flex-shrink-0 flex items-center justify-center rounded-2xl"
-                  style={{
-                    width: 60, height: 60, border: `1.5px dashed ${DRAFT_DASH}`,
-                    color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 24,
-                  }}
-                >
-                  {name.trim().charAt(0).toUpperCase() || '?'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2
-                    id="draft-review-name"
-                    className="font-black truncate"
-                    style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.2 }}
+                {/* Avatar → public MUN CV, new tab: a draft only exists for a
+                    signed-in user, so d.user_id is always a real UUID. New tab
+                    for the same reason as the application drawer — the
+                    organiser is mid-review and must not lose it. */}
+                <ProfileLink userId={d.user_id} name={name} newTab style={{ display: 'block', flexShrink: 0 }}>
+                  <div
+                    className="flex-shrink-0 flex items-center justify-center rounded-2xl"
+                    style={{
+                      width: 60, height: 60, border: `1.5px dashed ${DRAFT_DASH}`,
+                      color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 24,
+                    }}
                   >
-                    {name}
-                  </h2>
+                    {name.trim().charAt(0).toUpperCase() || '?'}
+                  </div>
+                </ProfileLink>
+                <div className="flex-1 min-w-0">
+                  {/* Name → the same CV, same new-tab reasoning. */}
+                  <ProfileLink userId={d.user_id} name={name} newTab style={{ display: 'block' }}>
+                    <h2
+                      id="draft-review-name"
+                      className="font-black truncate"
+                      style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.2 }}
+                    >
+                      {name}
+                    </h2>
+                  </ProfileLink>
                   {email && (
                     <p className="truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 13, fontWeight: 500, marginTop: 1 }}>
                       {email}

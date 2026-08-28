@@ -11,6 +11,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { queueEventEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
+import ProfileLink from '@/components/ProfileLink';
 
 // ── Shared bits (matches the visual language of the rest of this page) ─────────
 
@@ -481,9 +482,23 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 // Renders profiles.avatar_url when present; otherwise an initial-disc built
 // from the (display or invited) name, forest disc, ivory letter, so imported,
 // account-less applicants still get a recognisable, legible avatar.
-export function MemberAvatar({ name, url, size = 28 }: { name: string; url: string | null; size?: number }) {
+export function MemberAvatar({ name, url, size = 28, userId, nested }: {
+  name: string; url: string | null; size?: number;
+  /**
+   * profiles.id / pool_members.user_id — OPT-IN ONLY. When passed, the avatar
+   * wraps itself in a <ProfileLink> to that person's public MUN CV. When it is
+   * NOT passed the markup below is byte-identical to what it has always been,
+   * and that is load-bearing: this avatar is rendered inside chips that sit in
+   * real <button>s and inside drag sources, where an <a> would be invalid HTML
+   * or would hijack the drag. Only pass `userId` from a site you have verified
+   * has no <button>/<a> ancestor.
+   */
+  userId?: string | null;
+  /** Forwarded to ProfileLink — set when a clickable (onClick) ancestor exists. */
+  nested?: boolean;
+}) {
   const initial = (name?.trim()?.charAt(0) ?? '?').toUpperCase();
-  return url ? (
+  const inner = url ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={url}
@@ -503,6 +518,16 @@ export function MemberAvatar({ name, url, size = 28 }: { name: string; url: stri
     >
       {initial}
     </div>
+  );
+  if (!userId) return inner;
+  // inline-flex + flex-shrink:0 so the anchor is exactly the flex item the
+  // avatar itself was — the link must not change any layout. draggable={false}
+  // so an <a> inside a drag surface never starts a link drag of its own.
+  return (
+    <ProfileLink userId={userId} name={name} nested={nested} draggable={false}
+      style={{ display: 'inline-flex', flexShrink: 0, lineHeight: 0 }}>
+      {inner}
+    </ProfileLink>
   );
 }
 
@@ -561,6 +586,11 @@ export function DraggableChip({
       }}
     >
       <GripVertical size={13} style={{ color: '#DDD4C0', flexShrink: 0 }} />
+      {/* Deliberately NOT linked to the CV. This chip is the drag SOURCE for
+          delegation assignment — the core workflow of this page — and it is
+          handed only `dataId` (the APPLICATION id), never the user id, so
+          linking would also mean threading `user_id` through both callers.
+          Not worth putting an <a> inside a drag source for. */}
       <MemberAvatar name={name} url={avatarUrl} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
@@ -595,7 +625,9 @@ export function WaivedChip({ member, onRemove }: { member: PoolMember; onRemove?
       style={{ backgroundColor: 'rgba(184,132,74,0.06)', border: '1px solid rgba(184,132,74,0.3)' }}
     >
       <Lock size={13} style={{ color: '#9A6B2F', flexShrink: 0 }} />
-      <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} />
+      {/* Static chip: plain <div>, no onClick and no drag; the only button is a
+          sibling REMOVE. So a bare link, no nesting needed. */}
+      <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} userId={member.user_id} />
       <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</span>
       {!member.user_id && <NotRegisteredChip />}
       <span style={{ fontSize: 10, fontWeight: 700, color: '#9A6B2F', fontFamily: MONO, letterSpacing: '0.06em', flexShrink: 0 }}>WAIVED</span>
@@ -611,7 +643,9 @@ export function NotAttendingChip({ member, onUndo, onRemove }: { member: PoolMem
       className="flex items-center gap-2 rounded-xl px-3 py-2 mb-1.5"
       style={{ backgroundColor: 'rgba(154,138,120,0.06)', border: '1px solid #F0EDE6', opacity: 0.7 }}
     >
-      <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} />
+      {/* Static chip: plain <div>, no onClick and no drag; UNDO / REMOVE are
+          siblings. So a bare link, no nesting needed. */}
+      <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} userId={member.user_id} />
       <span className="flex-1 min-w-0 text-sm font-semibold truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{name}</span>
       {!member.user_id && <NotRegisteredChip />}
       <div className="flex items-center gap-2.5 flex-shrink-0">
@@ -650,7 +684,11 @@ export function PaidSlotChip({
         cursor: clickable ? 'pointer' : 'default',
       }}
     >
-      <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} />
+      {/* This chip is a DROP TARGET but never a drag SOURCE (no draggable), so
+          an anchor cannot hijack a drag here — dragover/drop still bubble from
+          it to this div. nested because the chip has its own onClick (pick as
+          swap target). */}
+      <MemberAvatar name={name} url={member.profiles?.avatar_url ?? null} userId={member.user_id} nested />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>

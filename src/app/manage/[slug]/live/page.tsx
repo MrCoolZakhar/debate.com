@@ -23,11 +23,13 @@ import {
   mapBroadcastRow, deleteBroadcastGroup, BROADCAST_COLUMNS,
   type BroadcastRow, type BroadcastGroup,
 } from './BroadcastComposer';
-import { CommitteeCard, StatusFilterBar, GridFootnote } from './CommitteeCard';
+import { CommitteeCard, GridFootnote } from './CommitteeCard';
 import { FloorDetail, useNowTick } from './PhaseVariants';
 import { CommitteeScoreboardModal } from './CommitteeScoreboardModal';
+import { DelegateCardModal } from './DelegateCardModal';
+import { loadAllocationIndex, type AllocationIndex } from './allocations';
 import {
-  type RoomStatus, roomStatus, STATUS_META, sortByUrgency, cardWarnings,
+  type RoomStatus, roomStatus, sortByUrgency, cardWarnings,
   committeeIdentities,
 } from './cardModel';
 import { SOFT, AMBER_INK, RED } from './tokens';
@@ -70,11 +72,16 @@ export default function LiveStatusPage() {
   /** The committee a SCOPED broadcast is being written to, or null for the
    *  floor-wide composer. Same component either way — see `composerTargets`. */
   const [broadcastFor, setBroadcastFor] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<'all' | RoomStatus>('all');
+  /** One delegation's card, opened from a flag in a live card's queue strip. */
+  const [delegateFor, setDelegateFor] = useState<{ confId: string; country: string } | null>(null);
   // The conference-wide scoreboard, loaded ONCE and lazily — only when an
   // organiser first opens a Points view. Loading it on mount would put a second
   // multi-table read behind every visit to a page that polls every ten seconds.
   const [scoreboard, setScoreboard] = useState<ConferenceScoreboard | null>(null);
+  /** Who holds each delegation, on the same lazy-once contract as the
+   *  scoreboard. Allocations move when an organiser assigns a delegate, which is
+   *  not a live-floor event, so this is deliberately kept out of the 10s poll. */
+  const [allocations, setAllocations] = useState<AllocationIndex | null>(null);
   const [scoreboardLoading, setScoreboardLoading] = useState(false);
   const [scoreboardError, setScoreboardError] = useState('');
   const [refreshHover, setRefreshHover] = useState(false);
@@ -104,7 +111,11 @@ export default function LiveStatusPage() {
       const authed = getAuthedClient(authSession.access_token);
       const { data: confCommittees, error: confErr } = await authed
         .from('conference_committees')
-        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs')
+        // `released_to_chairs_at` and `delegation_size` are new here and are both
+        // read-only: the first lets a never-opened room say whether its dais has
+        // actually been invited (the not-started nudge on the card), the second
+        // is the double-delegation flag. Neither is ever written by this page.
+        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs, released_to_chairs_at, delegation_size')
         .eq('conference_id', conference.id)
         .order('name', { ascending: true });
 
@@ -354,6 +365,9 @@ export default function LiveStatusPage() {
             totalSlots: (c.total_slots as number) ?? 0,
             sessionId: sid,
             sessionCode: (c.session_code as string | null) ?? null,
+            releasedToChairsAt: (c.released_to_chairs_at as string | null) ?? null,
+            // NOT NULL DEFAULT 1 in the schema; the coalesce is for the type.
+            delegationSize: (c.delegation_size as number | null) ?? 1,
             chairUserIds,
             chairs,
           },
@@ -491,14 +505,28 @@ export default function LiveStatusPage() {
   // the WHOLE conference, so switching committees mid-load must keep the same
   // request rather than abandon it and re-latch.
   const scoreboardReq = useRef(false);
+  // BOTH doors open the same payload. A committee's Points view and a single
+  // delegation's card are two views of one `ConferenceScoreboard`, so whichever
+  // is opened first pays for the load and the other is instant. The allocation
+  // index rides along on the same latch for the same reason — the delegate card
+  // needs both halves, and two latches would mean two ways to be half-loaded.
+  const wantsScoreboard = !!scoreboardFor || !!delegateFor;
   useEffect(() => {
-    if (scoreboardReq.current || !scoreboardFor || !conferenceId || !accessToken) return;
+    if (scoreboardReq.current || !wantsScoreboard || !conferenceId || !accessToken) return;
     scoreboardReq.current = true;
     setScoreboardLoading(true);
     void (async () => {
+      const authed = getAuthedClient(accessToken);
       try {
-        const result = await loadConferenceScoreboard(getAuthedClient(accessToken), conferenceId);
+        // `loadAllocationIndex` never throws — it logs and returns an empty
+        // index — so a failure to resolve WHO holds a delegation can never take
+        // the performance figures down with it.
+        const [result, allocIndex] = await Promise.all([
+          loadConferenceScoreboard(authed, conferenceId),
+          loadAllocationIndex(authed, conferenceId),
+        ]);
         setScoreboard(result);
+        setAllocations(allocIndex);
         setScoreboardError('');
       } catch (err) {
         console.error('[LiveStatusPage] scoreboard load failed:', err);
@@ -510,13 +538,14 @@ export default function LiveStatusPage() {
         setScoreboardLoading(false);
       }
     })();
-  }, [scoreboardFor, conferenceId, accessToken]);
+  }, [wantsScoreboard, conferenceId, accessToken]);
 
   // ── Derived ──
   const recapData = recapFor ? rows?.find((r) => r.conf.id === recapFor) ?? null : null;
   const awardsData = awardsFor ? rows?.find((r) => r.conf.id === awardsFor) ?? null : null;
   const rosterData = rosterFor ? rows?.find((r) => r.conf.id === rosterFor) ?? null : null;
   const scoreboardData = scoreboardFor ? rows?.find((r) => r.conf.id === scoreboardFor) ?? null : null;
+  const delegateData = delegateFor ? rows?.find((r) => r.conf.id === delegateFor.confId) ?? null : null;
   const broadcastData = broadcastFor ? rows?.find((r) => r.conf.id === broadcastFor) ?? null : null;
 
   // Stable identity: `rows ?? []` minted a fresh array on every tick while the
@@ -561,15 +590,20 @@ export default function LiveStatusPage() {
   const onFloor = counts.live + counts.idle + counts.stalled;
   const presentTotal = allRows.reduce((sum, r) => sum + presence(r).present, 0);
 
-  // URGENCY ORDER, not the alphabet. `.order('name')` is still what the query
-  // asks the database for — it is the only stable base ordering — but the grid
-  // is re-sorted here so the rooms that need feet are the ones at the top.
-  const visibleRows = useMemo(() => {
-    const filtered = statusFilter === 'all'
-      ? allRows
-      : allRows.filter((r) => statusOf.get(r.conf.id) === statusFilter);
-    return sortByUrgency(filtered, now);
-  }, [allRows, statusFilter, statusOf, now]);
+  // EVERY COMMITTEE, ALWAYS — re-ordered, never reduced.
+  //
+  // There is no filter left to hide one behind. The status filter bar that used
+  // to sit above the floor overview is gone on the owner's instruction, and with
+  // it the only way this grid could ever omit a room: picking "Live" off it hid
+  // every never-opened committee, which is exactly the disappearance the owner
+  // asked to be fixed. The query itself has never filtered — it is
+  // `conference_committees` where `conference_id` matches, with no other
+  // predicate — so with the bar gone `visibleRows` is provably `allRows`.
+  //
+  // `.order('name')` is still what the query asks the database for, because it
+  // is the only stable base ordering, but the grid is re-sorted here so the
+  // rooms that need feet are the ones at the top.
+  const visibleRows = useMemo(() => sortByUrgency(allRows, now), [allRows, now]);
 
   const secondsAgo = lastRefreshed ? Math.max(0, Math.floor((now - lastRefreshed) / 1000)) : null;
 
@@ -672,24 +706,14 @@ export default function LiveStatusPage() {
         </NeuInset>
       )}
 
-      {/* Status filter — REPLACES the five-glyph row.
-          Those glyphs were floor-wide totals that named no committee: "Motions:
-          3" tells an organiser nothing without WHICH room. These count the
-          status axis, and every one of them is a filter, so the row is
-          navigation rather than decoration. */}
-      <StatusFilterBar
-        active={statusFilter}
-        onPick={(k) => setStatusFilter(k as 'all' | RoomStatus)}
-        counts={[
-          { key: 'all', label: 'All rooms', value: allRows.length, color: NEU.forest, ink: NEU.ink },
-          { key: 'stalled', label: STATUS_META.stalled.label, value: counts.stalled, color: STATUS_META.stalled.color, ink: STATUS_META.stalled.ink },
-          { key: 'suspended', label: STATUS_META.suspended.label, value: counts.suspended, color: STATUS_META.suspended.color, ink: STATUS_META.suspended.ink },
-          { key: 'live', label: STATUS_META.live.label, value: counts.live, color: STATUS_META.live.color, ink: STATUS_META.live.ink },
-          { key: 'idle', label: STATUS_META.idle.label, value: counts.idle, color: STATUS_META.idle.color, ink: STATUS_META.idle.ink },
-          { key: 'not-started', label: STATUS_META['not-started'].label, value: counts['not-started'], color: STATUS_META['not-started'].color, ink: STATUS_META['not-started'].ink },
-          { key: 'ended', label: STATUS_META.ended.label, value: counts.ended, color: STATUS_META.ended.color, ink: STATUS_META.ended.ink },
-        ]}
-      />
+      {/* THE FLOOR-WIDE TOTALS STRIP THAT SAT HERE IS GONE, on the owner's
+          instruction: "remove the floor-wide totals strip at the top (all rooms
+          / stalled / suspended counts) — the floor overview alone is enough".
+          Those were the first three pills of `StatusFilterBar`, in that order.
+
+          The floor overview below keeps the three counts worth keeping
+          (committees, live now, need attention), and every room now appears in
+          the grid unconditionally — see `visibleRows`. */}
 
       {/* Summary strip — floor overview + live counts */}
       <NeuCard
@@ -788,20 +812,10 @@ export default function LiveStatusPage() {
             Create them in Committees →
           </Link>
         </NeuCard>
-      ) : visibleRows.length === 0 ? (
-        <NeuCard style={{ padding: 40, textAlign: 'center' }}>
-          <p className="text-sm font-bold mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-            No committee is {STATUS_META[statusFilter as RoomStatus]?.label.toLowerCase() ?? 'matching'} right now
-          </p>
-          <button
-            onClick={() => setStatusFilter('all')}
-            className="text-sm font-bold focus:outline-none"
-            style={{ color: NEU.forest, fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer' }}
-          >
-            Show all rooms →
-          </button>
-        </NeuCard>
       ) : (
+        // There is no "nothing matches your filter" state any more, because
+        // there is no filter. `rows.length === 0` above is now the only empty
+        // case, and it means the conference genuinely has no committees.
         <>
           {/* ONE card for every state.
               `items-stretch` + a `flex-1` band inside the card is the pattern
@@ -828,6 +842,7 @@ export default function LiveStatusPage() {
                 onOpenRoster={(d) => setRosterFor(d.conf.id)}
                 onOpenScoreboard={(d) => setScoreboardFor(d.conf.id)}
                 onOpenDocuments={(d, type) => { setRecapDocFilter(type); setRecapFor(d.conf.id); }}
+                onOpenDelegate={(d, country) => setDelegateFor({ confId: d.conf.id, country })}
               />
             ))}
           </div>
@@ -868,6 +883,21 @@ export default function LiveStatusPage() {
           error={scoreboardError}
           conferenceSlug={conference.slug}
           onClose={() => setScoreboardFor(null)}
+        />
+      )}
+      {/* ONE delegation, opened from a flag in a card's queue strip. Shares the
+          scoreboard payload the committee Points view uses, plus the allocation
+          index that resolves the delegation to the person (or, under double
+          delegation, the two people) actually representing it. */}
+      {delegateData && (
+        <DelegateCardModal
+          data={delegateData}
+          country={delegateFor!.country}
+          scoreboard={scoreboard}
+          allocations={allocations}
+          loading={scoreboardLoading}
+          error={scoreboardError}
+          onClose={() => setDelegateFor(null)}
         />
       )}
       {/* SCOPED broadcast — the same composer, handed a one-committee target

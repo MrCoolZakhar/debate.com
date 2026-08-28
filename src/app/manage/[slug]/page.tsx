@@ -14,6 +14,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { formatFee } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
 import Avatar from '@/components/Avatar';
+import ProfileLink from '@/components/ProfileLink';
 import {
   NeuCard, NeuInset, NeuIconDisc, NeuProgress, NeuRing,
   NeuPill, NeuButton, NeuChecklistRow, Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE,
@@ -735,7 +736,7 @@ export interface ActivityEvent {
    * before applications.checked_in_by / conference_allocations.assigned_by
    * existed, which are all null. Absent → the row renders exactly as before.
    */
-  actor?: { name: string; avatarUrl: string | null };
+  actor?: { id: string; name: string; avatarUrl: string | null };
 }
 
 const ACTIVITY_META: Record<ActivityKind, { icon: typeof Inbox; gradient: [string, string]; verb: string }> = {
@@ -796,12 +797,16 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
           row, so the common "you accepted them" case stays quiet. Logical
           gap/flex only, so it mirrors cleanly in RTL. */}
       {ev.actor && (
-        <span className="flex items-center gap-1.5 flex-shrink-0 max-w-[38%]" title={`by ${ev.actor.name}`}>
+        <ProfileLink
+          userId={ev.actor.id}
+          name={ev.actor.name}
+          className="flex items-center gap-1.5 flex-shrink-0 max-w-[38%]"
+        >
           <Avatar url={ev.actor.avatarUrl} name={ev.actor.name} size={18} />
           <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted }}>
             {ev.actor.name}
           </span>
-        </span>
+        </ProfileLink>
       )}
       <span className="flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
         {timeAgo(ev.ts, now)}
@@ -1144,7 +1149,7 @@ export default function DashboardPage() {
         if (cancelled) return;
         const byId = new Map(
           ((actorRows ?? []) as { id: string; display_name: string | null; avatar_url: string | null }[])
-            .map(p => [p.id, { name: p.display_name ?? 'An organiser', avatarUrl: p.avatar_url }]),
+            .map(p => [p.id, { id: p.id, name: p.display_name ?? 'An organiser', avatarUrl: p.avatar_url }]),
         );
         const actorByKey = new Map(pending.map(r => [r.key, byId.get(r.actorId)]));
         for (const ev of top) {
