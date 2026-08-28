@@ -1029,8 +1029,18 @@ function ConferenceApplyInner() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      const returnTo = `/conferences/${slug}/apply?role=${role}`;
-      router.replace(`/auth/signin?next=${encodeURIComponent(returnTo)}`);
+      // Round-trip the WHOLE query string, not just ?role. Rebuilding it as
+      // `?role=${role}` dropped ?delegationInvite=<token> (an invited delegate
+      // who had to sign in lost their invite and landed in the generic flow)
+      // and ?edit=1 (an edit link bounced back as a fresh application).
+      const query = searchParams.toString();
+      const returnTo = `/conferences/${slug}/apply?${query || `role=${role}`}`;
+      // `apply=1` is context, not routing: without it the sign-in page gives no
+      // reason for asking, and an applicant who followed a role link reads the
+      // bare form as the link having been wrong.
+      router.replace(
+        `/auth/signin?next=${encodeURIComponent(returnTo)}&apply=1`,
+      );
       return;
     }
     fetchAll();

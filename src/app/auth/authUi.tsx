@@ -35,7 +35,13 @@ export function safeNext(searchParams: URLSearchParams, fallback: string): strin
 export function withNext(href: string, searchParams: URLSearchParams): string {
   const raw = searchParams.get('next');
   const valid = raw && raw.startsWith('/') && !raw.startsWith('//');
-  return valid ? `${href}?next=${encodeURIComponent(raw)}` : href;
+  const parts: string[] = [];
+  if (valid) parts.push(`next=${encodeURIComponent(raw)}`);
+  // Carry the apply context across sign-in <-> sign-up so the "continue your
+  // application" banner survives the hop; losing it here is what made the
+  // round trip look like the link had gone wrong.
+  if (searchParams.get('apply') === '1') parts.push('apply=1');
+  return parts.length ? `${href}?${parts.join('&')}` : href;
 }
 
 // ── Brand marks ────────────────────────────────────────────────────────────
@@ -383,19 +389,22 @@ export function PrimaryLinkButton({ href, children }: { href: string; children: 
   );
 }
 
-export function GoogleButton({ label, onClick }: { label: string; onClick: () => void }) {
+export function GoogleButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className="w-full flex items-center justify-center gap-3 rounded-xl py-3 font-bold text-sm tracking-widest transition-colors focus:outline-none"
       style={{
         backgroundColor: '#1B3828',
         color: '#EED98A',
         fontFamily: OUTFIT,
         letterSpacing: '0.08em',
+        opacity: disabled ? 0.6 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+      onMouseLeave={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
     >
       <GoogleIcon />
       {label}
