@@ -1799,6 +1799,20 @@ export default function ApplicationsPage() {
   // `silent` refetches never touch the page-level loading flag, they
   // reconcile local optimistic state with what the server actually computed
   // (fillFreeSpots promotions, etc) without wiping the list.
+  /* Which applicants were still undecided when this page was OPENED.
+     Undecided rows sort to the top, but off this frozen snapshot rather than
+     off live status — so accepting someone does not yank their row out from
+     under the cursor mid-triage. They stay put, and the list only reshuffles
+     the next time the page is opened, which is a fresh mount and a fresh
+     snapshot. Deliberately NOT refreshed by the silent reloads that follow an
+     accept or reject, for exactly that reason. */
+  const pendingAtOpen = useRef<Set<string> | null>(null);
+  /* Every id present at open, so an application that ARRIVES while the page is
+     sitting there can be told apart from one that was already decided. A new
+     submission is undecided and belongs at the top; burying it at the bottom
+     because it missed the snapshot would be the wrong kind of stable. */
+  const idsAtOpen = useRef<Set<string> | null>(null);
+
   const loadApplications = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
     if (!session) return;
@@ -1851,6 +1865,14 @@ export default function ApplicationsPage() {
 
     const apps = (appRes.data ?? []) as unknown as Application[];
     setApplications(apps);
+    // Seed once per mount. `opts.silent` reloads (post-accept, post-reject)
+    // must not re-seed, or the row just acted on would jump away.
+    if (pendingAtOpen.current === null && !opts?.silent) {
+      pendingAtOpen.current = new Set(
+        apps.filter(a => a.status === 'submitted').map(a => a.id),
+      );
+      idsAtOpen.current = new Set(apps.map(a => a.id));
+    }
     setRoleConfigs((cfgRes.data ?? []) as unknown as RoleConfigLite[]);
     setGatingInvoices((gatingRes.data ?? []) as { application_id: string | null; society_id: string | null }[]);
     setLoading(false);
@@ -3290,10 +3312,31 @@ export default function ApplicationsPage() {
     }
     return true;
   })
-    // Default order = latest applications first. The DB fetch already orders by
-    // submitted_at desc; this keeps that guarantee after any optimistic in-place
-    // patching so the visible default always matches "newest first".
-    .sort((a, b) => (b.submitted_at ?? '').localeCompare(a.submitted_at ?? ''));
+    // Default order = still-to-decide first, then latest applications first.
+    // The DB fetch already orders by submitted_at desc; this keeps that
+    // guarantee after any optimistic in-place patching so the visible default
+    // always matches "newest first" within each group.
+    //
+    // The top group is keyed on `pendingAtOpen`, the snapshot taken when the
+    // page was opened — not on live status. Accepting someone therefore leaves
+    // their row exactly where it is instead of flinging it down the list while
+    // the organiser is still looking at it; the reshuffle happens on the next
+    // visit. Before the snapshot exists (first paint) everything is treated as
+    // one group, so the order never flickers as it arrives.
+    .sort((a, b) => {
+      const pending = pendingAtOpen.current;
+      const seen = idsAtOpen.current;
+      if (pending && seen) {
+        // Top group: undecided when the page opened, or undecided and arrived
+        // since. Decided-since-open rows stay put, which is the whole point.
+        const top = (x: Application) =>
+          pending.has(x.id) || (x.status === 'submitted' && !seen.has(x.id)) ? 0 : 1;
+        const aP = top(a);
+        const bP = top(b);
+        if (aP !== bP) return aP - bP;
+      }
+      return (b.submitted_at ?? '').localeCompare(a.submitted_at ?? '');
+    });
 
   const activeFilterCount =
     (filters.status.size > 0 ? 1 : 0) +

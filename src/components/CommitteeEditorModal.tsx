@@ -46,15 +46,21 @@ const inputStyle: React.CSSProperties = {
   fontFamily: "'Outfit', sans-serif",
 };
 
-// Topics are capped at 60 characters. The cap applies per topic entry, not to
-// the topics array as a whole. It is enforced in the app only — 178 of the 325
-// topic entries already in the database are longer than this, so a CHECK
-// constraint would reject every one of those rows on the next write. Legacy
-// topics are grandfathered via baselineTopics below.
-const TOPIC_MAX_LENGTH = 60;
+// Topics are capped at 120 characters. The cap applies per topic entry, not to
+// the topics array as a whole. It is enforced in the app only — a large share
+// of the topic entries already in the database are longer than this, so a CHECK
+// constraint would reject those rows on their next write. Legacy topics are
+// grandfathered via baselineTopics below.
+//
+// 120, not 60: a perfectly ordinary MUN topic runs past 60 without trying
+// ("Addressing the Rise of Non-State Actors and Transnational Organized Crime"
+// is 73), so the tighter cap fired on normal titles rather than on the runaway
+// ones it exists to catch — the longest in the database is over a thousand
+// characters.
+const TOPIC_MAX_LENGTH = 120;
 // Point at which the remaining-characters hint appears, so the limit is visible
 // before it is hit rather than only after.
-const TOPIC_HINT_AT = 45;
+const TOPIC_HINT_AT = 95;
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
