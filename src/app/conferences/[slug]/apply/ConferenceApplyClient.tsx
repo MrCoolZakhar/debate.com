@@ -1176,7 +1176,12 @@ function ConferenceApplyInner() {
       // and ?edit=1 (an edit link bounced back as a fresh application).
       const query = searchParams.toString();
       const returnTo = `/conferences/${slug}/apply?${query || `role=${role}`}`;
-      router.replace(`/auth/signin?next=${encodeURIComponent(returnTo)}`);
+      // `apply=1` is context, not routing: without it the sign-in page gives no
+      // reason for asking, and an applicant who followed a role link reads the
+      // bare form as the link having been wrong.
+      router.replace(
+        `/auth/signin?next=${encodeURIComponent(returnTo)}&apply=1`,
+      );
       return;
     }
     fetchAll();

@@ -63,6 +63,7 @@ function SignUpInner() {
   // back on its own token page rather than the default onboarding funnel.
   // Only relative paths are allowed (must start with a single "/") to prevent
   // open-redirect, same guard as /auth/signin's next handling.
+  const isApplying = searchParams.get('apply') === '1';
   const next = safeNext(searchParams, '/auth/onboarding');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -71,6 +72,9 @@ function SignUpInner() {
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Latch: a second click starts a second PKCE flow and overwrites the
+  // code_verifier cookie, which is what produced bad_code_verifier failures.
+  const [oauthLoading, setOauthLoading] = useState(false);
   const [phase, setPhase] = useState<Phase>('form');
   const [continuing, setContinuing] = useState(false);
 
@@ -151,12 +155,20 @@ function SignUpInner() {
   }
 
   async function handleGoogleSignUp() {
-    await supabase.auth.signInWithOAuth({
+    if (oauthLoading) return;
+    setOauthLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
+    // On success the browser is already navigating away; only a failed start
+    // returns here, and the button has to become usable again.
+    if (error) {
+      setOauthLoading(false);
+      setError(error.message);
+    }
   }
 
   async function handleEmailSignUp(e: React.FormEvent) {
@@ -263,7 +275,21 @@ function SignUpInner() {
 
           {error && <ErrorBanner>{error}</ErrorBanner>}
 
-          <GoogleButton label="SIGN UP WITH GOOGLE" onClick={handleGoogleSignUp} />
+          {isApplying && (
+            <div
+              role="status"
+              className="mb-4 px-4 py-3 rounded-xl text-sm text-center"
+              style={{
+                backgroundColor: 'rgba(27, 56, 40, 0.08)',
+                border: '1px solid rgba(27, 56, 40, 0.2)',
+                color: '#1B3828',
+                fontFamily: OUTFIT,
+              }}
+            >
+              Create your account to continue your application — we&apos;ll take you straight back to it.
+            </div>
+          )}
+          <GoogleButton label="SIGN UP WITH GOOGLE" onClick={handleGoogleSignUp} disabled={oauthLoading} />
           <OrDivider />
 
           <form onSubmit={handleEmailSignUp} className="space-y-4">

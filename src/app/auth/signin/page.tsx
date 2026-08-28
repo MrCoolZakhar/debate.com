@@ -24,22 +24,34 @@ function SignInInner() {
   const searchParams = useSearchParams();
   const hasCallbackError = searchParams.get('error') === 'auth_callback_failed';
   const justVerified = searchParams.get('verified') === '1';
+  const isApplying = searchParams.get('apply') === '1';
   const next = safeNext(searchParams, '/');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Latch: a second click starts a second PKCE flow and overwrites the
+  // code_verifier cookie, which is what produced bad_code_verifier failures.
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const supabase = useMemo(() => createAuthClient(), []);
 
   async function handleGoogleSignIn() {
-    await supabase.auth.signInWithOAuth({
+    if (oauthLoading) return;
+    setOauthLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
+    // On success the browser is already navigating away; only a failed start
+    // returns here, and the button has to become usable again.
+    if (error) {
+      setOauthLoading(false);
+      setError(error.message);
+    }
   }
 
   async function handleEmailSignIn(e: React.FormEvent) {
@@ -95,7 +107,22 @@ function SignInInner() {
       )}
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
-      <GoogleButton label="SIGN IN WITH GOOGLE" onClick={handleGoogleSignIn} />
+      {isApplying && (
+        <div
+          role="status"
+          className="mb-4 px-4 py-3 rounded-xl text-sm text-center"
+          style={{
+            backgroundColor: 'rgba(27, 56, 40, 0.08)',
+            border: '1px solid rgba(27, 56, 40, 0.2)',
+            color: '#1B3828',
+            fontFamily: OUTFIT,
+          }}
+        >
+          Sign in to continue your application — we&apos;ll take you straight back to it.
+        </div>
+      )}
+
+      <GoogleButton label="SIGN IN WITH GOOGLE" onClick={handleGoogleSignIn} disabled={oauthLoading} />
       <OrDivider />
 
       <form onSubmit={handleEmailSignIn} className="space-y-4">
