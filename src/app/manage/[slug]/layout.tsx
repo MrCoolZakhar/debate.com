@@ -15,6 +15,7 @@ import ProfileDropdown from '@/components/ProfileDropdown';
 import type { EmailTheme } from '@/lib/emailHtml';
 import { financialsAreReadOnly } from '@/lib/organizerPermissions';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import NotificationStack from '@/components/notifications/NotificationStack';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -835,6 +836,18 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       {/* Base surface, one continuous ivory behind rail + content (body is white;
           without this the strip behind the rail reads as a different background) */}
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundColor: '#EDE7D8' }} />
+
+      {/* The organiser-side notification host — the SAME stack and the same store
+          the live committee session uses (`@/lib/sessionNotifications`), which is
+          headless and has never been coupled to a committee. Exactly ONE host may
+          be mounted per surface: it owns the single interval that advances every
+          TTL, so a second one would run every countdown at double speed. This is
+          that one for all of /manage.
+
+          `topPx` clears this layout's 56px top bar (the chair cockpit's is 44px,
+          which is the component default). Portaled to `document.body` — there is
+          no `#fit-root` here — so no ancestor `overflow` can clip it. */}
+      <NotificationStack topPx={64} />
 
       {/* Top bar */}
       <header

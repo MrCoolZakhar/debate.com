@@ -16,6 +16,7 @@ import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/email
 import { queueAdHocEmail } from '@/lib/adHocEmail';
 import type { EmailBlock } from '@/lib/emailBlocks';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
@@ -1723,9 +1724,18 @@ export default function ApplicationsPage() {
   // Conferences done in any capacity, per user, count of their mun_cv_entries
   // rows (the same source profiles.mun_experience_level is derived from).
   const [cvCounts, setCvCounts] = useState<Record<string, number>>({});
-  const [actionError, setActionError] = useState('');
-  // Transient green confirmation (e.g. "Payment reminder sent"), auto-clears.
-  const [flashMsg, setFlashMsg] = useState('');
+  /* Action outcomes go to the corner notification stack — the same cards the
+     live committee session raises — instead of two thin lines above the stat
+     tiles that the organiser had already scrolled past by the time they landed.
+     Both keep their old call shape (`setActionError('')` still clears), so no
+     call site changed. The stack is z-index 900, above the z-50 review drawer,
+     so a failure raised from inside that drawer is still seen. */
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'applications'); else clearErr('applications');
+  }, []);
+  const setFlashMsg = useCallback((msg: string) => {
+    if (msg) notifyOk(msg, 'applications'); else clearOk('applications');
+  }, []);
   // Previewed applicant's MUN CV, fetched on demand when the review modal opens.
   const [previewCv, setPreviewCv] = useState<PreviewCvEntry[] | null>(null);
   const [previewCvLoading, setPreviewCvLoading] = useState(false);
@@ -1973,13 +1983,6 @@ export default function ApplicationsPage() {
     // A cooldown answer is fresher than what this page is holding, so re-read.
     if (res.reason === 'cooldown' || res.reason === 'opted_out') loadDrafts();
   }
-
-  // Auto-clear the green confirmation flash.
-  useEffect(() => {
-    if (!flashMsg) return;
-    const t = setTimeout(() => setFlashMsg(''), 4000);
-    return () => clearTimeout(t);
-  }, [flashMsg]);
 
   // Review dialog behaviour: Escape closes, the list behind is scroll-locked,
   // and Tab is trapped inside the card. Presentation only — closing goes
@@ -3553,18 +3556,6 @@ export default function ApplicationsPage() {
         }}
       />
 
-      {actionError && (
-        <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
-          {actionError}
-        </p>
-      )}
-      {flashMsg && (
-        <p className="inline-flex items-center gap-1.5 text-xs font-semibold mb-3" style={{ color: '#2A5A3C', fontFamily: OUTFIT }}>
-          <CircleCheck size={13} strokeWidth={2.6} />
-          {flashMsg}
-        </p>
-      )}
-
       {/* Stat tiles — compact, six clickable filters (#10). */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {statItems.map(s => (
@@ -5057,11 +5048,6 @@ export default function ApplicationsPage() {
                 className="appRevPad flex-shrink-0"
                 style={{ backgroundColor: NEU.surface, boxShadow: '0 -8px 18px -14px rgba(27,56,40,0.55)', zIndex: 2, paddingTop: 16, paddingBottom: 16 }}
               >
-                {actionError && (
-                  <p className="mb-2.5" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER }}>
-                    {actionError}
-                  </p>
-                )}
                 {app.status === 'submitted' && isAcceptBlockedByFee(app) && (
                   <p
                     className="mb-2.5 rounded-xl px-3.5 py-2.5"

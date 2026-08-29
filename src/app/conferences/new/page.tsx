@@ -20,7 +20,7 @@ import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
-import { generateSlug } from '@/lib/utils';
+import { conferenceSlugAttempts, conferenceYear, isSlugTakenError } from '@/lib/conferenceSlug';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
@@ -439,8 +439,15 @@ export default function NewConferencePage() {
     try {
       const supabase = getAuthedClient();
 
-      const baseSlug = generateSlug(fullName);
-      const slug = baseSlug + '-' + Math.random().toString(36).substring(2, 7);
+      // Short, human URLs: /conferences/limun2027. The ladder and the reasons
+      // behind it live in src/lib/conferenceSlug.ts. `attempts` is ordered
+      // best-first and always ends with a legacy random-suffix slug, so the
+      // loop below can never run out of names.
+      const attempts = await conferenceSlugAttempts(supabase, {
+        acronym,
+        fullName,
+        year: datesTbd ? null : conferenceYear(startDate, endDate),
+      });
       // Minted client-side (at mount) so the logo/banner uploads earlier in the
       // wizard, the role-config seeding insert below, and this row all share one
       // id without reading it back (see the RETURNING/RLS note just below).
@@ -449,9 +456,7 @@ export default function NewConferencePage() {
       // No .select() after insert: the new row is only SELECT-visible once the
       // ownership trigger has run, so RETURNING fails RLS for private conferences.
       // We already know the slug, we generated it.
-      const { error: dbError } = await supabase
-        .from('conferences')
-        .insert({
+      const insertRow = (slug: string) => ({
           id: conferenceId,
           slug,
           organizer_id: user.id,
@@ -479,11 +484,25 @@ export default function NewConferencePage() {
           is_public: false,
           status: 'private',
           predecessor_conference_id: null,
-        });
+      });
 
-      if (dbError) {
+      // `conferences.slug` has a real UNIQUE constraint, so the pre-filter in
+      // conferenceSlugAttempts is an optimisation, not the guarantee: two
+      // organizers creating the same acronym+year at the same moment can both
+      // see a rung free. Walk down the list on a slug 23505 rather than failing
+      // the creation. Any other error is real and aborts immediately.
+      let slug = '';
+      let dbError: { code?: string; message: string } | null = null;
+      for (const candidate of attempts) {
+        const { error } = await supabase.from('conferences').insert(insertRow(candidate));
+        if (!error) { slug = candidate; dbError = null; break; }
+        dbError = error;
+        if (!isSlugTakenError(error)) break;
+      }
+
+      if (dbError || !slug) {
         setSubmitting(false);
-        setError('Failed to create conference: ' + dbError.message);
+        setError('Failed to create conference: ' + (dbError?.message ?? 'could not assign a URL.'));
         return;
       }
 

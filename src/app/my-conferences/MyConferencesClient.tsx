@@ -64,6 +64,9 @@ interface OrganizerInvite {
   conferenceName: string;
   acronym: string;
   slug: string;
+  /** The public-facing role the inviting team picked for them, chosen in the
+   *  add flow. Null for invites sent before that field existed. */
+  publicTitle: string | null;
 }
 
 interface ImportInvite {
@@ -545,7 +548,7 @@ function OrganizerInviteCard({ invite, onRespond }: { invite: OrganizerInvite; o
 
   return (
     <InviteCardShell
-      title="Join the organizing team"
+      title={invite.publicTitle ? `Join as ${invite.publicTitle}` : 'Join the organizing team'}
       subtitle={`${invite.conferenceName} · ${invite.acronym}`}
       responding={responding}
       onDecline={() => handle(false)}
@@ -860,7 +863,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   const loadOrganizerInvites = useCallback(async () => {
     if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
-    const select = 'id, token, conferences (full_name, acronym, slug)';
+    const select = 'id, token, public_title, conferences (full_name, acronym, slug)';
     // Two queries, not one .or(): invited_user_id-keyed invites (the normal
     // case) plus email-keyed invites (invited_user_id null) for someone who
     // just created their account with the invited address — matches RLS's
@@ -875,12 +878,13 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     ]);
     const rows = [...(byUser.data ?? []), ...(byEmail.data ?? [])];
     const invites = (rows as unknown as {
-      id: string; token: string;
+      id: string; token: string; public_title: string | null;
       conferences: { full_name: string; acronym: string; slug: string } | { full_name: string; acronym: string; slug: string }[] | null;
     }[]).map(r => {
       const conf = first(r.conferences);
       return {
         id: r.id, token: r.token,
+        publicTitle: r.public_title ?? null,
         conferenceName: conf?.full_name ?? 'Unknown conference',
         acronym: conf?.acronym ?? '',
         slug: conf?.slug ?? '',
@@ -1251,7 +1255,14 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
             a user with drafts but no conferences yet must still see them. */}
         {activeTab === 'all' && <DraftsToCompleteSection drafts={drafts} onDelete={handleDeleteDraft} />}
         {activeTab === 'chair' && <ChairInvitesSection invites={chairInvites} onRespond={handleRespondInvite} />}
-        {activeTab === 'organizer' && <OrganizerInvitesSection invites={organizerInvites} onRespond={handleRespondOrganizerInvite} />}
+        {/* Also on ALL — this is the tab everyone lands on. Gating a pending
+            invitation behind the ORGANIZER tab hid it from exactly the people
+            it is addressed to: someone who has never organised a conference
+            has no reason to open that tab, so the invite existed only in the
+            email. Accept/decline still goes through respond_organizer_invite. */}
+        {(activeTab === 'all' || activeTab === 'organizer') && (
+          <OrganizerInvitesSection invites={organizerInvites} onRespond={handleRespondOrganizerInvite} />
+        )}
 
         {loading ? (
           <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(272px, 1fr))' }}>

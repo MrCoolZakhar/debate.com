@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 import { Check, Clock, CreditCard, Eye, Receipt, RotateCcw, User, X } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -268,7 +269,12 @@ export default function FinancialsInvoicesPage() {
   // ── Ledger data ──────────────────────────────────────────────────────────
   const [invoices, setInvoices] = useState<InvoiceWithApp[] | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  const [actionError, setActionError] = useState('');
+  /* Goes to the corner notification stack (same store and renderer as the live
+     committee session) instead of a line above the filters. Call shape kept, so
+     `setActionError('')` still clears. */
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'invoices'); else clearErr('invoices');
+  }, []);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
@@ -369,7 +375,12 @@ export default function FinancialsInvoicesPage() {
   const [batches, setBatches] = useState<TxBatchRow[] | null>(null);
   const [payerNames, setPayerNames] = useState<Map<string, string>>(new Map());
   const [txBusyIds, setTxBusyIds] = useState<Set<string>>(new Set());
-  const [txActionError, setTxActionError] = useState('');
+  /* Goes to the corner notification stack (same store and renderer as the live
+     committee session) instead of a line above the filters. Call shape kept, so
+     `setTxActionError('')` still clears. */
+  const setTxActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'invoice-transactions'); else clearErr('invoice-transactions');
+  }, []);
   const [expandedBatchIds, setExpandedBatchIds] = useState<Set<string>>(new Set());
 
   const [txStatusFilter, setTxStatusFilter] = useState<'all' | 'pending' | 'paid' | 'rejected'>('all');
@@ -612,10 +623,6 @@ export default function FinancialsInvoicesPage() {
 
       {activeView === 'transactions' ? (
         <>
-          {txActionError && (
-            <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{txActionError}</p>
-          )}
-
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <select value={txStatusFilter} onChange={e => setTxStatusFilter(e.target.value as typeof txStatusFilter)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
               <option value="all">All statuses</option>
@@ -766,10 +773,6 @@ export default function FinancialsInvoicesPage() {
         </>
       ) : (
         <>
-          {actionError && (
-            <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{actionError}</p>
-          )}
-
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <input

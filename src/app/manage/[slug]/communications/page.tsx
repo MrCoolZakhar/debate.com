@@ -19,6 +19,7 @@ import {
 } from '@/lib/emailTokens';
 import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, type EventDef } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { type EmailBlock, normalizeBlocks, flattenBlocksToPlainText } from '@/lib/emailBlocks';
 import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/emailHtml';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
@@ -534,7 +535,6 @@ function CommunicationsPageInner() {
 
   // ── View state ──
   const [activeTab, setActiveTab] = useState<'emails' | 'notifications' | 'inbox'>('emails');
-  const [flash, setFlash] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
   const [historyExpandedId, setHistoryExpandedId] = useState<string | null>(null);
   const [recipientsExpandedId, setRecipientsExpandedId] = useState<string | null>(null);
   const [outboxBySend, setOutboxBySend] = useState<Record<string, OutboxDetailRow[] | 'loading'>>({});
@@ -626,9 +626,13 @@ function CommunicationsPageInner() {
 
   const builderJustOpenedRef = useRef(false);
 
+  /* Outcome feedback goes to the corner notification stack — the same cards the
+     live committee session raises — instead of a strip above the tabs. Same
+     call shape as before, so every showFlash() site is untouched; the store
+     owns the countdown, so there is no local timeout to leak. */
   function showFlash(kind: 'ok' | 'err', msg: string) {
-    setFlash({ kind, msg });
-    setTimeout(() => setFlash(f => (f?.msg === msg ? null : f)), 4500);
+    if (kind === 'ok') notifyOk(msg, 'communications');
+    else notifyErr(msg, 'communications');
   }
 
   // ── Data loading ──────────────────────────────────────────────────────────
@@ -2084,21 +2088,6 @@ function CommunicationsPageInner() {
             void loadTemplates();
           }}
         />
-      )}
-
-      {/* Flash */}
-      {flash && (
-        <div
-          className="rounded-xl px-4 py-2.5 mb-5 text-sm"
-          style={{
-            backgroundColor: flash.kind === 'ok' ? 'rgba(61,122,82,0.10)' : 'rgba(139,32,32,0.08)',
-            border: `1px solid ${flash.kind === 'ok' ? 'rgba(61,122,82,0.35)' : 'rgba(139,32,32,0.3)'}`,
-            color: flash.kind === 'ok' ? '#3D7A52' : '#8B2020',
-            fontFamily: OUTFIT, fontWeight: 600,
-          }}
-        >
-          {flash.msg}
-        </div>
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════

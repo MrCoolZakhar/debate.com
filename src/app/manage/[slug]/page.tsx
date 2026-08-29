@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { notifyOk } from '@/lib/appNotify';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -947,16 +948,16 @@ export default function DashboardPage() {
   // accepting, read via window.location rather than useSearchParams so this
   // stays a plain client-side effect (matches the pattern used for the
   // account-deletion and password-reset homepage toasts).
-  const [orgInviteToast, setOrgInviteToast] = useState(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('organizerInvite') !== 'accepted') return;
-    setOrgInviteToast(true);
+    // Goes to the corner notification stack — the same cards the live committee
+    // session raises — rather than a green strip that pushed the whole
+    // dashboard down for five seconds. The store owns the countdown.
+    notifyOk("Invite accepted. You're now part of the organizing team.", 'organizer-invite');
     const url = new URL(window.location.href);
     url.searchParams.delete('organizerInvite');
     window.history.replaceState({}, '', url.toString());
-    const t = setTimeout(() => setOrgInviteToast(false), 5000);
-    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -1433,18 +1434,6 @@ export default function DashboardPage() {
           { Icon: Globe2, size: 110, top: '55%', right: '-24px', opacity: 0.035 },
         ]}
       />
-
-      {orgInviteToast && (
-        <div
-          className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 mb-3 flex-shrink-0"
-          style={{ backgroundColor: 'rgba(61,122,82,0.10)', border: '1px solid rgba(61,122,82,0.35)' }}
-        >
-          <CheckCircle2 size={14} style={{ color: '#3D7A52', flexShrink: 0 }} />
-          <p className="text-sm" style={{ color: '#1B3828', fontFamily: OUTFIT, fontWeight: 600 }}>
-            Invite accepted. You&apos;re now part of the organizing team.
-          </p>
-        </div>
-      )}
 
       {/* ── Header, compact single row ── */}
       <div className="flex items-center justify-between gap-4 flex-shrink-0" style={{ marginBottom: 12 }}>

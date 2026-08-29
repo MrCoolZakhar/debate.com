@@ -857,7 +857,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                   <Loader size={48} />
                 </div>
               ) : logoUrl ? (
-                <LogoDisc src={logoUrl} alt="Committee emblem" size={96} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
+                /* `bare`: the emblem floats transparently, matching both the
+                   crop tool's preview and every other committee-emblem render
+                   (assignment page, CommitteeIdentityBadge). Without it this
+                   preview paints a near-white disc the emblem never actually
+                   ships on. */
+                <LogoDisc bare src={logoUrl} alt="Committee emblem" size={96} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
               ) : (
                 <MonogramMedallion text={abbreviation || name} isCrisis={isCrisis} size={96} />
               )}
@@ -1044,6 +1049,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       <Portal>
         <LogoCropModal
           file={emblemCropFile}
+          /* Committee emblems ship transparent and render `LogoDisc bare`
+             everywhere they appear, so the crop preview must not sit them on a
+             white disc — the ring of disc showing around the artwork reads as a
+             white outline baked into the file. Conference logos keep the disc:
+             they genuinely render on one. */
+          bare
           onCancel={() => setEmblemCropFile(null)}
           onSave={(blob) => {
             setEmblemCropFile(null);

@@ -20,6 +20,10 @@ export interface OrganizerInviteRow {
    *  to 'custom' with an empty permissions blob. */
   bundle: BundleId;
   permissions: PermissionMap;
+  /** Public-facing role chosen when the invite was sent ("Secretary-General").
+   *  Copied onto the conference_organizers row by respond_organizer_invite.
+   *  Null on rows created before the column existed. */
+  public_title: string | null;
 }
 
 export interface SendOrganizerInviteArgs {
@@ -33,6 +37,10 @@ export interface SendOrganizerInviteArgs {
    *  new conference_organizers row. */
   bundle: BundleId;
   permissions: PermissionMap;
+  /** The role they will be representing publicly, asked for in the add flow
+   *  rather than left to be filled in later. Stored on the invite row and
+   *  copied onto the team row the moment they accept. */
+  publicTitle: string | null;
 }
 
 export interface SendOrganizerInviteResult {
@@ -66,6 +74,7 @@ export async function sendOrganizerInvite(
     p_email: args.email.trim(),
     p_bundle: args.bundle,
     p_permissions: args.permissions,
+    p_public_title: args.publicTitle?.trim() || null,
   });
   if (error) return { ok: false, error: error.message || 'Could not send that invite.' };
 
@@ -98,7 +107,7 @@ export async function listPendingOrganizerInvites(
 ): Promise<OrganizerInviteRow[]> {
   const { data } = await supabase
     .from('conference_organizer_invites')
-    .select('id, email, status, created_at, bundle, permissions')
+    .select('id, email, status, created_at, bundle, permissions, public_title')
     .eq('conference_id', conferenceId)
     .eq('status', 'pending')
     .order('created_at', { ascending: true });
@@ -108,6 +117,7 @@ export async function listPendingOrganizerInvites(
     ...r,
     bundle: r.bundle ?? 'custom',
     permissions: r.permissions ?? {},
+    public_title: r.public_title ?? null,
   }));
 }
 

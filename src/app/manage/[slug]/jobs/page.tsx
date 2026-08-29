@@ -7,6 +7,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import Portal from '@/components/Portal';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -671,7 +672,12 @@ export default function JobBoardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editPosting, setEditPosting] = useState<JobPosting | null>(null);
   const [saving, setSaving] = useState(false);
-  const [actionError, setActionError] = useState('');
+  // Failures go to the corner notification stack, not a strip above the page —
+  // same store and renderer as the live committee session. The `setX('')` call
+  // shape is preserved so no call site changed; only where it lands did.
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'jobs'); else clearErr('jobs');
+  }, []);
   const [createError, setCreateError] = useState('');
   // Posting ids with a write in flight, disables that row's controls (double-click guard).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -914,15 +920,6 @@ export default function JobBoardPage() {
           POST A POSITION
         </button>
       </div>
-
-      {actionError && (
-        <p
-          className="rounded-xl px-4 py-2.5 mb-5 text-xs"
-          style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}
-        >
-          {actionError}
-        </p>
-      )}
 
       {/* Stats row */}
       <div className="flex gap-4 mb-6 flex-wrap">

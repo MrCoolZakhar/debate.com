@@ -88,7 +88,7 @@ export const BUNDLES: Bundle[] = [
   {
     id: 'custom',
     label: 'Custom',
-    summary: 'Only the pages you pick below.',
+    summary: 'Only the pages you pick for them.',
     caveat: null,
   },
 ];

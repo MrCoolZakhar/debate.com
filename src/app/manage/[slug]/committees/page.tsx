@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { PillToggle, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { DatePicker } from '@/components/DatePicker';
@@ -615,8 +616,17 @@ export default function CommitteesPage() {
   }, []);
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'name' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [flash, setFlash] = useState<string | null>(null);
-  const [actionError, setActionError] = useState('');
+  // Outcome feedback goes to the corner notification stack (the same one the
+  // live committee session uses), not to strips above the page. These two
+  // keep the call shape the page has always used — `setFlash(null)` still
+  // clears, `setActionError('')` still clears — so every existing call site is
+  // untouched; only where the message lands changed.
+  const setFlash = useCallback((msg: string | null) => {
+    if (msg) notifyOk(msg, 'committees'); else clearOk('committees');
+  }, []);
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'committees'); else clearErr('committees');
+  }, []);
   const [sendingToChairs, setSendingToChairs] = useState<string | null>(null);
   const [sendingToParticipants, setSendingToParticipants] = useState<string | null>(null);
   const [sendingAllToParticipants, setSendingAllToParticipants] = useState(false);
@@ -635,8 +645,8 @@ export default function CommitteesPage() {
   const [savingToggle, setSavingToggle] = useState<'sameTime' | 'allAtOnce' | null>(null);
 
   function showFlash(msg: string) {
+    // The store owns the countdown now; no local timeout to leak.
     setFlash(msg);
-    setTimeout(() => setFlash(f => (f === msg ? null : f)), 4500);
   }
 
   function markBusy(id: string, busy: boolean) {
@@ -1172,36 +1182,6 @@ export default function CommitteesPage() {
           await turnOnDefaultEmail(supabase, conference.id, eventKey);
         }}
       />
-
-      {flash && (
-        <div
-          className="rounded-xl px-4 py-2.5 mb-5 text-sm"
-          style={{
-            backgroundColor: 'rgba(61,122,82,0.10)',
-            border: '1px solid rgba(61,122,82,0.35)',
-            color: '#3D7A52',
-            fontFamily: "'Outfit', sans-serif",
-            fontWeight: 600,
-          }}
-        >
-          {flash}
-        </div>
-      )}
-
-      {actionError && (
-        <div
-          className="rounded-xl px-4 py-2.5 mb-5 text-sm"
-          style={{
-            backgroundColor: 'rgba(139,32,32,0.06)',
-            border: '1px solid rgba(139,32,32,0.2)',
-            color: '#8B2020',
-            fontFamily: "'Outfit', sans-serif",
-            fontWeight: 600,
-          }}
-        >
-          {actionError}
-        </div>
-      )}
 
       {loading && (
         <div className="flex justify-center py-16">

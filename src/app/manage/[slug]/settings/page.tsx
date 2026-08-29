@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
+  Settings2, Globe, EyeOff, ArrowUp, ArrowDown, Trash2,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -456,6 +457,10 @@ export default function SettingsPage() {
   const [inviteStep, setInviteStep] = useState<1 | 2 | 3>(1);
   const [inviteBundle, setInviteBundle] = useState<BundleId>('admin');
   const [inviteCustomPerms, setInviteCustomPerms] = useState<PermissionMap>({});
+  // The public-facing role, asked for at the moment of adding rather than left
+  // to be filled in later. Rides along on the invite row and lands on the team
+  // row when they accept (respond_organizer_invite).
+  const [invitePublicTitle, setInvitePublicTitle] = useState('');
   // Floating layers keep a handle on their TRIGGER, not a frozen rect, so they
   // can be re-placed on scroll/resize instead of drifting (AGENTS.md: popovers
   // are portaled at fixed coords and flip near an edge).
@@ -463,6 +468,9 @@ export default function SettingsPage() {
   const [bundleMenuPos, setBundleMenuPos] = useState<{ left: number; top: number } | null>(null);
   const [tierHint, setTierHint] = useState<{ id: string; text: string; el: HTMLElement } | null>(null);
   const [tierHintPos, setTierHintPos] = useState<{ left: number; top: number } | null>(null);
+  // Per-member sheet. Holds everything that would otherwise crowd a tree node:
+  // public listing, the public-facing role, page access, and removal.
+  const [memberSheetId, setMemberSheetId] = useState<string | null>(null);
 
   // `organizers` mirrored into a ref that is updated SYNCHRONOUSLY on every
   // write. Permission toggles used to read the previous permissions out of the
@@ -478,10 +486,14 @@ export default function SettingsPage() {
   // One serial write chain per organizer row, so rapid clicks land in click
   // order instead of racing each other to be last-writer.
   const permWriteChain = useRef<Map<string, Promise<void>>>(new Map());
+  // Same treatment for the public-page columns. "Show on public page" had the
+  // identical stale-closure defect the permission chips used to have — see
+  // toggleOrganizerPublic below.
+  const publicWriteChain = useRef<Map<string, Promise<void>>>(new Map());
 
   // House rule: the page behind a modal must not scroll. The bundle menu and
   // the tier hint are non-modal floating layers and deliberately do NOT lock.
-  useScrollLock(inviteOpen);
+  useScrollLock(inviteOpen || memberSheetId !== null);
 
   // Gavelling staff have no conference_organizers row, so nothing in the team
   // list identifies them. Ask the database directly — is_conference_owner()
@@ -952,6 +964,7 @@ export default function SettingsPage() {
     setInviteNotice('');
     setInviteBundle('admin');
     setInviteCustomPerms({});
+    setInvitePublicTitle('');
     setInviteStep(1);
     setInviteOpen(true);
   }
@@ -976,6 +989,7 @@ export default function SettingsPage() {
       inviterName: profile?.display_name || 'A Gavelling organizer',
       bundle: inviteBundle,
       permissions: bundlePermissions(inviteBundle, inviteCustomPerms),
+      publicTitle: invitePublicTitle,
     });
     setInviting(false);
     if (!res.ok) {
@@ -985,6 +999,7 @@ export default function SettingsPage() {
     const sentTo = res.invitedEmail;
     setInviteOpen(false);
     setInviteEmail('');
+    setInvitePublicTitle('');
     setInviteNotice(res.existing
       ? `An invite for ${sentTo} was already pending, the original link still works. Its privileges now match what you just picked.`
       : `Invite sent to ${sentTo} as ${bundleLabel(inviteBundle).toLowerCase()}. They'll appear on the team once they accept.`);
@@ -1141,35 +1156,88 @@ export default function SettingsPage() {
     })();
   }
 
-  // Public-page curation (team managers only, enforced by RLS as well as the
-  // UI gate — the policy is can_manage_team(), not just role='owner').
-  // A DB trigger recomputes conferences.display_secretariat on every write, so
-  // a confirmed write is followed by a quiet conference re-fetch to pick that
-  // up in place (no full-screen reload).
-  function updateOrganizerPublic(orgId: string, updates: { public_title?: string | null; show_on_public?: boolean }) {
-    if (!session) return;
-    const target = organizersRef.current.find(o => o.id === orgId);
-    if (!target) return;
-    const prior: { public_title?: string | null; show_on_public?: boolean } = {};
-    if ('public_title' in updates) prior.public_title = target.public_title;
-    if ('show_on_public' in updates) prior.show_on_public = target.show_on_public;
-    applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, ...updates } : o));
-    setOrganizersError('');
-    void (async () => {
+  // ── Public-page curation ────────────────────────────────────────────────
+  // Team managers only, enforced by RLS as well as by the UI gate — the policy
+  // is can_manage_team(), not just role='owner'. A DB trigger recomputes
+  // conferences.display_secretariat on every write, so a confirmed write is
+  // followed by a quiet conference re-fetch (no full-screen reload).
+  //
+  // A failed write cannot roll back to a snapshot taken before it started: by
+  // the time it fails the row may have been toggled again. Re-read it instead,
+  // exactly like resyncOrganizerPermissions.
+  const resyncOrganizerPublic = useCallback(async (orgId: string, message: string) => {
+    setOrganizersError(message);
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('conference_organizers')
+      .select('public_title, show_on_public')
+      .eq('id', orgId)
+      .maybeSingle();
+    if (!data) return;
+    const truth = data as { public_title: string | null; show_on_public: boolean };
+    applyOrganizers(prev => prev.map(o => o.id === orgId
+      ? { ...o, public_title: truth.public_title, show_on_public: truth.show_on_public }
+      : o));
+  }, [applyOrganizers]);
+
+  // One serial chain per row: click PUBLIC then HIDDEN and the second UPDATE is
+  // issued only after the first has returned, so the last request to reach the
+  // database is always the last click on screen.
+  const queuePublicWrite = useCallback((orgId: string, updates: { public_title?: string | null; show_on_public?: boolean }) => {
+    const previous = publicWriteChain.current.get(orgId) ?? Promise.resolve();
+    const run = previous.then(async () => {
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
-        applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, ...prior } : o));
-        setOrganizersError('Your session has expired, please refresh and sign in again.');
+        await resyncOrganizerPublic(orgId, 'Your session has expired, please refresh and sign in again.');
         return;
       }
-      const { data, error } = await supabase.from('conference_organizers').update(updates).eq('id', orgId).select('id');
+      const { data, error } = await supabase
+        .from('conference_organizers')
+        .update(updates)
+        .eq('id', orgId)
+        .select('id');
+      // A silent zero-row update is an RLS refusal, not a success.
       if (error || !data || data.length !== 1) {
-        applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, ...prior } : o));
-        setOrganizersError(saveFailMessage(error));
+        await resyncOrganizerPublic(orgId, saveFailMessage(error));
         return;
       }
       void refreshConferenceQuiet();
-    })();
+    });
+    publicWriteChain.current.set(orgId, run);
+  }, [resyncOrganizerPublic, refreshConferenceQuiet]);
+
+  /** Flip public listing for one member.
+   *
+   *  THE BUG THIS FIXES: the call site used to be
+   *    onClick={() => updateOrganizerPublic(org.id, { show_on_public: !org.show_on_public })}
+   *  where `org` came from the render closure. Two clicks inside one React
+   *  batch both read the same `org.show_on_public`, both computed the same
+   *  `next`, and both wrote it — so the second click undid nothing on screen
+   *  and wrote a value identical to the first, leaving screen and database
+   *  disagreeing as soon as a re-render landed between them. Same class as the
+   *  permission-chip defect: the CURRENT value must come from organizersRef,
+   *  never from the closure. */
+  function toggleOrganizerPublic(orgId: string) {
+    if (!session) return;
+    const target = organizersRef.current.find(o => o.id === orgId);
+    if (!target) return;
+    const next = !target.show_on_public;
+    applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, show_on_public: next } : o));
+    setOrganizersError('');
+    queuePublicWrite(orgId, { show_on_public: next });
+  }
+
+  /** Set the public-facing role. Same ref-first rule. */
+  function setOrganizerTitle(orgId: string, raw: string) {
+    if (!session) return;
+    const target = organizersRef.current.find(o => o.id === orgId);
+    if (!target) return;
+    const next = raw.trim() || null;
+    if (next === (target.public_title ?? null)) return;
+    applyOrganizers(prev => prev.map(o => o.id === orgId ? { ...o, public_title: next } : o));
+    setOrganizersError('');
+    queuePublicWrite(orgId, { public_title: next });
   }
 
   function handleMoveOrganizer(idx: number, dir: -1 | 1) {
@@ -1835,7 +1903,11 @@ export default function SettingsPage() {
   const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
 
   return (
-    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: '1080px' }}>
+    // The team tree is the one tab that earns the extra width: it lays its
+    // members out in a grid, so a wider panel means fewer wrapped rows and a
+    // shallower, more legible hierarchy. Every other tab is a reading column
+    // and stays at 1080.
+    <div className="px-4 sm:px-6 md:px-10 py-8" style={{ maxWidth: activeTab === 'organizers' ? '1400px' : '1080px' }}>
       {/* Header */}
       <p className="text-xs mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em' }}>
         {view.acronym} / Settings
@@ -2944,54 +3016,139 @@ export default function SettingsPage() {
       </div>}
 
       {activeTab === 'organizers' && (() => {
-        // ── Team hierarchy ──────────────────────────────────────────────────
-        // The team is read top-down: the owner, then whoever can do everything,
-        // then whoever can do everything except move money, then whoever has a
-        // hand-picked set of pages, then people who have not accepted yet. Each
-        // tier is one rung down a spine so the shape of the team is legible
-        // before a single name is read.
+        // ── The team, drawn as a hierarchy ──────────────────────────────────
+        // Not a stack of rows: a tree. Rank 1 holds the owner AND the super
+        // admins, because a super admin can do everything the owner can except
+        // remove them — the crown is the only difference, so they share a
+        // level. Admins hang below that, hand-picked access below that, and
+        // people who have not accepted yet below that. Each rank is drawn
+        // slightly smaller than the one above, and the trunk between them is
+        // real drawn connective tissue, not implied by indentation.
         const ranked = [...organizers].sort((a, b) => a.sort_order - b.sort_order);
         const owners = ranked.filter(o => o.role === 'owner');
         const others = ranked.filter(o => o.role !== 'owner');
-        const tiers: {
-          id: BundleId | 'owner';
+
+        // "Slightly smaller" as a real ramp: avatar, card width and type all
+        // step down together, so rank is legible before a name is read.
+        const TIERS = [
+          { avatar: 76, card: 250, name: 15.5, meta: 12,   pad: 18, radius: 20, gap: 16, icon: 15 },
+          { avatar: 64, card: 228, name: 14.5, meta: 11.5, pad: 16, radius: 18, gap: 14, icon: 14 },
+          { avatar: 56, card: 208, name: 13.5, meta: 11,   pad: 15, radius: 16, gap: 13, icon: 13 },
+          { avatar: 48, card: 196, name: 13,   meta: 11,   pad: 14, radius: 16, gap: 12, icon: 13 },
+        ];
+
+        interface Rank {
+          id: string;
           label: string;
           note: string;
           hint: string;
           accent: string;
-          indent: number;
           rows: Organizer[];
-        }[] = [
+        }
+
+        const ranks: Rank[] = [
           {
-            id: 'owner', label: 'Owner', note: 'Created this conference',
-            hint: 'Holds the conference outright. Can do everything, and is the only person who can hand ownership on or remove another owner. Enforced by is_conference_owner() in the database.',
-            accent: '#B6871F', indent: 0, rows: owners,
+            id: 'lead',
+            label: 'Owner & super admins',
+            note: 'Everything, money and team included',
+            hint: 'The owner holds the conference outright and is the only person who can hand ownership on. A super admin opens every page, moves money and manages this team; the one thing they cannot do is remove the owner. Both are enforced in the database, by is_conference_owner() and can_manage_team().',
+            accent: '#B6871F',
+            rows: [...owners, ...others.filter(o => detectBundle(o.permissions) === 'super_admin')],
           },
           {
-            id: 'super_admin', label: 'Super admins', note: 'Everything, money and team included',
-            hint: 'Every page, every action, plus the ability to invite and edit this team. Team management is enforced in the database by can_manage_team(). The one thing they cannot do is remove the owner.',
-            accent: '#1B3828', indent: 1, rows: others.filter(o => detectBundle(o.permissions) === 'super_admin'),
-          },
-          {
-            id: 'admin', label: 'Admins', note: 'Every page, financials read-only',
+            id: 'admin',
+            label: 'Admins',
+            note: 'Every page, financials read-only',
             hint: 'Opens every section and sees financials in full, but cannot change fees, add-ons, vouchers, payout details, or mark an invoice paid. That restriction is enforced by can_write_financials() in the database, not just hidden in this interface.',
-            accent: '#3D7A52', indent: 2, rows: others.filter(o => detectBundle(o.permissions) === 'admin'),
+            accent: '#1B3828',
+            rows: others.filter(o => detectBundle(o.permissions) === 'admin'),
           },
           {
-            id: 'custom', label: 'Custom access', note: 'Only the pages picked for them',
-            hint: 'Opens exactly the sections lit up on their row. Section access is a navigation gate in this app, not a database rule — treat it as "what they are meant to use", not as a security boundary.',
-            accent: '#B8844A', indent: 3, rows: others.filter(o => detectBundle(o.permissions) === 'custom'),
+            id: 'custom',
+            label: 'Custom access',
+            note: 'Only the pages picked for them',
+            hint: 'Opens exactly the sections lit up on their card. Section access is a navigation gate in this app, not a database rule — treat it as "what they are meant to use", not as a security boundary.',
+            accent: '#B8844A',
+            rows: others.filter(o => detectBundle(o.permissions) === 'custom'),
           },
         ];
 
-        const spine = (accent: string, indent: number) => ({
-          marginLeft: indent * 14,
-          borderLeft: indent === 0 ? 'none' : `2px solid ${accent}33`,
-          paddingLeft: indent === 0 ? 0 : 14,
+        const visibleRanks = ranks.filter(r => r.rows.length > 0);
+        const showInvited = pendingInvites.length > 0;
+        // The invited rung is always drawn one step smaller than the last real
+        // rank, so it reads as the foot of the tree however many ranks exist.
+        const invitedTier = TIERS[Math.min(visibleRanks.length, TIERS.length - 1)];
+
+        // ── Trunk: the vertical line between two ranks, with a node on it ───
+        const trunk = (accent: string, key: string) => (
+          <div key={key} aria-hidden className="flex flex-col items-center" style={{ paddingTop: 4, paddingBottom: 4 }}>
+            <span style={{ width: 2, height: 15, backgroundColor: `${accent}3D`, borderRadius: 1 }} />
+            <span style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: accent, opacity: 0.5, margin: '4px 0' }} />
+            <span style={{ width: 2, height: 15, backgroundColor: `${accent}3D`, borderRadius: 1 }} />
+          </div>
+        );
+
+        // ── Rank header + the beam its members hang from ───────────────────
+        const rankHeader = (r: { id: string; label: string; note: string; hint: string; accent: string }, count: number) => (
+          <>
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mb-2">
+              <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: r.accent, display: 'inline-block' }} />
+              <p className="font-bold text-[10px]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+                {r.label.toUpperCase()}
+              </p>
+              <span
+                className="flex items-center justify-center rounded-full"
+                style={{
+                  minWidth: 20, height: 20, padding: '0 6px', fontSize: 10.5, fontWeight: 800,
+                  fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
+                  backgroundColor: `${r.accent}1F`, color: NEU.inkSoft,
+                }}
+              >
+                {count}
+              </span>
+              <span className="text-[11px]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>· {r.note}</span>
+              {/* Informational affordance: HOVER and FOCUS, never click. */}
+              <span
+                role="note"
+                tabIndex={0}
+                aria-label={`What ${r.label} means`}
+                onMouseEnter={(e) => setTierHint({ id: r.id, text: r.hint, el: e.currentTarget })}
+                onMouseLeave={() => window.setTimeout(() => setTierHint(prev => (prev && prev.id === r.id ? null : prev)), 140)}
+                onFocus={(e) => setTierHint({ id: r.id, text: r.hint, el: e.currentTarget })}
+                onBlur={() => setTierHint(null)}
+                className="flex items-center justify-center rounded-full"
+                style={{ width: 16, height: 16, border: `1.2px solid ${r.accent}66`, color: r.accent, cursor: 'help', flexShrink: 0 }}
+              >
+                <Info size={10} strokeWidth={2.6} />
+              </span>
+            </div>
+            {/* The beam. The trunk lands on it and the rank's cards hang below,
+                which is what makes this read as a tree rather than a list. */}
+            <div aria-hidden style={{ height: 2, borderRadius: 1, backgroundColor: `${r.accent}2E`, marginBottom: 14 }} />
+          </>
+        );
+
+        // Centred wrap, not a grid: the trunk runs down the middle, so a rank's
+        // members have to hang symmetrically off it. A grid would left-pack two
+        // super admins into the corner of a 1400px row and leave the trunk
+        // pointing at nothing. Cards keep their tier width and wrap into as
+        // many centred rows as the team needs — one member or thirty.
+        const rowStyle = (t: typeof TIERS[number]): React.CSSProperties => ({
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          alignItems: 'stretch',
+          gap: t.gap,
+        });
+        // maxWidth 100% is what keeps a 250px card inside a 375px phone: the
+        // tree collapses to one card per row instead of scrolling sideways.
+        const cardWidth = (t: typeof TIERS[number]): React.CSSProperties => ({
+          flex: `0 0 ${t.card}px`,
+          maxWidth: '100%',
         });
 
-        const renderMember = (org: Organizer, tierAccent: string) => {
-          const idx = ranked.indexOf(org);
+        // ── One person ─────────────────────────────────────────────────────
+        const renderMember = (org: Organizer, t: typeof TIERS[number], accent: string) => {
           const name = org.profiles?.display_name ?? 'Unknown';
           const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
           const orgIsOwner = org.role === 'owner';
@@ -2999,57 +3156,100 @@ export default function SettingsPage() {
           const bundle = detectBundle(perms);
           const readOnlyMoney = financialsAreReadOnly(perms);
           const editable = canManageTeam && !orgIsOwner;
+          const granted = ORGANIZER_SECTIONS.filter(s => perms[s.key] === true);
 
           return (
             <div
               key={org.id}
-              className="rounded-2xl"
+              className="relative flex flex-col items-center text-center"
               style={{
                 backgroundColor: '#FFFDF9',
-                border: `1.5px solid ${orgIsOwner ? 'rgba(182,135,31,0.38)' : '#E4DAC4'}`,
+                ...cardWidth(t),
+                borderRadius: t.radius,
+                border: `1.5px solid ${orgIsOwner ? 'rgba(182,135,31,0.42)' : '#E4DAC4'}`,
                 boxShadow: orgIsOwner
-                  ? '0 1px 2px rgba(27,56,40,0.05), 0 6px 16px rgba(182,135,31,0.10)'
-                  : '0 1px 2px rgba(27,56,40,0.04)',
-                padding: 14,
-                marginBottom: 10,
+                  ? '0 1px 2px rgba(27,56,40,0.05), 0 8px 22px rgba(182,135,31,0.13)'
+                  : '0 1px 2px rgba(27,56,40,0.04), 0 4px 14px rgba(27,56,40,0.05)',
+                padding: t.pad,
               }}
             >
-              <div className="flex items-center gap-3">
-                <ProfileLink userId={org.user_id} name={name} className="flex-shrink-0">
-                  {org.profiles?.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={org.profiles.avatar_url}
-                      alt={name}
-                      className="rounded-full object-cover flex-shrink-0"
-                      style={{ width: 40, height: 40, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1 }}
-                    />
-                  ) : (
-                    <div
-                      className="flex items-center justify-center rounded-full font-bold text-sm flex-shrink-0"
-                      style={{
-                        width: 40, height: 40, fontFamily: OUTFIT,
-                        backgroundColor: orgIsOwner ? 'rgba(182,135,31,0.14)' : 'rgba(27,56,40,0.10)',
-                        color: orgIsOwner ? '#8A6614' : '#1B3828',
-                      }}
-                    >
-                      {initials}
-                    </div>
-                  )}
-                </ProfileLink>
+              {/* Everything that would crowd a tree node lives in the sheet. */}
+              {canManageTeam && (
+                <button
+                  onClick={() => setMemberSheetId(org.id)}
+                  aria-label={`Manage ${name}`}
+                  title={`Manage ${name}`}
+                  className="absolute flex items-center justify-center rounded-full focus:outline-none"
+                  style={{
+                    top: 4, right: 4, width: 40, height: 40,
+                    color: NEU.inkSoft, background: 'transparent', border: 'none', cursor: 'pointer',
+                    transitionProperty: 'color, background-color, scale',
+                    transitionDuration: '140ms', transitionTimingFunction: EASE,
+                  }}
+                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.inkSoft; el.style.backgroundColor = 'transparent'; el.style.scale = '1'; }}
+                  onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; }}
+                  onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
+                >
+                  <Settings2 size={15} strokeWidth={2.2} />
+                </button>
+              )}
 
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                    <ProfileLink userId={org.user_id} name={name}>{name}</ProfileLink>
-                    {orgIsOwner && <Crown size={13} className="inline-block ml-1.5 -mt-0.5" style={{ color: '#B6871F' }} aria-label="Owner" />}
-                  </p>
-                  <p className="text-xs truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>{org.profiles?.email ?? ''}</p>
-                </div>
+              <ProfileLink userId={org.user_id} name={name} className="flex-shrink-0">
+                {org.profiles?.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={org.profiles.avatar_url}
+                    alt={name}
+                    className="rounded-full object-cover"
+                    style={{
+                      width: t.avatar, height: t.avatar,
+                      outline: '1px solid rgba(0, 0, 0, 0.1)', outlineOffset: -1,
+                      boxShadow: `0 0 0 3px #FFFDF9, 0 0 0 4.5px ${accent}3D`,
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="flex items-center justify-center rounded-full font-bold"
+                    style={{
+                      width: t.avatar, height: t.avatar, fontFamily: OUTFIT,
+                      fontSize: Math.round(t.avatar * 0.34),
+                      backgroundColor: orgIsOwner ? 'rgba(182,135,31,0.16)' : 'rgba(27,56,40,0.10)',
+                      color: orgIsOwner ? '#7A5A10' : '#1B3828',
+                      boxShadow: `0 0 0 3px #FFFDF9, 0 0 0 4.5px ${accent}3D`,
+                    }}
+                  >
+                    {initials}
+                  </div>
+                )}
+              </ProfileLink>
 
-                {/* Bundle chip. For the owner it is a static label — ownership
-                    is not a bundle you can pick from a menu. */}
+              <p
+                className="font-semibold mt-2.5 w-full truncate"
+                style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: t.name }}
+              >
+                <ProfileLink userId={org.user_id} name={name}>{name}</ProfileLink>
+                {orgIsOwner && <Crown size={13} className="inline-block ml-1.5 -mt-0.5" style={{ color: '#B6871F' }} aria-label="Owner" />}
+              </p>
+
+              {/* The public-facing role leads, because that is what the outside
+                  world sees. The email is the quiet second line. */}
+              <p
+                className="w-full truncate mt-0.5"
+                style={{ color: org.public_title ? '#1B3828' : NEU.inkSoft, fontFamily: OUTFIT, fontSize: t.meta, fontWeight: org.public_title ? 700 : 400 }}
+                title={org.public_title ?? undefined}
+              >
+                {org.public_title ?? (canManageTeam ? 'No role set' : '—')}
+              </p>
+              <p className="w-full truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: t.meta - 0.5, opacity: 0.9 }}>
+                {org.profiles?.email ?? ''}
+              </p>
+
+              <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2.5">
+                {/* Bundle chip — the fast path. Owner is a static label:
+                    ownership is not a bundle you can pick from a menu. */}
                 {orgIsOwner ? (
-                  <span className="flex-shrink-0"><Pill tone="gold" size="sm">Owner</Pill></span>
+                  <Pill tone="gold" size="sm">Owner</Pill>
                 ) : editable ? (
                   <button
                     onClick={(e) => {
@@ -3058,184 +3258,104 @@ export default function SettingsPage() {
                     }}
                     aria-haspopup="menu"
                     aria-expanded={bundleMenuFor?.orgId === org.id}
-                    className="flex items-center gap-1 rounded-xl flex-shrink-0 focus:outline-none"
+                    className="flex items-center gap-1 focus:outline-none"
                     style={{
-                      minHeight: 32, padding: '6px 10px', fontFamily: OUTFIT,
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                      color: '#1B3828', backgroundColor: `${tierAccent}14`,
-                      border: `1.5px solid ${tierAccent}52`,
+                      minHeight: 30, padding: '6px 11px', borderRadius: 999, fontFamily: OUTFIT,
+                      fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em',
+                      color: '#1B3828', backgroundColor: `${accent}17`,
+                      border: `1.5px solid ${accent}52`, cursor: 'pointer',
                       transitionProperty: 'background-color, border-color, scale',
                       transitionDuration: '140ms', transitionTimingFunction: EASE,
                     }}
-                    onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.backgroundColor = `${tierAccent}22`; }}
-                    onMouseLeave={(ev) => { (ev.currentTarget as HTMLElement).style.backgroundColor = `${tierAccent}14`; }}
+                    onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.backgroundColor = `${accent}26`; }}
+                    onMouseLeave={(ev) => { const el = ev.currentTarget as HTMLElement; el.style.backgroundColor = `${accent}17`; el.style.scale = '1'; }}
                     onMouseDown={(ev) => { (ev.currentTarget as HTMLElement).style.scale = '0.96'; }}
                     onMouseUp={(ev) => { (ev.currentTarget as HTMLElement).style.scale = '1'; }}
                   >
                     {bundleLabel(bundle).toUpperCase()}
-                    <ChevronDown size={13} />
+                    <ChevronDown size={12} strokeWidth={2.6} />
                   </button>
                 ) : (
-                  <span className="flex-shrink-0"><Pill tone="forest" size="sm">{bundleLabel(bundle)}</Pill></span>
+                  <Pill tone="forest" size="sm">{bundleLabel(bundle)}</Pill>
                 )}
 
-                {canManageTeam && !orgIsOwner && (
+                {/* Public listing. On by default now, with this as the explicit
+                    way to turn it off. Reads the CURRENT value from the ref
+                    inside the handler, never from this closure. */}
+                {canManageTeam ? (
                   <button
-                    onClick={() => handleRemoveOrganizer(org.id)}
-                    aria-label={`Remove ${name} from the team`}
-                    className="flex items-center justify-center rounded-lg focus:outline-none flex-shrink-0"
+                    onClick={() => toggleOrganizerPublic(org.id)}
+                    aria-pressed={org.show_on_public}
+                    title={org.show_on_public
+                      ? 'Shown on your public conference page with photo, name and role. Click to hide.'
+                      : 'Hidden from your public conference page. Click to show.'}
+                    className="flex items-center gap-1.5 focus:outline-none"
                     style={{
-                      width: 32, height: 32, color: NEU.inkSoft, background: 'transparent', border: 'none',
-                      transitionProperty: 'color, background-color', transitionDuration: '140ms',
+                      minHeight: 30, padding: '6px 11px', borderRadius: 999, fontFamily: OUTFIT,
+                      fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em', cursor: 'pointer',
+                      color: org.show_on_public ? '#1B3828' : NEU.inkSoft,
+                      backgroundColor: org.show_on_public ? 'rgba(27,56,40,0.10)' : 'transparent',
+                      border: org.show_on_public ? '1.5px solid rgba(27,56,40,0.32)' : '1.5px dashed #D8CDB6',
+                      transitionProperty: 'background-color, border-color, color, scale',
+                      transitionDuration: '140ms', transitionTimingFunction: EASE,
                     }}
-                    onMouseEnter={(ev) => { const t = ev.currentTarget as HTMLElement; t.style.color = '#8B2020'; t.style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
-                    onMouseLeave={(ev) => { const t = ev.currentTarget as HTMLElement; t.style.color = NEU.inkSoft; t.style.backgroundColor = 'transparent'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
+                    onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; }}
+                    onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
                   >
-                    <X size={15} />
+                    {org.show_on_public ? <Globe size={12} strokeWidth={2.4} /> : <EyeOff size={12} strokeWidth={2.4} />}
+                    {org.show_on_public ? 'PUBLIC' : 'HIDDEN'}
                   </button>
-                )}
+                ) : org.show_on_public ? (
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{
+                      minHeight: 30, padding: '6px 11px', borderRadius: 999, fontFamily: OUTFIT,
+                      fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em',
+                      color: NEU.inkSoft, border: '1.5px solid #E4DAC4',
+                    }}
+                  >
+                    <Globe size={12} strokeWidth={2.4} /> PUBLIC
+                  </span>
+                ) : null}
               </div>
 
-              {/* Section strip. The icons are the manage sidebar's own icons, so
-                  a lit chip reads as the page it opens. Owner and super admin
-                  open everything, so their strip is informational only. */}
-              {!orgIsOwner && (
-                <div className="flex flex-wrap items-center gap-1.5 mt-3" style={{ marginLeft: 52 }}>
+              {/* What they can actually open. Owners, super admins and admins
+                  open everything, so they get one honest line instead of nine
+                  identical chips; custom access gets the sidebar's own icons,
+                  which is the densest true summary that fits on a card. */}
+              {orgIsOwner || bundle !== 'custom' ? (
+                <p className="mt-2.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: t.meta - 0.5, textWrap: 'pretty' }}>
+                  {orgIsOwner || !readOnlyMoney ? 'Every page · can change money' : 'Every page · money read-only'}
+                </p>
+              ) : (
+                <div className="flex flex-wrap items-center justify-center gap-1 mt-2.5">
                   {ORGANIZER_SECTIONS.map(s => {
                     const on = perms[s.key] === true;
-                    const interactive = editable && bundle === 'custom';
                     const Icon = s.icon;
                     return (
-                      <button
+                      <span
                         key={s.key}
-                        type="button"
-                        onClick={interactive ? () => toggleOrgPermission(org.id, s.key) : undefined}
-                        disabled={!interactive}
                         title={`${s.label} — ${on ? 'can open' : 'cannot open'}. ${s.blurb}`}
-                        aria-pressed={on}
                         aria-label={`${s.label}: ${on ? 'granted' : 'not granted'}`}
-                        className="flex items-center gap-1.5 rounded-xl focus:outline-none"
+                        className="flex items-center justify-center rounded-full"
                         style={{
-                          minHeight: 30, padding: '5px 9px', fontFamily: OUTFIT,
-                          fontSize: 11, fontWeight: 700, letterSpacing: '0.01em',
-                          color: on ? '#1B3828' : NEU.inkSoft,
+                          width: 22, height: 22,
+                          color: on ? '#1B3828' : '#C4B79C',
                           backgroundColor: on ? 'rgba(27,56,40,0.10)' : 'transparent',
-                          border: on ? '1.5px solid rgba(27,56,40,0.30)' : '1.5px dashed #D8CDB6',
-                          opacity: on ? 1 : 0.72,
-                          cursor: interactive ? 'pointer' : 'default',
-                          transitionProperty: 'background-color, border-color, color, opacity, scale',
-                          transitionDuration: '140ms', transitionTimingFunction: EASE,
+                          border: on ? '1px solid rgba(27,56,40,0.22)' : '1px dashed #DDD4C0',
                         }}
-                        onMouseDown={interactive ? (ev) => { (ev.currentTarget as HTMLElement).style.scale = '0.96'; } : undefined}
-                        onMouseUp={interactive ? (ev) => { (ev.currentTarget as HTMLElement).style.scale = '1'; } : undefined}
-                        onMouseLeave={interactive ? (ev) => { (ev.currentTarget as HTMLElement).style.scale = '1'; } : undefined}
                       >
-                        <Icon size={13} strokeWidth={2.2} />
-                        {s.label}
-                      </button>
+                        <Icon size={12} strokeWidth={2.3} />
+                      </span>
                     );
                   })}
-
-                  {/* The one capability with a read/write distinction. */}
-                  {perms.financials === true && (
-                    <button
-                      type="button"
-                      onClick={editable ? () => toggleFinancialsReadOnly(org.id) : undefined}
-                      disabled={!editable}
-                      title={readOnlyMoney
-                        ? 'Financials are read-only for this member: they see fees, invoices and payouts but cannot change them. Enforced in the database.'
-                        : 'This member can change financial details. Click to make financials read-only for them.'}
-                      aria-pressed={readOnlyMoney}
-                      className="flex items-center gap-1.5 rounded-xl focus:outline-none"
-                      style={{
-                        minHeight: 30, padding: '5px 9px', fontFamily: OUTFIT,
-                        fontSize: 11, fontWeight: 700, letterSpacing: '0.01em',
-                        color: readOnlyMoney ? '#8A6614' : NEU.inkSoft,
-                        backgroundColor: readOnlyMoney ? 'rgba(182,135,31,0.14)' : 'transparent',
-                        border: readOnlyMoney ? '1.5px solid rgba(182,135,31,0.42)' : '1.5px dashed #D8CDB6',
-                        cursor: editable ? 'pointer' : 'default',
-                        transitionProperty: 'background-color, border-color, color, scale',
-                        transitionDuration: '140ms', transitionTimingFunction: EASE,
-                      }}
-                    >
-                      <Lock size={12} strokeWidth={2.2} />
-                      {readOnlyMoney ? 'Money read-only' : 'Can change money'}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Public-page curation, unchanged behaviour. */}
-              {canManageTeam && (
-                <div className="flex flex-wrap items-center gap-1.5 mt-2.5" style={{ marginLeft: 52 }}>
-                  <button
-                    onClick={() => updateOrganizerPublic(org.id, { show_on_public: !org.show_on_public })}
-                    className="rounded-xl focus:outline-none flex-shrink-0"
-                    style={{
-                      minHeight: 30, padding: '5px 10px', fontFamily: OUTFIT,
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.01em',
-                      border: org.show_on_public ? '1.5px solid rgba(27,56,40,0.32)' : '1.5px solid #DDD4C0',
-                      backgroundColor: org.show_on_public ? 'rgba(27,56,40,0.10)' : 'transparent',
-                      color: org.show_on_public ? '#1B3828' : NEU.inkSoft,
-                      transitionProperty: 'background-color, border-color, color',
-                      transitionDuration: '140ms',
-                    }}
+                  <span
+                    className="ml-1"
+                    style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: t.meta - 0.5, fontVariantNumeric: 'tabular-nums' }}
                   >
-                    {org.show_on_public ? 'On public page' : 'Show on public page'}
-                  </button>
-                  {org.show_on_public && (
-                    <>
-                      <input
-                        type="text"
-                        defaultValue={org.public_title ?? ''}
-                        placeholder="e.g. Secretary-General"
-                        aria-label={`Public title for ${name}`}
-                        onFocus={fgInput}
-                        onBlur={(e) => {
-                          e.currentTarget.style.borderColor = '#DDD4C0';
-                          const next = e.target.value.trim() || null;
-                          if (next !== (org.public_title ?? null)) updateOrganizerPublic(org.id, { public_title: next });
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
-                        style={{ ...inputStyle, width: 190, padding: '5px 10px', fontSize: 12 }}
-                      />
-                      <div className="flex items-center flex-shrink-0">
-                        <button
-                          onClick={() => handleMoveOrganizer(idx, -1)}
-                          disabled={idx === 0}
-                          aria-label={`Move ${name} up`}
-                          className="flex items-center justify-center focus:outline-none"
-                          style={{
-                            width: 30, height: 30, color: NEU.inkSoft, fontFamily: OUTFIT,
-                            background: 'transparent', border: 'none',
-                            cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.35 : 1,
-                            transitionProperty: 'color', transitionDuration: '140ms',
-                          }}
-                          onMouseEnter={(e) => { if (idx !== 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
-                        >
-                          ▲
-                        </button>
-                        <button
-                          onClick={() => handleMoveOrganizer(idx, 1)}
-                          disabled={idx === ranked.length - 1}
-                          aria-label={`Move ${name} down`}
-                          className="flex items-center justify-center focus:outline-none"
-                          style={{
-                            width: 30, height: 30, color: NEU.inkSoft, fontFamily: OUTFIT,
-                            background: 'transparent', border: 'none',
-                            cursor: idx === ranked.length - 1 ? 'default' : 'pointer',
-                            opacity: idx === ranked.length - 1 ? 0.35 : 1,
-                            transitionProperty: 'color', transitionDuration: '140ms',
-                          }}
-                          onMouseEnter={(e) => { if (idx !== ranked.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
-                        >
-                          ▼
-                        </button>
-                      </div>
-                    </>
-                  )}
+                    {granted.length}/{ORGANIZER_SECTIONS.length}
+                  </span>
                 </div>
               )}
             </div>
@@ -3252,8 +3372,8 @@ export default function SettingsPage() {
               </p>
               <p className="text-sm mt-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>
                 {canManageTeam
-                  ? 'Everyone who can open this dashboard, ranked by what they are allowed to do. Members marked public are shown on your public page with photo, name and title.'
-                  : 'Everyone who can open this dashboard, ranked by what they are allowed to do.'}
+                  ? 'Your team as a hierarchy: who holds the conference, who can do everything, and who has been given a hand-picked set of pages. Everyone is listed on your public conference page by default — hide anyone from their card.'
+                  : 'Your team as a hierarchy: who holds the conference, who can do everything, and who has been given a hand-picked set of pages.'}
               </p>
             </div>
             {canManageTeam && (
@@ -3263,7 +3383,7 @@ export default function SettingsPage() {
                 className="flex items-center justify-center rounded-2xl flex-shrink-0 focus:outline-none"
                 style={{
                   width: 44, height: 44, backgroundColor: '#1B3828', color: '#EED98A', border: 'none',
-                  boxShadow: '0 2px 6px rgba(27,56,40,0.22)',
+                  boxShadow: '0 2px 6px rgba(27,56,40,0.22)', cursor: 'pointer',
                   transitionProperty: 'background-color, scale, box-shadow',
                   transitionDuration: '160ms', transitionTimingFunction: EASE,
                 }}
@@ -3277,142 +3397,161 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Team shape at a glance — one strip of counts, tabular so it does
-              not jitter as members move between tiers. */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 mb-5">
-            {tiers.map(t => (
-              <span key={t.id} className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: NEU.inkSoft }}>
-                <span style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t.accent, display: 'inline-block' }} />
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{t.rows.length}</span>
-                {t.label.toUpperCase()}
+          {/* Team shape at a glance — tabular so it does not jitter as members
+              move between ranks. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 mb-6">
+            {ranks.map(r => (
+              <span key={r.id} className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: NEU.inkSoft }}>
+                <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: r.accent, display: 'inline-block' }} />
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{r.rows.length}</span>
+                {r.label.toUpperCase()}
               </span>
             ))}
-            {pendingInvites.length > 0 && (
+            {showInvited && (
               <span className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: NEU.inkSoft }}>
-                <span style={{ width: 8, height: 8, borderRadius: 4, border: '1.5px dashed #B6871F', display: 'inline-block' }} />
+                <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, border: '1.5px dashed #B6871F', display: 'inline-block' }} />
                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{pendingInvites.length}</span>
                 INVITED
               </span>
             )}
           </div>
 
-          {organizers.length === 0 && (
+          {organizers.length === 0 && !showInvited && (
             <p className="text-sm py-2" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>No team members yet.</p>
           )}
 
-          {/* ── The ladder ─────────────────────────────────────────────────── */}
-          {tiers.filter(t => t.rows.length > 0).map(t => (
-            <div key={t.id} className="mb-5" style={spine(t.accent, t.indent)}>
-              <div className="flex items-center gap-2 mb-2">
-                <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.accent, display: 'inline-block' }} />
-                <p className="font-bold text-[10px]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
-                  {t.label.toUpperCase()}
-                </p>
-                <span className="text-[11px]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, opacity: 0.85 }}>· {t.note}</span>
-                {/* Informational affordance: HOVER, never click. */}
-                <span
-                  role="note"
-                  tabIndex={0}
-                  aria-label={`What ${t.label} means`}
-                  onMouseEnter={(e) => setTierHint({ id: t.id, text: t.hint, el: e.currentTarget })}
-                  onMouseLeave={() => window.setTimeout(() => setTierHint(prev => (prev && prev.id === t.id ? null : prev)), 140)}
-                  onFocus={(e) => setTierHint({ id: t.id, text: t.hint, el: e.currentTarget })}
-                  onBlur={() => setTierHint(null)}
-                  data-tier-hint={t.id}
-                  className="flex items-center justify-center rounded-full"
-                  style={{ width: 16, height: 16, border: `1.2px solid ${t.accent}66`, color: t.accent, cursor: 'help', flexShrink: 0 }}
-                >
-                  <Info size={10} strokeWidth={2.6} />
-                </span>
+          {/* ── The tree ───────────────────────────────────────────────────── */}
+          {visibleRanks.map((r, i) => (
+            <div key={r.id}>
+              {i > 0 && trunk(r.accent, `trunk-${r.id}`)}
+              {rankHeader(r, r.rows.length)}
+              <div style={rowStyle(TIERS[Math.min(i, TIERS.length - 1)])}>
+                {r.rows.map(o => renderMember(o, TIERS[Math.min(i, TIERS.length - 1)], r.accent))}
               </div>
-              {t.rows.map(o => renderMember(o, t.accent))}
             </div>
           ))}
 
-          {/* ── Pending invites: the bottom rung, they are not on the team yet ── */}
-          {pendingInvites.length > 0 && (
-            <div className="mb-5" style={spine('#B6871F', 3)}>
-              <div className="flex items-center gap-2 mb-2">
-                <span style={{ width: 6, height: 6, borderRadius: 3, border: '1.5px dashed #B6871F', display: 'inline-block' }} />
-                <p className="font-bold text-[10px]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
-                  INVITED
-                </p>
-                <span className="text-[11px]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, opacity: 0.85 }}>
-                  · Privileges already chosen, applied the moment they accept
-                </span>
-              </div>
-              {pendingInvites.map(inv => {
-                const invBundle = (inv.bundle ?? 'custom') as BundleId;
-                const invSections = grantedSectionCount(inv.permissions);
-                return (
-                  <div
-                    key={inv.id}
-                    className="flex items-center gap-3 rounded-2xl"
-                    style={{
-                      backgroundColor: 'rgba(255,253,249,0.6)',
-                      border: '1.5px dashed rgba(182,135,31,0.42)',
-                      padding: 12, marginBottom: 8,
-                    }}
-                  >
+          {/* ── Invited: the bottom rung. Not on the team yet, so dashed. ──── */}
+          {showInvited && (
+            <div>
+              {visibleRanks.length > 0 && trunk('#B6871F', 'trunk-invited')}
+              {rankHeader(
+                {
+                  id: 'invited',
+                  label: 'Invited',
+                  note: 'Privileges and role already chosen, applied the moment they accept',
+                  hint: 'These people have been sent an invitation. It reaches them by email and, if the address already has a Gavelling account, it also appears on their profile at My Conferences for them to accept or decline. Nothing is created on the team until they do.',
+                  accent: '#B6871F',
+                },
+                pendingInvites.length,
+              )}
+              <div style={rowStyle(invitedTier)}>
+                {pendingInvites.map(inv => {
+                  const invBundle = (inv.bundle ?? 'custom') as BundleId;
+                  const invSections = grantedSectionCount(inv.permissions);
+                  return (
                     <div
-                      className="flex items-center justify-center rounded-full flex-shrink-0"
-                      style={{ width: 40, height: 40, backgroundColor: 'rgba(182,135,31,0.10)' }}
+                      key={inv.id}
+                      className="relative flex flex-col items-center text-center"
+                      style={{
+                        ...cardWidth(invitedTier),
+                        backgroundColor: 'rgba(255,253,249,0.6)',
+                        borderRadius: invitedTier.radius,
+                        border: '1.5px dashed rgba(182,135,31,0.45)',
+                        padding: invitedTier.pad,
+                      }}
                     >
-                      <MailIcon size={16} style={{ color: '#8A6614' }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{inv.email}</p>
-                      <p className="text-xs" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                      {canManageTeam && (
+                        <button
+                          onClick={() => handleRevokeInvite(inv)}
+                          disabled={revokingInviteId === inv.id}
+                          aria-label={`Revoke invite to ${inv.email}`}
+                          title={`Revoke invite to ${inv.email}`}
+                          className="absolute flex items-center justify-center rounded-full focus:outline-none"
+                          style={{
+                            top: 4, right: 4, width: 40, height: 40,
+                            color: NEU.inkSoft, background: 'transparent', border: 'none',
+                            opacity: revokingInviteId === inv.id ? 0.5 : 1,
+                            cursor: revokingInviteId === inv.id ? 'default' : 'pointer',
+                            transitionProperty: 'color, background-color', transitionDuration: '140ms',
+                          }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#8B2020'; el.style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.inkSoft; el.style.backgroundColor = 'transparent'; }}
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
+
+                      <div
+                        className="flex items-center justify-center rounded-full"
+                        style={{
+                          width: invitedTier.avatar, height: invitedTier.avatar,
+                          backgroundColor: 'rgba(182,135,31,0.10)',
+                          boxShadow: '0 0 0 3px #FFFDF9, 0 0 0 4.5px rgba(182,135,31,0.24)',
+                        }}
+                      >
+                        <MailIcon size={Math.round(invitedTier.avatar * 0.36)} style={{ color: '#8A6614' }} />
+                      </div>
+
+                      <p
+                        className="font-semibold mt-2.5 w-full truncate"
+                        style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: invitedTier.name }}
+                        title={inv.email}
+                      >
+                        {inv.email}
+                      </p>
+                      <p
+                        className="w-full truncate mt-0.5"
+                        style={{ color: inv.public_title ? '#8A6614' : NEU.inkSoft, fontFamily: OUTFIT, fontSize: invitedTier.meta, fontWeight: inv.public_title ? 700 : 400 }}
+                      >
+                        {inv.public_title ?? 'No role set'}
+                      </p>
+                      <p
+                        className="w-full truncate"
+                        style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: invitedTier.meta - 0.5, fontVariantNumeric: 'tabular-nums' }}
+                      >
                         {bundleLabel(invBundle)}
                         {invBundle === 'custom' && ` · ${invSections} section${invSections === 1 ? '' : 's'}`}
-                        {' · invited '}
-                        {new Date(inv.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+
+                      <span
+                        className="mt-2.5"
+                        style={{
+                          padding: '4px 10px', borderRadius: 999, fontSize: 9.5, fontWeight: 800,
+                          letterSpacing: '0.07em', fontFamily: OUTFIT,
+                          backgroundColor: 'rgba(182,135,31,0.18)', color: '#7A5A10',
+                        }}
+                      >
+                        AWAITING REPLY
+                      </span>
+                      <p
+                        className="mt-1.5"
+                        style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: invitedTier.meta - 1, fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        invited {new Date(inv.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
                       </p>
                     </div>
-                    <span
-                      className="px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: 'rgba(182,135,31,0.18)', color: '#7A5A10' }}
-                    >
-                      AWAITING REPLY
-                    </span>
-                    {canManageTeam && (
-                      <button
-                        onClick={() => handleRevokeInvite(inv)}
-                        disabled={revokingInviteId === inv.id}
-                        aria-label={`Revoke invite to ${inv.email}`}
-                        className="flex items-center justify-center rounded-lg focus:outline-none flex-shrink-0"
-                        style={{
-                          width: 32, height: 32, color: NEU.inkSoft, background: 'transparent', border: 'none',
-                          opacity: revokingInviteId === inv.id ? 0.5 : 1,
-                          transitionProperty: 'color, background-color', transitionDuration: '140ms',
-                        }}
-                        onMouseEnter={(e) => { const t = e.currentTarget as HTMLElement; t.style.color = '#8B2020'; t.style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
-                        onMouseLeave={(e) => { const t = e.currentTarget as HTMLElement; t.style.color = NEU.inkSoft; t.style.backgroundColor = 'transparent'; }}
-                      >
-                        <X size={15} />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {/* A refused write must never be silent — this is the surface that
               told the owner nothing when the platform-admin UPDATE matched
-              zero rows. resyncOrganizerPermissions() fills it and re-reads the
-              row so the chips end up showing database truth. */}
+              zero rows. The resync helpers fill it and re-read the row so the
+              cards end up showing database truth. */}
           {organizersError && (
             <p
               role="alert"
-              className="text-xs mt-1 rounded-lg px-3 py-2"
+              className="text-xs mt-4 rounded-lg px-3 py-2"
               style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)', fontFamily: OUTFIT }}
             >
               {organizersError}
             </p>
           )}
           {inviteNotice && (
-            <p className="text-xs mt-1 rounded-lg px-3 py-2" style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.07)', fontFamily: OUTFIT }}>
+            <p className="text-xs mt-4 rounded-lg px-3 py-2" style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.07)', fontFamily: OUTFIT }}>
               {inviteNotice}
             </p>
           )}
@@ -3420,7 +3559,7 @@ export default function SettingsPage() {
           {/* Honest footnote. Section access is a navigation gate; the two
               capabilities below it are real database rules. Saying so here is
               cheaper than someone assuming otherwise. */}
-          <p className="text-xs mt-4" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty', lineHeight: 1.55 }}>
+          <p className="text-xs mt-5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty', lineHeight: 1.55 }}>
             Section access decides which pages a member can open. The team and money
             capabilities go further: managing this team and changing financial details
             are both refused by the database, not merely hidden here.
@@ -4043,13 +4182,14 @@ export default function SettingsPage() {
                     Who are you adding?
                   </h3>
                   <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>
-                    They get an emailed link. It works whether or not they already have a Gavelling
-                    account, and they join the team the moment they accept.
+                    They get an emailed link, and it also lands on their Gavelling profile if they
+                    already have an account. Either way they join the team the moment they accept.
                   </p>
-                  <label className="block font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  <label htmlFor="org-invite-email" className="block font-semibold text-sm mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                     Email address
                   </label>
                   <input
+                    id="org-invite-email"
                     type="email"
                     autoFocus
                     value={inviteEmail}
@@ -4060,6 +4200,31 @@ export default function SettingsPage() {
                     onFocus={fgInput}
                     onBlur={bgInput}
                   />
+
+                  {/* Asked for here, at the moment of adding, rather than left
+                      as a blank on the team page for somebody to remember. It
+                      is the public-facing title, not a privilege — privileges
+                      are the next two steps. */}
+                  <label htmlFor="org-invite-title" className="block font-semibold text-sm mt-4 mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    Role they will be representing
+                  </label>
+                  <input
+                    id="org-invite-title"
+                    type="text"
+                    value={invitePublicTitle}
+                    onChange={(e) => setInvitePublicTitle(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && inviteEmail.trim()) setInviteStep(2); }}
+                    placeholder="e.g. Secretary-General"
+                    maxLength={80}
+                    style={{ ...inputStyle, width: '100%' }}
+                    onFocus={fgInput}
+                    onBlur={bgInput}
+                  />
+                  <p className="text-xs mt-2" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty', lineHeight: 1.5 }}>
+                    This is the title shown beside their photo on your public conference page. They
+                    are listed publicly by default — you can hide anyone from their card on the team
+                    page. It has nothing to do with what they can open in this dashboard.
+                  </p>
                 </>
               )}
 
@@ -4069,7 +4234,9 @@ export default function SettingsPage() {
                     What is their role?
                   </h3>
                   <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>
-                    Inviting {inviteEmail.trim() || 'them'}.
+                    Inviting {inviteEmail.trim() || 'them'}
+                    {invitePublicTitle.trim() ? ` as ${invitePublicTitle.trim()}` : ''}. This is what
+                    they can do in the dashboard, which is a separate question from their title.
                   </p>
                   <div className="flex flex-col gap-2">
                     {BUNDLES.map(b => {
@@ -4256,6 +4423,320 @@ export default function SettingsPage() {
           </div>
         </Portal>
       )}
+      {/* ── Member sheet ─────────────────────────────────────────────────────
+          Everything that would otherwise crowd a node of the tree: the public
+          listing switch, the public-facing role, page access, public-page order
+          and removal. One member at a time, so the tree stays a tree. */}
+      {memberSheetId && (() => {
+        const org = organizers.find(o => o.id === memberSheetId);
+        // The row can vanish underneath this sheet (a co-chair removed them, a
+        // failed write re-read the truth). Close rather than render a ghost.
+        if (!org) return null;
+        // `organizers` is kept in sort_order order by loadOrganizers and by
+        // handleMoveOrganizer's normalisation, so this index is the one
+        // handleMoveOrganizer expects.
+        const idx = organizers.findIndex(o => o.id === org.id);
+        const name = org.profiles?.display_name ?? 'Unknown';
+        const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+        const orgIsOwner = org.role === 'owner';
+        const perms = org.permissions ?? {};
+        const bundle = detectBundle(perms);
+        const readOnlyMoney = financialsAreReadOnly(perms);
+        const editable = canManageTeam && !orgIsOwner;
+        const close = () => setMemberSheetId(null);
+
+        const groupHeading = (text: string) => (
+          <p className="font-bold text-[10px] mb-2" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+            {text}
+          </p>
+        );
+
+        return (
+          <Portal>
+            <div
+              className="fixed inset-0 flex items-center justify-center px-4"
+              style={{ zIndex: 130, backgroundColor: 'rgba(28,20,16,0.42)', backdropFilter: 'blur(3px)' }}
+              onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Manage ${name}`}
+                className="w-full"
+                style={{
+                  maxWidth: 520, maxHeight: '86vh', overflowY: 'auto',
+                  backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 24,
+                  boxShadow: '0 26px 70px rgba(27,56,40,0.30)', padding: 24,
+                }}
+              >
+                {/* Identity */}
+                <div className="flex items-center gap-3.5">
+                  {org.profiles?.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={org.profiles.avatar_url}
+                      alt={name}
+                      className="rounded-full object-cover flex-shrink-0"
+                      style={{ width: 52, height: 52, outline: '1px solid rgba(0, 0, 0, 0.1)', outlineOffset: -1 }}
+                    />
+                  ) : (
+                    <div
+                      className="flex items-center justify-center rounded-full font-bold flex-shrink-0"
+                      style={{
+                        width: 52, height: 52, fontFamily: OUTFIT, fontSize: 17,
+                        backgroundColor: orgIsOwner ? 'rgba(182,135,31,0.16)' : 'rgba(27,56,40,0.10)',
+                        color: orgIsOwner ? '#7A5A10' : '#1B3828',
+                      }}
+                    >
+                      {initials}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>
+                      {name}
+                      {orgIsOwner && <Crown size={15} className="inline-block ml-1.5 -mt-1" style={{ color: '#B6871F' }} aria-label="Owner" />}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+                      {org.profiles?.email ?? ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={close}
+                    aria-label="Close"
+                    className="flex items-center justify-center rounded-full focus:outline-none flex-shrink-0"
+                    style={{
+                      width: 40, height: 40, color: NEU.inkSoft, background: 'transparent',
+                      border: 'none', cursor: 'pointer',
+                      transitionProperty: 'color, background-color', transitionDuration: '140ms',
+                    }}
+                    onMouseEnter={(e) => { const t = e.currentTarget as HTMLElement; t.style.color = '#1C1410'; t.style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                    onMouseLeave={(e) => { const t = e.currentTarget as HTMLElement; t.style.color = NEU.inkSoft; t.style.backgroundColor = 'transparent'; }}
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+
+                {/* ── Public page ─────────────────────────────────────────── */}
+                <div className="mt-6 pt-5" style={{ borderTop: '1px solid #E4DAC4' }}>
+                  {groupHeading('PUBLIC CONFERENCE PAGE')}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                        Show {name.split(' ')[0]} on the public page
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty', lineHeight: 1.5 }}>
+                        Team members are listed publicly by default, with photo, name and role.
+                      </p>
+                    </div>
+                    <span className="flex-shrink-0">
+                      <PillToggle
+                        value={org.show_on_public}
+                        onChange={() => toggleOrganizerPublic(org.id)}
+                        size="md"
+                        disabled={!canManageTeam}
+                      />
+                    </span>
+                  </div>
+
+                  <label
+                    htmlFor="member-public-title"
+                    className="block font-semibold text-sm mt-4 mb-2"
+                    style={{ color: '#1C1410', fontFamily: OUTFIT }}
+                  >
+                    Role they represent
+                  </label>
+                  <input
+                    id="member-public-title"
+                    type="text"
+                    // Keyed on the member so switching rows re-seeds the field.
+                    key={`title-${org.id}`}
+                    defaultValue={org.public_title ?? ''}
+                    placeholder="e.g. Secretary-General"
+                    maxLength={80}
+                    disabled={!canManageTeam}
+                    aria-label={`Public role for ${name}`}
+                    onFocus={fgInput}
+                    onBlur={(e) => { bgInput(e); setOrganizerTitle(org.id, e.target.value); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+                    style={{ ...inputStyle, width: '100%', opacity: canManageTeam ? 1 : 0.6 }}
+                  />
+
+                  {canManageTeam && organizers.length > 1 && (
+                    <div className="flex items-center gap-2 mt-4">
+                      <p className="text-xs flex-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>
+                        Position {idx + 1} of {organizers.length} in the public listing order.
+                      </p>
+                      <button
+                        onClick={() => handleMoveOrganizer(idx, -1)}
+                        disabled={idx <= 0}
+                        aria-label={`Move ${name} earlier on the public page`}
+                        className="flex items-center justify-center rounded-xl focus:outline-none flex-shrink-0"
+                        style={{
+                          width: 40, height: 40, color: NEU.inkSoft, background: 'transparent',
+                          border: '1.5px solid #DDD4C0',
+                          cursor: idx <= 0 ? 'default' : 'pointer', opacity: idx <= 0 ? 0.35 : 1,
+                          transitionProperty: 'color, border-color', transitionDuration: '140ms',
+                        }}
+                        onMouseEnter={(e) => { if (idx > 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
+                      >
+                        <ArrowUp size={15} strokeWidth={2.4} />
+                      </button>
+                      <button
+                        onClick={() => handleMoveOrganizer(idx, 1)}
+                        disabled={idx >= organizers.length - 1}
+                        aria-label={`Move ${name} later on the public page`}
+                        className="flex items-center justify-center rounded-xl focus:outline-none flex-shrink-0"
+                        style={{
+                          width: 40, height: 40, color: NEU.inkSoft, background: 'transparent',
+                          border: '1.5px solid #DDD4C0',
+                          cursor: idx >= organizers.length - 1 ? 'default' : 'pointer',
+                          opacity: idx >= organizers.length - 1 ? 0.35 : 1,
+                          transitionProperty: 'color, border-color', transitionDuration: '140ms',
+                        }}
+                        onMouseEnter={(e) => { if (idx < organizers.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
+                      >
+                        <ArrowDown size={15} strokeWidth={2.4} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Privileges ──────────────────────────────────────────── */}
+                <div className="mt-6 pt-5" style={{ borderTop: '1px solid #E4DAC4' }}>
+                  {groupHeading('WHAT THEY CAN OPEN')}
+                  {orgIsOwner ? (
+                    <p className="text-sm" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty', lineHeight: 1.55 }}>
+                      The owner opens every page and can do everything, including handing ownership
+                      on. That is enforced by is_conference_owner() in the database and is not a
+                      bundle anyone can pick from a menu.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm mb-3" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty', lineHeight: 1.55 }}>
+                        {bundleLabel(bundle)} — {BUNDLES.find(b => b.id === bundle)?.summary}
+                        {editable ? ' Change the bundle from the chip on their card.' : ''}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {ORGANIZER_SECTIONS.map(s => {
+                          const on = perms[s.key] === true;
+                          const interactive = editable && bundle === 'custom';
+                          const Icon = s.icon;
+                          return (
+                            <button
+                              key={s.key}
+                              type="button"
+                              onClick={interactive ? () => toggleOrgPermission(org.id, s.key) : undefined}
+                              disabled={!interactive}
+                              title={`${s.label} — ${on ? 'can open' : 'cannot open'}. ${s.blurb}`}
+                              aria-pressed={on}
+                              aria-label={`${s.label}: ${on ? 'granted' : 'not granted'}`}
+                              className="flex items-center gap-1.5 focus:outline-none"
+                              style={{
+                                minHeight: 40, padding: '9px 12px', borderRadius: 999, fontFamily: OUTFIT,
+                                fontSize: 12, fontWeight: 700,
+                                color: on ? '#1B3828' : NEU.inkSoft,
+                                backgroundColor: on ? 'rgba(27,56,40,0.10)' : 'transparent',
+                                border: on ? '1.5px solid rgba(27,56,40,0.30)' : '1.5px dashed #D8CDB6',
+                                opacity: on ? 1 : 0.75,
+                                cursor: interactive ? 'pointer' : 'default',
+                                transitionProperty: 'background-color, border-color, color, opacity, scale',
+                                transitionDuration: '140ms', transitionTimingFunction: EASE,
+                              }}
+                              onMouseDown={interactive ? (e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; } : undefined}
+                              onMouseUp={interactive ? (e) => { (e.currentTarget as HTMLElement).style.scale = '1'; } : undefined}
+                              onMouseLeave={interactive ? (e) => { (e.currentTarget as HTMLElement).style.scale = '1'; } : undefined}
+                            >
+                              <Icon size={14} strokeWidth={2.2} />
+                              {s.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {!editable && (
+                        <p className="text-xs mt-3" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>
+                          Only a team manager can change these.
+                        </p>
+                      )}
+                      {editable && bundle !== 'custom' && (
+                        <p className="text-xs mt-3" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>
+                          A bundle grants every page. Move them to Custom to pick pages individually.
+                        </p>
+                      )}
+
+                      {/* The one capability with a read/write distinction. */}
+                      {perms.financials === true && (
+                        <button
+                          type="button"
+                          onClick={editable ? () => toggleFinancialsReadOnly(org.id) : undefined}
+                          disabled={!editable}
+                          title={readOnlyMoney
+                            ? 'Financials are read-only for this member: they see fees, invoices and payouts but cannot change them. Enforced in the database.'
+                            : 'This member can change financial details. Click to make financials read-only for them.'}
+                          aria-pressed={readOnlyMoney}
+                          className="flex items-center gap-1.5 mt-3 focus:outline-none"
+                          style={{
+                            minHeight: 40, padding: '9px 12px', borderRadius: 999, fontFamily: OUTFIT,
+                            fontSize: 12, fontWeight: 700,
+                            color: readOnlyMoney ? '#7A5A10' : NEU.inkSoft,
+                            backgroundColor: readOnlyMoney ? 'rgba(182,135,31,0.14)' : 'transparent',
+                            border: readOnlyMoney ? '1.5px solid rgba(182,135,31,0.42)' : '1.5px dashed #D8CDB6',
+                            cursor: editable ? 'pointer' : 'default',
+                            transitionProperty: 'background-color, border-color, color, scale',
+                            transitionDuration: '140ms', transitionTimingFunction: EASE,
+                          }}
+                          onMouseDown={editable ? (e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; } : undefined}
+                          onMouseUp={editable ? (e) => { (e.currentTarget as HTMLElement).style.scale = '1'; } : undefined}
+                          onMouseLeave={editable ? (e) => { (e.currentTarget as HTMLElement).style.scale = '1'; } : undefined}
+                        >
+                          <Lock size={13} strokeWidth={2.2} />
+                          {readOnlyMoney ? 'Money read-only' : 'Can change money'}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* ── Remove ──────────────────────────────────────────────── */}
+                {canManageTeam && !orgIsOwner && (
+                  <div className="mt-6 pt-5" style={{ borderTop: '1px solid #E4DAC4' }}>
+                    <button
+                      onClick={() => { close(); handleRemoveOrganizer(org.id); }}
+                      className="flex items-center justify-center gap-2 w-full focus:outline-none"
+                      style={{
+                        minHeight: 44, borderRadius: 14, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
+                        letterSpacing: '0.04em', color: '#8B2020', background: 'transparent',
+                        border: '1.5px solid rgba(139,32,32,0.30)', cursor: 'pointer',
+                        transitionProperty: 'background-color, scale', transitionDuration: '140ms',
+                        transitionTimingFunction: EASE,
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
+                      onMouseLeave={(e) => { const t = e.currentTarget as HTMLElement; t.style.backgroundColor = 'transparent'; t.style.scale = '1'; }}
+                      onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; }}
+                      onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
+                    >
+                      <Trash2 size={14} strokeWidth={2.3} />
+                      REMOVE FROM TEAM
+                    </button>
+                  </div>
+                )}
+
+                {organizersError && (
+                  <p
+                    role="alert"
+                    className="text-xs mt-4 rounded-lg px-3 py-2"
+                    style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.22)', fontFamily: OUTFIT }}
+                  >
+                    {organizersError}
+                  </p>
+                )}
+              </div>
+            </div>
+          </Portal>
+        );
+      })()}
+
       {confirmModal}
     </div>
   );
