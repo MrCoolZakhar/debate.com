@@ -20,20 +20,6 @@ export async function GET(request: NextRequest) {
   const otpType = searchParams.get('type') as EmailOtpType | null;
   const next = safeNext(searchParams.get('next'));
 
-  // Supabase can redirect straight to the callback with an error (e.g. an
-  // expired or already-consumed link) instead of a usable code. Forward the
-  // reason to the explanation screen rather than silently bouncing.
-  const providerError = searchParams.get('error');
-  const providerErrorCode = searchParams.get('error_code');
-  if (providerError) {
-    const reason = providerErrorCode === 'otp_expired' || providerError === 'access_denied'
-      ? 'expired'
-      : 'invalid';
-    return NextResponse.redirect(
-      `${origin}/auth/error?reason=${reason}&next=${encodeURIComponent(next)}`,
-    );
-  }
-
   const cookieStore = await cookies();
   const supabase = createServerClient(
     'https://luruhkwrgisytejswlas.supabase.co',
@@ -49,6 +35,50 @@ export async function GET(request: NextRequest) {
       },
     }
   );
+
+  const userAgent = request.headers.get('user-agent');
+
+  /**
+   * Fire-and-forget instrumentation. Never let a logging failure break a
+   * sign-in: every call is wrapped and the result discarded. Only
+   * error.message is ever passed as error text, never a raw URL, because a
+   * callback URL carries a live token.
+   */
+  async function logFailure(
+    stage: string,
+    opts: { errorText?: string | null; shownReason?: string | null; hadSession?: boolean } = {},
+  ): Promise<void> {
+    try {
+      await supabase.rpc('log_auth_flow_failure', {
+        p_stage: stage,
+        p_error_text: opts.errorText ?? null,
+        p_shown_reason: opts.shownReason ?? null,
+        p_had_session: opts.hadSession ?? false,
+        p_next_path: next,
+        p_user_agent: userAgent,
+      });
+    } catch {
+      // Instrumentation must never break auth.
+    }
+  }
+
+  // Supabase can redirect straight to the callback with an error (e.g. an
+  // expired or already-consumed link) instead of a usable code. Forward the
+  // reason to the explanation screen rather than silently bouncing.
+  const providerError = searchParams.get('error');
+  const providerErrorCode = searchParams.get('error_code');
+  if (providerError) {
+    const reason = providerErrorCode === 'otp_expired' || providerError === 'access_denied'
+      ? 'expired'
+      : 'invalid';
+    await logFailure('provider', {
+      errorText: providerErrorCode ? `${providerError}:${providerErrorCode}` : providerError,
+      shownReason: reason,
+    });
+    return NextResponse.redirect(
+      `${origin}/auth/error?reason=${reason}&next=${encodeURIComponent(next)}`,
+    );
+  }
 
   /**
    * Where a now-authenticated user should land.
@@ -88,8 +118,27 @@ export async function GET(request: NextRequest) {
     if (!error && data.user) {
       return NextResponse.redirect(await destinationFor(data.user.id));
     }
+
+    // Same reasoning as the code branch below: this route gets hit twice for a
+    // single confirmation more often than you would think (mail scanner
+    // prefetch, a duplicated navigation, two Vercel instances racing). The
+    // first hit consumes the one-time token and mints the session; the second
+    // finds it gone. Ask whether we already have a session before showing an
+    // error, because an error screen shown to an authenticated user sends them
+    // backwards.
+    const { data: existing } = await supabase.auth.getUser();
+    if (existing.user) {
+      await logFailure('otp', {
+        errorText: error?.message ?? null,
+        shownReason: 'recovered',
+        hadSession: true,
+      });
+      return NextResponse.redirect(await destinationFor(existing.user.id));
+    }
+
     const msg = (error?.message || '').toLowerCase();
     const reason = msg.includes('expire') ? 'expired' : 'invalid';
+    await logFailure('otp', { errorText: error?.message ?? null, shownReason: reason });
     return NextResponse.redirect(
       `${origin}/auth/error?reason=${reason}&next=${encodeURIComponent(next)}`,
     );
@@ -115,16 +164,23 @@ export async function GET(request: NextRequest) {
     // So: before blaming the link, ask whether we already have a session.
     const { data: existing } = await supabase.auth.getUser();
     if (existing.user) {
+      await logFailure('exchange', {
+        errorText: error?.message ?? null,
+        shownReason: 'recovered',
+        hadSession: true,
+      });
       return NextResponse.redirect(await destinationFor(existing.user.id));
     }
 
     const msg = (error?.message || '').toLowerCase();
     const reason = msg.includes('expire') ? 'expired' : 'invalid';
+    await logFailure('exchange', { errorText: error?.message ?? null, shownReason: reason });
     return NextResponse.redirect(
       `${origin}/auth/error?reason=${reason}&next=${encodeURIComponent(next)}`,
     );
   }
 
   // No code and no error param — nothing to exchange.
+  await logFailure('missing', { shownReason: 'missing' });
   return NextResponse.redirect(`${origin}/auth/error?reason=missing&next=${encodeURIComponent(next)}`);
 }
