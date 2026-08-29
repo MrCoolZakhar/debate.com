@@ -10,18 +10,17 @@ import Loader from '@/components/Loader';
 import {
   AuthLayout,
   CardHeading,
-  CheckEmailScreen,
-  CheckMark,
+  CodeVerifyScreen,
   ErrorBanner,
   FieldLabel,
   GoogleButton,
-  NoticeScreen,
   OrDivider,
   OUTFIT,
   PasswordField,
-  PrimaryActionButton,
   PrimaryButton,
   TextField,
+  VerifiedScreen,
+  destinationAfterVerify,
   isValidEmail,
   safeNext,
   withNext,
@@ -135,7 +134,7 @@ function SignUpInner() {
     setContinuing(true);
     const { data } = await supabase.auth.getSession();
     if (data.session) {
-      router.push(next);
+      router.push(await destinationAfterVerify(supabase, next));
     } else {
       // Verified but the session didn't stick to this tab — send them to sign
       // in rather than a dead end.
@@ -232,26 +231,18 @@ function SignUpInner() {
       sub="Create an account to attend conferences, build your MUN CV, and run committees of your own."
     >
       {phase === 'verified' ? (
-        <NoticeScreen
-          icon={<CheckMark size={26} />}
-          title="You're verified. Happy Gavelling!"
-          action={
-            <PrimaryActionButton loading={continuing} loadingText="TAKING YOU IN…" onClick={handleContinue}>
-              CONTINUE
-            </PrimaryActionButton>
-          }
-        >
-          Your email is confirmed and your account is ready. Let&apos;s finish setting things up.
-        </NoticeScreen>
+        <VerifiedScreen onContinue={handleContinue} busy={continuing} />
       ) : phase === 'awaiting' ? (
-        <CheckEmailScreen
+        <CodeVerifyScreen
           email={email}
-          intro={
-            <>
-              We&apos;ve sent a confirmation link to your inbox. Open it and click{' '}
-              <strong style={{ color: '#1C1410' }}>ACTIVATE MY ACCOUNT</strong> to finish creating your account. This page will update automatically once you do.
-            </>
-          }
+          startCooldown
+          intro="We sent a 6-digit code to"
+          onVerify={async (token) => {
+            const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+            if (error) return 'That code is not right, or it has expired. Request a new one below.';
+            setPhase('verified');
+            return null;
+          }}
           onResend={resendSignupEmail}
           footer={
             <button
@@ -286,7 +277,7 @@ function SignUpInner() {
                 fontFamily: OUTFIT,
               }}
             >
-              Create your account to continue your application — we&apos;ll take you straight back to it.
+              Create your account to continue your application and we&apos;ll take you straight back to it.
             </div>
           )}
           <GoogleButton label="SIGN UP WITH GOOGLE" onClick={handleGoogleSignUp} disabled={oauthLoading} />

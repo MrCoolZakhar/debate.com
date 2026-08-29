@@ -16,6 +16,8 @@ import {
   PasswordField,
   PrimaryButton,
   TextField,
+  VerifiedScreen,
+  destinationAfterVerify,
   safeNext,
   withNext,
 } from '../authUi';
@@ -36,6 +38,8 @@ function SignInInner() {
   // code_verifier cookie, which is what produced bad_code_verifier failures.
   const [oauthLoading, setOauthLoading] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
+  const [verified, setVerified] = useState(false);
+  const [continuing, setContinuing] = useState(false);
 
   const supabase = useMemo(() => createAuthClient(), []);
 
@@ -56,27 +60,9 @@ function SignInInner() {
     }
   }
 
-  // Verifying inline with verifyOtp skips /auth/callback, and with it the
-  // onboarding gate that lives there. The signup wizard never collects
-  // education_level, so without this a rescued account would land in the app
-  // with no education level and no MUN CV. Mirrors destinationFor() in
-  // src/app/auth/callback/route.ts.
-  async function goAfterVerify() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push(`/auth/signin?next=${encodeURIComponent(next)}&verified=1`);
-      return;
-    }
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('education_level')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (!profile || profile.education_level == null) {
-      router.push(next === '/auth/onboarding' ? '/auth/onboarding' : `/auth/onboarding?next=${encodeURIComponent(next)}`);
-      return;
-    }
-    router.push(next);
+  async function handleContinue() {
+    setContinuing(true);
+    router.push(await destinationAfterVerify(supabase, next));
   }
 
   function resendSignupCode(): Promise<string | null> {
@@ -104,9 +90,12 @@ function SignInInner() {
         code === 'email_not_confirmed' ||
         error.message.toLowerCase().includes('not confirmed');
       if (unconfirmed) {
-        await resendSignupCode();
+        // A rate-limited or failed send must be said out loud, or the user sits
+        // on a code screen waiting for a code that was never sent.
+        const resendError = await resendSignupCode();
         setLoading(false);
         setUnconfirmedEmail(email);
+        if (resendError) setError(resendError);
         return;
       }
       setLoading(false);
@@ -122,29 +111,34 @@ function SignInInner() {
       headline="Where the gavel falls."
       sub="Sign in to run committees, track your MUN history, and manage conferences."
     >
-      {unconfirmedEmail ? (
-        <CodeVerifyScreen
-          email={unconfirmedEmail}
-          startCooldown
-          intro="Your email is not confirmed yet. We sent a 6-digit code to"
-          onVerify={async (token) => {
-            const { error } = await supabase.auth.verifyOtp({ email: unconfirmedEmail, token, type: 'signup' });
-            if (error) return 'That code is not right, or it has expired. Request a new one below.';
-            await goAfterVerify();
-            return null;
-          }}
-          onResend={resendSignupCode}
-          footer={
-            <button
-              type="button"
-              onClick={() => setUnconfirmedEmail(null)}
-              className="text-sm font-semibold transition-colors"
-              style={{ color: '#9A8A78', fontFamily: OUTFIT }}
-            >
-              Back to sign in
-            </button>
-          }
-        />
+      {verified ? (
+        <VerifiedScreen onContinue={handleContinue} busy={continuing} />
+      ) : unconfirmedEmail ? (
+        <>
+          {error && <ErrorBanner>{error}</ErrorBanner>}
+          <CodeVerifyScreen
+            email={unconfirmedEmail}
+            startCooldown
+            intro="Your email is not confirmed yet. We sent a 6-digit code to"
+            onVerify={async (token) => {
+              const { error } = await supabase.auth.verifyOtp({ email: unconfirmedEmail, token, type: 'signup' });
+              if (error) return 'That code is not right, or it has expired. Request a new one below.';
+              setVerified(true);
+              return null;
+            }}
+            onResend={resendSignupCode}
+            footer={
+              <button
+                type="button"
+                onClick={() => setUnconfirmedEmail(null)}
+                className="text-sm font-semibold transition-colors"
+                style={{ color: '#9A8A78', fontFamily: OUTFIT }}
+              >
+                Back to sign in
+              </button>
+            }
+          />
+        </>
       ) : (
         <>
           <CardHeading
@@ -192,7 +186,7 @@ function SignInInner() {
                 fontFamily: OUTFIT,
               }}
             >
-              Sign in to continue your application — we&apos;ll take you straight back to it.
+              Sign in to continue your application and we&apos;ll take you straight back to it.
             </div>
           )}
 
@@ -240,6 +234,13 @@ function SignInInner() {
             Don&apos;t have an account?{' '}
             <Link href={withNext('/auth/signup', searchParams)} className="font-semibold transition-colors" style={{ color: '#1B3828' }}>
               Sign up
+            </Link>
+          </p>
+
+          <p className="text-xs text-center mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+            Never got your confirmation code?{' '}
+            <Link href={withNext('/auth/confirm', searchParams)} className="font-semibold" style={{ color: '#1B3828' }}>
+              Confirm your email
             </Link>
           </p>
 
