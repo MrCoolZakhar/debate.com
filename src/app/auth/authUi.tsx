@@ -12,7 +12,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Globe2, CalendarCheck, MailCheck, RotateCw, Sparkles, Star } from 'lucide-react';
+import { ArrowLeft, Globe2, CalendarCheck, KeyRound, MailCheck, RotateCw, Sparkles, Star } from 'lucide-react';
 import DecorativeBleed from '@/components/DecorativeBleed';
 
 export const OUTFIT = "'Outfit', sans-serif";
@@ -763,6 +763,150 @@ export function CheckEmailScreen({
           {busy ? 'SENDING…' : active ? `RESEND EMAIL (${remaining}s)` : 'RESEND EMAIL'}
         </span>
       </SecondaryButton>
+
+      {/* Live region so screen readers hear the countdown / ready state. */}
+      <p aria-live="polite" className="text-xs mt-2" style={{ color: '#B6AC98', fontFamily: OUTFIT, minHeight: '1.2em' }}>
+        {active ? `You can resend in ${remaining} second${remaining === 1 ? '' : 's'}.` : 'Didn’t get it? Check spam, or resend.'}
+      </p>
+
+      {footer && <div className="mt-4">{footer}</div>}
+
+      <Toast message={toast} />
+    </div>
+  );
+}
+
+/**
+ * Inline 6-digit code confirmation. Sibling of CheckEmailScreen above, and
+ * deliberately the same centred-notice shape, but the visitor finishes
+ * verifying right here instead of leaving for their inbox and coming back
+ * through /auth/callback. That matters for the rescue path: the person who
+ * lands here already lost the tab that held their original resend button.
+ *
+ * `onVerify` returns an error message to show inline, or null once it has
+ * taken over navigation. `startCooldown` seeds the resend timer for callers
+ * that already sent a code on the way in.
+ */
+export function CodeVerifyScreen({
+  email,
+  intro,
+  onVerify,
+  onResend,
+  footer,
+  startCooldown,
+}: {
+  email: string;
+  intro: React.ReactNode;
+  onVerify: (code: string) => Promise<string | null>;
+  onResend: () => Promise<string | null>;
+  footer?: React.ReactNode;
+  startCooldown?: boolean;
+}) {
+  const { remaining, active, start } = useCooldown(60);
+  const { message: toast, show } = useToast();
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  // Mount only. A caller that already sent a code before rendering this screen
+  // passes startCooldown, otherwise the first thing on offer is a resend the
+  // user can fire a second later against a code that is already in flight.
+  useEffect(() => {
+    if (startCooldown) start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleVerify() {
+    if (busy || code.length !== 6) return;
+    setErr('');
+    setBusy(true);
+    const error = await onVerify(code);
+    setBusy(false);
+    // On null the caller is already navigating away, so leave the screen alone.
+    if (error) setErr(error);
+  }
+
+  async function handleResend() {
+    if (active || busy) return;
+    setErr('');
+    setBusy(true);
+    const error = await onResend();
+    setBusy(false);
+    if (error) {
+      setErr(error);
+      return;
+    }
+    start();
+    show('Sent, check your inbox');
+  }
+
+  return (
+    <div className="text-center">
+      <IconBadge>
+        <KeyRound size={24} color="#1B3828" strokeWidth={2} />
+      </IconBadge>
+      <h1 className="text-xl font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        Confirm your email
+      </h1>
+      <p className="text-sm leading-relaxed mb-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        {intro}
+      </p>
+      <p className="text-sm font-semibold mb-5 break-words" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        {email}
+      </p>
+
+      {err && <div className="mb-4"><ErrorBanner>{err}</ErrorBanner></div>}
+
+      {/* Not TextField: that primitive hardcodes `style={inputStyle}`, and the
+          code entry needs monospace digits on a wide tracking to be readable
+          as six separate characters. */}
+      <div className="text-left mb-4">
+        <FieldLabel>Enter the 6-digit code</FieldLabel>
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleVerify();
+            }
+          }}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          placeholder="000000"
+          onFocus={focusInput}
+          onBlur={blurInput}
+          className="w-full rounded-xl px-4 py-3 transition-colors focus:outline-none"
+          style={{
+            ...inputStyle,
+            fontFamily: "'DM Mono', monospace",
+            fontSize: '20px',
+            letterSpacing: '0.4em',
+            textAlign: 'center',
+            fontWeight: 700,
+          }}
+        />
+      </div>
+
+      {/* An incomplete code holds the button in its disabled styling, but only
+          an in-flight request may claim to be verifying. */}
+      <PrimaryActionButton
+        onClick={handleVerify}
+        loading={busy || code.length !== 6}
+        loadingText={busy ? 'VERIFYING...' : 'VERIFY EMAIL'}
+      >
+        VERIFY EMAIL
+      </PrimaryActionButton>
+
+      <div className="mt-3">
+        <SecondaryButton onClick={handleResend} disabled={active || busy}>
+          <span className="inline-flex items-center justify-center gap-2">
+            <RotateCw size={15} className={busy ? 'animate-spin' : ''} />
+            {busy ? 'SENDING...' : active ? `RESEND CODE (${remaining}s)` : 'RESEND CODE'}
+          </span>
+        </SecondaryButton>
+      </div>
 
       {/* Live region so screen readers hear the countdown / ready state. */}
       <p aria-live="polite" className="text-xs mt-2" style={{ color: '#B6AC98', fontFamily: OUTFIT, minHeight: '1.2em' }}>
