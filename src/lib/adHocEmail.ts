@@ -48,7 +48,7 @@ interface RecipientRow {
   society_id: string | null;
   payment_status: string | null;
   societies: { name: string } | null;
-  assigned_committee: { abbreviation: string | null; name: string } | null;
+  assigned_committee: { abbreviation: string | null; name: string; session_code: string | null } | null;
   assigned_country_name: string | null;
   profiles: (PreferenceRow & { display_name: string; email: string | null }) | null;
   invited_email: string | null;
@@ -155,7 +155,7 @@ export async function queueAdHocEmail(
       .select(`
         id, role, society_id, payment_status,
         societies (name),
-        assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
+        assigned_committee:conference_committees!assigned_committee_id (abbreviation, name, session_code),
         assigned_country_name,
         profiles (display_name, email, notify_email_applications, notify_email_payments, notify_email_documents, notify_email_marketing),
         invited_email, invited_name
@@ -225,6 +225,10 @@ export async function queueAdHocEmail(
       conference_name: conference.full_name,
       conference_dates: formatDateRange(conference.start_date, conference.end_date),
       fee: resolveFeeToken(app.role, roleConfigs, conference),
+      // From the assigned committee — lets an ad-hoc "session codes" email
+      // resolve per delegate. Mirrors the Communications composer's
+      // buildContext, so the preview and the real send agree.
+      session_code: app.assigned_committee?.session_code ?? null,
     };
     return {
       conference_id: conferenceId,

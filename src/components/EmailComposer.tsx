@@ -12,14 +12,14 @@
 // being edited.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, ChevronUp, ChevronDown, Monitor, Smartphone, Send } from 'lucide-react';
+import { Plus, Trash2, ChevronUp, ChevronDown, Monitor, Smartphone, Send, Bold, Italic, Image as ImageIcon } from 'lucide-react';
 import {
   EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS, resolveTokens, splitResolvedText,
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import {
-  type EmailBlock, type ButtonBlock, type ButtonDestination,
-  BUTTON_DESTINATION_LABELS, flattenBlocksToPlainText,
+  type EmailBlock, type ButtonBlock, type ButtonDestination, type ImageBlock, type ParagraphVariant,
+  BUTTON_DESTINATION_LABELS, flattenBlocksToPlainText, parseInlineMarks,
 } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference } from '@/lib/emailHtml';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -107,30 +107,112 @@ function createPillNode(tokenKey: string): HTMLSpanElement {
   return span;
 }
 
-function buildParagraphDom(container: HTMLElement, content: string) {
-  container.innerHTML = '';
+/** Appends text to `parent`, turning each {{token}} into a pill node. */
+function appendContentWithPills(parent: HTMLElement, content: string) {
   const re = /\{\{(\w+)\}\}/g;
   let lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content))) {
-    if (m.index > lastIndex) container.appendChild(document.createTextNode(content.slice(lastIndex, m.index)));
-    container.appendChild(createPillNode(m[1]));
+    if (m.index > lastIndex) parent.appendChild(document.createTextNode(content.slice(lastIndex, m.index)));
+    parent.appendChild(createPillNode(m[1]));
     lastIndex = m.index + m[0].length;
   }
-  if (lastIndex < content.length) container.appendChild(document.createTextNode(content.slice(lastIndex)));
+  if (lastIndex < content.length) parent.appendChild(document.createTextNode(content.slice(lastIndex)));
 }
 
-function serializeParagraphDom(el: HTMLElement): string {
+/** Rebuilds the editable DOM from stored text: bold (`**`) and italic (`*`)
+ *  marks become <strong>/<em> wrappers (same parser as the renderer, so the
+ *  editor and the sent email always agree on what is a mark), and token
+ *  placeholders become pills. */
+function buildParagraphDom(container: HTMLElement, content: string) {
+  container.innerHTML = '';
+  for (const run of parseInlineMarks(content)) {
+    if (!run.text) continue;
+    let target: HTMLElement = container;
+    if (run.bold) {
+      const strong = document.createElement('strong');
+      container.appendChild(strong);
+      target = strong;
+    }
+    if (run.italic) {
+      const em = document.createElement('em');
+      target.appendChild(em);
+      target = em;
+    }
+    appendContentWithPills(target, run.text);
+  }
+}
+
+/** Collapses adjacent runs that carry identical marks (parseInlineMarks
+ *  output is already merged; this normalizes derived run lists the same way
+ *  so they can be compared). */
+function mergeRuns(runs: { text: string; bold: boolean; italic: boolean }[]): { text: string; bold: boolean; italic: boolean }[] {
+  const out: { text: string; bold: boolean; italic: boolean }[] = [];
+  for (const r of runs) {
+    if (!r.text) continue;
+    const prev = out[out.length - 1];
+    if (prev && prev.bold === r.bold && prev.italic === r.italic) prev.text += r.text;
+    else out.push({ ...r });
+  }
+  return out;
+}
+
+/** Serializes one element's children back to stored text, emitting `**`/`*`
+ *  delimiters for bold/italic context introduced by this subtree. `bold` /
+ *  `italic` say the surrounding context already carries the mark (so it is
+ *  not re-emitted for nested duplicates execCommand can produce). */
+function serializeChildren(el: Node, bold: boolean, italic: boolean): string {
   let out = '';
   el.childNodes.forEach(node => {
     if (node.nodeType === Node.TEXT_NODE) {
       out += node.textContent ?? '';
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const token = (node as HTMLElement).dataset.token;
-      out += token ? `{{${token}}}` : ((node as HTMLElement).textContent ?? '');
+      return;
     }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const elem = node as HTMLElement;
+    const token = elem.dataset.token;
+    if (token) {
+      out += `{{${token}}}`;
+      return;
+    }
+    if (elem.tagName === 'BR') {
+      out += '\n';
+      return;
+    }
+    // execCommand emits <b>/<i> (styleWithCSS off), but some engines fall
+    // back to styled spans mid-toggle — accept both spellings of each mark.
+    const weight = elem.style.fontWeight;
+    const addBold = !bold && (elem.tagName === 'B' || elem.tagName === 'STRONG' || weight === 'bold' || parseInt(weight, 10) >= 600);
+    const addItalic = !italic && (elem.tagName === 'I' || elem.tagName === 'EM' || elem.style.fontStyle === 'italic');
+    let inner = serializeChildren(elem, bold || addBold, italic || addItalic);
+    if ((addBold || addItalic) && inner.trim()) {
+      // Delimiters hug the text: whitespace moves outside them, because a
+      // delimiter touching a space is (deliberately) not a valid mark.
+      const lead = /^\s*/.exec(inner)![0];
+      const trail = /\s*$/.exec(inner.slice(lead.length))![0];
+      const core = inner.slice(lead.length, inner.length - trail.length);
+      let wrapped = core;
+      if (addItalic) wrapped = `*${wrapped}*`;
+      if (addBold) wrapped = `**${wrapped}**`;
+      // Prove the wrap round-trips before keeping it: reparsing the wrapped
+      // text must yield exactly the core's runs with this element's marks
+      // added (nested marks like <b><i>x</i></b> → ***x*** pass this; a
+      // literal asterisk at the core's edge would fuse into an ambiguous
+      // delimiter run and fails it). On failure the text is emitted unmarked
+      // — dropping the styling for that edge case rather than corrupting it.
+      const intended = mergeRuns(parseInlineMarks(core).map(r => ({ text: r.text, bold: r.bold || addBold, italic: r.italic || addItalic })));
+      const actual = parseInlineMarks(wrapped);
+      const same = actual.length === intended.length
+        && actual.every((r, i) => r.text === intended[i].text && r.bold === intended[i].bold && r.italic === intended[i].italic);
+      if (same) inner = lead + wrapped + trail;
+    }
+    out += inner;
   });
   return out;
+}
+
+function serializeParagraphDom(el: HTMLElement): string {
+  return serializeChildren(el, false, false);
 }
 
 function insertTextAtRange(range: Range, text: string) {
@@ -201,42 +283,58 @@ function BlockShell({
   );
 }
 
-function AddRow({ onAdd }: { onAdd: (type: 'paragraph' | 'button') => void }) {
+function AddRow({ onAdd }: { onAdd: (type: 'paragraph' | 'button' | 'image') => void }) {
+  const items: { type: 'paragraph' | 'button' | 'image'; label: string }[] = [
+    { type: 'paragraph', label: 'PARAGRAPH' },
+    { type: 'button', label: 'BUTTON' },
+    { type: 'image', label: 'IMAGE' },
+  ];
   return (
     <div className="flex items-center gap-2 my-1.5">
       <div style={{ flex: 1, height: 1, backgroundColor: '#F0EDE6' }} />
-      <button type="button" onClick={() => onAdd('paragraph')}
-        className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold focus:outline-none transition-colors"
-        style={{ border: `1px solid ${BORDER}`, color: INK, backgroundColor: 'transparent', fontFamily: OUTFIT }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-      >
-        <Plus size={12} /> PARAGRAPH
-      </button>
-      <button type="button" onClick={() => onAdd('button')}
-        className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold focus:outline-none transition-colors"
-        style={{ border: `1px solid ${BORDER}`, color: INK, backgroundColor: 'transparent', fontFamily: OUTFIT }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-      >
-        <Plus size={12} /> BUTTON
-      </button>
+      {items.map(item => (
+        <button key={item.type} type="button" onClick={() => onAdd(item.type)}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold focus:outline-none transition-colors"
+          style={{ border: `1px solid ${BORDER}`, color: INK, backgroundColor: 'transparent', fontFamily: OUTFIT }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+        >
+          <Plus size={12} /> {item.label}
+        </button>
+      ))}
       <div style={{ flex: 1, height: 1, backgroundColor: '#F0EDE6' }} />
     </div>
   );
 }
 
+const VARIANT_OPTIONS: { value: ParagraphVariant; label: string }[] = [
+  { value: 'heading', label: 'Heading' },
+  { value: 'body', label: 'Body' },
+  { value: 'small', label: 'Small' },
+];
+
+/** Editor-side look for each size preset (mirrors the renderer's fixed sizes;
+ *  free-form font size is deliberately not offered — see ParagraphVariant). */
+const VARIANT_EDITOR_STYLE: Record<ParagraphVariant, React.CSSProperties> = {
+  heading: { fontSize: 19, fontWeight: 700, lineHeight: 1.35 },
+  body: { fontSize: 14, lineHeight: 1.6 },
+  small: { fontSize: 12.5, lineHeight: 1.6, color: '#9A8A78' },
+};
+
 function ParagraphEditor({
-  blockId, initialContent, registerRef, onFocusBlock, onContentChange,
+  blockId, initialContent, variant, registerRef, onFocusBlock, onContentChange, onVariantChange,
 }: {
   blockId: string;
   initialContent: string;
+  variant: ParagraphVariant;
   registerRef: (id: string, el: HTMLDivElement | null) => void;
   onFocusBlock: (id: string) => void;
   onContentChange: (id: string, content: string) => void;
+  onVariantChange: (id: string, variant: ParagraphVariant) => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mounted = useRef(initialContent);
+  const [fmt, setFmt] = useState({ bold: false, italic: false });
 
   useEffect(() => {
     if (ref.current) buildParagraphDom(ref.current, mounted.current);
@@ -247,7 +345,37 @@ function ParagraphEditor({
     onContentChange(blockId, serializeParagraphDom(ref.current));
   }
 
+  function refreshFormatState() {
+    try {
+      setFmt({ bold: document.queryCommandState('bold'), italic: document.queryCommandState('italic') });
+    } catch {
+      /* queryCommandState can throw on detached selections — keep last state */
+    }
+  }
+
+  // Marks are applied through execCommand so the browser handles splitting
+  // text nodes, toggling, and native undo. Token pills are contenteditable=false
+  // atoms: a selection can cover a whole pill (serialized as **{{token}}**,
+  // which is valid) but never part of one, so no selection can corrupt a pill.
+  function applyMark(cmd: 'bold' | 'italic') {
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    try { document.execCommand('styleWithCSS', false, 'false'); } catch { /* unsupported — <b>/<i> default is fine */ }
+    document.execCommand(cmd);
+    handleInput();
+    refreshFormatState();
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'b' || k === 'i') {
+        e.preventDefault();
+        applyMark(k === 'b' ? 'bold' : 'italic');
+        return;
+      }
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       const sel = window.getSelection();
@@ -270,21 +398,67 @@ function ParagraphEditor({
 
   return (
     <>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            title="Bold (Ctrl/Cmd+B)"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => applyMark('bold')}
+            className="rounded-md p-1 focus:outline-none"
+            style={{ border: `1px solid ${BORDER}`, backgroundColor: fmt.bold ? 'rgba(27,56,40,0.12)' : 'transparent' }}
+          >
+            <Bold size={12} style={{ color: INK }} />
+          </button>
+          <button
+            type="button"
+            title="Italic (Ctrl/Cmd+I)"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => applyMark('italic')}
+            className="rounded-md p-1 focus:outline-none"
+            style={{ border: `1px solid ${BORDER}`, backgroundColor: fmt.italic ? 'rgba(27,56,40,0.12)' : 'transparent' }}
+          >
+            <Italic size={12} style={{ color: INK }} />
+          </button>
+        </div>
+        <div className="flex items-center gap-0.5 rounded-lg p-0.5" style={{ border: `1px solid ${BORDER}` }}>
+          {VARIANT_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => onVariantChange(blockId, opt.value)}
+              className="rounded-md px-1.5 py-0.5 text-[10px] font-bold focus:outline-none"
+              style={{
+                backgroundColor: variant === opt.value ? FOREST : 'transparent',
+                color: variant === opt.value ? GOLD : INK,
+                fontFamily: OUTFIT,
+              }}
+            >
+              {opt.label.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
       <div
         ref={el => { ref.current = el; registerRef(blockId, el); }}
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
-        onFocus={() => onFocusBlock(blockId)}
+        onFocus={() => { onFocusBlock(blockId); refreshFormatState(); }}
         onKeyDown={handleKeyDown}
+        onKeyUp={refreshFormatState}
+        onSelect={refreshFormatState}
+        onMouseUp={refreshFormatState}
         onPaste={handlePaste}
         data-placeholder="Write your message here..."
         className="paragraph-editor"
         style={{
           width: '100%', minHeight: 90, padding: '12px 14px', borderRadius: 12,
           border: `1px solid ${BORDER}`, backgroundColor: CREAM, color: INK,
-          fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+          fontFamily: OUTFIT, whiteSpace: 'pre-wrap',
           outline: 'none', cursor: 'text',
+          ...VARIANT_EDITOR_STYLE[variant],
         }}
       />
       <style jsx>{`
@@ -294,6 +468,117 @@ function ParagraphEditor({
         }
       `}</style>
     </>
+  );
+}
+
+// ── Image block editor ───────────────────────────────────────────────────────
+// Upload pattern mirrors uploadBroadcastImage (manage/[slug]/live/
+// BroadcastComposer.tsx): the public conference-assets bucket, the bucket's
+// own allowed_mime_types and 5MB limit enforced client-side for readable
+// errors, a Date.now() path so upsert isn't needed, then getPublicUrl.
+
+const EMAIL_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+function ImageBlockEditor({
+  block, conferenceId, accessToken, onPatch,
+}: {
+  block: ImageBlock;
+  conferenceId: string;
+  accessToken: string | null;
+  onPatch: (patch: Partial<ImageBlock>) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleFile(file: File) {
+    if (!EMAIL_IMAGE_TYPES.includes(file.type)) {
+      setUploadError('Attach a JPEG, PNG, WebP or GIF.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Image must be under 5MB.');
+      return;
+    }
+    if (!accessToken) {
+      setUploadError('Your session has expired — refresh the page and try again.');
+      return;
+    }
+    setUploading(true);
+    setUploadError(null);
+    const supabase = getAuthedClient(accessToken);
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const path = `email-images/${conferenceId}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage
+      .from('conference-assets')
+      .upload(path, file, { contentType: file.type, upsert: false });
+    setUploading(false);
+    if (error) {
+      setUploadError("Couldn't upload the image: " + error.message);
+      return;
+    }
+    const { data } = supabase.storage.from('conference-assets').getPublicUrl(path);
+    onPatch({ url: data.publicUrl });
+  }
+
+  return (
+    <div className="rounded-xl p-4" style={{ border: `1px solid ${BORDER}`, backgroundColor: CREAM }}>
+      <input
+        ref={fileRef}
+        type="file"
+        accept={EMAIL_IMAGE_TYPES.join(',')}
+        className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+          e.target.value = '';
+        }}
+      />
+      {block.url ? (
+        <div className="flex justify-center mb-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={block.url}
+            alt={block.alt || 'Email image'}
+            style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 8, display: 'block' }}
+          />
+        </div>
+      ) : (
+        <div
+          className="flex items-center justify-center rounded-lg mb-3"
+          style={{ height: 120, border: `1px dashed ${BORDER}`, color: '#9A8A78' }}
+        >
+          <ImageIcon size={26} />
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="w-full rounded-lg px-3 py-2 text-xs font-bold focus:outline-none transition-colors disabled:opacity-55"
+          style={{ border: `1px solid ${BORDER}`, color: INK, backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
+        >
+          {uploading ? 'UPLOADING...' : block.url ? 'REPLACE IMAGE' : 'UPLOAD IMAGE'}
+        </button>
+        {uploadError && (
+          <p className="text-xs font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{uploadError}</p>
+        )}
+        <input
+          value={block.alt}
+          onChange={e => onPatch({ alt: e.target.value })}
+          placeholder="Describe the image (alt text)"
+          className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+          style={{ border: `1px solid ${block.url && !block.alt.trim() ? 'rgba(182,135,31,0.5)' : BORDER}`, color: INK, backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
+        />
+        {block.url && !block.alt.trim() && (
+          // Nudge only — alt is send-quality, not a hard gate.
+          <p className="text-xs" style={{ color: '#B6871F', fontFamily: OUTFIT }}>
+            Add a short description so the image still reads in text-only mail clients and screen readers.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -357,7 +642,10 @@ export default function EmailComposer({
   const [subject, setSubject] = useState(initialSubject);
   const [blocks, setBlocks] = useState<LocalBlock[]>(() => withIds(initialBlocks));
   const [activeTarget, setActiveTarget] = useState<string>('subject');
-  const [previewing, setPreviewing] = useState(false);
+  // The live preview sits beside the editor from lg up — no mode toggle. On
+  // narrower screens it collapses behind this toggle instead of eating the
+  // editor's width.
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [previewWidth, setPreviewWidth] = useState<'desktop' | 'mobile'>('desktop');
   const [previewSearch, setPreviewSearch] = useState('');
   const [previewId, setPreviewId] = useState<string | null>(null);
@@ -392,11 +680,29 @@ export default function EmailComposer({
     setBlocks(bs => bs.map(b => (b._id === id && b.type === 'button' ? { ...b, ...patch } : b)));
   }
 
-  function addBlock(type: 'paragraph' | 'button', afterIndex: number) {
+  function updateImageBlock(id: string, patch: Partial<ImageBlock>) {
+    setBlocks(bs => bs.map(b => (b._id === id && b.type === 'image' ? { ...b, ...patch } : b)));
+  }
+
+  function updateParagraphVariant(id: string, variant: ParagraphVariant) {
+    // 'body' is stored as an absent variant so an untouched (or reverted)
+    // paragraph keeps the exact stored shape older rows have.
+    setBlocks(bs => bs.map(b => {
+      if (b._id !== id || b.type !== 'paragraph') return b;
+      const next = { ...b };
+      if (variant === 'body') delete next.variant;
+      else next.variant = variant;
+      return next;
+    }));
+  }
+
+  function addBlock(type: 'paragraph' | 'button' | 'image', afterIndex: number) {
     const newBlock: LocalBlock =
       type === 'paragraph'
         ? { type: 'paragraph', content: '', _id: genId() }
-        : { type: 'button', label: '', destination: 'conference_page', _id: genId() };
+        : type === 'image'
+          ? { type: 'image', url: '', alt: '', _id: genId() }
+          : { type: 'button', label: '', destination: 'conference_page', _id: genId() };
     setBlocks(bs => {
       const next = [...bs];
       next.splice(afterIndex + 1, 0, newBlock);
@@ -490,13 +796,26 @@ export default function EmailComposer({
 
   const previewCandidate = previewId ? previewCandidates.find(c => c.id === previewId) ?? null : null;
 
+  // The preview is always live now, so re-rendering the iframe srcDoc on
+  // every keystroke would flash it white each time. A short debounce keeps
+  // it feeling instant without the churn.
+  const [debouncedBlocks, setDebouncedBlocks] = useState<LocalBlock[]>(blocks);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedBlocks(blocks), 250);
+    return () => clearTimeout(t);
+  }, [blocks]);
+
   const previewHtml = useMemo(
-    () => renderEmailHtml({ blocks: stripIds(blocks), conference, ctx: previewCandidate?.ctx ?? {} }),
-    [blocks, conference, previewCandidate]
+    () => renderEmailHtml({ blocks: stripIds(debouncedBlocks), conference, ctx: previewCandidate?.ctx ?? {} }),
+    [debouncedBlocks, conference, previewCandidate]
   );
 
   return (
-    <div>
+    // Write | check, side by side from lg up. Below lg the preview collapses
+    // behind a toggle (see previewOpen) so the editor keeps its full width.
+    <div className="lg:grid lg:items-start lg:gap-6" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(360px,440px)' }}>
+      {/* ── Write ── */}
+      <div className="min-w-0">
       {/* Composer-level actions */}
       <div className="flex items-center justify-end gap-3 mb-3">
         {testSentMessage && (
@@ -592,22 +911,13 @@ export default function EmailComposer({
       </div>
 
       {/* Token palette */}
-      <div className="flex items-center justify-between mb-1.5">
+      <div className="mb-1.5">
         <label className="block font-semibold text-sm" style={{ color: INK, fontFamily: OUTFIT }}>
           Message
         </label>
-        <button
-          type="button"
-          onClick={() => setPreviewing(v => !v)}
-          className="text-xs font-semibold focus:outline-none"
-          style={{ color: FOREST, backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT }}
-        >
-          {previewing ? '← EDIT' : 'PREVIEW →'}
-        </button>
       </div>
 
-      {!previewing && (
-        <>
+      <>
           <div className="flex flex-wrap gap-1.5 mb-3">
             {EMAIL_TOKEN_KEYS.map(key => (
               <button
@@ -632,9 +942,18 @@ export default function EmailComposer({
                     <ParagraphEditor
                       blockId={block._id}
                       initialContent={block.content}
+                      variant={block.variant ?? 'body'}
                       registerRef={registerBlockRef}
                       onFocusBlock={setActiveTarget}
                       onContentChange={updateParagraphContent}
+                      onVariantChange={updateParagraphVariant}
+                    />
+                  ) : block.type === 'image' ? (
+                    <ImageBlockEditor
+                      block={block}
+                      conferenceId={conferenceId}
+                      accessToken={accessToken}
+                      onPatch={patch => updateImageBlock(block._id, patch)}
                     />
                   ) : (
                     <ButtonBlockEditor block={block} onPatch={patch => updateButtonBlock(block._id, patch)} />
@@ -644,11 +963,27 @@ export default function EmailComposer({
               </div>
             ))}
           </div>
-        </>
-      )}
+      </>
+      </div>
 
-      {previewing && (
+      {/* ── Check: the live preview — always beside the editor from lg up,
+          sticky so it tracks while a long email scrolls ── */}
+      <div className="mt-6 lg:mt-0 min-w-0 lg:sticky lg:top-4">
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(v => !v)}
+          aria-expanded={previewOpen}
+          className="flex items-center gap-1.5 mb-2 text-xs font-bold focus:outline-none lg:hidden"
+          style={{ color: FOREST, backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '8px 0', letterSpacing: '0.04em' }}
+        >
+          <ChevronDown size={13} style={{ transform: previewOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 200ms ease' }} />
+          {previewOpen ? 'HIDE PREVIEW' : 'SHOW PREVIEW'}
+        </button>
+        <div className={`${previewOpen ? '' : 'hidden'} lg:block`}>
         <div className="rounded-xl px-4 py-4" style={{ border: `1px solid ${BORDER}`, backgroundColor: CREAM }}>
+          <p className="font-semibold text-sm mb-2" style={{ color: INK, fontFamily: OUTFIT }}>
+            Live preview
+          </p>
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="relative flex-1 min-w-0">
               <input
@@ -718,7 +1053,12 @@ export default function EmailComposer({
               sandbox="allow-same-origin"
               title="Email preview"
               style={{
-                width: previewWidth === 'desktop' ? 620 : 390,
+                // Fluid at desktop width so the side-by-side column can be
+                // narrower than a real 620px mail client; capped at the true
+                // render width. Mobile stays a fixed 390 (shrinking on tiny
+                // screens via maxWidth).
+                width: previewWidth === 'desktop' ? '100%' : 390,
+                maxWidth: previewWidth === 'desktop' ? 620 : '100%',
                 height: 640,
                 border: `1px solid ${BORDER}`,
                 borderRadius: 12,
@@ -727,7 +1067,8 @@ export default function EmailComposer({
             />
           </div>
         </div>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

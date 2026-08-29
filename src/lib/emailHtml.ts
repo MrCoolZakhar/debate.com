@@ -8,7 +8,7 @@
 // client), and a fixed-height cover-cropped banner band.
 
 import { resolveTokens, splitResolvedText, type EmailTokenContext } from './emailTokens';
-import { type EmailBlock, resolveButtonUrl, absolutizeUrl, getSiteUrl } from './emailBlocks';
+import { type EmailBlock, type ParagraphVariant, resolveButtonUrl, absolutizeUrl, getSiteUrl, parseInlineMarks } from './emailBlocks';
 
 // ── Design theme ─────────────────────────────────────────────────────────────
 // Persisted at conferences.email_theme (jsonb, default {}). Every field is
@@ -75,14 +75,30 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** Resolves tokens, escapes the result, and wraps unresolved ⚠token⚠ markers in an amber highlight. */
-function renderTokenizedHtml(raw: string, ctx: EmailTokenContext): string {
-  const resolved = resolveTokens(raw, ctx);
-  return splitResolvedText(resolved)
+/** Escapes one resolved-text run and wraps unresolved ⚠token⚠ markers in an amber highlight. */
+function renderResolvedRun(text: string): string {
+  return splitResolvedText(text)
     .map(seg => {
       const html = escapeHtml(seg.text).replace(/\n/g, '<br>');
       if (!seg.unresolved) return html;
       return `<span style="background-color:#F4E9C8;color:#8A6614;padding:0 3px;border-radius:3px;font-weight:600;">${html}</span>`;
+    })
+    .join('');
+}
+
+/** Resolves tokens, applies **bold** / *italic* inline marks (parsed AFTER
+ *  token resolution, escaped per run — mark parsing never sees or emits raw
+ *  HTML, so there is no injection surface), and highlights unresolved tokens.
+ *  Text with no valid marks takes parseInlineMarks' single-run fast path and
+ *  renders byte-identically to the pre-marks renderer. */
+function renderTokenizedHtml(raw: string, ctx: EmailTokenContext): string {
+  const resolved = resolveTokens(raw, ctx);
+  return parseInlineMarks(resolved)
+    .map(run => {
+      let html = renderResolvedRun(run.text);
+      if (run.italic) html = `<em>${html}</em>`;
+      if (run.bold) html = `<strong>${html}</strong>`;
+      return html;
     })
     .join('');
 }
@@ -137,8 +153,27 @@ function renderBlock(
 ): string {
   if (block.type === 'paragraph') {
     if (!block.content.trim()) return '';
-    return `<tr><td class="email-padding" style="padding:0 0 18px 0;font-family:${FONT_STACK};font-size:17px;line-height:1.6;color:${INK};">
+    // 'body' (and a missing variant) must reproduce the pre-variant style
+    // string EXACTLY — stored templates have no variant field and must keep
+    // rendering byte-identically. Sizes are fixed presets on purpose (no
+    // free-form font size — see ParagraphVariant in emailBlocks.ts); the
+    // 22px bold heading echoes the 26px solid-header treatment one step down.
+    const variantStyle: Record<ParagraphVariant, string> = {
+      body: `padding:0 0 18px 0;font-family:${FONT_STACK};font-size:17px;line-height:1.6;color:${INK};`,
+      heading: `padding:0 0 12px 0;font-family:${FONT_STACK};font-size:22px;line-height:1.35;font-weight:bold;color:${INK};`,
+      small: `padding:0 0 18px 0;font-family:${FONT_STACK};font-size:13px;line-height:1.6;color:${MUTED};`,
+    };
+    return `<tr><td class="email-padding" style="${variantStyle[block.variant ?? 'body']}">
       ${renderTokenizedHtml(block.content, ctx)}
+    </td></tr>`;
+  }
+  if (block.type === 'image') {
+    const abs = absolutizeUrl(block.url, getSiteUrl());
+    // Skip empty and data: URIs — most mail clients block data: images
+    // (Gmail strips them entirely), so they must never reach an outbox row.
+    if (!abs || /^data:/i.test(abs)) return '';
+    return `<tr><td align="center" style="padding:0 0 18px 0;">
+      <img src="${escapeHtml(abs)}" width="520" alt="${escapeHtml(block.alt)}" style="max-width:100%;height:auto;display:block;" />
     </td></tr>`;
   }
   const url = resolveButtonUrl(block, conference, { chairInviteToken, organizerInviteToken, importClaimToken });

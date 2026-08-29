@@ -136,7 +136,7 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
   {
     header: 'COMMUNICATE',
     items: [
-      { icon: Mail, label: 'Email Builder', href: `/manage/${slug}/communications`, external: false, badge: communicationsBadge },
+      { icon: Mail, label: 'Communications', href: `/manage/${slug}/communications`, external: false, badge: communicationsBadge },
     ],
   },
   {

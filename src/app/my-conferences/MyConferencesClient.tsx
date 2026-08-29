@@ -1254,7 +1254,13 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         {/* Above the card grid, and outside the loading/empty chain below —
             a user with drafts but no conferences yet must still see them. */}
         {activeTab === 'all' && <DraftsToCompleteSection drafts={drafts} onDelete={handleDeleteDraft} />}
-        {activeTab === 'chair' && <ChairInvitesSection invites={chairInvites} onRespond={handleRespondInvite} />}
+        {/* Also on ALL, for the same reason as the organizer invites below: a
+            pending chair invitation was only reachable from the CHAIR tab,
+            which someone who has never chaired has no reason to open — so the
+            invite lived only in the email. Accept/decline is unchanged. */}
+        {(activeTab === 'all' || activeTab === 'chair') && (
+          <ChairInvitesSection invites={chairInvites} onRespond={handleRespondInvite} />
+        )}
         {/* Also on ALL — this is the tab everyone lands on. Gating a pending
             invitation behind the ORGANIZER tab hid it from exactly the people
             it is addressed to: someone who has never organised a conference
