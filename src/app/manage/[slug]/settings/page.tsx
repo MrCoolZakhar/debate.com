@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, EyeOff, ArrowUp, ArrowDown, Trash2,
+  User, Gavel, GraduationCap, Eye,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -158,6 +159,83 @@ const BANNER_PRESETS = [
 function roleLabel(role: string): string {
   return role.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
+
+const ROLE_ICONS: Record<string, typeof User> = {
+  'delegate': User,
+  'chair': Gavel,
+  'head-delegate': Users2,
+  'faculty-advisor': GraduationCap,
+  'observer': Eye,
+};
+
+type RoleStatus = 'OPEN' | 'SCHEDULED' | 'CLOSED' | 'OFF';
+
+/** Four states, not two. A role can be switched on while its window has
+ *  already closed, and "enabled" alone would report that as live. */
+function roleStatus(config: RoleConfig | undefined, now: number): RoleStatus {
+  if (!config?.is_enabled) return 'OFF';
+  const opensAt = config.applications_open_at ? new Date(config.applications_open_at).getTime() : null;
+  const closesAt = config.applications_close_at ? new Date(config.applications_close_at).getTime() : null;
+  if (opensAt !== null && opensAt > now) return 'SCHEDULED';
+  if (closesAt !== null && closesAt < now) return 'CLOSED';
+  return 'OPEN';
+}
+
+const STATUS_STYLE: Record<RoleStatus, { fg: string; bg: string; dot: string }> = {
+  OPEN:      { fg: '#EED98A', bg: '#1B3828',                dot: '#1B3828' },
+  SCHEDULED: { fg: '#6B4F12', bg: 'rgba(238,217,138,0.35)', dot: '#B6871F' },
+  CLOSED:    { fg: '#8B2020', bg: 'rgba(139,32,32,0.08)',   dot: '#8B2020' },
+  OFF:       { fg: '#9A8A78', bg: 'rgba(154,138,120,0.12)', dot: '#9A8A78' },
+};
+
+/** One step's clickable header: a numbered disc that becomes a gold check once
+ *  the step has nothing unresolved, the label, its subtitle, and a chevron.
+ *  Module scope on purpose: a component declared inside the page would be a new
+ *  type every render, remounting QuestionBuilder and losing its editing state. */
+function StepHeader({ n, label, sub, complete, open, onClick }: {
+  n: number; label: string; sub: string; complete: boolean; open: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={open}
+      className="w-full flex items-center gap-3 text-left focus:outline-none"
+      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+    >
+      <span
+        className="flex items-center justify-center flex-shrink-0"
+        style={{
+          width: '24px', height: '24px', borderRadius: '999px',
+          backgroundColor: complete ? '#1B3828' : 'rgba(27,56,40,0.08)',
+          color: complete ? '#EED98A' : '#1C1410',
+          fontFamily: "'Outfit', sans-serif", fontSize: '12px', fontWeight: 800,
+        }}
+      >
+        {complete ? <Check size={14} strokeWidth={3} style={{ color: '#EED98A' }} /> : n}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          {label}
+        </span>
+        <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          {sub}
+        </span>
+      </span>
+      <ChevronDown
+        size={18}
+        strokeWidth={2.2}
+        style={{ color: '#9A8A78', flexShrink: 0, transform: open ? 'none' : 'rotate(-90deg)', transition: 'transform 200ms ease' }}
+      />
+    </button>
+  );
+}
+
+const STEPS = [
+  { n: 1, label: 'General info', sub: 'Dates, capacity and how applications are handled' },
+  { n: 2, label: 'Fees', sub: 'What this role costs and when the price changes' },
+  { n: 3, label: 'Form', sub: 'The questions this role answers when applying' },
+] as const;
 
 /** True when any two dated fee phases have intersecting [start, end] windows. */
 function feePhasesOverlap(phases: FeePhase[]): boolean {
@@ -406,6 +484,19 @@ export default function SettingsPage() {
     return t === 'conference' || t === 'organizers' || t === 'privacy' ? t : 'applications';
   })();
   const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>(initialTab);
+  // Which role's configuration the Applications section is showing. Derived
+  // from ?role= rather than held in state, so a deep link lands on the right
+  // role and the back button walks back through them.
+  const roleParam = searchParams.get('role');
+  const activeRole: string = (ROLES as readonly string[]).includes(roleParam ?? '') ? (roleParam as string) : ROLES[0];
+  function setActiveRole(next: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('role', next);
+    router.push(`?${params.toString()}`, { scroll: false });
+  }
+  // Exactly one step open at a time.
+  const [openStep, setOpenStep] = useState<number>(1);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -468,7 +559,8 @@ export default function SettingsPage() {
   const [rolesWithApplications, setRolesWithApplications] = useState<Set<string>>(new Set());
   const { confirm, modal: confirmModal } = useConfirmModal();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
-  const [selectedRole, setSelectedRole] = useState<string>('delegate');
+  // The form builder edits whichever role the tab is on.
+  const selectedRole = activeRole;
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -1603,9 +1695,61 @@ export default function SettingsPage() {
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
   const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
   const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
-  const enabledRoles = ROLES.filter(r => roleConfigs.find(rc => rc.role === r)?.is_enabled);
   const otherRoles = ROLES.filter(r => r !== selectedRole);
   const [copyNotice, setCopyNotice] = useState('');
+
+  // ── Step completion ──────────────────────────────────────────────────────
+  // "Nothing unresolved", not "every field filled". Max accepted, the phase
+  // list and the custom questions are all legitimately empty, so requiring
+  // them would leave a step permanently unticked for a correct setup.
+  const activeRoleConfig = roleConfigs.find(rc => rc.role === activeRole);
+  const step1Complete = !!(activeRoleConfig?.applications_open_at && activeRoleConfig?.applications_close_at);
+  const step2Complete = !!activeRoleConfig?.fee_currency
+    && !(activeRoleConfig?.fee_phases ?? []).some(p => !p.start_date || !p.end_date);
+  const stepComplete = useMemo(
+    // Form is always complete: custom questions are optional by design.
+    () => ({ 1: step1Complete, 2: step2Complete, 3: true } as Record<number, boolean>),
+    [step1Complete, step2Complete],
+  );
+
+  const stepPanelRef = useRef<HTMLDivElement | null>(null);
+  const lastOpenedRef = useRef<string | null>(null);
+  const wasCompleteRef = useRef<Record<string, boolean>>({});
+
+  // Auto-advance, deliberately narrow: only on the incomplete → complete edge,
+  // only for the step actually open, and never while the person is still in it.
+  useEffect(() => {
+    const key = `${activeRole}-${openStep}`;
+    const complete = stepComplete[openStep] ?? true;
+    if (lastOpenedRef.current !== key) {
+      // Just opened, or the role changed. Record the baseline and stop, so
+      // reopening an already-complete step cannot bounce straight back out.
+      lastOpenedRef.current = key;
+      wasCompleteRef.current[key] = complete;
+      return;
+    }
+    const was = wasCompleteRef.current[key];
+    wasCompleteRef.current[key] = complete;
+    if (was || !complete) return;
+    // A save can settle while focus is still inside the panel (blur one field,
+    // land on the next). Moving the panel out from under that is hostile.
+    if (stepPanelRef.current && stepPanelRef.current.contains(document.activeElement)) return;
+    const next = STEPS.find(st => st.n > openStep && !stepComplete[st.n]);
+    if (!next) return;
+    setOpenStep(next.n);
+  }, [activeRole, openStep, stepComplete]);
+
+  function handleCopyApplicationLink() {
+    if (!conference) return;
+    const url = `${window.location.origin}/conferences/${conference.slug}/apply?role=${activeRole}`;
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setLinkCopied(true);
+        window.setTimeout(() => setLinkCopied(false), 2000);
+      },
+      () => setRoleConfigError('Could not copy the link. Your browser blocked clipboard access.'),
+    );
+  }
 
   function handleBlocksChange(next: FormBlock[]) {
     void saveRoleConfig(selectedRole, { custom_questions: next });
@@ -1942,13 +2086,13 @@ export default function SettingsPage() {
       </h1>
 
       {/* Rail + floating panel shell */}
-      <div className="flex flex-col md:flex-row md:items-start" style={{ gap: '22px' }}>
+      <div className="flex flex-col md:flex-row md:items-start" style={{ gap: '24px' }}>
 
         {/* ── Section rail (desktop: vertical glass rail; mobile: horizontal scroller) ── */}
         <nav
           aria-label="Settings sections"
-          className="md:flex-shrink-0"
-          style={{ width: '100%', maxWidth: '244px' }}
+          className="md:flex-shrink-0 md:sticky"
+          style={{ width: '100%', maxWidth: '220px', top: '24px' }}
         >
           <div
             className="flex md:flex-col overflow-x-auto md:overflow-visible"
@@ -2047,37 +2191,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-      {/* ── APPLICATIONS TAB — locked until a payment method is on file ── */}
-      {applicationsGated && (
-        <div className="flex flex-col items-center text-center" style={{ ...cardStyle, padding: '48px 32px' }}>
-          <span
-            className="flex items-center justify-center flex-shrink-0 mb-5"
-            style={{
-              width: '56px', height: '56px', borderRadius: '16px',
-              background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
-              boxShadow: '0 6px 16px rgba(27,56,40,0.28)',
-            }}
-          >
-            <Lock size={24} strokeWidth={2.1} style={{ color: '#EED98A' }} />
-          </span>
-          <p className="font-black text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", maxWidth: '420px' }}>
-            Application opening is not available until Financial Onboarding is completed.
-          </p>
-          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
-            {paymentGateMessage(conference)}
-          </p>
-          <button
-            onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
-            className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em', cursor: 'pointer' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-          >
-            Go to Financial Settings
-          </button>
-        </div>
-      )}
-
       {/* ── Grandfathered warning — payment_gate_exempt conferences the gate
           let through on purpose, but that still can't actually get paid.
           Informs without blocking: applications tab renders normally below. ── */}
@@ -2102,361 +2215,528 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ── APPLICATIONS TAB ── */}
-      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Application Windows
-        </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Configure which roles can apply, their fees, and application windows.
-        </p>
-
-        {roleConfigError && (
-          <p className="text-xs mb-4 rounded-lg px-3 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>
-            {roleConfigError}
-          </p>
-        )}
-
-        {ROLES.map((role, idx) => {
-          const config = roleConfigs.find(rc => rc.role === role);
-          const enabled = config?.is_enabled ?? false;
-          const isLast = idx === ROLES.length - 1;
-
-          return (
+      {/* ── APPLICATIONS TAB ──────────────────────────────────────────────
+          One role at a time. The five-role stack made every role look equally
+          urgent and buried the one question that matters, which is whether the
+          role is actually taking applications right now. ── */}
+      {activeTab === 'applications' && (() => {
+        // `role` and `config` keep their old names so every control below reads
+        // exactly as it did when this was a ROLES.map.
+        const role = activeRole;
+        const config = roleConfigs.find(rc => rc.role === role);
+        const enabled = config?.is_enabled ?? false;
+        const status = roleStatus(config, Date.now());
+        const chip = STATUS_STYLE[status];
+        return (
+          <>
+            {/* The gate blurs the real screen rather than replacing it: this is
+                a step not yet done, not an error, and seeing what is waiting
+                behind it is the point. */}
             <div
-              key={`${role}-${configVersion}`}
-              style={{
-                marginBottom: isLast ? 0 : '24px',
-                paddingBottom: isLast ? 0 : '24px',
-                borderBottom: isLast ? 'none' : '1px solid #F0EDE6',
-              }}
+              style={applicationsGated
+                ? { filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none' }
+                : undefined}
             >
-              {/* Role header */}
-              <div className="flex items-center justify-between mb-4">
-                <span className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                  {roleLabel(role)}
-                </span>
-                <PillToggle
-                  value={enabled}
-                  onChange={(v) => saveRoleConfig(role, { is_enabled: v })}
-                  size="md"
-                />
+              {/* ── Role tabs ── */}
+              <div className="flex flex-wrap gap-2 mb-5">
+                {ROLES.map(r => {
+                  const rc = roleConfigs.find(c => c.role === r);
+                  const st = roleStatus(rc, Date.now());
+                  const active = r === role;
+                  const Icon = ROLE_ICONS[r] ?? User;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setActiveRole(r)}
+                      className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+                      style={{
+                        padding: '6px 13px',
+                        borderRadius: '999px',
+                        fontFamily: "'Outfit', sans-serif",
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        backgroundColor: active ? '#1B3828' : 'transparent',
+                        color: active ? '#EED98A' : '#7A6E5E',
+                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                        boxShadow: active ? '0 3px 10px rgba(27,56,40,0.22)' : 'none',
+                        opacity: st === 'OFF' ? 0.6 : 1,
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      <span
+                        suppressHydrationWarning
+                        style={{
+                          width: '6px', height: '6px', borderRadius: '999px', flexShrink: 0,
+                          backgroundColor: active && st === 'OPEN' ? '#EED98A' : STATUS_STYLE[st].dot,
+                        }}
+                      />
+                      <Icon size={12} strokeWidth={2.5} />
+                      {roleLabel(r)}
+                    </button>
+                  );
+                })}
               </div>
 
-              {enabled && config && (
-                <>
-                  {/* Date + fee grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                    <div>
-                      <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Opens</label>
-                      <input
-                        type="datetime-local"
-                        // Prerendered server-side where local time is UTC, so the
-                        // corrected value differs from the client's on any other zone.
-                        suppressHydrationWarning
-                        defaultValue={toDatetimeLocal(config.applications_open_at)}
-                        onFocus={fgInput}
-                        onBlur={(e) => {
-                          e.currentTarget.style.borderColor = '#DDD4C0';
-                          saveRoleConfig(role, { applications_open_at: fromDatetimeLocal(e.target.value) });
-                        }}
-                        style={inputStyle}
-                      />
-                    </div>
+              {/* ── Role header bar. Never collapses: this is the one place that
+                  answers "is this role live". ── */}
+              <div style={cardStyle}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-black" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontSize: '18px' }}>
+                    {roleLabel(role)}
+                  </span>
+                  <span
+                    suppressHydrationWarning
+                    className="font-bold"
+                    style={{
+                      fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 800,
+                      letterSpacing: '0.1em', padding: '3px 9px', borderRadius: '999px',
+                      backgroundColor: chip.bg, color: chip.fg,
+                    }}
+                  >
+                    {status}
+                  </span>
 
-                    <div>
-                      <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Closes</label>
-                      <input
-                        type="datetime-local"
-                        suppressHydrationWarning
-                        defaultValue={toDatetimeLocal(config.applications_close_at)}
-                        onFocus={fgInput}
-                        onBlur={(e) => {
-                          e.currentTarget.style.borderColor = '#DDD4C0';
-                          saveRoleConfig(role, { applications_close_at: fromDatetimeLocal(e.target.value) });
-                        }}
-                        style={inputStyle}
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        Times are in {localZoneLabel()}. Applicants see these in their own timezone.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Max Accepted</label>
-                      <input
-                        type="number"
-                        min={1}
-                        placeholder="Unlimited"
-                        defaultValue={config.max_accepted ?? ''}
-                        onFocus={fgInput}
-                        onBlur={(e) => {
-                          e.currentTarget.style.borderColor = '#DDD4C0';
-                          saveRoleConfig(role, { max_accepted: e.target.value ? parseInt(e.target.value) : null });
-                        }}
-                        style={inputStyle}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Fee</label>
-                      <div className="flex gap-2">
-                        <select
-                          defaultValue={config.fee_currency}
-                          onFocus={fgInput}
-                          onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#DDD4C0';
-                            saveRoleConfig(role, { fee_currency: e.target.value });
-                          }}
-                          style={{ ...inputStyle, width: '30%', cursor: 'pointer' }}
-                        >
-                          {CURRENCY_GROUPS.pinned.map(c => (
-                            <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
-                          ))}
-                          <option disabled>──────────</option>
-                          {CURRENCY_GROUPS.rest.map(c => (
-                            <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          placeholder="0.00"
-                          defaultValue={config.fee_amount}
-                          onFocus={fgInput}
-                          onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#DDD4C0';
-                            saveRoleConfig(role, { fee_amount: parseFloat(e.target.value) || 0 });
-                          }}
-                          style={{ ...inputStyle, width: '70%' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Fee phases, date-windowed pricing (Early Bird, Phase 1, …).
-                      When a phase's window contains today it overrides the flat
-                      fee above; gaps between phases fall back to the flat fee. */}
-                  {(() => {
-                    const phases = config.fee_phases ?? [];
-                    const active = activeFeePhase(phases);
-                    // A phase missing either date is skipped by the app and by
-                    // resolve_phase_fee, so the amount on it never applies. Say
-                    // so on the row, and refuse to stack another on top of it.
-                    const hasInvalidPhase = phases.some(p => !p.start_date || !p.end_date);
-                    return (
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                            Fee phases
-                          </label>
-                          <button
-                            type="button"
-                            disabled={hasInvalidPhase}
-                            onClick={() => saveRoleConfig(role, {
-                              fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
-                            })}
-                            className="text-[11px] font-bold focus:outline-none hover:underline"
-                            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
-                          >
-                            + ADD PHASE
-                          </button>
-                        </div>
-                        {phases.length === 0 ? (
-                          <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
-                            Optional: charge different amounts by date, e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
-                          </p>
-                        ) : (
-                          <>
-                            {phases.map((phase, pi) => {
-                              const isActive = active !== null && phase === active;
-                              const invalid = !phase.start_date || !phase.end_date;
-                              return (
-                                <Fragment key={`${pi}-${phases.length}-${configVersion}`}>
-                                <div
-                                  className="grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
-                                  style={{
-                                    gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,0.8fr) 24px',
-                                    backgroundColor: isActive ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.02)',
-                                    border: invalid
-                                      ? '1.5px solid rgba(139,32,32,0.45)'
-                                      : isActive ? '1.5px solid rgba(27,56,40,0.35)' : '1px solid #F0EDE6',
-                                  }}
-                                >
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <input
-                                      type="text"
-                                      placeholder="e.g. Early Bird"
-                                      defaultValue={phase.label}
-                                      onFocus={fgInput}
-                                      onBlur={(e) => {
-                                        e.currentTarget.style.borderColor = '#DDD4C0';
-                                        if (e.target.value.trim() !== phase.label) updateFeePhase(role, phases, pi, { label: e.target.value.trim() });
-                                      }}
-                                      style={{ ...inputStyle, padding: '6px 10px', fontSize: '12.5px', minWidth: 0 }}
-                                    />
-                                    {isActive && (
-                                      <span
-                                        className="flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                                        style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}
-                                      >
-                                        CURRENT
-                                      </span>
-                                    )}
-                                  </div>
-                                  <DatePicker
-                                    value={phase.start_date}
-                                    max={phase.end_date || undefined}
-                                    placeholder="Start date"
-                                    onChange={(iso) => {
-                                      if (iso !== phase.start_date) updateFeePhase(role, phases, pi, { start_date: iso });
-                                    }}
-                                  />
-                                  <DatePicker
-                                    value={phase.end_date}
-                                    min={phase.start_date || undefined}
-                                    placeholder="End date"
-                                    onChange={(iso) => {
-                                      if (iso !== phase.end_date) updateFeePhase(role, phases, pi, { end_date: iso });
-                                    }}
-                                  />
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    step={0.01}
-                                    aria-label="Phase fee amount"
-                                    placeholder="0.00"
-                                    defaultValue={phase.amount}
-                                    onFocus={fgInput}
-                                    onBlur={(e) => {
-                                      e.currentTarget.style.borderColor = '#DDD4C0';
-                                      const next = parseFloat(e.target.value) || 0;
-                                      if (next !== phase.amount) updateFeePhase(role, phases, pi, { amount: next });
-                                    }}
-                                    style={{ ...inputStyle, padding: '6px 8px', fontSize: '12.5px', minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
-                                  />
-                                  <button
-                                    type="button"
-                                    aria-label={`Remove ${phase.label || 'phase'}`}
-                                    onClick={() => saveRoleConfig(role, { fee_phases: phases.filter((_, i) => i !== pi) })}
-                                    className="text-sm font-bold focus:outline-none justify-self-center"
-                                    style={{ color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                                {invalid && (
-                                  <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-                                    This fee phase is invalid. Please add dates.
-                                  </p>
-                                )}
-                                </Fragment>
-                              );
-                            })}
-                            {feePhasesOverlap(phases) && (
-                              <p className="text-xs mt-1" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
-                                Two phases have overlapping date windows, the phase listed first wins on overlapping days.
-                              </p>
-                            )}
-                            <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                              Dates are inclusive. When no phase covers today, the flat fee above applies ({config.fee_currency} {config.fee_amount}).
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Acceptance */}
-                  <div className="mt-4">
-                    <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      Acceptance
-                    </label>
-                    <div className="flex gap-2">
-                      {([
-                        { value: true, label: 'AUTO-ACCEPT' },
-                        { value: false, label: 'MANUAL REVIEW' },
-                      ] as const).map(opt => {
-                        const active = config.auto_accept === opt.value;
-                        return (
-                          <button
-                            key={String(opt.value)}
-                            type="button"
-                            onClick={() => saveRoleConfig(role, { auto_accept: opt.value })}
-                            className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
-                            style={{
-                              backgroundColor: active ? '#1B3828' : 'transparent',
-                              color: active ? '#EED98A' : '#1C1410',
-                              border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                              fontFamily: "'Outfit', sans-serif",
-                              letterSpacing: '0.06em',
-                            }}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Payment */}
-                  <div className="mt-4">
-                    <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      Payment
-                    </label>
-                    <div className="flex gap-2">
-                      {PAYMENT_TIMING_OPTIONS.map(opt => {
-                        const active = (config.payment_timing ?? 'anytime') === opt.value;
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => saveRoleConfig(role, { payment_timing: opt.value })}
-                            className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
-                            style={{
-                              backgroundColor: active ? '#1B3828' : 'transparent',
-                              color: active ? '#EED98A' : '#1C1410',
-                              border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                              fontFamily: "'Outfit', sans-serif",
-                              letterSpacing: '0.06em',
-                            }}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                      {PAYMENT_TIMING_OPTIONS.find(o => o.value === (config.payment_timing ?? 'anytime'))?.desc}
-                    </p>
-                  </div>
-
-                  {/* Resubmission */}
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                        Allow resubmission
-                      </label>
-                      <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        Let denied applicants edit and resubmit.
-                      </p>
-                    </div>
+                  <div className="flex items-center gap-3 ml-auto">
+                    <button
+                      type="button"
+                      onClick={handleCopyApplicationLink}
+                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
+                      style={{
+                        padding: '7px 12px',
+                        fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                        letterSpacing: '0.06em',
+                        color: '#1B3828', backgroundColor: 'transparent',
+                        border: '1.5px solid #DDD4C0', cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      {linkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
+                      {linkCopied ? 'COPIED' : 'COPY APPLICATION LINK'}
+                    </button>
                     <PillToggle
-                      value={config.allow_resubmission ?? false}
-                      onChange={(v) => saveRoleConfig(role, { allow_resubmission: v })}
+                      value={enabled}
+                      onChange={(v) => saveRoleConfig(role, { is_enabled: v })}
                       size="md"
                     />
                   </div>
-                </>
+                </div>
+
+                {/* enforce_role_config_payment_gate raises for real, so a refused
+                    toggle has to explain itself where the toggle is. */}
+                {roleConfigError && (
+                  <p className="text-xs mt-3 rounded-lg px-3 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>
+                    {roleConfigError}
+                  </p>
+                )}
+              </div>
+
+              {/* ── The three steps. Editable whether or not the role is on: a
+                  role gets set up before it is opened. ── */}
+              {config && (
+                <div key={`${role}-${configVersion}`} ref={stepPanelRef}>
+
+                  <div style={cardStyle}>
+                    <StepHeader
+                      n={STEPS[0].n} label={STEPS[0].label} sub={STEPS[0].sub}
+                      complete={stepComplete[1]} open={openStep === 1}
+                      onClick={() => setOpenStep(1)}
+                    />
+                    {openStep === 1 && (
+                      <div className="mt-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Opens</label>
+                            <input
+                              type="datetime-local"
+                              // Prerendered server-side where local time is UTC, so the
+                              // corrected value differs from the client's on any other zone.
+                              suppressHydrationWarning
+                              defaultValue={toDatetimeLocal(config.applications_open_at)}
+                              onFocus={fgInput}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#DDD4C0';
+                                saveRoleConfig(role, { applications_open_at: fromDatetimeLocal(e.target.value) });
+                              }}
+                              style={inputStyle}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Closes</label>
+                            <input
+                              type="datetime-local"
+                              suppressHydrationWarning
+                              defaultValue={toDatetimeLocal(config.applications_close_at)}
+                              onFocus={fgInput}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#DDD4C0';
+                                saveRoleConfig(role, { applications_close_at: fromDatetimeLocal(e.target.value) });
+                              }}
+                              style={inputStyle}
+                            />
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              Times are in {localZoneLabel()}. Applicants see these in their own timezone.
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Max Accepted</label>
+                            <input
+                              type="number"
+                              min={1}
+                              placeholder="Unlimited"
+                              defaultValue={config.max_accepted ?? ''}
+                              onFocus={fgInput}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#DDD4C0';
+                                saveRoleConfig(role, { max_accepted: e.target.value ? parseInt(e.target.value) : null });
+                              }}
+                              style={inputStyle}
+                            />
+                          </div>
+                        </div>
+                        {/* Acceptance */}
+                        <div className="mt-4">
+                          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            Acceptance
+                          </label>
+                          <div className="flex gap-2">
+                            {([
+                              { value: true, label: 'AUTO-ACCEPT' },
+                              { value: false, label: 'MANUAL REVIEW' },
+                            ] as const).map(opt => {
+                              const active = config.auto_accept === opt.value;
+                              return (
+                                <button
+                                  key={String(opt.value)}
+                                  type="button"
+                                  onClick={() => saveRoleConfig(role, { auto_accept: opt.value })}
+                                  className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
+                                  style={{
+                                    backgroundColor: active ? '#1B3828' : 'transparent',
+                                    color: active ? '#EED98A' : '#1C1410',
+                                    border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                                    fontFamily: "'Outfit', sans-serif",
+                                    letterSpacing: '0.06em',
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {/* Payment */}
+                        <div className="mt-4">
+                          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            Payment
+                          </label>
+                          <div className="flex gap-2">
+                            {PAYMENT_TIMING_OPTIONS.map(opt => {
+                              const active = (config.payment_timing ?? 'anytime') === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => saveRoleConfig(role, { payment_timing: opt.value })}
+                                  className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
+                                  style={{
+                                    backgroundColor: active ? '#1B3828' : 'transparent',
+                                    color: active ? '#EED98A' : '#1C1410',
+                                    border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                                    fontFamily: "'Outfit', sans-serif",
+                                    letterSpacing: '0.06em',
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                            {PAYMENT_TIMING_OPTIONS.find(o => o.value === (config.payment_timing ?? 'anytime'))?.desc}
+                          </p>
+                        </div>
+                        {/* Resubmission */}
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              Allow resubmission
+                            </label>
+                            <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                              Let denied applicants edit and resubmit.
+                            </p>
+                          </div>
+                          <PillToggle
+                            value={config.allow_resubmission ?? false}
+                            onChange={(v) => saveRoleConfig(role, { allow_resubmission: v })}
+                            size="md"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={cardStyle}>
+                    <StepHeader
+                      n={STEPS[1].n} label={STEPS[1].label} sub={STEPS[1].sub}
+                      complete={stepComplete[2]} open={openStep === 2}
+                      onClick={() => setOpenStep(2)}
+                    />
+                    {openStep === 2 && (
+                      <div className="mt-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Fee</label>
+                            <div className="flex gap-2">
+                              <select
+                                defaultValue={config.fee_currency}
+                                onFocus={fgInput}
+                                onBlur={(e) => {
+                                  e.currentTarget.style.borderColor = '#DDD4C0';
+                                  saveRoleConfig(role, { fee_currency: e.target.value });
+                                }}
+                                style={{ ...inputStyle, width: '30%', cursor: 'pointer' }}
+                              >
+                                {CURRENCY_GROUPS.pinned.map(c => (
+                                  <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
+                                ))}
+                                <option disabled>──────────</option>
+                                {CURRENCY_GROUPS.rest.map(c => (
+                                  <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                placeholder="0.00"
+                                defaultValue={config.fee_amount}
+                                onFocus={fgInput}
+                                onBlur={(e) => {
+                                  e.currentTarget.style.borderColor = '#DDD4C0';
+                                  saveRoleConfig(role, { fee_amount: parseFloat(e.target.value) || 0 });
+                                }}
+                                style={{ ...inputStyle, width: '70%' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        {/* Fee phases, date-windowed pricing (Early Bird, Phase 1, …).
+                            When a phase's window contains today it overrides the flat
+                            fee above; gaps between phases fall back to the flat fee. */}
+                        {(() => {
+                          const phases = config.fee_phases ?? [];
+                          const active = activeFeePhase(phases);
+                          // A phase missing either date is skipped by the app and by
+                          // resolve_phase_fee, so the amount on it never applies. Say
+                          // so on the row, and refuse to stack another on top of it.
+                          const hasInvalidPhase = phases.some(p => !p.start_date || !p.end_date);
+                          return (
+                            <div className="mt-4">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                  Fee phases
+                                </label>
+                                <button
+                                  type="button"
+                                  disabled={hasInvalidPhase}
+                                  onClick={() => saveRoleConfig(role, {
+                                    fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
+                                  })}
+                                  className="text-[11px] font-bold focus:outline-none hover:underline"
+                                  style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
+                                >
+                                  + ADD PHASE
+                                </button>
+                              </div>
+                              {phases.length === 0 ? (
+                                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
+                                  Optional: charge different amounts by date, e.g. an Early Bird rate. When no phase covers today, the flat fee above applies.
+                                </p>
+                              ) : (
+                                <>
+                                  {phases.map((phase, pi) => {
+                                    const isActive = active !== null && phase === active;
+                                    const invalid = !phase.start_date || !phase.end_date;
+                                    return (
+                                      <Fragment key={`${pi}-${phases.length}-${configVersion}`}>
+                                      <div
+                                        className="grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
+                                        style={{
+                                          gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,0.8fr) 24px',
+                                          backgroundColor: isActive ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.02)',
+                                          border: invalid
+                                            ? '1.5px solid rgba(139,32,32,0.45)'
+                                            : isActive ? '1.5px solid rgba(27,56,40,0.35)' : '1px solid #F0EDE6',
+                                        }}
+                                      >
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <input
+                                            type="text"
+                                            placeholder="e.g. Early Bird"
+                                            defaultValue={phase.label}
+                                            onFocus={fgInput}
+                                            onBlur={(e) => {
+                                              e.currentTarget.style.borderColor = '#DDD4C0';
+                                              if (e.target.value.trim() !== phase.label) updateFeePhase(role, phases, pi, { label: e.target.value.trim() });
+                                            }}
+                                            style={{ ...inputStyle, padding: '6px 10px', fontSize: '12.5px', minWidth: 0 }}
+                                          />
+                                          {isActive && (
+                                            <span
+                                              className="flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}
+                                            >
+                                              CURRENT
+                                            </span>
+                                          )}
+                                        </div>
+                                        <DatePicker
+                                          value={phase.start_date}
+                                          max={phase.end_date || undefined}
+                                          placeholder="Start date"
+                                          onChange={(iso) => {
+                                            if (iso !== phase.start_date) updateFeePhase(role, phases, pi, { start_date: iso });
+                                          }}
+                                        />
+                                        <DatePicker
+                                          value={phase.end_date}
+                                          min={phase.start_date || undefined}
+                                          placeholder="End date"
+                                          onChange={(iso) => {
+                                            if (iso !== phase.end_date) updateFeePhase(role, phases, pi, { end_date: iso });
+                                          }}
+                                        />
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step={0.01}
+                                          aria-label="Phase fee amount"
+                                          placeholder="0.00"
+                                          defaultValue={phase.amount}
+                                          onFocus={fgInput}
+                                          onBlur={(e) => {
+                                            e.currentTarget.style.borderColor = '#DDD4C0';
+                                            const next = parseFloat(e.target.value) || 0;
+                                            if (next !== phase.amount) updateFeePhase(role, phases, pi, { amount: next });
+                                          }}
+                                          style={{ ...inputStyle, padding: '6px 8px', fontSize: '12.5px', minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
+                                        />
+                                        <button
+                                          type="button"
+                                          aria-label={`Remove ${phase.label || 'phase'}`}
+                                          onClick={() => saveRoleConfig(role, { fee_phases: phases.filter((_, i) => i !== pi) })}
+                                          className="text-sm font-bold focus:outline-none justify-self-center"
+                                          style={{ color: '#8B2020', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                      {invalid && (
+                                        <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                                          This fee phase is invalid. Please add dates.
+                                        </p>
+                                      )}
+                                      </Fragment>
+                                    );
+                                  })}
+                                  {feePhasesOverlap(phases) && (
+                                    <p className="text-xs mt-1" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+                                      Two phases have overlapping date windows, the phase listed first wins on overlapping days.
+                                    </p>
+                                  )}
+                                  <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                    Dates are inclusive. When no phase covers today, the flat fee above applies ({config.fee_currency} {config.fee_amount}).
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={cardStyle}>
+                    <StepHeader
+                      n={STEPS[2].n} label={STEPS[2].label} sub={STEPS[2].sub}
+                      complete={stepComplete[3]} open={openStep === 3}
+                      onClick={() => setOpenStep(3)}
+                    />
+                    {openStep === 3 && (
+                      <div className="mt-5">
+                        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                          <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
+                          {copyNotice && (
+                            <p className="text-xs font-semibold" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                              {copyNotice} ✓
+                            </p>
+                          )}
+                        </div>
+                        <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-          );
-        })}
-      </div>}
+
+            {/* Not dismissible by design: no close, no backdrop click, no Escape.
+                It goes away when financial onboarding is done, and not before. */}
+            {applicationsGated && (
+              <Portal>
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  className="fixed inset-0 z-[80] flex items-center justify-center px-4"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.28)' }}
+                >
+                  <div
+                    className="flex flex-col items-center text-center"
+                    style={{ ...cardStyle, marginBottom: 0, padding: '48px 32px', maxWidth: '520px', boxShadow: '0 24px 70px rgba(27,56,40,0.28)' }}
+                  >
+                    <span
+                      className="flex items-center justify-center flex-shrink-0 mb-5"
+                      style={{
+                        width: '56px', height: '56px', borderRadius: '16px',
+                        background: 'linear-gradient(140deg, #16301F, #2A5A3C)',
+                        boxShadow: '0 6px 16px rgba(27,56,40,0.28)',
+                      }}
+                    >
+                      <Lock size={24} strokeWidth={2.1} style={{ color: '#EED98A' }} />
+                    </span>
+                    <p className="font-black text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", maxWidth: '420px' }}>
+                      Application opening is not available until Financial Onboarding is completed.
+                    </p>
+                    <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '440px', lineHeight: 1.6 }}>
+                      {paymentGateMessage(conference)}
+                    </p>
+                    <button
+                      onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
+                      className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors"
+                      style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em', cursor: 'pointer' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                    >
+                      Go to Financial Settings
+                    </button>
+                  </div>
+                </div>
+              </Portal>
+            )}
+          </>
+        );
+      })()}
+
 
 
       {/* ── VISUAL TAB ── */}
@@ -3012,58 +3292,6 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-
-      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Custom Questions
-        </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Add custom questions to application forms for specific roles.
-        </p>
-
-        {/* Role tabs */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {enabledRoles.length === 0 ? (
-            <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              Enable roles above to add custom questions.
-            </p>
-          ) : (
-            enabledRoles.map(role => {
-              const active = selectedRole === role;
-              return (
-                <button
-                  key={role}
-                  onClick={() => setSelectedRole(role)}
-                  className="px-4 py-1.5 rounded-[10px] text-xs font-bold focus:outline-none transition-all"
-                  style={{
-                    backgroundColor: active ? '#1B3828' : 'transparent',
-                    color: active ? '#EED98A' : '#7A6E5E',
-                    border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                    fontFamily: "'Outfit', sans-serif",
-                    letterSpacing: '0.01em',
-                  }}
-                >
-                  {roleLabel(role)}
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        {enabledRoles.length > 0 && (
-          <>
-            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-              <CopyFormMenu roles={otherRoles} onPick={handleCopyFormTo} />
-              {copyNotice && (
-                <p className="text-xs font-semibold" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
-                  {copyNotice} ✓
-                </p>
-              )}
-            </div>
-            <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
-          </>
-        )}
-      </div>}
 
       {activeTab === 'organizers' && (() => {
         // ── The team, drawn as a hierarchy ──────────────────────────────────
