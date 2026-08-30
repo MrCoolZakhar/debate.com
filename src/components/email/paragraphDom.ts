@@ -5,8 +5,8 @@
 // the two places where a "small tidy-up" silently corrupts stored template
 // content. See the flanking-rule notes in `@/lib/emailBlocks`.
 
-import { EMAIL_TOKEN_LABELS, type EmailTokenKey } from '@/lib/emailTokens';
 import { parseInlineMarks } from '@/lib/emailBlocks';
+import { tokenIdentity, tokenShort } from './tokenKit';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -15,7 +15,24 @@ export function createPillNode(tokenKey: string): HTMLSpanElement {
   const span = document.createElement('span');
   span.setAttribute('contenteditable', 'false');
   span.dataset.token = tokenKey;
-  span.textContent = EMAIL_TOKEN_LABELS[tokenKey as EmailTokenKey] ?? tokenKey;
+  const id = tokenIdentity(tokenKey);
+  span.title = id.becomes;
+
+  // The pill carries its own IDENTITY now: a glyph, then a short name. It used
+  // to be a form label ("Delegate Name") in a plain outline, which read as a
+  // field to fill in rather than as an object dropped into the sentence.
+  //
+  // A unicode glyph, not the Fluent 3D image the palette uses: this node lives
+  // inside a contentEditable, where a slow or failed <img> would reflow the
+  // line the caret is on. It is also SAFE for storage, serializeChildren
+  // short-circuits on `dataset.token` and emits `{{key}}` without reading a
+  // byte of the pill's text, so decorating it cannot change what is saved.
+  const glyph = document.createElement('span');
+  glyph.textContent = id.glyph;
+  Object.assign(glyph.style, { marginRight: '4px', fontSize: '11.5px', lineHeight: '1' });
+  span.appendChild(glyph);
+  span.appendChild(document.createTextNode(tokenShort(tokenKey)));
+
   Object.assign(span.style, {
     display: 'inline-block',
     // Pale gold fill with FOREST ink, which is the house pairing (a gold

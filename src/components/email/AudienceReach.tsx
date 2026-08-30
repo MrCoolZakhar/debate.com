@@ -69,12 +69,28 @@ export interface AudienceSectionDef {
 export interface ReachPerson {
   id: string;
   name: string;
+  /** Pre-joined one-liner. Still the fallback everywhere, so a caller that
+   *  has not been taught the structured fields below still renders sensibly. */
   sub: string;
   avatarUrl: string | null;
   userId: string | null;
   registered: boolean;
   optedOut: boolean;
   manual: boolean;
+  // ── The same facts, kept apart ────────────────────────────────────────────
+  // RecipientRoster shows a person's address, delegation, allocation and role
+  // on their own lines, which a single joined string cannot be split back
+  // into. All OPTIONAL: the roster degrades to `sub` when they are absent, so
+  // adding them is a pure improvement rather than a breaking change.
+  email?: string | null;
+  /** "Delegate", "Chair", "Faculty Advisor"… */
+  roleLabel?: string | null;
+  /** The school or society they came with. */
+  delegation?: string | null;
+  /** The committee they were allocated to, acronym preferred. */
+  committee?: string | null;
+  /** The country or seat they represent. */
+  country?: string | null;
 }
 
 export interface ReachGroup {
@@ -592,11 +608,18 @@ export default function AudienceReach({
               </div>
             )}
 
-            {/* ── Step 1 · Who ── */}
+            {/* ── Step 1 · Who ──
+                ONE LINE. This was a grid of 174×62 tiles, two rows of them on
+                any real screen, roughly 140px of dialog spent on six choices
+                that are each one word and one number long, which is most of
+                why the list of actual people below needed scrolling to reach.
+                The same six choices as chips wrap into one line (two at the
+                narrowest), and every one of them is still a 40px-tall target
+                carrying its emoji, its name and its live count. ── */}
             <div className="mt-6">
               <StepHeading n={1} title="Who is this for?" hint="Pick one or more. Most emails stop here." />
               {roleSection && (
-                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(174px, 1fr))' }}>
+                <div className="flex flex-wrap gap-1.5">
                   {[{ value: '__all__', label: 'Everyone' }, ...roleSection.options].map(o => {
                     const isAll = o.value === '__all__';
                     const active = isAll ? roleSection.selected.size === 0 : roleSection.selected.has(o.value);
@@ -605,51 +628,42 @@ export default function AudienceReach({
                       <button
                         key={o.value}
                         type="button"
+                        aria-pressed={active}
+                        title={`${o.label} · ${count.toLocaleString()} ${count === 1 ? 'person' : 'people'}`}
                         onClick={() => {
                           if (isAll) onClearSection('roles');
                           else onToggle('roles', o.value);
                         }}
-                        className="flex items-center gap-2.5 text-left focus:outline-none"
+                        className="inline-flex items-center gap-1.5 focus:outline-none"
                         style={{
-                          minHeight: 62, padding: '10px 12px', borderRadius: 18,
+                          minHeight: 40, padding: '8px 12px', borderRadius: 999,
                           border: active ? `1.5px solid ${FOREST}` : CARD_BORDER,
-                          backgroundColor: active ? 'rgba(27,56,40,0.075)' : '#FFFDF8',
+                          backgroundColor: active ? FOREST : '#FFFDF8',
                           boxShadow: active ? NEU.outSm : NEU.inSm,
                           cursor: 'pointer',
-                          transitionProperty: 'border-color, background-color, box-shadow, transform',
-                          transitionDuration: '220ms',
+                          transitionProperty: 'border-color, background-color, box-shadow, color',
+                          transitionDuration: '200ms',
                           transitionTimingFunction: EASE,
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
                       >
+                        <Emoji3D
+                          name={isAll ? 'Busts in silhouette' : (ROLE_EMOJI[o.value] ?? 'Person raising hand')}
+                          size={16}
+                          fallback={Users}
+                          fallbackColor={active ? GOLD : FOREST}
+                        />
+                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: active ? GOLD : INK, whiteSpace: 'nowrap' }}>
+                          {o.label}
+                        </span>
                         <span
-                          className="inline-flex items-center justify-center flex-shrink-0"
                           style={{
-                            width: 36, height: 36, borderRadius: 13,
-                            background: active
-                              ? `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}55, ${NEU_GRADIENTS.gold[1]}40), ${NEU.surface}`
-                              : 'rgba(27,56,40,0.05)',
-                            boxShadow: active ? NEU.outSm : 'none',
+                            fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                            padding: '1px 6px', borderRadius: 999,
+                            backgroundColor: active ? 'rgba(255,255,255,0.16)' : 'rgba(27,56,40,0.07)',
+                            color: active ? GOLD : SOFT,
                           }}
                         >
-                          <Emoji3D
-                            name={isAll ? 'Busts in silhouette' : (ROLE_EMOJI[o.value] ?? 'Person raising hand')}
-                            size={21}
-                            fallback={Users}
-                            fallbackColor={FOREST}
-                          />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: INK, lineHeight: 1.25, textWrap: 'balance' }}>
-                            {o.label}
-                          </span>
-                          <span
-                            className="block"
-                            style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: active ? FOREST : SOFT, fontVariantNumeric: 'tabular-nums' }}
-                          >
-                            {count.toLocaleString()} {count === 1 ? 'person' : 'people'}
-                          </span>
+                          {count.toLocaleString()}
                         </span>
                       </button>
                     );

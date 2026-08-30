@@ -127,7 +127,13 @@ const FOOTER_BG = '#F7F4EC';
 // Dark-mode counterparts, applied via the <style> block only.
 const D_PAGE_BG = '#14130F';
 const D_CARD_BG = '#1D1B16';
-const D_CHIP_BG = '#26231D';
+/* The logo chip stays LIGHT in dark mode, on purpose.
+   A conference logo is an arbitrary upload: dark seals and dark-ink wordmarks
+   are common, and painting them onto a near-black tile makes them vanish. This
+   is the same reasoning as LogoDisc on the web side, which sits every logo on a
+   near-white disc rather than trusting the artwork. A soft ring gives it an
+   edge against the dark card without a box-shadow, which Outlook drops. */
+const D_CHIP_BG = '#F4F1EA';
 const D_INK = '#F3EFE6';
 const D_INK_SOFT = '#CFC7B8';
 const D_MUTED = '#A79D8D';
@@ -375,72 +381,6 @@ function renderIdentityRow(
   </td></tr>`;
 }
 
-// ── Maker's mark ─────────────────────────────────────────────────────────────
-// A quiet "made with Gavelling" mark tucked into the bottom-right of the banner
-// band, between the banner image and the identity row.
-//
-// Why it is a ROW and not an OVERLAY. The obvious ask is "float it over the
-// banner", and in email that means one of two things, both of which cost more
-// than the mark is worth:
-//   * `position:absolute` — Outlook 2007–2019/365 on Windows renders through
-//     the WORD engine, which ignores position/z-index outright. The mark would
-//     drop below the banner as a second stacked image.
-//   * banner as a CSS `background-image` + a VML `<v:rect>/<v:fill type=frame>`
-//     for Outlook — this genuinely works, but it puts the CONFERENCE's banner
-//     (the loudest thing in the email) behind a property Gmail has repeatedly
-//     broken: caniemail still lists Gmail's background-image support as
-//     "partial and buggy — removes the entire style attribute or <style> tag
-//     when a url() function with a valid image URL is present". Trading a
-//     reliably-proxied <img> banner for a decorative maker's mark is a bad
-//     trade, and it would also violate this file's own rule that the <style>
-//     block never carries anything the email needs.
-// So the mark gets its own row: nothing can overlap, nothing can stack wrong,
-// and every client — Word engine included — renders the same tucked corner
-// chip. Outlook drops only `border-radius`, so the chip is a small square
-// instead of a rounded one. That is a deliberate-looking degradation.
-//
-// Placement: the conference's own logo sits at the LEFT of the identity row
-// directly below (52px, `renderIdentityRow`). This mark is 20px and hard right,
-// so the two never sit near each other or read as a co-brand.
-//
-// Only rendered when a banner is actually rendered — a solid-colour header is a
-// centred masthead on the accent, and a chip floating above nothing would just
-// look like a stray image.
-const MARK_SIZE = 20;
-
-/** Backing chip. Deliberately PAGE_BG rather than the `.e-chip` token: `.e-chip`
- *  is repainted dark by the prefers-color-scheme block, and the mark's artwork
- *  is a dark gavel — it would disappear. PAGE_BG is near-invisible on the white
- *  card in light mode (it reads as a notch of page showing through) and becomes
- *  a subtle light pill on the dark card, which is exactly where the artwork
- *  needs the backing. It carries no dark-mode class, so it stays light in both
- *  schemes by construction. */
-const MARK_CHIP_BG = PAGE_BG;
-
-function renderMakerMark(siteUrl: string): string {
-  // Absolute HTTPS, same convention as every other asset here (getSiteUrl() →
-  // NEXT_PUBLIC_SITE_URL, production fallback https://gavelling.com). This is
-  // the 512px SQUARE mark, never a lockup — see public/README.md and the note
-  // in renderIdentityRow about the crescent-"C" crop.
-  const src = `${siteUrl}/gavelling-mark.png`;
-  // Right padding is 40px, NOT the 18px this first shipped with, so the mark
-  // sits on the SAME optical margin as the identity row below it and every
-  // paragraph under that (all 40px). At 18px it hung further right than
-  // anything else in the email, which is most of what made it read as a stray
-  // floating chip rather than a corner mark. The identity row does not carry
-  // `.email-padding` either, so 40px is correct at every width.
-  return `<tr><td class="e-card" align="right" style="background-color:${CARD_BG};padding:8px 40px 0 40px;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" style="border-collapse:collapse;"><tr>
-      <td bgcolor="${MARK_CHIP_BG}" style="background-color:${MARK_CHIP_BG};border-radius:7px;padding:4px;">
-        <a href="${escapeHtml(siteUrl)}" target="_blank" title="Made with Gavelling" style="text-decoration:none;">
-          <img src="${escapeHtml(src)}" width="${MARK_SIZE}" height="${MARK_SIZE}" alt="Gavelling"
-               style="display:block;width:${MARK_SIZE}px;height:${MARK_SIZE}px;border:0;font-family:${SANS};font-size:10px;line-height:${MARK_SIZE}px;color:${MUTED};" />
-        </a>
-      </td>
-    </tr></table>
-  </td></tr>`;
-}
-
 function renderHeader(conference: EmailRenderConference, siteUrl: string, theme: Required<EmailTheme>): string {
   const bannerAbs = absolutizeUrl(conference.banner_url, siteUrl);
   const logoAbs = theme.showLogo ? absolutizeUrl(conference.logo_url, siteUrl) : null;
@@ -466,7 +406,6 @@ function renderHeader(conference: EmailRenderConference, siteUrl: string, theme:
   return (
     spine +
     banner +
-    (useBanner ? renderMakerMark(siteUrl) : '') +
     renderIdentityRow(conference, logoAbs, { onAccent: !useBanner, accent })
   );
 }
@@ -621,7 +560,7 @@ export function renderEmailHtml({
     .e-soft { color: ${D_INK_SOFT} !important; }
     .e-muted, .e-muted a, .e-muted div { color: ${D_MUTED} !important; }
     .e-footer { background-color: ${D_FOOTER_BG} !important; border-color: ${D_HAIRLINE} !important; }
-    .e-chip { background-color: ${D_CHIP_BG} !important; }
+    .e-chip { background-color: ${D_CHIP_BG} !important; box-shadow: 0 0 0 1px rgba(255,255,255,0.22) !important; }
     .e-link { color: ${mixHex(theme.accentColor, '#FFFFFF', 0.55)} !important; }
   }
   [data-ogsc] .e-page { background-color: ${D_PAGE_BG} !important; }

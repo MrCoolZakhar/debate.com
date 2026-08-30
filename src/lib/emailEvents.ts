@@ -483,7 +483,6 @@ export async function turnOnDefaultEmail(
     body_blocks: [],
     enabled: true,
     delivery: event?.defaultDelivery ?? 'immediate',
-    lifecycle: 'draft',
   });
   return { ok: !error, error: error?.message };
 }

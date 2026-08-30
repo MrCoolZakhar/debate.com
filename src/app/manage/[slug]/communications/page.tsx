@@ -4,9 +4,10 @@ import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, Palette, Trash2,
+  Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Trash2,
   BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass, Wrench,
-  Zap, Clock, BookOpen, KeyRound, PenLine, Plus,
+  Zap, Clock, BookOpen, KeyRound, PenLine, Plus, Inbox, Users, CheckCircle2,
+  CreditCard, Globe, FileText, Mic, HelpCircle,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -19,10 +20,10 @@ import {
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
 import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, type EventDef, type EventKey } from '@/lib/emailEvents';
-import { EASE } from '@/components/neu';
+import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
   SOFT, GREEN_INK, RED,
-  CARD_BORDER, CARD_SHADOW as LIFTED_SHADOW,
+  CARD_BORDER, CARD_SHADOW as LIFTED_SHADOW, CARD_SHADOW_HOVER as HOVER_SHADOW,
 } from '../live/tokens';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk } from '@/lib/appNotify';
@@ -94,7 +95,6 @@ interface EmailTemplate {
   body_blocks: unknown;
   enabled: boolean;
   delivery: 'immediate' | 'manual';
-  lifecycle: 'draft' | 'ready';
   updated_at: string;
   audience: SavedAudience | null;
 }
@@ -377,6 +377,11 @@ interface AdHocSeed {
    *  gone: the picker now has ONE custom button of its own, so asking the
    *  question again on two of the four cards was the same choice twice. */
   content: SeedContent;
+  /** Who `content.audience` resolves to, in words, for the card's reach line.
+   *  A seed with no `audience` presets nothing, and no filters means everyone
+   *  (no filters means everyone), which is what the builder opens with, so
+   *  unpreset seed is a real number and not a guess. */
+  audienceLabel: string;
 }
 
 const EMPTY_SAVED_AUDIENCE: SavedAudience = {
@@ -391,6 +396,7 @@ const SESSION_CHAIR_DEFAULT = getDefaultEventEmail('session_chair_invite');
 const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'session-codes-delegates',
+    audienceLabel: 'Delegates',
     emoji: '🔑',
     title: 'Session codes — delegates',
     blurb: 'Every allocated delegate gets the join code for their committee room.',
@@ -404,6 +410,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   },
   {
     id: 'session-codes-chairs',
+    audienceLabel: 'Chairs',
     emoji: '🪑',
     title: 'Session codes — chairs',
     blurb: 'Chairs get their session details and where to find their chair password.',
@@ -417,6 +424,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   },
   {
     id: 'payment-reminder',
+    audienceLabel: 'Anyone still unpaid',
     emoji: '💳',
     title: 'Payment reminder',
     blurb: 'A nudge to everyone whose fee is still outstanding.',
@@ -434,6 +442,7 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
   },
   {
     id: 'welcome-pack',
+    audienceLabel: 'Everyone',
     emoji: '📦',
     title: 'Welcome / logistics pack',
     blurb: 'Arrival, venue and schedule details in one email before the conference.',
@@ -466,6 +475,43 @@ const BORDER = '#DDD4C0';
 const PANEL: React.CSSProperties = {
   backgroundColor: '#F0EBDD',
   border: CARD_BORDER,
+  boxShadow: LIFTED_SHADOW,
+};
+
+/** `PANEL` with a gold wash, and its green sibling.
+ *
+ *  The gradient runs 150deg, the same direction the neumorphic light already
+ *  comes from, so a washed card reads as the SAME ivory material catching more
+ *  light, not as a differently coloured card dropped into the page. Both stop
+ *  well short of saturation, because every one of them has to carry text:
+ *
+ *    ink on the darkest corner of the wash        gold      green
+ *    NEU.ink   #1C1410 ......................... 14.3:1    12.9:1
+ *    SOFT      #6A5A4A .......................... 5.17:1    4.62:1
+ *    GOLD_INK  #6B5A15 .......................... 5.30:1      n/a
+ *    GREEN_INK #2F6644 ...........................  n/a      4.80:1
+ *
+ *  The green wash is capped at 0.15 for exactly that reason: at 0.20 GREEN_INK
+ *  measured 4.45:1 on its own panel, which fails. Do not deepen either stop
+ *  without re-measuring the ink that sits on it. */
+const GOLD_PANEL: React.CSSProperties = {
+  background: 'linear-gradient(150deg, rgba(238,217,138,0.42), rgba(238,217,138,0.10) 62%), #F0EBDD',
+  border: '1px solid rgba(182,135,31,0.34)',
+  boxShadow: LIFTED_SHADOW,
+};
+
+const GREEN_PANEL: React.CSSProperties = {
+  background: 'linear-gradient(150deg, rgba(61,122,82,0.15), rgba(61,122,82,0.04) 62%), #F0EBDD',
+  border: '1px solid rgba(47,102,68,0.26)',
+  boxShadow: LIFTED_SHADOW,
+};
+
+/** The failure wash. Capped at 0.10 (not the 0.12 that looked right) because
+ *  SOFT measured 4.53:1 there, inside the rounding error of the AA line.
+ *  At 0.10: SOFT 4.72:1, RED 6.44:1, NEU.ink 14.5:1. */
+const RED_PANEL: React.CSSProperties = {
+  background: 'linear-gradient(150deg, rgba(139,32,32,0.10), rgba(139,32,32,0.03) 62%), #F0EBDD',
+  border: '1px solid rgba(139,32,32,0.28)',
   boxShadow: LIFTED_SHADOW,
 };
 
@@ -532,6 +578,52 @@ const EVENT_STAGE: Record<EventKey, Stage> = {
   organizer_invite: 'Team & questions',
   request_reply: 'Team & questions',
   request_received: 'Team & questions',
+};
+
+/** What each stage IS, said in one line, plus the art that carries it.
+ *
+ *  The registry is the surface that tells an organiser what Gavelling sends on
+ *  their behalf, and it used to open on six 11px letterspaced captions that
+ *  read like fieldset labels in a settings screen. A stage is a moment in the
+ *  conference, not a form section, so it now gets the weight of a heading: a
+ *  44px 3D emoji disc, a 26px title and a sentence saying what the moment is.
+ *
+ *  Every disc passes a lucide `fallback`: the Fluent art is a CDN image and
+ *  must degrade to a glyph rather than to a hole. Gold discs carry forest ink
+ *  (white on gold is unreadable), which `NeuIconDisc` handles via `darkStop`.
+ *
+ *  CHECK A NEW NAME AGAINST THE CDN BEFORE YOU COMMIT IT. Fluent files every
+ *  emoji that has skin-tone variants under a per-tone subfolder, so the flat
+ *  path `Emoji3D` builds 404s and the disc quietly drops to lucide. Both
+ *  "People holding hands" and "Person raising hand" do exactly that, and both
+ *  are still passed from several other surfaces in this repo, and neither has
+ *  once rendered as 3D art. One request settles it:
+ *    cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/<Name>/3D/<name>_3d.png */
+const STAGE_META: Record<Stage, { emoji: string; icon: typeof Bell; gradient: NeuGradient; blurb: string }> = {
+  Applying: {
+    emoji: 'Page facing up', icon: FileText, gradient: NEU_GRADIENTS.forest,
+    blurb: 'From the moment an application lands to the moment you answer it.',
+  },
+  Payment: {
+    emoji: 'Money bag', icon: CreditCard, gradient: NEU_GRADIENTS.gold,
+    blurb: 'Fees becoming due, clearing, and being waived.',
+  },
+  Allocation: {
+    emoji: 'Ballot box with ballot', icon: Globe, gradient: NEU_GRADIENTS.sage,
+    blurb: 'Countries and committees going out, changing, and coming back.',
+  },
+  Delegations: {
+    emoji: 'Busts in silhouette', icon: Users, gradient: NEU_GRADIENTS.green,
+    blurb: 'Delegations gaining and losing members and places.',
+  },
+  Session: {
+    emoji: 'Studio microphone', icon: Mic, gradient: NEU_GRADIENTS.forest,
+    blurb: 'Everything the days of the conference itself need.',
+  },
+  'Team & questions': {
+    emoji: 'Red question mark', icon: HelpCircle, gradient: NEU_GRADIENTS.gold,
+    blurb: 'Your own team, and the questions people send you.',
+  },
 };
 
 /** 24h snooze for dismissable rail cards, per conference, client-local. */
@@ -703,92 +795,69 @@ function PillToggle({ value, onChange }: { value: boolean; onChange: () => void 
   );
 }
 
-function TabPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className="focus:outline-none transition-colors"
-      style={{
-        padding: '7px 20px', borderRadius: 8, fontSize: 11, fontFamily: OUTFIT, fontWeight: 700,
-        letterSpacing: '0.06em', border: 'none',
-        backgroundColor: active ? '#1B3828' : 'transparent',
-        color: active ? '#EED98A' : SOFT,
-        cursor: 'pointer',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-
-const COLOR_PALETTE = ['#1B3828', '#8A6614', '#8B2020', '#2A4B7C', '#5C3A72', '#1C1410'];
-const BUTTON_COLOR_PALETTE = ['#EED98A', '#F3E3A1', '#B6871F', '#9AC6A8', '#DCEAF5', '#F5D6C6'];
-
-function ColorField({
-  label, value, onChange, palette,
+/** The title above one of the three sections.
+ *
+ *  It sits OUTSIDE the card, not inside it, so the three headings align on one
+ *  baseline no matter how tall or short the card under each of them is, which is
+ *  thing that makes three columns read as three peers rather than as a stack
+ *  of unrelated panels.
+ *
+ *  Every disc passes a lucide `fallback`: the Fluent art is a CDN image and a
+ *  blocked request must land on a glyph, never on a hole. */
+function ColumnHeading({
+  emoji, icon, gradient, title, sub, count,
 }: {
-  label: string; value: string; onChange: (v: string) => void; palette: string[];
+  emoji: string;
+  icon: typeof Bell;
+  gradient: NeuGradient;
+  title: string;
+  sub: string;
+  /** Unread badge. Rendered only above zero, in the forest/gold pairing. */
+  count?: number;
 }) {
   return (
-    <div className="mb-4">
-      <p className="text-xs font-bold mb-1.5" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-        {label.toUpperCase()}
-      </p>
-      <div className="flex items-center gap-2 flex-wrap">
-        {palette.map(c => {
-          const active = value.toLowerCase() === c.toLowerCase();
-          return (
-            <button
-              key={c}
-              type="button"
-              onClick={() => onChange(c)}
-              title={c}
-              className="flex-shrink-0 rounded-full focus:outline-none"
+    <div className="flex items-center gap-3 mb-3">
+      <NeuIconDisc gradient={gradient} emoji={emoji} icon={icon} size={44} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <h2
+            className="font-black"
+            style={{
+              color: NEU.ink, fontFamily: OUTFIT, fontSize: 22,
+              lineHeight: 1.1, letterSpacing: '-0.022em',
+              textWrap: 'balance', overflowWrap: 'anywhere',
+            }}
+          >
+            {title}
+          </h2>
+          {!!count && count > 0 && (
+            <span
+              className="inline-flex items-center justify-center flex-shrink-0"
               style={{
-                width: 26, height: 26, backgroundColor: c,
-                border: active ? '2.5px solid #1B3828' : '1px solid rgba(0,0,0,0.15)',
-                boxShadow: active ? '0 0 0 2px rgba(238,217,138,0.55)' : 'none',
+                minWidth: 22, height: 22, padding: '0 7px', borderRadius: 999,
+                backgroundColor: '#EED98A', color: '#1B3828',
+                fontFamily: OUTFIT, fontSize: 12, fontWeight: 900,
+                fontVariantNumeric: 'tabular-nums',
+                boxShadow: NEU.outSm,
               }}
-            />
-          );
-        })}
-        <input
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder="#000000"
-          className="rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
-          style={{ border: `1px solid ${BORDER}`, color: '#1C1410', fontFamily: OUTFIT, width: 92 }}
-        />
+            >
+              {count}
+            </span>
+          )}
+        </div>
+        <p
+          style={{
+            color: SOFT, fontFamily: OUTFIT, fontSize: 12.5,
+            lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty',
+          }}
+        >
+          {sub}
+        </p>
       </div>
     </div>
   );
 }
 
-function SegButton({
-  active, onClick, icon: Icon, children,
-}: {
-  active: boolean; onClick: () => void; icon: typeof ChevronDown; children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold focus:outline-none transition-colors"
-      style={{
-        border: active ? '1px solid #1B3828' : `1px solid ${BORDER}`,
-        backgroundColor: active ? '#1B3828' : 'transparent',
-        color: active ? '#EED98A' : '#4A4238',
-        fontFamily: OUTFIT,
-      }}
-    >
-      <Icon size={13} /> {children}
-    </button>
-  );
-}
-
-/** Quiet bordered action — the landing's secondary button. Hairline edge,
- *  forest wash on hover, scale-on-press. */
 function GhostBtn({
   onClick, children, title: btnTitle, danger = false, disabled = false,
 }: {
@@ -858,34 +927,35 @@ function PrimaryBtn({
 /** One card on the "Coming up" rail. Gold-tinted when it is a recommendation;
  *  otherwise the same ivory panel as everything else. Exactly one action. */
 function RailCard({
-  icon: Icon, title, sub, gold = false, live = false,
+  icon: Icon, emoji, title, sub, gold = false, live = false,
   actionLabel, onAction, onDismiss,
 }: {
-  icon: typeof Bell; title: string; sub?: string; gold?: boolean; live?: boolean;
+  icon: typeof Bell;
+  /** Fluent 3D asset name. `icon` stays required and becomes its fallback, so
+   *  a blocked CDN degrades to exactly the glyph this card had before. */
+  emoji: string;
+  title: string; sub?: string; gold?: boolean; live?: boolean;
   actionLabel?: string; onAction?: () => void; onDismiss?: () => void;
 }) {
   return (
     <div
-      className="relative flex items-start gap-3 rounded-2xl px-4 py-3"
+      className="relative flex items-start gap-3 rounded-2xl px-4 py-3.5"
       style={{
-        ...PANEL,
-        ...(gold ? {
-          background: 'linear-gradient(135deg, rgba(238,217,138,0.35), rgba(238,217,138,0.10)), #F0EBDD',
-          border: '1px solid rgba(182,135,31,0.38)',
-        } : {}),
-        minWidth: 230, maxWidth: 340, flex: '1 1 240px',
+        // FULL WIDTH, not `flex: 1 1 240px` with a 340px cap. These cards used
+        // to wrap across a full-page rail; they are a column now, and a card
+        // that stops at 340px inside a 420px column leaves a ragged right edge
+        // down the whole section.
+        ...(gold ? GOLD_PANEL : PANEL),
+        width: '100%',
       }}
     >
-      <span
-        className="flex items-center justify-center flex-shrink-0 rounded-xl"
-        style={{
-          width: 34, height: 34, marginTop: 1,
-          background: gold ? 'linear-gradient(150deg, rgba(182,135,31,0.22), rgba(182,135,31,0.08))' : 'rgba(27,56,40,0.07)',
-          border: gold ? '1px solid rgba(182,135,31,0.35)' : '1px solid rgba(27,56,40,0.12)',
-        }}
-      >
-        <Icon size={16} strokeWidth={2} style={{ color: gold ? GOLD_INK : '#1B3828' }} />
-      </span>
+      <NeuIconDisc
+        gradient={gold ? NEU_GRADIENTS.gold : NEU_GRADIENTS.forest}
+        emoji={emoji}
+        icon={Icon}
+        size={38}
+        style={{ marginTop: 1 }}
+      />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.3, textWrap: 'pretty' }}>
           {live && <span className="inline-block rounded-full animate-pulse flex-shrink-0" style={{ width: 7, height: 7, backgroundColor: '#B6871F' }} />}
@@ -958,11 +1028,17 @@ function RailCard({
 // `overflow` can clip it, and it cannot inherit a stacking context from the
 // band it was opened from.
 function NewEmailModal({
-  onClose, onPick, onCustom,
+  onClose, onPick, onCustom, reach,
 }: {
   onClose: () => void;
   onPick: (seed: AdHocSeed) => void;
   onCustom: () => void;
+  /** seed.id → how many people that seed's preset audience reaches right now,
+   *  or `null` when it cannot be resolved without opening the builder. The
+   *  numbers come from `appMatchesAudience` over the applications the page has
+   *  already loaded, through the SAME predicate the builder and the send pipeline
+   *  use, so the card and the SEND button can never disagree. */
+  reach: Record<string, number | null>;
 }) {
   // Escape closes, and the scroll lock stops the landing drifting behind the
   // scrim on trackpads.
@@ -991,7 +1067,7 @@ function NewEmailModal({
           className="relative w-full rounded-3xl p-5 sm:p-6 my-auto"
           style={{
             ...PANEL,
-            maxWidth: 680,
+            maxWidth: 760,
             boxShadow: '-10px -10px 26px rgba(255,255,255,0.55), 16px 18px 46px rgba(27,56,40,0.36)',
             animation: `commsPop 220ms ${EASE} both`,
           }}
@@ -1025,7 +1101,9 @@ function NewEmailModal({
           </p>
 
           <div className="grid gap-2.5 sm:grid-cols-2" style={{ marginBlockStart: 18 }}>
-            {AD_HOC_SEEDS.map(seed => (
+            {AD_HOC_SEEDS.map(seed => {
+              const reachOf = seed.id in reach ? reach[seed.id] : null;
+              return (
               <button
                 key={seed.id}
                 type="button"
@@ -1045,28 +1123,60 @@ function NewEmailModal({
                   (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;
                 }}
               >
-                <span className="flex items-start gap-2.5">
+                <span className="flex items-start gap-3">
                   <span
-                    className="flex items-center justify-center rounded-xl flex-shrink-0"
-                    style={{ ...RAISED_DISC, width: 38, height: 38, fontSize: 19, lineHeight: 1 }}
+                    className="flex items-center justify-center rounded-2xl flex-shrink-0"
+                    style={{ ...RAISED_DISC, width: 52, height: 52, fontSize: 27, lineHeight: 1 }}
                     aria-hidden
                   >
                     {seed.emoji}
                   </span>
                   <span className="min-w-0 flex-1 block">
+                    {/* 27px, exactly double the 13.5 this shipped with. The
+                        card's job is "find my template in under a second" and
+                        the template's NAME is the only thing that does that
+                        job, so it is now unmistakably the loudest thing on
+                        the card rather than the same weight as its blurb. */}
                     <span
-                      className="block font-bold"
-                      style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.25, textWrap: 'pretty' }}
+                      className="block font-black"
+                      style={{
+                        color: '#1C1410', fontFamily: OUTFIT, fontSize: 27,
+                        lineHeight: 1.08, letterSpacing: '-0.025em',
+                        textWrap: 'balance', overflowWrap: 'anywhere',
+                      }}
                     >
                       {seed.title}
                     </span>
                     <span
                       className="block"
-                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.4, marginBlockStart: 3, textWrap: 'pretty' }}
+                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 5, textWrap: 'pretty' }}
                     >
                       {seed.blurb}
                     </span>
                   </span>
+                </span>
+
+                {/* HOW MANY PEOPLE, before you commit to opening anything. The
+                    single most expensive thing about this modal was that you
+                    had to pick a template, load the builder and read the
+                    audience bar to find out a template was aimed at nobody. */}
+                <span
+                  className="flex items-center gap-1.5 rounded-full self-start"
+                  style={{
+                    marginBlockStart: 10, padding: '5px 11px',
+                    backgroundColor: reachOf === 0 ? 'rgba(154,138,120,0.18)' : 'rgba(182,135,31,0.16)',
+                    border: `1px solid ${reachOf === 0 ? 'rgba(154,138,120,0.34)' : 'rgba(182,135,31,0.32)'}`,
+                    color: reachOf === 0 ? SOFT : GOLD_INK,
+                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
+                    letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  <Users size={12} strokeWidth={2.5} />
+                  {reachOf === null
+                    ? 'Audience set in the editor'
+                    : reachOf === 0
+                      ? `${seed.audienceLabel}: nobody yet`
+                      : `${seed.audienceLabel} · ${reachOf.toLocaleString()} ${reachOf === 1 ? 'person' : 'people'}`}
                 </span>
                 {/* What gets personalised, before you open it. */}
                 <span className="flex flex-wrap gap-1" style={{ marginBlockStart: 9 }}>
@@ -1085,7 +1195,8 @@ function NewEmailModal({
                   ))}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
 
           {/* The one custom button, under a rule so it reads as the other
@@ -1175,6 +1286,31 @@ const CONSOLE_DISC: Record<ConsoleTone, string> = {
   idle: 'linear-gradient(150deg, rgba(27,56,40,0.10), rgba(27,56,40,0.03))',
 };
 
+/** The art per tone. 3D over lucide, because the console is the one thing on
+ *  the page that has to be readable from across a room, and a monochrome
+ *  forest glyph at 22px is not. Every one keeps its lucide glyph as the CDN
+ *  fallback, so a blocked image degrades to what was there before. */
+const CONSOLE_EMOJI: Record<ConsoleTone, string> = {
+  alert: 'Warning',
+  live: 'Envelope with arrow',
+  warn: 'Bellhop bell',
+  calm: 'Check mark button',
+  idle: 'Envelope',
+};
+
+/** The card surface per tone. The wash rides on the OUTER card and the well
+ *  inside stays the neutral pressed dent, so every word in the console sits on
+ *  ivory whatever the state is: the colour is a band around the statement,
+ *  never behind it. `idle` gets no wash at all: nothing has happened yet, and
+ *  a coloured card would be saying something. */
+const CONSOLE_PANEL: Record<ConsoleTone, React.CSSProperties> = {
+  alert: RED_PANEL,
+  live: GOLD_PANEL,
+  warn: GOLD_PANEL,
+  calm: GREEN_PANEL,
+  idle: PANEL,
+};
+
 /** Meter fill per tone — the live card's `toneFill`, same two-stop idea. */
 const CONSOLE_FILL: Record<ConsoleTone, [string, string]> = {
   alert: ['#8B2020', '#B04A4A'],
@@ -1213,13 +1349,13 @@ function Console({
 
   return (
     <section
-      className="rounded-3xl p-3.5 sm:p-4 mb-4"
-      style={PANEL}
+      className="rounded-3xl p-3.5 sm:p-4 flex flex-col"
+      style={{ ...CONSOLE_PANEL[model.tone], flex: '1 1 auto' }}
       data-tutorial="comms-console"
       aria-live="polite"
     >
-      <div className="rounded-2xl p-4 sm:p-5" style={WELL}>
-        <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
+      <div className="rounded-2xl p-4 flex flex-col flex-1" style={WELL}>
+        <div className="flex items-start gap-3.5 min-w-0 flex-1">
           {/* The art. A raised disc in a pressed well — a token in a slot. */}
           <span
             className="flex items-center justify-center rounded-full flex-shrink-0"
@@ -1230,7 +1366,7 @@ function Console({
               className="flex items-center justify-center rounded-full"
               style={{ width: 44, height: 44, background: CONSOLE_DISC[model.tone] }}
             >
-              <Icon size={22} strokeWidth={2} style={{ color: ink }} />
+              <Emoji3D name={CONSOLE_EMOJI[model.tone]} size={28} fallback={Icon} fallbackColor={ink} />
             </span>
           </span>
 
@@ -1256,8 +1392,14 @@ function Console({
               className="font-extrabold"
               style={{
                 color: '#1C1410', fontFamily: OUTFIT,
-                fontSize: 'clamp(19px, 2.1vw, 26px)',
-                lineHeight: 1.14, letterSpacing: '-0.016em',
+                // NOT a vw clamp any more. `2.1vw` sized the headline off the
+                // VIEWPORT while the console now lives in a third of it, so at
+                // 1440 it asked for 26px inside a 420px column and "63 emails
+                // never arrived" broke across four lines. Fixed 21px, which is
+                // the same optical weight the old clamp produced at the width
+                // this column actually is.
+                fontSize: 21,
+                lineHeight: 1.16, letterSpacing: '-0.016em',
                 textWrap: 'balance', fontVariantNumeric: 'tabular-nums',
                 overflowWrap: 'anywhere', marginBlockStart: 3,
               }}
@@ -1284,11 +1426,10 @@ function Console({
               them said "63 emails never arrived" and the other said "write
               another". NEW EMAIL is a property of the PAGE, not of any state,
               so it moved to the page header. */}
-          {model.action && (
-            <div className="hidden sm:block flex-shrink-0">
-              <PrimaryBtn onClick={model.action.onClick}>{model.action.label}</PrimaryBtn>
-            </div>
-          )}
+          {/* NOT beside the statement any more. `sm:` is a VIEWPORT query and
+              the console is now a column, so on a wide screen it put a
+              gradient button into a 420px card next to a headline and squeezed
+              both. One action, always under the words it follows from. */}
         </div>
 
         {/* The delivery scrubber. Measures what actually left the building:
@@ -1333,10 +1474,8 @@ function Console({
           </div>
         </div>
 
-        {/* Below 640px the action moves under the statement rather than
-            squeezing the headline into a column two words wide. */}
         {model.action && (
-          <div className="flex sm:hidden" style={{ marginBlockStart: 12 }}>
+          <div className="flex" style={{ marginBlockStart: 12 }}>
             <PrimaryBtn onClick={model.action.onClick}>{model.action.label}</PrimaryBtn>
           </div>
         )}
@@ -1349,10 +1488,14 @@ function Console({
  *  every state — the live card's "what has happened" band: static facts, low
  *  contrast in the hierarchy, so the console above keeps dominating. */
 function StatWell({
-  label, value, ink = '#1C1410', onClick, title: wellTitle,
+  label, value, ink = '#1C1410', onClick, title: wellTitle, emoji, icon: Icon,
 }: {
   label: string; value: string | number; ink?: string;
   onClick?: () => void; title?: string;
+  /** Fluent 3D art, seated top-right of the well. Decorative and aria-hidden:
+   *  the figure and its label already say everything, so a blocked CDN image
+   *  costs the strip nothing. */
+  emoji: string; icon: typeof Bell;
 }) {
   const interactive = !!onClick;
   const Tag = (interactive ? 'button' : 'div') as 'button';
@@ -1377,14 +1520,17 @@ function StatWell({
         (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;
       } : undefined}
     >
-      <span
-        className="block font-extrabold"
-        style={{
-          color: ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.05,
-          letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {value}
+      <span className="flex items-center justify-between gap-2">
+        <span
+          className="block font-extrabold"
+          style={{
+            color: ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.05,
+            letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {value}
+        </span>
+        <Emoji3D name={emoji} size={20} fallback={Icon} fallbackColor={SOFT} style={{ opacity: 0.95 }} />
       </span>
       <span
         className="block font-bold uppercase"
@@ -1432,7 +1578,6 @@ function CommunicationsPageInner() {
   // registry of self-sending emails, one click off the landing. Below 1024px
   // the inbox column collapses into its own tab.
   const [view, setView] = useState<'landing' | 'automatic'>('landing');
-  const [mobileTab, setMobileTab] = useState<'sent' | 'inbox'>('sent');
   const [historyExpandedId, setHistoryExpandedId] = useState<string | null>(null);
   const [recipientsExpandedId, setRecipientsExpandedId] = useState<string | null>(null);
   const [autoExpandedKey, setAutoExpandedKey] = useState<string | null>(null);
@@ -1493,8 +1638,11 @@ function CommunicationsPageInner() {
   // ── Notifications: PREVIEW DEFAULT modal ──
   const [previewDefaultKey, setPreviewDefaultKey] = useState<string | null>(null);
 
-  // ── Design section (conferences.email_theme) ──
-  const [designOpen, setDesignOpen] = useState(false);
+  // ── Email theme (conferences.email_theme) ──
+  // The CONTROLS moved out (src/components/EmailDesignPanel.tsx) but this
+  // state stays here on purpose: the debounced autosave below has invariants
+  // that only hold while the draft, the "user actually edited" flag and the
+  // last-confirmed value live together. The panel is a pure prop consumer.
   const [themeDraft, setThemeDraft] = useState<Required<EmailTheme>>(resolveEmailTheme(null));
   const [themeSaving, setThemeSaving] = useState(false);
   const [themeSaved, setThemeSaved] = useState(false);
@@ -1565,7 +1713,7 @@ function CommunicationsPageInner() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('email_templates')
-      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at, audience')
+      .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience')
       .eq('conference_id', conference.id);
     if (!fresh()) return;
     setTemplates((data ?? []) as EmailTemplate[]);
@@ -1940,11 +2088,16 @@ function CommunicationsPageInner() {
     return m;
   }, [outboxFeed, templateById]);
 
-  // The draft→ready lifecycle is gone as a UI concept: autosave makes every
-  // ad-hoc email a draft, and SEND is always available from the editor. The
-  // `lifecycle` column is left untouched on existing rows (and still written
-  // as 'draft' on inserts) so nothing downstream breaks — the UI just no
-  // longer reads it.
+  // THE `lifecycle` COLUMN IS GONE FROM THIS FILE. It was a draft→ready flag
+  // whose only two writers of 'ready' were deleted, so nothing could ever
+  // advance it again and no branch anywhere read it. Send state does not
+  // belong on a template in the first place: a template is a reusable body
+  // that can be sent many times, and the real per-send record lives in
+  // `email_outbox` (status, sent_at, per recipient) and `email_sends`
+  // (status, sent_at, per blast). A scalar on the template could only ever
+  // disagree with those. Neither read nor written here any more; the column
+  // itself is NOT NULL DEFAULT 'draft', so omitting it on insert is valid,
+  // and dropping it is a separate migration.
   const adhocTemplates = useMemo(
     () => templates.filter(t => !t.event_key).sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     [templates]
@@ -2020,6 +2173,42 @@ function CommunicationsPageInner() {
     },
     [chipCounts]
   );
+
+  /** HOW MANY PEOPLE EACH GALLERY TEMPLATE WOULD REACH, right now.
+   *
+   *  Built from the seed's own `content.audience` through `appMatchesAudience`
+   *  through the one predicate the builder's chips, the reach bar and the send
+   *  pipeline all run, so this number can never disagree with the one the
+   *  organiser sees a second later. Opted-out recipients are subtracted here
+   *  too, for the same reason: `finalRecipients` is what actually sends.
+   *
+   *  A seed with no `audience` presets no filters, and no filters means
+   *  everyone eligible, which IS what the builder opens with, so the number is
+   *  real rather than a guess. `null` is reserved for the case where the page
+   *  has no applications loaded to count against; the card then says the
+   *  audience is set in the editor instead of showing a confident zero. */
+  const seedReach = useMemo<Record<string, number | null>>(() => {
+    const out: Record<string, number | null> = {};
+    for (const seed of AD_HOC_SEEDS) {
+      if (applications.length === 0) { out[seed.id] = null; continue; }
+      const a = seed.content.audience;
+      const delegations = new Set(a?.delegationIds ?? []);
+      if (a?.includeIndependents) delegations.add(INDEPENDENT_KEY);
+      const sets: AudienceFilterSets = {
+        roles: new Set(a?.roles ?? []),
+        payment: new Set(a?.paymentStatuses ?? []),
+        delegations,
+        committees: new Set(a?.committeeIds ?? []),
+        attendance: new Set(a?.attendance ?? []),
+        status: new Set(a?.applicationStatuses ?? []),
+        aid: new Set(a?.aidStatuses ?? []),
+      };
+      out[seed.id] = eligibleApplications.filter(
+        x => appMatchesAudience(x, sets) && x.profiles?.notify_email_marketing !== false
+      ).length;
+    }
+    return out;
+  }, [applications.length, eligibleApplications]);
 
   const matchedRecipients = useMemo(() => {
     const byId = new Map(applications.map(a => [a.id, a]));
@@ -2135,7 +2324,7 @@ function CommunicationsPageInner() {
     { key: 'roles', label: 'Roles', emoji: 'Busts in silhouette', phrase: '', options: ROLE_OPTIONS, selected: selRoles, counts: countsFor('roles', ROLE_OPTIONS) },
     { key: 'payment', label: 'Payment', emoji: 'Money bag', phrase: 'marked {v}', options: PAYMENT_OPTIONS, selected: selPayment, counts: countsFor('payment', PAYMENT_OPTIONS) },
     { key: 'committees', label: 'Committees', emoji: 'Ballot box with ballot', phrase: 'in {v}', options: committeeOptions, selected: selCommittees, counts: countsFor('committees', committeeOptions) },
-    { key: 'delegations', label: 'Delegations', emoji: 'People holding hands', phrase: 'from {v}', options: delegationOptions, selected: selDelegations, counts: countsFor('delegations', delegationOptions) },
+    { key: 'delegations', label: 'Delegations', emoji: 'People hugging', phrase: 'from {v}', options: delegationOptions, selected: selDelegations, counts: countsFor('delegations', delegationOptions) },
     { key: 'attendance', label: 'Coming or not', emoji: 'Ticket', phrase: 'who are {v}', options: ATTENDANCE_OPTIONS, selected: selAttendance, counts: countsFor('attendance', ATTENDANCE_OPTIONS) },
     { key: 'status', label: 'Application status', emoji: 'Page facing up', phrase: 'whose application is {v}', options: APP_STATUS_OPTIONS, selected: selStatus, counts: countsFor('status', APP_STATUS_OPTIONS) },
     { key: 'aid', label: 'Financial aid', emoji: 'Money with wings', phrase: 'with {v}', options: AID_OPTIONS, selected: selAid, counts: countsFor('aid', AID_OPTIONS) },
@@ -2174,6 +2363,15 @@ function CommunicationsPageInner() {
           registered: !!a.profiles,
           optedOut: a.profiles?.notify_email_marketing === false,
           manual: manuallyAddedIds.has(a.id),
+          /* The roster panel draws these as their own columns rather than the
+             joined `sub` string, so it can show who someone is at the
+             conference without the organiser opening anything. All optional:
+             absent, the panel falls back to `sub`. */
+          email: a.profiles?.email ?? a.invited_email ?? null,
+          roleLabel: roleLabel(a.role),
+          delegation: a.societies?.name ?? (a.society_id == null ? 'Independent' : null),
+          committee: a.assigned_committee?.abbreviation ?? a.assigned_committee?.name ?? null,
+          country: a.assigned_country_name ?? null,
         };
       }),
     })),
@@ -2249,19 +2447,10 @@ function CommunicationsPageInner() {
     return ctx;
   }, [conference, profile, roleConfigs]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live shell preview for the Design section, a representative sample
-  // (allocation_assigned) rendered through the in-progress theme draft, not
-  // yet-saved conference.email_theme.
-  const designPreviewHtml = useMemo(() => {
-    if (!conference) return '';
-    const sample = getDefaultEventEmail('allocation_assigned');
-    if (!sample) return '';
-    return renderEmailHtml({
-      blocks: sample.blocks,
-      conference: { ...conference, email_theme: themeDraft },
-      ctx: testSendContext,
-    });
-  }, [conference, themeDraft, testSendContext]);
+  // The Design section's own preview iframe went with the section. The
+  // composer's canvas already IS the live preview, rendering the sheet
+  // straight from `design.theme`, so a second, smaller, staler copy of the
+  // same render was the only thing `designPreviewHtml` ever existed for.
 
   function buildRecipientFilterPayload() {
     return {
@@ -2406,15 +2595,14 @@ function CommunicationsPageInner() {
   // Deep link: ?event=<key> opens the Automatic-emails view with that event's
   // composer; ?inbox=<requestId> opens the Inbox on that thread (the target
   // of the 'request_received' email's button). The inbox is a permanent column
-  // on desktop, so opening the thread is enough there; below 1024px the same
-  // state shows through the INBOX tab.
+  // in the three-section grid at every width now, so selecting the thread is
+  // the whole job, and there is no tab left to switch to.
   useEffect(() => {
     if (loading || deepLinkHandled) return;
     setDeepLinkHandled(true);
     const inboxId = searchParams.get('inbox');
     if (inboxId) {
       setView('landing');
-      setMobileTab('inbox');
       setSelectedRequestId(inboxId);
       return;
     }
@@ -2547,10 +2735,9 @@ function CommunicationsPageInner() {
       body: t.body,
       body_blocks: t.body_blocks,
       delivery: 'manual',
-      lifecycle: 'draft',
       enabled: false,
       updated_at: new Date().toISOString(),
-    }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, lifecycle, updated_at, audience').single();
+    }).select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience').single();
     setDuplicatingIds(prev => { const nextSet = new Set(prev); nextSet.delete(t.id); return nextSet; });
     if (error || !data) { showFlash('err', error?.message ?? 'Could not duplicate the template.'); return; }
     setTemplates(prev => [...prev, data as EmailTemplate]);
@@ -2740,8 +2927,9 @@ function CommunicationsPageInner() {
       text: (
         <>
           This is <strong>Communications</strong> — every email your conference sends, and every
-          message it gets back. One screen: what is <TourGreen>coming up</TourGreen>, everything{' '}
-          <TourGreen>sent</TourGreen>, and the <TourGreen>inbox</TourGreen> for replies. Let me
+          message it gets back. Three sections across the top: what needs{' '}
+          <TourGreen>a look</TourGreen>, what is <TourGreen>going out soon</TourGreen>, and the{' '}
+          <TourGreen>inbox</TourGreen> for replies. Everything ever sent sits underneath. Let me
           show you around.
         </>
       ),
@@ -2763,14 +2951,15 @@ function CommunicationsPageInner() {
       id: 'sent-feed',
       targets: ['comms-sent-feed'],
       radius: 16,
-      before: () => { setView('landing'); setMobileTab('sent'); },
+      before: () => { setView('landing'); },
       text: (
         <>
           <TourGreen>Sent</TourGreen> is the full record — emails you wrote yourself AND the
           automatic ones the platform sent for you, with delivered/failed per recipient. Hit{' '}
           <TourGold>NEW EMAIL</TourGold> to pick a template or start blank, write with a live
-          preview beside you, and choose exactly who gets it — all on one screen.{' '}
-          <strong>Design</strong> below sets the look every email inherits.
+          preview beside you, and choose exactly who gets it, all on one screen. The{' '}
+          <strong>Design</strong> controls ride with the editor now, so the look every email
+          inherits is set beside the email you are writing.
         </>
       ),
     },
@@ -2778,7 +2967,7 @@ function CommunicationsPageInner() {
       id: 'inbox',
       targets: ['comms-inbox'],
       radius: 16,
-      before: () => { setView('landing'); setMobileTab('inbox'); setSelectedRequestId(null); },
+      before: () => { setView('landing'); setSelectedRequestId(null); },
       text: (
         <>
           <TourGold>Inbox</TourGold> is the other direction: questions and allocation swap
@@ -2925,7 +3114,6 @@ function CommunicationsPageInner() {
 
   function jumpToInbox() {
     setInboxStatusFilter(new Set(['open']));
-    setMobileTab('inbox');
     setSelectedRequestId(null);
     document.getElementById('comms-inbox-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -3044,8 +3232,8 @@ function CommunicationsPageInner() {
   const confirmDisabled = requireTypedConfirm && sendConfirmText.trim().toUpperCase() !== 'SEND';
   const namesPreview = finalRecipients.slice(0, 5).map(a => a.profiles?.display_name ?? a.invited_name ?? 'Unknown').join(', ');
 
-  // ── Row renderer for ad-hoc templates (all drafts now — the draft→ready
-  // lifecycle is retired; SEND lives in the editor, always visible) ─────────
+  // ── Row renderer for ad-hoc templates (SEND lives in the editor and is
+  // always visible, so these rows carry no state of their own) ─────────────
 
   function renderAdHocRow(t: EmailTemplate) {
     return (
@@ -3442,38 +3630,9 @@ function CommunicationsPageInner() {
         </div>
       )}
 
-      {/* ── Builder header ── */}
-      {builderOpen && (
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={closeBuilder}
-            className="text-sm font-semibold focus:outline-none transition-colors"
-            style={{ color: '#9A8A78', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-          >
-            ← BACK
-          </button>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSaveAndClose}
-              disabled={savingTemplate}
-              className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors disabled:opacity-60"
-              style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
-              onMouseEnter={e => { if (!savingTemplate) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              {savingTemplate ? 'SAVING...' : 'SAVE'}
-            </button>
-            {/* SEND is NOT here any more — it moved onto the "who gets it" bar
-                (AudienceReach), beside the recipient count it acts on. Same
-                handler, same confirm modal, same typed-SEND gate above 200.
-                Event templates never had one and still don't: their audience
-                is fixed by the event and they are turned on, not sent. */}
-          </div>
-        </div>
-      )}
-
+      {/* The builder's own header carries BACK, the name and SAVE now. Drawing
+          them here as well cost ~142px above the paper, which is exactly the
+          space the email was being cut off by. */}
       {!builderOpen && (
         <DraftNoticeList
           notices={draftNotices}
@@ -3512,28 +3671,65 @@ function CommunicationsPageInner() {
             ← BACK TO COMMUNICATIONS
           </button>
 
-          <div className="mb-6">
-            <h2 className="font-black text-xl" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>
-              Automatic emails
-            </h2>
-            <p className="text-sm mt-1" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty', maxWidth: 640 }}>
-              Each one is tied to a moment in the conference lifecycle and sends itself the second
-              that moment happens. Turned on without a draft, it sends our default copy — draft your
-              own and that sends instead.
-            </p>
-            <p className="text-xs mt-1.5 font-bold" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.04em' }}>
-              {enabledCount} ON{autoDefaultCount > 0 ? ` · ${autoDefaultCount} SENDING OUR DEFAULT COPY` : ''}
-            </p>
+          <div className="rounded-3xl p-5 sm:p-6 mb-7" style={GOLD_PANEL}>
+            <div className="flex items-start gap-4">
+              <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Bellhop bell" icon={Bell} size={56} />
+              <div className="min-w-0 flex-1">
+                <h2
+                  className="font-black"
+                  style={{
+                    color: NEU.ink, fontFamily: OUTFIT, fontSize: 'clamp(24px, 3vw, 32px)',
+                    lineHeight: 1.08, letterSpacing: '-0.022em', textWrap: 'balance',
+                  }}
+                >
+                  Automatic emails
+                </h2>
+                <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty', maxWidth: 640, marginBlockStart: 5, lineHeight: 1.5 }}>
+                  Each one is tied to a moment in the conference and sends itself the second that
+                  moment happens. Turned on without a draft it sends our default copy; draft your
+                  own and that sends instead.
+                </p>
+                <p className="text-xs font-bold" style={{ color: GOLD_INK, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.05em', marginBlockStart: 8 }}>
+                  {enabledCount} ON{autoDefaultCount > 0 ? ` · ${autoDefaultCount} SENDING OUR DEFAULT COPY` : ''}
+                </p>
+              </div>
+            </div>
           </div>
 
           {STAGE_ORDER.map(stage => {
             const evs = (EVENT_REGISTRY as readonly EventDef[]).filter(e => EVENT_STAGE[e.key as EventKey] === stage);
             if (evs.length === 0) return null;
+            const meta = STAGE_META[stage];
+            const onCount = evs.filter(e => e.functional || templatesByEvent.get(e.key)?.enabled).length;
             return (
-              <div key={stage} className="mb-7">
-                <p className="mb-2" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em' }}>
-                  {stage.toUpperCase()}
-                </p>
+              <div key={stage} className="mb-9">
+                <div className="flex items-center gap-3 mb-3">
+                  <NeuIconDisc gradient={meta.gradient} emoji={meta.emoji} icon={meta.icon} size={46} />
+                  <div className="min-w-0">
+                    <h3
+                      className="font-black"
+                      style={{
+                        color: NEU.ink, fontFamily: OUTFIT, fontSize: 26,
+                        lineHeight: 1.1, letterSpacing: '-0.02em',
+                        textWrap: 'balance', overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {stage}
+                    </h3>
+                    <p
+                      style={{
+                        color: SOFT, fontFamily: OUTFIT, fontSize: 12.5,
+                        lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {meta.blurb}
+                      <span style={{ color: onCount > 0 ? GREEN_INK : SOFT, fontWeight: 800 }}>
+                        {' '}{onCount} of {evs.length} on
+                      </span>
+                    </p>
+                  </div>
+                </div>
                 <div className="flex flex-col gap-2">
                   {evs.map((ev: EventDef) => {
                     const template = templatesByEvent.get(ev.key);
@@ -3618,43 +3814,43 @@ function CommunicationsPageInner() {
           onClose={() => setPickerOpen(false)}
           onPick={seed => openBuilderForSeed(seed.content)}
           onCustom={() => openBuilderForAdHoc()}
+          reach={seedReach}
         />
       )}
 
       {/* ═══ LANDING ═══ */}
+      {/* ═══ LANDING ═══ */}
       {!builderOpen && !loading && view === 'landing' && (
         <>
-          {/* ── Band 1 · The console ──
-              The page's one statement, and the one action that follows from
-              it. Same panel in every state; only the words change. */}
-          <Console
-            model={consoleModel}
-            delivered={deliveredTotal}
-            attempted={attemptedTotal}
-            meterTone={failedTotal > 0 ? 'alert' : drainingCount > 0 ? 'live' : attemptedTotal > 0 ? 'calm' : 'idle'}
-          />
-
-          {/* ── Band 2 · The figures ──
-              Static facts, identical in every state, deliberately tight so the
-              console keeps dominating — the live card's "what has happened"
-              band. Pressed wells, tabular figures. Three of the five are also
-              jumps, because a number you cannot act on is trivia. */}
+          {/* ── The figures ──
+              First on the page now, and first on purpose. Every other band
+              here is a verdict about one state; this is the only one true in
+              all of them. It also replaces the old opening move, which was a
+              full-width card shouting about mail that never arrived before
+              the page had said anything else at all. Pressed wells, tabular
+              figures, three of the five are jumps. */}
           <div className="flex flex-wrap gap-2.5 mb-7">
-            <StatWell label="Delivered" value={deliveredTotal.toLocaleString()} ink={deliveredTotal > 0 ? GREEN_INK : '#1C1410'} />
+            <StatWell label="Delivered" value={deliveredTotal.toLocaleString()} ink={deliveredTotal > 0 ? GREEN_INK : '#1C1410'} emoji="Check mark button" icon={CheckCircle2} />
             <StatWell
               label="Failed"
               value={failedTotal.toLocaleString()}
+              emoji="Warning"
+              icon={AlertTriangle}
               ink={failedTotal > 0 ? RED : '#1C1410'}
             />
             <StatWell
               label="Automatic on"
               value={enabledCount + alwaysOnCount}
+              emoji="Bellhop bell"
+              icon={Bell}
               onClick={() => setView('automatic')}
               title="Open the automatic-emails registry"
             />
             <StatWell
               label="Unanswered"
               value={neverAnsweredCount}
+              emoji="Speech balloon"
+              icon={MessageSquare}
               ink={neverAnsweredCount > 0 ? GOLD_INK : '#1C1410'}
               onClick={jumpToInbox}
               title="Jump to the inbox"
@@ -3662,433 +3858,233 @@ function CommunicationsPageInner() {
             <StatWell
               label="Your emails"
               value={adhocTemplates.length}
+              emoji="Memo"
+              icon={PenLine}
               onClick={adhocTemplates.length > 0 ? () => setWorklistOpen(true) : openPicker}
               title={adhocTemplates.length > 0 ? 'Show your saved emails' : 'Start an email'}
             />
           </div>
 
-          {/* ── Band 3 · Coming up ──
-              Whatever the console did NOT promote. */}
-          <section className="mb-8" data-tutorial="comms-coming-up">
-            <p className="mb-2" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em' }}>
-              COMING UP
-            </p>
-            {railHasCards ? (
-              <div className="flex flex-wrap items-stretch gap-3">
-                {drainingCount > 0 && consoleModel.promoted !== 'draining' && (
-                  <RailCard
-                    icon={Zap}
-                    live
-                    title={`${drainingCount} email${drainingCount === 1 ? '' : 's'} sending now`}
-                    sub="Queued and being delivered — large sends take a few minutes to drain."
-                  />
+          {/* ══════════════════════════════════════════════════════════════
+              THE THREE SECTIONS.
+
+              Issues, Going out soon, Inbox. Equal citizens, side by side,
+              because they are the three different questions somebody opens
+              this page to ask (what is broken, what is about to leave, and
+              who is waiting on me), and none of them outranks the others.
+              The inbox especially: it was a 400px aside pinned next to a
+              feed that runs for a thousand pixels, so on any real conference
+              it was the shortest column on the page and read as a sidebar
+              rather than as a job.
+
+              THE LADDER
+                >=1280 (xl)  three equal columns.
+                1024-1279    two columns. Issues and Going out soon share row
+                             one; Inbox spans the full width on row two
+                             (lg:col-span-2 xl:col-span-1). Three tracks here
+                             would be ~269px each once the 96px nav rail and
+                             the page padding are gone, which is narrower
+                             than a thread row survives.
+                <1024        one column, same order. This is also why the old
+                             SENT / INBOX tab pair is gone: the inbox is the
+                             third thing on a phone now instead of the last,
+                             so there is nothing left for a tab to rescue.
+
+              items-stretch plus a flex-1 band inside each column, per the
+              card-grid contract, or the surplus height on the short
+              columns pools at the bottom as a dead strip.
+          ══════════════════════════════════════════════════════════════ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5 xl:gap-6 items-stretch mb-9">
+
+            {/* 1 · ISSUES, the console. Same panel, same states, same words;
+                it is a column now instead of a banner. */}
+            <div className="flex flex-col min-w-0">
+              <ColumnHeading
+                emoji={CONSOLE_EMOJI[consoleModel.tone]}
+                icon={consoleModel.icon}
+                gradient={consoleModel.tone === 'calm' ? NEU_GRADIENTS.green : consoleModel.tone === 'idle' ? NEU_GRADIENTS.sage : NEU_GRADIENTS.gold}
+                title="Issues"
+                sub="What needs a look before anything else."
+              />
+            <Console
+              model={consoleModel}
+              delivered={deliveredTotal}
+              attempted={attemptedTotal}
+              meterTone={failedTotal > 0 ? 'alert' : drainingCount > 0 ? 'live' : attemptedTotal > 0 ? 'calm' : 'idle'}
+            />
+            </div>
+
+            {/* 2 · GOING OUT SOON, everything the system is about to do, and
+                the door into the automatic emails that do it. */}
+            <div className="flex flex-col min-w-0" data-tutorial="comms-coming-up">
+              <ColumnHeading
+                emoji="Alarm clock"
+                icon={Clock}
+                gradient={NEU_GRADIENTS.forest}
+                title="Going out soon"
+                sub="Queued, scheduled, and the emails that send themselves."
+              />
+              <div className="flex flex-col gap-3 flex-1">
+                {railHasCards ? (
+                  // A COLUMN, not a wrapping row. The cards are full width now,
+                  // so `flex-wrap` gave every one of them its own line anyway
+                  // and only added a second gap on top of the parent's.
+                  <div className="flex flex-col gap-3">
+                    {drainingCount > 0 && consoleModel.promoted !== 'draining' && (
+                      <RailCard
+                        icon={Zap}
+                        emoji="Envelope with arrow"
+                        live
+                        title={`${drainingCount} email${drainingCount === 1 ? '' : 's'} sending now`}
+                        sub="Queued and being delivered. Large sends take a few minutes to drain."
+                      />
+                    )}
+                    {scheduledRows.length > 0 && earliestScheduled && (
+                      <RailCard
+                        icon={Clock}
+                        emoji="Alarm clock"
+                        title={`${scheduledRows.length} email${scheduledRows.length === 1 ? '' : 's'} scheduled`}
+                        sub={`First goes out ${formatSentAt(earliestScheduled)}.`}
+                      />
+                    )}
+                    {neverAnsweredCount > 0 && railCardVisible('unanswered') && consoleModel.promoted !== 'unanswered' && (
+                      <RailCard
+                        icon={MessageSquare}
+                        emoji="Speech balloon"
+                        gold={goldUnanswered}
+                        title={`${neverAnsweredCount} thread${neverAnsweredCount === 1 ? '' : 's'} never answered`}
+                        sub={digestOn
+                          ? 'A reminder digest keeps nudging your team while these wait.'
+                          : 'Still waiting on a first reply from your team.'}
+                        actionLabel="Answer them"
+                        onAction={jumpToInbox}
+                        onDismiss={() => dismissRailCard('unanswered')}
+                      />
+                    )}
+                    {draftRemindersDue > 0 && railCardVisible('draft-reminders') && (
+                      <RailCard
+                        icon={PenLine}
+                        emoji="Memo"
+                        title={`${draftRemindersDue} unfinished application${draftRemindersDue === 1 ? '' : 's'} can be nudged`}
+                        sub="Started over three days ago and never submitted."
+                        actionLabel="Send reminders"
+                        onAction={() => router.push(`/manage/${conference.slug}/applications`)}
+                        onDismiss={() => dismissRailCard('draft-reminders')}
+                      />
+                    )}
+                    {upcomingGuideReleases.length > 0 && (
+                      <RailCard
+                        icon={BookOpen}
+                        emoji="Books"
+                        title={`${upcomingGuideReleases.length} study guide${upcomingGuideReleases.length === 1 ? '' : 's'} scheduled to release`}
+                        sub={`Next on ${formatDate(upcomingGuideReleases[0].study_guides_publish_at!)}, delegates are emailed automatically.`}
+                        actionLabel="View committees"
+                        onAction={() => router.push(`/manage/${conference.slug}/committees`)}
+                      />
+                    )}
+                    {sessionCodesNudge && railCardVisible('session-codes') && consoleModel.promoted !== 'session-codes' && (
+                      <RailCard
+                        icon={KeyRound}
+                        emoji="Key"
+                        gold={goldSessionCodes}
+                        title="Session codes haven't gone out"
+                        sub={`The conference starts ${daysToStart === 0 ? 'today' : `in ${daysToStart} day${daysToStart === 1 ? '' : 's'}`} and allocated delegates have no join invite yet.`}
+                        actionLabel="Send join invites"
+                        onAction={() => {
+                          const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');
+                          if (def) { setView('automatic'); openBuilderForEvent(def); }
+                        }}
+                        onDismiss={() => dismissRailCard('session-codes')}
+                      />
+                    )}
+                    {/* Only when it is a RECOMMENDATION. The plain "N automatic
+                        emails are on" fact moved into the stat strip above, which
+                        is already a jump to the registry — a card that repeated it
+                        unconditionally was the reason this rail was never empty
+                        and therefore never meant anything. */}
+                    {autoDefaultCount > 0 && (
+                      <RailCard
+                        icon={Bell}
+                        emoji="Bellhop bell"
+                        gold={goldDefaults}
+                        title={`${autoDefaultCount} automatic email${autoDefaultCount === 1 ? '' : 's'} still send our copy`}
+                        sub="They work as they are, but your own wording will sound like your conference."
+                        actionLabel="Review them"
+                        onAction={() => setView('automatic')}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  // Nothing pending: one quiet line, never dead space. The
+                  // "Automatic emails: N on" link that used to ride on the end
+                  // of it is gone, because the card directly below now says
+                  // exactly that, permanently, and better.
+                  <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>
+                    Nothing queued and nothing scheduled. The emails below keep watching anyway.
+                  </p>
                 )}
-                {scheduledRows.length > 0 && earliestScheduled && (
-                  <RailCard
-                    icon={Clock}
-                    title={`${scheduledRows.length} email${scheduledRows.length === 1 ? '' : 's'} scheduled`}
-                    sub={`First goes out ${formatSentAt(earliestScheduled)}.`}
-                  />
-                )}
-                {neverAnsweredCount > 0 && railCardVisible('unanswered') && consoleModel.promoted !== 'unanswered' && (
-                  <RailCard
-                    icon={MessageSquare}
-                    gold={goldUnanswered}
-                    title={`${neverAnsweredCount} thread${neverAnsweredCount === 1 ? '' : 's'} never answered`}
-                    sub={digestOn
-                      ? 'A reminder digest keeps nudging your team while these wait.'
-                      : 'Still waiting on a first reply from your team.'}
-                    actionLabel="Answer them"
-                    onAction={jumpToInbox}
-                    onDismiss={() => dismissRailCard('unanswered')}
-                  />
-                )}
-                {draftRemindersDue > 0 && railCardVisible('draft-reminders') && (
-                  <RailCard
-                    icon={PenLine}
-                    title={`${draftRemindersDue} unfinished application${draftRemindersDue === 1 ? '' : 's'} can be nudged`}
-                    sub="Started over three days ago and never submitted."
-                    actionLabel="Send reminders"
-                    onAction={() => router.push(`/manage/${conference.slug}/applications`)}
-                    onDismiss={() => dismissRailCard('draft-reminders')}
-                  />
-                )}
-                {upcomingGuideReleases.length > 0 && (
-                  <RailCard
-                    icon={BookOpen}
-                    title={`${upcomingGuideReleases.length} study guide${upcomingGuideReleases.length === 1 ? '' : 's'} scheduled to release`}
-                    sub={`Next on ${formatDate(upcomingGuideReleases[0].study_guides_publish_at!)} — delegates are emailed automatically.`}
-                    actionLabel="View committees"
-                    onAction={() => router.push(`/manage/${conference.slug}/committees`)}
-                  />
-                )}
-                {sessionCodesNudge && railCardVisible('session-codes') && consoleModel.promoted !== 'session-codes' && (
-                  <RailCard
-                    icon={KeyRound}
-                    gold={goldSessionCodes}
-                    title="Session codes haven't gone out"
-                    sub={`The conference starts ${daysToStart === 0 ? 'today' : `in ${daysToStart} day${daysToStart === 1 ? '' : 's'}`} and allocated delegates have no join invite yet.`}
-                    actionLabel="Send join invites"
-                    onAction={() => {
-                      const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');
-                      if (def) { setView('automatic'); openBuilderForEvent(def); }
-                    }}
-                    onDismiss={() => dismissRailCard('session-codes')}
-                  />
-                )}
-                {/* Only when it is a RECOMMENDATION. The plain "N automatic
-                    emails are on" fact moved into the stat strip above, which
-                    is already a jump to the registry — a card that repeated it
-                    unconditionally was the reason this rail was never empty
-                    and therefore never meant anything. */}
-                {autoDefaultCount > 0 && (
-                  <RailCard
-                    icon={Bell}
-                    gold={goldDefaults}
-                    title={`${autoDefaultCount} automatic email${autoDefaultCount === 1 ? '' : 's'} still send our copy`}
-                    sub="They work as they are — but your own wording will sound like your conference."
-                    actionLabel="Review them"
-                    onAction={() => setView('automatic')}
-                  />
-                )}
-              </div>
-            ) : (
-              // Nothing pending — collapse to one quiet line, never dead space.
-              <p className="text-sm flex flex-wrap items-center gap-x-2" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                Nothing queued or scheduled.
+
+                {/* THE DOOR INTO THE AUTOMATIC EMAILS. Permanent, and last in
+                    the column, because unlike everything above it this is not
+                    a thing that happened. It is the standing machinery, and
+                    it answers "what does Gavelling send without me". It used
+                    to be reachable only from a stat well and a rail card that
+                    appeared solely when something was wrong with it. */}
                 <button
                   type="button"
                   onClick={() => setView('automatic')}
-                  className="inline-flex items-center gap-1 font-bold focus:outline-none"
-                  style={{ color: '#1B3828', background: 'none', border: 'none', padding: '6px 0', fontFamily: OUTFIT, fontSize: 13, cursor: 'pointer' }}
+                  className="w-full text-left rounded-2xl px-4 py-3.5 flex items-center gap-3 focus:outline-none active:scale-[0.99] mt-auto"
+                  style={{
+                    ...GOLD_PANEL, cursor: 'pointer',
+                    transitionProperty: 'box-shadow, transform',
+                    transitionDuration: '200ms', transitionTimingFunction: EASE,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = HOVER_SHADOW; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = LIFTED_SHADOW; }}
                 >
-                  Automatic emails: {enabledCount} on{autoDefaultCount > 0 ? `, ${autoDefaultCount} sending our default` : ''}
-                  <ArrowRight size={12} strokeWidth={2.5} />
-                </button>
-              </p>
-            )}
-          </section>
-
-          {/* Below 1024px the inbox collapses into a tab. */}
-          <div className="inline-flex rounded-xl p-1 mb-5 lg:hidden" style={{ border: CARD_BORDER, backgroundColor: '#F0EBDD' }}>
-            <TabPill active={mobileTab === 'sent'} onClick={() => setMobileTab('sent')}>SENT</TabPill>
-            <TabPill active={mobileTab === 'inbox'} onClick={() => setMobileTab('inbox')}>
-              INBOX{inboxUnreadThreadCount > 0 ? ` (${inboxUnreadThreadCount})` : ''}
-            </TabPill>
-          </div>
-
-          <div className="lg:grid lg:items-start lg:gap-8" style={{ gridTemplateColumns: 'minmax(0,1fr) 400px' }}>
-
-            {/* ── Band 4 · Sent ── */}
-            <div className={`${mobileTab === 'sent' ? '' : 'hidden'} lg:block min-w-0`}>
-              <section data-tutorial="comms-sent-feed">
-                {/* The failed / sending pills that used to sit here are gone:
-                    the console states whichever of them is true, in words, at
-                    the top of the page, and the stat strip carries the figure.
-                    NEW EMAIL went the same way — it now rides with the console
-                    instead of being the third thing on this row. */}
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
-                  <h2 className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.015em' }}>Sent</h2>
-                  {attemptedTotal > 0 && (
+                  <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Bellhop bell" icon={Bell} size={44} />
+                  <span className="min-w-0 flex-1 block">
                     <span
-                      className="font-bold uppercase"
-                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, letterSpacing: '0.08em', fontVariantNumeric: 'tabular-nums' }}
+                      className="block font-black"
+                      style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 17, lineHeight: 1.15, letterSpacing: '-0.015em', textWrap: 'balance' }}
                     >
-                      {attemptedTotal.toLocaleString()} email{attemptedTotal === 1 ? '' : 's'}
+                      Automatic emails
                     </span>
-                  )}
-                </div>
-                <p className="text-sm mb-5" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>
-                  Everything this conference has sent — broadcasts you wrote, and the automatic
-                  emails the platform sent for you.
-                </p>
-
-                {/* In-the-works strip: drafts + ready-to-send, tucked above the feed. */}
-                {adhocTemplates.length > 0 && (
-                  <div className="mb-6">
-                    <button
-                      type="button"
-                      onClick={() => setWorklistOpen(v => !v)}
-                      aria-expanded={worklistOpen}
-                      className="flex items-center gap-2 focus:outline-none"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}
+                    <span
+                      className="block"
+                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty', fontVariantNumeric: 'tabular-nums' }}
                     >
-                      <ChevronDown size={15} style={{ color: '#1C1410', transform: worklistOpen ? 'rotate(180deg)' : 'rotate(0)', transitionProperty: 'transform', transitionDuration: '200ms', transitionTimingFunction: EASE }} />
-                      <span className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        Your emails
-                      </span>
-                      {/* "N drafts" was a lie, and production proves it: ALL
-                          157 template rows carry lifecycle='draft', including
-                          every one that has already been sent. The column is
-                          written on insert and never advanced, so it can only
-                          ever say "draft". These rows are SAVED emails — some
-                          sent, some not — and the word now says so. */}
-                      <span className="text-xs font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, letterSpacing: '0.07em', fontVariantNumeric: 'tabular-nums' }}>
-                        {adhocTemplates.length} saved
-                      </span>
-                    </button>
-                    {worklistOpen && (
-                      <div className="flex flex-col gap-2 mt-2">
-                        {adhocTemplates.map(t => renderAdHocRow(t))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* The feed */}
-                {feedItems.length === 0 ? (
-                  <div className="flex flex-col items-center py-16">
-                    <Mail size={40} style={{ color: SOFT, marginBottom: 16 }} />
-                    <p className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>
-                      Nothing sent yet
-                    </p>
-                    <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                      Broadcasts and automatic emails will appear here.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {feedItems.map(item => {
-                      if (item.kind === 'auto') {
-                        const g = item.group;
-                        const isOpen = autoExpandedKey === g.key;
-                        return (
-                          <div key={`auto-${g.key}`} className="rounded-2xl p-5" style={PANEL}>
-                            <div className="flex items-center gap-3">
-                              <span
-                                className="flex items-center justify-center flex-shrink-0 rounded-xl"
-                                style={{ width: 30, height: 30, background: 'linear-gradient(150deg, rgba(182,135,31,0.2), rgba(182,135,31,0.07))', border: '1px solid rgba(182,135,31,0.3)' }}
-                              >
-                                <Bell size={14} style={{ color: GOLD_INK }} />
-                              </span>
-                              <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                                {g.label}
-                              </p>
-                              <span
-                                className="flex-shrink-0 rounded-md px-2 py-0.5"
-                                style={{ fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em', backgroundColor: 'rgba(182,135,31,0.12)', color: GOLD_INK, border: '1px solid rgba(182,135,31,0.3)' }}
-                              >
-                                AUTOMATIC
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5" style={{ fontSize: 12, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                              <span>{g.count} recipient{g.count === 1 ? '' : 's'}</span>
-                              {g.delivered > 0 && <span style={{ color: GREEN_INK, fontWeight: 700 }}>{g.delivered} delivered</span>}
-                              {g.failed > 0 && <span style={{ color: RED, fontWeight: 700 }}>{g.failed} failed</span>}
-                              {g.pending > 0 && <span style={{ color: GOLD_INK, fontWeight: 700 }}>{g.pending} sending</span>}
-                              <span className="ml-auto flex-shrink-0">{formatDate(g.latestAt)}</span>
-                            </div>
-                            <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}>
-                              <div>
-                                <button
-                                  onClick={() => setAutoExpandedKey(isOpen ? null : g.key)}
-                                  className="text-xs font-bold focus:outline-none"
-                                  style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
-                                >
-                                  {isOpen ? 'HIDE RECIPIENTS' : 'RECIPIENTS'}
-                                </button>
-                              </div>
-                              {isOpen && (
-                                <div className="flex flex-col gap-1" style={{ maxHeight: 280, overflowY: 'auto' }}>
-                                  {g.rows.map(r => renderRecipientRow(r))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      const email = item.send;
-                      const sc = STATUS_COLORS[email.status] ?? STATUS_COLORS.draft;
-                      const isExpanded = historyExpandedId === email.id;
-                      const filterText = formatFilter(email.recipient_filter, societies, committees);
-                      const isHtml = looksLikeHtmlDoc(email.body_html);
-                      const split = splitBySendId.get(email.id);
-
-                      return (
-                        <div key={email.id} className="rounded-2xl p-5" style={PANEL}>
-                          <div className="flex items-center gap-3">
-                            <span
-                              className="flex items-center justify-center flex-shrink-0 rounded-xl"
-                              style={{ width: 30, height: 30, background: 'rgba(27,56,40,0.08)', border: '1px solid rgba(27,56,40,0.14)' }}
-                            >
-                              <Send size={13} style={{ color: '#1B3828' }} />
-                            </span>
-                            <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                              {email.subject || '(No subject)'}
-                            </p>
-                            <span
-                              className="flex-shrink-0 rounded-md px-2.5 py-0.5"
-                              style={{ fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, backgroundColor: sc.bg, color: sc.text, border: `1px solid ${sc.dot}55` }}
-                            >
-                              {email.status.charAt(0).toUpperCase() + email.status.slice(1)}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5" style={{ fontSize: 12, color: SOFT, fontFamily: OUTFIT }}>
-                            <span className="truncate" style={{ maxWidth: 340 }}>
-                              {filterText}
-                              {email.recipient_count > 0 ? ` · ${email.recipient_count} recipient${email.recipient_count === 1 ? '' : 's'}` : ''}
-                            </span>
-                            {split && split.delivered > 0 && <span style={{ color: GREEN_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.delivered} delivered</span>}
-                            {split && split.failed > 0 && <span style={{ color: RED, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.failed} failed</span>}
-                            {split && split.pending > 0 && <span style={{ color: GOLD_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.pending} sending</span>}
-                            <span className="ml-auto flex-shrink-0">
-                              {email.sent_at ? `Sent ${formatDate(email.sent_at)}` : `${formatDate(email.created_at)}`}
-                            </span>
-                          </div>
-
-                          <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}>
-                            <div className="flex items-center gap-4">
-                              {email.body_html && (
-                                <button
-                                  onClick={() => setHistoryExpandedId(isExpanded ? null : email.id)}
-                                  className="text-xs font-bold focus:outline-none"
-                                  style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
-                                >
-                                  {isExpanded ? 'HIDE' : 'VIEW'}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => toggleRecipientsExpanded(email.id)}
-                                className="text-xs font-bold focus:outline-none"
-                                style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
-                              >
-                                {recipientsExpandedId === email.id ? 'HIDE RECIPIENTS' : 'RECIPIENTS'}
-                              </button>
-                            </div>
-
-                            {isExpanded && email.body_html && (
-                              isHtml ? (
-                                <iframe
-                                  srcDoc={email.body_html}
-                                  sandbox="allow-same-origin"
-                                  title="Sent email"
-                                  style={{ width: '100%', height: 480, border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: '#FFFFFF' }}
-                                />
-                              ) : (
-                                <p
-                                  className="text-sm leading-relaxed"
-                                  style={{ color: '#1C1410', fontFamily: OUTFIT, whiteSpace: 'pre-wrap' }}
-                                >
-                                  {email.body_html}
-                                </p>
-                              )
-                            )}
-
-                            {recipientsExpandedId === email.id && (() => {
-                              const detail = outboxBySend[email.id];
-                              if (detail === 'loading') {
-                                return <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>Loading…</p>;
-                              }
-                              if (!detail || detail.length === 0) {
-                                return (
-                                  <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                                    No per-recipient delivery data recorded for this send.
-                                  </p>
-                                );
-                              }
-                              return (
-                                <div className="flex flex-col gap-1" style={{ maxHeight: 280, overflowY: 'auto' }}>
-                                  {detail.map(r => renderRecipientRow(r))}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* ── Design, inherited by every email ── */}
-                <section className="mt-10" data-tutorial="comms-email-design">
-                  <button
-                    type="button"
-                    onClick={() => setDesignOpen(v => !v)}
-                    aria-expanded={designOpen}
-                    className="flex items-center gap-2 focus:outline-none"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}
-                  >
-                    <ChevronDown size={15} style={{ color: '#1C1410', transform: designOpen ? 'rotate(180deg)' : 'rotate(0)', transitionProperty: 'transform', transitionDuration: '200ms', transitionTimingFunction: EASE }} />
-                    <p className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Design</p>
-                  </button>
-                  <p className="text-sm mt-0.5 mb-3" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>
-                    How every email from this conference looks — header, colors, logo, and footer.
-                  </p>
-                  {designOpen && (
-                    <div className="rounded-2xl p-5 flex flex-col md:flex-row gap-6" style={PANEL}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold mb-1.5" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                          HEADER STYLE
-                        </p>
-                        <div className="flex gap-2 mb-4">
-                          <SegButton active={themeDraft.headerStyle === 'banner'} onClick={() => patchTheme({ headerStyle: 'banner' })} icon={ImageIcon}>
-                            BANNER IMAGE
-                          </SegButton>
-                          <SegButton active={themeDraft.headerStyle === 'solid'} onClick={() => patchTheme({ headerStyle: 'solid' })} icon={Palette}>
-                            SOLID BAR
-                          </SegButton>
-                        </div>
-
-                        <ColorField label="Accent color" value={themeDraft.accentColor} onChange={c => patchTheme({ accentColor: c })} palette={COLOR_PALETTE} />
-                        <ColorField label="Button color" value={themeDraft.buttonColor} onChange={c => patchTheme({ buttonColor: c })} palette={BUTTON_COLOR_PALETTE} />
-
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-sm font-semibold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Show logo</span>
-                          <PillToggle value={themeDraft.showLogo} onChange={() => patchTheme({ showLogo: !themeDraft.showLogo })} />
-                        </div>
-
-                        <p className="text-xs font-bold mb-1.5" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                          CUSTOM FOOTER LINE
-                        </p>
-                        <input
-                          value={themeDraft.footerLine}
-                          onChange={e => patchTheme({ footerLine: e.target.value })}
-                          placeholder="Optional, shown above the standard footer"
-                          className="w-full rounded-xl px-3.5 py-2 text-sm focus:outline-none mb-2"
-                          style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT }}
-                        />
-
-                        <p className="text-xs font-semibold" style={{ color: themeError ? RED : GREEN_INK, fontFamily: OUTFIT, minHeight: 16 }}>
-                          {themeError || (themeSaving ? 'Saving…' : themeSaved ? 'Saved ✓' : '')}
-                        </p>
-                      </div>
-
-                      <div className="flex-1 min-w-0 flex justify-center">
-                        <iframe
-                          srcDoc={designPreviewHtml}
-                          sandbox="allow-same-origin"
-                          title="Design preview"
-                          style={{ width: '100%', maxWidth: 420, height: 460, border: `1px solid ${BORDER}`, borderRadius: 12, backgroundColor: '#FFFFFF' }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </section>
-              </section>
+                      {/* No "…and N still send our copy" here. That is a
+                          RECOMMENDATION, it has its own rail card directly
+                          above with its own action, and this card is a route,
+                          not a second voice saying the same sentence. */}
+                      {enabledCount + alwaysOnCount} send themselves the moment something happens.
+                    </span>
+                  </span>
+                  <ArrowRight size={15} strokeWidth={2.5} className="flex-shrink-0" style={{ color: GOLD_INK }} />
+                </button>
+              </div>
             </div>
 
-            {/* ── Band 3 · Inbox — a permanent column on desktop ── */}
-            <aside id="comms-inbox-panel" className={`${mobileTab === 'inbox' ? '' : 'hidden'} lg:block min-w-0 mt-8 lg:mt-0`}>
-              <section className="rounded-2xl p-4" style={PANEL} data-tutorial="comms-inbox">
+            {/* 3 · INBOX, the other direction. Spans both tracks at lg so a
+                thread and its reader get real width there. */}
+            <div id="comms-inbox-panel" className="flex flex-col min-w-0 lg:col-span-2 xl:col-span-1">
+              <ColumnHeading
+                emoji="Inbox tray"
+                icon={Inbox}
+                gradient={NEU_GRADIENTS.sage}
+                title="Inbox"
+                sub="Questions and swap requests waiting on a reply."
+                count={inboxUnreadThreadCount}
+              />
+              <section className="rounded-2xl p-4 flex-1" style={PANEL} data-tutorial="comms-inbox">
                 {!selectedRequest ? (
                   <>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h2 className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Inbox</h2>
-                      {inboxUnreadThreadCount > 0 && (
-                        <span
-                          className="inline-flex items-center justify-center"
-                          style={{ minWidth: 20, height: 20, padding: '0 6px', borderRadius: 999, backgroundColor: '#EED98A', color: '#1B3828', fontFamily: OUTFIT, fontSize: 11, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
-                        >
-                          {inboxUnreadThreadCount}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs mb-3" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>
-                      Questions and swap requests from advisors, head delegates, and delegates.
-                    </p>
-
+                    {/* No title here any more. `ColumnHeading` above the card
+                        carries it, and the unread count with it, so the three
+                        section titles sit on one baseline. Saying "Inbox" twice,
+                        40px apart, was the giveaway that this panel was bolted
+                        on beside a feed rather than a peer of it. */}
                     <div className="flex flex-wrap items-center gap-2 mb-3">
                       <input
                         value={inboxSearch}
@@ -4163,61 +4159,97 @@ function CommunicationsPageInner() {
                             <button
                               key={r.id}
                               onClick={() => handleOpenThread(r.id)}
-                              className="w-full flex items-start gap-2.5 rounded-xl p-3 text-left focus:outline-none active:scale-[0.99]"
+                              className="relative w-full flex items-start gap-3 rounded-xl p-3 pl-4 text-left focus:outline-none active:scale-[0.99] overflow-hidden"
                               style={{
                                 backgroundColor: attention ? 'rgba(238,217,138,0.16)' : '#FAF8F3',
                                 border: attention ? '1px solid rgba(182,135,31,0.45)' : '1px solid rgba(27,56,40,0.09)',
                                 cursor: 'pointer',
-                                transitionProperty: 'background-color, border-color, transform',
+                                transitionProperty: 'background-color, border-color, box-shadow, transform',
                                 transitionDuration: '160ms', transitionTimingFunction: EASE,
                               }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(27,56,40,0.35)'; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = attention ? 'rgba(182,135,31,0.45)' : 'rgba(27,56,40,0.09)'; }}
+                              onMouseEnter={e => {
+                                const el = e.currentTarget as HTMLElement;
+                                el.style.borderColor = 'rgba(27,56,40,0.35)';
+                                el.style.boxShadow = NEU.outSm;
+                              }}
+                              onMouseLeave={e => {
+                                const el = e.currentTarget as HTMLElement;
+                                el.style.borderColor = attention ? 'rgba(182,135,31,0.45)' : 'rgba(27,56,40,0.09)';
+                                el.style.boxShadow = 'none';
+                              }}
                             >
+                              {/* THE UNREAD RAIL. A 3px gradient spine on the
+                                  leading edge, the same gesture the live card
+                                  uses for a room's status. It survives at a
+                                  glance down a column of twelve rows in a way a
+                                  background tint does not, and it does not have
+                                  to pass a contrast check because nothing is
+                                  written on it. */}
+                              {attention && (
+                                <span
+                                  aria-hidden
+                                  className="absolute inset-y-0 left-0"
+                                  style={{ width: 3, background: `linear-gradient(180deg, ${NEU_GRADIENTS.gold[1]}, ${NEU_GRADIENTS.gold[0]})` }}
+                                />
+                              )}
                               {threadProfile?.avatar_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={threadProfile.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 32, height: 32, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1 }} />
+                                <img src={threadProfile.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 36, height: 36, marginTop: 1, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1, boxShadow: NEU.outSm }} />
                               ) : (
-                                <span className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 32, height: 32, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 13, fontWeight: 700, fontFamily: OUTFIT }}>
+                                <span className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, marginTop: 1, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 15, fontWeight: 800, fontFamily: OUTFIT, boxShadow: NEU.outSm }}>
                                   {name.charAt(0)}
                                 </span>
                               )}
                               <span className="min-w-0 flex-1 block">
-                                <span className="flex items-center gap-1.5">
-                                  <span className="text-xs truncate" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: attention ? 800 : 600 }}>
-                                    {name}
+                                {/* SUBJECT FIRST. It was the second line under a
+                                    12px name, which is the wrong way round: the
+                                    subject is what you scan a thread list for
+                                    and the sender is how you place it once you
+                                    have found it. No truncate: the row grows a
+                                    line instead of hiding the half of the
+                                    sentence that says what is being asked. */}
+                                <span className="flex items-start gap-2">
+                                  <span
+                                    className="min-w-0 flex-1 block"
+                                    style={{
+                                      color: '#1C1410', fontFamily: OUTFIT, fontSize: 14,
+                                      fontWeight: attention ? 800 : 600, lineHeight: 1.3,
+                                      letterSpacing: '-0.01em', textWrap: 'pretty', overflowWrap: 'anywhere',
+                                    }}
+                                  >
+                                    {r.subject}
                                   </span>
-                                  {role && (
-                                    <span className="text-xs flex-shrink-0" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 10.5 }}>{roleLabel(role)}</span>
-                                  )}
                                   {attention && (
                                     <span
                                       className="inline-flex items-center justify-center flex-shrink-0"
-                                      style={{ minWidth: 17, height: 17, padding: '0 5px', borderRadius: 999, backgroundColor: '#EED98A', color: '#1B3828', fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
+                                      style={{ minWidth: 19, height: 19, marginTop: 1, padding: '0 6px', borderRadius: 999, backgroundColor: '#EED98A', color: '#1B3828', fontFamily: OUTFIT, fontSize: 11, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
                                     >
                                       {unread}
                                     </span>
                                   )}
-                                  <span className="ml-auto flex-shrink-0" style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT }}>
-                                    {formatDate(r.last_message_at)}
-                                  </span>
                                 </span>
-                                <span className="block text-sm truncate mt-0.5" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: attention ? 700 : 500 }}>
-                                  {r.subject}
-                                </span>
-                                <span className="flex items-center gap-1.5 mt-0.5">
+                                <span className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5" style={{ marginBlockStart: 3 }}>
                                   <span
-                                    className="rounded-full px-1.5 py-0.5 flex-shrink-0"
-                                    style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: kindChip.bg, color: kindChip.color }}
+                                    className="rounded-full px-2 py-0.5 flex-shrink-0"
+                                    style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', fontFamily: OUTFIT, backgroundColor: kindChip.bg, color: kindChip.color }}
                                   >
                                     {kindChip.label}
                                   </span>
-                                  {last && (
-                                    <span className="text-xs truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                                      {last.is_organizer ? 'You: ' : ''}{last.body}
-                                    </span>
-                                  )}
+                                  <span className="truncate" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
+                                    {name}{role ? ` · ${roleLabel(role)}` : ''}
+                                  </span>
+                                  <span className="ml-auto flex-shrink-0" style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                                    {formatDate(r.last_message_at)}
+                                  </span>
                                 </span>
+                                {last && (
+                                  <span
+                                    className="block truncate"
+                                    style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 3 }}
+                                  >
+                                    {last.is_organizer ? 'You: ' : ''}{last.body}
+                                  </span>
+                                )}
                               </span>
                             </button>
                           );
@@ -4429,8 +4461,234 @@ function CommunicationsPageInner() {
                   </>
                 )}
               </section>
-            </aside>
+            </div>
           </div>
+
+          {/* ── SENT ── The record, and the longest thing on the page, so it
+              takes the full width underneath the three sections instead of
+              half of it beside them. */}
+          <section data-tutorial="comms-sent-feed">
+            {/* The failed / sending pills that used to sit here are gone:
+                the console states whichever of them is true, in words, at
+                the top of the page, and the stat strip carries the figure.
+                NEW EMAIL went the same way — it now rides with the console
+                instead of being the third thing on this row. */}
+            <div className="flex items-center gap-3 mb-5">
+              <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Outbox tray" icon={Send} size={44} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h2
+                    className="font-black"
+                    style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.1, letterSpacing: '-0.022em' }}
+                  >
+                    Sent
+                  </h2>
+                  {attemptedTotal > 0 && (
+                    <span
+                      className="font-bold uppercase"
+                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, letterSpacing: '0.08em', fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {attemptedTotal.toLocaleString()} email{attemptedTotal === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+                <p style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.4, marginBlockStart: 2, textWrap: 'pretty' }}>
+                  Everything this conference has sent: broadcasts you wrote, and the automatic
+                  emails the platform sent for you.
+                </p>
+              </div>
+            </div>
+
+            {/* In-the-works strip: drafts + ready-to-send, tucked above the feed. */}
+            {adhocTemplates.length > 0 && (
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={() => setWorklistOpen(v => !v)}
+                  aria-expanded={worklistOpen}
+                  className="flex items-center gap-2 focus:outline-none"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}
+                >
+                  <ChevronDown size={15} style={{ color: '#1C1410', transform: worklistOpen ? 'rotate(180deg)' : 'rotate(0)', transitionProperty: 'transform', transitionDuration: '200ms', transitionTimingFunction: EASE }} />
+                  <span className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    Your emails
+                  </span>
+                  {/* "N drafts" was a lie. The `lifecycle` column that word
+                      came from is gone from this file entirely (see
+                      `adhocTemplates` above); while it existed nothing could
+                      advance it, so it labelled already-sent emails as
+                      drafts. Production still holds 150 'draft' rows and 7
+                      orphaned 'ready' ones, which is proof enough that it
+                      never tracked anything. These are SAVED emails, some
+                      sent and some not, and the word now says so. */}
+                  <span className="text-xs font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, letterSpacing: '0.07em', fontVariantNumeric: 'tabular-nums' }}>
+                    {adhocTemplates.length} saved
+                  </span>
+                </button>
+                {worklistOpen && (
+                  <div className="flex flex-col gap-2 mt-2">
+                    {adhocTemplates.map(t => renderAdHocRow(t))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* The feed */}
+            {feedItems.length === 0 ? (
+              <div className="flex flex-col items-center py-16">
+                <Mail size={40} style={{ color: SOFT, marginBottom: 16 }} />
+                <p className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>
+                  Nothing sent yet
+                </p>
+                <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                  Broadcasts and automatic emails will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {feedItems.map(item => {
+                  if (item.kind === 'auto') {
+                    const g = item.group;
+                    const isOpen = autoExpandedKey === g.key;
+                    return (
+                      <div key={`auto-${g.key}`} className="rounded-2xl p-5" style={PANEL}>
+                        <div className="flex items-center gap-3">
+                          <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Bellhop bell" icon={Bell} size={34} />
+                          <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                            {g.label}
+                          </p>
+                          <span
+                            className="flex-shrink-0 rounded-md px-2 py-0.5"
+                            style={{ fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em', backgroundColor: 'rgba(182,135,31,0.12)', color: GOLD_INK, border: '1px solid rgba(182,135,31,0.3)' }}
+                          >
+                            AUTOMATIC
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5" style={{ fontSize: 12, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                          <span>{g.count} recipient{g.count === 1 ? '' : 's'}</span>
+                          {g.delivered > 0 && <span style={{ color: GREEN_INK, fontWeight: 700 }}>{g.delivered} delivered</span>}
+                          {g.failed > 0 && <span style={{ color: RED, fontWeight: 700 }}>{g.failed} failed</span>}
+                          {g.pending > 0 && <span style={{ color: GOLD_INK, fontWeight: 700 }}>{g.pending} sending</span>}
+                          <span className="ml-auto flex-shrink-0">{formatDate(g.latestAt)}</span>
+                        </div>
+                        <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}>
+                          <div>
+                            <button
+                              onClick={() => setAutoExpandedKey(isOpen ? null : g.key)}
+                              className="text-xs font-bold focus:outline-none"
+                              style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
+                            >
+                              {isOpen ? 'HIDE RECIPIENTS' : 'RECIPIENTS'}
+                            </button>
+                          </div>
+                          {isOpen && (
+                            <div className="flex flex-col gap-1" style={{ maxHeight: 280, overflowY: 'auto' }}>
+                              {g.rows.map(r => renderRecipientRow(r))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const email = item.send;
+                  const sc = STATUS_COLORS[email.status] ?? STATUS_COLORS.draft;
+                  const isExpanded = historyExpandedId === email.id;
+                  const filterText = formatFilter(email.recipient_filter, societies, committees);
+                  const isHtml = looksLikeHtmlDoc(email.body_html);
+                  const split = splitBySendId.get(email.id);
+
+                  return (
+                    <div key={email.id} className="rounded-2xl p-5" style={PANEL}>
+                      <div className="flex items-center gap-3">
+                        <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Outbox tray" icon={Send} size={34} />
+                        <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                          {email.subject || '(No subject)'}
+                        </p>
+                        <span
+                          className="flex-shrink-0 rounded-md px-2.5 py-0.5"
+                          style={{ fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, backgroundColor: sc.bg, color: sc.text, border: `1px solid ${sc.dot}55` }}
+                        >
+                          {email.status.charAt(0).toUpperCase() + email.status.slice(1)}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5" style={{ fontSize: 12, color: SOFT, fontFamily: OUTFIT }}>
+                        <span className="truncate" style={{ maxWidth: 340 }}>
+                          {filterText}
+                          {email.recipient_count > 0 ? ` · ${email.recipient_count} recipient${email.recipient_count === 1 ? '' : 's'}` : ''}
+                        </span>
+                        {split && split.delivered > 0 && <span style={{ color: GREEN_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.delivered} delivered</span>}
+                        {split && split.failed > 0 && <span style={{ color: RED, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.failed} failed</span>}
+                        {split && split.pending > 0 && <span style={{ color: GOLD_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.pending} sending</span>}
+                        <span className="ml-auto flex-shrink-0">
+                          {email.sent_at ? `Sent ${formatDate(email.sent_at)}` : `${formatDate(email.created_at)}`}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}>
+                        <div className="flex items-center gap-4">
+                          {email.body_html && (
+                            <button
+                              onClick={() => setHistoryExpandedId(isExpanded ? null : email.id)}
+                              className="text-xs font-bold focus:outline-none"
+                              style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
+                            >
+                              {isExpanded ? 'HIDE' : 'VIEW'}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => toggleRecipientsExpanded(email.id)}
+                            className="text-xs font-bold focus:outline-none"
+                            style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '4px 0' }}
+                          >
+                            {recipientsExpandedId === email.id ? 'HIDE RECIPIENTS' : 'RECIPIENTS'}
+                          </button>
+                        </div>
+
+                        {isExpanded && email.body_html && (
+                          isHtml ? (
+                            <iframe
+                              srcDoc={email.body_html}
+                              sandbox="allow-same-origin"
+                              title="Sent email"
+                              style={{ width: '100%', height: 480, border: `1px solid ${BORDER}`, borderRadius: 8, backgroundColor: '#FFFFFF' }}
+                            />
+                          ) : (
+                            <p
+                              className="text-sm leading-relaxed"
+                              style={{ color: '#1C1410', fontFamily: OUTFIT, whiteSpace: 'pre-wrap' }}
+                            >
+                              {email.body_html}
+                            </p>
+                          )
+                        )}
+
+                        {recipientsExpandedId === email.id && (() => {
+                          const detail = outboxBySend[email.id];
+                          if (detail === 'loading') {
+                            return <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>Loading…</p>;
+                          }
+                          if (!detail || detail.length === 0) {
+                            return (
+                              <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                                No per-recipient delivery data recorded for this send.
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="flex flex-col gap-1" style={{ maxHeight: 280, overflowY: 'auto' }}>
+                              {detail.map(r => renderRecipientRow(r))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </>
       )}
 
@@ -4500,24 +4758,39 @@ function CommunicationsPageInner() {
             </div>
           )}
 
-          {builderEventKey === null && (
-            <div className="mb-4">
-              <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                Name
-              </label>
-              <input
-                type="text"
-                value={builderName}
-                onChange={e => setBuilderName(e.target.value)}
-                placeholder="e.g. Welcome pack reminder"
-                className="w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none"
-                style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: '#FAF8F3', fontFamily: OUTFIT, maxWidth: 560 }}
-              />
-            </div>
-          )}
-
           <EmailComposer
               key={builderTemplateId ?? builderEventKey ?? 'new-adhoc'}
+              /* BACK, the name and SAVE live in the composer's own header strip
+                 so the paper starts as high as it can. `onNameChange` is
+                 deliberately undefined for event templates: those are named by
+                 the event, not by the organiser, and the field is then not
+                 rendered at all. */
+              backSlot={(
+                <button
+                  onClick={closeBuilder}
+                  className="text-sm font-semibold focus:outline-none transition-colors"
+                  style={{ color: SOFT, backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
+                >
+                  ← BACK
+                </button>
+              )}
+              actionsSlot={(
+                <button
+                  onClick={handleSaveAndClose}
+                  disabled={savingTemplate}
+                  className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors disabled:opacity-60"
+                  style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT }}
+                  onMouseEnter={e => { if (!savingTemplate) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  {savingTemplate ? 'SAVING...' : 'SAVE'}
+                </button>
+              )}
+              name={builderName}
+              onNameChange={builderEventKey === null ? setBuilderName : undefined}
+              recipients={{ groups: reachGroups, reachCount: finalRecipients.length }}
               conference={conference}
               conferenceId={conference.id}
               initialSubject={builderSubject}
@@ -4527,6 +4800,33 @@ function CommunicationsPageInner() {
               testSendContext={testSendContext}
               accessToken={session?.access_token ?? null}
               organizerEmail={profile?.email ?? null}
+              /* THE EMAIL THEME, handed to the composer's Design rail.
+
+                 It used to be the last fold of the LANDING page, under the
+                 Sent feed, so the one place you could see what a colour did
+                 and the one place you could change it were never on screen
+                 together, and it sat inside the history band, which is not
+                 what a theme is.
+
+                 The controls themselves live in `email/DesignPanel`; this is
+                 the whole handover. The STATE deliberately does not move: the
+                 draft, the `themeTouchedRef` / `lastSavedThemeRef` guards and
+                 the debounced write into `conferences.email_theme` only hold
+                 their invariants while they sit together, so the panel is a
+                 controlled view and this page stays the single writer.
+
+                 `hasBanner` is a fact about the conference, not the draft: with
+                 no banner image the renderer falls back to the solid bar
+                 whatever `headerStyle` says, and the panel says so rather than
+                 offering a choice with nothing behind it. */
+              design={{
+                theme: themeDraft,
+                onPatch: patchTheme,
+                saving: themeSaving,
+                saved: themeSaved,
+                error: themeError || null,
+                hasBanner: !!conference.banner_url,
+              }}
               reachSlot={builderEventKey === null ? (
                 /* "Who gets it" rides ABOVE the three zones, sticky, so the
                    answer to the only question anybody has is never scrolled
