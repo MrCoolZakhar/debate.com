@@ -207,7 +207,7 @@ export function DatePicker({
         }}
       >
         <CalendarDays size={17} style={{ color: '#B6871F', flexShrink: 0 }} />
-        <span className="flex-1 truncate">
+        <span className="flex-1 truncate" title={selected ? (withTime ? `${fmt(selected)} · ${fmtTime(hour, minute)}` : fmt(selected)) : undefined}>
           {selected ? (withTime ? `${fmt(selected)} · ${fmtTime(hour, minute)}` : fmt(selected)) : placeholder}
         </span>
         {clearable && selected && !disabled && (

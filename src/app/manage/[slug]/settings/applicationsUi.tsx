@@ -488,7 +488,11 @@ function CopyToRolesSheet({
             disabled={picked.size === 0 || busy}
             onClick={() => onConfirm([...picked])}
           >
-            {busy ? 'COPYING…' : `COPY TO ${picked.size || ''}`.trim()}
+            {busy
+              ? 'COPYING…'
+              : picked.size === 0
+                ? 'COPY'
+                : `COPY TO ${picked.size} ${picked.size === 1 ? 'ROLE' : 'ROLES'}`}
           </ModalButton>
         </>
       }

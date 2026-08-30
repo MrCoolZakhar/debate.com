@@ -3177,7 +3177,7 @@ export default function SettingsPage() {
                                       <div
                                         className="grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
                                         style={{
-                                          gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,0.8fr) 24px',
+                                          gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,1.25fr) minmax(0,1.25fr) minmax(0,0.7fr) 24px',
                                           backgroundColor: isActive ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.02)',
                                           border: invalid
                                             ? '1.5px solid rgba(139,32,32,0.45)'
