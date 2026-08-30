@@ -34,7 +34,7 @@ import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
   ROLE_ORDER, ROLE_EMOJI, ROLE_BLURB, RoleBookmarks, StepDisc, InfoHint,
-  SettingsModal, ModalButton, CopyToRolesModal, SetupIntro, Segmented, SegmentedNote,
+  CopyToRolesModal, SetupIntro, Segmented, SegmentedNote,
   type RoleStatus as RoleStatusKind,
 } from './applicationsUi';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
@@ -2698,18 +2698,23 @@ export default function SettingsPage() {
         {/* ── Floating elevated content panel ── */}
         <section
           className="flex-1 min-w-0"
-          style={{
-            borderRadius: '22px',
-            backgroundColor: 'rgba(250,248,243,0.9)',
-            backdropFilter: 'blur(14px) saturate(1.25)',
-            WebkitBackdropFilter: 'blur(14px) saturate(1.25)',
-            border: '1.5px solid #D8CDB6',
-            boxShadow: '0 1px 3px rgba(27,56,40,0.06), 0 20px 60px rgba(27,56,40,0.12)',
-            padding: '22px 22px 24px',
-          }}
+          style={activeTab === 'organizers'
+            // The team is a gallery of faces, and a gallery wants a wall, not a
+            // sheet of paper. No panel, no border, no shadow — the portraits sit
+            // straight on the ivory canvas with the full width to spread into.
+            ? { borderRadius: 0, backgroundColor: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }
+            : {
+              borderRadius: '22px',
+              backgroundColor: 'rgba(250,248,243,0.9)',
+              backdropFilter: 'blur(14px) saturate(1.25)',
+              WebkitBackdropFilter: 'blur(14px) saturate(1.25)',
+              border: '1.5px solid #D8CDB6',
+              boxShadow: '0 1px 3px rgba(27,56,40,0.06), 0 20px 60px rgba(27,56,40,0.12)',
+              padding: '22px 22px 24px',
+            }}
         >
           {/* Panel header, echoes the active rail item, gives the panel a protagonist */}
-          <div className="flex items-center gap-3 mb-6 pb-5" style={{ borderBottom: '1.5px solid rgba(216,205,182,0.75)' }}>
+          <div className="flex items-center gap-3 mb-6 pb-5" style={{ borderBottom: '1.5px solid rgba(216,205,182,0.9)' }}>
             <span
               className="flex items-center justify-center flex-shrink-0"
               style={{
@@ -3358,6 +3363,151 @@ export default function SettingsPage() {
       {/* ── VISUAL TAB ── */}
       {activeTab === 'conference' && (
         <div>
+          {/* ── Marketing first. The banner and the logo are the two things a
+              visitor actually sees, and they were buried under six fields of
+              logistics nobody opens twice. ── */}
+          {/* Banner card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
+            <div
+              style={{
+                border: '1.5px dashed #DDD4C0', borderRadius: 14, overflow: 'hidden',
+                backgroundColor: '#FAF8F3', minHeight: 140,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative', cursor: 'pointer',
+              }}
+              onClick={() => { if (!bannerUploading) document.getElementById('settings-banner-upload')?.click(); }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+            >
+              {view.banner_url ? (
+                <>
+                  <img src={view.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); document.getElementById('settings-banner-upload')?.click(); }}
+                    style={{
+                      position: 'absolute', top: 8, right: 8,
+                      backgroundColor: 'rgba(27,56,40,0.85)', color: '#EDE7D8',
+                      border: 'none', borderRadius: 8, padding: '4px 10px',
+                      fontSize: 11, fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer',
+                    }}
+                  >
+                    {bannerUploading ? 'UPLOADING...' : 'CHANGE'}
+                  </button>
+                </>
+              ) : bannerUploading ? (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Uploading...</p>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to upload banner</p>
+                  <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px</p>
+                </div>
+              )}
+              <input
+                id="settings-banner-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
+              />
+            </div>
+
+            {/* Preset picker, one click sets banner_url to a bundled photo */}
+            <div style={{ marginTop: 14 }}>
+              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
+                Or pick a preset
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {BANNER_PRESETS.map(p => {
+                  const selected = view.banner_url === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleBannerPreset(p)}
+                      disabled={bannerUploading}
+                      aria-label={'Use preset banner ' + p}
+                      style={{
+                        width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
+                        cursor: bannerUploading ? 'wait' : 'pointer',
+                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
+                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
+                        opacity: bannerUploading && !selected ? 0.6 : 1,
+                        transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
+                        backgroundColor: '#EDE7D8',
+                      }}
+                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+                    >
+                      <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {bannerError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{bannerError}</p>
+            )}
+          </div>
+
+          {/* Logo card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Logo</p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
+            <div className="flex items-center gap-5">
+              <div
+                style={{
+                  width: 96, height: 96, borderRadius: 20, flexShrink: 0,
+                  border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden', cursor: 'pointer', position: 'relative',
+                }}
+                onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              >
+                {logoUploading ? (
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                ) : view.logo_url ? (
+                  <LogoDisc src={view.logo_url} alt="Logo" size={80} fallbackText={view.acronym?.slice(0, 3)} />
+                ) : (
+                  <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
+                )}
+              </div>
+              <div>
+                <button
+                  onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
+                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none"
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                >
+                  {logoUploading ? 'UPLOADING...' : view.logo_url ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                </button>
+              </div>
+              <input
+                id="settings-logo-upload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  if (f.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
+                  setLogoCropFile(f);
+                }}
+              />
+            </div>
+            {logoError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{logoError}</p>
+            )}
+          </div>
+
           {/* Conference Details card */}
           <div style={cardStyle}>
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Details</p>
@@ -3590,147 +3740,6 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Banner card */}
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
-            <div
-              style={{
-                border: '1.5px dashed #DDD4C0', borderRadius: 14, overflow: 'hidden',
-                backgroundColor: '#FAF8F3', minHeight: 140,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative', cursor: 'pointer',
-              }}
-              onClick={() => { if (!bannerUploading) document.getElementById('settings-banner-upload')?.click(); }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-            >
-              {view.banner_url ? (
-                <>
-                  <img src={view.banner_url} alt="Banner" style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }} />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); document.getElementById('settings-banner-upload')?.click(); }}
-                    style={{
-                      position: 'absolute', top: 8, right: 8,
-                      backgroundColor: 'rgba(27,56,40,0.85)', color: '#EDE7D8',
-                      border: 'none', borderRadius: 8, padding: '4px 10px',
-                      fontSize: 11, fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer',
-                    }}
-                  >
-                    {bannerUploading ? 'UPLOADING...' : 'CHANGE'}
-                  </button>
-                </>
-              ) : bannerUploading ? (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                  <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Uploading...</p>
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to upload banner</p>
-                  <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px</p>
-                </div>
-              )}
-              <input
-                id="settings-banner-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ''; }}
-              />
-            </div>
-
-            {/* Preset picker, one click sets banner_url to a bundled photo */}
-            <div style={{ marginTop: 14 }}>
-              <p style={{ fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: '0.01em', color: '#7A6E5E', margin: '0 0 8px 0' }}>
-                Or pick a preset
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {BANNER_PRESETS.map(p => {
-                  const selected = view.banner_url === p;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => handleBannerPreset(p)}
-                      disabled={bannerUploading}
-                      aria-label={'Use preset banner ' + p}
-                      style={{
-                        width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
-                        cursor: bannerUploading ? 'wait' : 'pointer',
-                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
-                        boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
-                        opacity: bannerUploading && !selected ? 0.6 : 1,
-                        transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
-                        backgroundColor: '#EDE7D8',
-                      }}
-                      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-                    >
-                      <img src={p} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {bannerError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{bannerError}</p>
-            )}
-          </div>
-
-          {/* Logo card */}
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Logo</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
-            <div className="flex items-center gap-5">
-              <div
-                style={{
-                  width: 96, height: 96, borderRadius: 20, flexShrink: 0,
-                  border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  overflow: 'hidden', cursor: 'pointer', position: 'relative',
-                }}
-                onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
-              >
-                {logoUploading ? (
-                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                ) : view.logo_url ? (
-                  <LogoDisc src={view.logo_url} alt="Logo" size={80} fallbackText={view.acronym?.slice(0, 3)} />
-                ) : (
-                  <span style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textAlign: 'center', padding: '0 8px' }}>Click to upload</span>
-                )}
-              </div>
-              <div>
-                <button
-                  onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                >
-                  {logoUploading ? 'UPLOADING...' : view.logo_url ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
-                </button>
-              </div>
-              <input
-                id="settings-logo-upload"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!f) return;
-                  if (f.size > 5 * 1024 * 1024) { alert('Logo must be under 5MB.'); return; }
-                  setLogoCropFile(f);
-                }}
-              />
-            </div>
-            {logoError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{logoError}</p>
-            )}
-          </div>
 
           {/* Description + socials card */}
           <div style={cardStyle}>
@@ -3798,12 +3807,15 @@ export default function SettingsPage() {
         const others = ranked.filter(o => o.role !== 'owner');
 
         // "Slightly smaller" as a real ramp: avatar, card width and type all
-        // step down together, so rank is legible before a name is read.
+        // step down together, so rank is legible before a name is read. The
+        // faces are roughly three times what they were — with the email, the
+        // bundle chip and the nine permission dots gone, the photograph is what
+        // the card is for.
         const TIERS = [
-          { avatar: 76, card: 250, name: 15.5, meta: 12,   pad: 18, radius: 20, gap: 16, icon: 15 },
-          { avatar: 64, card: 228, name: 14.5, meta: 11.5, pad: 16, radius: 18, gap: 14, icon: 14 },
-          { avatar: 56, card: 208, name: 13.5, meta: 11,   pad: 15, radius: 16, gap: 13, icon: 13 },
-          { avatar: 48, card: 196, name: 13,   meta: 11,   pad: 14, radius: 16, gap: 12, icon: 13 },
+          { avatar: 148, card: 208, name: 16.5, meta: 12.5, pad: 14, radius: 22, gap: 22, icon: 15 },
+          { avatar: 126, card: 186, name: 15.5, meta: 12,   pad: 13, radius: 20, gap: 20, icon: 14 },
+          { avatar: 110, card: 172, name: 14.5, meta: 11.5, pad: 12, radius: 18, gap: 18, icon: 13 },
+          { avatar: 94,  card: 158, name: 14,   meta: 11,   pad: 12, radius: 18, gap: 16, icon: 13 },
         ];
 
         interface Rank {
@@ -3851,9 +3863,9 @@ export default function SettingsPage() {
         // ── Trunk: the vertical line between two ranks, with a node on it ───
         const trunk = (accent: string, key: string) => (
           <div key={key} aria-hidden className="flex flex-col items-center" style={{ paddingTop: 4, paddingBottom: 4 }}>
-            <span style={{ width: 2, height: 15, backgroundColor: `${accent}3D`, borderRadius: 1 }} />
-            <span style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: accent, opacity: 0.5, margin: '4px 0' }} />
-            <span style={{ width: 2, height: 15, backgroundColor: `${accent}3D`, borderRadius: 1 }} />
+            <span style={{ width: 2, height: 18, backgroundColor: `${accent}55`, borderRadius: 1 }} />
+            <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: accent, margin: '5px 0' }} />
+            <span style={{ width: 2, height: 18, backgroundColor: `${accent}55`, borderRadius: 1 }} />
           </div>
         );
 
@@ -3862,7 +3874,7 @@ export default function SettingsPage() {
           <>
             <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mb-2">
               <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: r.accent, display: 'inline-block' }} />
-              <p className="font-bold text-[10px]" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
+              <p className="font-bold text-[10.5px]" style={{ color: r.accent, fontFamily: OUTFIT, letterSpacing: '0.14em' }}>
                 {r.label.toUpperCase()}
               </p>
               <span
@@ -3870,7 +3882,7 @@ export default function SettingsPage() {
                 style={{
                   minWidth: 20, height: 20, padding: '0 6px', fontSize: 10.5, fontWeight: 800,
                   fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
-                  backgroundColor: `${r.accent}1F`, color: NEU.inkSoft,
+                  backgroundColor: r.accent, color: '#FFFDF9',
                 }}
               >
                 {count}
@@ -3893,7 +3905,13 @@ export default function SettingsPage() {
             </div>
             {/* The beam. The trunk lands on it and the rank's cards hang below,
                 which is what makes this read as a tree rather than a list. */}
-            <div aria-hidden style={{ height: 2, borderRadius: 1, backgroundColor: `${r.accent}2E`, marginBottom: 14 }} />
+            <div
+              aria-hidden
+              style={{
+                height: 2, borderRadius: 1, marginBottom: 18,
+                background: `linear-gradient(90deg, transparent, ${r.accent}88 18%, ${r.accent}88 82%, transparent)`,
+              }}
+            />
           </>
         );
 
@@ -3917,222 +3935,161 @@ export default function SettingsPage() {
         });
 
         // ── One person ─────────────────────────────────────────────────────
+        // A face, a name, a crown if they own the place, the role the outside
+        // world sees, and a gear. Nothing else. Privileges, the email address,
+        // page access and the public-listing switch all live one click away in
+        // the member sheet — they were making a portrait gallery read like a
+        // permissions audit.
         const renderMember = (org: Organizer, t: typeof TIERS[number], accent: string) => {
           const name = org.profiles?.display_name ?? 'Unknown';
           const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
           const orgIsOwner = org.role === 'owner';
-          const perms = org.permissions ?? {};
-          const bundle = detectBundle(perms);
-          const readOnlyMoney = financialsAreReadOnly(perms);
-          const editable = canManageTeam && !orgIsOwner;
-          const granted = ORGANIZER_SECTIONS.filter(s => perms[s.key] === true);
+          // Hidden from the public page: the portrait goes quiet — desaturated
+          // and dimmed — and wears a struck-through eye. No pill needed; the
+          // picture itself says it, and the switch is in the sheet.
+          const hidden = !org.show_on_public;
 
           return (
             <div
               key={org.id}
               className="relative flex flex-col items-center text-center"
-              style={{
-                backgroundColor: '#FFFDF9',
-                ...cardWidth(t),
-                borderRadius: t.radius,
-                border: `1.5px solid ${orgIsOwner ? 'rgba(182,135,31,0.42)' : '#E4DAC4'}`,
-                boxShadow: orgIsOwner
-                  ? '0 1px 2px rgba(27,56,40,0.05), 0 8px 22px rgba(182,135,31,0.13)'
-                  : '0 1px 2px rgba(27,56,40,0.04), 0 4px 14px rgba(27,56,40,0.05)',
-                padding: t.pad,
-              }}
+              style={{ ...cardWidth(t), padding: t.pad, borderRadius: t.radius }}
             >
-              {/* Everything that would crowd a tree node lives in the sheet. */}
-              {canManageTeam && (
-                <button
-                  onClick={() => setMemberSheetId(org.id)}
-                  aria-label={`Manage ${name}`}
-                  title={`Manage ${name}`}
-                  className="absolute flex items-center justify-center rounded-full focus:outline-none"
-                  style={{
-                    top: 4, right: 4, width: 40, height: 40,
-                    color: NEU.inkSoft, background: 'transparent', border: 'none', cursor: 'pointer',
-                    transitionProperty: 'color, background-color, scale',
-                    transitionDuration: '140ms', transitionTimingFunction: EASE,
-                  }}
-                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
-                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.inkSoft; el.style.backgroundColor = 'transparent'; el.style.scale = '1'; }}
-                  onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; }}
-                  onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
-                >
-                  <Settings2 size={15} strokeWidth={2.2} />
-                </button>
-              )}
-
-              <ProfileLink userId={org.user_id} name={name} className="flex-shrink-0">
-                {org.profiles?.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={org.profiles.avatar_url}
-                    alt={name}
-                    className="rounded-full object-cover"
-                    style={{
-                      width: t.avatar, height: t.avatar,
-                      outline: '1px solid rgba(0, 0, 0, 0.1)', outlineOffset: -1,
-                      boxShadow: `0 0 0 3px #FFFDF9, 0 0 0 4.5px ${accent}3D`,
-                    }}
-                  />
-                ) : (
-                  <div
-                    className="flex items-center justify-center rounded-full font-bold"
-                    style={{
-                      width: t.avatar, height: t.avatar, fontFamily: OUTFIT,
-                      fontSize: Math.round(t.avatar * 0.34),
-                      backgroundColor: orgIsOwner ? 'rgba(182,135,31,0.16)' : 'rgba(27,56,40,0.10)',
-                      color: orgIsOwner ? '#7A5A10' : '#1B3828',
-                      boxShadow: `0 0 0 3px #FFFDF9, 0 0 0 4.5px ${accent}3D`,
-                    }}
-                  >
-                    {initials}
-                  </div>
-                )}
-              </ProfileLink>
-
-              <p
-                className="font-semibold mt-2.5 w-full truncate"
-                style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: t.name }}
+              {/* Portrait. The accent ring is the rank, worn rather than
+                  labelled — gold for the people who hold the conference,
+                  forest for admins, amber for hand-picked access. */}
+              {/* The ring lives on the frame, not on the picture: CSS `filter`
+                  desaturates an element's own box-shadow too, and a hidden
+                  member's rank should still be legible. */}
+              <div
+                style={{
+                  position: 'relative', width: t.avatar, height: t.avatar, borderRadius: 999,
+                  boxShadow: `0 0 0 5px ${NEU.base}, 0 0 0 8px ${accent}, 0 0 0 9px ${accent}33, 0 12px 30px rgba(27,56,40,0.18)`,
+                }}
               >
-                <ProfileLink userId={org.user_id} name={name}>{name}</ProfileLink>
-                {orgIsOwner && <Crown size={13} className="inline-block ml-1.5 -mt-0.5" style={{ color: '#B6871F' }} aria-label="Owner" />}
-              </p>
+                <ProfileLink userId={org.user_id} name={name} className="flex-shrink-0">
+                  {org.profiles?.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={org.profiles.avatar_url}
+                      alt={name}
+                      className="rounded-full object-cover"
+                      style={{
+                        width: t.avatar, height: t.avatar, display: 'block',
+                        outline: '1px solid rgba(0, 0, 0, 0.1)', outlineOffset: -1,
+                        filter: hidden ? 'grayscale(1)' : 'none',
+                        opacity: hidden ? 0.5 : 1,
+                        transitionProperty: 'filter, opacity',
+                        transitionDuration: '200ms', transitionTimingFunction: EASE,
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="flex items-center justify-center rounded-full font-bold"
+                      style={{
+                        width: t.avatar, height: t.avatar, fontFamily: OUTFIT,
+                        fontSize: Math.round(t.avatar * 0.32),
+                        background: orgIsOwner
+                          ? 'linear-gradient(150deg, rgba(238,217,138,0.5), rgba(182,135,31,0.28))'
+                          : `linear-gradient(150deg, ${accent}26, ${accent}12)`,
+                        color: orgIsOwner ? '#7A5A10' : '#1B3828',
+                        filter: hidden ? 'grayscale(1)' : 'none',
+                        opacity: hidden ? 0.5 : 1,
+                      }}
+                    >
+                      {initials}
+                    </div>
+                  )}
+                </ProfileLink>
 
-              {/* The public-facing role leads, because that is what the outside
-                  world sees. The email is the quiet second line. */}
-              <p
-                className="w-full truncate mt-0.5"
-                style={{ color: org.public_title ? '#1B3828' : NEU.inkSoft, fontFamily: OUTFIT, fontSize: t.meta, fontWeight: org.public_title ? 700 : 400 }}
-                title={org.public_title ?? undefined}
-              >
-                {org.public_title ?? (canManageTeam ? 'No role set' : '—')}
-              </p>
-              <p className="w-full truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: t.meta - 0.5, opacity: 0.9 }}>
-                {org.profiles?.email ?? ''}
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2.5">
-                {/* Bundle chip — the fast path. Owner is a static label:
-                    ownership is not a bundle you can pick from a menu. */}
-                {orgIsOwner ? (
-                  <Pill tone="gold" size="sm">Owner</Pill>
-                ) : editable ? (
-                  <button
-                    onClick={(e) => {
-                      const el = e.currentTarget;
-                      setBundleMenuFor(prev => (prev?.orgId === org.id ? null : { orgId: org.id, el }));
-                    }}
-                    aria-haspopup="menu"
-                    aria-expanded={bundleMenuFor?.orgId === org.id}
-                    className="flex items-center gap-1 focus:outline-none"
-                    style={{
-                      minHeight: 30, padding: '6px 11px', borderRadius: 999, fontFamily: OUTFIT,
-                      fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em',
-                      color: '#1B3828', backgroundColor: `${accent}17`,
-                      border: `1.5px solid ${accent}52`, cursor: 'pointer',
-                      transitionProperty: 'background-color, border-color, scale',
-                      transitionDuration: '140ms', transitionTimingFunction: EASE,
-                    }}
-                    onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.backgroundColor = `${accent}26`; }}
-                    onMouseLeave={(ev) => { const el = ev.currentTarget as HTMLElement; el.style.backgroundColor = `${accent}17`; el.style.scale = '1'; }}
-                    onMouseDown={(ev) => { (ev.currentTarget as HTMLElement).style.scale = '0.96'; }}
-                    onMouseUp={(ev) => { (ev.currentTarget as HTMLElement).style.scale = '1'; }}
-                  >
-                    {bundleLabel(bundle).toUpperCase()}
-                    <ChevronDown size={12} strokeWidth={2.6} />
-                  </button>
-                ) : (
-                  <Pill tone="forest" size="sm">{bundleLabel(bundle)}</Pill>
-                )}
-
-                {/* Public listing. On by default now, with this as the explicit
-                    way to turn it off. Reads the CURRENT value from the ref
-                    inside the handler, never from this closure. */}
-                {canManageTeam ? (
-                  <button
-                    onClick={() => toggleOrganizerPublic(org.id)}
-                    aria-pressed={org.show_on_public}
-                    title={org.show_on_public
-                      ? 'Shown on your public conference page with photo, name and role. Click to hide.'
-                      : 'Hidden from your public conference page. Click to show.'}
-                    className="flex items-center gap-1.5 focus:outline-none"
-                    style={{
-                      minHeight: 30, padding: '6px 11px', borderRadius: 999, fontFamily: OUTFIT,
-                      fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em', cursor: 'pointer',
-                      color: org.show_on_public ? '#1B3828' : NEU.inkSoft,
-                      backgroundColor: org.show_on_public ? 'rgba(27,56,40,0.10)' : 'transparent',
-                      border: org.show_on_public ? '1.5px solid rgba(27,56,40,0.32)' : '1.5px dashed #D8CDB6',
-                      transitionProperty: 'background-color, border-color, color, scale',
-                      transitionDuration: '140ms', transitionTimingFunction: EASE,
-                    }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
-                    onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; }}
-                    onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1'; }}
-                  >
-                    {org.show_on_public ? <Globe size={12} strokeWidth={2.4} /> : <EyeOff size={12} strokeWidth={2.4} />}
-                    {org.show_on_public ? 'PUBLIC' : 'HIDDEN'}
-                  </button>
-                ) : org.show_on_public ? (
+                {/* Struck-through eye, bottom-left of the portrait. */}
+                {hidden && (
                   <span
-                    className="flex items-center gap-1.5"
+                    title={`${name} is hidden from your public conference page`}
+                    aria-label="Hidden from the public page"
+                    className="absolute flex items-center justify-center rounded-full"
                     style={{
-                      minHeight: 30, padding: '6px 11px', borderRadius: 999, fontFamily: OUTFIT,
-                      fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em',
-                      color: NEU.inkSoft, border: '1.5px solid #E4DAC4',
+                      left: '4%', bottom: '4%',
+                      width: Math.round(t.avatar * 0.30), height: Math.round(t.avatar * 0.30),
+                      backgroundColor: '#3C332B', color: '#F4EEDD',
+                      boxShadow: `0 0 0 3px ${NEU.base}, 0 3px 10px rgba(27,56,40,0.28)`,
                     }}
                   >
-                    <Globe size={12} strokeWidth={2.4} /> PUBLIC
+                    <EyeOff size={Math.round(t.avatar * 0.16)} strokeWidth={2.3} />
                   </span>
-                ) : null}
+                )}
+
+                {/* Crown, worn on the portrait rather than beside the name. */}
+                {orgIsOwner && (
+                  <span
+                    aria-label="Owner"
+                    title="Owns this conference"
+                    className="absolute flex items-center justify-center rounded-full"
+                    style={{
+                      right: '2%', top: '2%',
+                      width: Math.round(t.avatar * 0.30), height: Math.round(t.avatar * 0.30),
+                      background: 'linear-gradient(150deg, #F3E2A8, #B6871F)',
+                      color: '#3A2A05',
+                      boxShadow: `0 0 0 3px ${NEU.base}, 0 4px 12px rgba(182,135,31,0.4)`,
+                    }}
+                  >
+                    <Crown size={Math.round(t.avatar * 0.16)} strokeWidth={2.4} />
+                  </span>
+                )}
+
+                {/* Gear. Everything that used to crowd this card is behind it. */}
+                {canManageTeam && (
+                  <button
+                    onClick={() => setMemberSheetId(org.id)}
+                    aria-label={`Manage ${name}`}
+                    title={`Manage ${name}`}
+                    className="absolute flex items-center justify-center rounded-full focus:outline-none"
+                    style={{
+                      right: '2%', bottom: '2%',
+                      width: Math.round(t.avatar * 0.30), height: Math.round(t.avatar * 0.30),
+                      backgroundColor: '#FFFDF9', color: NEU.inkSoft, border: 'none',
+                      boxShadow: `0 0 0 3px ${NEU.base}, 0 3px 10px rgba(27,56,40,0.2)`,
+                      cursor: 'pointer',
+                      transitionProperty: 'color, background-color, scale',
+                      transitionDuration: '140ms', transitionTimingFunction: EASE,
+                    }}
+                    onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.backgroundColor = '#FFFFFF'; el.style.scale = '1.06'; }}
+                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = NEU.inkSoft; el.style.backgroundColor = '#FFFDF9'; el.style.scale = '1'; }}
+                    onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; }}
+                    onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.scale = '1.06'; }}
+                  >
+                    <Settings2 size={Math.round(t.avatar * 0.15)} strokeWidth={2.2} />
+                  </button>
+                )}
               </div>
 
-              {/* What they can actually open. Owners, super admins and admins
-                  open everything, so they get one honest line instead of nine
-                  identical chips; custom access gets the sidebar's own icons,
-                  which is the densest true summary that fits on a card. */}
-              {orgIsOwner || bundle !== 'custom' ? (
-                <p className="mt-2.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: t.meta - 0.5, textWrap: 'pretty' }}>
-                  {orgIsOwner || !readOnlyMoney ? 'Every page · can change money' : 'Every page · money read-only'}
-                </p>
-              ) : (
-                <div className="flex flex-wrap items-center justify-center gap-1 mt-2.5">
-                  {ORGANIZER_SECTIONS.map(s => {
-                    const on = perms[s.key] === true;
-                    const Icon = s.icon;
-                    return (
-                      <span
-                        key={s.key}
-                        title={`${s.label} — ${on ? 'can open' : 'cannot open'}. ${s.blurb}`}
-                        aria-label={`${s.label}: ${on ? 'granted' : 'not granted'}`}
-                        className="flex items-center justify-center rounded-full"
-                        style={{
-                          width: 22, height: 22,
-                          color: on ? '#1B3828' : '#C4B79C',
-                          backgroundColor: on ? 'rgba(27,56,40,0.10)' : 'transparent',
-                          border: on ? '1px solid rgba(27,56,40,0.22)' : '1px dashed #DDD4C0',
-                        }}
-                      >
-                        <Icon size={12} strokeWidth={2.3} />
-                      </span>
-                    );
-                  })}
-                  <span
-                    className="ml-1"
-                    style={{ color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: t.meta - 0.5, fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {granted.length}/{ORGANIZER_SECTIONS.length}
-                  </span>
-                </div>
-              )}
+              <p
+                className="font-bold mt-3.5 w-full"
+                style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: t.name, lineHeight: 1.2, textWrap: 'balance' }}
+              >
+                <ProfileLink userId={org.user_id} name={name}>{name}</ProfileLink>
+              </p>
+
+              {/* The role, in the rank's own colour. This is the one thing the
+                  outside world sees, so it is the one thing printed here. */}
+              <p
+                className="w-full mt-1"
+                style={{
+                  color: org.public_title ? accent : NEU.muted,
+                  fontFamily: OUTFIT, fontSize: t.meta,
+                  fontWeight: org.public_title ? 700 : 500,
+                  letterSpacing: '0.02em', lineHeight: 1.35, textWrap: 'pretty',
+                }}
+                title={org.public_title ?? undefined}
+              >
+                {org.public_title ?? (canManageTeam ? 'No role set' : '')}
+              </p>
             </div>
           );
         };
 
         return (
-        <div style={cardStyle}>
+        <div>
           {/* Header: title, one-line purpose, and the "+" that starts the flow */}
           <div className="flex items-start gap-3 mb-1">
             <div className="flex-1 min-w-0">
@@ -4169,8 +4126,8 @@ export default function SettingsPage() {
           {/* Team shape at a glance — tabular so it does not jitter as members
               move between ranks. */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 mb-6">
-            {ranks.map(r => (
-              <span key={r.id} className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: NEU.inkSoft }}>
+            {visibleRanks.map(r => (
+              <span key={r.id} className="flex items-center gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: r.accent }}>
                 <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: r.accent, display: 'inline-block' }} />
                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{r.rows.length}</span>
                 {r.label.toUpperCase()}
@@ -5382,9 +5339,45 @@ export default function SettingsPage() {
                     </p>
                   ) : (
                     <>
+                      {/* The bundle picker lives here now. It used to be a chip
+                          on the card, back when the card was a permissions
+                          summary; the card is a portrait now, and this is where
+                          privileges are. */}
+                      <div className="flex items-center flex-wrap gap-2 mb-3">
+                        {editable ? (
+                          <button
+                            onClick={(e) => {
+                              const el = e.currentTarget;
+                              setBundleMenuFor(prev => (prev?.orgId === org.id ? null : { orgId: org.id, el }));
+                            }}
+                            aria-haspopup="menu"
+                            aria-expanded={bundleMenuFor?.orgId === org.id}
+                            className="flex items-center gap-1.5 focus:outline-none"
+                            style={{
+                              minHeight: 38, padding: '9px 14px', borderRadius: 999, fontFamily: OUTFIT,
+                              fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
+                              color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.09)',
+                              border: '1.5px solid rgba(27,56,40,0.28)', cursor: 'pointer',
+                              transitionProperty: 'background-color, scale',
+                              transitionDuration: '140ms', transitionTimingFunction: EASE,
+                            }}
+                            onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.15)'; }}
+                            onMouseLeave={(ev) => { const el = ev.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.09)'; el.style.scale = '1'; }}
+                            onMouseDown={(ev) => { (ev.currentTarget as HTMLElement).style.scale = '0.96'; }}
+                            onMouseUp={(ev) => { (ev.currentTarget as HTMLElement).style.scale = '1'; }}
+                          >
+                            {bundleLabel(bundle).toUpperCase()}
+                            <ChevronDown size={13} strokeWidth={2.6} />
+                          </button>
+                        ) : (
+                          <Pill tone="forest" size="sm">{bundleLabel(bundle)}</Pill>
+                        )}
+                        {readOnlyMoney && (
+                          <Pill tone="gold" size="sm">Money read-only</Pill>
+                        )}
+                      </div>
                       <p className="text-sm mb-3" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty', lineHeight: 1.55 }}>
-                        {bundleLabel(bundle)} — {BUNDLES.find(b => b.id === bundle)?.summary}
-                        {editable ? ' Change the bundle from the chip on their card.' : ''}
+                        {BUNDLES.find(b => b.id === bundle)?.summary}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {ORGANIZER_SECTIONS.map(s => {
