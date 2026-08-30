@@ -105,6 +105,7 @@ interface Conference {
   contact_email: string | null;
   organizer_id: string;
   min_age: number | null;
+  max_age: number | null;
   allocation_swap_mode: string;
   display_secretariat: SecretariatMember[] | null;
   connect_onboarding_status: string;
@@ -238,11 +239,20 @@ function fmtReviewDate(iso: string): string {
 
 // ── Sub-components ────────────────────────────────────────────────────────
 
-/** Small age-limit chip shown near the apply CTA on the dark green card. */
-function MinAgeChip({ minAge }: { minAge: number }) {
+/** Small age-limit chip shown near the apply CTA on the dark green card.
+ *  Reads "16+", "up to 26" or "16–26" depending on which bounds are set. */
+function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number | null }) {
+  const label =
+    minAge != null && maxAge != null ? `${minAge}–${maxAge}`
+      : minAge != null ? `${minAge}+`
+        : `UP TO ${maxAge}`;
+  const requirement =
+    minAge != null && maxAge != null ? `between ${minAge} and ${maxAge} years old`
+      : minAge != null ? `at least ${minAge} years old`
+        : `no older than ${maxAge}`;
   return (
     <span
-      title={`This conference requires delegates to be at least ${minAge} years old at its start date`}
+      title={`This conference requires delegates to be ${requirement} at its start date`}
       className="flex-shrink-0 inline-flex items-center rounded-full"
       style={{
         padding: '3px 9px',
@@ -255,7 +265,7 @@ function MinAgeChip({ minAge }: { minAge: number }) {
         letterSpacing: '0.06em',
       }}
     >
-      {minAge}+
+      {label}
     </span>
   );
 }
@@ -784,7 +794,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         start_date, end_date, dates_tbd, fee_amount, fee_currency, expected_delegates,
         description, logo_url, banner_url, is_public, status,
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-        contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
+        contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
         connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
         financial_aid_enabled, aid_questions, aid_intro
       `)
@@ -802,7 +812,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             start_date, end_date, dates_tbd, fee_amount, fee_currency, expected_delegates,
             description, logo_url, banner_url, is_public, status,
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
-            contact_email, organizer_id, min_age, allocation_swap_mode, display_secretariat,
+            contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
             connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
             financial_aid_enabled, aid_questions, aid_intro
           `)
@@ -2218,7 +2228,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       <>
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>Ready to take the floor?</p>
-                          {conference.min_age != null && <MinAgeChip minAge={conference.min_age} />}
+                          {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
                         <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
                           Sign in with a free account to start your application.
@@ -2248,7 +2258,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       <>
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>Apply to this Conference</p>
-                          {conference.min_age != null && <MinAgeChip minAge={conference.min_age} />}
+                          {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
                         <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
                           {hasOpenRoles ? 'Applications are open.' : 'Applications are currently closed.'}

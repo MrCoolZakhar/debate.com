@@ -7,7 +7,6 @@ import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, EyeOff, ArrowUp, ArrowDown, Trash2,
-  User, Gavel, GraduationCap, Eye,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -166,13 +165,6 @@ function roleLabel(role: string): string {
   return role.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-const ROLE_ICONS: Record<string, typeof User> = {
-  'delegate': User,
-  'chair': Gavel,
-  'head-delegate': Users2,
-  'faculty-advisor': GraduationCap,
-  'observer': Eye,
-};
 
 type RoleStatus = RoleStatusKind;
 
@@ -513,6 +505,16 @@ export default function SettingsPage() {
     params.set('role', next);
     router.push(`?${params.toString()}`, { scroll: false });
   }
+  // Applications splits in two: the per-role setup (bookmarks + three steps)
+  // and the handful of decisions that are the same for everybody. Carried in
+  // ?view= so a deep link lands where it says it does.
+  const viewParam = searchParams.get('view');
+  const appsView: 'roles' | 'general' = viewParam === 'general' ? 'general' : 'roles';
+  function setAppsView(next: 'roles' | 'general') {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === 'roles') params.delete('view'); else params.set('view', next);
+    router.push(`?${params.toString()}`, { scroll: false });
+  }
   // Exactly one step open at a time.
   const [openStep, setOpenStep] = useState<number>(1);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -553,10 +555,27 @@ export default function SettingsPage() {
   const [detailsSaved, setDetailsSaved] = useState(false);
   const [detailsError, setDetailsError] = useState('');
 
-  // Minimum age (Applications tab)
+  // Age range (Applications → General). min_age has existed since launch;
+  // max_age is its other half, and both are measured on the start date.
   const [minAge, setMinAge] = useState('');
+  const [maxAge, setMaxAge] = useState('');
   const [minAgeSaved, setMinAgeSaved] = useState(false);
   const [minAgeError, setMinAgeError] = useState('');
+  // Writing one of the "same for everybody" settings across all five roles.
+  const [bulkSaving, setBulkSaving] = useState<string | null>(null);
+  // "Set the same phase up for another role?" — offered once per role per
+  // visit, the moment a phase first becomes usable, and always available from
+  // the button beside + ADD PHASE. Re-typing the same two dates five times is
+  // the single most tedious part of setting a conference up.
+  const [copyPhasesOpen, setCopyPhasesOpen] = useState(false);
+  const [copyPhasesBusy, setCopyPhasesBusy] = useState(false);
+  const [copyPhasesNotice, setCopyPhasesNotice] = useState('');
+  const phaseOfferedFor = useRef<Set<string>>(new Set());
+  // Roles whose first-run walkthrough has been dismissed, kept in localStorage
+  // per conference. Hydrated after mount so the server render and the first
+  // client render agree.
+  const [introDone, setIntroDone] = useState<Set<string>>(new Set());
+  const introHydrated = useRef(false);
 
   // Delegation allocation swaps (Applications tab)
   const [swapMode, setSwapMode] = useState('request');
@@ -728,7 +747,7 @@ export default function SettingsPage() {
   const minAgeBaseline = useRef<string | null>(null);
   const detailsSnap = () => snap({ fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
   const visualSnap = () => snap({ description, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
-  const minAgeSnap = () => snap({ minAge });
+  const minAgeSnap = () => snap({ minAge, maxAge });
 
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
@@ -918,6 +937,7 @@ export default function SettingsPage() {
     setWhatsappUrl(conference.whatsapp_url ?? '');
     setWebsiteUrl(conference.website_url ?? '');
     setMinAge(conference.min_age != null ? String(conference.min_age) : '');
+    setMaxAge(conference.max_age != null ? String(conference.max_age) : '');
     setSwapMode(conference.allocation_swap_mode ?? 'request');
     setSwapModeError('');
     setFullName(conference.full_name ?? '');
@@ -950,7 +970,10 @@ export default function SettingsPage() {
       facebookUrl: conference.facebook_url ?? '', tiktokUrl: conference.tiktok_url ?? '',
       whatsappUrl: conference.whatsapp_url ?? '', websiteUrl: conference.website_url ?? '',
     });
-    minAgeBaseline.current = snap({ minAge: conference.min_age != null ? String(conference.min_age) : '' });
+    minAgeBaseline.current = snap({
+      minAge: conference.min_age != null ? String(conference.min_age) : '',
+      maxAge: conference.max_age != null ? String(conference.max_age) : '',
+    });
   }, [conference?.id, loadRoleConfigs, loadRolesWithApplications, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
 
   // Partner typeahead: debounced authed search over public conferences,
@@ -1013,10 +1036,100 @@ export default function SettingsPage() {
     }
   }
 
+  // ── First-run walkthrough bookkeeping ────────────────────────────────────
+  // A role that has never been configured gets three illustrated slides
+  // explaining what its three steps decide, before the form itself. Dismissed
+  // state is per conference and per role, in localStorage — it is a first-run
+  // courtesy, not a preference worth a database column.
+
+  const introStorageKey = conference ? `gv-role-setup-intro-${conference.id}` : null;
+
+  useEffect(() => {
+    if (!introStorageKey || introHydrated.current) return;
+    introHydrated.current = true;
+    try {
+      const raw = window.localStorage.getItem(introStorageKey);
+      if (raw) setIntroDone(new Set(JSON.parse(raw) as string[]));
+    } catch { /* private mode, or corrupt value: show the intro, harmless */ }
+  }, [introStorageKey]);
+
+  function dismissIntro(role: string) {
+    setIntroDone(prev => {
+      const next = new Set(prev).add(role);
+      if (introStorageKey) {
+        try { window.localStorage.setItem(introStorageKey, JSON.stringify([...next])); } catch { /* ignore */ }
+      }
+      return next;
+    });
+  }
+
+  /** True when nothing about this role has been decided yet: no window, no
+   *  cap, no fee, no questions. A role part-way through setup is NOT untouched
+   *  — the walkthrough would be an interruption at that point. */
+  function roleIsUntouched(rc: RoleConfig | undefined): boolean {
+    if (!rc) return false;
+    return (
+      !rc.applications_open_at &&
+      !rc.applications_close_at &&
+      rc.max_accepted == null &&
+      Number(rc.fee_amount) === 0 &&
+      (rc.fee_phases ?? []).length === 0 &&
+      (rc.custom_questions ?? []).length === 0
+    );
+  }
+
   // Patch one field of one fee phase and persist the whole jsonb array —
   // rides saveRoleConfig's optimistic-update-with-rollback.
   function updateFeePhase(role: string, phases: FeePhase[], idx: number, patch: Partial<FeePhase>) {
-    void saveRoleConfig(role, { fee_phases: phases.map((p, i) => (i === idx ? { ...p, ...patch } : p)) });
+    const next = phases.map((p, i) => (i === idx ? { ...p, ...patch } : p));
+    void saveRoleConfig(role, { fee_phases: next });
+    // The moment this role has at least one phase with both ends of its window
+    // filled in, offer to give the other roles the same one. Once per role per
+    // visit — a suggestion, never a nag.
+    const usable = next.some(p => p.start_date && p.end_date);
+    if (usable && !phaseOfferedFor.current.has(role) && ROLES.length > 1) {
+      phaseOfferedFor.current.add(role);
+      setCopyPhasesOpen(true);
+    }
+  }
+
+  /** Copy this role's whole fee-phase ladder (and its flat fee, which the
+   *  phases fall back to) onto the chosen roles. */
+  async function copyPhasesToRoles(targets: string[]) {
+    const source = roleConfigs.find(rc => rc.role === activeRole);
+    if (!conference || !source || copyPhasesBusy) return;
+    setCopyPhasesBusy(true);
+    setRoleConfigError('');
+    const patch = {
+      fee_phases: source.fee_phases ?? [],
+      fee_amount: source.fee_amount,
+      fee_currency: source.fee_currency,
+    };
+    const previous = roleConfigs;
+    setRoleConfigs(prev => prev.map(rc => (targets.includes(rc.role) ? { ...rc, ...patch } : rc)));
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setRoleConfigs(previous);
+      setCopyPhasesBusy(false);
+      setRoleConfigError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase
+      .from('application_role_configs')
+      .update(patch)
+      .eq('conference_id', conference.id)
+      .in('role', targets)
+      .select('id');
+    setCopyPhasesBusy(false);
+    if (error || !data || data.length === 0) {
+      setRoleConfigs(previous);
+      setRoleConfigError(error ? error.message : "Couldn't copy those phases across.");
+      return;
+    }
+    setCopyPhasesOpen(false);
+    setConfigVersion(v => v + 1);
+    setCopyPhasesNotice(`Copied to ${targets.length} ${targets.length === 1 ? 'role' : 'roles'}`);
+    setTimeout(() => setCopyPhasesNotice(''), 3000);
   }
 
   // Toggle that writes immediately (no dedicated save button): shows an
@@ -1988,15 +2101,26 @@ export default function SettingsPage() {
   async function handleSaveMinAge() {
     if (!conference || minAgeSaving) return;
     setMinAgeError('');
-    const trimmed = minAge.trim();
-    let value: number | null = null;
-    if (trimmed !== '') {
+    // Either bound may be left empty, meaning "no limit at that end", but a
+    // value that is present has to be plausible AND has to leave a range that
+    // somebody could actually fall inside.
+    const parseBound = (raw: string, which: string): number | null | 'bad' => {
+      const trimmed = raw.trim();
+      if (trimmed === '') return null;
       const parsed = parseInt(trimmed, 10);
       if (isNaN(parsed) || parsed < 10 || parsed > 99) {
-        setMinAgeError('Minimum age must be between 10 and 99, or left empty for no limit.');
-        return;
+        setMinAgeError(`${which} age must be between 10 and 99, or left empty for no limit.`);
+        return 'bad';
       }
-      value = parsed;
+      return parsed;
+    };
+    const value = parseBound(minAge, 'Minimum');
+    if (value === 'bad') return;
+    const maxValue = parseBound(maxAge, 'Maximum');
+    if (maxValue === 'bad') return;
+    if (value !== null && maxValue !== null && value > maxValue) {
+      setMinAgeError('The minimum age cannot be above the maximum age — nobody would be eligible.');
+      return;
     }
     setMinAgeSaving(true);
     const supabase = await getFreshAuthedClient();
@@ -2005,7 +2129,7 @@ export default function SettingsPage() {
       setMinAgeError('Your session has expired, please refresh and sign in again.');
       return;
     }
-    const { data, error } = await supabase.from('conferences').update({ min_age: value }).eq('id', conference.id).select('id');
+    const { data, error } = await supabase.from('conferences').update({ min_age: value, max_age: maxValue }).eq('id', conference.id).select('id');
     if (error || !data || data.length !== 1) {
       // Failure: the input keeps the user's typed value untouched, the
       // button returns to its normal label, and an inline error explains it.
@@ -2118,7 +2242,7 @@ export default function SettingsPage() {
     const t = setTimeout(() => { void handleSaveMinAge(); }, 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minAge, minAgeSaving, conference]);
+  }, [minAge, maxAge, minAgeSaving, conference]);
 
   useEffect(() => {
     if (!conference || visualBaseline.current === null || visualSaving) return;
@@ -2162,6 +2286,312 @@ export default function SettingsPage() {
     marginBottom: '20px',
     boxShadow: '0 1px 2px rgba(27,56,40,0.04)',
   };
+
+  // ── Applications → General ──────────────────────────────────────────────
+  // The decisions that are the same for everybody, gathered in one place. Two
+  // kinds live here:
+  //
+  //   • Conference-level columns (preferences, swaps, age range) — one row,
+  //     one write, exactly as they behaved when they were stranded on the
+  //     Conference tab.
+  //   • Per-role columns that organisers almost always want identical across
+  //     roles (acceptance, payment timing, resubmission). These stay per-role
+  //     in the database — the roles page can still diverge them — but this page
+  //     reads them as one answer and writes to every role at once. When the
+  //     roles disagree, it says so instead of picking a winner.
+
+  /** The shared answer across every role, or null when they disagree. */
+  function agreedAcross<K extends keyof RoleConfig>(key: K): RoleConfig[K] | null {
+    if (roleConfigs.length === 0) return null;
+    const first = roleConfigs[0][key];
+    return roleConfigs.every(rc => rc[key] === first) ? first : null;
+  }
+
+  /** Write one field to every role config at once, with rollback. */
+  async function saveAcrossRoles(updates: Partial<RoleConfig>, busyKey: string) {
+    if (!conference || bulkSaving) return;
+    setBulkSaving(busyKey);
+    setRoleConfigError('');
+    const previous = roleConfigs;
+    setRoleConfigs(prev => prev.map(rc => ({ ...rc, ...updates })));
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setRoleConfigs(previous);
+      setBulkSaving(null);
+      setRoleConfigError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase
+      .from('application_role_configs')
+      .update(updates)
+      .eq('conference_id', conference.id)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      setRoleConfigs(previous);
+      setRoleConfigError(error ? error.message : "Couldn't save that across your roles.");
+    }
+    setBulkSaving(null);
+  }
+
+  function renderApplicationsGeneral() {
+    const agreedAccept = agreedAcross('auto_accept');
+    const agreedPayment = agreedAcross('payment_timing');
+    const agreedResub = agreedAcross('allow_resubmission');
+
+    return (
+      <>
+        {/* ── When people pay, and whether you choose them ── */}
+        <div style={cardStyle}>
+          <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <Emoji3D name="Money bag" size={20} />
+            Payment, acceptance and resubmission
+            <InfoHint
+              label="About the shared role settings"
+              text="These three still belong to each role in the database, and the per-role page can still set them separately — most conferences never want to. Change one here and it is written to all five roles at once. If your roles currently disagree, nothing is selected and the control says so rather than quietly picking one."
+            />
+          </p>
+          <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            Set once for every role. Any role can still be changed on its own from the Per role tab.
+          </p>
+
+          <div className="mb-5">
+            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              When payment opens
+              <InfoHint
+                label="About payment timing"
+                text="After application charges on submission, which fills the account early but means refunding everyone you turn down. After acceptance only charges the people you actually took, which is the safer default anywhere you review applications. Pay at any time leaves the timing entirely to the applicant."
+              />
+            </label>
+            <Segmented
+              options={PAYMENT_TIMING_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+              value={(agreedPayment ?? 'anytime') as RoleConfig['payment_timing']}
+              mixed={agreedPayment === null}
+              disabled={bulkSaving === 'payment'}
+              onChange={(v) => void saveAcrossRoles({ payment_timing: v }, 'payment')}
+            />
+            <SegmentedNote
+              mixed={agreedPayment === null}
+              text={PAYMENT_TIMING_OPTIONS.find(o => o.value === agreedPayment)?.desc}
+            />
+          </div>
+
+          <div className="mb-5">
+            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              Acceptance
+              <InfoHint
+                label="About acceptance"
+                text="Auto-accept lets everyone in the moment they submit, which is right for observers, advisors, and any role where you are not really choosing. Manual review holds every application as pending until someone decides, which is what you want wherever places are limited or the answers matter."
+              />
+            </label>
+            <Segmented
+              options={[
+                { value: true, label: 'AUTO-ACCEPT' },
+                { value: false, label: 'MANUAL REVIEW' },
+              ]}
+              value={agreedAccept ?? false}
+              mixed={agreedAccept === null}
+              disabled={bulkSaving === 'accept'}
+              onChange={(v) => void saveAcrossRoles({ auto_accept: v }, 'accept')}
+            />
+            <SegmentedNote
+              mixed={agreedAccept === null}
+              text={agreedAccept
+                ? 'Everyone who applies is accepted the moment they submit.'
+                : 'Every application waits as pending until someone on your team decides.'}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                Allow resubmission
+                <InfoHint
+                  label="About resubmission"
+                  text="With this on, someone you have denied can reopen their form, change their answers and send it back for another look — useful when a denial is usually about a missing detail rather than a real no. With it off, a denial is final and they cannot apply for that role again."
+                />
+              </label>
+              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                {agreedResub === null
+                  ? 'Your roles do not all agree. Flipping this sets it for every role.'
+                  : 'Let denied applicants edit and resubmit.'}
+              </p>
+            </div>
+            <PillToggle
+              value={agreedResub ?? false}
+              onChange={(v) => void saveAcrossRoles({ allow_resubmission: v }, 'resub')}
+              disabled={bulkSaving === 'resub'}
+              size="md"
+            />
+          </div>
+
+          {roleConfigError && (
+            <p className="text-xs mt-3 rounded-lg px-3 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>
+              {roleConfigError}
+            </p>
+          )}
+        </div>
+
+        {/* ── What delegates rank ── */}
+        <div style={cardStyle}>
+          <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <Emoji3D name="Globe showing europe-africa" size={20} fallback={Globe} fallbackColor="#1B3828" />
+            Delegate preferences
+            <InfoHint
+              label="About delegate preferences"
+              text="What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."
+            />
+          </p>
+          <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
+            {PREF_MODE_OPTIONS.map(opt => {
+              const active = prefMode === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => savePrefMode(opt.value)}
+                  disabled={prefModeSaving}
+                  className="flex items-center rounded-xl focus:outline-none"
+                  style={{
+                    gap: 10, padding: '11px 13px', textAlign: 'left',
+                    backgroundColor: active ? '#1B3828' : 'transparent',
+                    color: active ? '#EED98A' : '#1C1410',
+                    border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                    boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
+                    fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                    opacity: prefModeSaving ? 0.6 : 1,
+                    cursor: prefModeSaving ? 'wait' : 'pointer',
+                  }}
+                >
+                  {/* The two things being ranked, drawn rather than described:
+                      a committee emblem and a flag. */}
+                  <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
+                    {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                    {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                    {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                  </span>
+                  <span className="min-w-0">{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2 mt-2.5">
+            {prefModeSaving && (
+              <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+            )}
+            <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              {PREF_MODE_OPTIONS.find(o => o.value === prefMode)?.desc}
+            </p>
+          </div>
+          {prefModeError && (
+            <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
+          )}
+        </div>
+
+        {/* ── Swaps ── */}
+        <div style={cardStyle}>
+          <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
+            Delegation allocation swaps
+            <InfoHint
+              label="About allocation swaps"
+              text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them — a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."
+            />
+          </p>
+          <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            Control whether delegation leaders can trade committee allocations within their own delegation.
+          </p>
+          <div className="flex items-center" style={{ gap: 8 }}>
+            <div className="flex-1">
+              <Segmented
+                options={SWAP_MODE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                value={swapMode}
+                disabled={swapModeSaving}
+                onChange={(v) => saveSwapMode(v)}
+              />
+            </div>
+            {swapModeSaving && (
+              <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+            )}
+          </div>
+          <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
+          </p>
+          {swapModeError && (
+            <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
+          )}
+        </div>
+
+        {/* ── Age range ── */}
+        <div style={cardStyle}>
+          <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <Emoji3D name="Birthday cake" size={20} />
+            Age of participants
+            <InfoHint
+              label="About the age range"
+              text="Both bounds are inclusive and both are measured on your conference's start date, not on the day someone applies — so a delegate who turns sixteen the week before still counts as sixteen. Leave either end empty for no limit at that end. Applicants outside the range are told before they fill anything in, rather than after."
+            />
+          </p>
+          <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            Checked against each applicant&apos;s date of birth, on the day your conference starts. Leave either box empty for no limit.
+          </p>
+          <div className="flex items-end flex-wrap" style={{ gap: 14 }}>
+            <div style={{ width: '150px' }}>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                Minimum age
+              </label>
+              <input
+                type="number"
+                min={10}
+                max={99}
+                step={1}
+                value={minAge}
+                onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
+                placeholder="No limit"
+                style={inputStyle}
+                onFocus={fgInput}
+                onBlur={bgInput}
+              />
+            </div>
+            <div style={{ width: '150px' }}>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                Maximum age
+              </label>
+              <input
+                type="number"
+                min={10}
+                max={99}
+                step={1}
+                value={maxAge}
+                onChange={(e) => { setMaxAge(e.target.value); setMinAgeError(''); }}
+                placeholder="No limit"
+                style={inputStyle}
+                onFocus={fgInput}
+                onBlur={bgInput}
+              />
+            </div>
+            <div className="pb-2">
+              <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />
+            </div>
+          </div>
+          {minAgeError && (
+            <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{minAgeError}</p>
+          )}
+          {!minAgeError && (view.min_age != null || view.max_age != null) && (
+            <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+              {view.min_age != null && view.max_age != null
+                ? `Applicants must be between ${view.min_age} and ${view.max_age} years old at the start of your conference.`
+                : view.min_age != null
+                  ? `Applicants must be at least ${view.min_age} years old at the start of your conference.`
+                  : `Applicants must be no older than ${view.max_age} at the start of your conference.`}
+            </p>
+          )}
+        </div>
+      </>
+    );
+  }
 
   // ── Section rail definition ──────────────────────────────────────────────
   // Mirrors the manage layout rail's language: lucide icon + Outfit label +
@@ -2346,6 +2776,40 @@ export default function SettingsPage() {
                 ? { filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none' }
                 : undefined}
             >
+              {/* ── Roles ⇄ General. Most of this screen is per-role, but a
+                  handful of decisions are the same for everybody and were
+                  scattered across two tabs before. ── */}
+              <div className="flex mb-5" style={{ gap: 6, padding: 5, borderRadius: 14, backgroundColor: 'rgba(27,56,40,0.05)', width: 'fit-content' }}>
+                {([
+                  { key: 'roles' as const,   label: 'Per role',  emoji: 'Bookmark tabs' },
+                  { key: 'general' as const, label: 'General',   emoji: 'Balance scale' },
+                ]).map(v => {
+                  const on = appsView === v.key;
+                  return (
+                    <button
+                      key={v.key}
+                      type="button"
+                      onClick={() => setAppsView(v.key)}
+                      className="inline-flex items-center focus:outline-none"
+                      style={{
+                        gap: 7, padding: '7px 15px', borderRadius: 10,
+                        backgroundColor: on ? '#FFFDF9' : 'transparent',
+                        boxShadow: on ? '0 2px 6px rgba(27,56,40,0.12), 0 0 0 1px rgba(216,205,182,0.9)' : 'none',
+                        color: on ? '#1C1410' : '#7A6E5E',
+                        fontFamily: "'Outfit', sans-serif", fontSize: 12.5, fontWeight: on ? 800 : 700,
+                        letterSpacing: '0.04em', border: 'none', cursor: 'pointer',
+                        transition: 'background-color 160ms, box-shadow 200ms',
+                      }}
+                    >
+                      <Emoji3D name={v.emoji} size={17} />
+                      {v.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {appsView === 'general' ? renderApplicationsGeneral() : (<>
+
               {/* ── Role bookmarks. Icon above the name, active tab raised and
                   joined to the panel below it. Order follows how a conference
                   is actually staffed, not the alphabet. ── */}
@@ -2416,6 +2880,12 @@ export default function SettingsPage() {
                   </p>
                 )}
               </div>
+
+              {/* ── First-run walkthrough. Only for a role nothing has been
+                  decided about yet, and only until it is dismissed. ── */}
+              {config && roleIsUntouched(config) && !introDone.has(role) && (
+                <SetupIntro role={role} onDone={() => dismissIntro(role)} />
+              )}
 
               {/* ── The three steps. Editable whether or not the role is on: a
                   role gets set up before it is opened. ── */}
@@ -2650,21 +3120,43 @@ export default function SettingsPage() {
                           const hasInvalidPhase = phases.some(p => !p.start_date || !p.end_date);
                           return (
                             <div className="mt-4">
-                              <div className="flex items-center justify-between mb-1.5">
-                                <label className="text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              <div className="flex items-center justify-between mb-1.5 flex-wrap" style={{ gap: 8 }}>
+                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                                   Fee phases
+                                  <InfoHint
+                                    label="About fee phases"
+                                    text="Optional date windows that override the flat fee — an early-bird rate, a standard rate, a late rate. Whichever phase contains today is what an applicant is quoted and charged; on a day no phase covers, the flat fee applies. Both dates are inclusive, and a phase missing either one is skipped entirely."
+                                  />
                                 </label>
-                                <button
-                                  type="button"
-                                  disabled={hasInvalidPhase}
-                                  onClick={() => saveRoleConfig(role, {
-                                    fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
-                                  })}
-                                  className="text-[11px] font-bold focus:outline-none hover:underline"
-                                  style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
-                                >
-                                  + ADD PHASE
-                                </button>
+                                <div className="flex items-center" style={{ gap: 12 }}>
+                                  {copyPhasesNotice && (
+                                    <span className="text-[11px] font-bold" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                                      {copyPhasesNotice} ✓
+                                    </span>
+                                  )}
+                                  {phases.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setCopyPhasesOpen(true)}
+                                      className="text-[11px] font-bold focus:outline-none hover:underline inline-flex items-center gap-1.5"
+                                      style={{ color: '#7A6E5E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer' }}
+                                    >
+                                      <Copy size={12} strokeWidth={2.4} />
+                                      COPY TO ANOTHER ROLE
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={hasInvalidPhase}
+                                    onClick={() => saveRoleConfig(role, {
+                                      fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
+                                    })}
+                                    className="text-[11px] font-bold focus:outline-none hover:underline"
+                                    style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
+                                  >
+                                    + ADD PHASE
+                                  </button>
+                                </div>
                               </div>
                               {phases.length === 0 ? (
                                 <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
@@ -2797,7 +3289,22 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
+
+              </>)}
             </div>
+
+            {/* Offered when a phase first becomes usable, and from the button
+                beside + ADD PHASE. Copies the whole ladder plus the flat fee it
+                falls back to — a half-copied price is worse than none. */}
+            <CopyToRolesModal
+              open={copyPhasesOpen}
+              onClose={() => setCopyPhasesOpen(false)}
+              onConfirm={(targets) => void copyPhasesToRoles(targets)}
+              busy={copyPhasesBusy}
+              title="Set this up for another role too?"
+              sub={`${roleLabel(role)} fee phases are saved. Most conferences run the same windows for every role — tick the ones that should get an identical ladder and the same fee.`}
+              roles={ROLES.filter(r => r !== role)}
+            />
 
             {/* Not dismissible by design: no close, no backdrop click, no Escape.
                 It goes away when financial onboarding is done, and not before. */}
@@ -3080,134 +3587,6 @@ export default function SettingsPage() {
             <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
             {detailsError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{detailsError}</p>
-            )}
-          </div>
-
-          {/* Delegate preference mode card */}
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              Delegate Preferences
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {PREF_MODE_OPTIONS.map(opt => {
-                const active = prefMode === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => savePrefMode(opt.value)}
-                    disabled={prefModeSaving}
-                    className="py-2.5 px-3 rounded-[10px] font-bold text-xs focus:outline-none transition-all"
-                    style={{
-                      backgroundColor: active ? '#1B3828' : 'transparent',
-                      color: active ? '#EED98A' : '#1C1410',
-                      border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                      fontFamily: "'Outfit', sans-serif",
-                      letterSpacing: '0.04em',
-                      opacity: prefModeSaving ? 0.6 : 1,
-                      cursor: prefModeSaving ? 'wait' : 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              {prefModeSaving && (
-                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-              )}
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                {PREF_MODE_OPTIONS.find(o => o.value === prefMode)?.desc}
-              </p>
-            </div>
-            {prefModeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
-            )}
-          </div>
-
-          {/* Delegation allocation swaps card */}
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              Delegation Allocation Swaps
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              Control whether delegation leaders can trade committee allocations within their own delegation.
-            </p>
-            <div className="flex gap-2 items-center">
-              {SWAP_MODE_OPTIONS.map(opt => {
-                const active = swapMode === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => saveSwapMode(opt.value)}
-                    disabled={swapModeSaving}
-                    className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
-                    style={{
-                      backgroundColor: active ? '#1B3828' : 'transparent',
-                      color: active ? '#EED98A' : '#1C1410',
-                      border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                      fontFamily: "'Outfit', sans-serif",
-                      letterSpacing: '0.06em',
-                      opacity: swapModeSaving ? 0.6 : 1,
-                      cursor: swapModeSaving ? 'wait' : 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-              {swapModeSaving && (
-                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-              )}
-            </div>
-            <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
-            </p>
-            {swapModeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
-            )}
-          </div>
-
-          {/* Minimum age card */}
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              Minimum Age
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              Applicants below this age cannot apply. Leave empty for no limit. Age is checked against the applicant&apos;s date of birth on the conference start date.
-            </p>
-            <div className="flex items-end gap-3">
-              <div style={{ width: '140px' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                  Minimum age
-                </label>
-                <input
-                  type="number"
-                  min={10}
-                  max={99}
-                  step={1}
-                  value={minAge}
-                  onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
-                  placeholder="No limit"
-                  style={inputStyle}
-                  onFocus={fgInput}
-                  onBlur={bgInput}
-                />
-          </div>
-            </div>
-            <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />
-            {minAgeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{minAgeError}</p>
-            )}
-            {view.min_age != null && !minAgeError && (
-              <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
-                Delegates must be at least {view.min_age} years old at the start of your conference to apply.
-              </p>
             )}
           </div>
 

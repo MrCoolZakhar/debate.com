@@ -63,6 +63,7 @@ interface Conference {
   fee_currency: string;
   start_date: string;
   min_age: number | null;
+  max_age: number | null;
   logo_url: string | null;
   /** Used as the Questions-stage plate image when the conference has one;
    *  falls back to a deterministic /public/onboarding photo. */
@@ -1073,11 +1074,29 @@ function ConferenceApplyInner() {
     setAppliedVoucher({ voucherId: res.voucher_id, code, kind: res.kind, amount: Number(res.amount), currency: res.currency });
   }
 
-  // ── Age gate derivations, age is computed at the conference START DATE
+  // ── Age gate derivations, age is computed at the conference START DATE.
+  // Both bounds are inclusive and either may be absent.
   const minAgeLimit = conference?.min_age ?? null;
-  const ageAtStart = minAgeLimit != null && myDob && conference ? ageAt(myDob, conference.start_date) : null;
+  const maxAgeLimit = conference?.max_age ?? null;
+  const hasAgeGate = minAgeLimit != null || maxAgeLimit != null;
+  const ageAtStart = hasAgeGate && myDob && conference ? ageAt(myDob, conference.start_date) : null;
   const underAge = minAgeLimit != null && ageAtStart !== null && ageAtStart < minAgeLimit;
-  const needsDob = minAgeLimit != null && !myDob;
+  const overAge = maxAgeLimit != null && ageAtStart !== null && ageAtStart > maxAgeLimit;
+  const needsDob = hasAgeGate && !myDob;
+  /** One sentence stating the requirement, whichever bounds are set. */
+  const ageRequirementText =
+    minAgeLimit != null && maxAgeLimit != null
+      ? `between ${minAgeLimit} and ${maxAgeLimit} years old`
+      : minAgeLimit != null
+        ? `at least ${minAgeLimit} years old`
+        : `no older than ${maxAgeLimit}`;
+  /** The eyebrow chip's shorthand: "16+", "under 26", or "16–26". */
+  const ageChipText =
+    minAgeLimit != null && maxAgeLimit != null
+      ? `${minAgeLimit}–${maxAgeLimit}`
+      : minAgeLimit != null
+        ? `${minAgeLimit}+`
+        : `UP TO ${maxAgeLimit}`;
 
   const isPreferenceRole = role === 'delegate' || role === 'head-delegate';
   const isObserver = role === 'observer';
@@ -1523,7 +1542,7 @@ function ConferenceApplyInner() {
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, logo_url, banner_url, delegate_preference_mode, credits_sponsored')
+      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, max_age, logo_url, banner_url, delegate_preference_mode, credits_sponsored')
       .eq('slug', slug)
       .single();
 
@@ -1987,10 +2006,10 @@ function ConferenceApplyInner() {
       goToQuestion(questionCheck.missingIds[0]);
       return;
     }
-    if (needsDob || underAge) {
+    if (needsDob || underAge || overAge) {
       setSubmitError(
-        minAgeLimit != null
-          ? `This conference requires delegates to be at least ${minAgeLimit} years old.`
+        hasAgeGate
+          ? `This conference requires delegates to be ${ageRequirementText}.`
           : 'This conference has an age requirement you do not meet.'
       );
       return;
@@ -4116,7 +4135,7 @@ function ConferenceApplyInner() {
 
   // ── Age gate screens ──────────────────────────────────────────────────────
 
-  if (underAge) {
+  if (underAge || overAge) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -4130,7 +4149,7 @@ function ConferenceApplyInner() {
               AGE REQUIREMENT
             </span>
             <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              This conference requires delegates to be at least {minAgeLimit} years old
+              This conference requires delegates to be {ageRequirementText}
             </h2>
             <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
               Based on your date of birth, you will be {ageAtStart} when {conference.acronym} starts, so you can&apos;t apply this time. If your date of birth is wrong, you can update it in your profile.
@@ -4168,13 +4187,13 @@ function ConferenceApplyInner() {
               className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
               style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.35)', color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
             >
-              {minAgeLimit}+ CONFERENCE
+              {ageChipText} CONFERENCE
             </span>
             <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               Add your date of birth to continue
             </h2>
             <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
-              This conference requires delegates to be at least {minAgeLimit} years old, and your profile doesn&apos;t have a date of birth yet. It will be saved to your profile.
+              This conference requires delegates to be {ageRequirementText}, and your profile doesn&apos;t have a date of birth yet. It will be saved to your profile.
             </p>
             <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               Date of birth
