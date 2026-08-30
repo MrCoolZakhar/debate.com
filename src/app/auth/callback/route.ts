@@ -93,6 +93,15 @@ export async function GET(request: NextRequest) {
    * straight to next, so nobody loops.
    */
   async function destinationFor(userId: string): Promise<string> {
+    // A recovery link exists to reach the reset form. Putting onboarding in
+    // front of it interrupts a repair with a survey, and the session behind it
+    // is a recovery session, so anyone who wanders off inside onboarding can
+    // lose the reset entirely. `next` is the load-bearing signal because the
+    // recovery template comes back as a PKCE code with next=/auth/reset and
+    // carries no type; otpType covers a token_hash recovery link as well.
+    if (otpType === 'recovery' || next === '/auth/reset' || next.startsWith('/auth/reset?')) {
+      return `${origin}${next}`;
+    }
     const { data: profile } = await supabase
       .from('profiles')
       .select('education_level')

@@ -960,6 +960,9 @@ export function VerifiedScreen({ onContinue, busy }: { onContinue: () => void; b
  * and no MUN CV.
  */
 export async function destinationAfterVerify(supabase: SupabaseClient, next: string): Promise<string> {
+  // Mirrors the recovery guard in destinationFor: a destination of the reset
+  // form is a repair, not a sign-in, and must not be gated behind onboarding.
+  if (next === '/auth/reset' || next.startsWith('/auth/reset?')) return next;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return `/auth/signin?next=${encodeURIComponent(next)}&verified=1`;
   const { data: profile } = await supabase
