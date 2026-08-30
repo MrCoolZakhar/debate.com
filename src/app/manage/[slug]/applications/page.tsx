@@ -3478,7 +3478,7 @@ export default function ApplicationsPage() {
     { label: 'Allocated',  value: `${stats.assigned} / ${stats.accepted}`, emoji: 'Round pushpin', icon: BadgeCheck, gradient: NEU_GRADIENTS.gold, active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
     { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',           icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
     { label: 'Unpaid',     value: stats.unpaid,    emoji: 'Hourglass not done',  icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
-    { label: 'Checked in', value: stats.checkedIn, emoji: 'Person raising hand', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
+    { label: 'Checked in', value: stats.checkedIn, emoji: 'Busts in silhouette', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
   ];
 
   return (

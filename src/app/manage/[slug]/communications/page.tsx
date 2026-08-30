@@ -19,6 +19,7 @@ import {
   EMAIL_TOKEN_KEYS, EMAIL_TOKEN_LABELS,
   type EmailTokenContext, type EmailTokenKey,
 } from '@/lib/emailTokens';
+import { TOKEN_IDENTITY } from '@/components/email/tokenKit';
 import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE, NEU, NEU_GRADIENTS, Emoji3D, NeuIconDisc, type NeuGradient } from '@/components/neu';
 import {
@@ -263,6 +264,20 @@ const INBOX_STATE_OPTIONS = [
   { value: 'closed', label: 'Closed' },
 ];
 
+/** The recede in the inbox band, indexed by distance from the front of the
+ *  pile. Index 0 is a live row and is never touched (scale 1, opacity 1, no
+ *  blur); 1 and up are the ghosts stacked behind it.
+ *
+ *  Same mechanism as the co-chair feedback dock (`FeedbackLogPanel.tsx:194`),
+ *  a steeper curve. The dock stays gentle because its pills are all readable
+ *  peers arranged symmetrically around a focused row; this is the front of a
+ *  pile, the recede is monotonic, and nothing past index 0 is meant to be
+ *  read, so it can afford to fall away properly. Anything carrying a number
+ *  a person has to act on lives at index 0. */
+const STACK_SCALE = [1, 0.965, 0.935, 0.905];
+const STACK_OPACITY = [1, 0.6, 0.42, 0.3];
+const STACK_BLUR = [0, 0.9, 1.7, 2.5];
+
 const INBOX_KIND_OPTIONS = [
   { value: 'question', label: 'Question' },
   { value: 'swap_request', label: 'Swap request' },
@@ -398,11 +413,11 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
     id: 'session-codes-delegates',
     audienceLabel: 'Delegates',
     emoji: '🔑',
-    title: 'Session codes — delegates',
+    title: 'Session codes for delegates',
     blurb: 'Every allocated delegate gets the join code for their committee room.',
     tokens: ['delegate_name', 'committee', 'session_code'],
     content: {
-      name: 'Session codes — delegates',
+      name: 'Session codes for delegates',
       subject: SESSION_JOIN_DEFAULT?.subject ?? 'Join your live committee — {{conference_name}}',
       blocks: SESSION_JOIN_DEFAULT?.blocks ?? [],
       audience: { roles: ['delegate'] },
@@ -412,11 +427,11 @@ const AD_HOC_SEEDS: AdHocSeed[] = [
     id: 'session-codes-chairs',
     audienceLabel: 'Chairs',
     emoji: '🪑',
-    title: 'Session codes — chairs',
+    title: 'Session codes for chairs',
     blurb: 'Chairs get their session details and where to find their chair password.',
     tokens: ['delegate_name', 'committee', 'conference_name'],
     content: {
-      name: 'Session codes — chairs',
+      name: 'Session codes for chairs',
       subject: SESSION_CHAIR_DEFAULT?.subject ?? 'Your session details — {{conference_name}}',
       blocks: SESSION_CHAIR_DEFAULT?.blocks ?? [],
       audience: { roles: ['chair'] },
@@ -1108,9 +1123,13 @@ function NewEmailModal({
                 key={seed.id}
                 type="button"
                 onClick={() => onPick(seed)}
-                className="rounded-2xl p-3.5 text-left flex flex-col focus:outline-none active:scale-[0.98]"
+                className="relative rounded-2xl p-3.5 text-left flex flex-col focus:outline-none active:scale-[0.98]"
                 style={{
                   ...WELL,
+                  /* `relative` anchors the reach circle; the trailing inset keeps
+                     the title out from under it, since a two line title would
+                     otherwise run beneath the badge. */
+                  paddingInlineEnd: 66,
                   border: 'none', cursor: 'pointer',
                   transitionProperty: 'box-shadow, transform',
                   transitionDuration: '180ms', transitionTimingFunction: EASE,
@@ -1156,43 +1175,62 @@ function NewEmailModal({
                   </span>
                 </span>
 
-                {/* HOW MANY PEOPLE, before you commit to opening anything. The
-                    single most expensive thing about this modal was that you
-                    had to pick a template, load the builder and read the
-                    audience bar to find out a template was aimed at nobody. */}
+                {/* HOW MANY PEOPLE, in the corner. It answers "is this aimed
+                    at anybody" at a glance, which was the most expensive thing
+                    about this modal: you used to pick a template, load the
+                    builder and read the audience bar only to find it was aimed
+                    at nobody. Absolute, so it never pushes the copy around. */}
                 <span
-                  className="flex items-center gap-1.5 rounded-full self-start"
+                  className="absolute inline-flex flex-col items-center justify-center rounded-full"
+                  title={reachOf === null
+                    ? 'Audience is set in the editor'
+                    : `${seed.audienceLabel}: ${reachOf.toLocaleString()} ${reachOf === 1 ? 'person' : 'people'}`}
                   style={{
-                    marginBlockStart: 10, padding: '5px 11px',
-                    backgroundColor: reachOf === 0 ? 'rgba(154,138,120,0.18)' : 'rgba(182,135,31,0.16)',
-                    border: `1px solid ${reachOf === 0 ? 'rgba(154,138,120,0.34)' : 'rgba(182,135,31,0.32)'}`,
+                    top: 12, insetInlineEnd: 12, width: 46, height: 46,
+                    backgroundColor: reachOf === 0 ? 'rgba(154,138,120,0.16)' : 'rgba(182,135,31,0.15)',
+                    border: `1px solid ${reachOf === 0 ? 'rgba(154,138,120,0.32)' : 'rgba(182,135,31,0.32)'}`,
                     color: reachOf === 0 ? SOFT : GOLD_INK,
-                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800,
-                    letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums',
+                    fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  <Users size={12} strokeWidth={2.5} />
-                  {reachOf === null
-                    ? 'Audience set in the editor'
-                    : reachOf === 0
-                      ? `${seed.audienceLabel}: nobody yet`
-                      : `${seed.audienceLabel} · ${reachOf.toLocaleString()} ${reachOf === 1 ? 'person' : 'people'}`}
+                  <Users size={12} strokeWidth={2.6} aria-hidden />
+                  <span style={{ fontSize: reachOf !== null && reachOf > 999 ? 10.5 : 13, fontWeight: 900, lineHeight: 1.05 }}>
+                    {reachOf === null ? '?' : reachOf.toLocaleString()}
+                  </span>
                 </span>
-                {/* What gets personalised, before you open it. */}
-                <span className="flex flex-wrap gap-1" style={{ marginBlockStart: 9 }}>
-                  {seed.tokens.map(tk => (
-                    <span
-                      key={tk}
-                      className="rounded-full px-1.5 py-0.5"
-                      style={{
-                        fontSize: 9.5, fontWeight: 700, fontFamily: OUTFIT, letterSpacing: '0.03em',
-                        backgroundColor: 'rgba(238,217,138,0.34)', color: GOLD_INK,
-                        border: '1px solid rgba(182,135,31,0.32)',
-                      }}
-                    >
-                      {EMAIL_TOKEN_LABELS[tk]}
-                    </span>
-                  ))}
+
+                {/* Badges, not form labels: the same identity the builder rail
+                    and the in-text pill use, so a token looks like itself
+                    everywhere it appears. Icon first, what it does underneath. */}
+                <span className="flex flex-wrap gap-1.5" style={{ marginBlockStart: 10 }}>
+                  {seed.tokens.map(tk => {
+                    const id = TOKEN_IDENTITY[tk];
+                    const TokenIcon = id.icon;
+                    return (
+                      <span
+                        key={tk}
+                        title={id.becomes}
+                        className="inline-flex flex-col items-center justify-center rounded-xl"
+                        style={{
+                          minWidth: 62, padding: '7px 6px 6px', gap: 3,
+                          backgroundColor: 'rgba(238,217,138,0.26)',
+                          border: '1px solid rgba(182,135,31,0.28)',
+                          color: GOLD_INK,
+                        }}
+                      >
+                        <TokenIcon size={15} strokeWidth={2.2} aria-hidden />
+                        <span
+                          className="block text-center"
+                          style={{
+                            fontSize: 9, fontWeight: 800, fontFamily: OUTFIT,
+                            letterSpacing: '0.02em', lineHeight: 1.15,
+                          }}
+                        >
+                          {id.short}
+                        </span>
+                      </span>
+                    );
+                  })}
                 </span>
               </button>
               );
@@ -1601,6 +1639,11 @@ function CommunicationsPageInner() {
   const [inboxDateTo, setInboxDateTo] = useState('');
   const [inboxSearch, setInboxSearch] = useState('');
   const [inboxPage, setInboxPage] = useState(1);
+  // The full thread list under the stack band. Closed by default: the band at
+  // the top of the page is a prompt to answer the people waiting, not a mail
+  // client. Opening it is how you get at the search, the filters, the pages
+  // and every thread that has already been read.
+  const [inboxExpanded, setInboxExpanded] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replyError, setReplyError] = useState('');
@@ -2001,6 +2044,21 @@ function CommunicationsPageInner() {
   const inboxUnreadThreadCount = inboxRequests.filter(r => unreadCountOf(r) > 0).length;
   // MARK ALL READ only ever acts on the current page ("currently visible").
   const inboxVisibleUnreadCount = pagedInboxRequests.filter(r => unreadCountOf(r) > 0).length;
+
+  // ── THE STACK BAND ────────────────────────────────────────────────────────
+  // The band at the top of the page is built from the WHOLE inbox, never from
+  // filteredInboxRequests: the filters belong to the list you open underneath
+  // it, and a band whose job is "who is waiting on me" must not be silenced by
+  // a filter somebody left on. Unread first, each half newest-activity-first,
+  // so the two crisp rows at the front are always the two oldest-unanswered
+  // things a person can act on right now.
+  const inboxByActivity = [...inboxRequests].sort((a, b) => lastActivityOf(b).localeCompare(lastActivityOf(a)));
+  const stackUnread = inboxByActivity.filter(r => unreadCountOf(r) > 0);
+  const stackRead = inboxByActivity.filter(r => unreadCountOf(r) === 0);
+  // Two crisp rows, at most. Three ghosts behind them, at most, and the ghosts
+  // are decoration: what they say is repeated verbatim in the full list.
+  const stackLive = stackUnread.slice(0, 2);
+  const stackGhosts = [...stackUnread.slice(stackLive.length), ...stackRead].slice(0, 3);
 
   const selectedRequest = inboxRequests.find(r => r.id === selectedRequestId) ?? null;
   const selectedMessages = selectedRequestId ? inboxMessagesByRequest.get(selectedRequestId) ?? [] : [];
@@ -2594,9 +2652,10 @@ function CommunicationsPageInner() {
 
   // Deep link: ?event=<key> opens the Automatic-emails view with that event's
   // composer; ?inbox=<requestId> opens the Inbox on that thread (the target
-  // of the 'request_received' email's button). The inbox is a permanent column
-  // in the three-section grid at every width now, so selecting the thread is
-  // the whole job, and there is no tab left to switch to.
+  // of the 'request_received' email's button). The inbox band is the first
+  // thing on the landing at every width now, and the thread reader replaces
+  // the stack inside it, so selecting the thread is the whole job: no tab to
+  // switch to, and nothing to scroll to either.
   useEffect(() => {
     if (loading || deepLinkHandled) return;
     setDeepLinkHandled(true);
@@ -2927,10 +2986,10 @@ function CommunicationsPageInner() {
       text: (
         <>
           This is <strong>Communications</strong> — every email your conference sends, and every
-          message it gets back. Three sections across the top: what needs{' '}
-          <TourGreen>a look</TourGreen>, what is <TourGreen>going out soon</TourGreen>, and the{' '}
-          <TourGreen>inbox</TourGreen> for replies. Everything ever sent sits underneath. Let me
-          show you around.
+          message it gets back. The <TourGreen>inbox</TourGreen> is first, because people waiting
+          on a reply come before anything else; under it sit what needs{' '}
+          <TourGreen>a look</TourGreen> and what is <TourGreen>going out soon</TourGreen>, and
+          everything ever sent sits underneath those. Let me show you around.
         </>
       ),
     },
@@ -2967,12 +3026,14 @@ function CommunicationsPageInner() {
       id: 'inbox',
       targets: ['comms-inbox'],
       radius: 16,
-      before: () => { setView('landing'); setSelectedRequestId(null); },
+      before: () => { setView('landing'); setSelectedRequestId(null); setInboxExpanded(false); },
       text: (
         <>
           <TourGold>Inbox</TourGold> is the other direction: questions and allocation swap
-          requests from advisors, head delegates and delegates land here as threads. Filter them,
-          reply in place, and approve or decline a swap without leaving the page.
+          requests from advisors, head delegates and delegates land here as threads. The two
+          nobody has answered sit at the front and the rest stack away behind them; open{' '}
+          <TourGold>ALL THREADS</TourGold> to search and filter the pile. Reply in place, and
+          approve or decline a swap without leaving the page.
         </>
       ),
     },
@@ -3112,9 +3173,13 @@ function CommunicationsPageInner() {
    *  category of real traffic, so the console must not claim nothing happens. */
   const alwaysOnCount = (EVENT_REGISTRY as readonly EventDef[]).filter(e => e.functional).length;
 
+  // The UNANSWERED figure and the console's ANSWER THEM both land here, and
+  // both mean "show me the whole pile", not "show me the two at the front" —
+  // so this opens the list under the band as well as filtering it.
   function jumpToInbox() {
     setInboxStatusFilter(new Set(['open']));
     setSelectedRequestId(null);
+    setInboxExpanded(true);
     document.getElementById('comms-inbox-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -3408,6 +3473,119 @@ function CommunicationsPageInner() {
 
   // Reply posts regardless of whether the notification email drafts, a
   // missing/disabled 'request_reply' template just nudges via DraftNotice.
+
+  /** ONE THREAD ROW. Shared by the receding stack at the top of the page and
+   *  by the full list underneath it, so a thread reads and behaves identically
+   *  wherever you meet it, and there is only one place to change it. Unread
+   *  carries the gold rail, the bolder subject and the count chip. */
+  function threadRow(r: InboxRequest) {
+    const threadProfile = inboxProfiles.get(r.user_id);
+    const role = inboxRoles.get(r.user_id);
+    const last = lastMessageOf(r.id);
+    const unread = unreadCountOf(r);
+    const attention = unread > 0;
+    const kindChip = KIND_CHIP[r.kind] ?? KIND_CHIP.question;
+    const name = threadProfile?.display_name ?? 'Unknown';
+    return (
+      <button
+        key={r.id}
+        onClick={() => handleOpenThread(r.id)}
+        className="relative w-full flex items-start gap-3 rounded-xl p-3 pl-4 text-left focus:outline-none active:scale-[0.99] overflow-hidden"
+        style={{
+          backgroundColor: attention ? 'rgba(238,217,138,0.16)' : '#FAF8F3',
+          border: attention ? '1px solid rgba(182,135,31,0.45)' : '1px solid rgba(27,56,40,0.09)',
+          cursor: 'pointer',
+          transitionProperty: 'background-color, border-color, box-shadow, transform',
+          transitionDuration: '160ms', transitionTimingFunction: EASE,
+        }}
+        onMouseEnter={e => {
+          const el = e.currentTarget as HTMLElement;
+          el.style.borderColor = 'rgba(27,56,40,0.35)';
+          el.style.boxShadow = NEU.outSm;
+        }}
+        onMouseLeave={e => {
+          const el = e.currentTarget as HTMLElement;
+          el.style.borderColor = attention ? 'rgba(182,135,31,0.45)' : 'rgba(27,56,40,0.09)';
+          el.style.boxShadow = 'none';
+        }}
+      >
+        {/* THE UNREAD RAIL. A 3px gradient spine on the
+            leading edge, the same gesture the live card
+            uses for a room's status. It survives at a
+            glance down a column of twelve rows in a way a
+            background tint does not, and it does not have
+            to pass a contrast check because nothing is
+            written on it. */}
+        {attention && (
+          <span
+            aria-hidden
+            className="absolute inset-y-0 left-0"
+            style={{ width: 3, background: `linear-gradient(180deg, ${NEU_GRADIENTS.gold[1]}, ${NEU_GRADIENTS.gold[0]})` }}
+          />
+        )}
+        {threadProfile?.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={threadProfile.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 36, height: 36, marginTop: 1, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1, boxShadow: NEU.outSm }} />
+        ) : (
+          <span className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, marginTop: 1, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 15, fontWeight: 800, fontFamily: OUTFIT, boxShadow: NEU.outSm }}>
+            {name.charAt(0)}
+          </span>
+        )}
+        <span className="min-w-0 flex-1 block">
+          {/* SUBJECT FIRST. It was the second line under a
+              12px name, which is the wrong way round: the
+              subject is what you scan a thread list for
+              and the sender is how you place it once you
+              have found it. No truncate: the row grows a
+              line instead of hiding the half of the
+              sentence that says what is being asked. */}
+          <span className="flex items-start gap-2">
+            <span
+              className="min-w-0 flex-1 block"
+              style={{
+                color: '#1C1410', fontFamily: OUTFIT, fontSize: 14,
+                fontWeight: attention ? 800 : 600, lineHeight: 1.3,
+                letterSpacing: '-0.01em', textWrap: 'pretty', overflowWrap: 'anywhere',
+              }}
+            >
+              {r.subject}
+            </span>
+            {attention && (
+              <span
+                className="inline-flex items-center justify-center flex-shrink-0"
+                style={{ minWidth: 19, height: 19, marginTop: 1, padding: '0 6px', borderRadius: 999, backgroundColor: '#EED98A', color: '#1B3828', fontFamily: OUTFIT, fontSize: 11, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
+              >
+                {unread}
+              </span>
+            )}
+          </span>
+          <span className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5" style={{ marginBlockStart: 3 }}>
+            <span
+              className="rounded-full px-2 py-0.5 flex-shrink-0"
+              style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', fontFamily: OUTFIT, backgroundColor: kindChip.bg, color: kindChip.color }}
+            >
+              {kindChip.label}
+            </span>
+            <span className="truncate" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
+              {name}{role ? ` · ${roleLabel(role)}` : ''}
+            </span>
+            <span className="ml-auto flex-shrink-0" style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+              {formatDate(r.last_message_at)}
+            </span>
+          </span>
+          {last && (
+            <span
+              className="block truncate"
+              style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 3 }}
+            >
+              {last.is_organizer ? 'You: ' : ''}{last.body}
+            </span>
+          )}
+        </span>
+      </button>
+    );
+  }
+
   function handleInboxReply() {
     if (!session || !conference || !selectedRequest || !replyText.trim()) return;
     const req = selectedRequest;
@@ -3866,35 +4044,448 @@ function CommunicationsPageInner() {
           </div>
 
           {/* ══════════════════════════════════════════════════════════════
-              THE THREE SECTIONS.
+              THE INBOX BAND — a receding stack, not a column.
 
-              Issues, Going out soon, Inbox. Equal citizens, side by side,
-              because they are the three different questions somebody opens
-              this page to ask (what is broken, what is about to leave, and
-              who is waiting on me), and none of them outranks the others.
-              The inbox especially: it was a 400px aside pinned next to a
-              feed that runs for a thousand pixels, so on any real conference
-              it was the shortest column on the page and read as a sidebar
-              rather than as a job.
+              This used to be the third track of a three-column grid, which
+              gave the shortest-lived job on the page the same 400px box as
+              the two longest ones. It is a band across the top now, because
+              of the one number that matters here: 43% of production threads
+              never got a single organiser reply. Answering people is the
+              first thing this page should say, and it costs about a fifth of
+              the height it used to.
+
+              WHAT IS CRISP AND WHAT IS NOT
+                • At most TWO unread threads render at full size, as the same
+                  row you get everywhere else, fully interactive.
+                • Behind them, up to three more recede: smaller, dimmer,
+                  blurred, overlapping. Those are `aria-hidden` and
+                  `pointer-events: none` — a blurred row must never eat a
+                  click aimed at the crisp one above it, and nothing a person
+                  is expected to READ is ever blurred. Everything they say is
+                  repeated verbatim, crisp, in the list one click away.
+                • ALL N THREADS opens that list (search, filters, paging) in
+                  place, which is the route to an older or already-read
+                  thread. SHOW LESS in the heading closes it again.
+
+              ZERO UNREAD
+                The band does not vanish (the inbox would be unreachable from
+                the top of the page, and the ?inbox= deep link would land on
+                nothing) and it does not keep a full-height stack of already
+                read threads alive either. It collapses to one line that says
+                so, with the way in still on it.
+
+              375px
+                Identical, minus nothing: the crisp rows are the same rows
+                the one-column layout already used, and the ghosts only ever
+                scale DOWN from the row width, so the stack cannot overflow
+                sideways at any width.
+          ══════════════════════════════════════════════════════════════ */}
+          <div id="comms-inbox-panel" className="gv-inbox-band mb-7">
+            <style>{`@media (prefers-reduced-motion: reduce){.gv-inbox-band,.gv-inbox-band *{transition:none !important}}`}</style>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <ColumnHeading
+                  emoji="Inbox tray"
+                  icon={Inbox}
+                  gradient={NEU_GRADIENTS.sage}
+                  title="Inbox"
+                  sub="Questions and swap requests waiting on a reply."
+                  count={inboxUnreadThreadCount}
+                />
+              </div>
+              {inboxExpanded && !selectedRequest && (
+                <div className="flex-shrink-0" style={{ marginBlockStart: 5 }}>
+                  <GhostBtn onClick={() => setInboxExpanded(false)}>SHOW LESS</GhostBtn>
+                </div>
+              )}
+            </div>
+            <section className="rounded-2xl p-4" style={PANEL} data-tutorial="comms-inbox">
+              {selectedRequest ? (
+                <>
+                  <button
+                    onClick={() => setSelectedRequestId(null)}
+                    className="text-xs font-bold mb-3 focus:outline-none"
+                    style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
+                  >
+                    ← BACK TO INBOX
+                  </button>
+
+                  <div className="flex items-start justify-between gap-3 mb-1">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span
+                          className="rounded-full px-2 py-0.5 flex-shrink-0"
+                          style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedKindChip!.bg, color: selectedKindChip!.color }}
+                        >
+                          {selectedKindChip!.label}
+                        </span>
+                        <span
+                          className="rounded-full px-2 py-0.5 flex-shrink-0"
+                          style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedRequest.status === 'open' ? 'rgba(61,122,82,0.13)' : 'rgba(154,138,120,0.16)', color: selectedRequest.status === 'open' ? GREEN_INK : '#6B5F52' }}
+                        >
+                          {selectedRequest.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="font-black text-base" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>{selectedRequest.subject}</p>
+                      {/* Thread author → their public MUN CV, so an organiser reading a
+                          request can see who is asking. No `nested`: this header sits in a
+                          plain div (the BACK control and the CLOSE/DELETE buttons are
+                          siblings), so there is no ancestor onClick to swallow. */}
+                      <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                        <ProfileLink
+                          userId={selectedRequest.user_id}
+                          name={inboxProfiles.get(selectedRequest.user_id)?.display_name}
+                        >
+                          {inboxProfiles.get(selectedRequest.user_id)?.display_name ?? 'Unknown'}
+                        </ProfileLink>
+                        {inboxRoles.get(selectedRequest.user_id) ? ` · ${roleLabel(inboxRoles.get(selectedRequest.user_id)!)}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <GhostBtn onClick={() => (selectedRequest.status === 'open' ? setCloseConfirmOpen(true) : handleCloseReopen(false))}>
+                        {selectedRequest.status === 'open' ? 'CLOSE' : 'REOPEN'}
+                      </GhostBtn>
+                      <GhostBtn onClick={handleDeleteThread} title="Delete this thread" danger disabled={deletingThread}>
+                        <Trash2 size={13} />
+                      </GhostBtn>
+                    </div>
+                  </div>
+
+                  {/* Swap details */}
+                  {(selectedRequest.kind === 'swap_request' || selectedRequest.kind === 'swap_notice') && (
+                    <div className="rounded-xl p-3.5 mt-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.09)' }}>
+                      <p className="text-xs font-bold mb-1.5" style={{ color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
+                        SWAP DETAILS
+                      </p>
+                      <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                        {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? '—'} → {selectedRequest.metadata.after?.a ?? '—'}
+                      </p>
+                      <p className="text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                        {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '—'} → {selectedRequest.metadata.after?.b ?? '—'}
+                      </p>
+                      {swapError && (
+                        <p className="text-xs mt-3" style={{ color: RED, fontFamily: OUTFIT }}>{swapError}</p>
+                      )}
+                      {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (
+                        <div className="flex gap-2 mt-3">
+                          <GhostBtn onClick={() => handleSwapDecision(false)} danger disabled={swapActing}>
+                            DECLINE
+                          </GhostBtn>
+                          <button
+                            onClick={() => handleSwapDecision(true)}
+                            disabled={swapActing}
+                            className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none active:scale-[0.96]"
+                            style={{
+                              backgroundColor: swapActing ? '#DDD4C0' : '#1B3828',
+                              color: swapActing ? SOFT : '#EED98A',
+                              border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
+                              cursor: swapActing ? 'default' : 'pointer',
+                              transitionProperty: 'transform', transitionDuration: '160ms', transitionTimingFunction: EASE,
+                            }}
+                          >
+                            {swapActing ? 'PROCESSING...' : 'APPROVE'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Messages */}
+                  <div className="flex flex-col gap-3 mt-4" style={{ maxHeight: 440, overflowY: 'auto' }}>
+                    {selectedMessages.map(m => {
+                      const mine = m.is_organizer;
+                      const senderName = mine ? 'You' : (inboxProfiles.get(m.sender_user_id)?.display_name ?? 'Participant');
+                      return (
+                        <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
+                          {/* Sender label → that participant's public MUN CV. Only for
+                              incoming messages: `mine` renders as "You" with no user to
+                              link to. No `nested` — the message column is a plain div with
+                              no click handler of its own. */}
+                          {!mine && (
+                            <span className="mb-1" style={{ fontSize: 10, fontWeight: 700, color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                              <ProfileLink userId={m.sender_user_id} name={senderName}>
+                                {senderName.toUpperCase()}
+                              </ProfileLink>
+                            </span>
+                          )}
+                          <div
+                            className="rounded-2xl px-4 py-2.5"
+                            style={{ maxWidth: '85%', backgroundColor: mine ? '#1B3828' : '#FAF8F3', border: mine ? 'none' : '1px solid rgba(27,56,40,0.09)', color: mine ? '#EED98A' : '#1C1410' }}
+                          >
+                            <p className="text-sm" style={{ fontFamily: OUTFIT, whiteSpace: 'pre-wrap', lineHeight: 1.55, margin: 0 }}>{m.body}</p>
+                          </div>
+                          <span className="mt-1" style={{ fontSize: 10, color: SOFT, fontFamily: OUTFIT }}>
+                            {formatDate(m.created_at)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Reply */}
+                  {selectedRequest.status === 'open' && (
+                    <div className="flex gap-2 mt-4">
+                      <input
+                        value={replyText}
+                        onChange={e => setReplyText(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleInboxReply(); }}
+                        placeholder="Write a reply..."
+                        className="flex-1 min-w-0 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                        style={{ border: CARD_BORDER, backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
+                      />
+                      <button
+                        onClick={handleInboxReply}
+                        disabled={!replyText.trim()}
+                        className="rounded-xl px-4 text-xs font-bold focus:outline-none flex-shrink-0 active:scale-[0.96]"
+                        style={{
+                          backgroundColor: !replyText.trim() ? '#DDD4C0' : '#1B3828',
+                          color: !replyText.trim() ? SOFT : '#EED98A',
+                          border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
+                          cursor: !replyText.trim() ? 'default' : 'pointer', minHeight: 40,
+                          transitionProperty: 'transform, background-color', transitionDuration: '160ms', transitionTimingFunction: EASE,
+                        }}
+                      >
+                        SEND
+                      </button>
+                    </div>
+                  )}
+                  {replyError && (
+                    <p className="text-xs mt-2" style={{ color: RED, fontFamily: OUTFIT }}>{replyError}</p>
+                  )}
+
+                  {closeConfirmOpen && (
+                    <ConfirmModal
+                      title="Close this thread?"
+                      body="The participant will see it as closed. You can reopen it later."
+                      confirmLabel="Close Thread"
+                      danger
+                      onConfirm={() => handleCloseReopen(true)}
+                      onCancel={() => setCloseConfirmOpen(false)}
+                    />
+                  )}
+                </>
+              ) : inboxExpanded ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <input
+                      value={inboxSearch}
+                      onChange={e => setInboxSearch(e.target.value)}
+                      placeholder="Search subjects..."
+                      className="flex-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                      style={{ border: CARD_BORDER, backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: OUTFIT, minWidth: 130 }}
+                    />
+                    {inboxVisibleUnreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllInboxRead}
+                        disabled={markingAllRead}
+                        className="focus:outline-none"
+                        style={{
+                          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
+                          color: markingAllRead ? SOFT : '#1B3828',
+                          background: 'none', border: 'none', cursor: markingAllRead ? 'default' : 'pointer', padding: '8px 2px',
+                        }}
+                      >
+                        {markingAllRead ? 'MARKING…' : 'MARK ALL READ'}
+                      </button>
+                    )}
+                    <FilterPopoverShell
+                      title="Filter threads"
+                      activeCount={inboxActiveFilterCount}
+                      onClearAll={() => { setInboxStatusFilter(new Set()); setInboxKindFilter(new Set()); setInboxDateFrom(''); setInboxDateTo(''); }}
+                    >
+                      <FilterGroup
+                        title="State" icon={BadgeCheck} options={INBOX_STATE_OPTIONS} selected={inboxStatusFilter}
+                        onToggle={v => setInboxStatusFilter(s => toggleIn(s, v))}
+                        onAll={() => setInboxStatusFilter(new Set(INBOX_STATE_OPTIONS.map(o => o.value)))}
+                        onNone={() => setInboxStatusFilter(new Set())}
+                      />
+                      <FilterGroup
+                        title="Kind" icon={MessageSquare} options={INBOX_KIND_OPTIONS} selected={inboxKindFilter}
+                        onToggle={v => setInboxKindFilter(s => toggleIn(s, v))}
+                        onAll={() => setInboxKindFilter(new Set(INBOX_KIND_OPTIONS.map(o => o.value)))}
+                        onNone={() => setInboxKindFilter(new Set())}
+                      />
+                      <div>
+                        <div className="mb-2">
+                          <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div style={{ flex: 1 }}>
+                            <DatePicker value={inboxDateFrom} max={inboxDateTo || undefined} onChange={setInboxDateFrom} placeholder="From" />
+                          </div>
+                          <ArrowRight size={13} style={{ color: SOFT, flexShrink: 0 }} />
+                          <div style={{ flex: 1 }}>
+                            <DatePicker value={inboxDateTo} min={inboxDateFrom || undefined} onChange={setInboxDateTo} placeholder="To" />
+                          </div>
+                        </div>
+                      </div>
+                    </FilterPopoverShell>
+                  </div>
+
+                  {filteredInboxRequests.length === 0 ? (
+                    <p className="text-sm py-6 text-center" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                      No threads match these filters.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {pagedInboxRequests.map(r => threadRow(r))}
+                    </div>
+                  )}
+
+                  {filteredInboxRequests.length > INBOX_PAGE_SIZE && (
+                    <div className="flex items-center justify-center gap-3 mt-4">
+                      <button
+                        onClick={() => setInboxPage(p => Math.max(1, p - 1))}
+                        disabled={inboxPage <= 1}
+                        aria-label="Previous page"
+                        className="flex items-center justify-center rounded-full focus:outline-none"
+                        style={{
+                          width: 28, height: 28, border: CARD_BORDER,
+                          backgroundColor: '#FAF8F3',
+                          color: inboxPage <= 1 ? '#C8BEA8' : '#1C1410',
+                          cursor: inboxPage <= 1 ? 'default' : 'pointer',
+                        }}
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                        PAGE {inboxPage} OF {inboxTotalPages}
+                      </span>
+                      <button
+                        onClick={() => setInboxPage(p => Math.min(inboxTotalPages, p + 1))}
+                        disabled={inboxPage >= inboxTotalPages}
+                        aria-label="Next page"
+                        className="flex items-center justify-center rounded-full focus:outline-none"
+                        style={{
+                          width: 28, height: 28, border: CARD_BORDER,
+                          backgroundColor: '#FAF8F3',
+                          color: inboxPage >= inboxTotalPages ? '#C8BEA8' : '#1C1410',
+                          cursor: inboxPage >= inboxTotalPages ? 'default' : 'pointer',
+                        }}
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {stackLive.length === 0 ? (
+                    /* Caught up. One line, and it still carries the way in. */
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                      <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'pretty', margin: 0 }}>
+                        <span style={{ fontWeight: 800 }}>Nothing is waiting on a reply.</span>{' '}
+                        <span style={{ color: SOFT }}>
+                          {inboxRequests.length === 0
+                            ? 'Questions and swap requests from participants land here.'
+                            : `All ${inboxRequests.length} thread${inboxRequests.length === 1 ? '' : 's'} read.`}
+                        </span>
+                      </p>
+                      {inboxRequests.length > 0 && (
+                        <GhostBtn onClick={() => setInboxExpanded(true)}>OPEN THE INBOX</GhostBtn>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* The one or two live rows. Same component as the list,
+                          so a thread reads identically wherever you meet it. */}
+                      <div className="flex flex-col gap-2">
+                        {stackLive.map(r => threadRow(r))}
+                      </div>
+
+                      {/* The pile behind them. Decoration: hidden from the
+                          accessibility tree and deaf to the pointer. */}
+                      {stackGhosts.length > 0 && (
+                        <div aria-hidden className="relative" style={{ pointerEvents: 'none', marginBlockStart: 4 }}>
+                          {stackGhosts.map((r, i) => {
+                            const dist = i + 1;
+                            const ghostName = inboxProfiles.get(r.user_id)?.display_name ?? 'Unknown';
+                            const ghostUnread = unreadCountOf(r) > 0;
+                            return (
+                              <div
+                                key={r.id}
+                                className="flex items-center gap-2 rounded-xl overflow-hidden"
+                                style={{
+                                  position: 'relative',
+                                  zIndex: STACK_SCALE.length - i,
+                                  marginBlockStart: i === 0 ? 0 : -22,
+                                  height: 34, padding: '0 12px 0 14px',
+                                  backgroundColor: ghostUnread ? 'rgba(238,217,138,0.16)' : '#FAF8F3',
+                                  border: ghostUnread ? '1px solid rgba(182,135,31,0.45)' : '1px solid rgba(27,56,40,0.09)',
+                                  transform: `scale(${STACK_SCALE[dist]})`,
+                                  transformOrigin: 'top center',
+                                  opacity: STACK_OPACITY[dist],
+                                  filter: `blur(${STACK_BLUR[dist]}px)`,
+                                  transitionProperty: 'transform, opacity, filter',
+                                  transitionDuration: '260ms',
+                                  transitionTimingFunction: EASE,
+                                }}
+                              >
+                                {ghostUnread && (
+                                  <span
+                                    className="absolute inset-y-0 left-0"
+                                    style={{ width: 3, background: `linear-gradient(180deg, ${NEU_GRADIENTS.gold[1]}, ${NEU_GRADIENTS.gold[0]})` }}
+                                  />
+                                )}
+                                <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: ghostUnread ? 800 : 600, color: '#1C1410' }}>
+                                  {r.subject}
+                                </span>
+                                <span className="truncate flex-shrink-0" style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: SOFT }}>
+                                  {ghostName}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* The route to everything else, including the unread
+                          this band deliberately did not open with. */}
+                      <button
+                        type="button"
+                        onClick={() => setInboxExpanded(true)}
+                        className="w-full rounded-xl text-xs font-bold focus:outline-none active:scale-[0.99]"
+                        style={{
+                          marginBlockStart: 10, minHeight: 40, border: CARD_BORDER,
+                          backgroundColor: 'transparent', color: '#1C1410', fontFamily: OUTFIT,
+                          letterSpacing: '0.05em', cursor: 'pointer', fontVariantNumeric: 'tabular-nums',
+                          transitionProperty: 'background-color, transform', transitionDuration: '180ms', transitionTimingFunction: EASE,
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        ALL {inboxRequests.length} THREAD{inboxRequests.length === 1 ? '' : 'S'}
+                        {stackUnread.length > stackLive.length ? ` · ${stackUnread.length - stackLive.length} MORE UNREAD` : ''}
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </section>
+          </div>
+
+          {/* ══════════════════════════════════════════════════════════════
+              THE TWO SECTIONS.
+
+              Issues and Going out soon. Equal citizens, side by side,
+              because they are the two different questions somebody opens
+              this page to ask once they have answered their post: what is
+              broken, and what is about to leave. The third question, who is
+              waiting on me, is the band above — it outranks both of these,
+              which is exactly why it is no longer sitting beside them
+              pretending to be a peer.
 
               THE LADDER
-                >=1280 (xl)  three equal columns.
-                1024-1279    two columns. Issues and Going out soon share row
-                             one; Inbox spans the full width on row two
-                             (lg:col-span-2 xl:col-span-1). Three tracks here
-                             would be ~269px each once the 96px nav rail and
-                             the page padding are gone, which is narrower
-                             than a thread row survives.
-                <1024        one column, same order. This is also why the old
-                             SENT / INBOX tab pair is gone: the inbox is the
-                             third thing on a phone now instead of the last,
-                             so there is nothing left for a tab to rescue.
+                >=1024 (lg)  two equal columns.
+                <1024        one column, same order.
 
               items-stretch plus a flex-1 band inside each column, per the
               card-grid contract, or the surplus height on the short
-              columns pools at the bottom as a dead strip.
+              column pools at the bottom as a dead strip.
           ══════════════════════════════════════════════════════════════ */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5 xl:gap-6 items-stretch mb-9">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 xl:gap-6 items-stretch mb-9">
 
             {/* 1 · ISSUES, the console. Same panel, same states, same words;
                 it is a column now instead of a banner. */}
@@ -4065,407 +4656,10 @@ function CommunicationsPageInner() {
                 </button>
               </div>
             </div>
-
-            {/* 3 · INBOX, the other direction. Spans both tracks at lg so a
-                thread and its reader get real width there. */}
-            <div id="comms-inbox-panel" className="flex flex-col min-w-0 lg:col-span-2 xl:col-span-1">
-              <ColumnHeading
-                emoji="Inbox tray"
-                icon={Inbox}
-                gradient={NEU_GRADIENTS.sage}
-                title="Inbox"
-                sub="Questions and swap requests waiting on a reply."
-                count={inboxUnreadThreadCount}
-              />
-              <section className="rounded-2xl p-4 flex-1" style={PANEL} data-tutorial="comms-inbox">
-                {!selectedRequest ? (
-                  <>
-                    {/* No title here any more. `ColumnHeading` above the card
-                        carries it, and the unread count with it, so the three
-                        section titles sit on one baseline. Saying "Inbox" twice,
-                        40px apart, was the giveaway that this panel was bolted
-                        on beside a feed rather than a peer of it. */}
-                    <div className="flex flex-wrap items-center gap-2 mb-3">
-                      <input
-                        value={inboxSearch}
-                        onChange={e => setInboxSearch(e.target.value)}
-                        placeholder="Search subjects..."
-                        className="flex-1 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                        style={{ border: CARD_BORDER, backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: OUTFIT, minWidth: 130 }}
-                      />
-                      {inboxVisibleUnreadCount > 0 && (
-                        <button
-                          onClick={handleMarkAllInboxRead}
-                          disabled={markingAllRead}
-                          className="focus:outline-none"
-                          style={{
-                            fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
-                            color: markingAllRead ? SOFT : '#1B3828',
-                            background: 'none', border: 'none', cursor: markingAllRead ? 'default' : 'pointer', padding: '8px 2px',
-                          }}
-                        >
-                          {markingAllRead ? 'MARKING…' : 'MARK ALL READ'}
-                        </button>
-                      )}
-                      <FilterPopoverShell
-                        title="Filter threads"
-                        activeCount={inboxActiveFilterCount}
-                        onClearAll={() => { setInboxStatusFilter(new Set()); setInboxKindFilter(new Set()); setInboxDateFrom(''); setInboxDateTo(''); }}
-                      >
-                        <FilterGroup
-                          title="State" icon={BadgeCheck} options={INBOX_STATE_OPTIONS} selected={inboxStatusFilter}
-                          onToggle={v => setInboxStatusFilter(s => toggleIn(s, v))}
-                          onAll={() => setInboxStatusFilter(new Set(INBOX_STATE_OPTIONS.map(o => o.value)))}
-                          onNone={() => setInboxStatusFilter(new Set())}
-                        />
-                        <FilterGroup
-                          title="Kind" icon={MessageSquare} options={INBOX_KIND_OPTIONS} selected={inboxKindFilter}
-                          onToggle={v => setInboxKindFilter(s => toggleIn(s, v))}
-                          onAll={() => setInboxKindFilter(new Set(INBOX_KIND_OPTIONS.map(o => o.value)))}
-                          onNone={() => setInboxKindFilter(new Set())}
-                        />
-                        <div>
-                          <div className="mb-2">
-                            <FilterHeading icon={CalendarDays}>Submitted between</FilterHeading>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div style={{ flex: 1 }}>
-                              <DatePicker value={inboxDateFrom} max={inboxDateTo || undefined} onChange={setInboxDateFrom} placeholder="From" />
-                            </div>
-                            <ArrowRight size={13} style={{ color: SOFT, flexShrink: 0 }} />
-                            <div style={{ flex: 1 }}>
-                              <DatePicker value={inboxDateTo} min={inboxDateFrom || undefined} onChange={setInboxDateTo} placeholder="To" />
-                            </div>
-                          </div>
-                        </div>
-                      </FilterPopoverShell>
-                    </div>
-
-                    {filteredInboxRequests.length === 0 ? (
-                      <p className="text-sm py-6 text-center" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                        No threads match these filters.
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        {pagedInboxRequests.map(r => {
-                          const threadProfile = inboxProfiles.get(r.user_id);
-                          const role = inboxRoles.get(r.user_id);
-                          const last = lastMessageOf(r.id);
-                          const unread = unreadCountOf(r);
-                          const attention = unread > 0;
-                          const kindChip = KIND_CHIP[r.kind] ?? KIND_CHIP.question;
-                          const name = threadProfile?.display_name ?? 'Unknown';
-                          return (
-                            <button
-                              key={r.id}
-                              onClick={() => handleOpenThread(r.id)}
-                              className="relative w-full flex items-start gap-3 rounded-xl p-3 pl-4 text-left focus:outline-none active:scale-[0.99] overflow-hidden"
-                              style={{
-                                backgroundColor: attention ? 'rgba(238,217,138,0.16)' : '#FAF8F3',
-                                border: attention ? '1px solid rgba(182,135,31,0.45)' : '1px solid rgba(27,56,40,0.09)',
-                                cursor: 'pointer',
-                                transitionProperty: 'background-color, border-color, box-shadow, transform',
-                                transitionDuration: '160ms', transitionTimingFunction: EASE,
-                              }}
-                              onMouseEnter={e => {
-                                const el = e.currentTarget as HTMLElement;
-                                el.style.borderColor = 'rgba(27,56,40,0.35)';
-                                el.style.boxShadow = NEU.outSm;
-                              }}
-                              onMouseLeave={e => {
-                                const el = e.currentTarget as HTMLElement;
-                                el.style.borderColor = attention ? 'rgba(182,135,31,0.45)' : 'rgba(27,56,40,0.09)';
-                                el.style.boxShadow = 'none';
-                              }}
-                            >
-                              {/* THE UNREAD RAIL. A 3px gradient spine on the
-                                  leading edge, the same gesture the live card
-                                  uses for a room's status. It survives at a
-                                  glance down a column of twelve rows in a way a
-                                  background tint does not, and it does not have
-                                  to pass a contrast check because nothing is
-                                  written on it. */}
-                              {attention && (
-                                <span
-                                  aria-hidden
-                                  className="absolute inset-y-0 left-0"
-                                  style={{ width: 3, background: `linear-gradient(180deg, ${NEU_GRADIENTS.gold[1]}, ${NEU_GRADIENTS.gold[0]})` }}
-                                />
-                              )}
-                              {threadProfile?.avatar_url ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={threadProfile.avatar_url} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: 36, height: 36, marginTop: 1, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1, boxShadow: NEU.outSm }} />
-                              ) : (
-                                <span className="flex items-center justify-center rounded-full flex-shrink-0" style={{ width: 36, height: 36, marginTop: 1, backgroundColor: '#1B3828', color: '#EED98A', fontSize: 15, fontWeight: 800, fontFamily: OUTFIT, boxShadow: NEU.outSm }}>
-                                  {name.charAt(0)}
-                                </span>
-                              )}
-                              <span className="min-w-0 flex-1 block">
-                                {/* SUBJECT FIRST. It was the second line under a
-                                    12px name, which is the wrong way round: the
-                                    subject is what you scan a thread list for
-                                    and the sender is how you place it once you
-                                    have found it. No truncate: the row grows a
-                                    line instead of hiding the half of the
-                                    sentence that says what is being asked. */}
-                                <span className="flex items-start gap-2">
-                                  <span
-                                    className="min-w-0 flex-1 block"
-                                    style={{
-                                      color: '#1C1410', fontFamily: OUTFIT, fontSize: 14,
-                                      fontWeight: attention ? 800 : 600, lineHeight: 1.3,
-                                      letterSpacing: '-0.01em', textWrap: 'pretty', overflowWrap: 'anywhere',
-                                    }}
-                                  >
-                                    {r.subject}
-                                  </span>
-                                  {attention && (
-                                    <span
-                                      className="inline-flex items-center justify-center flex-shrink-0"
-                                      style={{ minWidth: 19, height: 19, marginTop: 1, padding: '0 6px', borderRadius: 999, backgroundColor: '#EED98A', color: '#1B3828', fontFamily: OUTFIT, fontSize: 11, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}
-                                    >
-                                      {unread}
-                                    </span>
-                                  )}
-                                </span>
-                                <span className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5" style={{ marginBlockStart: 3 }}>
-                                  <span
-                                    className="rounded-full px-2 py-0.5 flex-shrink-0"
-                                    style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', fontFamily: OUTFIT, backgroundColor: kindChip.bg, color: kindChip.color }}
-                                  >
-                                    {kindChip.label}
-                                  </span>
-                                  <span className="truncate" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700 }}>
-                                    {name}{role ? ` · ${roleLabel(role)}` : ''}
-                                  </span>
-                                  <span className="ml-auto flex-shrink-0" style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                                    {formatDate(r.last_message_at)}
-                                  </span>
-                                </span>
-                                {last && (
-                                  <span
-                                    className="block truncate"
-                                    style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.4, marginBlockStart: 3 }}
-                                  >
-                                    {last.is_organizer ? 'You: ' : ''}{last.body}
-                                  </span>
-                                )}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {filteredInboxRequests.length > INBOX_PAGE_SIZE && (
-                      <div className="flex items-center justify-center gap-3 mt-4">
-                        <button
-                          onClick={() => setInboxPage(p => Math.max(1, p - 1))}
-                          disabled={inboxPage <= 1}
-                          aria-label="Previous page"
-                          className="flex items-center justify-center rounded-full focus:outline-none"
-                          style={{
-                            width: 28, height: 28, border: CARD_BORDER,
-                            backgroundColor: '#FAF8F3',
-                            color: inboxPage <= 1 ? '#C8BEA8' : '#1C1410',
-                            cursor: inboxPage <= 1 ? 'default' : 'pointer',
-                          }}
-                        >
-                          <ChevronLeft size={14} />
-                        </button>
-                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                          PAGE {inboxPage} OF {inboxTotalPages}
-                        </span>
-                        <button
-                          onClick={() => setInboxPage(p => Math.min(inboxTotalPages, p + 1))}
-                          disabled={inboxPage >= inboxTotalPages}
-                          aria-label="Next page"
-                          className="flex items-center justify-center rounded-full focus:outline-none"
-                          style={{
-                            width: 28, height: 28, border: CARD_BORDER,
-                            backgroundColor: '#FAF8F3',
-                            color: inboxPage >= inboxTotalPages ? '#C8BEA8' : '#1C1410',
-                            cursor: inboxPage >= inboxTotalPages ? 'default' : 'pointer',
-                          }}
-                        >
-                          <ChevronRight size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setSelectedRequestId(null)}
-                      className="text-xs font-bold mb-3 focus:outline-none"
-                      style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
-                    >
-                      ← BACK TO INBOX
-                    </button>
-
-                    <div className="flex items-start justify-between gap-3 mb-1">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span
-                            className="rounded-full px-2 py-0.5 flex-shrink-0"
-                            style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedKindChip!.bg, color: selectedKindChip!.color }}
-                          >
-                            {selectedKindChip!.label}
-                          </span>
-                          <span
-                            className="rounded-full px-2 py-0.5 flex-shrink-0"
-                            style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', fontFamily: OUTFIT, backgroundColor: selectedRequest.status === 'open' ? 'rgba(61,122,82,0.13)' : 'rgba(154,138,120,0.16)', color: selectedRequest.status === 'open' ? GREEN_INK : '#6B5F52' }}
-                          >
-                            {selectedRequest.status.toUpperCase()}
-                          </span>
-                        </div>
-                        <p className="font-black text-base" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>{selectedRequest.subject}</p>
-                        {/* Thread author → their public MUN CV, so an organiser reading a
-                            request can see who is asking. No `nested`: this header sits in a
-                            plain div (the BACK control and the CLOSE/DELETE buttons are
-                            siblings), so there is no ancestor onClick to swallow. */}
-                        <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                          <ProfileLink
-                            userId={selectedRequest.user_id}
-                            name={inboxProfiles.get(selectedRequest.user_id)?.display_name}
-                          >
-                            {inboxProfiles.get(selectedRequest.user_id)?.display_name ?? 'Unknown'}
-                          </ProfileLink>
-                          {inboxRoles.get(selectedRequest.user_id) ? ` · ${roleLabel(inboxRoles.get(selectedRequest.user_id)!)}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <GhostBtn onClick={() => (selectedRequest.status === 'open' ? setCloseConfirmOpen(true) : handleCloseReopen(false))}>
-                          {selectedRequest.status === 'open' ? 'CLOSE' : 'REOPEN'}
-                        </GhostBtn>
-                        <GhostBtn onClick={handleDeleteThread} title="Delete this thread" danger disabled={deletingThread}>
-                          <Trash2 size={13} />
-                        </GhostBtn>
-                      </div>
-                    </div>
-
-                    {/* Swap details */}
-                    {(selectedRequest.kind === 'swap_request' || selectedRequest.kind === 'swap_notice') && (
-                      <div className="rounded-xl p-3.5 mt-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.09)' }}>
-                        <p className="text-xs font-bold mb-1.5" style={{ color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
-                          SWAP DETAILS
-                        </p>
-                        <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                          {selectedRequest.metadata.member_a ?? 'Member A'}: {selectedRequest.metadata.before?.a ?? '—'} → {selectedRequest.metadata.after?.a ?? '—'}
-                        </p>
-                        <p className="text-sm mt-1" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                          {selectedRequest.metadata.member_b ?? 'Member B'}: {selectedRequest.metadata.before?.b ?? '—'} → {selectedRequest.metadata.after?.b ?? '—'}
-                        </p>
-                        {swapError && (
-                          <p className="text-xs mt-3" style={{ color: RED, fontFamily: OUTFIT }}>{swapError}</p>
-                        )}
-                        {selectedRequest.kind === 'swap_request' && selectedRequest.status === 'open' && (
-                          <div className="flex gap-2 mt-3">
-                            <GhostBtn onClick={() => handleSwapDecision(false)} danger disabled={swapActing}>
-                              DECLINE
-                            </GhostBtn>
-                            <button
-                              onClick={() => handleSwapDecision(true)}
-                              disabled={swapActing}
-                              className="rounded-lg py-2 px-4 text-xs font-bold focus:outline-none active:scale-[0.96]"
-                              style={{
-                                backgroundColor: swapActing ? '#DDD4C0' : '#1B3828',
-                                color: swapActing ? SOFT : '#EED98A',
-                                border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
-                                cursor: swapActing ? 'default' : 'pointer',
-                                transitionProperty: 'transform', transitionDuration: '160ms', transitionTimingFunction: EASE,
-                              }}
-                            >
-                              {swapActing ? 'PROCESSING...' : 'APPROVE'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Messages */}
-                    <div className="flex flex-col gap-3 mt-4" style={{ maxHeight: 440, overflowY: 'auto' }}>
-                      {selectedMessages.map(m => {
-                        const mine = m.is_organizer;
-                        const senderName = mine ? 'You' : (inboxProfiles.get(m.sender_user_id)?.display_name ?? 'Participant');
-                        return (
-                          <div key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-                            {/* Sender label → that participant's public MUN CV. Only for
-                                incoming messages: `mine` renders as "You" with no user to
-                                link to. No `nested` — the message column is a plain div with
-                                no click handler of its own. */}
-                            {!mine && (
-                              <span className="mb-1" style={{ fontSize: 10, fontWeight: 700, color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                                <ProfileLink userId={m.sender_user_id} name={senderName}>
-                                  {senderName.toUpperCase()}
-                                </ProfileLink>
-                              </span>
-                            )}
-                            <div
-                              className="rounded-2xl px-4 py-2.5"
-                              style={{ maxWidth: '85%', backgroundColor: mine ? '#1B3828' : '#FAF8F3', border: mine ? 'none' : '1px solid rgba(27,56,40,0.09)', color: mine ? '#EED98A' : '#1C1410' }}
-                            >
-                              <p className="text-sm" style={{ fontFamily: OUTFIT, whiteSpace: 'pre-wrap', lineHeight: 1.55, margin: 0 }}>{m.body}</p>
-                            </div>
-                            <span className="mt-1" style={{ fontSize: 10, color: SOFT, fontFamily: OUTFIT }}>
-                              {formatDate(m.created_at)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Reply */}
-                    {selectedRequest.status === 'open' && (
-                      <div className="flex gap-2 mt-4">
-                        <input
-                          value={replyText}
-                          onChange={e => setReplyText(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleInboxReply(); }}
-                          placeholder="Write a reply..."
-                          className="flex-1 min-w-0 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                          style={{ border: CARD_BORDER, backgroundColor: '#FFFFFF', color: '#1C1410', fontFamily: OUTFIT }}
-                        />
-                        <button
-                          onClick={handleInboxReply}
-                          disabled={!replyText.trim()}
-                          className="rounded-xl px-4 text-xs font-bold focus:outline-none flex-shrink-0 active:scale-[0.96]"
-                          style={{
-                            backgroundColor: !replyText.trim() ? '#DDD4C0' : '#1B3828',
-                            color: !replyText.trim() ? SOFT : '#EED98A',
-                            border: 'none', fontFamily: OUTFIT, letterSpacing: '0.05em',
-                            cursor: !replyText.trim() ? 'default' : 'pointer', minHeight: 40,
-                            transitionProperty: 'transform, background-color', transitionDuration: '160ms', transitionTimingFunction: EASE,
-                          }}
-                        >
-                          SEND
-                        </button>
-                      </div>
-                    )}
-                    {replyError && (
-                      <p className="text-xs mt-2" style={{ color: RED, fontFamily: OUTFIT }}>{replyError}</p>
-                    )}
-
-                    {closeConfirmOpen && (
-                      <ConfirmModal
-                        title="Close this thread?"
-                        body="The participant will see it as closed. You can reopen it later."
-                        confirmLabel="Close Thread"
-                        danger
-                        onConfirm={() => handleCloseReopen(true)}
-                        onCancel={() => setCloseConfirmOpen(false)}
-                      />
-                    )}
-                  </>
-                )}
-              </section>
-            </div>
           </div>
 
           {/* ── SENT ── The record, and the longest thing on the page, so it
-              takes the full width underneath the three sections instead of
+              takes the full width underneath the two sections instead of
               half of it beside them. */}
           <section data-tutorial="comms-sent-feed">
             {/* The failed / sending pills that used to sit here are gone:

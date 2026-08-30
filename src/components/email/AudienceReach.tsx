@@ -150,7 +150,7 @@ function useIsWide(): boolean {
 const ROLE_EMOJI: Record<string, string> = {
   delegate: 'Person raising hand',
   chair: 'Studio microphone',
-  'head-delegate': 'People holding hands',
+  'head-delegate': 'Busts in silhouette',
   'faculty-advisor': 'Handshake',
   observer: 'Card index',
 };

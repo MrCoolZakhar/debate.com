@@ -1268,7 +1268,7 @@ export function RecapModal({
               title="Motions a chair ACCEPTED: a rejected motion is deleted from the database outright and leaves no record, so the true total can only be higher than this"
             />
             <StatTile
-              icon={Users} emoji="Person raising hand" gradient={NEU_GRADIENTS.sage}
+              icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.sage}
               value={`${present}/${votingTotal}`} label="Delegates present"
               title={observers > 0
                 ? `Excludes ${observers} observer${observers === 1 ? '' : 's'}, matching the chair's roll`
@@ -1516,9 +1516,9 @@ export function RosterBody({ data }: { data: LiveCommittee }) {
     <>
       {/* Present / voting summary */}
       <div className="grid grid-cols-3 gap-3 mt-4 mb-5">
-        <StatTile icon={Users} emoji="Person raising hand" gradient={NEU_GRADIENTS.sage} value={`${present}/${total}`} label="Present" />
+        <StatTile icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.sage} value={`${present}/${total}`} label="Present" />
         <StatTile icon={CheckCircle2} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.forest} value={String(voting)} label="Present & voting" />
-        <StatTile icon={Users} emoji="People holding hands" gradient={NEU_GRADIENTS.amber} value={String(total - present)} label="Absent" />
+        <StatTile icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.amber} value={String(total - present)} label="Absent" />
       </div>
       {observers > 0 && (
         <p className="text-[11px] -mt-3 mb-4" style={{ color: SOFT, fontFamily: OUTFIT }}>

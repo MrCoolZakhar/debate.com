@@ -45,7 +45,11 @@ export interface TokenIdentity {
 export const TOKEN_IDENTITY: Record<EmailTokenKey, TokenIdentity> = {
   delegate_name: { emoji: 'Bust in silhouette', glyph: '🧑', icon: UserRound, short: 'Their name', family: 'person', becomes: 'The name of whoever opens the email.' },
   role: { emoji: 'Identification card', glyph: '🪪', icon: BadgeCheck, short: 'Their role', family: 'person', becomes: 'Delegate, Chair, Faculty Advisor, and so on.' },
-  delegation_name: { emoji: 'People holding hands', glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Delegation', family: 'place', becomes: 'The school or society they came with.' },
+  /* NOT 'People holding hands': Fluent files skin-tone emoji under a per-tone
+     subfolder, so that name 404s on the flat asset path and silently falls back
+     to the lucide glyph. Verified: 'People holding hands' 404, 'Family' 404,
+     'Busts in silhouette' 200. */
+  delegation_name: { emoji: 'Busts in silhouette', glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Delegation', family: 'place', becomes: 'The school or society they came with.' },
   committee: { emoji: 'Ballot box with ballot', glyph: '🗳️', icon: Landmark, short: 'Committee', family: 'place', becomes: 'The committee they were allocated to.' },
   country: { emoji: 'Globe showing Europe-Africa', glyph: '🌍', icon: Globe, short: 'Country', family: 'place', becomes: 'The country or seat they represent.' },
   payment_status: { emoji: 'Money bag', glyph: '💰', icon: Wallet, short: 'Paid or not', family: 'money', becomes: 'Paid, Unpaid, Waived, and so on.' },
