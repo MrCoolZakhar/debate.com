@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -170,9 +170,34 @@ function feePhasesOverlap(phases: FeePhase[]): boolean {
   return false;
 }
 
+/** UTC instant from the database to the local wall-clock value a
+ *  datetime-local input expects. The old version sliced the ISO string,
+ *  showing a UTC instant as if its digits were local time. */
 function toDatetimeLocal(iso: string | null): string {
   if (!iso) return '';
-  return iso.slice(0, 16);
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** The inverse. A datetime-local value carries no zone, so `new Date` reads
+ *  it as local wall-clock time, which is what the organizer meant, and we
+ *  store the resulting instant as UTC. */
+function fromDatetimeLocal(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+/** IANA zone name for the label under the window fields, e.g. Europe/London. */
+function localZoneLabel(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'your local time';
+  } catch {
+    return 'your local time';
+  }
 }
 
 // Standard failure copy for every verified-write save in this page: a write
@@ -2126,11 +2151,14 @@ export default function SettingsPage() {
                       <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Opens</label>
                       <input
                         type="datetime-local"
+                        // Prerendered server-side where local time is UTC, so the
+                        // corrected value differs from the client's on any other zone.
+                        suppressHydrationWarning
                         defaultValue={toDatetimeLocal(config.applications_open_at)}
                         onFocus={fgInput}
                         onBlur={(e) => {
                           e.currentTarget.style.borderColor = '#DDD4C0';
-                          saveRoleConfig(role, { applications_open_at: e.target.value || null });
+                          saveRoleConfig(role, { applications_open_at: fromDatetimeLocal(e.target.value) });
                         }}
                         style={inputStyle}
                       />
@@ -2140,14 +2168,21 @@ export default function SettingsPage() {
                       <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Closes</label>
                       <input
                         type="datetime-local"
+                        suppressHydrationWarning
                         defaultValue={toDatetimeLocal(config.applications_close_at)}
                         onFocus={fgInput}
                         onBlur={(e) => {
                           e.currentTarget.style.borderColor = '#DDD4C0';
-                          saveRoleConfig(role, { applications_close_at: e.target.value || null });
+                          saveRoleConfig(role, { applications_close_at: fromDatetimeLocal(e.target.value) });
                         }}
                         style={inputStyle}
                       />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        Times are in {localZoneLabel()}. Applicants see these in their own timezone.
+                      </p>
                     </div>
 
                     <div>
@@ -2209,6 +2244,10 @@ export default function SettingsPage() {
                   {(() => {
                     const phases = config.fee_phases ?? [];
                     const active = activeFeePhase(phases);
+                    // A phase missing either date is skipped by the app and by
+                    // resolve_phase_fee, so the amount on it never applies. Say
+                    // so on the row, and refuse to stack another on top of it.
+                    const hasInvalidPhase = phases.some(p => !p.start_date || !p.end_date);
                     return (
                       <div className="mt-4">
                         <div className="flex items-center justify-between mb-1.5">
@@ -2217,11 +2256,12 @@ export default function SettingsPage() {
                           </label>
                           <button
                             type="button"
+                            disabled={hasInvalidPhase}
                             onClick={() => saveRoleConfig(role, {
                               fee_phases: [...phases, { label: `Phase ${phases.length + 1}`, start_date: '', end_date: '', amount: config.fee_amount }],
                             })}
                             className="text-[11px] font-bold focus:outline-none hover:underline"
-                            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', cursor: 'pointer' }}
+                            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', background: 'none', border: 'none', opacity: hasInvalidPhase ? 0.45 : 1, cursor: hasInvalidPhase ? 'not-allowed' : 'pointer' }}
                           >
                             + ADD PHASE
                           </button>
@@ -2234,14 +2274,17 @@ export default function SettingsPage() {
                           <>
                             {phases.map((phase, pi) => {
                               const isActive = active !== null && phase === active;
+                              const invalid = !phase.start_date || !phase.end_date;
                               return (
+                                <Fragment key={`${pi}-${phases.length}-${configVersion}`}>
                                 <div
-                                  key={`${pi}-${phases.length}-${configVersion}`}
                                   className="grid gap-2 items-center mb-2 rounded-[10px] px-2.5 py-2"
                                   style={{
                                     gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,0.8fr) 24px',
                                     backgroundColor: isActive ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.02)',
-                                    border: isActive ? '1.5px solid rgba(27,56,40,0.35)' : '1px solid #F0EDE6',
+                                    border: invalid
+                                      ? '1.5px solid rgba(139,32,32,0.45)'
+                                      : isActive ? '1.5px solid rgba(27,56,40,0.35)' : '1px solid #F0EDE6',
                                   }}
                                 >
                                   <div className="flex items-center gap-1.5 min-w-0">
@@ -2306,6 +2349,12 @@ export default function SettingsPage() {
                                     ✕
                                   </button>
                                 </div>
+                                {invalid && (
+                                  <p className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                                    This fee phase is invalid. Please add dates.
+                                  </p>
+                                )}
+                                </Fragment>
                               );
                             })}
                             {feePhasesOverlap(phases) && (
@@ -2409,95 +2458,6 @@ export default function SettingsPage() {
         })}
       </div>}
 
-      {/* ── Delegate preference mode card ── */}
-      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Delegate Preferences
-        </p>
-        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {PREF_MODE_OPTIONS.map(opt => {
-            const active = prefMode === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => savePrefMode(opt.value)}
-                disabled={prefModeSaving}
-                className="py-2.5 px-3 rounded-[10px] font-bold text-xs focus:outline-none transition-all"
-                style={{
-                  backgroundColor: active ? '#1B3828' : 'transparent',
-                  color: active ? '#EED98A' : '#1C1410',
-                  border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.04em',
-                  opacity: prefModeSaving ? 0.6 : 1,
-                  cursor: prefModeSaving ? 'wait' : 'pointer',
-                }}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          {prefModeSaving && (
-            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-          )}
-          <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            {PREF_MODE_OPTIONS.find(o => o.value === prefMode)?.desc}
-          </p>
-        </div>
-        {prefModeError && (
-          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
-        )}
-      </div>}
-
-      {/* ── Delegation allocation swaps card ── */}
-      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Delegation Allocation Swaps
-        </p>
-        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Control whether delegation leaders can trade committee allocations within their own delegation.
-        </p>
-        <div className="flex gap-2 items-center">
-          {SWAP_MODE_OPTIONS.map(opt => {
-            const active = swapMode === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => saveSwapMode(opt.value)}
-                disabled={swapModeSaving}
-                className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
-                style={{
-                  backgroundColor: active ? '#1B3828' : 'transparent',
-                  color: active ? '#EED98A' : '#1C1410',
-                  border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.06em',
-                  opacity: swapModeSaving ? 0.6 : 1,
-                  cursor: swapModeSaving ? 'wait' : 'pointer',
-                }}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-          {swapModeSaving && (
-            <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-          )}
-        </div>
-        <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
-        </p>
-        {swapModeError && (
-          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
-        )}
-      </div>}
 
       {/* ── VISUAL TAB ── */}
       {activeTab === 'conference' && (
@@ -2731,6 +2691,134 @@ export default function SettingsPage() {
             )}
           </div>
 
+          {/* Delegate preference mode card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              Delegate Preferences
+            </p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {PREF_MODE_OPTIONS.map(opt => {
+                const active = prefMode === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => savePrefMode(opt.value)}
+                    disabled={prefModeSaving}
+                    className="py-2.5 px-3 rounded-[10px] font-bold text-xs focus:outline-none transition-all"
+                    style={{
+                      backgroundColor: active ? '#1B3828' : 'transparent',
+                      color: active ? '#EED98A' : '#1C1410',
+                      border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                      fontFamily: "'Outfit', sans-serif",
+                      letterSpacing: '0.04em',
+                      opacity: prefModeSaving ? 0.6 : 1,
+                      cursor: prefModeSaving ? 'wait' : 'pointer',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              {prefModeSaving && (
+                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+              )}
+              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                {PREF_MODE_OPTIONS.find(o => o.value === prefMode)?.desc}
+              </p>
+            </div>
+            {prefModeError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
+            )}
+          </div>
+
+          {/* Delegation allocation swaps card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              Delegation Allocation Swaps
+            </p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              Control whether delegation leaders can trade committee allocations within their own delegation.
+            </p>
+            <div className="flex gap-2 items-center">
+              {SWAP_MODE_OPTIONS.map(opt => {
+                const active = swapMode === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => saveSwapMode(opt.value)}
+                    disabled={swapModeSaving}
+                    className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
+                    style={{
+                      backgroundColor: active ? '#1B3828' : 'transparent',
+                      color: active ? '#EED98A' : '#1C1410',
+                      border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                      fontFamily: "'Outfit', sans-serif",
+                      letterSpacing: '0.06em',
+                      opacity: swapModeSaving ? 0.6 : 1,
+                      cursor: swapModeSaving ? 'wait' : 'pointer',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+              {swapModeSaving && (
+                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+              )}
+            </div>
+            <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
+            </p>
+            {swapModeError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
+            )}
+          </div>
+
+          {/* Minimum age card */}
+          <div style={cardStyle}>
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              Minimum Age
+            </p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              Applicants below this age cannot apply. Leave empty for no limit. Age is checked against the applicant&apos;s date of birth on the conference start date.
+            </p>
+            <div className="flex items-end gap-3">
+              <div style={{ width: '140px' }}>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                  Minimum age
+                </label>
+                <input
+                  type="number"
+                  min={10}
+                  max={99}
+                  step={1}
+                  value={minAge}
+                  onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
+                  placeholder="No limit"
+                  style={inputStyle}
+                  onFocus={fgInput}
+                  onBlur={bgInput}
+                />
+          </div>
+            </div>
+            <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />
+            {minAgeError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{minAgeError}</p>
+            )}
+            {view.min_age != null && !minAgeError && (
+              <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                Delegates must be at least {view.min_age} years old at the start of your conference to apply.
+              </p>
+            )}
+          </div>
+
           {/* Banner card */}
           <div style={cardStyle}>
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
@@ -2924,44 +3012,6 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-
-      {/* ── Minimum age card ── */}
-      {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Minimum Age
-        </p>
-        <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Applicants below this age cannot apply. Leave empty for no limit. Age is checked against the applicant&apos;s date of birth on the conference start date.
-        </p>
-        <div className="flex items-end gap-3">
-          <div style={{ width: '140px' }}>
-            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              Minimum age
-            </label>
-            <input
-              type="number"
-              min={10}
-              max={99}
-              step={1}
-              value={minAge}
-              onChange={(e) => { setMinAge(e.target.value); setMinAgeError(''); }}
-              placeholder="No limit"
-              style={inputStyle}
-              onFocus={fgInput}
-              onBlur={bgInput}
-            />
-          </div>
-        </div>
-        <AutoSaveStatus saving={minAgeSaving} saved={minAgeSaved} />
-        {minAgeError && (
-          <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{minAgeError}</p>
-        )}
-        {view.min_age != null && !minAgeError && (
-          <p className="text-xs mt-3" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
-            Delegates must be at least {view.min_age} years old at the start of your conference to apply.
-          </p>
-        )}
-      </div>}
 
       {activeTab === 'applications' && !applicationsGated && <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -4057,7 +4107,6 @@ export default function SettingsPage() {
           }}
         />
       )}
-
 
       {/* ── Bundle menu ──────────────────────────────────────────────────────
           Portaled at fixed viewport coordinates and edge-flipping, so a member
