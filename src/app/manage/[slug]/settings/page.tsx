@@ -34,7 +34,7 @@ import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
   ROLE_ORDER, ROLE_EMOJI, ROLE_BLURB, RoleBookmarks, StepDisc, InfoHint,
-  CopyToRolesModal, SetupIntro, Segmented, SegmentedNote,
+  CopyToRolesModal, SetupIntro, Segmented, SegmentedNote, STATUS_STYLE,
   type RoleStatus as RoleStatusKind,
 } from './applicationsUi';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
@@ -179,12 +179,6 @@ function roleStatus(config: RoleConfig | undefined, now: number): RoleStatus {
   return 'OPEN';
 }
 
-const STATUS_STYLE: Record<RoleStatus, { fg: string; bg: string; dot: string }> = {
-  OPEN:      { fg: '#EED98A', bg: '#1B3828',                dot: '#1B3828' },
-  SCHEDULED: { fg: '#6B4F12', bg: 'rgba(238,217,138,0.35)', dot: '#B6871F' },
-  CLOSED:    { fg: '#8B2020', bg: 'rgba(139,32,32,0.08)',   dot: '#8B2020' },
-  OFF:       { fg: '#9A8A78', bg: 'rgba(154,138,120,0.12)', dot: '#9A8A78' },
-};
 
 /** One step's clickable header: a numbered disc that becomes a gold check once
  *  the step has nothing unresolved, the label, its subtitle, and a chevron.
@@ -1069,6 +1063,9 @@ export default function SettingsPage() {
   function roleIsUntouched(rc: RoleConfig | undefined): boolean {
     if (!rc) return false;
     return (
+      // Switching the role on is the loudest possible "I have touched this",
+      // and it is the one field the header shows rather than the steps.
+      !rc.is_enabled &&
       !rc.applications_open_at &&
       !rc.applications_close_at &&
       rc.max_accepted == null &&
@@ -1845,7 +1842,16 @@ export default function SettingsPage() {
   // list and the custom questions are all legitimately empty, so requiring
   // them would leave a step permanently unticked for a correct setup.
   const activeRoleConfig = roleConfigs.find(rc => rc.role === activeRole);
-  const step1Complete = !!(activeRoleConfig?.applications_open_at && activeRoleConfig?.applications_close_at);
+  // Both ends set AND in the right order. DatePicker's `min` only disables
+  // whole days, so "opens 16 Jul 09:00, closes 16 Jul 08:00" gets through the
+  // control and has to be caught here — otherwise the step ticks green on a
+  // window that closes an hour before it opens.
+  const windowBackwards = !!(
+    activeRoleConfig?.applications_open_at &&
+    activeRoleConfig?.applications_close_at &&
+    new Date(activeRoleConfig.applications_close_at).getTime() <= new Date(activeRoleConfig.applications_open_at).getTime()
+  );
+  const step1Complete = !!(activeRoleConfig?.applications_open_at && activeRoleConfig?.applications_close_at) && !windowBackwards;
   const step2Complete = !!activeRoleConfig?.fee_currency
     && !(activeRoleConfig?.fee_phases ?? []).some(p => !p.start_date || !p.end_date);
   const stepComplete = useMemo(
@@ -2334,6 +2340,12 @@ export default function SettingsPage() {
   }
 
   function renderApplicationsGeneral() {
+    // `agreedAcross` returns null both for "the roles disagree" and for "there
+    // are no roles yet". Only the first is a fact worth telling anyone, so the
+    // three shared controls wait for the configs rather than claiming a
+    // conflict — and, until then, they are not clickable, because a click
+    // would be writing on a false premise.
+    const configsReady = roleConfigs.length > 0;
     const agreedAccept = agreedAcross('auto_accept');
     const agreedPayment = agreedAcross('payment_timing');
     const agreedResub = agreedAcross('allow_resubmission');
@@ -2365,13 +2377,16 @@ export default function SettingsPage() {
             <Segmented
               options={PAYMENT_TIMING_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
               value={(agreedPayment ?? 'anytime') as RoleConfig['payment_timing']}
-              mixed={agreedPayment === null}
-              disabled={bulkSaving === 'payment'}
+              mixed={configsReady && agreedPayment === null}
+              // Every shared control locks while ANY of them is writing: they
+              // all hit the same five rows, and a second click landing inside
+              // the first round-trip was being dropped in silence.
+              disabled={!configsReady || !!bulkSaving}
               onChange={(v) => void saveAcrossRoles({ payment_timing: v }, 'payment')}
             />
             <SegmentedNote
-              mixed={agreedPayment === null}
-              text={PAYMENT_TIMING_OPTIONS.find(o => o.value === agreedPayment)?.desc}
+              mixed={configsReady && agreedPayment === null}
+              text={configsReady ? PAYMENT_TIMING_OPTIONS.find(o => o.value === agreedPayment)?.desc : 'Loading your roles…'}
             />
           </div>
 
@@ -2389,15 +2404,17 @@ export default function SettingsPage() {
                 { value: false, label: 'MANUAL REVIEW' },
               ]}
               value={agreedAccept ?? false}
-              mixed={agreedAccept === null}
-              disabled={bulkSaving === 'accept'}
+              mixed={configsReady && agreedAccept === null}
+              disabled={!configsReady || !!bulkSaving}
               onChange={(v) => void saveAcrossRoles({ auto_accept: v }, 'accept')}
             />
             <SegmentedNote
-              mixed={agreedAccept === null}
-              text={agreedAccept
-                ? 'Everyone who applies is accepted the moment they submit.'
-                : 'Every application waits as pending until someone on your team decides.'}
+              mixed={configsReady && agreedAccept === null}
+              text={!configsReady
+                ? 'Loading your roles…'
+                : agreedAccept
+                  ? 'Everyone who applies is accepted the moment they submit.'
+                  : 'Every application waits as pending until someone on your team decides.'}
             />
           </div>
 
@@ -2411,15 +2428,17 @@ export default function SettingsPage() {
                 />
               </label>
               <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                {agreedResub === null
-                  ? 'Your roles do not all agree. Flipping this sets it for every role.'
-                  : 'Let denied applicants edit and resubmit.'}
+                {!configsReady
+                  ? 'Loading your roles…'
+                  : agreedResub === null
+                    ? 'Your roles do not all agree. Flipping this sets it for every role.'
+                    : 'Let denied applicants edit and resubmit.'}
               </p>
             </div>
             <PillToggle
               value={agreedResub ?? false}
               onChange={(v) => void saveAcrossRoles({ allow_resubmission: v }, 'resub')}
-              disabled={bulkSaving === 'resub'}
+              disabled={!configsReady || !!bulkSaving}
               size="md"
             />
           </div>
@@ -2948,9 +2967,15 @@ export default function SettingsPage() {
                           </div>
 
                           <div className="md:col-span-2">
-                            <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                              Times are in {localZoneLabel()}. Applicants see these in their own timezone.
-                            </p>
+                            {windowBackwards ? (
+                              <p className="text-xs rounded-lg px-3 py-2" suppressHydrationWarning style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}>
+                                This window closes at or before it opens, so nobody can apply. Move one of the two.
+                              </p>
+                            ) : (
+                              <p className="text-xs" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                Times are in {localZoneLabel()}. Applicants see these in their own timezone.
+                              </p>
+                            )}
                           </div>
                           <div>
                             <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>

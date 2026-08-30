@@ -115,6 +115,9 @@ export function InfoHint({ label, text, size = 16 }: { label: string; text: stri
         onMouseLeave={() => setPos(null)}
         onFocus={() => place()}
         onBlur={() => setPos(null)}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); } }}
         className="inline-flex items-center justify-center rounded-full flex-shrink-0 align-middle"
         style={{
           width: size, height: size, backgroundColor: NEU.surface, boxShadow: NEU.inSm,
@@ -143,21 +146,6 @@ export function InfoHint({ label, text, size = 16 }: { label: string; text: stri
     </>
   );
 }
-
-/** Label + its explainer, the pairing used everywhere on this surface. */
-export function HintedLabel({ children, hint, hintLabel }: {
-  children: React.ReactNode;
-  hint: string;
-  hintLabel?: string;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span>{children}</span>
-      <InfoHint label={hintLabel ?? `About ${typeof children === 'string' ? children : 'this setting'}`} text={hint} />
-    </span>
-  );
-}
-
 // ── Step disc ──────────────────────────────────────────────────────────────
 
 /**
@@ -188,49 +176,6 @@ export function StepDisc({ n, complete, size = 34 }: { n: number; complete: bool
     </span>
   );
 }
-
-/**
- * A number seated in its own extruded disc. Used for counts and totals across
- * this surface, so a figure never floats as bare text.
- */
-export function StatDisc({ value, label, tone = 'neutral', size = 54 }: {
-  value: React.ReactNode;
-  label?: string;
-  tone?: 'neutral' | 'forest' | 'gold';
-  size?: number;
-}) {
-  const forest = tone === 'forest';
-  const gold = tone === 'gold';
-  return (
-    <span className="inline-flex flex-col items-center" style={{ gap: 6 }}>
-      <span
-        className="flex items-center justify-center"
-        style={{
-          width: size, height: size, borderRadius: '999px',
-          background: forest
-            ? 'linear-gradient(145deg, #16301F, #2E6040)'
-            : gold
-              ? 'linear-gradient(145deg, #F3E2A8, #C99A2C)'
-              : `linear-gradient(145deg, #F6F2E7, ${NEU.base})`,
-          boxShadow: forest || gold
-            ? '0 6px 16px rgba(27,56,40,0.26), inset -2px -2px 6px rgba(0,0,0,0.18), inset 2px 2px 6px rgba(255,255,255,0.22)'
-            : NEU.outSm,
-          color: forest ? NEU.gold : gold ? '#2E2205' : NEU.ink,
-          fontFamily: OUTFIT, fontWeight: 800, fontSize: size * 0.34,
-          fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
-        }}
-      >
-        {value}
-      </span>
-      {label && (
-        <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.11em', textTransform: 'uppercase', color: NEU.muted }}>
-          {label}
-        </span>
-      )}
-    </span>
-  );
-}
-
 // ── Role bookmarks ─────────────────────────────────────────────────────────
 
 /**

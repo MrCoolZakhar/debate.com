@@ -94,12 +94,26 @@ export function DatePicker({
 }) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => parseISO(value), [value]);
-  const { h: hour, m: minute } = useMemo(() => timeOf(value), [value]);
+  // The time the user has dialled in while there is still no day. Held here
+  // rather than emitted: falling back to "whatever month the calendar happens
+  // to be showing" meant touching the hour on an empty field silently saved a
+  // date nobody chose — and, on an application window, opened the role.
+  const [pendingTime, setPendingTime] = useState<{ h: number; m: number } | null>(null);
+  const stored = useMemo(() => timeOf(value), [value]);
+  const hour = selected ? stored.h : (pendingTime?.h ?? stored.h);
+  const minute = selected ? stored.m : (pendingTime?.m ?? stored.m);
 
   /** Emit in whichever shape this instance speaks. */
-  const emit = useCallback((iso: string, h = hour, m = minute) => {
+  const emit = useCallback((iso: string, h: number, m: number) => {
     onChange(withTime ? `${iso}T${fmtTime(h, m)}` : iso);
-  }, [onChange, withTime, hour, minute]);
+  }, [onChange, withTime]);
+
+  /** A time change: writes through once a day exists, otherwise parks the
+   *  choice until one is picked. */
+  const setTime = useCallback((h: number, m: number) => {
+    if (selected) emit(toISO(selected), h, m);
+    else setPendingTime({ h, m });
+  }, [selected, emit]);
   const minDate = useMemo(() => parseISO(min), [min]);
   const maxDate = useMemo(() => parseISO(max), [max]);
   const [view, setView] = useState<Date>(() => selected ?? parseISO(initialView) ?? new Date());
@@ -108,6 +122,21 @@ export function DatePicker({
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
   useEffect(() => { if (selected) setView(selected); }, [selected]);
+
+  // Opening one picker closes every other. Two calendars floating side by side
+  // reads as a glitch, and it is genuinely reachable here: Opens and Closes sit
+  // next to each other. They are portalled siblings with no common parent, so a
+  // window-level broadcast is the only thing they share.
+  const instanceId = useRef(Math.random().toString(36).slice(2));
+  useEffect(() => {
+    if (!open) return;
+    window.dispatchEvent(new CustomEvent('gv-datepicker-open', { detail: instanceId.current }));
+    const onOther = (e: Event) => {
+      if ((e as CustomEvent).detail !== instanceId.current) setOpen(false);
+    };
+    window.addEventListener('gv-datepicker-open', onOther);
+    return () => window.removeEventListener('gv-datepicker-open', onOther);
+  }, [open]);
 
   // The calendar is rendered through a Portal at fixed viewport coordinates so
   // it can never be clipped by an ancestor's overflow (e.g. a scrollable filter
@@ -181,7 +210,7 @@ export function DatePicker({
         aria-describedby={describedBy}
         aria-invalid={invalid || undefined}
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((v) => { if (v) setPendingTime(null); return !v; })}
         className={`w-full flex items-center gap-2.5 text-left focus:outline-none ${variant === 'well' ? '' : 'rounded-xl px-4 py-3'}`}
         style={{
           fontFamily: OUTFIT,
@@ -274,7 +303,7 @@ export function DatePicker({
               const off = disabledDay(d);
               return (
                 <button key={i} type="button" disabled={off}
-                  onClick={() => { emit(toISO(d)); if (!withTime) setOpen(false); }}
+                  onClick={() => { emit(toISO(d), hour, minute); if (!withTime) setOpen(false); }}
                   className="aspect-square rounded-lg flex items-center justify-center focus:outline-none"
                   style={{
                     fontFamily: OUTFIT, fontSize: 13, fontWeight: isSel ? 800 : 500, fontVariantNumeric: 'tabular-nums',
@@ -300,7 +329,7 @@ export function DatePicker({
                 <select
                   aria-label="Hour"
                   value={hour}
-                  onChange={(e) => emit(selected ? toISO(selected) : toISO(view), Number(e.target.value), minute)}
+                  onChange={(e) => setTime(Number(e.target.value), minute)}
                   className="focus:outline-none rounded-lg px-2 py-1.5"
                   style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
                 >
@@ -309,12 +338,16 @@ export function DatePicker({
                 <span style={{ fontFamily: OUTFIT, fontWeight: 800, color: '#9A8A78' }}>:</span>
                 <select
                   aria-label="Minute"
-                  value={MINUTES.includes(minute) ? minute : 0}
-                  onChange={(e) => emit(selected ? toISO(selected) : toISO(view), hour, Number(e.target.value))}
+                  value={minute}
+                  onChange={(e) => setTime(hour, Number(e.target.value))}
                   className="focus:outline-none rounded-lg px-2 py-1.5"
                   style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
                 >
-                  {MINUTES.map(m => <option key={m} value={m}>{pad2(m)}</option>)}
+                  {/* A stored minute off the 5-minute grid (anything written
+                      before this control existed) gets its own option, so the
+                      dropdown never reads :00 while the field says :07. */}
+                  {(MINUTES.includes(minute) ? MINUTES : [...MINUTES, minute].sort((a, b) => a - b))
+                    .map(m => <option key={m} value={m}>{pad2(m)}</option>)}
                 </select>
                 <button
                   type="button"
