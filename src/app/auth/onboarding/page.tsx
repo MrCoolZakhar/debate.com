@@ -20,7 +20,10 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { monogramFor } from '@/app/account/accountUi';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { FlagImg } from '@/components/FlagImg';
-import { UN_COUNTRIES } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
+import { CountryField } from '@/components/CountryField';
+import { DatePicker } from '@/components/DatePicker';
+import { ageAt } from '@/lib/age';
 
 const TOTAL_STEPS = 4;
 
@@ -52,6 +55,18 @@ export default function OnboardingPage() {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
+  // ── Mandatory basics gate ────────────────────────────────────────────────
+  // The e-mail sign-up form asks for nationality and date of birth and will not
+  // submit without them. Google sign-up never passes through that form, so
+  // those accounts land here with both blank — and a delegate with no
+  // nationality and no age silently fails allocation and every age check a
+  // conference runs. This screen is the only unskippable thing in onboarding,
+  // and it only ever appears for a profile that is actually missing them.
+  const [basicsNeeded, setBasicsNeeded] = useState<boolean | null>(null);
+  const [basicsNationality, setBasicsNationality] = useState('');
+  const [basicsDob, setBasicsDob] = useState('');
+  const [basicsError, setBasicsError] = useState('');
+  const [basicsSaving, setBasicsSaving] = useState(false);
   const [education, setEducation] = useState<string | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [level, setLevel] = useState<string | null>(null);
@@ -68,13 +83,42 @@ export default function OnboardingPage() {
   // send the visitor home rather than gating them behind auth.
   useEffect(() => {
     let cancelled = false;
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (cancelled) return;
-      if (data.user) setUserId(data.user.id);
-      else router.replace('/');
+      if (!data.user) { router.replace('/'); return; }
+      setUserId(data.user.id);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('nationality, date_of_birth')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      const row = profile as { nationality: string | null; date_of_birth: string | null } | null;
+      setBasicsNationality(row?.nationality ?? '');
+      setBasicsDob(row?.date_of_birth ?? '');
+      setBasicsNeeded(!row?.nationality || !row?.date_of_birth);
     });
     return () => { cancelled = true; };
   }, [supabase, router]);
+
+  async function saveBasics() {
+    if (!userId || basicsSaving) return;
+    setBasicsError('');
+    const country = getCountryByName(basicsNationality);
+    if (!country) { setBasicsError('Please choose your nationality from the list.'); return; }
+    if (!basicsDob) { setBasicsError('Please enter your date of birth.'); return; }
+    const age = ageAt(basicsDob);
+    if (age === null || age < 0 || age > 120) { setBasicsError('That date of birth doesn’t look right.'); return; }
+    if (age < 13) { setBasicsError('You need to be at least 13 to use Gavelling.'); return; }
+    setBasicsSaving(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ nationality: country.name, date_of_birth: basicsDob })
+      .eq('id', userId);
+    setBasicsSaving(false);
+    if (error) { setBasicsError('Could not save that. Please try again.'); return; }
+    setBasicsNeeded(false);
+  }
 
   const countryOptions = useMemo<WizardOption[]>(
     () =>
@@ -186,6 +230,88 @@ export default function OnboardingPage() {
   }
 
   const confCount = cvEntries.length;
+
+  // ── The one screen with no way past it ──────────────────────────────────
+  // Rendered instead of the questionnaire, never alongside it, and only for a
+  // profile actually missing these. `null` = still checking; showing the
+  // questionnaire first and yanking it away would be worse than a beat of
+  // nothing.
+  if (basicsNeeded !== false) {
+    return (
+      <div className="min-h-screen w-full flex flex-col" style={{ backgroundColor: NEU.base ?? '#EDE7D8' }}>
+        <div className="flex items-center" style={{ padding: '18px 22px' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/gavel-mark.png" alt="Gavelling" className="h-9 w-9 object-contain" />
+        </div>
+        {basicsNeeded === null ? (
+          <div className="flex-1" />
+        ) : (
+          <div className="flex-1 flex items-start justify-center px-5 pb-16">
+            <div className="w-full" style={{ maxWidth: 460 }}>
+              <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 'clamp(26px, 4vw, 34px)', color: NEU.ink, margin: '18px 0 8px', lineHeight: 1.1 }}>
+                Two things before you start
+              </h1>
+              <p style={{ fontFamily: OUTFIT, fontSize: 14.5, lineHeight: 1.6, color: NEU.inkSoft, margin: '0 0 26px' }}>
+                Conferences allocate seats by delegation and several set an age range for their
+                delegates. Without these two, an application of yours can be rejected at allocation
+                rather than at the point you filled it in.
+              </p>
+
+              <label className="block text-sm font-semibold mb-1.5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                Nationality
+              </label>
+              <CountryField
+                value={basicsNationality}
+                onChange={(v) => { setBasicsNationality(v); setBasicsError(''); }}
+                placeholder="Start typing a country..."
+                inputStyle={{
+                  backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', borderRadius: 12,
+                  color: NEU.ink, fontFamily: OUTFIT, fontSize: 14, paddingTop: 12, paddingBottom: 12,
+                }}
+              />
+
+              <label className="block text-sm font-semibold mb-1.5 mt-5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                Date of birth
+              </label>
+              <DatePicker
+                value={basicsDob}
+                onChange={(iso) => { setBasicsDob(iso); setBasicsError(''); }}
+                max={new Date().toISOString().slice(0, 10)}
+                initialView="2005-06-15"
+                placeholder="Select your date of birth"
+              />
+              <p className="text-xs mt-1.5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+                You must be at least 13. Only your age is ever shown to a conference, never the date.
+              </p>
+
+              {basicsError && (
+                <p role="alert" className="text-sm mt-4" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                  {basicsError}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void saveBasics()}
+                disabled={basicsSaving}
+                className="w-full mt-6 rounded-xl focus:outline-none"
+                style={{
+                  padding: '14px 20px', backgroundColor: NEU.forest, color: NEU.gold,
+                  fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, letterSpacing: '0.08em',
+                  border: 'none', cursor: basicsSaving ? 'wait' : 'pointer',
+                  opacity: basicsSaving ? 0.7 : 1,
+                  boxShadow: '0 8px 22px rgba(27,56,40,0.22)',
+                  transition: `background-color 160ms ${EASE}`,
+                }}
+              >
+                {basicsSaving ? 'SAVING…' : 'CONTINUE'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: NEU.base ?? '#EDE7D8' }}>
