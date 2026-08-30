@@ -1734,7 +1734,11 @@ export default function SettingsPage() {
     // A save can settle while focus is still inside the panel (blur one field,
     // land on the next). Moving the panel out from under that is hostile.
     if (stepPanelRef.current && stepPanelRef.current.contains(document.activeElement)) return;
-    const next = STEPS.find(st => st.n > openStep && !stepComplete[st.n]);
+    // The step after this one, not the next unfinished one: Form is always
+    // complete, so hunting for an incomplete step left anyone finishing Fees
+    // staring at a step that had just closed itself. Finishing the last step
+    // advances to nothing, which is the end of the flow.
+    const next = STEPS[STEPS.findIndex(st => st.n === openStep) + 1];
     if (!next) return;
     setOpenStep(next.n);
   }, [activeRole, openStep, stepComplete]);
