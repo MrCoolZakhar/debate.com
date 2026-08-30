@@ -169,8 +169,12 @@ export default function TermsPage() {
               </li>
               <li>You can hold one active application per conference, and you can withdraw it at any time.</li>
               <li>
-                Your MUN CV is yours. You can choose to publish it at a public link — if you do, the entries on it become
-                visible to anyone with that link, and you can unpublish it whenever you like.
+                Your MUN CV is yours, and it is <strong>public</strong>. Every account has one, at{' '}
+                <code>gavelling.com/cv/…</code>, and anyone with that address can read it without signing in.
+                There is currently no way to make it private or unpublish it — what you control is what you
+                put on it. Delete an entry and it leaves the page straight away; delete your account and the
+                page goes with it. See section 16 of the{' '}
+                <Link href="/privacy" style={A}>Privacy Policy</Link> for exactly what a visitor sees.
               </li>
               <li>
                 Fees you pay to a conference are collected for that organiser. Payment is handled by Stripe; we never see

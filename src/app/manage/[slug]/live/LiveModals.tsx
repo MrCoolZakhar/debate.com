@@ -1,15 +1,28 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2, Megaphone, FileCheck, Radio } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
 import Portal from '@/components/Portal';
+import ProfileLink from '@/components/ProfileLink';
+import { useScrollLock } from '@/hooks/useScrollLock';
+import { useModalEscape } from '@/components/ModalOverlay';
 import Avatar from '@/components/Avatar';
 import {
   NeuInset, NeuIconDisc, NEU, NEU_GRADIENTS, type NeuGradient, OUTFIT, EASE,
 } from '@/components/neu';
+// `NEU.muted` measures 2.81:1 on this surface and no longer appears in this
+// file at all: every label, caption and sentence here is SOFT (5.55:1). The two
+// accent colours that were also carrying text are read through their inks —
+// `NEU.green` is 4.30:1 and drops to 3.86:1 inside the adopted-resolution tint,
+// so GREEN_INK carries the words and `NEU.green` survives on dots and fills
+// only, where the 3:1 non-text bar applies. See ./tokens for the full sweep.
+import { type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
+import { CommitteeScoreboardBody } from './ScoreboardTable';
+import { SOFT, GREEN_INK } from './tokens';
+import { committeeIdentity } from './identity';
 
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
 
@@ -63,6 +76,21 @@ export interface LiveCommittee {
     totalSlots: number;
     sessionId: string | null;
     sessionCode: string | null;
+    /** `conference_committees.released_to_chairs_at` — when the chairs' invite
+     *  went (or is scheduled to go) out. Read ONLY so a never-opened room can
+     *  say whether its dais has actually been told; nothing here writes it. The
+     *  committees page owns that write. */
+    releasedToChairsAt: string | null;
+    /** `conference_committees.delegation_size` — 1, or 2 for a DOUBLE
+     *  DELEGATION committee (two people share one country seat).
+     *
+     *  This is the committee-wide mirror of
+     *  `committee_country_slots.delegation_size`, and reading it rather than the
+     *  slot rows is a deliberate, measured choice: in production all 22
+     *  committees with any double slot have EVERY slot double, the two columns
+     *  never disagree, and `committee_country_slots` is 17,189 rows against 393
+     *  committees. See ./allocations for the full model. */
+    delegationSize: number;
     chairUserIds: string[];
     /** chair_user_ids resolved against profiles, falling back to the
      *  trigger-maintained display_chairs entry at the same index. */
@@ -77,29 +105,107 @@ export interface LiveCommittee {
     chairNames: string[];
     suspendedAt: string | null;
     endedAt: string | null;
+    /** `committees.updated_at`, maintained by `committees_updated_at_trigger`
+     *  (BEFORE UPDATE ON committees). Half of the STATUS axis — see
+     *  `lastActiveAt` in cardModel.ts for why it is never used on its own. */
+    updatedAt: string | null;
+    /** The one-shot resume latch (`committees.resuming_chair`). NOT the gavel —
+     *  see AGENTS.md, "resuming_chair is NOT the gavel". Read here only so a
+     *  suspended card can name who is bringing the room back, and so a latch
+     *  that was claimed and never cleared can be reported as the deadlock it is. */
+    resumingChair: string | null;
+    /** `settings.quorumThreshold` straight off the row — never via the settings
+     *  store, which is never hydrated outside the chair page (AGENTS.md rule 14).
+     *  Default 'none'; only 13 of 509 production committees set it at all. */
+    quorumThreshold: string;
     /** Enabled ranking factors + scale from committees.settings.scoring, so
      *  feedback ratings can be labelled with the chair's own factor names. */
     scoringFactors: { id: string; name: string }[];
     factorScaleMax: number;
   } | null;
   currentSpeaker: { country: string | null; timeRemaining: number; startedAt: string | null } | null;
-  delegates: { country: string; status: string }[];
+  /** `isObserver` mirrors `delegates.is_observer`. Observers sit in the room but
+   *  are NOT part of the voting body, so every present/total count on this page
+   *  excludes them — the same rule the chair console applies
+   *  (`chair/[code]/page.tsx:2620, 2627-2628`). */
+  delegates: { country: string; status: string; isObserver: boolean }[];
   gslQueue: string[];
   caucusQueue: string[];
-  pendingMotions: { type: string; topic: string }[];
-  documents: { type: string; status: string; docCode: string; title: string; sponsors: string[] }[];
-  speechLogs: { country: string; seconds: number; context: string; topic: string }[];
+  // The `motions` table is DELIBERATELY not read by this page. The cards report
+  // the stage a room is in, never what is sitting on the chair's desk, and the
+  // recap's "Motions raised" tile counts `motion-raised` ledger events in
+  // `messages` (see `motionsLogged` below) rather than motion rows — which are
+  // hard-deleted on both accept and reject and so cannot be counted anyway.
+  documents: {
+    type: string; status: string; docCode: string; title: string; sponsors: string[];
+    /** Public Supabase Storage URL, or null — 17 of 23 production rows (74%) have none. */
+    fileUrl: string | null;
+    fileName: string | null;
+    /** Inline body, used only when there is no file. Blank on 22 of 23 production rows. */
+    content: string | null;
+    createdAt: string | null;
+  }[];
+  /** ONLY `type: 'speech'` ledger rows, with the `__chair__` sentinel country
+   *  removed. `logEvent` (committeeService.ts:899-914) writes six event types
+   *  onto the same `__log__:` channel; treating all of them as speeches inflated
+   *  every count on this page by ~37%. `at` is the payload timestamp, falling
+   *  back to `messages.created_at`. */
+  speechLogs: { country: string; seconds: number; context: string; topic: string; at: string | null }[];
+  /** Every ledger row regardless of type, for counting non-speech activity. */
+  eventLogs: { country: string; type: string; at: string | null }[];
+  /** Most recent sign of life in the room, from any source we can see. Drives
+   *  the staleness guard on the voting variant — see `votingLooksLive`. */
+  lastActivityAt: string | null;
+  /** `max(messages.created_at)` over EVERY message in the room, chat included —
+   *  the other half of `GREATEST(committees.updated_at, max(messages.created_at))`.
+   *  Chat is the one kind of activity that touches neither the `committees` row
+   *  nor the ledger, so without it a room where delegates are talking but the
+   *  chair has not pressed anything reads as stalled. */
+  lastMessageAt: string | null;
+  /** True when this committee has demonstrably run before: chairs joined, a
+   *  preserved queue, documents, ledger rows or chair feedback. Separates a
+   *  resume roll call from a session that was never opened — both sit at
+   *  `phase='pre-session'` (`committeeService.ts:1097-1105`). */
+  hasHistory: boolean;
   feedback: FeedbackEntry[];
 }
 
-export type CardStatus = 'no-session' | 'not-started' | 'live' | 'suspended' | 'ended';
+/** Delegates who count toward the voting body — observers excluded, matching
+ *  the chair console exactly. */
+export function votingBody(lc: LiveCommittee): LiveCommittee['delegates'] {
+  return lc.delegates.filter((d) => !d.isObserver);
+}
+
+/** `{ present, total }` over the voting body, the chair's own numbers. */
+export function presence(lc: LiveCommittee): { present: number; total: number } {
+  const body = votingBody(lc);
+  return { present: body.filter((d) => d.status !== 'absent').length, total: body.length };
+}
+
+/** `not-started` = never opened. `roll-call` = opened, initial roll call underway.
+ *  `resumed` = ran before and is doing its roll call after a break. The last two
+ *  are live rooms and must NOT get the dead "Session not in progress yet"
+ *  placeholder — a resumed committee still holds its GSL, documents and chat. */
+export type CardStatus =
+  | 'no-session' | 'not-started' | 'roll-call' | 'resumed' | 'live' | 'suspended' | 'ended';
 
 export function cardStatus(lc: LiveCommittee): CardStatus {
   if (!lc.session) return 'no-session';
   if (lc.session.endedAt) return 'ended';
   if (lc.session.phase === 'adjourned') return 'suspended';
-  if (lc.session.phase === 'pre-session' || lc.session.phase === 'roll-call') return 'not-started';
+  if (lc.session.phase === 'pre-session' || lc.session.phase === 'roll-call') {
+    // A resume roll call is indistinguishable from a first roll call by phase
+    // alone, so the room's own history is what separates them.
+    if (lc.hasHistory) return 'resumed';
+    if ((lc.session.chairNames?.length ?? 0) > 0) return 'roll-call';
+    return 'not-started';
+  }
   return 'live';
+}
+
+/** The three statuses that mean "a room is actually doing something right now". */
+export function isOnTheFloor(s: CardStatus): boolean {
+  return s === 'live' || s === 'roll-call' || s === 'resumed';
 }
 
 export const PHASE_LABELS: Record<string, string> = {
@@ -117,6 +223,18 @@ export function fmtClock(totalSeconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** "1h 12m" / "4m 20s" / "0m". Mirrors `formatSpeakingTime` in
+ *  `conferenceScoreboard.ts` so the recap and the scoreboard read alike. */
+export function fmtSpeakingTotal(totalSeconds: number): string {
+  if (totalSeconds <= 0) return '0m';
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const sec = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
 export function flagCodeFor(name: string): string {
   return getCountryByName(name)?.code ?? '';
 }
@@ -124,6 +242,13 @@ export function flagCodeFor(name: string): string {
 // Score formula replicated from SettingsPanel.tsx computeScore:
 // attendance 5 if not absent; WP sponsor ×10; DR sponsor ×20;
 // speaking floor(totalSeconds/10); GSL speeches ×10; caucus speeches ×8.
+//
+// This used to be correct only by accident: it was handed EVERY ledger event and
+// leaned on `context` being absent on the non-speech ones (`motion-raised` and
+// `right-of-reply` pass neither `context` nor `seconds` — MotionsModal.tsx:1234,
+// chair/[code]/page.tsx:3965), so they scored zero rather than being excluded.
+// `lc.speechLogs` is now speech-only at the source, so the filters below are
+// load-bearing on purpose instead of by luck.
 export function computeScores(lc: LiveCommittee): { country: string; total: number }[] {
   return lc.delegates.map((d) => {
     const attendancePoints = d.status !== 'absent' ? 5 : 0;
@@ -143,53 +268,331 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <p
       className="text-[11px] font-bold uppercase"
-      style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em' }}
+      style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em' }}
     >
       {children}
     </p>
   );
 }
 
-function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+/** Exported so the per-committee scoreboard and the scoped broadcast composer
+ *  open in the SAME shell as the recap, roster and awards modals rather than
+ *  each growing their own. `maxWidth` widens it for the scoreboard's table.
+ *
+ *  `rail` is the bookmark strip — see `ModalRail` below. It is rendered OUTSIDE
+ *  the scrolling card on purpose. */
+export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
+  children: React.ReactNode;
+  onClose: () => void;
+  maxWidth?: number;
+  /** Tabs pinned to the modal's edge. MUST NOT scroll with the body and MUST
+   *  NOT be clipped by it, so it is a SIBLING of the scroll container rather
+   *  than a child — see the layout note in the body. */
+  rail?: (side: boolean) => React.ReactNode;
+}) {
+  /* The page behind a dialog must not scroll, and Escape must dismiss it.
+     Both come from the shared implementations rather than being hand-rolled
+     here: the lock is reference counted (a confirm stacked on this must not
+     release it when IT closes), and the Escape stack is shared with
+     ModalOverlay so one keypress reaches the top-most dialog only, whichever
+     component drew it.
+
+     This keeps its own backdrop markup rather than delegating to ModalOverlay:
+     that component wraps its children in an auto-width div, which would break
+     the `w-full` + maxWidth sizing the card below relies on. */
+  useScrollLock(true);
+  useModalEscape(onClose);
+
+  // The narrow bookmark strip is ONE scrolling row, so the tab you are on can
+  // be off-screen. Bring it back whenever the active bookmark CHANGES.
+  //
+  // Deliberately not `scrollIntoView`: it scrolls ancestors as well as the
+  // strip, and inside a portaled, scroll-locked dialog it under-scrolled (the
+  // active tab was left half under the fade). This scrolls the one element that
+  // should move, by exactly the amount needed, keeping the tab clear of the
+  // 22px fade at either end.
+  //
+  // No dependency array — `rail` is a fresh closure every render, so a dep on
+  // it would fire this on every render regardless. The `lastActive` guard is
+  // what makes it act once per tab change instead.
+  const topRailRef = useRef<HTMLDivElement | null>(null);
+  const lastActiveTabRef = useRef<string | null>(null);
+  useEffect(() => {
+    const el = topRailRef.current;
+    if (!el) return;
+    const active = el.querySelector<HTMLElement>('[aria-current="page"]');
+    const key = active?.textContent ?? null;
+    if (key === lastActiveTabRef.current) return;
+    lastActiveTabRef.current = key;
+    if (!active) return;
+    const a = active.getBoundingClientRect();
+    const c = el.getBoundingClientRect();
+    const PAD = 26;
+    // Assigning `scrollLeft` rather than `scrollBy({behavior:'smooth'})`:
+    // measured, the smooth form is a NO-OP on this element (the dialog's scroll
+    // lock is in force and the environment may be honouring reduced motion),
+    // while the instant form works. A tab strip that jumps to the right place
+    // beats one that animates nowhere.
+    if (a.right > c.right - PAD) el.scrollLeft += a.right - c.right + PAD;
+    else if (a.left < c.left + 6) el.scrollLeft += a.left - c.left - 6;
+  });
+
   // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
   // content wrapper and covers the header/sidebar too.
   return (
     <Portal>
+      {/* `lg:pe-[156px]` when there is a side rail, and it is a bug fix.
+          The rail hangs 148px PAST the card's inline end, but only the CARD was
+          centred — so at 1024px (the width the side rail switches on at) the
+          card's right edge landed at 892 and the rail's at 1040, 16px off the
+          screen. Reserving the rail's width as end padding centres the pair
+          instead of the card, which is what "tucked under the card's edge"
+          means once the tabs are part of the object. */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
+        className={`fixed inset-0 z-50 flex items-center justify-center px-3 py-5 sm:px-4 sm:py-8${rail ? ' lg:pe-[156px]' : ''}`}
         style={{ backgroundColor: 'rgba(27,20,16,0.42)' }}
         onClick={onClose}
       >
+        {/* THE POSITIONING SHELL, and the reason the rail cannot be inside the
+            card. The card is the scroll container (`overflow-y: auto`), so a
+            rail rendered as its child would scroll away with the body — and the
+            card is also rounded, so an absolutely positioned rail inside it
+            would be clipped at the corner. AGENTS.md forbids both. The rail is
+            therefore a SIBLING, anchored to this wrapper.
+
+            BELOW `lg` (1024px) THE RAIL IS NOT A SIDE RAIL AT ALL. There is not
+            enough room beside a 672–760px card on a narrow screen — the tabs
+            would be pushed off-screen or over the backdrop's edge — so the
+            bookmarks come off the TOP of the card instead.
+
+            IT IS ONE ROW, AND IT SCROLLS. It used to be `flex-wrap`, which at
+            375px measured 106px tall — three rows of six pills stacked above a
+            card whose own max-height still assumed one. That is the thing the
+            owner is looking at when he says the bookmarks are wrong. A wrapping
+            strip also has no stable height, so `max-h` could not be right for
+            both a three-row and a one-row case, and the card ran off the bottom
+            of the screen.
+
+            So: `flex-nowrap` + `overflow-x: auto`, one fixed row of 46px
+            bookmarks, tucked 12px under the card's top edge exactly as the side
+            rail tucks under its inline edge — same object, same bookmark reading, rotated. The
+            active tab is scrolled into view on mount and on change, so the tab
+            you are on is never the one off-screen. */}
         <div
-          className="w-full max-w-2xl rounded-[22px] p-8 relative overflow-y-auto"
-          style={{ backgroundColor: NEU.surface, boxShadow: NEU.out, maxHeight: 'calc(100vh - 64px)', fontFamily: OUTFIT }}
+          className="w-full relative flex flex-col min-h-0"
+          style={{ maxWidth }}
           onClick={(e) => e.stopPropagation()}
+        >
+          {rail && (
+            <>
+              <div
+                ref={topRailRef}
+                className="lg:hidden flex flex-nowrap items-end overflow-x-auto flex-shrink-0"
+                style={{
+                  // -12 rather than -10: the card must cover the strip's own
+                  // 6px horizontal scrollbar (globals.css styles it visibly and
+                  // is a shared file this change does not touch) as well as the
+                  // bookmarks' square bottom edge.
+                  gap: 4, zIndex: 0, marginBlockEnd: -12,
+                  scrollbarWidth: 'none', msOverflowStyle: 'none',
+                  // The strip runs to the card's edges, but the last bookmark
+                  // must not sit flush against the rounded corner — and the
+                  // fade tells a reader there is more strip to scroll to.
+                  paddingInlineEnd: 14,
+                  WebkitMaskImage: 'linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%)',
+                  maskImage: 'linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%)',
+                }}
+              >
+                {rail(false)}
+              </div>
+              <div
+                className="hidden lg:flex flex-col"
+                style={{
+                  position: 'absolute', insetInlineStart: '100%', insetBlockStart: 26,
+                  gap: 6, zIndex: 0, marginInlineStart: -10,
+                }}
+              >
+                {rail(true)}
+              </div>
+            </>
+          )}
+        <div
+          className={`w-full rounded-[22px] p-5 sm:p-7 lg:p-8 relative overflow-y-auto${rail ? ' max-h-[calc(100vh-94px)] sm:max-h-[calc(100vh-118px)] lg:max-h-[calc(100vh-64px)]' : ''}`}
+          style={{
+            backgroundColor: NEU.surface, boxShadow: NEU.out, fontFamily: OUTFIT,
+            // The card paints ON TOP of the rail, so the tabs read as bookmarks
+            // tucked behind its edge rather than as buttons floating beside it.
+            zIndex: 1,
+            ...(rail ? {} : { maxHeight: 'calc(100vh - 64px)' }),
+          }}
         >
           <button
             onClick={onClose}
             className="absolute top-5 right-5 inline-flex items-center justify-center rounded-full focus:outline-none"
-            style={{ width: 32, height: 32, color: NEU.muted, backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}`, cursor: 'pointer' }}
+            style={{ width: 32, height: 32, color: SOFT, backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}`, cursor: 'pointer' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; (e.currentTarget as HTMLElement).style.color = NEU.ink; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; (e.currentTarget as HTMLElement).style.color = SOFT; }}
             aria-label="Close"
           >
             <X size={16} />
           </button>
           {children}
         </div>
+        </div>
       </div>
     </Portal>
   );
 }
 
-function StatTile({ icon: Icon, emoji, gradient, value, label }: { icon: LucideIcon; emoji: string; gradient: NeuGradient; value: string; label: string }) {
+/** ONE BOOKMARK on the rail.
+ *
+ *  A real `<button>` in both orientations — the rail is keyboard-reachable and
+ *  the tabs are in DOM order, which is why the narrow strip can be the same
+ *  component rotated into a row rather than a second implementation.
+ *
+ *  BOTH orientations are the same bookmark shape — square on the edge that
+ *  meets the card, rounded on the outside, tucked 10px under the card by the
+ *  rail's own negative margin so the two read as one object. `side` puts that
+ *  edge on the inline start; the narrow variant puts it on the bottom.
+ *
+ *  The narrow variant used to be a free-floating pill, which is what let the
+ *  strip wrap into three rows of tabs hovering over a card they had no visible
+ *  relationship to. It is now 46px tall — a real touch target, measured up
+ *  from 31 — and physically attached to the card's top edge.
+ *
+ *  COLOUR: the label is `NEU.forest` (10.73:1) when active and `SOFT` (5.55:1)
+ *  when not. Neither is `NEU.muted`, which is 2.81:1 and decoration only. */
+export function RailTab({
+  icon: Icon, label, count, active, side, onClick, title,
+}: {
+  icon: LucideIcon;
+  label: string;
+  /** Rendered as a small tabular figure after the label. Omit for an action. */
+  count?: number;
+  active?: boolean;
+  side: boolean;
+  onClick: () => void;
+  title?: string;
+}) {
+  const ink = active ? NEU.forest : SOFT;
   return (
-    <NeuInset className="flex items-center gap-3" style={{ padding: '13px 14px', borderRadius: 14 }}>
-      <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={36} />
-      <div className="min-w-0">
-        <p className="font-black text-xl leading-none" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
-        <p className="text-[11px] font-medium mt-1 truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{label}</p>
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-current={active ? 'page' : undefined}
+      className="inline-flex items-center gap-2 focus:outline-none"
+      style={{
+        border: 'none', cursor: 'pointer', fontFamily: OUTFIT,
+        fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: ink,
+        backgroundColor: active ? NEU.surface : NEU.base,
+        boxShadow: active
+          ? (side
+              ? '6px 4px 12px rgba(27,56,40,0.16), -2px -2px 6px rgba(255,255,255,0.7)'
+              : '4px 6px 12px rgba(27,56,40,0.16), -2px -2px 6px rgba(255,255,255,0.7)')
+          : NEU.outSm,
+        ...(side
+          ? {
+              borderRadius: '0 12px 12px 0',
+              padding: '9px 12px 9px 16px',
+              width: 158, justifyContent: 'flex-start',
+              transform: active ? 'translateX(3px)' : 'translateX(0)',
+            }
+          : {
+              // Bookmark, not pill: rounded on top, square where it meets the
+              // card. 44px tall INCLUDING the 10px that is tucked under the
+              // card, so the visible tab is 34px and the touch target is 44.
+              borderRadius: '12px 12px 0 0',
+              padding: '11px 13px 22px 13px',
+              minHeight: 46, flexShrink: 0, whiteSpace: 'nowrap',
+              transform: active ? 'translateY(3px)' : 'translateY(0)',
+            }),
+        transitionProperty: 'transform, box-shadow, background-color, color',
+        transitionDuration: '200ms', transitionTimingFunction: EASE,
+      }}
+    >
+      <Icon size={13} style={{ flexShrink: 0, color: ink }} />
+      <span className="min-w-0" style={{ overflowWrap: side ? 'anywhere' : 'normal' }}>{label}</span>
+      {typeof count === 'number' && count > 0 && (
+        <span
+          style={{
+            marginInlineStart: 'auto', fontSize: 10.5, fontWeight: 800,
+            fontVariantNumeric: 'tabular-nums', color: SOFT, flexShrink: 0,
+          }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function StatTile({ icon: Icon, emoji, gradient, value, label, onClick, title }: {
+  icon: LucideIcon; emoji: string; gradient: NeuGradient; value: string; label: string;
+  onClick?: () => void;
+  /** The caveat this figure carries, if it carries one.
+   *
+   *  These used to be a paragraph printed under the tile grid — "Speeches counts
+   *  logged speeches only… Motions raised counts motions a chair accepted…" —
+   *  which the owner asked to remove. The caveats are true and are not dropped;
+   *  they moved here, onto the number they qualify, where a reader who wonders
+   *  can get them and a reader who does not is not made to read them. A native
+   *  `title` is the right affordance for a one-line explainer (AGENTS.md, UI
+   *  RULES: informational hints reveal on hover, never on click) and cannot be
+   *  clipped by the modal's own scroll container. */
+  title?: string;
+}) {
+  // THE TILE STACKS BELOW `sm`, AND THAT IS THE FIX, NOT A PREFERENCE.
+  //
+  // Measured at 375px: the grid is two columns, so a tile is 133px wide. Take
+  // its 28px of padding, the 36px disc and the 12px gap and the text column is
+  // left with 55px. "Total speaking time" needs 102px and was `truncate`d to
+  // "Total spea…"; worse, the VALUE was truncated too — `9/11` needs 38px and
+  // had 7, so the headline figure on the Delegates-present tile rendered as a
+  // sliver. That is a large part of "scores seem broken" on a phone.
+  //
+  // Below `sm` the disc sits ABOVE the figure instead of beside it, which hands
+  // the full 105px to both lines, and the label wraps rather than truncating.
+  const body = (
+    <>
+      <span className="flex-shrink-0 hidden sm:inline-flex">
+        <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={36} />
+      </span>
+      <span className="flex-shrink-0 inline-flex sm:hidden">
+        <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={26} />
+      </span>
+      <div className="min-w-0 text-left">
+        <p className="font-black text-lg sm:text-xl leading-none" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+        <p className="text-[11px] font-semibold mt-1 leading-tight" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>{label}</p>
       </div>
+    </>
+  );
+  // A tile that leads somewhere says so by behaving like a control; the rest
+  // stay inert insets.
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3 w-full focus:outline-none"
+        style={{
+          backgroundColor: NEU.base, borderRadius: 14, padding: '11px 12px',
+          boxShadow: NEU.inSm, border: 'none', cursor: 'pointer',
+          transition: `box-shadow 200ms ${EASE}`,
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = `inset 2px 2px 6px rgba(27,56,40,0.18), inset -2px -2px 6px rgba(255,255,255,0.85)`; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.inSm; }}
+        title={title ?? 'Open this section'}
+      >
+        {body}
+      </button>
+    );
+  }
+  return (
+    <NeuInset className="flex items-center gap-3" style={{ padding: '11px 12px', borderRadius: 14 }}>
+      {/* The caveat rides on a wrapper rather than on `NeuInset`, which takes no
+          `title` — and `neu.tsx` is a shared surface another workstream is
+          editing, so it is not widened for this. */}
+      <span title={title} className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3 w-full min-w-0">{body}</span>
     </NeuInset>
   );
 }
@@ -281,7 +684,7 @@ function FeedbackEmpty({ committeeLabel }: { committeeLabel: string }) {
         <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
           Nothing written on {committeeLabel} yet
         </p>
-        <p className="text-xs mt-1" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.5 }}>
+        <p className="text-xs mt-1" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5 }}>
           Co-chairs rate each speech and leave private notes from the feedback dock in their console.
           Ratings and notes land here the moment they are saved — no action needed from you.
         </p>
@@ -300,7 +703,7 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
   const factorName = (id: string) => factors.find((f) => f.id === id)?.name ?? id;
   const totalNotes = data.feedback.filter((f) => f.content.trim().length > 0).length;
   const totalRated = data.feedback.filter((f) => Object.keys(f.factorScores ?? {}).length > 0).length;
-  const label = data.conf.abbreviation ?? data.conf.name;
+  const label = committeeIdentity(data.conf).title;
 
   return (
     <div className="mb-6">
@@ -331,26 +734,33 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
               <NeuInset key={cf.country} style={{ borderRadius: 14, overflow: 'hidden' }}>
                 <button
                   onClick={() => setExpanded(isOpen ? null : cf.country)}
-                  className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT }}
+                  className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left focus:outline-none"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT, minHeight: 48 }}
                 >
                   <FlagImg code={flagCodeFor(cf.country)} size={20} />
-                  <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{cf.country}</span>
+                  {/* THE ROW WRAPS BELOW `sm` INSTEAD OF CRUSHING THE NAME.
+                      Flag, rating pill, speech count and chevron are all
+                      `flex-shrink-0`, so at 375px the delegation had 101px and
+                      "United Kingdom" truncated. A 140px basis makes the trailing
+                      controls drop to a second line — right-aligned by the pill's
+                      own auto margin — rather than eating the one thing the row
+                      exists to name. */}
+                  <span className="text-sm font-bold flex-1 basis-[140px] truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{cf.country}</span>
                   {cf.headline !== null && (
                     <span
-                      className="text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0"
+                      className="text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0 ms-auto"
                       style={{ color: NEU.forest, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
                       title={`Mean of every factor rating this delegation has received, out of ${scaleMax}`}
                     >
                       {Math.round(cf.headline)}/{scaleMax}
                     </span>
                   )}
-                  <span className="text-[11px] flex-shrink-0" style={{ color: NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                  <span className="text-[11px] flex-shrink-0" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
                     {cf.entries.length} {cf.entries.length === 1 ? 'speech' : 'speeches'}
                   </span>
                   <ChevronDown
                     size={16}
-                    style={{ color: NEU.muted, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform 200ms ${EASE}` }}
+                    style={{ color: SOFT, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform 200ms ${EASE}` }}
                   />
                 </button>
 
@@ -365,7 +775,7 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
                           return (
                             <div key={f.id}>
                               <div className="flex items-baseline justify-between gap-2">
-                                <span className="text-[10px] font-bold uppercase truncate" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>{f.name}</span>
+                                <span className="text-[10px] font-bold uppercase truncate" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>{f.name}</span>
                                 <span className="text-xs font-black flex-shrink-0" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{Math.round(v)}</span>
                               </div>
                               <div className="w-full overflow-hidden mt-1" style={{ height: 6, borderRadius: 6, backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
@@ -380,7 +790,7 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
                     {/* Written notes. Most rows are ratings only, so say so. */}
                     <div className="mt-3">
                       {cf.notes.length === 0 ? (
-                        <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                        <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
                           Rated, but the dais left no written note for this delegation yet.
                         </p>
                       ) : (
@@ -393,10 +803,10 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
                                 className="flex items-start gap-2 rounded-xl px-3 py-2"
                                 style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
                               >
-                                <MessageSquareText size={12} style={{ flexShrink: 0, marginBlockStart: 3, color: NEU.muted }} />
+                                <MessageSquareText size={12} style={{ flexShrink: 0, marginBlockStart: 3, color: SOFT }} />
                                 <div className="min-w-0">
                                   <p className="text-xs" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.5 }}>{n.content}</p>
-                                  <p className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+                                  <p className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: SOFT, fontFamily: OUTFIT }}>
                                     <span className="font-bold">{n.chairName || 'Chair'}</span>
                                     <span>· {timeAgo(n.createdAt)}</span>
                                     {ctx && <span>· {ctx}</span>}
@@ -422,17 +832,341 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
   );
 }
 
+// ── Documents recap ─────────────────────────────────────────────────────────
+
+/** Pipeline order, matching DocumentsModal: submitted → on-floor → introduced →
+ *  passed/failed. Anything unrecognised falls to the end under its own name. */
+const DOC_STATUS_ORDER = ['introduced', 'on-floor', 'submitted', 'passed', 'failed'];
+const DOC_STATUS_LABELS: Record<string, string> = {
+  'submitted': 'Submitted',
+  'on-floor': 'On the floor',
+  'introduced': 'Introduced',
+  'passed': 'Passed',
+  'failed': 'Failed',
+};
+
+export type DocFilter = 'all' | 'working-paper' | 'draft-resolution';
+
+/** Working papers and draft resolutions the room has produced.
+ *
+ *  MOST DOCUMENTS HAVE NO BODY TO SHOW. Measured in production: of 23 documents,
+ *  17 (74%) have a null `file_url`, 22 have blank `content`, and 16 have NEITHER
+ *  — a chair typically tables a paper by title and sponsors alone. So "nothing
+ *  attached" is the ordinary case here, not a failure, and it is worded as a
+ *  plain statement rather than an error. */
+function DocumentsRecap({
+  data, filter = 'all', onFilter,
+}: {
+  data: LiveCommittee;
+  /** Set by the WP / DR stat tiles above (and by the WP / DR chips on the
+   *  card), which scroll here and narrow to one type rather than dropping the
+   *  reader at the top of a mixed list. */
+  filter?: DocFilter;
+  onFilter?: (f: DocFilter) => void;
+}) {
+  const all = data.documents;
+  if (all.length === 0) {
+    return (
+      <div className="mb-6">
+        <Eyebrow>Documents</Eyebrow>
+        <p className="text-sm mt-2" style={{ color: SOFT, fontFamily: OUTFIT }}>
+          No working papers or draft resolutions submitted yet.
+        </p>
+      </div>
+    );
+  }
+
+  const docs = filter === 'all' ? all : all.filter((d) => d.type === filter);
+
+  // A PASSED DRAFT RESOLUTION IS THE OUTCOME OF THE WHOLE COMMITTEE. It is
+  // lifted out of the pipeline list and given the top of the section, with its
+  // file openable, rather than sitting as one more row under a "Passed" heading.
+  const passedDrs = all.filter((d) => d.type === 'draft-resolution' && d.status === 'passed');
+
+  const wpCount = all.filter((d) => d.type === 'working-paper').length;
+  const drCount = all.length - wpCount;
+  const TABS: { key: DocFilter; label: string; n: number }[] = [
+    { key: 'all', label: 'All', n: all.length },
+    { key: 'working-paper', label: 'Working papers', n: wpCount },
+    { key: 'draft-resolution', label: 'Draft resolutions', n: drCount },
+  ];
+
+  const statuses = Array.from(new Set(docs.map((d) => d.status)))
+    .sort((a, b) => {
+      const ai = DOC_STATUS_ORDER.indexOf(a); const bi = DOC_STATUS_ORDER.indexOf(b);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+
+  return (
+    <div className="mb-6">
+      <Eyebrow>Documents</Eyebrow>
+
+      {/* The verdict first. */}
+      {passedDrs.length > 0 && (
+        <div className="mt-2 mb-3 flex flex-col gap-2">
+          {passedDrs.map((d, i) => (
+            <div
+              key={`passed-${d.docCode}-${i}`}
+              className="flex items-start gap-3"
+              style={{
+                backgroundColor: 'rgba(61,122,82,0.09)',
+                border: `1px solid rgba(61,122,82,0.30)`,
+                borderRadius: 16, padding: '13px 15px',
+              }}
+            >
+              <FileCheck size={18} style={{ color: GREEN_INK, flexShrink: 0, marginBlockStart: 1 }} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-extrabold uppercase" style={{ color: GREEN_INK, fontFamily: OUTFIT, letterSpacing: '0.1em' }}>
+                  Adopted by the committee
+                </p>
+                <p className="text-base font-extrabold" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.2 }}>
+                  {d.docCode ? `${d.docCode} · ` : ''}{d.title || 'Draft resolution'}
+                </p>
+                {d.sponsors.length > 0 && (
+                  <p className="text-[11px] mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                    Sponsored by {d.sponsors.slice(0, 4).join(', ')}
+                    {d.sponsors.length > 4 && ` +${d.sponsors.length - 4}`}
+                  </p>
+                )}
+                {d.fileUrl ? (
+                  <a
+                    href={d.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold mt-2 rounded-full px-3 py-1.5"
+                    style={{ color: NEU.gold, backgroundColor: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
+                  >
+                    <ExternalLink size={12} />
+                    {d.fileName || 'Open the adopted text'}
+                  </a>
+                ) : (
+                  <p className="text-[11px] mt-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                    {(d.content ?? '').trim()
+                      ? 'Text is below.'
+                      : 'No file was uploaded with this resolution — the chair recorded it by title and sponsors.'}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Type filter, driven by the WP / DR tiles as well as by clicking here. */}
+      {onFilter && all.length > 1 && (
+        <div className="flex items-center gap-1.5 mt-2 mb-1 flex-wrap">
+          {TABS.filter((t) => t.n > 0 || t.key === 'all').map((t) => (
+            <button
+              key={t.key}
+              onClick={() => onFilter(t.key)}
+              className="text-[11px] font-bold rounded-full px-2.5 py-1 focus:outline-none"
+              style={{
+                fontFamily: OUTFIT, border: 'none', cursor: 'pointer',
+                color: filter === t.key ? NEU.ink : SOFT,
+                backgroundColor: filter === t.key ? NEU.base : NEU.surface,
+                boxShadow: filter === t.key ? NEU.inSm : NEU.outSm,
+                transition: `box-shadow 200ms ${EASE}`,
+              }}
+              aria-pressed={filter === t.key}
+            >
+              {t.label} · {t.n}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-col gap-3">
+        {statuses.map((status) => {
+          const group = docs.filter((d) => d.status === status);
+          return (
+            <div key={status}>
+              <p className="text-[10px] font-bold uppercase mb-1.5" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
+                {DOC_STATUS_LABELS[status] ?? status} · {group.length}
+              </p>
+              <div className="flex flex-col gap-2">
+                {group.map((d, i) => {
+                  const isDR = d.type === 'draft-resolution';
+                  const Icon = isDR ? ScrollText : FileText;
+                  const body = (d.content ?? '').trim();
+                  return (
+                    <NeuInset key={`${d.docCode}-${d.title}-${i}`} style={{ padding: '11px 13px', borderRadius: 14 }}>
+                      <div className="flex items-start gap-2.5">
+                        <Icon size={14} style={{ color: NEU.forest, flexShrink: 0, marginBlockStart: 2 }} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                            {d.docCode ? `${d.docCode} · ` : ''}{d.title || (isDR ? 'Draft resolution' : 'Working paper')}
+                          </p>
+                          {d.sponsors.length > 0 && (
+                            <p className="text-[11px] mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                              Sponsored by {d.sponsors.slice(0, 4).join(', ')}
+                              {d.sponsors.length > 4 && ` +${d.sponsors.length - 4}`}
+                            </p>
+                          )}
+
+                          {/* A file wins over an inline body; the chair console
+                              renders the same `file_url` in its PDF viewer. */}
+                          {d.fileUrl ? (
+                            <a
+                              href={d.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-[11px] font-bold mt-1.5"
+                              style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
+                            >
+                              <ExternalLink size={11} />
+                              {d.fileName || 'Open document'}
+                            </a>
+                          ) : body ? (
+                            <p
+                              className="text-xs mt-1.5 whitespace-pre-wrap"
+                              style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.5, maxHeight: 160, overflowY: 'auto' }}
+                            >
+                              {body}
+                            </p>
+                          ) : (
+                            /* 17 of 23 production documents (74%) carry no
+                               file and 22 of 23 carry no body, so "nothing
+                               attached" is the ORDINARY case here. It is worded
+                               as a plain fact, never as an error. */
+                            <p className="text-[11px] mt-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                              Tabled by title and sponsors — no file or text attached.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </NeuInset>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Recap modal ─────────────────────────────────────────────────────────────
 
-export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: () => void }) {
-  const session = data.session;
-  const phaseLabel = session ? (PHASE_LABELS[session.phase] ?? session.phase) : 'No session';
+export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'feedback' | 'attendance';
 
+/** THE RECAP IS NO LONGER ONE LONG SCROLL.
+ *
+ *  The owner: "opening the committee for the session recap looks messy… I'm
+ *  just cleaning up so it's not that big and scrollable. Add a 'side tab' kinda
+ *  like a bookmark attached to the session recap that opens the documents as
+ *  well as the full scoreboard and chair feedback, and also delegate
+ *  attendance. Add also the broadcast tool into here. Make sure these always
+ *  stay there attached to the status."
+ *
+ *  So the five sections that used to be stacked in one column are five panels
+ *  behind a bookmark rail, and NOT ONE OF THEM WAS REBUILT:
+ *
+ *    Documents   → `DocumentsRecap`            (unchanged, same type filter)
+ *    Scoreboard  → `CommitteeScoreboardBody`   (the exact body the standalone
+ *                                               Points modal renders)
+ *    Feedback    → `FeedbackRecap`             (unchanged)
+ *    Attendance  → `RosterBody`                (the exact body `RosterModal`
+ *                                               renders)
+ *    Broadcast   → `BroadcastComposer`, via `onBroadcast`
+ *
+ *  BROADCAST IS AN ACTION TAB, not a panel, and that is deliberate:
+ *  `BroadcastComposer` is its own portalled full-screen dialog with its own
+ *  backdrop and its own send/confirm flow. Rendering it inside a panel would
+ *  mean rebuilding it, which is exactly what the owner asked not to happen, so
+ *  the tab hands off to the real composer — the same handoff the "MESSAGE THIS
+ *  COMMITTEE" button used to make from the bottom of the scroll.
+ *
+ *  The rail is rendered by `ModalShell` OUTSIDE the scrolling card, so it can
+ *  neither be clipped by the card's rounded overflow nor scroll away from the
+ *  status it is attached to. Below `lg` it becomes a horizontal strip above the
+ *  card — see the layout note in `ModalShell`. Scroll lock and the shared
+ *  Escape stack are untouched; they still come from `ModalShell`. */
+export function RecapModal({
+  data, onClose, onOpenScoreboard, onBroadcast, floorDetail = null, initialDocFilter = 'all',
+  scoreboard = null, scoreboardLoading = false, scoreboardError = '', onWantScoreboard,
+  conferenceSlug,
+}: {
+  data: LiveCommittee;
+  onClose: () => void;
+  /** Set when the recap was opened by a WP or DR chip on the card rather than by
+   *  the card body. The modal then opens ON the Documents tab, already narrowed
+   *  to that type.
+   *
+   *  This replaces a scroll-into-view dance that had to be done from a ref
+   *  callback because `Portal` commits nothing on its first pass. With tabs
+   *  there is nothing to scroll to: the section the reader asked for is the only
+   *  one rendered. */
+  initialDocFilter?: DocFilter;
+  /** The phase-specific body (caucus clock, ballot breakdown, unmod countdown).
+   *  Passed IN rather than imported, because `PhaseVariants` already imports
+   *  this module and reaching back the other way would make the pair circular. */
+  floorDetail?: React.ReactNode;
+  /** Points → the standalone scoreboard modal. Still reachable, for a reader who
+   *  wants it at its own full width. */
+  onOpenScoreboard: (d: LiveCommittee) => void;
+  /** Broadcast scoped to THIS room. Absent when the committee has no session to
+   *  address. */
+  onBroadcast: ((d: LiveCommittee) => void) | null;
+  /** The whole-conference scoreboard, loaded lazily and once by the page. Null
+   *  until the reader opens a Points view — which is what `onWantScoreboard`
+   *  tells the page has happened. */
+  scoreboard?: ConferenceScoreboard | null;
+  scoreboardLoading?: boolean;
+  scoreboardError?: string;
+  onWantScoreboard?: () => void;
+  conferenceSlug: string;
+}) {
+  const session = data.session;
+  // `phase` is left at whatever the room was last doing when it was gavelled out
+  // or suspended, so it must not be shown for either — an adjourned committee
+  // badged "General Speakers' List" reads as still sitting. Same rule as
+  // `phaseChip` on the card; kept inline because cardModel imports this module.
+  const phaseLabel = !session
+    ? 'No session'
+    : session.endedAt
+      ? 'Adjourned'
+      : session.phase === 'adjourned'
+        ? 'Suspended'
+        : (PHASE_LABELS[session.phase] ?? session.phase);
+  const ident = committeeIdentity(data.conf);
+
+  const [tab, setTab] = useState<RecapTab>(initialDocFilter === 'all' ? 'overview' : 'documents');
+  const [docFilter, setDocFilter] = useState<DocFilter>(initialDocFilter);
+
+  function openDocs(type: DocFilter) {
+    setDocFilter(type);
+    setTab('documents');
+  }
+  function openScoreboardTab() {
+    // The page loads the conference scoreboard lazily and once; this is what
+    // tells it a reader has asked for it. Calling it from the click rather than
+    // from an effect keeps it to exactly one call per press.
+    onWantScoreboard?.();
+    setTab('scoreboard');
+  }
+
+  // Speech-only: `speechLogs` no longer carries motions, rights of reply or
+  // manual point adjustments, so this tile stops over-reporting.
   const speeches = data.speechLogs.length;
-  const motionsPending = data.pendingMotions.length;
+
+  // MOTIONS RAISED, from the ledger — replacing "Motions pending", which the
+  // owner asked to drop.
+  //
+  // It is NOT derivable from the `motions` table: rows there are hard-deleted on
+  // BOTH accept and reject (`committeeService.ts:683, 688, 846, 851, 884`), which
+  // is why that whole table holds about five rows platform-wide. `motion-raised`
+  // ledger events survive — 95 of them in production.
+  const motionsLogged = data.eventLogs.filter((e) => e.type === 'motion-raised').length;
+
+  // TOTAL SPEAKING TIME — fully derivable, no caveat needed. All 333 production
+  // speech rows carry their own `seconds`.
+  const totalSpeakingSeconds = data.speechLogs.reduce((sum, l) => sum + (l.seconds || 0), 0);
+
   const wps = data.documents.filter((d) => d.type === 'working-paper').length;
   const drs = data.documents.filter((d) => d.type === 'draft-resolution').length;
-  const present = data.delegates.filter((d) => d.status !== 'absent').length;
+  const { present, total: votingTotal } = presence(data);
+  const observers = data.delegates.filter((d) => d.isObserver).length;
 
   const scores = computeScores(data).sort((a, b) => b.total - a.total);
   const top = scores[0];
@@ -444,16 +1178,53 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
     window.open(`/chair/${session.code}?chairName=Secretariat`, '_blank');
   }
 
+  const rail = (side: boolean) => (
+    <>
+      <RailTab
+        side={side} icon={Radio} label="Overview" active={tab === 'overview'}
+        onClick={() => setTab('overview')}
+        title="What this room has done — speeches, time, motions, top and quietest delegation"
+      />
+      <RailTab
+        side={side} icon={FileText} label="Documents" count={data.documents.length}
+        active={tab === 'documents'} onClick={() => openDocs('all')}
+        title="Working papers and draft resolutions, grouped by where they are in the pipeline"
+      />
+      <RailTab
+        side={side} icon={Trophy} label="Scoreboard" active={tab === 'scoreboard'}
+        onClick={openScoreboardTab}
+        title="The full delegate performance table — the same one the chairs score from"
+      />
+      <RailTab
+        side={side} icon={MessageSquareText} label="Chair feedback" count={data.feedback.length}
+        active={tab === 'feedback'} onClick={() => setTab('feedback')}
+        title="Ratings and private notes the dais has written, per delegation"
+      />
+      <RailTab
+        side={side} icon={Users} label="Attendance" count={votingTotal}
+        active={tab === 'attendance'} onClick={() => setTab('attendance')}
+        title="The roll — present, present & voting, absent, and each delegation's speaking time"
+      />
+      {onBroadcast && (
+        <RailTab
+          side={side} icon={Megaphone} label="Broadcast"
+          onClick={() => onBroadcast(data)}
+          title="Send a message to this committee — opens the broadcast composer"
+        />
+      )}
+    </>
+  );
+
   return (
-    <ModalShell onClose={onClose}>
-      {/* Header */}
-      <div className="flex items-center gap-3.5 mb-1">
-        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={(data.conf.abbreviation ?? data.conf.name).slice(0, 3)} alt={data.conf.abbreviation ?? data.conf.name} />
+    <ModalShell onClose={onClose} maxWidth={760} rail={rail}>
+      {/* Header — same acronym-over-full-name rule the cards follow. */}
+      <div className="flex items-center gap-3.5 mb-1" style={{ paddingInlineEnd: 36 }}>
+        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={ident.mono} alt={ident.title} />
         <div className="min-w-0">
           <Eyebrow>Session recap</Eyebrow>
           <div className="flex items-center gap-2.5 mt-0.5 flex-wrap">
             <h2 className="font-black" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.1 }}>
-              {data.conf.abbreviation ?? data.conf.name}
+              {ident.title}
             </h2>
             <span
               className="text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase"
@@ -464,73 +1235,149 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
           </div>
         </div>
       </div>
-      {data.conf.abbreviation && data.conf.abbreviation !== data.conf.name && (
-        <p className="text-sm mb-5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{data.conf.name}</p>
-      )}
-      {(!data.conf.abbreviation || data.conf.abbreviation === data.conf.name) && <div className="mb-5" />}
+      {ident.subtitle
+        ? <p className="text-sm mb-5" style={{ color: SOFT, fontFamily: OUTFIT }}>{ident.subtitle}</p>
+        : <div className="mb-5" />}
 
-      {/* Stat tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-        <StatTile icon={Mic} emoji="Studio microphone" gradient={NEU_GRADIENTS.forest} value={String(speeches)} label="Speeches given" />
-        <StatTile icon={Gavel} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.gold} value={String(motionsPending)} label="Motions pending" />
-        <StatTile icon={Users} emoji="Person raising hand" gradient={NEU_GRADIENTS.sage} value={`${present}/${data.delegates.length}`} label="Delegates present" />
-        <StatTile icon={FileText} emoji="Page facing up" gradient={NEU_GRADIENTS.green} value={String(wps)} label="Working papers" />
-        <StatTile icon={ScrollText} emoji="Scroll" gradient={NEU_GRADIENTS.amber} value={String(drs)} label="Draft resolutions" />
-      </div>
-      <p className="text-[11px] -mt-4 mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-        Motions count reflects pending motions only. Total motions raised isn&apos;t persisted.
-      </p>
+      {tab === 'overview' && (
+        <>
+          {/* THE LIVE FLOOR, IN FULL.
+              The caucus clock, the ballot breakdown and the unmoderated
+              countdown used to live on the CARD, where they forced four
+              different card shapes and with them the height chaos. They are
+              detail, not scanning information, so they moved here. */}
+          {floorDetail}
 
-      {/* Points */}
-      {scores.length > 0 && (
-        <div className="mb-6">
-          <Eyebrow>Points</Eyebrow>
-          <div className="mt-2 flex flex-col gap-2">
-            {[{ label: 'Top delegate', row: top }, ...(quietest ? [{ label: 'Quietest delegate', row: quietest }] : [])].map((entry) => (
-              <NeuInset
-                key={entry.label}
-                className="flex items-center gap-3"
-                style={{ padding: '11px 14px', borderRadius: 14 }}
-              >
-                <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em', width: 130 }}>
-                  {entry.label}
-                </span>
-                <FlagImg code={flagCodeFor(entry.row.country)} size={20} />
-                <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{entry.row.country}</span>
-                <span className="text-sm font-black" style={{ color: NEU.forest, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                  {entry.row.total} pts
-                </span>
-              </NeuInset>
-            ))}
+          {/* Stat tiles. The WP and DR tiles open the Documents tab.
+              THE PARAGRAPH THAT SAT UNDER THIS GRID IS GONE, on the owner's
+              instruction: "no need for the description below 'speeches counts
+              logged…'". Both caveats it carried are still told — they moved into
+              the tiles' own hover titles, where they are available to a reader
+              who wonders and invisible to one who does not. Nothing was
+              silently dropped. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            <StatTile
+              icon={Mic} emoji="Studio microphone" gradient={NEU_GRADIENTS.forest}
+              value={String(speeches)} label="Speeches given"
+              title="Logged speeches only — motions, rights of reply and manual point adjustments share the same ledger but are not speeches"
+            />
+            <StatTile icon={Clock} emoji="Stopwatch" gradient={NEU_GRADIENTS.sage} value={fmtSpeakingTotal(totalSpeakingSeconds)} label="Total speaking time" />
+            <StatTile
+              icon={Gavel} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.gold}
+              value={String(motionsLogged)} label="Motions raised"
+              title="Motions a chair ACCEPTED: a rejected motion is deleted from the database outright and leaves no record, so the true total can only be higher than this"
+            />
+            <StatTile
+              icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.sage}
+              value={`${present}/${votingTotal}`} label="Delegates present"
+              title={observers > 0
+                ? `Excludes ${observers} observer${observers === 1 ? '' : 's'}, matching the chair's roll`
+                : "The voting body, matching the chair's roll"}
+            />
+            <StatTile icon={FileText} emoji="Page facing up" gradient={NEU_GRADIENTS.green} value={String(wps)} label="Working papers" onClick={wps > 0 ? () => openDocs('working-paper') : undefined} />
+            <StatTile icon={ScrollText} emoji="Scroll" gradient={NEU_GRADIENTS.amber} value={String(drs)} label="Draft resolutions" onClick={drs > 0 ? () => openDocs('draft-resolution') : undefined} />
           </div>
-        </div>
+
+          {/* Points, in summary. The full table is one tab away. */}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <Eyebrow>Points</Eyebrow>
+            <button
+              onClick={openScoreboardTab}
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1 focus:outline-none"
+              style={{
+                color: NEU.forest, fontFamily: OUTFIT, backgroundColor: NEU.surface,
+                boxShadow: NEU.outSm, border: 'none', cursor: 'pointer',
+                transition: `box-shadow 200ms ${EASE}`,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
+            >
+              <Trophy size={12} />
+              Full delegate performance
+            </button>
+          </div>
+          {scores.length > 0 && (
+            <div className="mb-6 flex flex-col gap-2">
+              {[{ label: 'Top delegate', row: top }, ...(quietest ? [{ label: 'Quietest delegate', row: quietest }] : [])].map((entry) => (
+                <NeuInset
+                  key={entry.label}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1"
+                  style={{ padding: '11px 14px', borderRadius: 14 }}
+                >
+                  {/* The label was `width: 130` at every width. On a phone that
+                      left 69px for the delegation and truncated "United
+                      Kingdom" to "United Kin…" — so it wraps onto its own line
+                      below `sm` and only becomes a fixed column when there is
+                      room for one. */}
+                  <span className="text-[11px] font-bold uppercase flex-shrink-0 basis-full sm:basis-[130px]" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
+                    {entry.label}
+                  </span>
+                  <FlagImg code={flagCodeFor(entry.row.country)} size={20} />
+                  <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{entry.row.country}</span>
+                  <span className="text-sm font-black" style={{ color: NEU.forest, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+                    {entry.row.total} pts
+                  </span>
+                </NeuInset>
+              ))}
+            </div>
+          )}
+
+          {/* Join as secretariat — the one action that belongs on every tab's
+              floor, kept on Overview so it is not repeated five times. */}
+          {session && (
+            <button
+              onClick={joinAsSecretariat}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 font-bold text-sm tracking-widest focus:outline-none"
+              style={{
+                background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+                color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer',
+                boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
+                transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 16px ${NEU_GRADIENTS.forest[0]}66, ${NEU.outSmHover}`; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`; }}
+            >
+              JOIN AS SECRETARIAT
+              <ExternalLink size={14} />
+            </button>
+          )}
+        </>
       )}
 
-      {/* Chair feedback — live off the `feedback` table (ratings + private notes) */}
-      <FeedbackRecap data={data} />
+      {tab === 'documents' && (
+        <DocumentsRecap data={data} filter={docFilter} onFilter={setDocFilter} />
+      )}
 
-      {/* Join as secretariat */}
-      {session && (
-        <div>
-          <button
-            onClick={joinAsSecretariat}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 font-bold text-sm tracking-widest focus:outline-none"
-            style={{
-              background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
-              color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: 'pointer',
-              boxShadow: `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`,
-              transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 6px 16px ${NEU_GRADIENTS.forest[0]}66, ${NEU.outSmHover}`; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 10px ${NEU_GRADIENTS.forest[0]}4D, ${NEU.outSm}`; }}
-          >
-            JOIN AS SECRETARIAT
-            <ExternalLink size={14} />
-          </button>
-          <p className="text-[11px] text-center mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-            Opens the chair console (co-chair view after production merge)
-          </p>
-        </div>
+      {tab === 'scoreboard' && (
+        <CommitteeScoreboardBody
+          committeeId={data.conf.id}
+          scoreboard={scoreboard}
+          loading={scoreboardLoading}
+          error={scoreboardError}
+          hasSession={!!session}
+          delegationSize={data.conf.delegationSize ?? 1}
+          conferenceSlug={conferenceSlug}
+        />
+      )}
+
+      {tab === 'feedback' && <FeedbackRecap data={data} />}
+
+      {tab === 'attendance' && <RosterBody data={data} />}
+
+      {/* The standalone Points modal stays reachable for a reader who wants the
+          table at its own wider width; the card footer opens it directly. */}
+      {tab === 'scoreboard' && (
+        <button
+          onClick={() => onOpenScoreboard(data)}
+          className="inline-flex items-center gap-2 mt-3 text-xs font-bold focus:outline-none"
+          style={{
+            color: NEU.forest, fontFamily: OUTFIT, background: 'transparent',
+            border: 'none', cursor: 'pointer', padding: 0,
+          }}
+        >
+          <ExternalLink size={12} />
+          Open this scoreboard on its own
+        </button>
       )}
     </ModalShell>
   );
@@ -541,8 +1388,8 @@ export function RecapModal({ data, onClose }: { data: LiveCommittee; onClose: ()
 /** Present/absent visual language, forest-ivory. */
 function statusMeta(status: string): { label: string; color: string; ring: string; dot: string } {
   if (status === 'present-voting') return { label: 'Present & Voting', color: NEU.forest, ring: 'rgba(27,56,40,0.32)', dot: NEU.forest };
-  if (status === 'present') return { label: 'Present', color: NEU.green, ring: 'rgba(61,122,82,0.30)', dot: NEU.green };
-  return { label: 'Absent', color: NEU.muted, ring: 'rgba(154,138,120,0.30)', dot: NEU.muted };
+  if (status === 'present') return { label: 'Present', color: GREEN_INK, ring: 'rgba(61,122,82,0.30)', dot: NEU.green };
+  return { label: 'Absent', color: SOFT, ring: 'rgba(154,138,120,0.30)', dot: SOFT };
 }
 
 /** Small forest disc holding a chair's initials — a lightweight avatar. */
@@ -584,21 +1431,25 @@ function ChairStrip({ chairs, chairNames }: { chairs: ChairPerson[]; chairNames:
       <Eyebrow>Chairs</Eyebrow>
       <div className="flex items-center gap-2 mt-2 flex-wrap">
         {people.length === 0 ? (
-          <span className="inline-flex items-center gap-2 text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+          <span className="inline-flex items-center gap-2 text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>
             <Gavel size={14} /> No chairs joined yet
           </span>
         ) : (
           people.map((p, i) => (
-            <span
-              key={`${p.id ?? p.name}-${i}`}
-              className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5"
-              style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-            >
-              {p.avatarUrl
-                ? <Avatar url={p.avatarUrl} name={p.name} size={26} rounded />
-                : <ChairAvatar name={p.name} size={26} />}
-              <span className="text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 140 }}>{p.name}</span>
-            </span>
+            /* Not `nested`: this strip sits inside the modal body, which has no
+               click target of its own. A chair carried only as a name string
+               (`id: null`) renders bare — ProfileLink handles that itself. */
+            <ProfileLink key={`${p.id ?? p.name}-${i}`} userId={p.id} name={p.name}>
+              <span
+                className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5"
+                style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+              >
+                {p.avatarUrl
+                  ? <Avatar url={p.avatarUrl} name={p.name} size={26} rounded />
+                  : <ChairAvatar name={p.name} size={26} />}
+                <span className="text-xs font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, maxWidth: 140 }}>{p.name}</span>
+              </span>
+            </ProfileLink>
           ))
         )}
       </div>
@@ -607,6 +1458,34 @@ function ChairStrip({ chairs, chairNames }: { chairs: ChairPerson[]; chairNames:
 }
 
 export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: () => void }) {
+  const ident = committeeIdentity(data.conf);
+  return (
+    <ModalShell onClose={onClose}>
+      {/* Header */}
+      <div className="flex items-center gap-3.5 mb-1">
+        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={ident.mono} alt={ident.title} />
+        <div className="min-w-0">
+          <Eyebrow>Roll call · present delegates</Eyebrow>
+          <h2 className="font-black mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.1 }}>
+            {ident.title}
+          </h2>
+        </div>
+      </div>
+      {data.conf.abbreviation && data.conf.abbreviation !== data.conf.name && (
+        <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>{data.conf.name}</p>
+      )}
+      <RosterBody data={data} />
+    </ModalShell>
+  );
+}
+
+/** THE ROLL, WITHOUT A HEADER OF ITS OWN — one implementation, two callers.
+ *
+ *  `RosterModal` above (opened from a card's present/total chip) and the recap
+ *  modal's "Attendance" side-tab, which the owner asked for and which must show
+ *  the same roll rather than a second, thinner version of it. Only the heading
+ *  differs, so only the heading lives outside this. */
+export function RosterBody({ data }: { data: LiveCommittee }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   // Total speaking time + speech count per country, summed from the speaking logs
@@ -617,36 +1496,35 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
     speakingByCountry.set(log.country, { seconds: prev.seconds + (log.seconds || 0), speeches: prev.speeches + 1 });
   }
 
-  // Present first (present-voting, then present), absent last; alphabetical within each band.
+  // Present first (present-voting, then present), absent last; alphabetical within
+  // each band. Observers sort last — they are in the room but not in the body.
   const rank = (s: string) => (s === 'present-voting' ? 0 : s === 'present' ? 1 : 2);
-  const roster = [...data.delegates].sort((a, b) => rank(a.status) - rank(b.status) || a.country.localeCompare(b.country));
+  const roster = [...data.delegates].sort((a, b) =>
+    Number(a.isObserver) - Number(b.isObserver)
+    || rank(a.status) - rank(b.status)
+    || a.country.localeCompare(b.country));
 
-  const present = data.delegates.filter((d) => d.status !== 'absent').length;
-  const voting = data.delegates.filter((d) => d.status === 'present-voting').length;
+  // Counts are over the voting body only, so this modal agrees with the chair's
+  // own "N present" rather than quietly counting observers as delegations.
+  const body = votingBody(data);
+  const { present, total } = presence(data);
+  const voting = body.filter((d) => d.status === 'present-voting').length;
+  const observers = data.delegates.length - total;
   const chairNames = data.session?.chairNames ?? [];
 
   return (
-    <ModalShell onClose={onClose}>
-      {/* Header */}
-      <div className="flex items-center gap-3.5 mb-1">
-        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={(data.conf.abbreviation ?? data.conf.name).slice(0, 3)} alt={data.conf.abbreviation ?? data.conf.name} />
-        <div className="min-w-0">
-          <Eyebrow>Roll call · present delegates</Eyebrow>
-          <h2 className="font-black mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.1 }}>
-            {data.conf.abbreviation ?? data.conf.name}
-          </h2>
-        </div>
-      </div>
-      {data.conf.abbreviation && data.conf.abbreviation !== data.conf.name && (
-        <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{data.conf.name}</p>
-      )}
-
+    <>
       {/* Present / voting summary */}
       <div className="grid grid-cols-3 gap-3 mt-4 mb-5">
-        <StatTile icon={Users} emoji="Person raising hand" gradient={NEU_GRADIENTS.sage} value={`${present}/${data.delegates.length}`} label="Present" />
+        <StatTile icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.sage} value={`${present}/${total}`} label="Present" />
         <StatTile icon={CheckCircle2} emoji="Ballot box with ballot" gradient={NEU_GRADIENTS.forest} value={String(voting)} label="Present & voting" />
-        <StatTile icon={Users} emoji="People holding hands" gradient={NEU_GRADIENTS.amber} value={String(data.delegates.length - present)} label="Absent" />
+        <StatTile icon={Users} emoji="Busts in silhouette" gradient={NEU_GRADIENTS.amber} value={String(total - present)} label="Absent" />
       </div>
+      {observers > 0 && (
+        <p className="text-[11px] -mt-3 mb-4" style={{ color: SOFT, fontFamily: OUTFIT }}>
+          Plus {observers} observer{observers === 1 ? '' : 's'}, listed below but outside the voting body.
+        </p>
+      )}
 
       {/* Chairs — names + small avatars (shown with the detail per spec) */}
       <div className="mb-5">
@@ -656,7 +1534,7 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
       {/* Roster list — click a delegate to expand full detail */}
       <Eyebrow>Delegations</Eyebrow>
       {roster.length === 0 ? (
-        <p className="text-sm mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No delegates on the roster yet.</p>
+        <p className="text-sm mt-2" style={{ color: SOFT, fontFamily: OUTFIT }}>No delegates on the roster yet.</p>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           {roster.map((d) => {
@@ -667,8 +1545,8 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
               <NeuInset key={d.country} style={{ borderRadius: 14, overflow: 'hidden' }}>
                 <button
                   onClick={() => setExpanded(isOpen ? null : d.country)}
-                  className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT }}
+                  className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left focus:outline-none"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT, minHeight: 48 }}
                 >
                   <span
                     className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
@@ -676,13 +1554,19 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
                   >
                     <FlagImg code={flagCodeFor(d.country)} size={22} />
                   </span>
-                  <div className="min-w-0 flex-1">
+                  {/* Same wrap rule as the feedback row above: the status pill
+                      ("PRESENT & VOTING") and the chevron are unshrinkable and
+                      left the caption 63px at 375px, truncating "Represents
+                      Germany". They drop to a second line instead. */}
+                  <div className="min-w-0 flex-1 basis-[140px]">
                     {/* Name = the delegation's country (delegates join by nation; no personal name is stored) */}
                     <p className="text-sm font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{d.country}</p>
-                    <p className="text-[11px] truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Represents {d.country}</p>
+                    <p className="text-[11px] truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>
+                      {d.isObserver ? 'Observer — not part of the voting body' : `Represents ${d.country}`}
+                    </p>
                   </div>
                   <span
-                    className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0 ms-auto"
                     style={{ color: meta.color, backgroundColor: NEU.surface, boxShadow: `0 0 0 1.5px ${meta.ring}, ${NEU.outSm}`, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
                   >
                     <span className="rounded-full" style={{ width: 7, height: 7, backgroundColor: meta.dot }} />
@@ -690,7 +1574,7 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
                   </span>
                   <ChevronDown
                     size={16}
-                    style={{ color: NEU.muted, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform 200ms ${EASE}` }}
+                    style={{ color: SOFT, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform 200ms ${EASE}` }}
                   />
                 </button>
 
@@ -700,10 +1584,10 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
                     <div className="flex items-center gap-2 mt-3">
                       <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Studio microphone" icon={Mic} size={30} />
                       <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>Total speaking time</p>
+                        <p className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>Total speaking time</p>
                         <p className="text-base font-black leading-none mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
                           {fmtClock(spoken.seconds)}
-                          <span className="text-[11px] font-bold ml-2" style={{ color: NEU.muted }}>
+                          <span className="text-[11px] font-bold ml-2" style={{ color: SOFT }}>
                             {spoken.speeches} {spoken.speeches === 1 ? 'speech' : 'speeches'}
                           </span>
                         </p>
@@ -717,17 +1601,17 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
                         (and expose them in live/page.tsx's delegates select) to fill these in. */}
                     <div className="grid grid-cols-2 gap-2 mt-3">
                       <div className="flex items-center gap-2">
-                        <Clock size={14} style={{ color: NEU.muted, flexShrink: 0 }} />
+                        <Clock size={14} style={{ color: SOFT, flexShrink: 0 }} />
                         <div className="min-w-0">
-                          <p className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>Status changed</p>
-                          <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Not tracked in schema</p>
+                          <p className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>Status changed</p>
+                          <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>Not tracked in schema</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Timer size={14} style={{ color: NEU.muted, flexShrink: 0 }} />
+                        <Timer size={14} style={{ color: SOFT, flexShrink: 0 }} />
                         <div className="min-w-0">
-                          <p className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>Last roll call</p>
-                          <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Not tracked in schema</p>
+                          <p className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>Last roll call</p>
+                          <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>Not tracked in schema</p>
                         </div>
                       </div>
                     </div>
@@ -738,13 +1622,14 @@ export function RosterModal({ data, onClose }: { data: LiveCommittee; onClose: (
           })}
         </div>
       )}
-    </ModalShell>
+    </>
   );
 }
 
 // ── Awards board modal (placeholder) ────────────────────────────────────────
 
 export function AwardsModal({ data, onClose }: { data: LiveCommittee; onClose: () => void }) {
+  const ident = committeeIdentity(data.conf);
   // TODO(merge): wire to chair award allocation from production branch
   const rows: { label: string; emoji: string }[] = [
     { label: 'Best Delegate', emoji: '1st place medal' },
@@ -754,15 +1639,15 @@ export function AwardsModal({ data, onClose }: { data: LiveCommittee; onClose: (
   return (
     <ModalShell onClose={onClose}>
       <div className="flex items-center gap-3.5 mb-1">
-        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={(data.conf.abbreviation ?? data.conf.name).slice(0, 3)} alt={data.conf.abbreviation ?? data.conf.name} />
+        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={ident.mono} alt={ident.title} />
         <div className="min-w-0">
           <Eyebrow>Awards board</Eyebrow>
           <h2 className="font-black mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.1 }}>
-            {data.conf.abbreviation ?? data.conf.name}
+            {ident.title}
           </h2>
         </div>
       </div>
-      <p className="text-sm mb-6" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+      <p className="text-sm mb-6" style={{ color: SOFT, fontFamily: OUTFIT }}>
         Award allocation arrives with the production merge.
       </p>
 
@@ -775,12 +1660,12 @@ export function AwardsModal({ data, onClose }: { data: LiveCommittee; onClose: (
           >
             <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji={r.emoji} icon={Trophy} size={36} />
             <span className="text-sm font-bold flex-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{r.label}</span>
-            <span className="text-sm font-bold" style={{ color: NEU.muted, fontFamily: OUTFIT }}>—</span>
+            <span className="text-sm font-bold" style={{ color: SOFT, fontFamily: OUTFIT }}>—</span>
           </NeuInset>
         ))}
       </div>
 
-      <p className="text-[11px]" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+      <p className="text-[11px]" style={{ color: SOFT, fontFamily: OUTFIT }}>
         Chairs will allocate awards from their console once the award feature ships; allocations will appear here automatically.
       </p>
     </ModalShell>

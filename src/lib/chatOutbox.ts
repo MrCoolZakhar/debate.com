@@ -128,7 +128,14 @@ function takeFreshRows(committeeId: string, rows: ChatMessage[]): ChatMessage[] 
  * mask a failure, because it is never fresh.
  */
 export function reconcileOutbox(committeeId: string, rows: ChatMessage[]) {
-  if (rows.length === 0) return;
+  /* NO early return on an empty list. `takeFreshRows` treats its first call per
+     committee as the seed and returns nothing, which is right — but bailing out
+     before it meant a chat that was EMPTY when the panel mounted never seeded
+     at all. The first message ever sent then arrived as that committee's seed
+     call, was swallowed as history, and never retired its own outbox entry — so
+     it rendered twice, permanently, until reload. Verified: one row in the
+     database, two bubbles on screen.
+     Seeding on the empty list costs nothing and makes the first real row fresh. */
   const fresh = takeFreshRows(committeeId, rows);
 
   const cur = getOutbox(committeeId);

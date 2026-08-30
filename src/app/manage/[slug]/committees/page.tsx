@@ -8,10 +8,13 @@ import { useAuth } from '@/components/AuthProvider';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
+import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { PillToggle, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { DatePicker } from '@/components/DatePicker';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset, NeuPill } from '@/components/neu';
+import ProfileLink from '@/components/ProfileLink';
+import Portal from '@/components/Portal';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -369,6 +372,223 @@ function CompactSendButton({ releasedAt, busy, onSend }: {
   );
 }
 
+// ── The dais, as a stack ─────────────────────────────────────────────────────
+//
+// WHAT MOVED BEHIND A CLICK, AND WHY.
+//
+// The card used to print the dais in full: a "DAIS" eyebrow, then every chair
+// as a 44px avatar with their name under it, wrapping, plus a dashed ADD CHAIR
+// tile of the same size — about 90px of card for a fact most readers only need
+// to recognise ("is this one staffed, and is it the pair I think it is?").
+// Removing a chair was a hover-only X on the avatar, which does not exist on a
+// touch device at all.
+//
+// It is now an overlapping stack of 28px faces plus a count. The stack is one
+// button; opening it gives the full list — full names, a real Remove control
+// per chair, and Add chair — so nothing was dropped and the one affordance
+// that was mouse-only became reachable.
+//
+// The panel is portaled at fixed viewport coordinates and flips upward near the
+// bottom edge, per the house rule on popovers never being clipped.
+function DaisStack({ chairs, chairIds, linkable, onAdd, onRemove }: {
+  chairs: { name: string; avatar_url: string | null }[];
+  chairIds: string[];
+  /** display_chairs[i] ↔ chair_user_ids[i] only when the lengths agree — the
+   *  same guard the rest of this file and ConferenceDetailClient apply. */
+  linkable: boolean;
+  onAdd: () => void;
+  onRemove: (index: number, name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+
+  const place = useCallback(() => {
+    const b = btnRef.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const W = 250;
+    const wanted = Math.min(340, 84 + chairs.length * 46);
+    const below = window.innerHeight - r.bottom - 12;
+    const above = r.top - 12;
+    const up = below < wanted && above > below;
+    const maxHeight = Math.max(120, Math.min(wanted, up ? above : below));
+    setPos({
+      top: up ? Math.max(8, r.top - 8 - maxHeight) : r.bottom + 8,
+      left: Math.max(8, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 8)),
+      maxHeight,
+    });
+  }, [chairs.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, place]);
+
+  const face = (ch: { name: string; avatar_url: string | null }, size: number) =>
+    ch.avatar_url ? (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={ch.avatar_url}
+        alt=""
+        style={{
+          width: size, height: size, borderRadius: 9999, objectFit: 'cover',
+          backgroundColor: '#EDE7D8', display: 'block',
+          // Pure black at 10%, never a tinted neutral — a tinted outline picks
+          // up the ivory behind it and reads as dirt on the avatar's edge.
+          outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1,
+        }}
+      />
+    ) : (
+      <span
+        className="flex items-center justify-center"
+        style={{
+          width: size, height: size, borderRadius: 9999,
+          backgroundColor: '#1B3828', color: '#EED98A',
+          fontSize: size * 0.38, fontWeight: 700, fontFamily: OUTFIT,
+        }}
+      >
+        {ch.name.charAt(0)}
+      </span>
+    );
+
+  const summary = chairs.length === 0
+    ? 'No chairs on this dais yet — add one'
+    : `${chairs.map(c => c.name).join(', ')} — open the dais`;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={summary}
+        aria-label={summary}
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 rounded-xl focus:outline-none active:scale-[0.96]"
+        style={{
+          padding: '6px 8px', minHeight: 44, border: 'none',
+          backgroundColor: open ? NEU.base : 'transparent',
+          boxShadow: open ? NEU.inSm : 'none',
+          cursor: 'pointer', fontFamily: OUTFIT,
+          transitionProperty: 'box-shadow, background-color, scale',
+          transitionDuration: '200ms', transitionTimingFunction: EASE,
+        }}
+      >
+        <span className="flex items-center flex-shrink-0">
+          {chairs.slice(0, 4).map((ch, i) => (
+            <span key={`${ch.name}-${i}`} style={{ marginInlineStart: i === 0 ? 0 : -9, position: 'relative', zIndex: 4 - i, lineHeight: 0, borderRadius: 9999, boxShadow: '0 0 0 2px #FAF8F3' }}>
+              {face(ch, 28)}
+            </span>
+          ))}
+          {chairs.length === 0 && (
+            <span
+              className="flex items-center justify-center"
+              style={{ width: 28, height: 28, borderRadius: 9999, border: '1.5px dashed rgba(27,56,40,0.4)', color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.04)' }}
+            >
+              <Plus size={14} strokeWidth={2.2} />
+            </span>
+          )}
+        </span>
+        <span
+          className="min-w-0 text-left flex-1"
+          style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: '#6B5F52', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {chairs.length === 0
+            ? 'ADD CHAIR'
+            : chairs.length === 1 ? chairs[0].name : `${chairs.length} CHAIRS`}
+        </span>
+      </button>
+
+      {open && pos && (
+        <Portal>
+          <div
+            ref={popRef}
+            role="dialog"
+            aria-label="Dais"
+            style={{
+              position: 'fixed', top: pos.top, left: pos.left, width: 250,
+              zIndex: 60, maxHeight: pos.maxHeight, overflowY: 'auto',
+              backgroundColor: '#FAF8F3', borderRadius: 16,
+              border: '1px solid rgba(221,212,192,0.95)',
+              boxShadow: '0 14px 34px rgba(27,56,40,0.20)',
+              padding: '10px 11px', fontFamily: OUTFIT,
+            }}
+          >
+            <p style={{ margin: '0 0 8px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: '#7A5A10' }}>
+              DAIS
+            </p>
+            {chairs.length === 0 && (
+              <p style={{ fontSize: 12, color: '#6B5F52', margin: '0 0 8px 0' }}>No chairs assigned yet.</p>
+            )}
+            {chairs.map((ch, i) => (
+              <div key={`${ch.name}-${i}`} className="flex items-center gap-2.5" style={{ padding: '4px 0' }}>
+                <ProfileLink userId={linkable ? chairIds[i] : null} name={ch.name} className="block flex-shrink-0">
+                  {face(ch, 32)}
+                </ProfileLink>
+                <ProfileLink userId={linkable ? chairIds[i] : null} name={ch.name} className="min-w-0 flex-1">
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1C1410', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ch.name}
+                  </span>
+                </ProfileLink>
+                <button
+                  onClick={() => { setOpen(false); onRemove(i, ch.name); }}
+                  title={`Remove ${ch.name} from the dais`}
+                  aria-label={`Remove ${ch.name} from the dais`}
+                  className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none active:scale-[0.96]"
+                  style={{
+                    width: 28, height: 28, border: '1px solid rgba(139,32,32,0.35)',
+                    backgroundColor: 'transparent', color: '#8B2020', cursor: 'pointer',
+                    transitionProperty: 'background-color, color', transitionDuration: '200ms', transitionTimingFunction: EASE,
+                  }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#8B2020'; el.style.color = '#FFFFFF'; }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#8B2020'; }}
+                >
+                  <X size={12} strokeWidth={2.6} />
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => { setOpen(false); onAdd(); }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl mt-2 focus:outline-none active:scale-[0.96]"
+              style={{
+                minHeight: 40, border: '1.5px dashed rgba(27,56,40,0.4)',
+                backgroundColor: 'rgba(27,56,40,0.04)', color: '#1B3828',
+                fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', cursor: 'pointer',
+                transitionProperty: 'background-color, color, scale', transitionDuration: '250ms', transitionTimingFunction: EASE,
+              }}
+              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
+              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; }}
+            >
+              <Plus size={15} strokeWidth={2.2} />
+              ADD CHAIR
+            </button>
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
+
 // ── AddChairModal, assign an accepted chair applicant, or invite by email ────
 
 function AddChairModal({ conferenceId, committee, committees, onClose, onDone, onInvited, onAssign }: {
@@ -494,24 +714,30 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
                 : null;
               return (
                 <div key={app.id} className="flex items-center gap-3 rounded-xl px-3 py-2" style={{ border: '1px solid #EDE7D8', backgroundColor: 'rgba(237,231,216,0.3)' }}>
-                  {app.profiles?.avatar_url ? (
-                    <img
-                      src={app.profiles.avatar_url}
-                      alt={name}
-                      style={{ width: 30, height: 30, borderRadius: '9999px', objectFit: 'cover', backgroundColor: '#EDE7D8', flexShrink: 0 }}
-                    />
-                  ) : (
-                    <span
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{ width: 30, height: 30, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 12, fontWeight: 700, fontFamily: "'Outfit', sans-serif" }}
-                    >
-                      {name.charAt(0)}
-                    </span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{name}</p>
-                    <p className="text-[11px] truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
-                  </div>
+                  {/* Avatar + name link to this applicant's public MUN CV. The row is a
+                      plain div and ASSIGN is a sibling button, so no nesting concerns.
+                      An invited-but-unclaimed applicant has no user_id — ProfileLink
+                      then renders the children bare. */}
+                  <ProfileLink userId={app.user_id} name={name} className="flex items-center gap-3 min-w-0 flex-1">
+                    {app.profiles?.avatar_url ? (
+                      <img
+                        src={app.profiles.avatar_url}
+                        alt={name}
+                        style={{ width: 30, height: 30, borderRadius: '9999px', objectFit: 'cover', backgroundColor: '#EDE7D8', flexShrink: 0 }}
+                      />
+                    ) : (
+                      <span
+                        className="flex items-center justify-center flex-shrink-0"
+                        style={{ width: 30, height: 30, borderRadius: '9999px', backgroundColor: '#1B3828', color: '#EED98A', fontSize: 12, fontWeight: 700, fontFamily: "'Outfit', sans-serif" }}
+                      >
+                        {name.charAt(0)}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{name}</p>
+                      <p className="text-[11px] truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{app.profiles?.email ?? ''}</p>
+                    </div>
+                  </ProfileLink>
                   {app.assigned_committee_id && (
                     <span
                       className="px-2 py-0.5 rounded-full flex-shrink-0"
@@ -608,8 +834,17 @@ export default function CommitteesPage() {
   }, []);
   const [sortKey, setSortKey] = useState<'' | 'difficulty' | 'name' | 'type'>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [flash, setFlash] = useState<string | null>(null);
-  const [actionError, setActionError] = useState('');
+  // Outcome feedback goes to the corner notification stack (the same one the
+  // live committee session uses), not to strips above the page. These two
+  // keep the call shape the page has always used — `setFlash(null)` still
+  // clears, `setActionError('')` still clears — so every existing call site is
+  // untouched; only where the message lands changed.
+  const setFlash = useCallback((msg: string | null) => {
+    if (msg) notifyOk(msg, 'committees'); else clearOk('committees');
+  }, []);
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'committees'); else clearErr('committees');
+  }, []);
   const [sendingToChairs, setSendingToChairs] = useState<string | null>(null);
   const [sendingToParticipants, setSendingToParticipants] = useState<string | null>(null);
   const [sendingAllToParticipants, setSendingAllToParticipants] = useState(false);
@@ -628,8 +863,8 @@ export default function CommitteesPage() {
   const [savingToggle, setSavingToggle] = useState<'sameTime' | 'allAtOnce' | null>(null);
 
   function showFlash(msg: string) {
+    // The store owns the countdown now; no local timeout to leak.
     setFlash(msg);
-    setTimeout(() => setFlash(f => (f === msg ? null : f)), 4500);
   }
 
   function markBusy(id: string, busy: boolean) {
@@ -1166,36 +1401,6 @@ export default function CommitteesPage() {
         }}
       />
 
-      {flash && (
-        <div
-          className="rounded-xl px-4 py-2.5 mb-5 text-sm"
-          style={{
-            backgroundColor: 'rgba(61,122,82,0.10)',
-            border: '1px solid rgba(61,122,82,0.35)',
-            color: '#3D7A52',
-            fontFamily: "'Outfit', sans-serif",
-            fontWeight: 600,
-          }}
-        >
-          {flash}
-        </div>
-      )}
-
-      {actionError && (
-        <div
-          className="rounded-xl px-4 py-2.5 mb-5 text-sm"
-          style={{
-            backgroundColor: 'rgba(139,32,32,0.06)',
-            border: '1px solid rgba(139,32,32,0.2)',
-            color: '#8B2020',
-            fontFamily: "'Outfit', sans-serif",
-            fontWeight: 600,
-          }}
-        >
-          {actionError}
-        </div>
-      )}
-
       {loading && (
         <div className="flex justify-center py-16">
           <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
@@ -1408,6 +1613,13 @@ export default function CommitteesPage() {
               const seats = c.slotCount || c.total_slots;
               const copied = copiedCode === c.session_code && !!c.session_code;
               const dais = c.display_chairs ?? [];
+              // display_chairs and chair_user_ids are SEPARATE arrays, correlated only
+              // by position (the DB trigger keeps them index-aligned). Only link a dais
+              // avatar to a CV when the lengths match — on a mismatch (hand-seeded dais)
+              // index i could point at the wrong person. Same guard as
+              // ConferenceDetailClient.tsx and handleRemoveChair above.
+              const daisIds = c.chair_user_ids ?? [];
+              const daisLinkable = daisIds.length === dais.length;
               const minting = busyIds.has(`mint-${c.id}`);
               const seatLabel = !isCrisis && c.delegation_size === 2
                 ? `${seats} countries · ${seats * 2} seats`
@@ -1464,13 +1676,17 @@ export default function CommitteesPage() {
                     <div className="flex items-center flex-shrink-0" style={{ paddingLeft: 6 }}>
                       {dais.map((ch, chIdx) => (
                         <div key={`${ch.name}-${chIdx}`} className="group relative" style={{ marginLeft: chIdx === 0 ? 0 : -8 }} title={ch.name}>
-                          {ch.avatar_url ? (
-                            <img src={ch.avatar_url} alt={ch.name} style={{ width: 30, height: 30, borderRadius: 9999, objectFit: 'cover', border: '2px solid #F0EBDD', backgroundColor: '#EDE7D8' }} />
-                          ) : (
-                            <span className="flex items-center justify-center" style={{ width: 30, height: 30, borderRadius: 9999, border: '2px solid #F0EBDD', backgroundColor: NEU.forest, color: NEU.gold, fontSize: 12, fontWeight: 700, fontFamily: OUTFIT }}>
-                              {ch.name.charAt(0)}
-                            </span>
-                          )}
+                          {/* Only the avatar is the CV link — the hover X stays a sibling
+                              so removing a chair is unaffected. */}
+                          <ProfileLink userId={daisLinkable ? daisIds[chIdx] : null} name={ch.name} className="block">
+                            {ch.avatar_url ? (
+                              <img src={ch.avatar_url} alt={ch.name} style={{ width: 30, height: 30, borderRadius: 9999, objectFit: 'cover', border: '2px solid #F0EBDD', backgroundColor: '#EDE7D8' }} />
+                            ) : (
+                              <span className="flex items-center justify-center" style={{ width: 30, height: 30, borderRadius: 9999, border: '2px solid #F0EBDD', backgroundColor: NEU.forest, color: NEU.gold, fontSize: 12, fontWeight: 700, fontFamily: OUTFIT }}>
+                                {ch.name.charAt(0)}
+                              </span>
+                            )}
+                          </ProfileLink>
                           <button
                             onClick={() => handleRemoveChair(c, chIdx, ch.name)}
                             title={`Remove ${ch.name} from the dais`}
@@ -1564,14 +1780,36 @@ export default function CommitteesPage() {
             })}
           </div>
           ) : (
-          /* ── Cards view (default) ─────────────────────────────────────── */
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
+          /* ── Cards view (default) ───────────────────────────────────────
+             FIVE IN A ROW AT DESKTOP, and the card is sized to the PUBLIC
+             committee card on the conference page rather than to itself.
+
+             The manage content column is the viewport less the 96px rail and
+             the page's own 24/40px inset, so the ladder resolves to:
+
+               375  → 1 col, 327px      768  → 2 col, 289px
+               1024 → 3 col, 273px     1280 → 4 col, 265px
+               1440 → 5 col, 242px     1536+→ 5 col, 262px+
+
+             Every step lands within ~20% of the public card's 298px, which is
+             the point: the two surfaces should read as the same object. Nothing
+             below 5 columns is a compromise — a 242px card holds this content
+             comfortably now that the dais and the full release detail are one
+             click away rather than printed in full. */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1400px]:grid-cols-5 gap-3.5 items-stretch">
             {sortedCommittees.map(c => {
               const isCrisis = c.committee_type === 'crisis';
               const topics = c.topics ?? [];
               const seats = c.slotCount || c.total_slots;
               const copied = copiedCode === c.session_code && !!c.session_code;
               const dais = c.display_chairs ?? [];
+              // display_chairs and chair_user_ids are SEPARATE arrays, correlated only
+              // by position (the DB trigger keeps them index-aligned). Only link a dais
+              // face to a CV when the lengths match — on a mismatch (hand-seeded dais)
+              // index i could point at the wrong person. Same guard as
+              // ConferenceDetailClient.tsx and handleRemoveChair above.
+              const daisIds = c.chair_user_ids ?? [];
+              const daisLinkable = daisIds.length === dais.length;
               return (
                 <article
                   key={c.id}
@@ -1585,66 +1823,82 @@ export default function CommitteesPage() {
                   onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = NEU.outHover; }}
                   onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = NEU.out; }}
                 >
-                  <div className="flex flex-col items-center px-4 pt-5 flex-1">
-                    {/* Emblem, uploaded art or monogram medallion */}
+                  <div className="flex flex-col items-center px-3.5 pt-4 flex-1">
+                    {/* Emblem — 84px → 60px. The public card's emblem is the
+                        largest thing on it because that card is a poster; this
+                        one is a control panel, so the emblem identifies and
+                        then gets out of the way. */}
                     {c.logo_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img
                         src={c.logo_url}
                         alt={c.abbreviation ?? c.name}
                         style={{
-                          width: '84px', height: '84px', objectFit: 'contain', flexShrink: 0,
-                          filter: 'drop-shadow(0 8px 15px rgba(27,56,40,0.26))',
+                          width: '60px', height: '60px', objectFit: 'contain', flexShrink: 0,
+                          filter: 'drop-shadow(0 6px 12px rgba(27,56,40,0.24))',
                         }}
                       />
                     ) : (
-                      <MonogramMedallion text={c.abbreviation || c.name} isCrisis={isCrisis} size={78} />
+                      <MonogramMedallion text={c.abbreviation || c.name} isCrisis={isCrisis} size={56} />
                     )}
 
-                    {/* Abbreviation eyebrow (when art carries the emblem, the monogram moves up here) */}
+                    {/* Abbreviation eyebrow (when art carries the emblem, the
+                        monogram moves up here).
+
+                        `#7A5A10`, not the `#B6871F` this card used to carry.
+                        Measured on the card surface #F0EBDD, #B6871F is 2.72:1
+                        — below AA for something a reader is meant to read, and
+                        this is a 9.5px all-caps label where it matters most.
+                        #7A5A10 is 5.35:1, is already the manage layout's own
+                        gold ink, and is the same hue two steps down. Applied to
+                        the roman numerals and the dais heading for the same
+                        reason. */}
                     {c.abbreviation && (
-                      <p style={{ margin: '12px 0 0 0', fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.18em', color: '#B6871F', fontVariantNumeric: 'tabular-nums' }}>
+                      <p style={{ margin: '9px 0 0 0', fontFamily: "'Outfit', sans-serif", fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.18em', color: '#7A5A10', fontVariantNumeric: 'tabular-nums' }}>
                         {c.abbreviation.toUpperCase()}
                       </p>
                     )}
 
-                    {/* Name */}
+                    {/* Name — `balance` so a two-line committee name breaks into
+                        two even lines rather than one full line and one orphan. */}
                     <h3
-                      className="text-center font-bold text-[14.5px] leading-snug"
-                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: c.abbreviation ? '4px 0 0 0' : '14px 0 0 0', minHeight: '2.4em' }}
+                      className="text-center font-bold text-[13px] leading-snug"
+                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: c.abbreviation ? '3px 0 0 0' : '10px 0 0 0', minHeight: '2.4em', textWrap: 'balance' }}
                     >
                       {c.name}
                     </h3>
 
                     {/* Meta row — canonical rank insignia + seats */}
-                    <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-                      <DifficultyTile level={c.difficulty} />
-                      <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1.5">
+                      <DifficultyTile level={c.difficulty} size="sm" />
+                      <span className="text-[11px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                         {!isCrisis && c.delegation_size === 2
-                          ? `${seats} countries · ${seats * 2} seats`
+                          ? `${seats} × 2 seats`
                           : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : (seats === 1 ? 'seat' : 'seats')}`}
                       </span>
                       {isCrisis && (
                         <>
                           <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
-                          <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                          <span className="text-[9.5px] font-bold" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
                             CRISIS
                           </span>
                         </>
                       )}
                     </div>
 
-                    {/* Topics, roman numerals */}
+                    {/* Topics, roman numerals — the public card's own treatment,
+                        one step tighter. */}
                     {topics.length > 0 && (
-                      <div className="w-full mt-4 pt-3.5" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                      <div className="w-full mt-3 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                         {topics.map((topic, ti) => (
-                          <div key={topic} className="flex items-start gap-2.5 py-1">
+                          <div key={topic} className="flex items-start gap-2" style={{ padding: '1.5px 0' }}>
                             <span
                               className="flex-shrink-0 text-right"
-                              style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}
+                              style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: '#7A5A10', width: '15px', lineHeight: '17px' }}
                             >
                               {ROMAN[ti] ?? String(ti + 1)}.
                             </span>
-                            <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
+                            <span className="text-[11.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.45, textWrap: 'pretty' }}>
                               {topic}
                             </span>
                           </div>
@@ -1652,116 +1906,63 @@ export default function CommitteesPage() {
                       </div>
                     )}
 
-                    {/* Dais + session code ticket + PP deadline, pinned to the card bottom */}
+                    {/* Dais + session well, pinned to the card bottom */}
                     <div className="w-full mt-auto">
-                      {/* Dais, the committee's chairs, editable in place */}
-                      <div className="w-full mt-4 pt-3.5" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                        <p className="text-center" style={{ margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif", fontSize: '9px', fontWeight: 700, letterSpacing: '0.16em', color: '#B6871F' }}>
-                          DAIS
-                        </p>
-                        <div className="flex flex-wrap items-start justify-center gap-x-4 gap-y-3">
-                          {dais.map((ch, chIdx) => (
-                            <div key={`${ch.name}-${chIdx}`} className="group relative flex flex-col items-center text-center" style={{ width: 72 }}>
-                              <div className="relative">
-                                {ch.avatar_url ? (
-                                  <img
-                                    src={ch.avatar_url}
-                                    alt={ch.name}
-                                    style={{
-                                      width: '44px', height: '44px', borderRadius: '9999px', objectFit: 'cover',
-                                      boxShadow: '0 4px 10px rgba(27,56,40,0.2)',
-                                      backgroundColor: '#EDE7D8',
-                                    }}
-                                  />
-                                ) : (
-                                  <span
-                                    className="flex items-center justify-center"
-                                    style={{
-                                      width: '44px', height: '44px', borderRadius: '9999px',
-                                      backgroundColor: '#1B3828', color: '#EED98A',
-                                      fontSize: '15px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                                    }}
-                                  >
-                                    {ch.name.charAt(0)}
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => handleRemoveChair(c, chIdx, ch.name)}
-                                  title={`Remove ${ch.name} from the dais`}
-                                  className="absolute opacity-0 group-hover:opacity-100 flex items-center justify-center focus:outline-none"
-                                  style={{
-                                    top: -4, right: -4, width: 16, height: 16, borderRadius: '9999px',
-                                    backgroundColor: '#FAF8F3', border: '1px solid rgba(139,32,32,0.45)', color: '#8B2020',
-                                    cursor: 'pointer', boxShadow: '0 2px 6px rgba(27,56,40,0.18)',
-                                    transition: `opacity 200ms ${EASE}`,
-                                  }}
-                                >
-                                  <X size={9} strokeWidth={2.6} />
-                                </button>
-                              </div>
-                              <span className="text-[11px] font-semibold mt-1.5 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                                {ch.name}
-                              </span>
-                            </div>
-                          ))}
-                          <button
-                            onClick={() => setAddChairTarget(c)}
-                            className="flex flex-col items-center text-center focus:outline-none"
-                            style={{ width: 72, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
-                          >
-                            <span
-                              className="flex items-center justify-center"
-                              style={{
-                                width: '44px', height: '44px', borderRadius: '9999px',
-                                border: '1.5px dashed rgba(27,56,40,0.4)',
-                                color: '#1B3828',
-                                backgroundColor: 'rgba(27,56,40,0.04)',
-                                transition: `background-color 250ms ${EASE}, color 250ms ${EASE}, border-color 250ms ${EASE}`,
-                              }}
-                              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderStyle = 'solid'; }}
-                              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; el.style.borderStyle = 'dashed'; }}
-                            >
-                              <Plus size={18} strokeWidth={2.2} />
-                            </span>
-                            <span className="text-[10px] font-bold mt-1.5" style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
-                              ADD CHAIR
-                            </span>
-                          </button>
-                        </div>
+                      {/* THE DAIS, AS A STACK. Full names, per-chair removal and
+                          Add chair all live in the panel it opens — see
+                          `DaisStack` for what moved and why. */}
+                      <div className="w-full mt-3 pt-2" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                        <DaisStack
+                          chairs={dais}
+                          chairIds={daisIds}
+                          linkable={daisLinkable}
+                          onAdd={() => setAddChairTarget(c)}
+                          onRemove={(idx, name) => handleRemoveChair(c, idx, name)}
+                        />
                       </div>
 
-                      {/* Combined session control — code + chair/participant
-                          release + PP deadline, all in one pressed-in well
-                          (replaces the three separate top-bordered chips). */}
-                      <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                        <NeuInset small style={{ padding: 12 }}>
+                      {/* THE SESSION WELL, HALVED.
+                          It carried a full-width code button, then a labelled
+                          row per audience with a SEND/SENT+RESEND control, then
+                          a position-paper line — four stacked bands inside a
+                          padded inset. The code is still the card's most-copied
+                          thing so it stays a full-width control; the two
+                          release rows now share ONE row, because CHAIRS and
+                          DELEGATES are the same question asked twice and
+                          `CompactSendButton` already reads as a state chip.
+                          Nothing was removed: the same three-state control is
+                          still here, just side by side. */}
+                      <div className="w-full mt-2.5">
+                        <NeuInset small style={{ padding: 9 }}>
                           {/* Session code */}
                           {c.session_code ? (
                             <button
                               onClick={() => handleCopyCode(c.session_code!)}
-                              title="Copy session code"
-                              className="w-full flex items-center justify-between gap-2 rounded-[11px] px-3 py-2 focus:outline-none"
+                              title={`Copy session code ${c.session_code}`}
+                              className="w-full flex items-center justify-between gap-2 rounded-[10px] px-2.5 py-2 focus:outline-none active:scale-[0.96]"
                               style={{
+                                minHeight: 34,
                                 backgroundColor: copied ? 'rgba(61,122,82,0.12)' : NEU.surface,
                                 boxShadow: copied ? 'none' : NEU.outSm,
                                 cursor: 'pointer',
-                                transition: `background-color 300ms ${EASE}`,
+                                transitionProperty: 'background-color, scale',
+                                transitionDuration: '300ms', transitionTimingFunction: EASE,
                               }}
                             >
-                              <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: NEU.muted }}>
-                                SESSION CODE
+                              <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.14em', color: '#6B5F52' }}>
+                                CODE
                               </span>
                               {copied ? (
                                 <span className="inline-flex items-center gap-1.5">
                                   <Check size={12} style={{ color: NEU.green }} />
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: NEU.green }}>COPIED</span>
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', color: '#2F6644' }}>COPIED</span>
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.13em', color: NEU.forest, fontVariantNumeric: 'tabular-nums' }}>
+                                <span className="inline-flex items-center gap-1.5 min-w-0">
+                                  <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, letterSpacing: '0.12em', color: NEU.forest, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {c.session_code}
                                   </span>
-                                  <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)' }} />
+                                  <Copy size={11} style={{ color: 'rgba(27,56,40,0.55)', flexShrink: 0 }} />
                                 </span>
                               )}
                             </button>
@@ -1769,39 +1970,41 @@ export default function CommitteesPage() {
                             <button
                               onClick={() => generateSessionCode(c)}
                               disabled={busyIds.has(`mint-${c.id}`)}
-                              className="w-full rounded-[11px] py-2 text-[10.5px] font-bold focus:outline-none"
+                              className="w-full rounded-[10px] text-[10px] font-bold focus:outline-none active:scale-[0.96]"
                               style={{
+                                minHeight: 34,
                                 border: '1.5px dashed rgba(27,56,40,0.35)',
                                 color: busyIds.has(`mint-${c.id}`) ? NEU.muted : NEU.forest,
                                 backgroundColor: 'transparent',
                                 fontFamily: OUTFIT, letterSpacing: '0.09em',
                                 cursor: busyIds.has(`mint-${c.id}`) ? 'default' : 'pointer',
+                                transitionProperty: 'scale', transitionDuration: '200ms', transitionTimingFunction: EASE,
                               }}
                             >
-                              {busyIds.has(`mint-${c.id}`) ? 'GENERATING…' : 'GENERATE SESSION CODE'}
+                              {busyIds.has(`mint-${c.id}`) ? 'GENERATING…' : 'GENERATE CODE'}
                             </button>
                           )}
 
-                          {/* Release affordances */}
-                          <div className="mt-2.5 pt-2.5 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                          {/* Release affordances, side by side */}
+                          <div className="mt-2 pt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
                             {(c.chair_user_ids?.length ?? 0) > 0 && (
-                              <div className="flex items-center justify-between gap-2">
-                                <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>CHAIRS</span>
+                              <div className="flex items-center gap-1.5">
+                                <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em', color: '#6B5F52' }}>CHAIRS</span>
                                 <CompactSendButton releasedAt={c.released_to_chairs_at} busy={sendingToChairs === c.id} onSend={() => handleSendToChairs(c)} />
                               </div>
                             )}
-                            <div className="flex items-center justify-between gap-2">
-                              <span style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted }}>DELEGATES</span>
+                            <div className="flex items-center gap-1.5">
+                              <span style={{ fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em', color: '#6B5F52' }}>DELEGATES</span>
                               <CompactSendButton releasedAt={c.released_to_delegates_at} busy={sendingToParticipants === c.id} onSend={() => handleSendToParticipants(c)} />
                             </div>
                           </div>
 
                           {/* Position-paper deadline */}
                           {c.position_paper_deadline && (
-                            <div className="flex items-center gap-1.5 mt-2.5 pt-2.5" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+                            <div className="flex items-center gap-1.5 mt-2 pt-2" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
                               <CalendarClock size={11} style={{ color: NEU.deepGold, flexShrink: 0 }} />
-                              <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>
-                                Position papers due {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>
+                                Papers due {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                               </span>
                             </div>
                           )}
@@ -1811,15 +2014,17 @@ export default function CommitteesPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="px-4 pb-4 pt-3.5 flex gap-2">
+                  <div className="px-3.5 pb-3.5 pt-3 flex gap-2">
                     <button
                       onClick={() => setEditTarget(c)}
-                      className="flex-1 rounded-xl py-2.5 text-[11px] font-bold focus:outline-none"
+                      className="flex-1 rounded-xl text-[10.5px] font-bold focus:outline-none active:scale-[0.96]"
                       style={{
+                        minHeight: 40,
                         backgroundColor: 'transparent', color: '#1B3828',
                         border: '1.5px solid rgba(27,56,40,0.35)',
                         fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
-                        transition: `background-color 300ms ${EASE}, color 300ms ${EASE}`,
+                        transitionProperty: 'background-color, color, scale',
+                        transitionDuration: '300ms', transitionTimingFunction: EASE,
                       }}
                       onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
                       onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
@@ -1828,12 +2033,15 @@ export default function CommitteesPage() {
                     </button>
                     <button
                       onClick={() => setDeleteTarget(c)}
-                      title="Delete committee"
-                      className="flex items-center justify-center rounded-xl px-3.5 focus:outline-none"
+                      title={`Delete ${c.name}`}
+                      aria-label={`Delete ${c.name}`}
+                      className="flex items-center justify-center rounded-xl focus:outline-none active:scale-[0.96]"
                       style={{
+                        minWidth: 44, minHeight: 40,
                         border: '1.5px solid rgba(139,32,32,0.32)', color: '#8B2020', backgroundColor: 'transparent',
                         cursor: 'pointer',
-                        transition: `background-color 300ms ${EASE}, color 300ms ${EASE}`,
+                        transitionProperty: 'background-color, color, scale',
+                        transitionDuration: '300ms', transitionTimingFunction: EASE,
                       }}
                       onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#8B2020'; el.style.color = '#FFFFFF'; }}
                       onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#8B2020'; }}

@@ -7,7 +7,7 @@
 // position_paper_messages, no separate permission check here, a paper that
 // fails to load just renders the "not available" state.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Check, Download, Send, X } from 'lucide-react';
@@ -17,6 +17,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByCode } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
+import ProfileLink from '@/components/ProfileLink';
+import Avatar from '@/components/Avatar';
 import { isPaperLate } from '@/lib/positionPapers';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard } from '@/components/neu';
 import { ActionButton } from '@/components/PositionPaperButtons';
@@ -58,6 +60,8 @@ interface PaperRow {
 interface Submitter {
   user_id: string | null;
   display_name: string | null;
+  // public.profiles.avatar_url, joined off conference_allocations below.
+  avatar_url: string | null;
 }
 
 interface ChatMessage {
@@ -67,7 +71,8 @@ interface ChatMessage {
   is_system: boolean;
   body: string;
   created_at: string;
-  profiles: { display_name: string } | null;
+  // public.profiles, joined off position_paper_messages.sender_user_id.
+  profiles: { display_name: string; avatar_url: string | null } | null;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
@@ -170,7 +175,7 @@ export default function PositionPaperPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('position_paper_messages')
-      .select('id, sender_user_id, is_reviewer, is_system, body, created_at, profiles (display_name)')
+      .select('id, sender_user_id, is_reviewer, is_system, body, created_at, profiles (display_name, avatar_url)')
       .eq('paper_id', paperId)
       .order('created_at', { ascending: true });
     setMessages((data ?? []) as unknown as ChatMessage[]);
@@ -223,15 +228,19 @@ export default function PositionPaperPage() {
         committee
           ? supabase
               .from('conference_allocations')
-              .select('user_id, profiles (display_name)')
+              .select('user_id, profiles (display_name, avatar_url)')
               .eq('conference_committee_id', committee.id)
               .eq('country_code', row.country_code)
           : Promise.resolve({ data: [] as unknown[] }),
         supabase.rpc('mark_paper_seen', { p_paper_id: paperId }),
       ]);
       if (cancelled) return;
-      setSubmitters(((allocData ?? []) as unknown as { user_id: string | null; profiles: { display_name: string } | null }[])
-        .map(r => ({ user_id: r.user_id, display_name: r.profiles?.display_name ?? null })));
+      setSubmitters(((allocData ?? []) as unknown as { user_id: string | null; profiles: { display_name: string; avatar_url: string | null } | null }[])
+        .map(r => ({
+          user_id: r.user_id,
+          display_name: r.profiles?.display_name ?? null,
+          avatar_url: r.profiles?.avatar_url ?? null,
+        })));
 
       await refetchMessages();
       if (cancelled) return;
@@ -316,7 +325,11 @@ export default function PositionPaperPage() {
 
   const committee = paper?.conference_committees ?? null;
   const cName = paper ? (getCountryByCode(paper.country_code)?.name ?? paper.country_code) : '';
-  const submitterNames = submitters.map(s => s.display_name).filter(Boolean).join(' & ');
+  // Each submitter is kept WHOLE (the row, not just its display_name) rather
+  // than pre-joined into one string, so every named seat-holder can link to
+  // their own MUN CV. The ' & ' that used to be the join separator is now
+  // rendered between the links.
+  const namedSubmitters = submitters.filter(s => !!s.display_name);
   const late = paper ? isPaperLate(paper.submitted_at, committee?.position_paper_deadline ?? null) : false;
 
   return (
@@ -370,7 +383,27 @@ export default function PositionPaperPage() {
                   <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 20, color: NEU.ink, margin: 0 }}>{cName}</p>
                   <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, margin: '2px 0 0 0' }}>
                     {committee?.abbreviation ?? committee?.name}
-                    {submitterNames && ` · ${submitterNames}`}
+                    {namedSubmitters.length > 0 && ' · '}
+                    {namedSubmitters.map((s, i) => (
+                      <Fragment key={`${s.user_id ?? s.display_name}-${i}`}>
+                        {i > 0 && ' & '}
+                        {/* Header line sits in a plain div — no clickable
+                            ancestor, so no `nested`. A seat with no account
+                            has no user_id and stays plain text.
+                            avatar_url comes from public.profiles, joined onto
+                            conference_allocations in the loader above; null
+                            for an unclaimed seat, which Avatar draws as an
+                            initial disc. inline-flex keeps the picture on the
+                            name's baseline inside this flowing sentence, and
+                            min-w-0 lets a long name still wrap at 375px. */}
+                        <ProfileLink userId={s.user_id} name={s.display_name}>
+                          <span className="inline-flex items-center gap-1.5 align-middle" style={{ maxWidth: '100%' }}>
+                            <Avatar url={s.avatar_url} name={s.display_name ?? '?'} size={20} />
+                            <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{s.display_name}</span>
+                          </span>
+                        </ProfileLink>
+                      </Fragment>
+                    ))}
                     {` · Submitted ${fmtDate(paper.submitted_at)}`}
                     {committee?.position_paper_deadline && ` · Due ${fmtDate(committee.position_paper_deadline)}`}
                   </p>
@@ -458,7 +491,24 @@ export default function PositionPaperPage() {
                             <p style={{ fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{m.body}</p>
                           </div>
                           <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, margin: '3px 4px 0 4px' }}>
-                            {senderName} · {fmtTime(m.created_at)}
+                            {/* Sender label links to that person's MUN CV. The
+                                bubble is a plain div, so no `nested`. Passing
+                                null for your own messages keeps "You" as plain
+                                text — a self-link off your own thread is noise.
+                                avatar_url comes from public.profiles, joined
+                                onto position_paper_messages by sender_user_id
+                                in refetchMessages. A just-sent optimistic
+                                message has no joined profile yet, so its own
+                                picture is held back for the moment until the
+                                refetch lands rather than flashing a "Y" disc. */}
+                            <ProfileLink userId={mine ? null : m.sender_user_id} name={m.profiles?.display_name}>
+                              <span className="inline-flex items-center gap-1.5 align-middle" style={{ maxWidth: '100%' }}>
+                                {(m.profiles || !mine) && (
+                                  <Avatar url={m.profiles?.avatar_url ?? null} name={m.profiles?.display_name ?? senderName} size={20} />
+                                )}
+                                <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{senderName}</span>
+                              </span>
+                            </ProfileLink> · {fmtTime(m.created_at)}
                           </p>
                         </div>
                       );

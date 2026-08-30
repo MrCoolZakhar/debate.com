@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { Check, X, Gavel } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { reportBlocked } from '@/lib/reportCrash';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
@@ -87,9 +88,22 @@ export default function ChairInvitePage() {
     const supabase = getAuthedClient(session.access_token);
     const { data, error: rpcErr } = await supabase.rpc('respond_chair_invite', { p_token: token, p_accept: accept });
     setResponding(null);
-    if (rpcErr) { setError(rpcErr.message || 'Could not respond to this invite.'); return; }
-    const result = data as { ok: boolean; error?: string };
-    if (!result.ok) { setError(result.error ?? 'Could not respond to this invite.'); return; }
+    const result = data as { ok: boolean; error?: string } | null;
+    // Both failure branches are the SAME event, so they share ONE report — a
+    // transport error and an ok:false both mean the invite was not answered.
+    // Only ACCEPT is reported: the chair is locked out of a conference they
+    // were invited to and has no other way to tell anyone. A failed decline
+    // loses nothing, so it stays an inline message.
+    if (rpcErr || !result?.ok) {
+      if (accept) {
+        reportBlocked('accept chair invite', rpcErr ?? new Error(result?.error ?? 'rpc returned ok:false'), {
+          conferenceSlug: invite?.slug ?? null,
+          inviteStatus: invite?.status ?? null,
+        });
+      }
+      setError((rpcErr ? rpcErr.message : result?.error) || 'Could not respond to this invite.');
+      return;
+    }
 
     if (accept) {
       router.push('/my-conferences?tab=chair&chairInvite=accepted');

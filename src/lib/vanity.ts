@@ -15,11 +15,19 @@ import { supabase } from '@/lib/supabase';
  *
  *   1. PUBLIC ONLY. Only `is_public = true` conferences are resolvable. Note that
  *      the `conferences` RLS policy "Anyone can read conferences by link" is
- *      `USING (true)`, so a private conference IS technically readable by anyone
- *      holding its slug today — but its slug carries a random 5-char suffix and is
- *      therefore unguessable. An acronym is very guessable, so exposing private
- *      conferences at /<acronym> would be a real increase in discoverability.
- *      Keep the is_public filter.
+ *      `USING (true)`, so a private conference IS readable by anyone holding its
+ *      slug. That used to be tolerable because every slug carried a random 5-char
+ *      suffix and was therefore unguessable.
+ *
+ *      ⚠️ THAT IS NO LONGER TRUE FOR CONFERENCES CREATED FROM 2026 ONWARDS.
+ *      `src/lib/conferenceSlug.ts` now mints short slugs (`limun2027`), and every
+ *      conference is created private, so a new private conference's URL is
+ *      guessable from its acronym and year. "Private" means unlisted, not
+ *      access-controlled. If real privacy is ever wanted, it has to come from
+ *      narrowing this RLS policy — not from slug entropy.
+ *
+ *      The is_public filter here stays regardless: /<acronym> is a promoted,
+ *      crawlable surface, and an unlisted conference must not be advertised on it.
  *   2. UNAMBIGUOUS ONLY. `acronym` is NOT unique in the DB (verified: TMUN is
  *      shared by two public conferences). A shared acronym resolves to nothing at
  *      all rather than guessing which conference the visitor meant.

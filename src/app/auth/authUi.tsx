@@ -12,10 +12,18 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Globe2, CalendarCheck, MailCheck, RotateCw, Sparkles, Star } from 'lucide-react';
+import { ArrowLeft, Globe2, CalendarCheck, KeyRound, MailCheck, RotateCw, Sparkles, Star } from 'lucide-react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import DecorativeBleed from '@/components/DecorativeBleed';
 
 export const OUTFIT = "'Outfit', sans-serif";
+
+/**
+ * Length of the email confirmation code. This MUST match Supabase's
+ * Authentication > Sign In / Providers > Email > "Email OTP Length" setting.
+ * They are two halves of one contract and there is no runtime check.
+ */
+export const CODE_LENGTH = 6;
 
 // ── Return-to (`?next=`) handling ────────────────────────────────────────────
 // Shared by /auth/signin and /auth/signup so a logged-out visitor's intended
@@ -737,7 +745,7 @@ export function CheckEmailScreen({
       return;
     }
     start();
-    show('Sent — check your inbox');
+    show('Sent, check your inbox');
   }
 
   return (
@@ -774,4 +782,196 @@ export function CheckEmailScreen({
       <Toast message={toast} />
     </div>
   );
+}
+
+/**
+ * Inline 6-digit code confirmation. Sibling of CheckEmailScreen above, and
+ * deliberately the same centred-notice shape, but the visitor finishes
+ * verifying right here instead of leaving for their inbox and coming back
+ * through /auth/callback. That matters for the rescue path: the person who
+ * lands here already lost the tab that held their original resend button.
+ *
+ * `onVerify` returns an error message to show inline, or null once it has
+ * taken over navigation. `startCooldown` seeds the resend timer for callers
+ * that already sent a code on the way in.
+ */
+export function CodeVerifyScreen({
+  email,
+  intro,
+  onVerify,
+  onResend,
+  footer,
+  startCooldown,
+}: {
+  email: string;
+  intro: React.ReactNode;
+  onVerify: (code: string) => Promise<string | null>;
+  onResend: () => Promise<string | null>;
+  footer?: React.ReactNode;
+  startCooldown?: boolean;
+}) {
+  const { remaining, active, start } = useCooldown(60);
+  const { message: toast, show } = useToast();
+  const [code, setCode] = useState('');
+  // Two independent latches, not one: a verification in flight used to spin the
+  // resend button, and a resend used to grey out the verify button.
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [err, setErr] = useState('');
+
+  // Mount only. A caller that already sent a code before rendering this screen
+  // passes startCooldown, otherwise the first thing on offer is a resend the
+  // user can fire a second later against a code that is already in flight.
+  useEffect(() => {
+    if (startCooldown) start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleVerify() {
+    if (verifying || resending || code.length !== CODE_LENGTH) return;
+    setErr('');
+    setVerifying(true);
+    const error = await onVerify(code);
+    setVerifying(false);
+    // On null the caller is already navigating away, so leave the screen alone.
+    if (error) setErr(error);
+  }
+
+  async function handleResend() {
+    if (active || verifying || resending) return;
+    setErr('');
+    setResending(true);
+    const error = await onResend();
+    setResending(false);
+    if (error) {
+      setErr(error);
+      return;
+    }
+    start();
+    show('Sent, check your inbox');
+  }
+
+  return (
+    <div className="text-center">
+      <IconBadge>
+        <KeyRound size={24} color="#1B3828" strokeWidth={2} />
+      </IconBadge>
+      <h1 className="text-xl font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        Confirm your email
+      </h1>
+      <p className="text-sm leading-relaxed mb-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        {intro}
+      </p>
+      <p className="text-sm font-semibold mb-5 break-words" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+        {email}
+      </p>
+
+      {err && <div className="mb-4"><ErrorBanner>{err}</ErrorBanner></div>}
+
+      {/* Not TextField: that primitive hardcodes `style={inputStyle}`, and the
+          code entry needs monospace digits on a wide tracking to be readable
+          as separate characters. */}
+      <div className="text-left mb-4">
+        <FieldLabel>{`Enter the ${CODE_LENGTH}-digit code`}</FieldLabel>
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, CODE_LENGTH))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleVerify();
+            }
+          }}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={CODE_LENGTH}
+          placeholder={'0'.repeat(CODE_LENGTH)}
+          onFocus={focusInput}
+          onBlur={blurInput}
+          className="w-full rounded-xl px-4 py-3 transition-colors focus:outline-none"
+          style={{
+            ...inputStyle,
+            fontFamily: "'DM Mono', monospace",
+            fontSize: '20px',
+            letterSpacing: '0.4em',
+            textAlign: 'center',
+            fontWeight: 700,
+          }}
+        />
+      </div>
+
+      {/* An incomplete code holds the button in its disabled styling, but only
+          an in-flight request may claim to be verifying. */}
+      <PrimaryActionButton
+        onClick={handleVerify}
+        loading={verifying || resending || code.length !== CODE_LENGTH}
+        loadingText={verifying ? 'VERIFYING...' : 'VERIFY EMAIL'}
+      >
+        VERIFY EMAIL
+      </PrimaryActionButton>
+
+      <div className="mt-3">
+        <SecondaryButton onClick={handleResend} disabled={active || verifying || resending}>
+          <span className="inline-flex items-center justify-center gap-2">
+            <RotateCw size={15} className={resending ? 'animate-spin' : ''} />
+            {resending ? 'SENDING...' : active ? `RESEND CODE (${remaining}s)` : 'RESEND CODE'}
+          </span>
+        </SecondaryButton>
+      </div>
+
+      {/* Live region so screen readers hear the countdown / ready state. */}
+      <p aria-live="polite" className="text-xs mt-2" style={{ color: '#B6AC98', fontFamily: OUTFIT, minHeight: '1.2em' }}>
+        {active ? `You can resend in ${remaining} second${remaining === 1 ? '' : 's'}.` : 'Didn’t get it? Check spam, or resend.'}
+      </p>
+
+      {footer && <div className="mt-4">{footer}</div>}
+
+      <Toast message={toast} />
+    </div>
+  );
+}
+
+/**
+ * The single success state for email confirmation, shown by /auth/signup,
+ * /auth/signin and /auth/confirm alike. Confirmation must always be
+ * acknowledged before the onboarding gate; dropping someone straight into
+ * onboarding reads as if nothing happened.
+ */
+export function VerifiedScreen({ onContinue, busy }: { onContinue: () => void; busy?: boolean }) {
+  return (
+    <NoticeScreen
+      icon={<CheckMark size={26} />}
+      title="You're verified. Happy Gavelling!"
+      action={
+        <PrimaryActionButton loading={busy} loadingText="TAKING YOU IN…" onClick={onContinue}>
+          CONTINUE
+        </PrimaryActionButton>
+      }
+    >
+      Your email is confirmed and your account is ready. Let&apos;s finish setting things up.
+    </NoticeScreen>
+  );
+}
+
+/**
+ * Mirrors destinationFor() in src/app/auth/callback/route.ts. The signup
+ * wizard never collects education_level, so a user who confirms by code and
+ * skips the callback would otherwise land in the app with no education level
+ * and no MUN CV.
+ */
+export async function destinationAfterVerify(supabase: SupabaseClient, next: string): Promise<string> {
+  // Mirrors the recovery guard in destinationFor: a destination of the reset
+  // form is a repair, not a sign-in, and must not be gated behind onboarding.
+  if (next === '/auth/reset' || next.startsWith('/auth/reset?')) return next;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return `/auth/signin?next=${encodeURIComponent(next)}&verified=1`;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('education_level')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (!profile || profile.education_level == null) {
+    return next === '/auth/onboarding' ? '/auth/onboarding' : `/auth/onboarding?next=${encodeURIComponent(next)}`;
+  }
+  return next;
 }

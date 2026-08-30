@@ -6,22 +6,24 @@ import Link from 'next/link';
 import { createAuthClient } from '@/lib/supabase-auth';
 import { ageAt } from '@/lib/age';
 import { DatePicker } from '@/components/DatePicker';
+import { CountryField } from '@/components/CountryField';
+import { getCountryByName } from '@/lib/countries';
 import Loader from '@/components/Loader';
 import {
   AuthLayout,
   CardHeading,
-  CheckEmailScreen,
-  CheckMark,
+  CodeVerifyScreen,
   ErrorBanner,
   FieldLabel,
   GoogleButton,
-  NoticeScreen,
   OrDivider,
   OUTFIT,
   PasswordField,
-  PrimaryActionButton,
   PrimaryButton,
   TextField,
+  inputStyle,
+  VerifiedScreen,
+  destinationAfterVerify,
   isValidEmail,
   safeNext,
   withNext,
@@ -54,6 +56,28 @@ function DobField({ value, onChange }: { value: string; onChange: (iso: string) 
   );
 }
 
+/**
+ * Nationality picker. Mandatory at sign-up because conferences allocate seats
+ * by delegation and several enforce nationality/age eligibility — a blank
+ * profile silently blocks the applicant at the point of allocation instead.
+ */
+function NationalityField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <FieldLabel>Nationality</FieldLabel>
+      <CountryField
+        value={value}
+        onChange={onChange}
+        placeholder="Start typing a country..."
+        inputStyle={{ ...inputStyle, borderRadius: '12px', paddingTop: '12px', paddingBottom: '12px', fontSize: '14px' }}
+      />
+      <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+        Pick from the list. Conferences use this for delegation allocation.
+      </p>
+    </div>
+  );
+}
+
 type Phase = 'form' | 'awaiting' | 'verified';
 
 function SignUpInner() {
@@ -65,9 +89,16 @@ function SignUpInner() {
   // open-redirect, same guard as /auth/signin's next handling.
   const isApplying = searchParams.get('apply') === '1';
   const next = safeNext(searchParams, '/auth/onboarding');
-  const [name, setName] = useState('');
+  // Name is captured as two fields and stored as one `full_name`. Conferences
+  // sort, search and address applicants by their real name, so a single free
+  // "Full name" box that people filled with a nickname was worth splitting.
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [dob, setDob] = useState(''); // ISO 'YYYY-MM-DD' from the DatePicker
+  // Nationality is mandatory: conferences allocate by it and several run
+  // age/nationality eligibility rules, so an empty profile blocks them.
+  const [nationality, setNationality] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -135,7 +166,7 @@ function SignUpInner() {
     setContinuing(true);
     const { data } = await supabase.auth.getSession();
     if (data.session) {
-      router.push(next);
+      router.push(await destinationAfterVerify(supabase, next));
     } else {
       // Verified but the session didn't stick to this tab — send them to sign
       // in rather than a dead end.
@@ -183,6 +214,14 @@ function SignUpInner() {
       setError('Password must be at least 8 characters.');
       return;
     }
+    if (!firstName.trim()) {
+      setError('Please enter your first name.');
+      return;
+    }
+    if (!lastName.trim()) {
+      setError('Please enter your last name.');
+      return;
+    }
     if (!dob) {
       setError('Please enter your date of birth.');
       return;
@@ -197,13 +236,26 @@ function SignUpInner() {
       setError('You need to be at least 13 years old to create a Gavelling account.');
       return;
     }
+    // Free text is accepted while typing; only a real UN country name gets
+    // through, so allocation and eligibility checks can rely on the value.
+    const country = getCountryByName(nationality);
+    if (!country) {
+      setError('Please choose your nationality from the list.');
+      return;
+    }
 
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: name, date_of_birth: dateOfBirth },
+        data: {
+          full_name: `${firstName.trim()} ${lastName.trim()}`,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          date_of_birth: dateOfBirth,
+          nationality: country.name,
+        },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
@@ -232,26 +284,18 @@ function SignUpInner() {
       sub="Create an account to attend conferences, build your MUN CV, and run committees of your own."
     >
       {phase === 'verified' ? (
-        <NoticeScreen
-          icon={<CheckMark size={26} />}
-          title="You're verified. Happy Gavelling!"
-          action={
-            <PrimaryActionButton loading={continuing} loadingText="TAKING YOU IN…" onClick={handleContinue}>
-              CONTINUE
-            </PrimaryActionButton>
-          }
-        >
-          Your email is confirmed and your account is ready. Let&apos;s finish setting things up.
-        </NoticeScreen>
+        <VerifiedScreen onContinue={handleContinue} busy={continuing} />
       ) : phase === 'awaiting' ? (
-        <CheckEmailScreen
+        <CodeVerifyScreen
           email={email}
-          intro={
-            <>
-              We&apos;ve sent a confirmation link to your inbox. Open it and click{' '}
-              <strong style={{ color: '#1C1410' }}>ACTIVATE MY ACCOUNT</strong> to finish creating your account. This page will update automatically once you do.
-            </>
-          }
+          startCooldown
+          intro="We sent a 6-digit code to"
+          onVerify={async (token) => {
+            const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+            if (error) return 'That code is not right, or it has expired. Request a new one below.';
+            setPhase('verified');
+            return null;
+          }}
           onResend={resendSignupEmail}
           footer={
             <button
@@ -286,22 +330,33 @@ function SignUpInner() {
                 fontFamily: OUTFIT,
               }}
             >
-              Create your account to continue your application — we&apos;ll take you straight back to it.
+              Create your account to continue your application and we&apos;ll take you straight back to it.
             </div>
           )}
           <GoogleButton label="SIGN UP WITH GOOGLE" onClick={handleGoogleSignUp} disabled={oauthLoading} />
           <OrDivider />
 
           <form onSubmit={handleEmailSignUp} className="space-y-4">
-            <TextField
-              label="Full name"
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ada Lovelace"
-              autoComplete="name"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <TextField
+                label="First name"
+                type="text"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Ada"
+                autoComplete="given-name"
+              />
+              <TextField
+                label="Last name"
+                type="text"
+                required
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Lovelace"
+                autoComplete="family-name"
+              />
+            </div>
             <div>
               <TextField
                 label="Email address"
@@ -320,6 +375,7 @@ function SignUpInner() {
                 </p>
               )}
             </div>
+            <NationalityField value={nationality} onChange={setNationality} />
             <DobField value={dob} onChange={setDob} />
             <PasswordField
               label="Password"

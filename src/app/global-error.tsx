@@ -24,7 +24,9 @@ export default function GlobalError({
   useEffect(() => {
     // Same self-healing path as the route boundary — see src/app/error.tsx.
     if (recoverFromStaleDeploy(error)) return;
-    reportCrash(error);
+    // 'root': the root layout itself died, so the document rendered NOTHING.
+    // Whatever the message says, this user is blocked — it always pages.
+    reportCrash(error, 'root');
   }, [error]);
 
   return (

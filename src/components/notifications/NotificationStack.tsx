@@ -45,12 +45,12 @@
 // `calc()` in `GavelChip.tsx` / the chair page's `gavelToast`.
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, X, Hand, MessageCircle, Megaphone, Info } from 'lucide-react';
+import { Check, X, Hand, MessageCircle, Megaphone, Info, AlertTriangle } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { getFlagUrl } from '@/lib/countries';
 import {
   useNotifications, dismiss, setPending, tickNotifications,
-  type NotificationKind, type NotificationTone,
+  type NotificationKind, type NotificationLevel, type NotificationTone,
 } from '@/lib/sessionNotifications';
 
 const OUTFIT = "'Outfit', sans-serif";
@@ -83,6 +83,22 @@ const KIND_ICON: Record<NotificationKind, typeof Hand> = {
   broadcast: Megaphone,
   motion: Info,
   info: Info,
+};
+
+/**
+ * Outcome colour, applied to the ICON SEAT only.
+ *
+ * The organiser bars this stack replaced said "good" or "bad" with their tint,
+ * and a card that reports "Couldn't save" must not look like one reporting
+ * "Reminder sent". The glass body is untouched — recolouring that would give
+ * the stack two visual identities and make the session cards look wrong beside
+ * an error. Every colour here is a fill behind a glyph, never text: the words
+ * stay #FFFFFF on the same glass, so nothing readable changes contrast.
+ */
+const LEVEL: Record<NotificationLevel, { seat: string; ink: string; glyph: typeof Info | null }> = {
+  neutral: { seat: 'rgba(238,217,138,0.18)', ink: '#EED98A', glyph: null },
+  ok: { seat: 'rgba(126,214,160,0.22)', ink: '#9BE7BC', glyph: Check },
+  error: { seat: 'rgba(255,138,138,0.22)', ink: '#FFB4B4', glyph: AlertTriangle },
 };
 
 const TONE: Record<NotificationTone, { bg: string; fg: string; border: string }> = {
@@ -234,7 +250,8 @@ function NotificationCard({ n, extra }: CardProps) {
     setDx(0);                                   // spring back
   };
 
-  const Icon = KIND_ICON[n.kind];
+  const level = LEVEL[n.level ?? 'neutral'];
+  const Icon = level.glyph ?? KIND_ICON[n.kind];
   const pct = n.ttlMs == null ? 0 : Math.min(1, n.elapsedMs / n.ttlMs);
   /* Recomputed on the same 250ms tick that advances the TTLs — no second
      interval, and no re-notify (which would restart the TTL every second). */
@@ -293,7 +310,7 @@ function NotificationCard({ n, extra }: CardProps) {
               style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                 display: 'grid', placeItems: 'center',
-                background: 'rgba(238,217,138,0.18)', color: '#EED98A',
+                background: level.seat, color: level.ink,
               }}
             >
               <Icon size={15} strokeWidth={2.4} />
@@ -435,7 +452,27 @@ function NotificationCard({ n, extra }: CardProps) {
   );
 }
 
-export default function NotificationStack({ extras }: { extras?: Record<string, NotificationExtra> }) {
+export default function NotificationStack({
+  extras,
+  topPx = TOP_PX,
+}: {
+  extras?: Record<string, NotificationExtra>;
+  /**
+   * Distance from the top of the containing block to the first card.
+   *
+   * Defaults to the chair cockpit's 52px (its 44px header plus breath). Any
+   * OTHER surface that mounts a stack has a different header and must say so —
+   * `/manage` is 56px, for instance. This is the ONLY thing about this renderer
+   * that was ever tied to the session: the store (`@/lib/sessionNotifications`)
+   * is headless and surface-agnostic, `Portal` falls back to `document.body`
+   * when there is no `#fit-root`, and `fitScale()` returns 1 outside one.
+   *
+   * The `--dgn-stack-shift` publication below is chair-only in EFFECT, not in
+   * code: nothing outside the chair page reads the variable, so a stack mounted
+   * elsewhere simply sets a variable no one consumes.
+   */
+  topPx?: number;
+}) {
   const { items, suppressed } = useNotifications();
   /* Value is never read — the state exists only to re-render the progress
      hairlines each tick. The authoritative countdown lives in the store. */
@@ -466,14 +503,14 @@ export default function NotificationStack({ extras }: { extras?: Record<string, 
     const root = document.documentElement;
     if (!host) { root.style.removeProperty('--dgn-stack-shift'); return; }
     const apply = () => {
-      const shift = Math.max(0, TOP_PX + host.offsetHeight + STACK_GAP_PX - CHIP_TOP_PX);
+      const shift = Math.max(0, topPx + host.offsetHeight + STACK_GAP_PX - CHIP_TOP_PX);
       root.style.setProperty('--dgn-stack-shift', `${Math.round(shift)}px`);
     };
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(host);
     return () => { ro.disconnect(); root.style.removeProperty('--dgn-stack-shift'); };
-  }, [host]);
+  }, [host, topPx]);
 
   if (hidden) return null;
   const visible = items.slice(0, MAX_VISIBLE);
@@ -529,7 +566,7 @@ export default function NotificationStack({ extras }: { extras?: Record<string, 
         ref={setHost}
         aria-live="polite"
         style={{
-          position: 'fixed', top: TOP_PX, insetInlineEnd: EDGE_PX, zIndex: 900,
+          position: 'fixed', top: topPx, insetInlineEnd: EDGE_PX, zIndex: 900,
           display: 'flex', flexDirection: 'column', gap: 9,
           width: `min(${CARD_W}px, calc(100vw - ${EDGE_PX * 2}px))`, pointerEvents: 'none',
         }}

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { pageMetadata } from '@/lib/seo';
+import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 import AboutClient from './AboutClient';
 
 export const metadata: Metadata = pageMetadata({
@@ -16,12 +16,7 @@ const aboutSchema = {
   name: 'About Gavelling',
   description: 'Meet the team behind Gavelling: MUN practitioners building the modern infrastructure for Model UN sessions and conferences worldwide.',
   url: 'https://gavelling.com/about',
-  publisher: {
-    '@type': 'Organization',
-    name: 'Gavelling',
-    url: 'https://gavelling.com',
-    logo: { '@type': 'ImageObject', url: 'https://gavelling.com/GavellingLogo.png' },
-  },
+  publisher: JSONLD_PUBLISHER,
 };
 
 const breadcrumbSchema = {

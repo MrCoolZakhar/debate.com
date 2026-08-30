@@ -7,7 +7,7 @@ import GavelChip from '@/components/GavelChip';
 import CommitteeIdentityBadge from '@/components/CommitteeIdentityBadge';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Committee, Delegate, DelegateStatus } from '@/lib/types';
+import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
@@ -28,6 +28,8 @@ import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
 import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
+import SidebarResizer from '@/components/SidebarResizer';
+import { SIDEBAR_DEFAULT_WIDTH, loadSidebarWidth, saveSidebarWidth } from '@/lib/sidebarWidth';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import NotificationStack, { type NotificationExtra } from '@/components/notifications/NotificationStack';
@@ -149,15 +151,6 @@ function abbrevCountry(name: string): string {
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
 
 const localUpdateTime = { current: 0 };
-
-// True while the acting chair's UNMODERATED caucus countdown is running. That clock lives
-// entirely in local state — nothing writes caucus.remainingTime per tick — so a fresh row
-// fetched by the subscription would rewind it to the value stored when the caucus started.
-// The subscription uses this to carry the live countdown across a refetch. It is NOT a
-// debounce: everything else, including a caucus the head chair has just ended, still comes
-// from the fresh row. (The moderated caucus clock needs no equivalent — it only ticks while
-// timerRunning is true, which already pins caucus/phase in the subscription.)
-const caucusClockRunning = { current: false };
 
 // How long a locally-written delegate status stays pinned against an incoming refetch before
 // we hand control back to the DB row. Deliberately the same number as OPTIMISTIC_TTL_MS in
@@ -618,8 +611,14 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
   const [running, setRunning] = useState(() => !isViewOnly && !!committee.caucus?.totalStartedAt);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const caucus = committee.caucus!;
-  const remainingRef = useRef(caucus.remainingTime);
-  remainingRef.current = caucus.remainingTime;
+  // The LIVE remaining seconds, re-derived from the anchor on every tick — never a local
+  // decrement. `caucus.remainingTime` is only the value AT `caucus.totalStartedAt`; treating
+  // it as a live counter here is what let this clock part company with the delegate board
+  // (measured: chair frozen at 9:27 while delegates and the DB read 8:07) with nothing to
+  // pull the two back together.
+  const [liveTotal, setLiveTotal] = useState(() => caucusRemainingNow(caucus));
+  const remainingRef = useRef(liveTotal);
+  remainingRef.current = liveTotal;
   const [showExtendUnmod, setShowExtendUnmod] = useState(false);
   const [extendMinsUnmod, setExtendMinsUnmod] = useState(5);
 
@@ -671,37 +670,31 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
     if (cowEnabled) { setCowRemaining(cowDefaultSecs); setCowActive(true); }
   };
 
+  // Pure READER (RULE 3 / RULE 4): re-derives from the persisted anchor and touches nothing
+  // but its own state — no setCommittee, no updateLocal, no localUpdateTime. The interval is
+  // a repaint trigger, not the clock, so a throttled or blocked tab loses repaints rather
+  // than seconds and lands on the right number as soon as it runs again.
+  const unmodAnchor = committee.caucus?.totalStartedAt ?? null;
+  const unmodBase = committee.caucus?.remainingTime ?? null;
   useEffect(() => {
-    if (running) {
-      // structural=false (RULE 4 / MUST NEVER HAPPEN #4). This is a per-second tick, not a
-      // structural write: setting localUpdateTime here would keep the 3s debounce permanently
-      // armed for the whole unmoderated caucus, and the subscription returns early for
-      // speakers_list inside the debounce — so a co-chair's GSL edit or an approved GSL request
-      // would stay invisible to the acting chair until the caucus ended. Genuine mutations in
-      // this view (handleCowTap, handleEndCaucus) keep structural=true.
-      const tick = () => {
-        if (remainingRef.current <= 0) { setRunning(false); return; }
-        updateLocal(setCommittee, (c) => {
-          if (!c.caucus) return c;
-          const newTotal = Math.max(0, c.caucus.remainingTime - 1);
-          return { ...c, caucus: { ...c.caucus, remainingTime: newTotal } };
-        }, false);
-      };
-      tick();
-      intervalRef.current = setInterval(tick, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running]);
+    const read = () => caucusRemainingNow(
+      unmodBase === null ? null : ({ remainingTime: unmodBase, totalStartedAt: unmodAnchor } as CaucusState),
+    );
+    setLiveTotal(read());
+    if (!unmodAnchor) return;   // null anchor IS the paused signal
+    const tick = () => {
+      const next = read();
+      setLiveTotal(next);
+      if (next <= 0) setRunning(false);
+    };
+    intervalRef.current = setInterval(tick, 1000);
+    return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
+  }, [unmodAnchor, unmodBase]);
 
-  // Tell the subscription the local-only unmoderated countdown is live, so a refetch carries
-  // it instead of rewinding it. Cleared on stop AND on unmount (caucus end) so it can never
-  // stay armed past the caucus.
-  useEffect(() => {
-    caucusClockRunning.current = running && !isViewOnly;
-    return () => { caucusClockRunning.current = false; };
-  }, [running, isViewOnly]);
+  // Keep the button in step with the persisted anchor, so a co-chair pressing play/pause (or
+  // this chair reloading) is reflected here rather than leaving a PAUSE label over a stopped
+  // clock.
+  useEffect(() => { setRunning(!isViewOnly && !!unmodAnchor); }, [unmodAnchor, isViewOnly]);
 
   // ── H2 — ANCHOR the total clock ────────────────────────────────────────────
   // Nothing writes remainingTime per second (that is the H1 bug), so on its own the value
@@ -711,9 +704,9 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
   // device compute `remaining = remainingTime - (now - totalStartedAt)` locally. Same
   // proven shape as current_speaker.started_at.
   //
-  // ONE write per press. Not structural — no localUpdateTime (RULE 4): this is the same
-  // clock the local tick already owns, and caucusClockRunning already carries it across a
-  // refetch. Arming the debounce here would blind the chair to speakers_list events.
+  // ONE write per press. Not structural — no localUpdateTime (RULE 4): arming the debounce
+  // here would blind the chair to speakers_list events for 3s. It does not need to be:
+  // the write IS the clock now, so there is no local-only value for an echo to clobber.
   const handleToggleUnmodClock = () => {
     const nowRunning = !running;
     setRunning(nowRunning);
@@ -727,9 +720,9 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
   // restamped to now so the elapsed time already burnt is not charged twice.
   const handleExtendUnmod = (addSecs: number) => {
     if (addSecs <= 0 || !committee.caucus) return;
-    // remainingRef is the LIVE local value (the local tick decrements it every second).
-    // Never re-derive it through caucusRemainingNow here — locally the elapsed time has
-    // already been subtracted, so that would charge it twice.
+    // remainingRef is the LIVE derived value, so the elapsed time is already subtracted —
+    // never use committee.caucus.remainingTime here, which is the value at the anchor and
+    // would hand back every second the caucus had already burnt.
     const extended = { ...committee.caucus, totalTime: committee.caucus.totalTime + addSecs };
     const anchored = anchorCaucusClock(extended, remainingRef.current + addSecs, running);
     updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), true);
@@ -782,11 +775,13 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
           </span>
         )}
       </div>
-      <div className={`text-9xl font-black font-mono tabular-nums mb-8 ${caucus.remainingTime <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>
-        {formatTime(caucus.remainingTime)}
+      {/* liveTotal, not caucus.remainingTime — the stored field is the value at the anchor,
+          so rendering it raw is a clock that only moves when the chair writes. */}
+      <div className={`text-9xl font-black font-mono tabular-nums mb-8 ${liveTotal <= 30 ? 'text-red-500' : 'text-[#1C1410]'}`}>
+        {formatTime(liveTotal)}
       </div>
       <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
-        <div className="h-full bg-[#B6871F] rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (caucus.remainingTime / caucus.totalTime) * 100 : 0}%` }} />
+        <div className="h-full bg-[#B6871F] rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (liveTotal / caucus.totalTime) * 100 : 0}%` }} />
       </div>
       {/* Consultation of the Whole — live open-floor delegation board (tap to set speaker; co-chairs too) */}
       {caucus.isConsultation && (
@@ -914,12 +909,14 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
 // ── Moderated Caucus Main ─────────────────────────────────────────────────────
 function ModeratedCaucusMain({
   committee, setCommittee,
-  speakerTimeRemaining, timerRunning,
+  speakerTimeRemaining, timerRunning, caucusSeconds,
   activePopover, setActivePopover, extraTimeAdded,
   handleToggleTimer, handleRestartTime, handleNextCaucusSpeaker, handleEndCaucus,
   sessionEnded, isViewOnly = false,
 }: {
   committee: Committee; setCommittee: CommitteeSetter;
+  /** Live seconds on the TOTAL caucus clock, derived from the anchor by the page. */
+  caucusSeconds: number;
   speakerTimeRemaining: number; timerRunning: boolean;
   activePopover: 'extraTime' | 'rightToReply' | null;
   setActivePopover: (v: 'extraTime' | 'rightToReply' | null) => void;
@@ -955,51 +952,28 @@ function ModeratedCaucusMain({
     return () => document.removeEventListener('mousedown', handler);
   }, [showExtendMod]);
 
-  // Local live remaining-time — ticks in lockstep with speakerTimeRemaining.
-  const [liveRemaining, setLiveRemaining] = useState(caucus.remainingTime);
-  const liveRemainingRef = useRef(caucus.remainingTime);
+  // The total clock is `caucusSeconds`, derived from the anchor by the page and passed in.
+  // This component used to keep a THIRD copy of it (`liveRemaining`), decremented by the
+  // per-tick delta of the speaker atom — so the chair's own two clocks could disagree with
+  // each other as well as with the delegates. One derivation, one number, everywhere.
+  const liveRemaining = caucusSeconds;
 
-  // Resync when DB remainingTime jumps by more than 2s (extend / external write).
-  useEffect(() => {
-    const drift = Math.abs(caucus.remainingTime - liveRemainingRef.current);
-    if (drift > 2) {
-      liveRemainingRef.current = caucus.remainingTime;
-      setLiveRemaining(caucus.remainingTime);
-    }
-  }, [caucus.remainingTime]);
-
-  // Tick total in lockstep with the speaker atom — one decrement per speaker tick.
-  const lastSpeakerTickRef = useRef(speakerTimeRemaining);
-  useEffect(() => {
-    if (!timerRunning) { lastSpeakerTickRef.current = speakerTimeRemaining; return; }
-    const delta = lastSpeakerTickRef.current - speakerTimeRemaining;
-    lastSpeakerTickRef.current = speakerTimeRemaining;
-    if (delta > 0) {
-      setLiveRemaining((prev) => {
-        const next = Math.max(0, prev - delta);
-        liveRemainingRef.current = next;
-        return next;
-      });
-    }
-  }, [speakerTimeRemaining, timerRunning]);
-
-  // Extending RE-ANCHORS the total clock (H2). `caucus.remainingTime` is already the LIVE
-  // local value — the chair-level tick decrements it every second — so it is used as-is and
-  // never re-derived through caucusRemainingNow, which would subtract the elapsed time a
-  // second time. In a moderated caucus the total clock only advances while the speaker
-  // timer runs, so the anchor is armed iff timerRunning: the two stay in lockstep.
+  // Extending RE-ANCHORS the total clock (H2). `caucusSeconds` is the LIVE derived value, so
+  // the elapsed time is already subtracted — never use `caucus.remainingTime` here, which is
+  // the value at the anchor and would refund every second the caucus had already burnt. In a
+  // moderated caucus the total clock only advances while the speaker timer runs, so the
+  // anchor is armed iff timerRunning: the two stay in lockstep.
   const handleExtendMod = (addSecs: number) => {
     if (addSecs <= 0 || !committee.caucus) return;
     const extended = { ...committee.caucus, totalTime: committee.caucus.totalTime + addSecs };
-    const anchored = anchorCaucusClock(extended, committee.caucus.remainingTime + addSecs, timerRunning);
+    const anchored = anchorCaucusClock(extended, caucusSeconds + addSecs, timerRunning);
     updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), true);
     updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
     setShowExtendMod(false);
   };
 
   const speakTime2 = speakerTime > 0 ? speakerTime : 1;
-  const remainingForMax = committee.caucus?.remainingTime ?? liveRemaining;
-  const maxByTime = Math.floor(remainingForMax / speakTime2);
+  const maxByTime = Math.floor(liveRemaining / speakTime2);
   const totalProgress = caucus.totalTime > 0 ? (liveRemaining / caucus.totalTime) * 100 : 0;
   const caucusProgress = speakerTime > 0 ? (speakerTimeRemaining / speakerTime) * 100 : 0;
 
@@ -1356,6 +1330,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [timerRunning, setTimerRunning] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
+  /**
+   * Draggable roster-sidebar width. Starts at the historical w-[22rem] so the
+   * server-rendered markup matches; the stored preference is adopted in an
+   * effect below, because localStorage cannot be read during render.
+   *
+   * AGENTS.md RULE 3/4: this is its own isolated atom, exactly like
+   * speakerTimeRemaining. It never enters the committee object, so it can
+   * never call updateLocal and can never move `localUpdateTime`. The drag
+   * itself does not even come through here — SidebarResizer paints
+   * `sidebarRef.current.style.width` per frame and commits once on release.
+   */
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const [showSliders, setShowSliders] = useState(false);
   const [gslListView, setGslListView] = useState<'az' | 'queue'>('az');
   const [showMotions, setShowMotions] = useState(false);
@@ -1395,6 +1382,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Isolated timer atom — ticks never touch the `committee` object, preventing
   // whole-tree re-renders every second.
   const [speakerTimeRemaining, setSpeakerTimeRemaining] = useState(90);
+  // ── The speaker clock's ANCHOR, and the only thing the tick reads ────────────
+  // This pair mirrors current_speaker.{time_remaining, started_at} exactly, so the
+  // chair renders the SAME function of the SAME two numbers that every other surface
+  // renders (speakerRemainingNow). Before this existed the tick did `prev - 1`, which
+  // is a different clock: it counts INTERVAL FIRINGS, not seconds. A browser coalesces
+  // the firings of a background/throttled/blocked tab into one, so the chair's clock
+  // silently ran slow and never reconverged — measured at 15s lost to a single 12s
+  // stall, permanently. Deriving from the anchor makes a missed tick cost nothing: the
+  // next one lands on the right number.
+  const speakerAnchorRef = useRef<{ base: number; startedAt: string | null }>({ base: 90, startedAt: null });
+  /* The single writer for the speaker clock. `startedAt` null = paused, and `base` is
+     then the literal truth. ALWAYS seat both together — a base without its anchor (or
+     vice versa) is the desync. Reader only: never touches `committee`, never sets
+     localUpdateTime (RULE 3 / RULE 4). */
+  const seatSpeakerClock = useCallback((base: number, startedAt: string | null) => {
+    const safeBase = Number.isFinite(base) ? Math.max(0, Math.round(base)) : 0;
+    speakerAnchorRef.current = { base: safeBase, startedAt: startedAt ?? null };
+    setSpeakerTimeRemaining(speakerRemainingNow(safeBase, startedAt ?? null));
+  }, []);
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [headChairName, setHeadChairName] = useState<string | null>(null);
   // Gavel chip: live presence dots + the transient handover toast.
@@ -1532,11 +1538,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // seats speakers with the CAUCUS speaking time. Using speakerTimeLimit therefore
           // rewound a paused-then-resumed GSL speaker and reset every caucus speaker to the
           // committee default (H5).
-          const remaining = speakerRemainingNow(found.speakerTimeRemaining, found.speakerStartedAt);
-          setSpeakerTimeRemaining(remaining);
-          if (remaining > 0) setTimerRunning(true);
+          seatSpeakerClock(found.speakerTimeRemaining, found.speakerStartedAt);
+          if (speakerRemainingNow(found.speakerTimeRemaining, found.speakerStartedAt) > 0) setTimerRunning(true);
         } else {
-          setSpeakerTimeRemaining(found.speakerTimeRemaining);
+          seatSpeakerClock(found.speakerTimeRemaining, null);
         }
         // The load has authoritatively reconstructed the speaker clock from the DB anchor.
         // Tell the caucus seeding effect below not to clobber it on its first pass (H5).
@@ -1622,7 +1627,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             // Anchor base is the row's own time_remaining, NOT the committee speaker limit:
             // a moderated-caucus speaker is seated with the CAUCUS speaking time, and a
             // paused-then-resumed speaker carries their true remainder (H5).
-            setSpeakerTimeRemaining(speakerRemainingNow(cs.speakerTimeRemaining, cs.speakerStartedAt));
+            seatSpeakerClock(cs.speakerTimeRemaining, cs.speakerStartedAt);
             return;
           }
 
@@ -1725,29 +1730,24 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               delegates: applyPinnedStatuses(updated.delegates),
             } : updated);
           } else {
-            // Unmoderated caucus: carry ONLY the live countdown across the refetch (see
-            // caucusClockRunning). Every other field is taken fresh — critically, if the head
-            // chair has ended the caucus, updated.caucus is null and the guard falls through
-            // to the plain fresh row. Everything else below is unchanged.
-            if (caucusClockRunning.current && !isViewOnlyRef.current) {
-              setCommittee((prev) => (prev?.caucus && updated.caucus)
-                ? { ...updated, caucus: { ...updated.caucus, remainingTime: prev.caucus.remainingTime }, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
-                : updated);
-            } else {
-              setCommittee((prev) => prev
-                ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
-                : updated);
-            }
+            // The unmoderated countdown no longer needs carrying across a refetch. It used
+            // to: the clock lived only in local state, so a fresh row would rewind it, and
+            // `caucusClockRunning` pinned the local value to stop that. Now the clock IS the
+            // persisted anchor — the fresh row carries it — and pinning would be actively
+            // wrong, holding a stale base over a co-chair's extend.
+            setCommittee((prev) => prev
+              ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
+              : updated);
             // Sync isolated timer atom only when local timer is not running. Anchor base is
             // current_speaker.time_remaining, not the committee limit — see H5 above.
-            setSpeakerTimeRemaining(speakerRemainingNow(updated.speakerTimeRemaining, updated.speakerStartedAt));
+            seatSpeakerClock(updated.speakerTimeRemaining, updated.speakerStartedAt);
           }
         }, (status) => onRealtimeStatus(found.id, status));
       }
     }
     load();
     return () => unsubscribe?.();
-  }, [code, onRealtimeStatus]);
+  }, [code, onRealtimeStatus, seatSpeakerClock]);
 
   useEffect(() => {
     if (!committee?.id || !myChairName) return;
@@ -1857,7 +1857,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       setSpeakerTimeLimitLocal(fresh.speakerTimeLimit);
       // Anchor base is current_speaker.time_remaining, not the committee limit — see H5.
       const remaining = speakerRemainingNow(fresh.speakerTimeRemaining, fresh.speakerStartedAt);
-      setSpeakerTimeRemaining(remaining);
+      seatSpeakerClock(fresh.speakerTimeRemaining, fresh.speakerStartedAt);
       if (fresh.speakerStartedAt && !lost && remaining > 0) setTimerRunning(true);
     })();
     return () => { cancelled = true; };
@@ -1885,14 +1885,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Timer — isolated: only updates the speakerTimeRemaining atom, never the committee object.
   // This prevents whole-tree re-renders every second (S1).
   // tickSpeakerTimerInDB removed — DB is synced only at pause/next/expire (S2).
+  //
+  // The tick RE-DERIVES from speakerAnchorRef every time; it does NOT decrement. That is
+  // the whole fix: the interval is now only a repaint trigger, so losing firings (hidden
+  // tab, blocked main thread, sleeping laptop) costs accuracy nothing. Still a pure
+  // reader — no setCommittee, no updateLocal, no localUpdateTime (RULE 3 / RULE 4).
   useEffect(() => {
     if (timerRunning) {
       const tick = () => {
-        setSpeakerTimeRemaining((prev) => {
-          const next = Math.max(0, prev - 1);
-          if (next === 0) setTimerRunning(false);
-          return next;
-        });
+        const { base, startedAt } = speakerAnchorRef.current;
+        const next = speakerRemainingNow(base, startedAt);
+        setSpeakerTimeRemaining(next);
+        if (next === 0) setTimerRunning(false);
       };
       // Fire once immediately (fixes 1-second delay), then every 1000ms
       tick();
@@ -1921,33 +1925,45 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       speakerClockHydratedRef.current = false;
       return;
     }
-    setSpeakerTimeRemaining(committee.caucus.speakingTime);
+    seatSpeakerClock(committee.caucus.speakingTime, null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.phase, committee?.caucus?.speakingTime]);
 
-  // ── H2 — resolve a stored total-clock ANCHOR into a live local value ────────
-  // The DB stores `remainingTime` as the value AT `totalStartedAt`, never a per-second
-  // write. Whenever a caucus arrives carrying an anchor this device has not seen before
-  // (initial load, rejoin, or a refetch after another chair pressed play), collapse it to
-  // the real remaining time. Without this a chair who refreshed mid-caucus resumed from the
-  // start-of-caucus value — the whole point of H2.
+  // ── The TOTAL caucus clock, derived — never decremented ─────────────────────
+  // `caucus.remainingTime` is the value AT `caucus.totalStartedAt`, and the two together
+  // are an ANCHOR, not a live countdown. Everything that renders this clock — the
+  // delegate board, the advisor view, the organiser live wall — reads it that way via
+  // caucusRemainingNow.
   //
-  // Keyed on the anchor VALUE, and every value is consumed at most once. That matters: the
-  // subscription's caucusClockRunning/timerRunning carries re-attach the SAME anchor to an
-  // already-live remainingTime on every refetch, and re-resolving it would subtract the
-  // elapsed seconds a second time. A genuinely new anchor always arrives with a fresh base.
+  // The chair used to be the exception: it collapsed the anchor into a "live" local
+  // remainingTime and then decremented that copy once per second. So the same field meant
+  // two different things on two surfaces, and the moment anything disturbed the chair's
+  // decrement (a hidden tab, a blocked main thread, a refetch pinning the old value) the
+  // two readings parted company with nothing to pull them back. Measured on a real
+  // session: chair 9:27, delegate 8:09, DB anchor 8:07 — and the chair was frozen while
+  // the delegates kept draining.
   //
-  // structural=false — this is clock state, not a structural mutation (RULE 4).
-  const consumedAnchorRef = useRef<string | null>(null);
+  // Now the chair is just another reader of the anchor it wrote. `remainingTime` in local
+  // state is only ever changed by an explicit chair action that also writes the DB, so the
+  // local pair and the persisted pair stay identical by construction.
+  const [caucusSeconds, setCaucusSeconds] = useState(0);
+  const caucusSecondsRef = useRef(0);
+  caucusSecondsRef.current = caucusSeconds;
+  const caucusAnchor = committee?.caucus?.totalStartedAt ?? null;
+  const caucusAnchoredRemaining = committee?.caucus?.remainingTime ?? null;
   useEffect(() => {
-    const anchor = committee?.caucus?.totalStartedAt ?? null;
-    if (!anchor || consumedAnchorRef.current === anchor) return;
-    consumedAnchorRef.current = anchor;
-    const live = caucusRemainingNow(committee!.caucus!);
-    if (live === committee!.caucus!.remainingTime) return;
-    updateLocal(setCommittee, (prev) => (prev.caucus ? { ...prev, caucus: { ...prev.caucus, remainingTime: live } } : prev), false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee?.caucus?.totalStartedAt]);
+    const read = () => caucusRemainingNow(
+      caucusAnchoredRemaining === null
+        ? null
+        : ({ remainingTime: caucusAnchoredRemaining, totalStartedAt: caucusAnchor } as CaucusState),
+    );
+    setCaucusSeconds(read());
+    // A null anchor IS the paused signal — the stored value is the literal truth and there
+    // is nothing to tick.
+    if (!caucusAnchor) return;
+    const id = setInterval(() => setCaucusSeconds(read()), 1000);
+    return () => clearInterval(id);
+  }, [caucusAnchor, caucusAnchoredRemaining]);
 
   // H3 (local half) — entering ANY caucus stops the GSL clock on this device.
   // MotionsModal can only null `currentSpeaker` in the committee object; `timerRunning` is
@@ -1964,50 +1980,54 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (prev !== null && isCaucus && !wasCaucus) setTimerRunning(false);
   }, [committee?.phase]);
 
-  // Sync caucus total timer with speaker atom — one tick per second while running.
-  // Only the acting (head) chair runs this clock. A view-only co-chair must not: it would
-  // refresh the structural-write debounce every second (blinding itself to the head chair's
-  // caucus-end broadcast) and, on expiry, write the caucus/phase it does not own.
+  // ── Moderated-caucus EXPIRY — the one-shot, not a countdown ─────────────────
+  // The countdown itself is the derived `caucusSeconds` above; this effect only fires the
+  // single structural write that ends the caucus when the derived clock reaches zero.
+  // Because it is driven by a derived value rather than by a decrement, a chair whose tab
+  // was asleep past the deadline ends the caucus on wake instead of sitting on a clock
+  // that stopped — and it fires exactly once (expiredRef), not once per tick.
   //
-  // structural=false is MANDATORY here (RULE 4 / MUST NEVER HAPPEN #4): a per-second tick that
-  // set localUpdateTime would hold the 3s debounce open for the entire caucus, and the
-  // subscription returns early for speakers_list inside the debounce — so the acting chair
-  // would silently discard every queue reorder, removal and approved GSL request for the whole
-  // caucus. The caucus countdown does not need the debounce: it is already protected from the
-  // realtime echo by the timerRunning pin above (`caucus: prev.caucus, phase: prev.phase`).
-  // Only the one-shot expiry below is a genuine structural write, and it arms the debounce
-  // itself so the two separate DB updates (caucus, then phase) cannot flicker back in.
+  // Only the acting (head) chair runs this. A view-only co-chair must not: it would write
+  // the caucus/phase it does not own, and arming the debounce would blind it to the head
+  // chair's caucus-end broadcast.
+  const caucusExpiredRef = useRef(false);
   useEffect(() => {
-    if (!timerRunning || isViewOnly) return;
+    // Re-arm whenever a caucus with time on the clock is in play.
+    if (caucusSeconds > 0) caucusExpiredRef.current = false;
+  }, [caucusSeconds]);
+  useEffect(() => {
+    if (isViewOnly || caucusExpiredRef.current) return;
     if (committee?.phase !== 'moderated-caucus' || !committee.caucus) return;
+    if (!committee.caucus.totalStartedAt) return;   // paused — a paused clock never expires
+    if (caucusSeconds > 0) return;
+    caucusExpiredRef.current = true;
+    setTimerRunning(false);
+    // This IS a structural write (unlike the tick that used to live here), so it arms the
+    // debounce itself: the two separate DB updates below must not flicker back in.
+    localUpdateTime.current = Date.now();
     updateLocal(setCommittee, (prev) => {
       if (!prev?.caucus || prev.phase !== 'moderated-caucus') return prev;
-      const next = Math.max(0, prev.caucus.remainingTime - 1);
-      if (next === 0) {
-        localUpdateTime.current = Date.now();
-        // H4 — clear the current_speaker DB ROW as well as local state. Without this the row
-        // still holds the caucus speaker (with started_at set), so the next chair refresh
-        // resurrects them as the GSL current speaker — a delegate who was never on the GSL —
-        // and the following "Next" logs their speaking time a second time. Conditional and
-        // serialised against nextSpeaker(), so it is not the blind clear MUST NEVER HAPPEN
-        // #5 forbids.
-        if (prev.currentSpeaker) {
-          clearCurrentSpeakerIfUnchanged(
-            prev.id, prev.currentSpeaker.delegateId, prev.currentSpeaker.country,
-            prev.code, prev.dbChairJoinSuffix ?? undefined,
-          );
-        }
-        updateCaucusInDB(prev.id, null, prev.code, prev.dbChairJoinSuffix ?? undefined);
-        setPhaseInDB(prev.id, 'speakers-list', prev.code, prev.dbChairJoinSuffix ?? undefined);
-        // Auto-expiry must mirror the manual End button: clear the caucus and its speaker but
-        // NEVER prepend the current caucus speaker (or a Room-Order "Speaker N" placeholder)
-        // into the permanent GSL. The GSL is returned exactly as it was before the caucus.
-        return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: prev.speakersList };
+      // H4 — clear the current_speaker DB ROW as well as local state. Without this the row
+      // still holds the caucus speaker (with started_at set), so the next chair refresh
+      // resurrects them as the GSL current speaker — a delegate who was never on the GSL —
+      // and the following "Next" logs their speaking time a second time. Conditional and
+      // serialised against nextSpeaker(), so it is not the blind clear MUST NEVER HAPPEN
+      // #5 forbids.
+      if (prev.currentSpeaker) {
+        clearCurrentSpeakerIfUnchanged(
+          prev.id, prev.currentSpeaker.delegateId, prev.currentSpeaker.country,
+          prev.code, prev.dbChairJoinSuffix ?? undefined,
+        );
       }
-      return { ...prev, caucus: { ...prev.caucus, remainingTime: next } };
+      updateCaucusInDB(prev.id, null, prev.code, prev.dbChairJoinSuffix ?? undefined);
+      setPhaseInDB(prev.id, 'speakers-list', prev.code, prev.dbChairJoinSuffix ?? undefined);
+      // Auto-expiry must mirror the manual End button: clear the caucus and its speaker but
+      // NEVER prepend the current caucus speaker (or a Room-Order "Speaker N" placeholder)
+      // into the permanent GSL. The GSL is returned exactly as it was before the caucus.
+      return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: prev.speakersList };
     }, false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [speakerTimeRemaining]);
+  }, [caucusSeconds, committee?.phase, isViewOnly]);
 
   // RTR overlay countdown — fully independent of speakersList/DB
   useEffect(() => {
@@ -2269,6 +2289,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (!committee?.code) return;
     saveChatReadCounts(committee.code, { role: 'chair', identity: myChairName }, chatReadCounts);
   }, [chatReadCounts, committee?.code, myChairName]);
+
+  // ── Sidebar width ─────────────────────────────────────────────────────────
+  // Adopted after mount (localStorage is an external store; reading it during
+  // render would desync the server markup). Keyed by READER for the same
+  // reason the chat read-state is — two chairs on one dais laptop must not
+  // resize the roster for each other. See src/lib/sidebarWidth.ts.
+  useEffect(() => {
+    const stored = loadSidebarWidth({ role: 'chair', identity: myChairName });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (stored !== null) setSidebarWidth(stored);
+  }, [myChairName]);
+
+  // One commit per gesture (pointer release, or one keypress on the focused
+  // separator) — never per frame. Writes localStorage and nothing else: no DB
+  // write, no committee mutation, so `localUpdateTime` stays where it was.
+  const handleSidebarResize = useCallback((next: number) => {
+    setSidebarWidth(next);
+    saveSidebarWidth({ role: 'chair', identity: myChairName }, next);
+  }, [myChairName]);
 
   // ── Notifications ─────────────────────────────────────────────────────────
   // See src/lib/sessionNotifications.ts for the four rules this obeys. The store is
@@ -2653,7 +2692,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const [next, ...rest] = committee.speakersList;
     const timeToUse = speakerTimeLimit;
 
-    setSpeakerTimeRemaining(timeToUse);
+    // nextSpeakerInDB writes { time_remaining: timeToUse, started_at: null } — seat the
+    // local anchor to exactly that so this device and every reader agree immediately.
+    seatSpeakerClock(timeToUse, null);
 
     localUpdateTime.current = Date.now();
 
@@ -2676,32 +2717,61 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     localUpdateTime.current = Date.now();
   };
 
+  // Extra time RE-ANCHORS, and is now PERSISTED.
+  //
+  // This used to add the seconds to the local atom and nothing else, so no other device
+  // ever learned about them: a co-chair's clock, the organiser wall and a chair who simply
+  // reloaded all kept counting to the un-extended zero. That was survivable only while the
+  // chair's own clock was a private local counter. Now that every surface — including this
+  // one — derives from current_speaker.{time_remaining, started_at}, an unpersisted grant
+  // would be erased by this device's very next tick, so persisting it is what makes the
+  // button work at all. No schema change: the existing two columns carry it.
   const handleAddExtraTime = (secs: number) => {
-    setSpeakerTimeRemaining((prev) => prev + secs);
+    if (secs <= 0) return;
+    const running = timerRunning;
+    const base = speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt) + secs;
+    const startedAt = running ? new Date().toISOString() : null;
+    seatSpeakerClock(base, startedAt);
     extraTimeAddedSecsRef.current += secs;
     setExtraTimeAdded(true);
     setActivePopover(null);
     setExtraTimeSecs('');
+    // Optimistic-first, fire-and-forget (RULE 5). One write per press, never per second.
+    if (running) {
+      startSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current, startedAt!, base);
+    } else {
+      syncSpeakerTimeInDB(committeeIdRef.current, base, committeeCodeRef.current, chairSuffixRef.current);
+    }
   };
 
   const handleToggleTimer = () => {
     if (belowQuorum) return;
     const starting = !timerRunning;
     setTimerRunning(starting);
+    // The live remainder at the instant of the press — derived, so it is right even if the
+    // last repaint was a while ago.
+    const live = speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt);
     if (starting) {
-      startSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
+      // ONE anchor, written to the DB and seated locally as the SAME string, and the base
+      // is written alongside it. Stamping only `started_at` (as this used to) left the base
+      // at whatever a previous sync happened to store, so the chair and its readers started
+      // from two different numbers.
+      const startedAt = new Date().toISOString();
+      seatSpeakerClock(live, startedAt);
+      startSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current, startedAt, live);
     } else {
       // Sync current remaining time to DB on pause (S2 — no per-second writes)
+      seatSpeakerClock(live, null);
       stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
-      syncSpeakerTimeInDB(committeeIdRef.current, speakerTimeRemaining, committeeCodeRef.current, chairSuffixRef.current);
+      syncSpeakerTimeInDB(committeeIdRef.current, live, committeeCodeRef.current, chairSuffixRef.current);
     }
     // H2 — in a moderated caucus the TOTAL clock advances in lockstep with the speaker
     // clock, so play/pause is also the total clock's anchor point. One write per press,
-    // never per second: `remainingTime` is stamped with the live local value and
+    // never per second: `remainingTime` is stamped with the live derived value and
     // `totalStartedAt` with now (or null on pause), so delegates and advisors can render a
     // real countdown and a refresh cannot rewind it.
     if (committee.phase === 'moderated-caucus' && committee.caucus) {
-      const anchored = anchorCaucusClock(committee.caucus, committee.caucus.remainingTime, starting);
+      const anchored = anchorCaucusClock(committee.caucus, caucusSecondsRef.current, starting);
       // structural=false: this is the clock the local tick already owns and the timerRunning
       // pin already protects from the realtime echo. Arming the debounce (RULE 4 / MUST
       // NEVER HAPPEN #4) would make this device drop speakers_list events for 3s.
@@ -2717,9 +2787,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     extraTimeAddedSecsRef.current = 0;
     if (committee?.phase === 'moderated-caucus' && committee.caucus) {
       const speakTime = committee.caucus.speakingTime;
-      const spentSeconds = Math.max(0, speakTime - speakerTimeRemaining);
-      const newRemainingTime = committee.caucus.remainingTime + spentSeconds;
-      setSpeakerTimeRemaining(speakTime);
+      const live = speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt);
+      const spentSeconds = Math.max(0, speakTime - live);
+      // caucusSecondsRef, not caucus.remainingTime: the stored field is the value AT the
+      // anchor, so adding to it would refund seconds against a stale base and hand the
+      // caucus back time it had already burnt.
+      const newRemainingTime = caucusSecondsRef.current + spentSeconds;
+      seatSpeakerClock(speakTime, null);
+      syncSpeakerTimeInDB(committee.id, speakTime, committee.code, committee.dbChairJoinSuffix ?? undefined);
       // Ensure current speaker is in spokenCountries so a realtime echo cannot re-add them to the queue
       const currentCountry = committee.currentSpeaker?.country ?? null;
       const prevSpoken = committee.caucus.spokenCountries ?? [];
@@ -2732,7 +2807,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       updateLocal(setCommittee, (c) => ({ ...c, caucus: updated }), true);
       updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
     } else {
-      setSpeakerTimeRemaining(speakerTimeLimit);
+      seatSpeakerClock(speakerTimeLimit, null);
+      syncSpeakerTimeInDB(committee.id, speakerTimeLimit, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
   };
 
@@ -2749,8 +2825,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const prevCountry = committee.currentSpeaker?.country ?? null;
     // Count against the EXTENDED per-speaker limit (base + any +time) so extra time never
     // underflows the log and drops a real caucus speech (mirrors the GSL Next fix).
-    const spentOnCurrent = Math.max(0, (speakTime + extraTimeAddedSecsRef.current) - speakerTimeRemaining);
-    const newRemaining = committee.caucus.remainingTime;
+    const liveSpeaker = speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt);
+    const spentOnCurrent = Math.max(0, (speakTime + extraTimeAddedSecsRef.current) - liveSpeaker);
+    // The LIVE total, derived from the anchor — `caucus.remainingTime` is only the value at
+    // the anchor instant, so re-anchoring off it here would silently refund the whole
+    // speech to the caucus.
+    const newRemaining = caucusSecondsRef.current;
     const newSpoken = prevCountry && !(committee.caucus.spokenCountries ?? []).includes(prevCountry)
       ? [...(committee.caucus.spokenCountries ?? []), prevCountry]
       : (committee.caucus.spokenCountries ?? []);
@@ -2772,7 +2852,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }
     extraTimeAddedSecsRef.current = 0;
 
-    setSpeakerTimeRemaining(speakTime);
+    // nextSpeakerInDB below writes { time_remaining: speakTime, started_at: null }.
+    seatSpeakerClock(speakTime, null);
     localUpdateTime.current = Date.now();
 
     if (newRemaining <= 0) {
@@ -2857,13 +2938,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       currentSpeaker: null,
       speakerTimeRemaining: c.speakerTimeLimit,
     }), true);
-    setSpeakerTimeRemaining(committee.speakerTimeLimit);
+    seatSpeakerClock(committee.speakerTimeLimit, null);
   };
 
   const handleSetSpeakerTimeLimit = (seconds: number) => {
     setSpeakerTimeLimitLocal(seconds);
     setSpeakerTimeLimitInput(String(seconds));
-    setSpeakerTimeRemaining(seconds);
+    seatSpeakerClock(seconds, null);
+    syncSpeakerTimeInDB(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => ({ ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }));
     updateSpeakerTimeLimit(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
@@ -2998,6 +3080,24 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handleApproveGslRequest = async (motionId: string, delegateId: string, country: string) => {
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
+    /* Never seat the same delegation twice. Approve was an unconditional append,
+       so a double-click, two co-chairs acting on the same card, or an approve
+       racing a chair who had already added them by hand put one delegation on
+       the GSL more than once — and RULE 2 (currentSpeaker is popped OFF the
+       list) assumes each delegateId appears at most once, so the duplicate
+       desynced the queue for the whole committee. Clear the motion either way:
+       the request HAS been answered, they are on the list. */
+    const alreadyQueued = committee.speakersList.some((s) => s.delegateId === delegateId)
+      || committee.currentSpeaker?.delegateId === delegateId;
+    if (alreadyQueued) {
+      updateLocal(setCommittee, (c) => ({
+        ...c,
+        pendingMotions: c.pendingMotions.filter((m) => m.id !== motionId),
+      }), true);
+      void removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      localUpdateTime.current = Date.now();
+      return;
+    }
     updateLocal(setCommittee, (c) => ({
       ...c,
       speakersList: [...c.speakersList, { delegateId, country }],
@@ -3350,8 +3450,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         )}
         {committee.phase !== 'pre-session' && (
           <>
+            {/* Sidebar width is now inline and user-set (was w-[22rem] = 352px,
+                which is still the default and the SSR value). `borderRight`
+                moved to SidebarResizer below: the divider IS the border now, so
+                keeping both would draw two rules side by side. The main column
+                is flex-1, so it reflows as this narrows or widens. */}
             {showRollCall && (
-              <aside data-tutorial="speakers-sidebar" className="w-[22rem] flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
+              <aside
+                ref={sidebarRef}
+                data-tutorial="speakers-sidebar"
+                className="flex flex-col overflow-hidden shrink-0"
+                style={{ width: sidebarWidth, backgroundColor: '#1B3828' }}
+              >
                 {/* The committee's identity, stated ONCE for this whole column. RollCallPanel
                     below gets `hideIdentity` so it no longer prints the name and topic a
                     second time, one line down and behind its own border. Compact on purpose:
@@ -3450,6 +3560,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 </div>
               </aside>
             )}
+            {showRollCall && (
+              <SidebarResizer
+                width={sidebarWidth}
+                targetRef={sidebarRef}
+                onCommit={handleSidebarResize}
+                label={t('rollcall_resize_sidebar')}
+              />
+            )}
             <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
               {committee.phase === 'moderated-caucus' && committee.caucus && (
                 caucusLoading ? (() => {
@@ -3525,6 +3643,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     setCommittee={setCommittee}
                     speakerTimeRemaining={speakerTimeRemaining}
                     timerRunning={timerRunning}
+                    caucusSeconds={caucusSeconds}
                     activePopover={activePopover}
                     setActivePopover={setActivePopover}
                     extraTimeAdded={extraTimeAdded}

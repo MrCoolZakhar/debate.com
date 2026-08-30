@@ -18,13 +18,14 @@ import {
   entry,
   type RosterEntry,
 } from '@/components/ConferenceRosterPicker';
-import { matchPresetEmblem, committeeDisplayName } from '@/lib/presetNames';
+import { matchPresetEmblem } from '@/lib/presetNames';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { LogoDisc } from '@/components/LogoDisc';
+import { LogoCropModal } from '@/components/LogoCropModal';
+import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { queueEventEmail } from '@/lib/emailEvents';
-import Portal from '@/components/Portal';
 
 // ── Design constants ──────────────────────────────────────────────────────────
 
@@ -44,6 +45,22 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
   fontFamily: "'Outfit', sans-serif",
 };
+
+// Topics are capped at 120 characters. The cap applies per topic entry, not to
+// the topics array as a whole. It is enforced in the app only — a large share
+// of the topic entries already in the database are longer than this, so a CHECK
+// constraint would reject those rows on their next write. Legacy topics are
+// grandfathered via baselineTopics below.
+//
+// 120, not 60: a perfectly ordinary MUN topic runs past 60 without trying
+// ("Addressing the Rise of Non-State Actors and Transnational Organized Crime"
+// is 73), so the tighter cap fired on normal titles rather than on the runaway
+// ones it exists to catch — the longest in the database is over a thousand
+// characters.
+const TOPIC_MAX_LENGTH = 120;
+// Point at which the remaining-characters hint appears, so the limit is visible
+// before it is hit rather than only after.
+const TOPIC_HINT_AT = 95;
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
@@ -97,24 +114,13 @@ export function MonogramMedallion({ text, isCrisis, size }: { text: string; isCr
 }
 
 // ── Shared modal overlay ──────────────────────────────────────────────────────
+// Moved to @/components/ModalOverlay (background scroll lock + Escape + ARIA
+// live there now, shared by every dialog in the app). Re-exported so the many
+// existing `import { ModalOverlay } from '@/components/CommitteeEditorModal'`
+// call sites keep working.
 
-export function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  // Portal'd to document.body/#fit-root: the manage layout's content wrapper
-  // establishes its own stacking context (`relative z-10`), which traps
-  // `position: fixed` descendants below the header (z-30) and sidebar (z-25).
-  // Portaling out of that subtree is the only way the dim backdrop covers them.
-  return (
-    <Portal>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
-        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-        onClick={onClose}
-      >
-        <div onClick={e => e.stopPropagation()}>{children}</div>
-      </div>
-    </Portal>
-  );
-}
+import { ModalOverlay } from '@/components/ModalOverlay';
+export { ModalOverlay };
 
 // ── Session minting ───────────────────────────────────────────────────────────
 
@@ -454,6 +460,13 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   const [abbreviation, setAbbreviation] = useState(existing?.abbreviation ?? '');
   const [topics, setTopics] = useState<string[]>(existing?.topics ?? []);
   const [topicInput, setTopicInput] = useState('');
+  // The topics this committee was opened with. Every entry here is grandfathered:
+  // it predates the 60-character cap, so it stays on the committee untruncated and
+  // never blocks a save. Without this snapshot an organiser editing an old
+  // committee's notification email could not save it because of a topic they did
+  // not touch. Frozen at mount, exactly like baselineRoster below.
+  const [baselineTopics] = useState<string[]>(existing?.topics ?? []);
+  const [topicError, setTopicError] = useState('');
   const [difficulty, setDifficulty] = useState(existing?.difficulty ?? 'intermediate');
   const [roster, setRoster] = useState<RosterEntry[]>(initialRoster ?? []);
   const [baselineRoster] = useState<RosterEntry[]>(initialRoster ?? []);
@@ -471,6 +484,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   // the default from the name. An existing committee that already has an emblem
   // counts as manually set.
   const [emblemManuallySet, setEmblemManuallySet] = useState<boolean>(!!existing?.logo_url);
+  // The picked file, held while the organiser frames it in LogoCropModal — the
+  // same drag-to-fit step the conference logo upload uses. Nothing is uploaded
+  // until they save the crop.
+  const [emblemCropFile, setEmblemCropFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   // A selected preset can force the roster path (ICC/ICJ/Crisis/HoC/Senate/Press
@@ -488,7 +505,10 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     setLogoUrl(matchPresetEmblem(name, abbreviation));
   }, [name, abbreviation, emblemManuallySet]);
 
-  // Mirrors the conference logo upload in manage/[slug]/settings, same bucket, own folder.
+  // Mirrors the conference logo upload in manage/[slug]/settings, same bucket, own
+  // folder — including the LogoCropModal step in front of it, so a committee emblem
+  // is framed exactly the way a conference logo is. What arrives here is therefore
+  // always the crop tool's flattened 512×512 transparent PNG.
   async function handleEmblemUpload(file: File) {
     if (!session) return;
     if (file.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
@@ -506,10 +526,21 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
 
   function addTopic() {
     const t = topicInput.trim();
-    if (!t || topics.length >= 3 || topics.includes(t)) return;
+    if (!t || topics.length >= 3) return;
+    if (topics.includes(t)) { setTopicError('That topic is already on the list.'); return; }
+    // Over-length is not reported here: the live counter below the input has
+    // been showing the actionable message since the 61st character.
+    if (t.length > TOPIC_MAX_LENGTH) return;
     setTopics([...topics, t]);
     setTopicInput('');
+    setTopicError('');
   }
+
+  const topicLength = topicInput.trim().length;
+  const topicOverBy = topicLength - TOPIC_MAX_LENGTH;
+  // Only topics added or re-added during this edit are held to the cap. A topic
+  // carried over untouched from the database is exempt, however long it is.
+  const overLimitNewTopics = topics.filter((t) => t.length > TOPIC_MAX_LENGTH && !baselineTopics.includes(t));
 
   async function doCreate(supabase: ReturnType<typeof getAuthedClient>): Promise<boolean> {
     const delegationSize = doubleDelegation ? 2 : 1;
@@ -723,6 +754,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   async function handleSave(forceRemoval = false, forceDoubleOff = false) {
     if (!name.trim()) { setError('Committee name is required.'); return; }
     if (roster.length === 0) { setError(isCharacterRoster ? 'Add at least one character.' : 'Add at least one country.'); return; }
+    // Keyed off which topics changed, never off length alone — a committee whose
+    // saved topic already exceeds the cap must still save fine.
+    if (overLimitNewTopics.length > 0) {
+      setError(`Topics are limited to ${TOPIC_MAX_LENGTH} characters. Shorten or remove "${overLimitNewTopics[0].slice(0, 40)}…".`);
+      return;
+    }
     if (!session) return;
     setSaving(true); setError('');
     const supabase = getAuthedClient(session.access_token);
@@ -760,7 +797,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                     value={name}
                     onChange={setName}
                     onPresetSelect={(p) => {
-                      setName(committeeDisplayName(p.name, p.acronym));
+                      // Store the CANONICAL FULL NAME, always — the acronym goes
+                      // in its own column and the display layer collapses the two
+                      // (committeeDisplayName). This used to store the collapsed
+                      // label as the name, which is why production has rows whose
+                      // name and abbreviation are both literally "DISEC": the full
+                      // name was thrown away at creation and no surface could ever
+                      // show it beneath the acronym again.
+                      setName(p.name);
                       setAbbreviation(p.acronym);
                       setPresetRosterMode(p.rosterMode ?? 'country');
                       if (!isEdit) setRoster(p.members.map((m) => entry(m)));
@@ -813,7 +857,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                   <Loader size={48} />
                 </div>
               ) : logoUrl ? (
-                <LogoDisc src={logoUrl} alt="Committee emblem" size={96} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
+                /* `bare`: the emblem floats transparently, matching both the
+                   crop tool's preview and every other committee-emblem render
+                   (assignment page, CommitteeIdentityBadge). Without it this
+                   preview paints a near-white disc the emblem never actually
+                   ships on. */
+                <LogoDisc bare src={logoUrl} alt="Committee emblem" size={96} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
               ) : (
                 <MonogramMedallion text={abbreviation || name} isCrisis={isCrisis} size={96} />
               )}
@@ -848,16 +897,40 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/svg+xml"
                 style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleEmblemUpload(f); e.target.value = ''; }}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  if (f.size > 5 * 1024 * 1024) { setError('Emblem must be under 5MB.'); return; }
+                  setError('');
+                  setEmblemCropFile(f);
+                }}
               />
             </div>
           </div>
           <div>
             <label style={labelStyle}>Topics (optional, up to 3)</label>
             <div className="flex gap-2">
-              <input value={topicInput} onChange={e => setTopicInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }} placeholder="Type a topic..." style={{ ...inputStyle, flex: 1 }} disabled={topics.length >= 3} />
+              {/* Deliberately no maxLength: swallowing the 61st keystroke reads as a
+                  broken keyboard. Let them type past the cap and say so instead. */}
+              <input value={topicInput} onChange={e => { setTopicInput(e.target.value); if (topicError) setTopicError(''); }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTopic(); } }} placeholder="Type a topic..." aria-invalid={topicOverBy > 0} style={{ ...inputStyle, flex: 1, borderColor: topicOverBy > 0 ? '#8B2020' : '#DDD4C0' }} disabled={topics.length >= 3} />
               <button onClick={addTopic} disabled={topics.length >= 3} className="rounded-xl px-4 font-bold text-sm focus:outline-none" style={{ backgroundColor: topics.length >= 3 ? '#DDD4C0' : '#1B3828', color: topics.length >= 3 ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>Add topic</button>
             </div>
+            {/* One message line: a hard error wins, then the over-limit count,
+                then the approaching-the-limit countdown. Both colours clear 4.5:1
+                on #FAF8F3 — the muted #9A8A78 is not used here because this text
+                carries meaning. */}
+            {topicError ? (
+              <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{topicError}</p>
+            ) : topicOverBy > 0 ? (
+              <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                {topicOverBy} character{topicOverBy === 1 ? '' : 's'} over the {TOPIC_MAX_LENGTH}-character limit — shorten it to add this topic.
+              </p>
+            ) : topicLength >= TOPIC_HINT_AT ? (
+              <p className="text-xs mt-1.5" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+                {TOPIC_MAX_LENGTH - topicLength} character{TOPIC_MAX_LENGTH - topicLength === 1 ? '' : 's'} left.
+              </p>
+            ) : null}
             {topics.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {topics.map((t, i) => (
@@ -964,6 +1037,31 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
           </div>
         </div>
       </ModalOverlay>
+    )}
+    {/* Drag-to-fit crop step, flattens the chosen framing into a square
+        transparent PNG, then hands off to the existing upload path — the same
+        two-step the conference logo uses. Portal'd for the same reason
+        ModalOverlay is: the crop tool is `position: fixed`, and the manage
+        layout's content wrapper is a stacking context that would trap it under
+        the header. It mounts after the editor's own portal, so at equal z-index
+        it paints above the editor rather than behind it. */}
+    {emblemCropFile && (
+      <Portal>
+        <LogoCropModal
+          file={emblemCropFile}
+          /* Committee emblems ship transparent and render `LogoDisc bare`
+             everywhere they appear, so the crop preview must not sit them on a
+             white disc — the ring of disc showing around the artwork reads as a
+             white outline baked into the file. Conference logos keep the disc:
+             they genuinely render on one. */
+          bare
+          onCancel={() => setEmblemCropFile(null)}
+          onSave={(blob) => {
+            setEmblemCropFile(null);
+            handleEmblemUpload(new File([blob], 'emblem.png', { type: 'image/png' }));
+          }}
+        />
+      </Portal>
     )}
     </>
   );

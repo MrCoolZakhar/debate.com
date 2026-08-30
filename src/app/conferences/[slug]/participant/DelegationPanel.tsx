@@ -19,6 +19,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { NEU, NeuButton } from '@/components/neu';
+import ProfileLink from '@/components/ProfileLink';
 import Loader from '@/components/Loader';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import {
@@ -106,7 +107,13 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{name}</p>
+          {/* `nested` — the row itself is a div with an onClick (swap select),
+              so an anchor inside it is legal; stopping propagation keeps a
+              click on the name from also toggling the swap selection. The
+              <p> stays the flex item so truncation is unchanged. */}
+          <p className="text-sm font-semibold truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+            <ProfileLink userId={member.user_id} name={member.profiles?.display_name} nested>{name}</ProfileLink>
+          </p>
           {member.is_head_delegate && member.role === 'delegate' && (
             <span
               className="flex-shrink-0 px-1.5 py-0.5 rounded-full"
@@ -405,6 +412,10 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
         <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ backgroundColor: 'rgba(238,217,138,0.16)', border: '1px solid rgba(182,135,31,0.3)' }}>
           <ArrowLeftRight size={14} style={{ color: '#8A6614', flexShrink: 0, marginTop: 1 }} />
           <div>
+            {/* Deliberately NOT CV-linked. The two swapped names come from the
+                request's metadata as bare strings with no user id, so only the
+                requester below could ever link — one linked name among three in
+                the same banner reads as an inconsistency, not an affordance. */}
             <p className="text-xs" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>
               A swap of {pendingSwapRequest.metadata.member_a ?? 'a delegate'} and {pendingSwapRequest.metadata.member_b ?? 'a delegate'} is awaiting the organizing team.
             </p>
@@ -474,8 +485,21 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
           <div className="flex flex-col gap-1">
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-2 py-1">
-                <span className="text-xs truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  {m.profiles?.display_name ?? 'Unknown'} <span style={{ color: '#9A8A78' }}>· {pledgeText(m)}</span>
+                <span className="flex items-center gap-2 min-w-0 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  {/* avatar_url rides along on every member row via
+                      POOL_MEMBER_SELECT's `profiles (display_name, avatar_url)`
+                      — the same source MemberRow above reads, and the same
+                      MemberAvatar, so both lists in this panel look alike.
+                      Left unlinked here, exactly as in MemberRow: the name is
+                      the CV link, the picture is decoration. */}
+                  <MemberAvatar name={m.profiles?.display_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={22} />
+                  <span className="truncate">
+                    {/* Pledger's name links to their MUN CV — this row has no
+                        clickable ancestor, so no `nested` here. */}
+                    <ProfileLink userId={m.user_id} name={m.profiles?.display_name}>
+                      {m.profiles?.display_name ?? 'Unknown'}
+                    </ProfileLink> <span style={{ color: '#9A8A78' }}>· {pledgeText(m)}</span>
+                  </span>
                 </span>
                 <span
                   className="flex-shrink-0"
@@ -517,6 +541,11 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
               </div>
               {swapA && swapB && (
                 <div className="rounded-xl px-3.5 py-2.5 mb-3" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>
+                  {/* Deliberately NOT CV-linked. This is the live confirm step
+                      sitting directly above CONFIRM SWAP — swapSelection is
+                      local state, so navigating away to a CV discards the
+                      selection and the leader has to rebuild it. A link here
+                      costs the decision; it doesn't help it. */}
                   <p className="text-xs mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }}>
                     {swapA.profiles?.display_name}: {allocationLabel(swapA)} ↔ {swapB.profiles?.display_name}: {allocationLabel(swapB)}
                   </p>

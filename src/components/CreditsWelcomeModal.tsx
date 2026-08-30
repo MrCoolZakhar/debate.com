@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { X, ArrowRight, TicketCheck, BadgePercent, RotateCcw } from 'lucide-react';
 import { NEU, OUTFIT } from '@/components/neu';
 import Portal from '@/components/Portal';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const WELL_ROWS = [
   { Icon: TicketCheck, bold: '1 credit covers 1 application', muted: 'to any conference' },
@@ -29,6 +30,9 @@ export default function CreditsWelcomeModal({ onClose }: { onClose: () => void }
   // dims. Null when the chip isn't in the DOM, or is hidden below the
   // desktop breakpoint (a display:none element measures a 0×0 rect).
   const [hole, setHole] = useState<Rect | null>(null);
+
+  // Modal: whatever page this greets a fresh signup on must not scroll behind it.
+  useScrollLock(true);
 
   useEffect(() => {
     function measure() {

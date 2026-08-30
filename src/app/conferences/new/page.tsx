@@ -20,7 +20,7 @@ import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@supabase/supabase-js';
-import { generateSlug } from '@/lib/utils';
+import { conferenceSlugAttempts, conferenceYear, isSlugTakenError } from '@/lib/conferenceSlug';
 import { UN_COUNTRIES } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { WizardShell, TwoTabPick, CardSelect } from '@/components/wizard';
@@ -30,6 +30,7 @@ import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
+import { acronymProblem } from '@/lib/conferenceLabels';
 
 const CURRENCY_GROUPS = currencyPickerGroups();
 
@@ -271,12 +272,6 @@ function suggestAcronym(fullName: string): string {
   return initials;
 }
 
-function acronymProblem(acr: string): string {
-  const upper = acr.toUpperCase();
-  if (upper.length < 2) return 'Acronym must be at least 2 characters.';
-  if (!/^[A-Z0-9]+$/.test(upper)) return 'Acronym can only contain letters and numbers.';
-  return '';
-}
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
@@ -439,8 +434,15 @@ export default function NewConferencePage() {
     try {
       const supabase = getAuthedClient();
 
-      const baseSlug = generateSlug(fullName);
-      const slug = baseSlug + '-' + Math.random().toString(36).substring(2, 7);
+      // Short, human URLs: /conferences/limun2027. The ladder and the reasons
+      // behind it live in src/lib/conferenceSlug.ts. `attempts` is ordered
+      // best-first and always ends with a legacy random-suffix slug, so the
+      // loop below can never run out of names.
+      const attempts = await conferenceSlugAttempts(supabase, {
+        acronym,
+        fullName,
+        year: datesTbd ? null : conferenceYear(startDate, endDate),
+      });
       // Minted client-side (at mount) so the logo/banner uploads earlier in the
       // wizard, the role-config seeding insert below, and this row all share one
       // id without reading it back (see the RETURNING/RLS note just below).
@@ -449,14 +451,12 @@ export default function NewConferencePage() {
       // No .select() after insert: the new row is only SELECT-visible once the
       // ownership trigger has run, so RETURNING fails RLS for private conferences.
       // We already know the slug, we generated it.
-      const { error: dbError } = await supabase
-        .from('conferences')
-        .insert({
+      const insertRow = (slug: string) => ({
           id: conferenceId,
           slug,
           organizer_id: user.id,
           full_name: fullName,
-          acronym: acronym.toUpperCase(),
+          acronym: acronym.trim(),
           contact_email: contactEmail,
           student_level: studentLevel,
           start_date: datesTbd ? null : (startDate || null),
@@ -479,11 +479,25 @@ export default function NewConferencePage() {
           is_public: false,
           status: 'private',
           predecessor_conference_id: null,
-        });
+      });
 
-      if (dbError) {
+      // `conferences.slug` has a real UNIQUE constraint, so the pre-filter in
+      // conferenceSlugAttempts is an optimisation, not the guarantee: two
+      // organizers creating the same acronym+year at the same moment can both
+      // see a rung free. Walk down the list on a slug 23505 rather than failing
+      // the creation. Any other error is real and aborts immediately.
+      let slug = '';
+      let dbError: { code?: string; message: string } | null = null;
+      for (const candidate of attempts) {
+        const { error } = await supabase.from('conferences').insert(insertRow(candidate));
+        if (!error) { slug = candidate; dbError = null; break; }
+        dbError = error;
+        if (!isSlugTakenError(error)) break;
+      }
+
+      if (dbError || !slug) {
         setSubmitting(false);
-        setError('Failed to create conference: ' + dbError.message);
+        setError('Failed to create conference: ' + (dbError?.message ?? 'could not assign a URL.'));
         return;
       }
 
@@ -635,9 +649,9 @@ export default function NewConferencePage() {
                       value={acronym}
                       onChange={(e) => {
                         acronymTouched.current = true;
-                        setAcronym(e.target.value.toUpperCase());
+                        setAcronym(e.target.value);
                       }}
-                      placeholder="e.g. TEIMUN"
+                      placeholder="e.g. TEIMUN, or Model NATO Germany"
                       style={{ ...bigInputStyle, letterSpacing: '0.08em', fontVariantNumeric: 'tabular-nums' }}
                       onFocus={focusForest}
                       onBlur={blurClear}
@@ -646,7 +660,7 @@ export default function NewConferencePage() {
                       <ErrorNote>{acronymError}</ErrorNote>
                     ) : (
                       <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 8 }}>
-                        Suggested from your conference name. Use whatever acronym your conference goes by.
+                        Suggested from your conference name. Use whatever your conference actually goes by — &ldquo;MODEL NATO GERMANY&rdquo; is as valid as &ldquo;TEIMUN&rdquo;. The edition year is added automatically.
                       </p>
                     )}
                   </div>
@@ -1099,7 +1113,7 @@ export default function NewConferencePage() {
                 onBack={back}
               >
                 <div className="flex flex-col gap-2.5">
-                  <ReviewRow label="Conference" value={`${fullName} (${acronym.toUpperCase()})`} onEdit={() => editFromReview(1)} />
+                  <ReviewRow label="Conference" value={`${fullName} (${acronym.trim()})`} onEdit={() => editFromReview(1)} />
                   <ReviewRow label="Format" value={format === 'in-person' ? 'In person' : format === 'online' ? 'Online' : 'Hybrid'} onEdit={() => editFromReview(2)} />
                   <ReviewRow label="Level" value={studentLevel === 'school' ? 'High school' : studentLevel === 'university' ? 'University' : 'Both'} onEdit={() => editFromReview(3)} />
                   <ReviewRow label="Location" value={`${city}, ${country}`} onEdit={() => editFromReview(4)} />

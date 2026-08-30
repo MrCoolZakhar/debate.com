@@ -73,7 +73,8 @@ function TransferSpotModal({
           ) : results.map(a => (
             <NeuInset key={a.id} small className="flex items-center justify-between gap-2 px-3 py-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} />
+                {/* Static NeuInset row; TRANSFER is a sibling button. Plain link. */}
+                <PersonAvatar name={a.profiles?.display_name ?? a.invited_name ?? 'Unknown'} url={a.profiles?.avatar_url ?? null} size={30} userId={a.user_id} />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}</p>
                   <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{a.societies?.name ?? 'Independent'}</p>
@@ -136,7 +137,8 @@ function IndependentCard({
   return (
     <NeuCard style={{ padding: 20, opacity: notAttending ? 0.75 : 1 }}>
       <div className="flex items-center gap-2.5">
-        <PersonAvatar name={name} url={app.profiles?.avatar_url ?? null} size={38} />
+        {/* Independent's card header: NeuCard <div>, actions are sibling buttons. */}
+        <PersonAvatar name={name} url={app.profiles?.avatar_url ?? null} size={38} userId={app.user_id} />
         <div className="min-w-0 flex-1">
           <p className="font-black text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
           {notAttending && (

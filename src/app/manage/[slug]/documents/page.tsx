@@ -6,11 +6,12 @@ import Link from 'next/link';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import Portal from '@/components/Portal';
+import { ModalOverlay as SharedModalOverlay } from '@/components/ModalOverlay';
 import { DatePicker } from '@/components/DatePicker';
 import { PillToggle } from '@/app/account/accountUi';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
 import { useConfirmModal } from '@/components/ConfirmModal';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 import { NEU, EASE, NeuPill } from '@/components/neu';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
@@ -81,19 +82,10 @@ const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.
 // ── Modal overlay ──────────────────────────────────────────────────────────────
 
 function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
-  // content wrapper and covers the header/sidebar too.
-  return (
-    <Portal>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4"
-        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-        onClick={onClose}
-      >
-        <div onClick={e => e.stopPropagation()}>{children}</div>
-      </div>
-    </Portal>
-  );
+  // Thin wrapper over the shared house backdrop (@/components/ModalOverlay),
+  // which owns the background scroll lock, Escape-to-close and the dialog ARIA.
+  // `px-4` (no vertical padding) preserves this page's original spacing.
+  return <SharedModalOverlay onClose={onClose} paddingClassName="px-4">{children}</SharedModalOverlay>;
 }
 
 // ── UploadStudyGuideModal (unchanged) ───────────────────────────────────────────
@@ -381,7 +373,12 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [actionError, setActionError] = useState('');
+  // Failures go to the corner notification stack, not a strip above the page —
+  // same store and renderer as the live committee session. The `setX('')` call
+  // shape is preserved so no call site changed; only where it lands did.
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'documents'); else clearErr('documents');
+  }, []);
   const [papersError, setPapersError] = useState(false);
   // Ids with a write in flight, disables that row's controls (double-click guard).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -397,7 +394,12 @@ export default function DocumentsPage() {
   const [sgPerCommittee, setSgPerCommittee] = useState(false);
   const [sgGlobalPublishAt, setSgGlobalPublishAt] = useState<string | null>(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [settingsError, setSettingsError] = useState('');
+  // Failures go to the corner notification stack, not a strip above the page —
+  // same store and renderer as the live committee session. The `setX('')` call
+  // shape is preserved so no call site changed; only where it lands did.
+  const setSettingsError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'documents-settings'); else clearErr('documents-settings');
+  }, []);
   const { confirm, modal: confirmModal } = useConfirmModal();
 
   function markBusy(id: string, busy: boolean) {
@@ -714,12 +716,6 @@ export default function DocumentsPage() {
         Documents
       </h1>
 
-      {actionError && (
-        <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 16 }}>
-          {actionError}
-        </p>
-      )}
-
       {loading && (
         <div className="flex justify-center py-16">
           <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
@@ -937,12 +933,6 @@ export default function DocumentsPage() {
 
           {activeTab === 'settings' && settingsLoaded && (
             <div className="flex flex-col gap-6" style={{ maxWidth: 640 }}>
-              {settingsError && (
-                <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px' }}>
-                  {settingsError}
-                </p>
-              )}
-
               {/* Position Papers settings */}
               <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 24, boxShadow: CARD_SHADOW }}>
                 <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.14em', color: '#B6871F', textTransform: 'uppercase', margin: '0 0 16px 0' }}>

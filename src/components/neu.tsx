@@ -31,6 +31,10 @@ export const NEU = {
   amber: '#B8844A',
   green: '#3D7A52',
   muted: '#9A8A78',
+  // Accessible secondary ink. `muted` is a 3.15:1 wash on `surface` and must
+  // NEVER carry body copy — it is for decorative rules, disabled glyphs and
+  // placeholder marks only. `inkSoft` is its readable sibling (6.8:1 on
+  // `surface`): use it for emails, meta values, captions, any real sentence
   // that is not primary.
   inkSoft: '#5B4F42',
   // Extruded pair, light top-left, forest-tinted dark bottom-right.

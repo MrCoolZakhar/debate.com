@@ -15,6 +15,13 @@ export const EMAIL_TOKEN_KEYS = [
   'request_subject',
   'request_body',
   'session_code',
+  // Unfinished-application reminder only (draft_reminder). Both resolve to
+  // /drafts/{discard_token}: the first to the draft's landing page, the
+  // second to the same page with ?stop=1, which turns reminders off without
+  // a login. Substituted by the send_draft_reminder RPC, which is the only
+  // thing that knows a given draft's token.
+  'draft_link',
+  'draft_stop_link',
 ] as const;
 
 export type EmailTokenKey = (typeof EMAIL_TOKEN_KEYS)[number];
@@ -32,6 +39,8 @@ export const EMAIL_TOKEN_LABELS: Record<EmailTokenKey, string> = {
   request_subject: 'Request Subject',
   request_body: 'Request Message',
   session_code: 'Session Code',
+  draft_link: 'Draft Link',
+  draft_stop_link: 'Stop Reminders Link',
 };
 
 export type EmailTokenContext = Partial<Record<EmailTokenKey, string | null>>;

@@ -32,6 +32,7 @@ import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard, NeuIconDisc } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
+import ProfileLink from '@/components/ProfileLink';
 import { FlagImg } from '@/components/FlagImg';
 import { MemberAvatar } from '@/app/manage/[slug]/assignment/delegationShared';
 import Portal from '@/components/Portal';
@@ -330,7 +331,13 @@ function SeatRow({
               style={{ padding: '4px 12px 4px 5px', borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, maxWidth: 220 }}
             >
               <MemberAvatar name={memberName(assigned)} url={assigned.profiles?.avatar_url ?? null} size={24} />
-              <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>{memberName(assigned)}</span>
+              {/* Occupant's name links to their MUN CV. The pill is inert (no
+                  onClick, and its NeuCard ancestor has neither onClick nor
+                  href), so no `nested` and no nesting problem. The <span>
+                  stays the flex item so truncation is unchanged. */}
+              <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>
+                <ProfileLink userId={assigned.user_id} name={memberName(assigned)}>{memberName(assigned)}</ProfileLink>
+              </span>
             </span>
           ) : (
             <span

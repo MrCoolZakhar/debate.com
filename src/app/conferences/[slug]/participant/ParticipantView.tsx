@@ -8,7 +8,6 @@
 // already is one.
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Pencil, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -69,8 +68,16 @@ export interface ParticipantViewProps {
   /** The role segment from /conferences/[slug]/role/[role], or null on the
    *  bare /role resolver route. Whenever this doesn't match a role the
    *  viewer actually holds (missing, wrong, or stale), the effect below
-   *  redirects to their default role's URL. */
+   *  resolves it to their default role. */
   initialRole: string | null;
+  /** Correct a missing/unheld role in the URL. Owned by the parent, which
+   *  swaps the role in place (history.replaceState) — this used to be a
+   *  router.replace here, which reloaded the whole conference page just to
+   *  put the right slug in the URL. */
+  onResolveRole: (role: string) => void;
+  /** The viewer picked one of their other applications. Same deal: a pushState
+   *  so Back returns to the previous role, no navigation. */
+  onSelectRole: (role: string) => void;
   /** True until this viewer's own applications and allocation for this
    *  conference are actually known (auth still resolving counts as loading
    *  too). While true, every branch below, signed-out prompt, "no
@@ -88,27 +95,25 @@ export interface ParticipantViewProps {
 
 export default function ParticipantView({
   conferenceId, conferenceSlug, conferenceStartDate, myApplications, roleConfigs, myAllocation, committees, allocationSwapMode, isOrganizer = false,
-  initialRole, participantDataLoading, justClaimedCount,
+  initialRole, onResolveRole, onSelectRole, participantDataLoading, justClaimedCount,
 }: ParticipantViewProps) {
   const { user } = useAuth();
-  const router = useRouter();
   const holdsInitialRole = !!initialRole && myApplications.some(a => a.role === initialRole);
   // Dismissible, not persisted anywhere, "dismissed on navigation" falls out
-  // naturally: this component remounts fresh on every real route
-  // navigation, so leaving and coming back never resurrects a stale notice.
+  // naturally: this component unmounts whenever the viewer leaves the You tab,
+  // so leaving and coming back never resurrects a stale notice.
   const [claimNoticeDismissed, setClaimNoticeDismissed] = useState(false);
 
   // Resolver (/role) and "not holding that role" fallback (/role/[role] for
   // a role the viewer doesn't actually have) both land here: once
-  // applications are known, redirect to the default role's real URL.
+  // applications are known, settle on the default role's real URL.
   useEffect(() => {
     if (!user || myApplications.length === 0 || holdsInitialRole) return;
-    const target = pickDefault(myApplications).role;
-    router.replace(`/conferences/${conferenceSlug}/role/${target}`);
-  }, [user, myApplications, holdsInitialRole, conferenceSlug, router]);
+    onResolveRole(pickDefault(myApplications).role);
+  }, [user, myApplications, holdsInitialRole, onResolveRole]);
 
   function selectApplication(app: ParticipantApplication) {
-    router.push(`/conferences/${conferenceSlug}/role/${app.role}`);
+    onSelectRole(app.role);
   }
 
   if (participantDataLoading) {

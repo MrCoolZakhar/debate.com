@@ -5,6 +5,7 @@ import { Plus, Share2, Check } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { syncExperienceLevel } from '@/lib/munExperience';
+import { cvHref } from '@/lib/cvLink';
 import { CVEntryModal, type CVEntry } from '@/components/CVEntryModal';
 import { ShareAchievementModal } from '@/components/ShareAchievementModal';
 import Loader from '@/components/Loader';
@@ -80,6 +81,11 @@ export default function CVPage() {
     return `${window.location.origin}/cv/${path}`;
   }, [user, profile?.display_name]);
 
+  // The same /cv/… path as a relative href, for the "see what visitors see"
+  // link. Uses the shared cvHref rather than a second slug builder, and is
+  // null before auth resolves (so the link simply isn't rendered yet).
+  const publicHref = cvHref(user?.id, profile?.display_name);
+
   // After a save: refresh the timeline, and — only for a brand-new entry —
   // fire the Spotify-Wrapped congratulations card.
   const handleSaved = useCallback((added?: CVEntry) => {
@@ -121,6 +127,31 @@ export default function CVPage() {
           </h1>
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: 0 }}>
             Your Model UN conference history: typeset, verified, and yours.
+          </p>
+          {/* Said HERE, at the point it matters — the moment before somebody
+              types something into their CV — and not only in section 16 of the
+              privacy policy. Every account's CV is a public page and there is
+              no visibility setting to find, so the only honest thing to do is
+              tell people plainly and link them to the page as a stranger sees
+              it. If an opt-out is ever built, this line changes with it. */}
+          <p
+            className="text-xs mt-2 max-w-md"
+            style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: '8px 0 0', lineHeight: 1.6 }}
+          >
+            <strong style={{ color: '#5C5140', fontWeight: 800 }}>This page is public.</strong>{' '}
+            Anyone with the link can read it without signing in, and conference organisers see it
+            when they review your applications. There is no way to make it private yet, so add
+            only what you are happy for a stranger to read.{' '}
+            {publicHref && (
+              <a
+                href={publicHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#1B3828', fontWeight: 700, textDecoration: 'underline' }}
+              >
+                See what visitors see
+              </a>
+            )}
           </p>
         </div>
 

@@ -23,6 +23,7 @@ import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuIconDisc, NeuButton, NeuPill,
   Emoji3D, OUTFIT, EASE, type NeuGradient,
 } from '@/components/neu';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -549,6 +550,8 @@ function ApplyModal({
   onSubmit: (coverNote: string) => void;
   onClose: () => void;
 }) {
+  // Modal: freeze the roles board behind the apply dialog.
+  useScrollLock(true);
   const [coverNote, setCoverNote] = useState('');
 
   return (

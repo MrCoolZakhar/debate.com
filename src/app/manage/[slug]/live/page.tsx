@@ -2,37 +2,42 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import {
-  RefreshCw, Copy, Check, Gavel, Users, Mic, FileText, ScrollText,
-  FileCheck, Trophy, Radio, PauseCircle, Flag, MessageSquareText, Timer, Megaphone,
-} from 'lucide-react';
+import { RefreshCw, Radio, PauseCircle, Megaphone } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
-import { FlagImg } from '@/components/FlagImg';
-import { LogoDisc } from '@/components/LogoDisc';
 import {
   NeuCard, NeuInset, NeuIconDisc, Emoji3D,
-  NEU, NEU_GRADIENTS, type NeuGradient, OUTFIT, EASE,
+  NEU, NEU_GRADIENTS, OUTFIT, EASE,
 } from '@/components/neu';
-import AvatarStack from '@/components/AvatarStack';
 import { getScoringConfig } from '@/lib/scoring';
 import type { ScoringConfig } from '@/lib/settingsStore';
+import { loadConferenceScoreboard, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
 import {
-  type LiveCommittee, type CaucusJson, type ChairPerson, cardStatus, PHASE_LABELS, flagCodeFor,
-  RecapModal, AwardsModal, RosterModal,
+  type LiveCommittee, type ChairPerson, type CaucusJson,
+  presence, RecapModal, AwardsModal, RosterModal, type DocFilter,
 } from './LiveModals';
-import {
-  cardVariant, UnmoderatedBody, ModeratedBody, VotingBody, feedbackPulse,
-} from './PhaseVariants';
 import {
   BroadcastComposer, RecentBroadcasts, broadcastTargets, groupBroadcasts,
   mapBroadcastRow, deleteBroadcastGroup, BROADCAST_COLUMNS,
   type BroadcastRow, type BroadcastGroup,
 } from './BroadcastComposer';
+import { CommitteeCard, GridFootnote } from './CommitteeCard';
+import { FloorDetail, useNowTick } from './PhaseVariants';
+import { CommitteeScoreboardModal } from './CommitteeScoreboardModal';
+import { DelegateCardModal } from './DelegateCardModal';
+import { loadAllocationIndex, type AllocationIndex } from './allocations';
+import {
+  type RoomStatus, roomStatus, sortByUrgency, cardWarnings,
+  committeeIdentities,
+} from './cardModel';
+import { SOFT, AMBER_INK, RED } from './tokens';
 
-type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+/** Deadline on the in-flight load guard. Longer than any healthy load (the
+ *  batch is eight indexed `in` queries) but short enough that a hung request
+ *  costs at most a couple of poll cycles rather than the whole session. */
+const LOAD_TIMEOUT_MS = 30_000;
 
 // ── Small shared bits ───────────────────────────────────────────────────────
 
@@ -40,492 +45,10 @@ function Eyebrow({ children, style }: { children: React.ReactNode; style?: React
   return (
     <p
       className="text-[11px] font-bold uppercase"
-      style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em', ...style }}
+      style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em', ...style }}
     >
       {children}
     </p>
-  );
-}
-
-function CopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        navigator.clipboard.writeText(value).catch(() => {});
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1600);
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="inline-flex items-center justify-center rounded-xl focus:outline-none flex-shrink-0"
-      style={{
-        width: 32, height: 32, border: 'none', backgroundColor: NEU.surface,
-        color: copied ? NEU.green : NEU.forest,
-        boxShadow: hovered ? NEU.outSmHover : NEU.outSm,
-        transition: `box-shadow 200ms ${EASE}`, cursor: 'pointer',
-      }}
-      title="Copy to clipboard"
-    >
-      {copied ? <Check size={14} /> : <Copy size={14} />}
-    </button>
-  );
-}
-
-function FlagDot({ country }: { country: string }) {
-  return (
-    <span
-      className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
-      style={{ width: 24, height: 24, backgroundColor: NEU.surface, boxShadow: NEU.outSm, marginLeft: -6 }}
-      title={country}
-    >
-      <FlagImg code={flagCodeFor(country)} size={15} />
-    </span>
-  );
-}
-
-/** Acronym-forward committee identity, shared by both cards. */
-function committeeIdentity(conf: LiveCommittee['conf']): { title: string; subtitle: string | null; mono: string } {
-  const acr = conf.abbreviation?.trim() || null;
-  const full = conf.name;
-  const title = acr ?? full;
-  return { title, subtitle: acr && acr !== full ? full : null, mono: (acr ?? full).slice(0, 3) };
-}
-
-/** Compact status glyph pill for the at-a-glance indicator row. */
-function StatusGlyph({
-  gradient, emoji, icon: Icon, value, label, accent, pulse = false,
-}: {
-  gradient: NeuGradient;
-  emoji: string;
-  icon: LucideIcon;
-  value: number;
-  label: string;
-  accent: string;
-  pulse?: boolean;
-}) {
-  const dim = value === 0;
-  return (
-    <div
-      className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3.5 py-1.5"
-      style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, opacity: dim ? 0.55 : 1, transition: `opacity 220ms ${EASE}` }}
-      title={`${value} ${label.toLowerCase()}`}
-    >
-      <span className="relative inline-flex flex-shrink-0">
-        <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={28} />
-        {pulse && !dim && (
-          <span
-            className="absolute rounded-full animate-pulse"
-            style={{ top: -1, right: -1, width: 9, height: 9, backgroundColor: NEU.green, boxShadow: `0 0 0 2px ${NEU.surface}` }}
-          />
-        )}
-      </span>
-      <span className="flex items-baseline gap-1.5">
-        <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, lineHeight: 1, color: dim ? NEU.muted : accent, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-        <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 9.5, letterSpacing: '0.11em', textTransform: 'uppercase', color: NEU.muted }}>{label}</span>
-      </span>
-    </div>
-  );
-}
-
-// ── Not-started card ────────────────────────────────────────────────────────
-
-function NotStartedCard({
-  data,
-  committeesHref,
-}: {
-  data: LiveCommittee;
-  committeesHref: string;
-}) {
-  const session = data.session;
-  const id = committeeIdentity(data.conf);
-
-  return (
-    <NeuCard style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
-      {/* Greyed-out committee identity */}
-      <div className="flex items-center justify-between gap-3" style={{ opacity: 0.6, filter: 'saturate(0.7)' }}>
-        <div className="flex items-center gap-3 min-w-0">
-          <LogoDisc src={data.conf.logoUrl} size={44} fallbackText={id.mono} alt={id.title} style={{ filter: 'grayscale(0.4)' }} />
-          <div className="min-w-0">
-            <h3 className="font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.1 }}>
-              {id.title}
-            </h3>
-            {id.subtitle && (
-              <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{id.subtitle}</p>
-            )}
-          </div>
-        </div>
-        <span
-          className="text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase flex-shrink-0"
-          style={{ backgroundColor: NEU.base, color: NEU.muted, boxShadow: NEU.inSm, fontFamily: OUTFIT, letterSpacing: '0.08em' }}
-        >
-          Not started
-        </span>
-      </div>
-
-      {/* Centered well: session code, ready to share */}
-      <NeuInset className="flex flex-col items-center text-center" style={{ padding: '26px 20px', margin: '18px 0', borderRadius: 18 }}>
-        <Emoji3D name="Hourglass not done" size={34} fallback={Timer} fallbackColor={NEU.muted} style={{ opacity: 0.9 }} />
-        {session ? (
-          <>
-            <Eyebrow style={{ letterSpacing: '0.12em', marginTop: 10 }}>Session not in progress yet</Eyebrow>
-            <div className="flex items-center gap-2.5 mt-3">
-              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: NEU.ink, letterSpacing: '0.14em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                {session.code}
-              </span>
-              <CopyButton value={session.code} />
-            </div>
-            <p className="text-[11px] mt-3" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-              Session code: share with your chairs
-            </p>
-          </>
-        ) : (
-          <>
-            <Eyebrow style={{ letterSpacing: '0.12em', marginTop: 10 }}>Session not in progress yet</Eyebrow>
-            <p className="text-sm font-bold mt-3" style={{ color: NEU.ink, fontFamily: OUTFIT }}>No session code yet</p>
-            <Link
-              href={committeesHref}
-              className="text-sm font-bold inline-block mt-1 transition-colors"
-              style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.green; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
-            >
-              Generate it in Committees →
-            </Link>
-          </>
-        )}
-      </NeuInset>
-
-      {/* Chair assignment line (greyed) — same avatar stack as the live card,
-          so the dais reads identically before and after the gavel falls. */}
-      <div className="flex items-center justify-between gap-3" style={{ opacity: 0.6 }}>
-        <p className="text-xs flex items-center gap-1.5 min-w-0" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-          <Gavel size={12} style={{ flexShrink: 0 }} />
-          <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {data.conf.chairs.length} chair{data.conf.chairs.length === 1 ? '' : 's'} assigned
-            {session && session.chairNames.length > 0 && <> · {session.chairNames.length} joined</>}
-          </span>
-        </p>
-        <AvatarStack
-          people={data.conf.chairs}
-          size={26}
-          max={4}
-          label="Chairs"
-          ringColor={NEU.surface}
-          shadow={NEU.outSm}
-        />
-      </div>
-    </NeuCard>
-  );
-}
-
-// ── Live / suspended / ended card ───────────────────────────────────────────
-
-// The clock deliberately does NOT live here any more. A caucus card's countdown
-// is owned by its phase variant, which re-derives it from the persisted anchor
-// every second; the flat `caucus.remainingTime` this used to print was the value
-// at the anchor instant, so it sat frozen until the next chair write.
-function currentMotionLabel(phase: string, caucus: CaucusJson | null): { label: string; detail: string | null } {
-  if (caucus && (caucus.active ?? true)) {
-    const label = caucus.type === 'unmoderated' ? 'Unmoderated Caucus' : 'Moderated Caucus';
-    return { label: caucus.motionLabel || label, detail: caucus.purpose || null };
-  }
-  if (phase === 'speakers-list') return { label: "General Speakers' List (GSL)", detail: null };
-  return { label: PHASE_LABELS[phase] ?? phase, detail: null };
-}
-
-/** 3D glyph for the current motion, so the card reads at a glance. */
-function motionVisual(phase: string, caucus: CaucusJson | null): { emoji: string; fallback: LucideIcon; gradient: NeuGradient } {
-  if (caucus && (caucus.active ?? true)) {
-    if (caucus.type === 'unmoderated') return { emoji: 'Hourglass not done', fallback: Timer, gradient: NEU_GRADIENTS.amber };
-    return { emoji: 'Speaking head', fallback: Mic, gradient: NEU_GRADIENTS.sage };
-  }
-  if (phase === 'voting') return { emoji: 'Ballot box with ballot', fallback: Gavel, gradient: NEU_GRADIENTS.gold };
-  if (phase === 'speakers-list') return { emoji: 'Speech balloon', fallback: MessageSquareText, gradient: NEU_GRADIENTS.forest };
-  return { emoji: 'Speech balloon', fallback: Gavel, gradient: NEU_GRADIENTS.forest };
-}
-
-function LiveCard({
-  data,
-  onOpenRecap,
-  onOpenAwards,
-  onOpenRoster,
-}: {
-  data: LiveCommittee;
-  onOpenRecap: (data: LiveCommittee) => void;
-  onOpenAwards: (data: LiveCommittee) => void;
-  onOpenRoster: (data: LiveCommittee) => void;
-}) {
-  const status = cardStatus(data);
-  const session = data.session!;
-  const caucusActive = !!session.caucus && (session.caucus.active ?? true);
-  const motion = currentMotionLabel(session.phase, session.caucus);
-  const mv = motionVisual(session.phase, session.caucus);
-  const id = committeeIdentity(data.conf);
-
-  // Which body this card renders. Default keeps the original layout untouched;
-  // the other three replace the middle of the card (see PhaseVariants.tsx).
-  const variant = cardVariant(data);
-  const showFloorSpeaker = variant === 'default' || variant === 'moderated';
-  const showQueue = variant === 'default' || variant === 'moderated';
-  const showMotionInset = variant !== 'voting';
-
-  const speaker = data.currentSpeaker;
-  const speaking = !!speaker?.startedAt;
-  const present = data.delegates.filter((d) => d.status !== 'absent').length;
-
-  const wps = data.documents.filter((d) => d.type === 'working-paper');
-  const drs = data.documents.filter((d) => d.type === 'draft-resolution');
-  const wpsPresented = wps.filter((d) => d.status !== 'submitted').length;
-  const drsPresented = drs.filter((d) => d.status !== 'submitted').length;
-  const passedCount = data.documents.filter((d) => d.status === 'passed').length;
-
-  const pulse = feedbackPulse(data);
-
-  // Chairs for the corner stack: the conference dais (real profile pictures),
-  // falling back to whoever actually joined this session by name.
-  const chairPeople: ChairPerson[] = data.conf.chairs.length > 0
-    ? data.conf.chairs
-    : session.chairNames.map((name) => ({ id: null, name, avatarUrl: null }));
-
-  const upNext = caucusActive ? data.caucusQueue : data.gslQueue;
-  const shownFlags = upNext.slice(0, 10);
-  const overflow = upNext.length - shownFlags.length;
-
-  const chipStyle: React.CSSProperties = {
-    backgroundColor: NEU.surface,
-    boxShadow: NEU.outSm,
-    color: NEU.ink,
-    fontFamily: OUTFIT,
-    fontVariantNumeric: 'tabular-nums',
-  };
-
-  return (
-    <NeuCard hover onClick={() => onOpenRecap(data)} style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
-      {/* Status eyebrow */}
-      {status === 'live' && (
-        <div className="flex items-center gap-2 mb-3">
-          <span className="rounded-full animate-pulse flex-shrink-0" style={{ width: 8, height: 8, backgroundColor: NEU.green, boxShadow: `0 0 0 3px ${NEU.green}22` }} />
-          <span className="text-[11px] font-extrabold uppercase" style={{ color: NEU.forest, fontFamily: OUTFIT, letterSpacing: '0.09em' }}>
-            In session
-          </span>
-        </div>
-      )}
-      {status === 'suspended' && (
-        <div
-          className="inline-flex items-center gap-2 mb-3 rounded-full px-3 py-1.5 self-start"
-          style={{ backgroundColor: 'rgba(184,132,74,0.14)', boxShadow: NEU.outSm }}
-        >
-          <Emoji3D name="Pause button" size={15} fallback={PauseCircle} fallbackColor={NEU.amber} />
-          <span className="text-[11px] font-extrabold uppercase" style={{ color: '#8A5A2E', fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
-            Suspended
-          </span>
-        </div>
-      )}
-      {status === 'ended' && (
-        <div
-          className="inline-flex items-center gap-2 mb-3 rounded-full px-3 py-1.5 self-start"
-          style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}
-        >
-          <Emoji3D name="Chequered flag" size={15} fallback={Flag} fallbackColor={NEU.muted} />
-          <span className="text-[11px] font-extrabold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
-            Adjourned
-          </span>
-        </div>
-      )}
-
-      {/* Header: committee logo + acronym-forward identity + chairs */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <LogoDisc src={data.conf.logoUrl} size={46} fallbackText={id.mono} alt={id.title} />
-          <div className="min-w-0">
-            <h3 className="font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 22, lineHeight: 1.05 }}>
-              {id.title}
-            </h3>
-            {id.subtitle && (
-              <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{id.subtitle}</p>
-            )}
-          </div>
-        </div>
-        {/* Chair corner — stacked profile pictures, no names on screen. Each
-            avatar carries title + aria-label, so the dais stays reachable on
-            hover and to a screen reader without eating the header. */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <Gavel size={13} style={{ color: NEU.muted, flexShrink: 0 }} />
-          <AvatarStack
-            people={chairPeople}
-            size={28}
-            max={4}
-            label="Chairs"
-            ringColor={NEU.surface}
-            shadow={NEU.outSm}
-            empty={
-              <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No chairs</span>
-            }
-          />
-        </div>
-      </div>
-
-      {/* Current motion */}
-      {showMotionInset && (
-        <NeuInset className="flex items-center gap-3" style={{ padding: '11px 13px', marginTop: 16, borderRadius: 14 }}>
-          <NeuIconDisc gradient={mv.gradient} emoji={mv.emoji} icon={mv.fallback} size={36} />
-          <div className="min-w-0 flex-1">
-            <Eyebrow style={{ fontSize: 10 }}>Current motion</Eyebrow>
-            <p className="text-sm font-bold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{motion.label}</p>
-            {motion.detail && (
-              <p className="text-xs truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }} title={motion.detail}>{motion.detail}</p>
-            )}
-          </div>
-        </NeuInset>
-      )}
-
-      {/* ── Phase-specific body ── */}
-      {variant === 'unmoderated' && session.caucus && <UnmoderatedBody caucus={session.caucus} />}
-      {variant === 'voting' && <VotingBody data={data} />}
-
-      {/* Current speaker — the focal point, deliberately large.
-          Hidden in an unmod (nobody holds the floor) and during voting
-          (the ballot, not the last speaker, is the story). */}
-      {showFloorSpeaker && (
-      <div className="mt-4">
-        <Eyebrow style={{ fontSize: 10, marginBottom: 6 }}>On the floor</Eyebrow>
-        {speaker?.country ? (
-          <div
-            className="flex items-center gap-3.5 rounded-2xl"
-            style={{
-              padding: '12px 14px',
-              backgroundColor: NEU.surface,
-              boxShadow: speaking ? `0 0 0 1.5px ${NEU.green}55, ${NEU.outSm}` : NEU.outSm,
-            }}
-          >
-            <span
-              className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
-              style={{ width: 52, height: 52, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
-            >
-              <FlagImg code={flagCodeFor(speaker.country)} size={34} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 20, lineHeight: 1.1 }}>
-                {speaker.country}
-              </p>
-              <div className="flex items-center gap-1.5 mt-1">
-                {speaking ? (
-                  <>
-                    <span className="rounded-full animate-pulse flex-shrink-0" style={{ width: 7, height: 7, backgroundColor: NEU.green }} />
-                    <span className="text-xs font-bold uppercase" style={{ color: NEU.green, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                      Speaking now
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-                    Paused
-                  </span>
-                )}
-              </div>
-            </div>
-            <Emoji3D
-              name="Studio microphone"
-              size={34}
-              fallback={Mic}
-              fallbackColor={speaking ? NEU.green : NEU.muted}
-              style={speaking ? undefined : { opacity: 0.5, filter: 'grayscale(0.6) drop-shadow(0 2px 4px rgba(27,56,40,0.30))' }}
-            />
-          </div>
-        ) : (
-          <NeuInset className="flex items-center gap-2.5" style={{ padding: '14px 16px', borderRadius: 16 }}>
-            <Mic size={16} style={{ color: NEU.muted, flexShrink: 0 }} />
-            <span className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No speaker on the floor</span>
-          </NeuInset>
-        )}
-      </div>
-      )}
-
-      {/* Moderated caucus keeps its speaker and queue, and adds the caucus clock. */}
-      {variant === 'moderated' && session.caucus && <ModeratedBody caucus={session.caucus} />}
-
-      {/* Doc + delegate chips */}
-      <div className="flex flex-wrap gap-2 mt-3.5">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full" style={chipStyle}>
-          <FileText size={12} style={{ color: NEU.forest }} />
-          WPs {wpsPresented}/{wps.length}
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full" style={chipStyle}>
-          <ScrollText size={12} style={{ color: NEU.forest }} />
-          DRs {drsPresented}/{drs.length}
-        </span>
-        {passedCount > 0 && (
-          <span
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
-            style={{ ...chipStyle, color: NEU.green }}
-          >
-            <FileCheck size={12} />
-            {passedCount} passed
-          </span>
-        )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onOpenRoster(data); }}
-          className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full focus:outline-none"
-          style={{ ...chipStyle, border: 'none', cursor: 'pointer', transition: `box-shadow 200ms ${EASE}` }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; }}
-          title="View present delegates"
-        >
-          <Users size={12} style={{ color: NEU.forest }} />
-          {present}/{data.delegates.length} present
-        </button>
-        {(pulse.rated > 0 || pulse.notes > 0) && (
-          <span
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
-            style={chipStyle}
-            title={`${pulse.rated} speech ${pulse.rated === 1 ? 'rating' : 'ratings'} and ${pulse.notes} written ${pulse.notes === 1 ? 'note' : 'notes'} across ${pulse.delegations} delegation${pulse.delegations === 1 ? '' : 's'} — open the card for the recap`}
-          >
-            <MessageSquareText size={12} style={{ color: NEU.forest }} />
-            {pulse.rated + pulse.notes} feedback
-          </span>
-        )}
-      </div>
-
-      {/* Up next, flowing speakers strip. Removed entirely in an unmod (there is
-          no speakers list) and during voting (the roll, not a queue, is live). */}
-      {showQueue && (
-      <div className="mt-4">
-        <Eyebrow style={{ fontSize: 10 }}>Up next</Eyebrow>
-        <div className="flex items-center mt-1.5" style={{ paddingLeft: 6, minHeight: 24 }}>
-          {shownFlags.length > 0 ? (
-            <>
-              {shownFlags.map((country, i) => <FlagDot key={`${country}-${i}`} country={country} />)}
-              {overflow > 0 && (
-                <span
-                  className="flex items-center justify-center rounded-full text-[9px] font-extrabold flex-shrink-0"
-                  style={{ width: 24, height: 24, marginLeft: -6, background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`, color: NEU.gold, boxShadow: NEU.outSm, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
-                >
-                  +{overflow}
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>Queue empty</span>
-          )}
-        </div>
-      </div>
-      )}
-
-      {/* Awards footer */}
-      {/* TODO(merge): wire to chair award allocation from production branch */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onOpenAwards(data); }}
-        className="flex items-center gap-2 mt-4 pt-3 w-full text-left focus:outline-none transition-colors"
-        style={{ borderTop: '1px solid rgba(27,56,40,0.1)', color: NEU.muted, fontFamily: OUTFIT, backgroundColor: 'transparent', cursor: 'pointer' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.forest; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
-      >
-        <Trophy size={13} style={{ flexShrink: 0 }} />
-        <span className="text-xs font-semibold">Awards: not allocated</span>
-      </button>
-    </NeuCard>
   );
 }
 
@@ -538,30 +61,74 @@ export default function LiveStatusPage() {
   const [rows, setRows] = useState<LiveCommittee[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
-  const [, setTick] = useState(0);
   const [recapFor, setRecapFor] = useState<string | null>(null);
   const [awardsFor, setAwardsFor] = useState<string | null>(null);
   const [rosterFor, setRosterFor] = useState<string | null>(null);
+  // Which documents section the recap should open on. Set by the WP / DR chips
+  // on a card, reset to 'all' whenever the recap is opened from the card body,
+  // so the previous chip's choice never leaks into the next room.
+  const [recapDocFilter, setRecapDocFilter] = useState<DocFilter>('all');
+  const [scoreboardFor, setScoreboardFor] = useState<string | null>(null);
+  /** Set the first time a reader opens the recap's Scoreboard side-tab, which
+   *  shares the conference-wide payload with the standalone Points view. */
+  const [recapWantsScoreboard, setRecapWantsScoreboard] = useState(false);
+  /** The committee a SCOPED broadcast is being written to, or null for the
+   *  floor-wide composer. Same component either way — see `composerTargets`. */
+  const [broadcastFor, setBroadcastFor] = useState<string | null>(null);
+  /** One delegation's card, opened from a flag in a live card's queue strip. */
+  const [delegateFor, setDelegateFor] = useState<{ confId: string; country: string } | null>(null);
+  // The conference-wide scoreboard, loaded ONCE and lazily — only when an
+  // organiser first opens a Points view. Loading it on mount would put a second
+  // multi-table read behind every visit to a page that polls every ten seconds.
+  const [scoreboard, setScoreboard] = useState<ConferenceScoreboard | null>(null);
+  /** Who holds each delegation, on the same lazy-once contract as the
+   *  scoreboard. Allocations move when an organiser assigns a delegate, which is
+   *  not a live-floor event, so this is deliberately kept out of the 10s poll. */
+  const [allocations, setAllocations] = useState<AllocationIndex | null>(null);
+  const [scoreboardLoading, setScoreboardLoading] = useState(false);
+  const [scoreboardError, setScoreboardError] = useState('');
   const [refreshHover, setRefreshHover] = useState(false);
   const [broadcastHover, setBroadcastHover] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [broadcasts, setBroadcasts] = useState<BroadcastRow[]>([]);
   const [broadcastBusyKey, setBroadcastBusyKey] = useState<string | null>(null);
   const [broadcastError, setBroadcastError] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
   const loadingRef = useRef(false);
+  const loadStartedRef = useRef(0);
 
   const loadAll = useCallback(async () => {
     if (!conference || !authSession) return;
-    if (loadingRef.current) return;
+    // In-flight guard WITH a deadline. Without one, a single request that never
+    // settles (a dropped socket mid-flight leaves the promise pending forever)
+    // pinned `loadingRef` true and silently killed the 10s poll for the rest of
+    // the session, while the page kept showing a stale floor.
+    if (loadingRef.current && Date.now() - loadStartedRef.current < LOAD_TIMEOUT_MS) return;
     loadingRef.current = true;
+    loadStartedRef.current = Date.now();
     setRefreshing(true);
+    // Every read that failed this pass, so a silent failure can't render as a
+    // calm, empty floor stamped "Refreshed 2s ago".
+    const failures: string[] = [];
     try {
       const authed = getAuthedClient(authSession.access_token);
-      const { data: confCommittees } = await authed
+      const { data: confCommittees, error: confErr } = await authed
         .from('conference_committees')
-        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs')
+        // `released_to_chairs_at` and `delegation_size` are new here and are both
+        // read-only: the first lets a never-opened room say whether its dais has
+        // actually been invited (the not-started nudge on the card), the second
+        // is the double-delegation flag. Neither is ever written by this page.
+        .select('id, name, abbreviation, logo_url, topics, difficulty, committee_type, total_slots, session_id, session_code, chair_user_ids, display_chairs, released_to_chairs_at, delegation_size')
         .eq('conference_id', conference.id)
         .order('name', { ascending: true });
+
+      // The committee list is the spine of this page. If it fails there is
+      // nothing honest to draw, so bail out loudly and leave whatever was last
+      // known on screen rather than blanking the floor.
+      if (confErr) {
+        setLoadError("Couldn't load the committee list: " + confErr.message);
+        return;
+      }
 
       const confRows = confCommittees ?? [];
       const sessionIds = confRows.map((c) => c.session_id).filter((id): id is string => !!id);
@@ -587,36 +154,55 @@ export default function LiveStatusPage() {
       let speakers: Record<string, unknown>[] = [];
       let delegates: Record<string, unknown>[] = [];
       let queues: Record<string, unknown>[] = [];
-      let motions: Record<string, unknown>[] = [];
       let documents: Record<string, unknown>[] = [];
       let sysMessages: Record<string, unknown>[] = [];
       let feedback: Record<string, unknown>[] = [];
 
       if (sessionIds.length > 0) {
-        const [sRes, csRes, dRes, qRes, mRes, docRes, msgRes, fbRes] = await Promise.all([
+        // The `motions` table is NOT read here. The cards state the stage a room
+        // is in, not what is sitting on the chair's desk, and the recap's
+        // "Motions raised" tile counts `motion-raised` ledger events out of
+        // `messages`. Nothing else consumed the rows, so the whole query came
+        // out — one fewer table scan on a poll that runs every 10 seconds.
+        const [sRes, csRes, dRes, qRes, docRes, msgRes, fbRes] = await Promise.all([
+          // `updated_at` and `resuming_chair` are the STATUS axis. Without
+          // `updated_at` this page had no way to tell a room that is running
+          // from a room whose chair walked out three hours ago — "In session"
+          // meant nothing more than `phase !== 'pre-session'`.
           anonSupabase.from('committees')
-            .select('id, code, name, phase, caucus, chair_names, suspended_at, ended_at, settings')
+            .select('id, code, name, phase, caucus, chair_names, suspended_at, ended_at, settings, updated_at, resuming_chair')
             .in('id', sessionIds),
           anonSupabase.from('current_speaker')
             .select('committee_id, country, time_remaining, started_at')
             .in('committee_id', sessionIds),
           anonSupabase.from('delegates')
-            .select('committee_id, country, status')
+            .select('committee_id, country, status, is_observer')
             .in('committee_id', sessionIds),
           anonSupabase.from('speakers_list')
             .select('committee_id, country, position, list_type')
             .in('committee_id', sessionIds)
             .order('position', { ascending: true }),
-          anonSupabase.from('motions')
-            .select('committee_id, type, topic, disruptiveness')
-            .eq('status', 'pending')
-            .in('committee_id', sessionIds),
+          // file_url / file_name / content are what make a document readable
+          // rather than just countable. The chair console already renders the
+          // same `file_url` in its inline viewer (DocumentsModal.tsx:877), and
+          // `documents` carries a public SELECT policy, so no new RLS is needed.
           anonSupabase.from('documents')
-            .select('committee_id, type, status, doc_code, title, sponsors')
+            .select('committee_id, type, status, doc_code, title, sponsors, file_url, file_name, content, created_at')
             .in('committee_id', sessionIds),
+          // The `sender = '__system__'` filter is deliberately GONE. The ledger
+          // still only ever comes from `__system__` rows (filtered below), but
+          // `max(created_at)` over EVERY message is the second half of the
+          // activity clock, and delegates chatting is the one kind of life that
+          // touches neither the `committees` row nor the ledger.
+          //
+          // Cost, measured: 483 message rows across the whole platform, 459 of
+          // them already `__system__`, so this widens the read by 24 rows today.
+          // At a busy conference chat becomes the bulk of this table, and this
+          // query — like the ledger read it replaces — is unbounded. If that
+          // ever bites, the fix is a per-committee `max(created_at)` view, not
+          // narrowing the clock back to `updated_at`.
           anonSupabase.from('messages')
             .select('committee_id, sender, content, created_at')
-            .eq('sender', '__system__')
             .in('committee_id', sessionIds),
           // Chair feedback: ratings AND private notes. In practice almost every
           // row is a factor rating with no prose, so factor_scores is as much
@@ -626,14 +212,30 @@ export default function LiveStatusPage() {
             .in('committee_id', sessionIds)
             .order('created_at', { ascending: true }),
         ]);
+        // Name each read so a partial outage can say WHICH slice is missing
+        // instead of quietly rendering zeroes for it.
+        for (const [label, res] of [
+          ['sessions', sRes], ['current speaker', csRes], ['delegates', dRes],
+          ['queues', qRes], ['documents', docRes],
+          ['speaking log', msgRes], ['feedback', fbRes],
+        ] as const) {
+          if (res.error) failures.push(label);
+        }
+
         sessions = sRes.data ?? [];
         speakers = csRes.data ?? [];
         delegates = dRes.data ?? [];
         queues = qRes.data ?? [];
-        motions = mRes.data ?? [];
         documents = docRes.data ?? [];
         sysMessages = msgRes.data ?? [];
         feedback = fbRes.data ?? [];
+
+        // Everything failed: the floor is unknown, not empty. Do not draw it and
+        // do not stamp a refresh time over it.
+        if (failures.length === 7) {
+          setLoadError('Live session data is unreachable. Showing the last known floor.');
+          return;
+        }
       }
 
       const bySession = <T extends Record<string, unknown>>(list: T[], sid: string) =>
@@ -644,14 +246,45 @@ export default function LiveStatusPage() {
         const sRow = sid ? sessions.find((s) => s.id === sid) ?? null : null;
         const speakerRow = sid ? speakers.find((s) => s.committee_id === sid) ?? null : null;
 
-        const speechLogs = sid
+        // ── Ledger parsing ──
+        // `logEvent` (committeeService.ts:899-914) writes SIX event types onto
+        // this one `__log__:` channel — speech, motion-raised, right-of-reply,
+        // manual-award, manual-deduct, custom. Measured in production: 454 rows,
+        // of which 333 speech, 95 motion-raised, 13 manual-award, 12
+        // right-of-reply, 1 manual-deduct — 121 of 454 (27%) are not speeches,
+        // so treating the whole feed as speeches over-reported every speech
+        // count on this page by 36% (454/333).
+        // The messages read is no longer pre-filtered to `__system__`, so the
+        // ledger filter now states both halves of what a ledger row is.
+        const allLogs = sid
           ? bySession(sysMessages, sid)
-              .filter((m) => typeof m.content === 'string' && (m.content as string).startsWith('__log__:'))
+              .filter((m) => m.sender === '__system__'
+                && typeof m.content === 'string' && (m.content as string).startsWith('__log__:'))
               .map((m) => {
-                try { return JSON.parse((m.content as string).slice('__log__:'.length)); } catch { return null; }
+                try {
+                  const p = JSON.parse((m.content as string).slice('__log__:'.length)) as Record<string, unknown>;
+                  if (!p || typeof p !== 'object') return null;
+                  return {
+                    country: typeof p.country === 'string' ? p.country : '',
+                    type: typeof p.type === 'string' ? p.type : 'speech',
+                    seconds: typeof p.seconds === 'number' ? p.seconds : 0,
+                    context: typeof p.context === 'string' ? p.context : '',
+                    topic: typeof p.topic === 'string' ? p.topic : '',
+                    // The payload carries its own timestamp; `messages.created_at`
+                    // is the fallback so every row has a usable clock.
+                    at: (typeof p.timestamp === 'string' ? p.timestamp : (m.created_at as string | null)) ?? null,
+                  };
+                } catch { return null; }
               })
-              .filter((e): e is { country: string; seconds: number; context: string; topic: string } => e !== null)
+              .filter((e): e is NonNullable<typeof e> => e !== null)
           : [];
+
+        // `__chair__` is a sentinel country, not a delegation (17 production rows,
+        // all on motion-raised). It must never reach a per-delegation aggregate.
+        const speechLogs = allLogs
+          .filter((e) => e.type === 'speech' && e.country !== '__chair__')
+          .map(({ country, seconds, context, topic, at }) => ({ country, seconds, context, topic, at }));
+        const eventLogs = allLogs.map(({ country, type, at }) => ({ country, type, at }));
 
         const chairUserIds = (c.chair_user_ids as string[] | null) ?? [];
         const displayChairs = (c.display_chairs as { name: string; avatar_url: string | null }[] | null) ?? [];
@@ -675,6 +308,56 @@ export default function LiveStatusPage() {
         // pure function of the row; the settings store is never touched here.
         const scoring = getScoringConfig({ dbScoring: (sRow?.settings as { scoring?: ScoringConfig } | null)?.scoring ?? null });
 
+        const sessionDocs = sid ? bySession(documents, sid) : [];
+        const sessionQueues = sid ? bySession(queues, sid) : [];
+        const sessionFeedback = sid ? bySession(feedback, sid) : [];
+
+        // Most recent sign of life in the room, across every timestamp we can
+        // see. Used to decide whether an "introduced" resolution or a lingering
+        // phase='voting' still describes something happening now.
+        const activityTimes = [
+          ...allLogs.map((e) => e.at),
+          (speakerRow?.started_at as string | null) ?? null,
+          ...sessionDocs.map((d) => (d.created_at as string | null) ?? null),
+          ...sessionFeedback.map((f) => (f.created_at as string | null) ?? null),
+        ]
+          .filter((t): t is string => !!t)
+          .map((t) => Date.parse(t))
+          .filter((n) => Number.isFinite(n));
+        const lastActivityAt = activityTimes.length > 0
+          ? new Date(Math.max(...activityTimes)).toISOString()
+          : null;
+
+        // `max(messages.created_at)` over every message in the room, chat rows
+        // included — the second term of the activity clock the STATUS axis runs
+        // on (`lastActiveAt` in cardModel.ts).
+        const messageTimes = (sid ? bySession(sysMessages, sid) : [])
+          .map((m) => Date.parse((m.created_at as string | null) ?? ''))
+          .filter((n) => Number.isFinite(n));
+        const lastMessageAt = messageTimes.length > 0
+          ? new Date(Math.max(...messageTimes)).toISOString()
+          : null;
+
+        // Has this room ever actually SAT? A resume roll call and a session that
+        // was never opened both sit at phase='pre-session'
+        // (committeeService.ts:1097-1105), so only accumulated proceedings
+        // separate them: a preserved GSL or caucus queue, documents, ledger
+        // rows, chair feedback, a speaker row, or a suspension on file.
+        //
+        // `chairNames` is DELIBERATELY not in this list. A chair joining is what
+        // opens the room for its FIRST roll call, so folding it in here made
+        // every first sitting claim to be resuming and left `cardStatus`'s
+        // 'roll-call' branch unreachable. `cardStatus` reads the two signals
+        // separately: proceedings ⇒ resumed, chairs-only ⇒ first roll call.
+        const hasHistory = !!sRow && (
+          sessionQueues.length > 0
+          || sessionDocs.length > 0
+          || allLogs.length > 0
+          || sessionFeedback.length > 0
+          || !!speakerRow?.country
+          || !!(sRow.suspended_at as string | null)
+        );
+
         return {
           conf: {
             id: c.id as string,
@@ -685,6 +368,9 @@ export default function LiveStatusPage() {
             totalSlots: (c.total_slots as number) ?? 0,
             sessionId: sid,
             sessionCode: (c.session_code as string | null) ?? null,
+            releasedToChairsAt: (c.released_to_chairs_at as string | null) ?? null,
+            // NOT NULL DEFAULT 1 in the schema; the coalesce is for the type.
+            delegationSize: (c.delegation_size as number | null) ?? 1,
             chairUserIds,
             chairs,
           },
@@ -698,6 +384,12 @@ export default function LiveStatusPage() {
                 chairNames: (sRow.chair_names as string[] | null) ?? [],
                 suspendedAt: (sRow.suspended_at as string | null) ?? null,
                 endedAt: (sRow.ended_at as string | null) ?? null,
+                updatedAt: (sRow.updated_at as string | null) ?? null,
+                resumingChair: (sRow.resuming_chair as string | null) ?? null,
+                // Straight off the row. AGENTS.md rule 14: never `getSettings(code)`
+                // outside the chair page — the store is not hydrated here.
+                quorumThreshold:
+                  ((sRow.settings as { quorumThreshold?: string } | null)?.quorumThreshold) ?? 'none',
                 scoringFactors: scoring.factors.filter((f) => f.enabled).map((f) => ({ id: f.id, name: f.name })),
                 factorScaleMax: scoring.factorScaleMax,
               }
@@ -709,14 +401,15 @@ export default function LiveStatusPage() {
                 startedAt: (speakerRow.started_at as string | null) ?? null,
               }
             : null,
-          delegates: sid ? bySession(delegates, sid).map((d) => ({ country: d.country as string, status: d.status as string })) : [],
+          delegates: sid
+            ? bySession(delegates, sid).map((d) => ({
+                country: d.country as string,
+                status: d.status as string,
+                isObserver: (d.is_observer as boolean | null) ?? false,
+              }))
+            : [],
           gslQueue: sid ? bySession(queues, sid).filter((q) => q.list_type === 'gsl').map((q) => q.country as string) : [],
           caucusQueue: sid ? bySession(queues, sid).filter((q) => q.list_type === 'caucus').map((q) => q.country as string) : [],
-          pendingMotions: sid
-            ? bySession(motions, sid)
-                .filter((m) => m.type !== 'join-request' && m.type !== 'gsl-request')
-                .map((m) => ({ type: m.type as string, topic: (m.topic as string) ?? '' }))
-            : [],
           documents: sid
             ? bySession(documents, sid).map((d) => ({
                 type: d.type as string,
@@ -724,9 +417,17 @@ export default function LiveStatusPage() {
                 docCode: (d.doc_code as string) ?? '',
                 title: (d.title as string) ?? '',
                 sponsors: (d.sponsors as string[] | null) ?? [],
+                fileUrl: (d.file_url as string | null) ?? null,
+                fileName: (d.file_name as string | null) ?? null,
+                content: (d.content as string | null) ?? null,
+                createdAt: (d.created_at as string | null) ?? null,
               }))
             : [],
           speechLogs,
+          eventLogs,
+          lastActivityAt,
+          lastMessageAt,
+          hasHistory,
           feedback: sid
             ? bySession(feedback, sid).map((f) => ({
                 country: f.country as string,
@@ -743,7 +444,14 @@ export default function LiveStatusPage() {
       });
 
       setRows(assembled);
+      setLoadError(failures.length > 0
+        ? `Partly loaded — ${failures.join(', ')} could not be read. Those figures may be wrong.`
+        : null);
       setLastRefreshed(Date.now());
+    } catch (e) {
+      // A thrown request (network down, aborted fetch) is a failed load, not an
+      // empty floor. Same rule: say so, and don't stamp a fresh timestamp.
+      setLoadError("Couldn't refresh the floor: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       loadingRef.current = false;
       setRefreshing(false);
@@ -775,37 +483,152 @@ export default function LiveStatusPage() {
     return () => clearInterval(poll);
   }, [loadAll, loadBroadcasts]);
 
-  // 1s tick for the "Refreshed Xs ago" label
+
+  // Lazy, once-per-visit load of the conference scoreboard, triggered the first
+  // time an organiser opens a Points view.
+  const conferenceId = conference?.id;
+  const accessToken = authSession?.access_token;
+  //
+  // THE IN-FLIGHT LATCH IS A REF, AND THAT IS NOT A STYLE CHOICE.
+  //
+  // This effect used to guard on `scoreboardLoading` and ALSO list it as a
+  // dependency, which deadlocked the modal on its spinner every single time it
+  // was opened — verified on the real page, not reasoned about:
+  //
+  //   1. the effect passes its guard and calls `setScoreboardLoading(true)`;
+  //   2. that state IS a dependency, so React tears the effect down and runs it
+  //      again — and the teardown sets `cancelled = true` on the fetch that was
+  //      started one line earlier;
+  //   3. the new pass bails on the very flag it just set;
+  //   4. the fetch resolves into the cancelled closure, so neither
+  //      `setScoreboard` nor `setScoreboardLoading(false)` ever runs.
+  //
+  // A ref cannot re-trigger the effect, so the latch and the render state stop
+  // fighting. `scoreboardFor` is no longer cancellable either: the payload is
+  // the WHOLE conference, so switching committees mid-load must keep the same
+  // request rather than abandon it and re-latch.
+  const scoreboardReq = useRef(false);
+  // BOTH doors open the same payload. A committee's Points view and a single
+  // delegation's card are two views of one `ConferenceScoreboard`, so whichever
+  // is opened first pays for the load and the other is instant. The allocation
+  // index rides along on the same latch for the same reason — the delegate card
+  // needs both halves, and two latches would mean two ways to be half-loaded.
+  // THREE doors now, not two: the recap modal's Scoreboard side-tab is the
+  // third, and it opens the same payload rather than a thinner copy of it. It is
+  // a separate latch from `recapFor` on purpose — opening a recap must NOT drag
+  // a whole-conference scoreboard read in behind it; only pressing the tab does.
+  const wantsScoreboard = !!scoreboardFor || !!delegateFor || recapWantsScoreboard;
   useEffect(() => {
-    const t = setInterval(() => setTick((v) => v + 1), 1000);
-    return () => clearInterval(t);
-  }, []);
+    if (scoreboardReq.current || !wantsScoreboard || !conferenceId || !accessToken) return;
+    scoreboardReq.current = true;
+    setScoreboardLoading(true);
+    void (async () => {
+      const authed = getAuthedClient(accessToken);
+      try {
+        // `loadAllocationIndex` never throws — it logs and returns an empty
+        // index — so a failure to resolve WHO holds a delegation can never take
+        // the performance figures down with it.
+        const [result, allocIndex] = await Promise.all([
+          loadConferenceScoreboard(authed, conferenceId),
+          loadAllocationIndex(authed, conferenceId),
+        ]);
+        setScoreboard(result);
+        setAllocations(allocIndex);
+        setScoreboardError('');
+      } catch (err) {
+        console.error('[LiveStatusPage] scoreboard load failed:', err);
+        // Unlatch, so the next Points click retries instead of being stuck with
+        // a permanent error message.
+        scoreboardReq.current = false;
+        setScoreboardError("Couldn't load the scoreboard for this committee.");
+      } finally {
+        setScoreboardLoading(false);
+      }
+    })();
+  }, [wantsScoreboard, conferenceId, accessToken]);
 
   // ── Derived ──
   const recapData = recapFor ? rows?.find((r) => r.conf.id === recapFor) ?? null : null;
   const awardsData = awardsFor ? rows?.find((r) => r.conf.id === awardsFor) ?? null : null;
   const rosterData = rosterFor ? rows?.find((r) => r.conf.id === rosterFor) ?? null : null;
+  const scoreboardData = scoreboardFor ? rows?.find((r) => r.conf.id === scoreboardFor) ?? null : null;
+  const delegateData = delegateFor ? rows?.find((r) => r.conf.id === delegateFor.confId) ?? null : null;
+  const broadcastData = broadcastFor ? rows?.find((r) => r.conf.id === broadcastFor) ?? null : null;
 
   // Stable identity: `rows ?? []` minted a fresh array on every tick while the
   // page was still loading, which would re-run every memo hanging off it.
   const allRows = useMemo(() => rows ?? [], [rows]);
-  const liveCount = allRows.filter((r) => cardStatus(r) === 'live').length;
-  const chairsJoined = allRows.reduce((sum, r) => sum + (r.session?.chairNames.length ?? 0), 0);
 
-  // Aggregate glyph-row indicators — computed across every committee on the floor.
-  const speakingNow = allRows.filter((r) => !!r.currentSpeaker?.startedAt).length;
-  const rollCallCount = allRows.filter((r) => cardStatus(r) === 'not-started').length;
-  const motionsPending = allRows.reduce((sum, r) => sum + r.pendingMotions.length, 0);
-  const suspendedCount = allRows.filter((r) => cardStatus(r) === 'suspended').length;
-  const presentTotal = allRows.reduce((sum, r) => sum + r.delegates.filter((d) => d.status !== 'absent').length, 0);
+  // ── The STATUS axis, floor-wide ──
+  //
+  // ONE wall clock for the whole page, from the shared external store in
+  // PhaseVariants. It replaces the page's own `setInterval(setTick)` (one timer
+  // saved) and, more importantly, it is the SAME instant every card, every
+  // count, the filter and the sort order are computed from — so a room can
+  // never be sorted as stalled while its card still says idle.
+  const now = useNowTick(true);
+  const statusOf = useMemo(() => {
+    const m = new Map<string, RoomStatus>();
+    for (const r of allRows) m.set(r.conf.id, roomStatus(r, now));
+    return m;
+  }, [allRows, now]);
 
-  const secondsAgo = lastRefreshed ? Math.max(0, Math.floor((Date.now() - lastRefreshed) / 1000)) : null;
+  const counts = useMemo(() => {
+    const c: Record<RoomStatus, number> = {
+      live: 0, idle: 0, stalled: 0, suspended: 0, 'not-started': 0, ended: 0,
+    };
+    for (const r of allRows) c[statusOf.get(r.conf.id) ?? 'not-started'] += 1;
+    return c;
+  }, [allRows, statusOf]);
+
+  const needsAttention = useMemo(
+    () => allRows.filter((r) => {
+      const st = statusOf.get(r.conf.id);
+      return st === 'stalled' || st === 'suspended' || cardWarnings(r, now).length > 0;
+    }).length,
+    [allRows, statusOf, now],
+  );
+
+  // Acronym-over-full-name, resolved for the whole conference in one pass:
+  // an acronym two committees would share is dropped for both, so this cannot
+  // be done a card at a time.
+  const identities = useMemo(() => committeeIdentities(allRows), [allRows]);
+
+  const onFloor = counts.live + counts.idle + counts.stalled;
+  const presentTotal = allRows.reduce((sum, r) => sum + presence(r).present, 0);
+
+  // EVERY COMMITTEE, ALWAYS — re-ordered, never reduced.
+  //
+  // There is no filter left to hide one behind. The status filter bar that used
+  // to sit above the floor overview is gone on the owner's instruction, and with
+  // it the only way this grid could ever omit a room: picking "Live" off it hid
+  // every never-opened committee, which is exactly the disappearance the owner
+  // asked to be fixed. The query itself has never filtered — it is
+  // `conference_committees` where `conference_id` matches, with no other
+  // predicate — so with the bar gone `visibleRows` is provably `allRows`.
+  //
+  // `.order('name')` is still what the query asks the database for, because it
+  // is the only stable base ordering, but the grid is re-sorted here so the
+  // rooms that need feet are the ones at the top.
+  const visibleRows = useMemo(() => sortByUrgency(allRows, now), [allRows, now]);
+
+  const secondsAgo = lastRefreshed ? Math.max(0, Math.floor((now - lastRefreshed) / 1000)) : null;
 
   // Only a committee with a linked session (and not already adjourned for good)
   // has a `committees.id` to address, so those are the only broadcast targets.
   // Memoised: the composer diffs this list to fold in committees that come
   // online while it is open, so a fresh array on every 1s tick would churn.
   const targets = useMemo(() => broadcastTargets(allRows), [allRows]);
+
+  // A SCOPED broadcast is the same composer with a one-entry target list — not a
+  // second composer. `broadcastTargets` already drops committees with no session
+  // and committees that have been gavelled out, so a scoped list can legitimately
+  // come back empty; the composer is then not opened at all (see `canBroadcast`
+  // on the card's modal).
+  const composerTargets = useMemo(
+    () => (broadcastData ? targets.filter((t) => t.confCommitteeId === broadcastData.conf.id) : targets),
+    [targets, broadcastData],
+  );
   const broadcastGroups = useMemo(() => groupBroadcasts(broadcasts).slice(0, 5), [broadcasts]);
 
   async function handleWithdraw(g: BroadcastGroup) {
@@ -829,8 +652,8 @@ export default function LiveStatusPage() {
         </div>
         <div className="flex items-center gap-3">
           {secondsAgo !== null && (
-            <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-              Refreshed {secondsAgo}s ago
+            <span className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+              {loadError ? `Last good refresh ${secondsAgo}s ago` : `Refreshed ${secondsAgo}s ago`}
             </span>
           )}
           <button
@@ -876,14 +699,28 @@ export default function LiveStatusPage() {
         </div>
       </div>
 
-      {/* Status glyph row — at-a-glance indicators across the whole floor */}
-      <div className="flex items-center gap-2.5 mb-4 flex-wrap">
-        <StatusGlyph gradient={NEU_GRADIENTS.green} emoji="Satellite antenna" icon={Radio} value={liveCount} label="Live" accent={NEU.green} pulse />
-        <StatusGlyph gradient={NEU_GRADIENTS.sage} emoji="Studio microphone" icon={Mic} value={speakingNow} label="Speaking" accent={NEU.forest} />
-        <StatusGlyph gradient={NEU_GRADIENTS.forest} emoji="Person raising hand" icon={Users} value={rollCallCount} label="Roll call" accent={NEU.forest} />
-        <StatusGlyph gradient={NEU_GRADIENTS.gold} emoji="Ballot box with ballot" icon={Gavel} value={motionsPending} label="Motions" accent={NEU.deepGold} />
-        <StatusGlyph gradient={NEU_GRADIENTS.amber} emoji="Pause button" icon={PauseCircle} value={suspendedCount} label="Suspended" accent={NEU.amber} />
-      </div>
+      {/* Load failure — stated plainly. A live-ops surface must never present a
+          failed read as a quiet, empty floor. */}
+      {loadError && (
+        <NeuInset className="flex items-start gap-2.5 mb-4" style={{ padding: '12px 14px', borderRadius: 14 }}>
+          <PauseCircle size={15} style={{ color: AMBER_INK, flexShrink: 0, marginBlockStart: 1 }} />
+          <div className="min-w-0">
+            <p className="text-sm font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{loadError}</p>
+            <p className="text-[11px] mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
+              Retrying automatically every 10 seconds.
+            </p>
+          </div>
+        </NeuInset>
+      )}
+
+      {/* THE FLOOR-WIDE TOTALS STRIP THAT SAT HERE IS GONE, on the owner's
+          instruction: "remove the floor-wide totals strip at the top (all rooms
+          / stalled / suspended counts) — the floor overview alone is enough".
+          Those were the first three pills of `StatusFilterBar`, in that order.
+
+          The floor overview below keeps the three counts worth keeping
+          (committees, live now, need attention), and every room now appears in
+          the grid unconditionally — see `visibleRows`. */}
 
       {/* Summary strip — floor overview + live counts */}
       <NeuCard
@@ -898,7 +735,7 @@ export default function LiveStatusPage() {
         <div className="flex items-center gap-4 min-w-0" style={{ paddingLeft: 8 }}>
           <span className="relative inline-flex flex-shrink-0">
             <NeuIconDisc gradient={NEU_GRADIENTS.forest} emoji="Satellite antenna" icon={Radio} size={58} />
-            {liveCount > 0 && (
+            {counts.live > 0 && (
               <span
                 className="absolute rounded-full animate-pulse"
                 style={{ top: 0, right: 0, width: 13, height: 13, backgroundColor: NEU.green, boxShadow: `0 0 0 3px ${NEU.surface}, 0 0 0 5px ${NEU.green}33` }}
@@ -906,28 +743,38 @@ export default function LiveStatusPage() {
             )}
           </span>
           <div className="min-w-0">
-            <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.16em', color: NEU.deepGold }}>
+            <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.16em', color: NEU.forest }}>
               {conference?.acronym ?? '…'} · FLOOR OVERVIEW
             </p>
-            <p className="font-black truncate" style={{ color: liveCount > 0 ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.12, marginTop: 2 }}>
-              {liveCount > 0 ? 'Committees are in session' : 'All quiet on the floor'}
+            {/* The headline now reports the STATUS axis. "Committees are in
+                session" used to be true of any room whose phase had ever left
+                pre-session, including one abandoned three hours earlier. */}
+            <p className="font-black truncate" style={{ color: needsAttention > 0 ? RED : counts.live > 0 ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.12, marginTop: 2 }}>
+              {needsAttention > 0
+                ? `${needsAttention} room${needsAttention === 1 ? '' : 's'} need${needsAttention === 1 ? 's' : ''} attention`
+                : counts.live > 0
+                  ? `${counts.live} committee${counts.live === 1 ? '' : 's'} running normally`
+                  : 'All quiet on the floor'}
             </p>
-            {presentTotal > 0 && (
-              <p className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-                {presentTotal} delegate{presentTotal === 1 ? '' : 's'} present across the floor
-              </p>
-            )}
+            <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+              {onFloor > 0
+                ? `${onFloor} room${onFloor === 1 ? '' : 's'} open${presentTotal > 0 ? ` · ${presentTotal} delegate${presentTotal === 1 ? '' : 's'} present` : ''}`
+                : 'No committee has been opened yet'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-6 flex-wrap">
+          {/* "Chairs joined" is gone. It summed `chair_names` across the whole
+              conference — a number that names no room and moves for reasons an
+              organiser cannot act on. Attention needed replaces it. */}
           {[
             { value: rows?.length ?? 0, label: 'COMMITTEES', color: NEU.ink },
-            { value: liveCount, label: 'IN SESSION', color: liveCount > 0 ? NEU.green : NEU.muted },
-            { value: chairsJoined, label: 'CHAIRS JOINED', color: NEU.deepGold },
+            { value: counts.live, label: 'LIVE NOW', color: counts.live > 0 ? NEU.green : SOFT },
+            { value: needsAttention, label: 'NEED ATTENTION', color: needsAttention > 0 ? RED : SOFT },
           ].map((s) => (
             <NeuInset key={s.label} className="text-center" style={{ padding: '10px 18px', borderRadius: 14, minWidth: 92 }}>
               <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 30, color: s.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.12em', color: NEU.muted, marginTop: 5 }}>{s.label}</p>
+              <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.12em', color: SOFT, marginTop: 5 }}>{s.label}</p>
             </NeuInset>
           ))}
         </div>
@@ -942,7 +789,20 @@ export default function LiveStatusPage() {
       />
 
       {/* Grid */}
-      {rows === null ? (
+      {rows === null && loadError ? (
+        /* First load failed outright: there is no floor to draw. A shimmering
+           skeleton here would read as "still loading" forever, which is the same
+           lie as an empty floor stamped with a fresh refresh time. */
+        <NeuCard style={{ padding: 40, textAlign: 'center' }}>
+          <Emoji3D name="Satellite antenna" size={34} fallback={Radio} fallbackColor={SOFT} style={{ opacity: 0.9 }} />
+          <p className="text-sm font-bold mt-3 mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+            The floor could not be loaded
+          </p>
+          <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT }}>
+            Nothing is being hidden — this page has never had a successful read this session.
+          </p>
+        </NeuCard>
+      ) : rows === null ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="rounded-[22px] animate-pulse" style={{ height: 320, backgroundColor: NEU.surface, boxShadow: NEU.out }} />
@@ -960,32 +820,113 @@ export default function LiveStatusPage() {
           </Link>
         </NeuCard>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {rows.map((r) => {
-            const status = cardStatus(r);
-            return status === 'no-session' || status === 'not-started' ? (
-              <NotStartedCard
+        // There is no "nothing matches your filter" state any more, because
+        // there is no filter. `rows.length === 0` above is now the only empty
+        // case, and it means the conference genuinely has no committees.
+        <>
+          {/* ONE card for every state.
+              `items-stretch` + a `flex-1` band inside the card is the pattern
+              from `committees/page.tsx:1568, 1587`. Without the `flex-1` the
+              grid still stretches every card to the tallest in its row, but no
+              child claims the surplus and it all pools at the bottom as a dead
+              band — which is exactly what this page was doing. */}
+          {/* The row gap and the top padding are BOTH sized past the emblem's
+              overhang (22px, `CommitteeCard`'s LOGO_OVERHANG). The emblem sits
+              outside its card's top edge, so without the top padding the first
+              row's marks would be cut by the page, and without the wider row
+              gap a mark would land on the card above it in the same column. */}
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-stretch"
+            style={{ columnGap: 20, rowGap: 40, paddingBlockStart: 26 }}
+          >
+            {visibleRows.map((r) => (
+              <CommitteeCard
                 key={r.conf.id}
                 data={r}
-                committeesHref={conference ? `/manage/${conference.slug}/committees` : '#'}
-              />
-            ) : (
-              <LiveCard
-                key={r.conf.id}
-                data={r}
-                onOpenRecap={(d) => setRecapFor(d.conf.id)}
-                onOpenAwards={(d) => setAwardsFor(d.conf.id)}
+                identity={identities.get(r.conf.id)!}
+                now={now}
+                onOpen={(d) => { setRecapDocFilter('all'); setRecapFor(d.conf.id); }}
                 onOpenRoster={(d) => setRosterFor(d.conf.id)}
+                onOpenScoreboard={(d) => setScoreboardFor(d.conf.id)}
+                onOpenDocuments={(d, type) => { setRecapDocFilter(type); setRecapFor(d.conf.id); }}
+                onOpenDelegate={(d, country) => setDelegateFor({ confId: d.conf.id, country })}
               />
-            );
-          })}
-        </div>
+            ))}
+          </div>
+          <GridFootnote />
+        </>
       )}
 
       {/* Modals */}
-      {recapData && <RecapModal data={recapData} onClose={() => setRecapFor(null)} />}
+      {recapData && conference && (
+        <RecapModal
+          // Keyed on the committee AND on the section it was asked to open,
+          // because the jump-to-documents scroll is a mount effect: without the
+          // key, clicking a DR chip while the same room's recap is already open
+          // would set the filter but leave the reader at the top.
+          key={`${recapData.conf.id}:${recapDocFilter}`}
+          data={recapData}
+          initialDocFilter={recapDocFilter}
+          conferenceSlug={conference.slug}
+          // The recap's Scoreboard tab renders the SAME body the standalone
+          // Points modal does, off the same lazily-loaded conference payload.
+          scoreboard={scoreboard}
+          scoreboardLoading={scoreboardLoading}
+          scoreboardError={scoreboardError}
+          onWantScoreboard={() => setRecapWantsScoreboard(true)}
+          onClose={() => setRecapFor(null)}
+          // The caucus clock, ballot breakdown and unmod countdown moved OFF the
+          // card (four card shapes were the cause of the height chaos) and into
+          // the detail view, where a caller has already chosen one room.
+          floorDetail={<FloorDetail data={recapData} />}
+          onOpenScoreboard={(d) => { setRecapFor(null); setScoreboardFor(d.conf.id); }}
+          // A room with no session (or one already gavelled out) has nothing to
+          // address, so the affordance is absent rather than dead.
+          onBroadcast={targets.some((t) => t.confCommitteeId === recapData.conf.id)
+            ? (d) => { setRecapFor(null); setBroadcastFor(d.conf.id); }
+            : null}
+        />
+      )}
       {awardsData && <AwardsModal data={awardsData} onClose={() => setAwardsFor(null)} />}
       {rosterData && <RosterModal data={rosterData} onClose={() => setRosterFor(null)} />}
+      {scoreboardData && conference && (
+        <CommitteeScoreboardModal
+          data={scoreboardData}
+          scoreboard={scoreboard}
+          loading={scoreboardLoading}
+          error={scoreboardError}
+          conferenceSlug={conference.slug}
+          onClose={() => setScoreboardFor(null)}
+        />
+      )}
+      {/* ONE delegation, opened from a flag in a card's queue strip. Shares the
+          scoreboard payload the committee Points view uses, plus the allocation
+          index that resolves the delegation to the person (or, under double
+          delegation, the two people) actually representing it. */}
+      {delegateData && (
+        <DelegateCardModal
+          data={delegateData}
+          country={delegateFor!.country}
+          scoreboard={scoreboard}
+          allocations={allocations}
+          loading={scoreboardLoading}
+          error={scoreboardError}
+          onClose={() => setDelegateFor(null)}
+        />
+      )}
+      {/* SCOPED broadcast — the same composer, handed a one-committee target
+          list. `session_broadcasts` has zero production rows, so this path was
+          exercised end to end rather than assumed to work. */}
+      {broadcastData && conference && (
+        <BroadcastComposer
+          conferenceId={conference.id}
+          conferenceLabel={conference.acronym ?? conference.full_name}
+          createdBy={authSession?.user?.id ?? null}
+          targets={composerTargets}
+          onClose={() => setBroadcastFor(null)}
+          onSent={() => { void loadBroadcasts(); }}
+        />
+      )}
       {composerOpen && conference && (
         <BroadcastComposer
           conferenceId={conference.id}

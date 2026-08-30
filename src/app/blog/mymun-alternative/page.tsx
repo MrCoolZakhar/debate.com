@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import RelatedGuides from '@/components/RelatedGuides';
 import type { Metadata } from 'next';
-import { pageMetadata } from '@/lib/seo';
+import { pageMetadata, JSONLD_PUBLISHER } from '@/lib/seo';
 
 export const metadata: Metadata = pageMetadata({
   title: 'mymun Alternative 2026: mymun and MUN Command vs Gavelling',
@@ -36,7 +36,7 @@ const articleSchema = {
   datePublished: '2026-08-13',
   dateModified: '2026-08-13',
   author: { '@type': 'Organization', name: 'Gavelling', url: 'https://gavelling.com' },
-  publisher: { '@type': 'Organization', name: 'Gavelling', logo: { '@type': 'ImageObject', url: 'https://gavelling.com/GavellingLogo.png' } },
+  publisher: JSONLD_PUBLISHER,
   image: 'https://gavelling.com/og-image.png',
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://gavelling.com/blog/mymun-alternative' },
 };

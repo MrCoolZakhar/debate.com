@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "check:og": "node scripts/check-og.mjs",
-    "check:og:build": "next build && node scripts/check-og.mjs --start"
+    "check:og:build": "next build && node scripts/check-og.mjs --start",
+    "check:brand": "node scripts/check-brand-marks.mjs",
+    "prebuild": "node scripts/check-brand-marks.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

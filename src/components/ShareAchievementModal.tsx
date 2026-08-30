@@ -21,6 +21,7 @@ import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { AwardChip, AwardArtwork, monogramFor, OUTFIT } from '@/app/account/accountUi';
 import type { CVEntry } from '@/components/CVEntryModal';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 export function ShareAchievementModal({
   open,
@@ -63,6 +64,9 @@ export function ShareAchievementModal({
   // Reshuffle each time the modal (re)opens for a fresh burst.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry?.id]);
+
+  // Modal: the MUN CV page behind must not scroll while the card is up.
+  useScrollLock(open && !!entry);
 
   useEffect(() => {
     if (!open) return;

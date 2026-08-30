@@ -4,10 +4,12 @@
 // LogoCropModal, drag-to-fit crop step for conference logo uploads.
 //
 // Shown when an organiser picks a logo file, BEFORE the upload happens. The
-// image is draggable inside a large circular preview (the exact LogoDisc look:
-// near-white backdrop, soft forest shadow) with a zoom slider and a dashed
-// safe-margin ring at the 6%-inset boundary, whatever sits inside the ring
-// is what ships.
+// image is draggable inside a large circular preview with a zoom slider and a
+// dashed safe-margin ring at the 6%-inset boundary, whatever sits inside the
+// ring is what ships. The preview backdrop mirrors how the asset will really
+// render: the LogoDisc look (near-white backdrop, soft forest shadow) for
+// conference logos, or nothing at all under `bare` for committee emblems,
+// which float transparently. See the `bare` prop.
 //
 // SMART AUTO-FIT: on load the image is scanned on a small offscreen canvas to
 // find the artwork's REAL bounding box, alpha bounds for transparent images;
@@ -31,6 +33,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ZoomIn, ZoomOut, Move } from 'lucide-react';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const DISC = 280;              // preview disc diameter (px)
 const SAFE = DISC * 0.88;      // safe-area diameter, 6% margin each side (crop less)
@@ -144,13 +147,37 @@ export function LogoCropModal({
   file,
   onCancel,
   onSave,
+  bare = false,
 }: {
   /** The image file the organiser picked. */
   file: File;
   onCancel: () => void;
   /** Receives the flattened 512×512 transparent PNG. */
   onSave: (blob: Blob) => void;
+  /**
+   * Preview the artwork the way it will actually SHIP on this surface.
+   *
+   * The exported PNG has always been fully transparent — nothing is ever
+   * composited behind the artwork (see `handleSave`). The near-white disc is a
+   * PREVIEW of `LogoDisc`'s backdrop, which conference logos really do render
+   * on: they are arbitrary uploads (dark seals, edge-to-edge photos) that need
+   * separation on ivory AND on forest surfaces, so for those the disc preview
+   * is honest and stays.
+   *
+   * Committee emblems do NOT get that backdrop — they render `LogoDisc bare`,
+   * floating on the surface (assignment page, `CommitteeIdentityBadge`). For
+   * those, the white disc is a lie the tool tells: the organiser frames the
+   * mark against a white circle it will never sit on, and reads the ring of
+   * disc showing around the artwork as a white outline baked into their file.
+   * `bare` drops the fill, the rim and the shadow so the preview is the
+   * transparent thing that ships. The dashed safe ring stays — it is the crop
+   * guide, not decoration.
+   */
+  bare?: boolean;
 }) {
+  // Modal: freeze the page behind while the crop tool is open.
+  useScrollLock(true);
+
   const objectUrl = useMemo(() => URL.createObjectURL(file), [file]);
   useEffect(() => () => URL.revokeObjectURL(objectUrl), [objectUrl]);
 
@@ -336,9 +363,9 @@ export function LogoCropModal({
               width: `${DISC}px`,
               height: `${DISC}px`,
               borderRadius: '9999px',
-              backgroundColor: '#FDFCF9',
-              border: '1px solid rgba(221,212,192,0.6)',
-              boxShadow: '0 4px 12px rgba(27,56,40,0.15)',
+              backgroundColor: bare ? 'transparent' : '#FDFCF9',
+              border: bare ? 'none' : '1px solid rgba(221,212,192,0.6)',
+              boxShadow: bare ? 'none' : '0 4px 12px rgba(27,56,40,0.15)',
               overflow: 'hidden',
               touchAction: 'none',
               cursor: dragging ? 'grabbing' : 'grab',

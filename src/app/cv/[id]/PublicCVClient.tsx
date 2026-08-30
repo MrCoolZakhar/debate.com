@@ -6,6 +6,7 @@ import { getCountryByName, getFlagUrl } from '@/lib/countries';
 import type { CVEntry } from '@/components/CVEntryModal';
 import { CVStatsRow, TimelineEntry } from '../../account/cv/CVTimeline';
 import { Eyebrow, OUTFIT, MONO } from '../../account/accountUi';
+import PublicCVSignupPrompt from '@/components/PublicCVSignupPrompt';
 
 export interface PublicProfile {
   id: string;
@@ -121,7 +122,13 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
               No conferences yet
             </p>
             <p className="text-sm max-w-sm mx-auto" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-              {name} hasn&apos;t added any Model UN conferences to their record.
+              {/* One expression, not `{name}` followed by JSX text: the space
+                  between the two was being dropped in the rendered HTML
+                  ("Alejandro Quirozhasn't added…"). This is the empty state
+                  every profile without entries lands on — the common case now
+                  that avatars across the product link here — so it has to read
+                  correctly. */}
+              {`${name} hasn't added any Model UN conferences to their record.`}
             </p>
           </div>
         ) : (
@@ -153,6 +160,13 @@ export default function PublicCVClient({ profile, entries }: { profile: PublicPr
           </Link>
         </div>
       </main>
+
+      {/* Signup ask for logged-out readers, fired only once they have read
+          through the CV. Mounted inside the `profile` branch on purpose — the
+          "This CV isn't available" state above returns early, and asking a
+          stranger to register over a dead link would be the worst possible
+          first impression. It self-suppresses for signed-in visitors. */}
+      <PublicCVSignupPrompt />
     </div>
   );
 }

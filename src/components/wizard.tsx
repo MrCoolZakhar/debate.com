@@ -37,6 +37,9 @@ export function WizardShell({
   title,
   sub,
   onBack,
+  labels,
+  subStep,
+  minBodyHeight,
   children,
 }: {
   /** 1-based current step. */
@@ -45,15 +48,54 @@ export function WizardShell({
   title: string;
   sub?: string;
   onBack?: () => void;
+  /**
+   * OPT-IN. Floor (in px) for the title block + body TOGETHER, turning them
+   * into one flex column of at least that height.
+   *
+   * WHY: every step's content is a different height, so the primary action at
+   * the bottom of the column landed somewhere different on each one and moved
+   * out from under the pointer between steps. With this set, a caller whose
+   * footer carries `margin-top: auto` gets that footer parked at the BOTTOM of
+   * a fixed-height column instead — same y on every step short enough to fit.
+   *
+   * The title block is inside the measured column on purpose: a one-line vs
+   * two-line H1 would otherwise shift everything below it by a line.
+   *
+   * Capped at the viewport (`min(Npx, calc(100dvh - 200px))`) so a short
+   * phone screen never gains a scrollbar it did not have before.
+   *
+   * Omit it (the default, and what every pre-existing caller does) and the
+   * markup is byte-for-byte what it was: title block and body as plain
+   * siblings, no wrapper, no flex, no min-height.
+   */
+  minBodyHeight?: number;
+  /**
+   * OPT-IN. Names for each step, same length and order as `total`. Supplying
+   * them swaps the anonymous dots for the named segmented rail. Omit (the
+   * default, and what every pre-existing caller does) and the dots render
+   * exactly as before — no existing flow changes.
+   */
+  labels?: string[];
+  /**
+   * OPT-IN, only meaningful alongside `labels`. Sub-divides the CURRENT
+   * segment into `total` ticks, for a step that is itself paginated (the
+   * apply flow's Questions step splits on the organiser's section blocks).
+   * Without this the rail is frozen while the applicant moves between pages.
+   */
+  subStep?: { index: number; total: number };
   children: React.ReactNode;
 }) {
   const [backHover, setBackHover] = useState(false);
+  const pinned = typeof minBodyHeight === 'number';
   return (
     <div
       className="w-full flex flex-col items-center"
       style={{ maxWidth: 720, margin: '0 auto', padding: '8px 4px 32px' }}
     >
-      {/* Progress dots */}
+      {labels && labels.length === total ? (
+        <StepRail step={step} total={total} labels={labels} subStep={subStep} />
+      ) : (
+      /* Progress dots */
       <div className="flex items-center gap-2" style={{ marginBottom: 28 }} aria-label={`Step ${step} of ${total}`}>
         {Array.from({ length: total }, (_, i) => {
           const n = i + 1;
@@ -79,8 +121,12 @@ export function WizardShell({
           );
         })}
       </div>
+      )}
 
-      {/* Back arrow + title block */}
+      {/* Back arrow + title block. When `minBodyHeight` is set this and the
+          body share one min-height flex column, so a caller footer with
+          `margin-top: auto` lands at the same y on every step. */}
+      <PinWrap pinned={pinned} minHeight={minBodyHeight}>
       <div className="w-full relative" style={{ marginBottom: 26 }}>
         {onBack && (
           <button
@@ -139,7 +185,140 @@ export function WizardShell({
         </div>
       </div>
 
-      <div className="w-full">{children}</div>
+      <div className={pinned ? 'w-full flex flex-col flex-1' : 'w-full'}>{children}</div>
+      </PinWrap>
+    </div>
+  );
+}
+
+/**
+ * Wraps the title block + body in one min-height flex column when
+ * `minBodyHeight` was supplied, and renders them as bare siblings (a fragment,
+ * so ZERO extra DOM) when it was not. Existing callers therefore keep exactly
+ * the markup they had.
+ */
+function PinWrap({
+  pinned, minHeight, children,
+}: {
+  pinned: boolean;
+  minHeight?: number;
+  children: React.ReactNode;
+}) {
+  if (!pinned) return <>{children}</>;
+  return (
+    <div
+      className="w-full flex flex-col"
+      // Capped at the viewport so a short screen never gains a scrollbar that
+      // the natural content did not already need.
+      style={{ minHeight: `min(${minHeight}px, calc(100dvh - 200px))` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── StepRail, the NAMED segmented progress rail ────────────────────────────
+// Opt-in via WizardShell's `labels` prop. Anonymous dots tell an applicant
+// nothing: they cannot see which stage they are in, what is left, or that a
+// stage is itself paginated. The rail names the current stage, ticks off the
+// finished ones, and sub-divides the active segment when the caller passes
+// `subStep`.
+function StepRail({
+  step, total, labels, subStep,
+}: {
+  step: number;
+  total: number;
+  labels: string[];
+  subStep?: { index: number; total: number };
+}) {
+  const current = labels[step - 1] ?? '';
+  return (
+    <div
+      className="w-full"
+      style={{ marginBottom: 26 }}
+      role="group"
+      aria-label={`Step ${step} of ${total}: ${current}${subStep ? `, part ${subStep.index + 1} of ${subStep.total}` : ''}`}
+    >
+      <div className="flex items-center gap-1.5" aria-hidden>
+        {labels.map((label, i) => {
+          const n = i + 1;
+          const done = n < step;
+          const active = n === step;
+          const ticks = active && subStep && subStep.total > 1 ? subStep.total : 1;
+          return (
+            <div
+              key={label + i}
+              className="flex items-center gap-[3px]"
+              style={{ flex: active ? 1.6 : 1, minWidth: 0 }}
+            >
+              {Array.from({ length: ticks }, (_, t) => {
+                const tickDone = done || (active && subStep ? t < subStep.index : false);
+                const tickActive = active && (subStep ? t === subStep.index : true);
+                return (
+                  <span
+                    key={t}
+                    style={{
+                      flex: 1,
+                      height: 6,
+                      borderRadius: 999,
+                      background: tickActive
+                        ? `linear-gradient(90deg, ${NEU.gold}, ${NEU.deepGold})`
+                        : tickDone
+                          ? NEU.forest
+                          : 'rgba(27,56,40,0.14)',
+                      boxShadow: tickActive ? `0 2px 6px ${NEU.deepGold}55` : NEU.inSm,
+                      transition: `background 320ms ${EASE}, box-shadow 320ms ${EASE}`,
+                    }}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: every stage name, the current one lit. Narrow: just the
+          current stage plus its position, because six labels do not fit in
+          319px and a truncated rail is worse than a clear sentence. */}
+      <div className="hidden sm:flex items-center gap-1.5" style={{ marginTop: 8 }} aria-hidden>
+        {labels.map((label, i) => {
+          const n = i + 1;
+          const active = n === step;
+          const done = n < step;
+          return (
+            <span
+              key={label + i}
+              className="truncate"
+              style={{
+                flex: active ? 1.6 : 1,
+                minWidth: 0,
+                fontFamily: OUTFIT,
+                fontWeight: 800,
+                fontSize: 10.5,
+                letterSpacing: '0.13em',
+                textTransform: 'uppercase',
+                // NEU.muted is a 2.71:1 wash — future steps are decorative
+                // here, but anything the applicant must READ uses inkSoft.
+                color: active ? NEU.forest : done ? NEU.inkSoft : 'rgba(27,56,40,0.34)',
+                transition: `color 320ms ${EASE}`,
+              }}
+            >
+              {label}
+            </span>
+          );
+        })}
+      </div>
+      <p
+        className="sm:hidden"
+        style={{
+          marginTop: 8, fontFamily: OUTFIT, fontWeight: 800, fontSize: 11,
+          letterSpacing: '0.12em', textTransform: 'uppercase', color: NEU.forest,
+          textAlign: 'center', fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {current} · {step} of {total}
+        {subStep && subStep.total > 1 ? ` · part ${subStep.index + 1}/${subStep.total}` : ''}
+      </p>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Trophy,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -14,6 +14,9 @@ import Loader from '@/components/Loader';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import type { EmailTheme } from '@/lib/emailHtml';
 import { financialsAreReadOnly } from '@/lib/organizerPermissions';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import { useScrollLock } from '@/hooks/useScrollLock';
+import NotificationStack from '@/components/notifications/NotificationStack';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -59,6 +62,7 @@ export interface Conference {
   predecessor_conference_id: string | null;
   predecessor_approved: boolean;
   min_age: number | null;
+  max_age: number | null;
   allocation_swap_mode: string;
   email_theme: EmailTheme;
   financial_aid_enabled: boolean;
@@ -101,7 +105,7 @@ const CONFERENCE_COLUMNS = [
   'instagram_url', 'facebook_url', 'tiktok_url', 'whatsapp_url', 'website_url',
   'stripe_account_id', 'connect_onboarding_status', 'payout_country', 'payment_method',
   'external_payment_url', 'external_payment_note', 'payment_gate_exempt', 'organizer_id',
-  'predecessor_conference_id', 'predecessor_approved', 'min_age',
+  'predecessor_conference_id', 'predecessor_approved', 'min_age', 'max_age',
   'allocation_swap_mode', 'email_theme',
   'financial_aid_enabled', 'aid_questions', 'aid_intro',
 ].join(', ');
@@ -123,13 +127,18 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
       { icon: Users,     label: 'Applications', href: `/manage/${slug}/applications`, external: false, badge: 0 },
       { icon: MapPin,    label: 'Assignment',   href: `/manage/${slug}/assignment`,   external: false, badge: 0 },
       { icon: FileText,  label: 'Documents',    href: `/manage/${slug}/documents`,    external: false, badge: 0 },
-      { icon: Trophy,    label: 'Scoreboard',   href: `/manage/${slug}/scoreboard`,   external: false, badge: 0 },
+      // Scoreboard is deliberately NOT a nav item. Delegate performance is a
+      // property of a committee, not of the dashboard, so it opens from a
+      // committee on Live Status (the card's "Points & performance" footer and
+      // the Points block in its recap). The /manage/[slug]/scoreboard route is
+      // still reachable by URL for the cross-committee comparison and the CSV
+      // export, and is linked from inside the per-committee view.
     ],
   },
   {
     header: 'COMMUNICATE',
     items: [
-      { icon: Mail, label: 'Email Builder', href: `/manage/${slug}/communications`, external: false, badge: communicationsBadge },
+      { icon: Mail, label: 'Communications', href: `/manage/${slug}/communications`, external: false, badge: communicationsBadge },
     ],
   },
   {
@@ -584,6 +593,9 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const [isOwner, setIsOwner] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // The mobile nav drawer is a modal surface — the page behind it must not
+  // scroll while it is open (this is the phone case, so iOS matters).
+  useScrollLock(mobileMenuOpen);
   const [inboxBadge, setInboxBadge] = useState(0);
 
   // Nav badge — same unread definition as the communications inbox
@@ -780,11 +792,11 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const SECTION_PERMS: Record<string, string> = {
     committees: 'committees', applications: 'applications', import: 'import', assignment: 'assignment',
     documents: 'documents',
-    // The scoreboard reads the same committees the Committees section governs
-    // (it is that section's live-session performance data), so it reuses that
-    // permission key rather than introducing one the Settings → Organizers
-    // pill list does not yet offer. Give it its own key there first if the
-    // secretariat should ever be able to grant one without the other.
+    // The scoreboard is no longer a nav section, but the route is still
+    // reachable by URL — so its permission mapping MUST stay. Deleting it would
+    // turn a URL that used to be gated into one any organiser could open,
+    // which is the opposite of removing a tab. It reuses the Committees key
+    // because it is that section's live-session performance data.
     scoreboard: 'committees',
     communications: 'email_builder', financials: 'financials',
     'financial-aid': 'financials',
@@ -827,6 +839,18 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
           without this the strip behind the rail reads as a different background) */}
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundColor: '#EDE7D8' }} />
 
+      {/* The organiser-side notification host — the SAME stack and the same store
+          the live committee session uses (`@/lib/sessionNotifications`), which is
+          headless and has never been coupled to a committee. Exactly ONE host may
+          be mounted per surface: it owns the single interval that advances every
+          TTL, so a second one would run every countdown at double speed. This is
+          that one for all of /manage.
+
+          `topPx` clears this layout's 56px top bar (the chair cockpit's is 44px,
+          which is the component default). Portaled to `document.body` — there is
+          no `#fit-root` here — so no ancestor `overflow` can clip it. */}
+      <NotificationStack topPx={64} />
+
       {/* Top bar */}
       <header
         className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6"
@@ -861,7 +885,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.75'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
           >
-            {conference?.acronym ?? '...'}
+            {conference ? conferenceAcronymLabel(conference) : '...'}
           </Link>
         </div>
 

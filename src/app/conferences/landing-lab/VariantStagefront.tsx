@@ -129,9 +129,13 @@ function landingConfTitle(c: Pick<LabConference, 'acronym' | 'full_name' | 'star
 
 export default function VariantStagefront({
   conferences,
+  stats,
 }: {
   conferences: LabConference[];
   ratings: Record<string, RatingSummary>; // accepted for caller compatibility (season ledger removed)
+  /** Platform-wide totals (all conferences, not just the published ones the
+   *  cards are drawn from). Null until the RPC lands. */
+  stats?: { total_conferences: number; published_conferences: number; countries: number } | null;
 }) {
   const router = useRouter();
   const headliner = useMemo(() => pickHeadliner(conferences), [conferences]);
@@ -469,11 +473,13 @@ export default function VariantStagefront({
         >
           <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-0">
             {[
-              // Display-only launch inflation — these offsets are cosmetic; no
-              // conferences, delegates or countries are actually created.
-              { n: conferences.length + 100, label: 'Conferences on the board' },
+              // Conferences and countries are now real platform totals from
+              // public_conference_stats — every conference on Gavelling, not
+              // only the published ones these cards are drawn from. The
+              // delegates figure keeps its display-only launch offset.
+              { n: stats?.total_conferences ?? (conferences.length || null), label: 'Conferences on the board' },
               { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0) + 20000, label: 'Delegates expected' },
-              { n: new Set(conferences.map(c => c.country)).size + 30, label: 'Countries' },
+              { n: stats?.countries ?? (new Set(conferences.map(c => c.country)).size || null), label: 'Countries' },
             ].map((stat, i) => (
               <div
                 key={stat.label}
@@ -485,7 +491,11 @@ export default function VariantStagefront({
                     fontSize: 'clamp(38px, 4.5vw, 74px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
                   }}
                 >
-                  {stat.n.toLocaleString()}
+                  {/* Null while both the RPC and the card fetch are still in
+                      flight. The old +100/+30 offsets made a zero impossible;
+                      without them, a real "0 conferences" would flash on every
+                      first paint. An em dash holds the space instead. */}
+                  {stat.n === null ? '—' : stat.n.toLocaleString()}
                 </span>
                 <span
                   style={{
@@ -809,7 +819,9 @@ export default function VariantStagefront({
                 fontFamily: "'Outfit', sans-serif",
               }}
             >
-              From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.
+              {stats
+                ? `${stats.total_conferences} conferences across every continent. From The Hague to Singapore, Tokyo to New York — find your next destination.`
+                : 'From The Hague to Singapore, Tokyo to New York. Explore conferences on every continent and find your next destination.'}
             </p>
             <Link
               href="/conferences/map"

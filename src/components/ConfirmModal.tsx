@@ -7,7 +7,7 @@
 // from call sites: `const { confirmed, checked } = await confirm({ ... })`.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ModalOverlay } from '@/components/CommitteeEditorModal';
+import { ModalOverlay } from '@/components/ModalOverlay';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -57,16 +57,17 @@ export function ConfirmModal({
   title, body, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false,
   checkbox, checked = false, onCheckedChange, loading = false, confirmDisabled = false, onConfirm, onCancel,
 }: ConfirmModalProps) {
-  // Esc cancels, Enter confirms, scoped to this modal's lifetime.
+  // Enter confirms. Escape is NOT handled here — ModalOverlay owns it, via a
+  // stack that only ever dismisses the top-most overlay. Doing it locally as
+  // well would close a confirm AND the drawer underneath it with one keypress.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (loading) return;
-      if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
       if (e.key === 'Enter') { if (confirmDisabled) return; e.preventDefault(); onConfirm(); }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [loading, confirmDisabled, onConfirm, onCancel]);
+  }, [loading, confirmDisabled, onConfirm]);
 
   const disabled = loading || confirmDisabled;
   const confirmBg = disabled ? '#DDD4C0' : danger ? '#8B2020' : '#1B3828';
@@ -74,7 +75,12 @@ export function ConfirmModal({
   const spinnerColor = danger ? '#FFFFFF' : '#EED98A';
 
   return (
-    <ModalOverlay onClose={() => { if (!loading) onCancel(); }}>
+    <ModalOverlay
+      onClose={() => { if (!loading) onCancel(); }}
+      // The card below already declares role="alertdialog", so the backdrop
+      // stays role-less rather than nesting a second dialog.
+      dialogRole={null}
+    >
       <div
         role="alertdialog"
         aria-modal="true"

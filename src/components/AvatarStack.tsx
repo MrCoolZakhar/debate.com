@@ -12,6 +12,7 @@
 // Logical properties only, so the stack overlaps the correct way in RTL.
 
 import Avatar from '@/components/Avatar';
+import ProfileLink from '@/components/ProfileLink';
 
 export interface StackPerson {
   /** profiles.id when the chair is a Gavelling account; null for a name-only dais entry. */
@@ -26,6 +27,18 @@ export default function AvatarStack({
   max = 4,
   /** Names the group for screen readers, e.g. "Chairs". */
   label = 'Chairs',
+  /**
+   * Link each avatar to that person's public MUN CV.
+   *
+   * Opt-IN rather than default because the stack is usually pinned to a card
+   * that already navigates somewhere — turning the avatars into links there
+   * would put an anchor inside the card's own click target. Pass `nested` too
+   * when that ancestor is a JS onClick row; do NOT enable this inside an outer
+   * `<a>`/`<Link>` (see ProfileLink). Entries with no `id` (a name-only dais
+   * member) stay unlinked on their own.
+   */
+  linkToCv = false,
+  nested = false,
   /** Colour of the separating ring drawn around each avatar (the card surface). */
   ringColor = '#F0EBDD',
   /** Shadow applied to each disc, so the stack sits in the host's material. */
@@ -42,6 +55,8 @@ export default function AvatarStack({
   shadow?: string;
   empty?: React.ReactNode;
   style?: React.CSSProperties;
+  linkToCv?: boolean;
+  nested?: boolean;
 }) {
   if (people.length === 0) return <>{empty}</>;
 
@@ -56,27 +71,51 @@ export default function AvatarStack({
       aria-label={`${label}: ${people.map((p) => p.name).join(', ')}`}
       style={style}
     >
-      {shown.map((p, i) => (
-        <span
-          key={`${p.id ?? p.name}-${i}`}
-          className="inline-flex rounded-full flex-shrink-0"
-          title={p.name}
-          aria-label={p.name}
-          role="img"
-          style={{
-            marginInlineStart: i === 0 ? 0 : overlap,
-            // First avatar on top, so the stack reads front-to-back in the
-            // same order the aria-label lists the names.
-            zIndex: shown.length - i,
-            position: 'relative',
-            boxShadow: `0 0 0 2px ${ringColor}, ${shadow}`,
-            borderRadius: '50%',
-            backgroundColor: ringColor,
-          }}
-        >
-          <Avatar url={p.avatarUrl} name={p.name} size={size} rounded />
-        </span>
-      ))}
+      {shown.map((p, i) => {
+        // The overlap geometry (negative inline margin + stacking order) must
+        // live on the FLEX ITEM itself. When the avatar becomes a link, the
+        // link IS that item — wrapping the styled span in an extra element
+        // would leave the margin on a child and collapse the overlap.
+        const itemStyle: React.CSSProperties = {
+          marginInlineStart: i === 0 ? 0 : overlap,
+          // First avatar on top, so the stack reads front-to-back in the
+          // same order the aria-label lists the names.
+          zIndex: shown.length - i,
+          position: 'relative',
+          boxShadow: `0 0 0 2px ${ringColor}, ${shadow}`,
+          borderRadius: '50%',
+          backgroundColor: ringColor,
+        };
+        const key = `${p.id ?? p.name}-${i}`;
+        const disc = <Avatar url={p.avatarUrl} name={p.name} size={size} rounded />;
+
+        // ProfileLink falls back to rendering its children bare when the person
+        // has no account, which would drop `itemStyle` — so only take the link
+        // branch when there is genuinely an id to link to.
+        return linkToCv && p.id ? (
+          <ProfileLink
+            key={key}
+            userId={p.id}
+            name={p.name}
+            nested={nested}
+            className="inline-flex rounded-full flex-shrink-0"
+            style={itemStyle}
+          >
+            {disc}
+          </ProfileLink>
+        ) : (
+          <span
+            key={key}
+            className="inline-flex rounded-full flex-shrink-0"
+            title={p.name}
+            aria-label={p.name}
+            role="img"
+            style={itemStyle}
+          >
+            {disc}
+          </span>
+        );
+      })}
       {rest.length > 0 && (
         <span
           className="inline-flex items-center justify-center flex-shrink-0"

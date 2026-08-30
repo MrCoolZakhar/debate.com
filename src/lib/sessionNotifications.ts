@@ -58,6 +58,21 @@ export type NotificationKind = 'gsl-request' | 'chat' | 'broadcast' | 'motion' |
 
 export type NotificationTone = 'accept' | 'reject' | 'neutral';
 
+/**
+ * What KIND of outcome a card reports, as opposed to what it is about (`kind`).
+ *
+ * Session notifications are all `neutral` — a GSL request is neither good news
+ * nor bad. The organiser surfaces that replaced their inline amber/red/green
+ * bars need the distinction back: "Reminder sent" and "Couldn't save" must not
+ * look identical at a glance, and the bars they replaced carried that meaning
+ * in their tint.
+ *
+ * Deliberately NOT a whole second card style. It recolours the icon seat and
+ * swaps the glyph; the liquid-glass body stays exactly as it is, so one stack
+ * still reads as one stack and nothing about the session cards changes.
+ */
+export type NotificationLevel = 'neutral' | 'ok' | 'error';
+
 export interface NotificationAction {
   id: string;
   label: string;
@@ -70,6 +85,8 @@ export interface SessionNotification {
   /** Dedupe identity. Identifies the subject, never the event instant. */
   key: string;
   kind: NotificationKind;
+  /** Outcome colour. Omitted = `neutral`, which is every session notification. */
+  level?: NotificationLevel;
   title: string;
   /** Secondary line. For `chat` this must NOT contain message content. */
   body?: string;

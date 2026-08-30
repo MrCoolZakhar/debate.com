@@ -1,15 +1,27 @@
 'use client';
 
 // ============================================================
-// /manage/[slug]/scoreboard — the secretariat's cross-committee scoreboard.
+// /manage/[slug]/scoreboard — the CROSS-COMMITTEE scoreboard.
 //
-// Chairs score delegates inside the live session (ScoreboardPanel, scoped to one
-// committee). This is the conference-wide read of the same data: every
-// delegation in every committee, their points, their speeches, and the chairs'
-// factor ratings and free-text notes on them.
+// NO LONGER A DASHBOARD TAB. Delegate performance is a property of a committee,
+// not of the conference, so the primary way in is now a committee on Live
+// Status: its card footer and the Points block in its recap both open
+// `CommitteeScoreboardModal`, which renders the SAME table this page does.
+//
+// THE ROUTE STAYS REACHABLE BY URL, deliberately. Three things live here and
+// nowhere else, and none of them is per-committee:
+//   • comparing delegations ACROSS committees in one ranked list;
+//   • the whole-conference CSV export the secretariat uses for awards;
+//   • a full-page view for a table that is genuinely long.
+// Deleting the route would delete those. Its permission mapping is kept in
+// layout.tsx for exactly this reason — an ungated URL is worse than a tab.
+//
+// `?committee=<conference_committees.id>` deep-links it pre-filtered, which is
+// how the per-committee modal hands off to it.
 //
 // It computes NOTHING itself — src/lib/conferenceScoreboard.ts loads the rows
-// and hands them to the same scoring functions the chair panel uses.
+// and hands them to the same scoring functions the chair panel uses, and the
+// table itself is `live/ScoreboardTable.tsx`, shared with the modal.
 //
 // Read-only by design. Organisers observe; only chairs award points.
 // Manage surfaces render hardcoded English (no t()).
@@ -17,13 +29,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Trophy, Search, Download, MessageSquareQuote, ChevronRight, Radio } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Trophy, Search, Download, Radio } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { NeuPill } from '@/components/neu';
-import { FlagImg } from '@/components/FlagImg';
-import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { NeuPill, NEU, NeuCard } from '@/components/neu';
 import { committeeDisplayName } from '@/lib/presetNames';
 import {
   loadConferenceScoreboard,
@@ -32,23 +43,16 @@ import {
   type ConferenceScoreboard,
   type ScoreboardDelegateRow,
 } from '@/lib/conferenceScoreboard';
+import {
+  ScoreboardTable, SORTS, sortScoreboardRows, displayCountry, type SortKey,
+} from '@/app/manage/[slug]/live/ScoreboardTable';
+// This page used to hardcode `#FAF8F3`, `#D8CDB6` and `#9A8A78`. The last of
+// those measures 2.71:1 on this background and was carrying every column
+// header, every secondary fact and the whole "not yet scored" footer. The
+// tokens below are measured — see live/tokens.ts.
+import { SOFT, RED, CARD_BORDER_COLOR } from '@/app/manage/[slug]/live/tokens';
 
 const OUTFIT = "'Outfit', sans-serif";
-const CARD_SHADOW = '0 2px 8px rgba(27,56,40,0.05), 0 12px 32px rgba(27,56,40,0.06)';
-
-// Manage surfaces are English-only, so country names resolve against 'en'.
-const LOCALE = 'en';
-const displayCountry = (c: string) => getCountryDisplayName(c, LOCALE);
-
-type SortKey = 'score' | 'speeches' | 'time' | 'comments' | 'name';
-
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'score', label: 'SCORE' },
-  { key: 'speeches', label: 'SPEECHES' },
-  { key: 'time', label: 'SPEAKING TIME' },
-  { key: 'comments', label: 'COMMENTS' },
-  { key: 'name', label: 'DELEGATION' },
-];
 
 function csvEscape(v: string | number): string {
   const s = String(v ?? '');
@@ -59,147 +63,22 @@ function csvEscape(v: string | number): string {
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div
-      style={{
-        backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 14,
-        padding: '14px 18px', boxShadow: CARD_SHADOW, flex: '1 1 150px', minWidth: 0,
-      }}
-    >
-      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.12em', color: '#9A8A78' }}>
+    <NeuCard style={{ padding: '14px 18px', flex: '1 1 150px', minWidth: 0 }}>
+      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>
         {label}
       </p>
-      <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 22, color: '#1C1410', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
+      <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 22, color: NEU.ink, fontVariantNumeric: 'tabular-nums', marginBlockStart: 4 }}>
         {value}
       </p>
-      {hint && (
-        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', marginTop: 2 }}>{hint}</p>
-      )}
-    </div>
+      {hint && <p style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT, marginBlockStart: 2 }}>{hint}</p>}
+    </NeuCard>
   );
 }
 
-/** A factor rating as a bar — no charting library, just a filled track. */
-function FactorBar({ name, average, scaleMax, ratings }: { name: string; average: number; scaleMax: number; ratings: number }) {
-  const pct = Math.max(0, Math.min(100, (average / Math.max(1, scaleMax)) * 100));
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-        <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: '#1C1410' }}>{name}</span>
-        <span
-          style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', marginInlineStart: 'auto', fontVariantNumeric: 'tabular-nums' }}
-          title={`Average of ${ratings} rating${ratings === 1 ? '' : 's'}`}
-        >
-          {average} / {scaleMax}
-        </span>
-      </div>
-      <div style={{ height: 6, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.09)', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, backgroundColor: '#1B3828' }} />
-      </div>
-    </div>
-  );
-}
-
-function DelegateDetail({ row }: { row: ScoreboardDelegateRow }) {
-  // Group the ledger by source, exactly as the chair's drill-in does. Only one
-  // row is ever expanded at a time and a ledger is a few dozen entries, so this
-  // runs on render without memoisation.
-  const grouped: { sourceId: string; label: string; rows: typeof row.ledger; subtotal: number }[] = [];
-  for (const r of row.ledger) {
-    let g = grouped.find((x) => x.sourceId === r.sourceId);
-    if (!g) { g = { sourceId: r.sourceId, label: r.label, rows: [], subtotal: 0 }; grouped.push(g); }
-    g.rows.push(r);
-    g.subtotal += r.pts;
-  }
-
-  return (
-    <div
-      style={{
-        backgroundColor: 'rgba(27,56,40,0.035)', borderTop: '1px solid #E6DFCB',
-        padding: '16px 18px',
-      }}
-    >
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
-        {/* Points breakdown */}
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: '#B6871F', marginBottom: 8 }}>
-            POINTS BREAKDOWN
-          </p>
-          {grouped.length === 0 && (
-            <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#9A8A78' }}>No scored activity yet.</p>
-          )}
-          {grouped.map((g) => (
-            <div key={g.sourceId} style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: '#1B3828', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {g.label}
-                </span>
-                <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, marginInlineStart: 'auto', fontVariantNumeric: 'tabular-nums', color: g.subtotal < 0 ? '#8B2020' : '#1B3828' }}>
-                  {g.subtotal < 0 ? '' : '+'}{g.subtotal}
-                </span>
-              </div>
-              {g.rows.map((r, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, padding: '2px 0' }}>
-                  <span style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#6A5A4A', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.detail || r.label}
-                    {r.timestamp ? ` · ${new Date(r.timestamp).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
-                  </span>
-                  <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontVariantNumeric: 'tabular-nums', color: r.pts < 0 ? '#8B2020' : '#1C1410', flexShrink: 0 }}>
-                    {r.pts < 0 ? '' : '+'}{r.pts}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        {/* Chair ratings + comments */}
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: '#B6871F', marginBottom: 8 }}>
-            CHAIR RATINGS
-          </p>
-          {row.factors.length === 0 ? (
-            <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#9A8A78', marginBottom: 14 }}>
-              No factor ratings recorded by the chairs.
-            </p>
-          ) : (
-            <div style={{ marginBottom: 14 }}>
-              {row.factors.map((f) => (
-                <FactorBar key={f.id} name={f.name} average={f.average} scaleMax={f.scaleMax} ratings={f.ratings} />
-              ))}
-            </div>
-          )}
-
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: '#B6871F', marginBottom: 8 }}>
-            CHAIR COMMENTS
-          </p>
-          {row.comments.filter((c) => c.content.trim()).length === 0 ? (
-            <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#9A8A78' }}>No written comments yet.</p>
-          ) : (
-            row.comments.filter((c) => c.content.trim()).map((c) => (
-              <div
-                key={c.id}
-                style={{
-                  backgroundColor: '#FAF8F3', border: '1px solid #E6DFCB', borderRadius: 10,
-                  padding: '9px 11px', marginBottom: 7,
-                }}
-              >
-                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#1C1410', lineHeight: 1.5 }}>
-                  {c.content}
-                </p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: '#9A8A78', marginTop: 5 }}>
-                  {COMMENT_LEVEL_LABEL[c.level]}
-                  {c.chairName ? ` · ${c.chairName}` : ''}
-                  {c.speechSeconds ? ` · ${c.speechSeconds}s speech` : ''}
-                  {c.createdAt ? ` · ${new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// `FactorBar` and `DelegateDetail` are gone from this file — they now live in
+// `live/ScoreboardTable.tsx` alongside the table itself, so the per-committee
+// modal and this page render byte-identical drill-ins instead of two copies
+// drifting apart.
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -210,7 +89,13 @@ export default function ScoreboardPage() {
   const [data, setData] = useState<ConferenceScoreboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [committeeFilter, setCommitteeFilter] = useState<string>('ALL');
+  // `?committee=<conference_committees.id>` — how the per-committee scoreboard
+  // modal on Live Status hands off to the full page. Read once as the initial
+  // filter; the pills own it from then on.
+  const searchParams = useSearchParams();
+  const [committeeFilter, setCommitteeFilter] = useState<string>(
+    () => searchParams.get('committee') || 'ALL',
+  );
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -246,7 +131,7 @@ export default function ScoreboardPage() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = allRows.filter((r) => {
+    const filtered = allRows.filter((r: ScoreboardDelegateRow) => {
       if (committeeFilter !== 'ALL' && r.committeeId !== committeeFilter) return false;
       if (!q) return true;
       return displayCountry(r.country).toLowerCase().includes(q)
@@ -254,19 +139,9 @@ export default function ScoreboardPage() {
         || r.committeeName.toLowerCase().includes(q)
         || (r.committeeAbbrev ?? '').toLowerCase().includes(q);
     });
-    const byName = (a: ScoreboardDelegateRow, b: ScoreboardDelegateRow) =>
-      displayCountry(a.country).localeCompare(displayCountry(b.country), LOCALE);
-    const withComments = (r: ScoreboardDelegateRow) => r.comments.filter((c) => c.content.trim()).length;
-
-    return [...filtered].sort((a, b) => {
-      switch (sortKey) {
-        case 'speeches': return (b.gslSpeeches + b.caucusSpeeches) - (a.gslSpeeches + a.caucusSpeeches) || byName(a, b);
-        case 'time': return b.speakingSeconds - a.speakingSeconds || byName(a, b);
-        case 'comments': return withComments(b) - withComments(a) || byName(a, b);
-        case 'name': return byName(a, b);
-        default: return b.headline - a.headline || byName(a, b);
-      }
-    });
+    // Sorting lives with the table, so this page and the per-committee modal
+    // cannot rank the same delegations differently.
+    return sortScoreboardRows(filtered, sortKey);
   }, [allRows, committeeFilter, query, sortKey]);
 
   const totals = useMemo(() => {
@@ -281,7 +156,6 @@ export default function ScoreboardPage() {
     };
   }, [allRows, committeeFilter]);
 
-  const showCommitteeColumn = committeeFilter === 'ALL';
 
   function exportCsv() {
     const header = [
@@ -324,19 +198,25 @@ export default function ScoreboardPage() {
 
   if (!conference) return null;
 
+  const scopedCommittee = committeeFilter === 'ALL'
+    ? null
+    : committees.find((c) => c.id === committeeFilter) ?? null;
+
   return (
     <div className="px-6 md:px-10 py-8">
-      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#9A8A78', letterSpacing: '0.12em', marginBottom: 4 }}>
+      <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: SOFT, letterSpacing: '0.12em', marginBlockEnd: 4 }}>
         {conference.acronym} / Scoreboard
       </p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
-        <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 24, color: '#1C1410' }}>Scoreboard</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBlockEnd: 6 }}>
+        <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 24, color: NEU.ink }}>
+          {scopedCommittee ? committeeDisplayName(scopedCommittee.name, scopedCommittee.abbreviation) : 'Scoreboard'}
+        </h1>
         {!loading && allRows.length > 0 && (
           <button
             onClick={exportCsv}
             className="focus:outline-none"
             style={{
-              fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: '#EED98A', backgroundColor: '#1B3828',
+              fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.gold, backgroundColor: NEU.forest,
               border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', gap: 7, marginInlineStart: 'auto',
             }}
@@ -346,49 +226,59 @@ export default function ScoreboardPage() {
           </button>
         )}
       </div>
-      <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78', marginBottom: 24, maxWidth: 640 }}>
+      <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, marginBlockEnd: 12, maxWidth: 660 }}>
         Every delegation across your committees, as scored by the chairs in their live sessions —
         points, speeches, factor ratings and written comments. Read-only: only chairs can award points.
       </p>
+      {/* This page is no longer in the sidebar; say where it came from and how
+          to get back, so an organiser who lands here by URL is not stranded. */}
+      <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, marginBlockEnd: 22 }}>
+        <Radio size={11} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: -1, marginInlineEnd: 5 }} />
+        A single committee&apos;s scoreboard opens straight from its card on{' '}
+        <Link href={`/manage/${conference.slug}/live`} style={{ color: NEU.forest, fontWeight: 700, textDecoration: 'none' }}>
+          Live Status
+        </Link>
+        . This page is the cross-committee view and the CSV export.
+      </p>
 
       {loadError && (
-        <p style={{ fontFamily: OUTFIT, fontSize: 12, color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 16 }}>
+        <p style={{ fontFamily: OUTFIT, fontSize: 12, color: RED, backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', borderRadius: 10, padding: '8px 12px', marginBlockEnd: 16 }}>
           {loadError}
         </p>
       )}
 
       {loading && (
         <div className="flex justify-center py-16">
-          <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+          <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
         </div>
       )}
 
       {/* Nothing linked to a live session yet */}
       {!loading && committees.length === 0 && (
-        <div style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: CARD_SHADOW }}>
-          <span className="inline-flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(150deg, rgba(27,56,40,0.1), rgba(27,56,40,0.04))', border: '1px solid rgba(27,56,40,0.18)', marginBottom: 16 }}>
-            <Trophy size={26} strokeWidth={1.8} style={{ color: '#1B3828' }} />
+        <NeuCard style={{ padding: 40, textAlign: 'center' }}>
+          <span className="inline-flex items-center justify-center" style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(150deg, rgba(27,56,40,0.1), rgba(27,56,40,0.04))', border: `1px solid ${CARD_BORDER_COLOR}`, marginBlockEnd: 16 }}>
+            <Trophy size={26} strokeWidth={1.8} style={{ color: NEU.forest }} />
           </span>
-          <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 600, color: '#1C1410', marginBottom: 6 }}>
+          <p style={{ fontFamily: OUTFIT, fontSize: 15, fontWeight: 600, color: NEU.ink, marginBlockEnd: 6 }}>
             No scored committees yet
           </p>
-          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78', marginBottom: 20, maxWidth: 420, marginInline: 'auto' }}>
+          <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, marginBlockEnd: 20, maxWidth: 420, marginInline: 'auto' }}>
             Scores appear here once a chair runs one of your committees as a live session. Each committee
             gets its session when it is created, and the chair scores delegates from the dais.
           </p>
           <Link
             href={`/manage/${conference.slug}/committees`}
-            style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#EED98A', backgroundColor: '#1B3828', borderRadius: 10, padding: '8px 20px', textDecoration: 'none', display: 'inline-block' }}
+            style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: NEU.gold, backgroundColor: NEU.forest, borderRadius: 10, padding: '8px 20px', textDecoration: 'none', display: 'inline-block' }}
           >
             GO TO COMMITTEES →
           </Link>
-        </div>
+        </NeuCard>
       )}
 
       {!loading && committees.length > 0 && (
         <>
           {/* Summary */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBlockEnd: 20 }}>
             <StatTile label="COMMITTEES" value={String(committeeFilter === 'ALL' ? committees.length : 1)} />
             <StatTile label="DELEGATIONS" value={String(totals.delegations)} />
             <StatTile label="SPEECHES" value={String(totals.speeches)} />
@@ -414,7 +304,7 @@ export default function ScoreboardPage() {
 
           {/* Sort + search */}
           <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: '#B6871F' }}>
+            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>
               SORT BY
             </span>
             {SORTS.map((s) => (
@@ -425,11 +315,11 @@ export default function ScoreboardPage() {
             <div
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7, marginInlineStart: 'auto',
-                backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 10,
+                backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, borderRadius: 10,
                 paddingInline: 11, paddingBlock: 7,
               }}
             >
-              <Search size={13} style={{ color: '#9A8A78', flexShrink: 0 }} />
+              <Search size={13} style={{ color: SOFT, flexShrink: 0 }} />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -437,144 +327,34 @@ export default function ScoreboardPage() {
                 aria-label="Search delegation or committee"
                 className="focus:outline-none"
                 style={{
-                  fontFamily: OUTFIT, fontSize: 12.5, color: '#1C1410',
+                  fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink,
                   backgroundColor: 'transparent', border: 'none', width: 210, maxWidth: '50vw',
                 }}
               />
             </div>
           </div>
 
-          {/* Table */}
-          <div
-            style={{
-              backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6', borderRadius: 16,
-              boxShadow: CARD_SHADOW, overflow: 'hidden',
-            }}
-          >
-            {/* Header row — hidden on narrow screens where the cards stack */}
-            <div
-              className="hidden md:flex"
-              style={{
-                alignItems: 'center', gap: 12, paddingInline: 18, paddingBlock: 10,
-                borderBottom: '1px solid #E6DFCB', backgroundColor: 'rgba(27,56,40,0.04)',
-              }}
-            >
-              <span style={{ width: 28, fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.1em', color: '#9A8A78', textAlign: 'end' }}>#</span>
-              <span style={{ width: 22 }} />
-              <span style={{ flex: 1, minWidth: 0, fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.1em', color: '#9A8A78' }}>DELEGATION</span>
-              {showCommitteeColumn && (
-                <span style={{ width: 120, fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.1em', color: '#9A8A78' }}>COMMITTEE</span>
-              )}
-              <span style={{ width: 70, fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.1em', color: '#9A8A78', textAlign: 'end' }}>SPEECHES</span>
-              <span style={{ width: 78, fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.1em', color: '#9A8A78', textAlign: 'end' }}>TIME</span>
-              <span style={{ width: 62, fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.1em', color: '#9A8A78', textAlign: 'end' }}>NOTES</span>
-              <span style={{ width: 62, fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.1em', color: '#9A8A78', textAlign: 'end' }}>SCORE</span>
-              <span style={{ width: 16 }} />
-            </div>
-
-            {rows.length === 0 && (
-              <p style={{ fontFamily: OUTFIT, fontSize: 13, color: '#9A8A78', textAlign: 'center', padding: '40px 0' }}>
-                No delegations match this filter.
-              </p>
-            )}
-
-            {rows.map((r, i) => {
-              const open = expanded === r.key;
-              const noteCount = r.comments.filter((c) => c.content.trim()).length;
-              return (
-                <div key={r.key} style={{ borderBottom: i < rows.length - 1 || open ? '1px solid #F0EDE6' : 'none' }}>
-                  <button
-                    onClick={() => setExpanded(open ? null : r.key)}
-                    aria-expanded={open}
-                    className="w-full focus:outline-none"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      paddingInline: 18, paddingBlock: 11,
-                      background: open ? 'rgba(27,56,40,0.05)' : 'transparent',
-                      border: 'none', cursor: 'pointer', textAlign: 'start', flexWrap: 'wrap',
-                    }}
-                    onMouseEnter={(e) => { if (!open) (e.currentTarget as HTMLElement).style.background = 'rgba(27,56,40,0.03)'; }}
-                    onMouseLeave={(e) => { if (!open) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                  >
-                    <span style={{ width: 28, fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', fontVariantNumeric: 'tabular-nums', textAlign: 'end', flexShrink: 0 }}>
-                      {sortKey === 'name' ? '' : i + 1}
-                    </span>
-                    <span style={{ width: 22, flexShrink: 0, display: 'inline-flex' }}>
-                      <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} />
-                    </span>
-                    <span style={{ flex: '1 1 140px', minWidth: 0 }}>
-                      <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 600, fontSize: 13.5, color: '#1C1410', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {displayCountry(r.country)}
-                      </span>
-                      {(r.status === 'absent' || r.isObserver) && (
-                        <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: '#9A8A78' }}>
-                          {r.isObserver ? 'Observer' : 'Absent'}
-                        </span>
-                      )}
-                    </span>
-                    {showCommitteeColumn && (
-                      <span
-                        style={{ width: 120, flexShrink: 0, fontFamily: OUTFIT, fontSize: 11.5, color: '#6A5A4A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        title={r.committeeName}
-                      >
-                        {committeeDisplayName(r.committeeName, r.committeeAbbrev)}
-                      </span>
-                    )}
-                    <span
-                      style={{ width: 70, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: '#6A5A4A', fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}
-                      title={`${r.gslSpeeches} GSL · ${r.caucusSpeeches} caucus`}
-                    >
-                      {r.gslSpeeches + r.caucusSpeeches}
-                    </span>
-                    <span style={{ width: 78, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: '#6A5A4A', fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}>
-                      {formatSpeakingTime(r.speakingSeconds)}
-                    </span>
-                    <span style={{ width: 62, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: noteCount ? '#1B3828' : '#C3B9A4', fontVariantNumeric: 'tabular-nums', textAlign: 'end', display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                      <MessageSquareQuote size={12} strokeWidth={2.2} />
-                      {noteCount}
-                    </span>
-                    <span style={{ width: 62, flexShrink: 0, textAlign: 'end' }}>
-                      <span
-                        style={{
-                          fontFamily: OUTFIT, fontWeight: 800, fontSize: 12.5, fontVariantNumeric: 'tabular-nums',
-                          backgroundColor: '#1B3828', color: '#EED98A', borderRadius: 999,
-                          paddingInline: 9, paddingBlock: 2, display: 'inline-block',
-                        }}
-                        title={r.quality != null ? `${r.objective} objective points · quality ${r.quality}/100` : `${r.objective} objective points`}
-                      >
-                        {r.headline}
-                      </span>
-                    </span>
-                    <span style={{ width: 16, flexShrink: 0, display: 'inline-flex', color: '#9A8A78' }}>
-                      <ChevronRight
-                        size={14}
-                        style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 160ms cubic-bezier(0.22,1,0.36,1)' }}
-                      />
-                    </span>
-                  </button>
-                  {open && <DelegateDetail row={r} />}
-                </div>
-              );
-            })}
-          </div>
+          {/* The table — the SAME component the per-committee modal renders. */}
+          <ScoreboardTable
+            rows={rows}
+            sortKey={sortKey}
+            showCommitteeColumn={committeeFilter === 'ALL'}
+            expanded={expanded}
+            onExpand={setExpanded}
+          />
 
           {/* Committees with no live session yet */}
           {(data?.unlinked.length ?? 0) > 0 && (
-            <div
-              style={{
-                marginTop: 20, backgroundColor: '#FAF8F3', border: '1.5px solid #D8CDB6',
-                borderRadius: 14, padding: '14px 18px', boxShadow: CARD_SHADOW,
-              }}
-            >
-              <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', color: '#9A8A78', marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <NeuCard style={{ marginBlockStart: 20, padding: '14px 18px' }}>
+              <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', color: SOFT, marginBlockEnd: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <Radio size={12} strokeWidth={2.4} />
                 NOT YET SCORED
               </p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6A5A4A' }}>
+              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT }}>
                 {data!.unlinked.map((u) => committeeDisplayName(u.name, u.abbreviation)).join(', ')}
                 {' — '}no live session is linked to {data!.unlinked.length === 1 ? 'this committee' : 'these committees'} yet.
               </p>
-            </div>
+            </NeuCard>
           )}
         </>
       )}

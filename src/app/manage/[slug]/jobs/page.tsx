@@ -6,6 +6,9 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import Portal from '@/components/Portal';
+import ProfileLink from '@/components/ProfileLink';
+import { useScrollLock } from '@/hooks/useScrollLock';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,7 +33,9 @@ interface Application {
   cover_note: string | null;
   status: string;
   submitted_at: string;
-  profiles: { display_name: string; email: string; avatar_url: string | null; } | null;
+  // `id` is profiles.id — needed for the public MUN CV link. `avatar_url` is
+  // public.profiles.avatar_url, the one column profile pictures live in.
+  profiles: { id: string; display_name: string; email: string; avatar_url: string | null; } | null;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -124,7 +129,7 @@ function ApplicationsPanel({
     const supabase = getAuthedClient(session.access_token);
     supabase
       .from('job_applications')
-      .select('id, cover_note, status, submitted_at, profiles (display_name, email, avatar_url)')
+      .select('id, cover_note, status, submitted_at, profiles (id, display_name, email, avatar_url)')
       .eq('job_posting_id', postingId)
       .order('submitted_at', { ascending: false })
       .then(({ data }) => {
@@ -193,27 +198,42 @@ function ApplicationsPanel({
               className="flex items-center gap-3 py-2"
               style={{ borderBottom: isLast ? 'none' : `1px solid ${DIVIDER}` }}
             >
-              {/* Avatar */}
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold overflow-hidden"
-                style={{ backgroundColor: 'rgba(27,56,40,0.12)', color: FOREST }}
+              {/* Picture + name link to the applicant's public MUN CV. An applicant
+                  who has not claimed an account has no profiles row, so `id` is
+                  undefined and ProfileLink renders the pair bare — correct, not a
+                  bug. `flex-1 min-w-0` stays on the name block as well as the link
+                  so the row lays out identically whether or not it is linked. */}
+              <ProfileLink
+                userId={profile?.id}
+                name={profile?.display_name}
+                className="flex items-center gap-3 flex-1 min-w-0"
               >
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-                ) : (
-                  initials(profile?.display_name ?? profile?.email ?? '?')
-                )}
-              </div>
+                {/* Avatar — profile picture is public.profiles.avatar_url, joined
+                    in through job_applications.profiles above. Kept as this file's
+                    own two-letter initials disc rather than the shared <Avatar>:
+                    that one draws a single-letter squircle-style glyph, so swapping
+                    would visibly change every applicant without a photo. */}
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold overflow-hidden"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.12)', color: FOREST }}
+                >
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    initials(profile?.display_name ?? profile?.email ?? '?')
+                  )}
+                </div>
 
-              {/* Name + email */}
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
-                  {profile?.display_name ?? 'Unknown'}
-                </p>
-                <p className="text-xs truncate" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
-                  {profile?.email ?? ''}
-                </p>
-              </div>
+                {/* Name + email */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate" style={{ color: INK, fontFamily: "'Outfit', sans-serif" }}>
+                    {profile?.display_name ?? 'Unknown'}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: MUTED, fontFamily: "'Outfit', sans-serif" }}>
+                    {profile?.email ?? ''}
+                  </p>
+                </div>
+              </ProfileLink>
 
               {/* Status badge */}
               <span
@@ -415,6 +435,8 @@ function PostingModal({
   }) => void;
   onClose: () => void;
 }) {
+  // Modal: freeze the job board behind it.
+  useScrollLock(true);
   const [category, setCategory] = useState(posting?.category ? toUiEnum(posting.category) : 'CHAIRS');
   const [roleName, setRoleName] = useState(posting?.role_name ?? '');
   const [committeeId, setCommitteeId] = useState(posting?.conference_committees?.id ?? '');
@@ -668,7 +690,12 @@ export default function JobBoardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editPosting, setEditPosting] = useState<JobPosting | null>(null);
   const [saving, setSaving] = useState(false);
-  const [actionError, setActionError] = useState('');
+  // Failures go to the corner notification stack, not a strip above the page —
+  // same store and renderer as the live committee session. The `setX('')` call
+  // shape is preserved so no call site changed; only where it lands did.
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'jobs'); else clearErr('jobs');
+  }, []);
   const [createError, setCreateError] = useState('');
   // Posting ids with a write in flight, disables that row's controls (double-click guard).
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -911,15 +938,6 @@ export default function JobBoardPage() {
           POST A POSITION
         </button>
       </div>
-
-      {actionError && (
-        <p
-          className="rounded-xl px-4 py-2.5 mb-5 text-xs"
-          style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}
-        >
-          {actionError}
-        </p>
-      )}
 
       {/* Stats row */}
       <div className="flex gap-4 mb-6 flex-wrap">

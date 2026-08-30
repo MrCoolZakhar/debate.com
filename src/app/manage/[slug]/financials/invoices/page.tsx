@@ -10,11 +10,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { notifyErr, clearErr } from '@/lib/appNotify';
 import { Check, Clock, CreditCard, Eye, Receipt, RotateCcw, User, X } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { isPaymentsLive } from '@/lib/payments';
+import { reportBlocked } from '@/lib/reportCrash';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import Portal from '@/components/Portal';
@@ -267,7 +269,12 @@ export default function FinancialsInvoicesPage() {
   // ── Ledger data ──────────────────────────────────────────────────────────
   const [invoices, setInvoices] = useState<InvoiceWithApp[] | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  const [actionError, setActionError] = useState('');
+  /* Goes to the corner notification stack (same store and renderer as the live
+     committee session) instead of a line above the filters. Call shape kept, so
+     `setActionError('')` still clears. */
+  const setActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'invoices'); else clearErr('invoices');
+  }, []);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
@@ -318,10 +325,19 @@ export default function FinancialsInvoicesPage() {
     setActionError('');
     markBusy(inv.id, true);
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
+    const { data, error } = await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
     const result = data as { ok?: boolean; error?: string } | null;
     markBusy(inv.id, false);
-    if (!result?.ok) { setActionError(result?.error || 'Could not mark this invoice paid.'); return; }
+    if (error || !result?.ok) {
+      // Money the organizer has already received in hand cannot be recorded,
+      // so the payer keeps being chased for a fee they have paid. One click,
+      // one row — busyIds makes a second concurrent call impossible.
+      reportBlocked('mark invoice paid', error ?? new Error(result?.error ?? 'rpc returned ok:false'), {
+        invoiceId: inv.id, kind: inv.kind,
+      });
+      setActionError(result?.error || error?.message || 'Could not mark this invoice paid.');
+      return;
+    }
     setInvoices(cur => (cur ?? []).map(i => (i.id === inv.id ? { ...i, status: 'settled', amount_paid_cents: i.amount_cents } : i)));
   }
 
@@ -330,10 +346,13 @@ export default function FinancialsInvoicesPage() {
     setActionError('');
     markBusy(inv.id, true);
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
+    // No reportBlocked here on purpose: this is the REVERSAL of a bookkeeping
+    // flag. A failure leaves the invoice exactly as the organizer found it,
+    // nothing is lost and nobody is stopped — so it stays inline-only.
+    const { data, error } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
     const result = data as { ok?: boolean; error?: string } | null;
     markBusy(inv.id, false);
-    if (!result?.ok) { setActionError(result?.error || 'Could not mark this invoice unpaid.'); return; }
+    if (error || !result?.ok) { setActionError(result?.error || error?.message || 'Could not mark this invoice unpaid.'); return; }
     setInvoices(cur => (cur ?? []).map(i => (i.id === inv.id ? { ...i, status: 'open', amount_paid_cents: 0 } : i)));
   }
 
@@ -356,7 +375,12 @@ export default function FinancialsInvoicesPage() {
   const [batches, setBatches] = useState<TxBatchRow[] | null>(null);
   const [payerNames, setPayerNames] = useState<Map<string, string>>(new Map());
   const [txBusyIds, setTxBusyIds] = useState<Set<string>>(new Set());
-  const [txActionError, setTxActionError] = useState('');
+  /* Goes to the corner notification stack (same store and renderer as the live
+     committee session) instead of a line above the filters. Call shape kept, so
+     `setTxActionError('')` still clears. */
+  const setTxActionError = useCallback((msg: string) => {
+    if (msg) notifyErr(msg, 'invoice-transactions'); else clearErr('invoice-transactions');
+  }, []);
   const [expandedBatchIds, setExpandedBatchIds] = useState<Set<string>>(new Set());
 
   const [txStatusFilter, setTxStatusFilter] = useState<'all' | 'pending' | 'paid' | 'rejected'>('all');
@@ -448,6 +472,12 @@ export default function FinancialsInvoicesPage() {
     const result = data as { ok?: boolean; error?: string } | null;
     markTxBusy(batch.id, false);
     if (error || !result?.ok) {
+      // review_payment_batch settles EVERY invoice under the batch in one RPC,
+      // so this is one report per batch however many invoices it covers. The
+      // organizer has seen the proof and the delegate still reads as unpaid.
+      reportBlocked('approve manual payment', error ?? new Error(result?.error ?? 'rpc returned ok:false'), {
+        batchId: batch.id,
+      });
       setBatches(cur => (cur ?? []).map(b => (b.id === batch.id ? { ...b, status: previous, paid_at: b.paid_at } : b)));
       setTxActionError(result?.error || error?.message || 'Could not approve this payment.');
       return;
@@ -455,6 +485,9 @@ export default function FinancialsInvoicesPage() {
     setInvoices(await fetchInvoicesData());
   }
 
+  // Not reported to reportBlocked, unlike handleApprove: a failed reject
+  // leaves the batch pending and the invoices unpaid, which is where they
+  // already were. Nobody is stopped and no money is unaccounted for.
   async function handleReject(batch: TxBatchRow) {
     if (!session || txBusyIds.has(batch.id)) return;
     const { confirmed } = await confirm({
@@ -590,10 +623,6 @@ export default function FinancialsInvoicesPage() {
 
       {activeView === 'transactions' ? (
         <>
-          {txActionError && (
-            <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{txActionError}</p>
-          )}
-
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <select value={txStatusFilter} onChange={e => setTxStatusFilter(e.target.value as typeof txStatusFilter)} style={{ ...inputStyle, width: 'auto', cursor: 'pointer' }}>
               <option value="all">All statuses</option>
@@ -744,10 +773,6 @@ export default function FinancialsInvoicesPage() {
         </>
       ) : (
         <>
-          {actionError && (
-            <p className="text-xs font-semibold mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{actionError}</p>
-          )}
-
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <input

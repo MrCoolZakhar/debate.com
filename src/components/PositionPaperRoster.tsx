@@ -10,8 +10,10 @@
 // submission stays a flat, quiet row, the contrast itself signals which
 // rows invite a click.
 
+import { Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronRight, X } from 'lucide-react';
+import ProfileLink from '@/components/ProfileLink';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByCode } from '@/lib/countries';
 import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionPapers';
@@ -111,9 +113,14 @@ export default function PositionPaperRoster({
         // Dedup repeated "Seat not claimed" placeholders (an unclaimed
         // double-delegation country would otherwise read as the phrase
         // twice), keeping every distinct claimed or invited name.
-        const labels = seats.map(seatLabel);
-        const firstUnclaimed = labels.indexOf('Seat not claimed');
-        const names = labels.filter((label, i) => label !== 'Seat not claimed' || i === firstUnclaimed).join(' & ');
+        // Each seat is kept whole (label PLUS the seat it came from) rather
+        // than collapsed into one joined string, so a claimed seat can link to
+        // that delegate's MUN CV. Same dedup as before: repeated "Seat not
+        // claimed" placeholders collapse to one, every distinct claimed or
+        // invited name survives.
+        const labelled = seats.map((seat) => ({ seat, label: seatLabel(seat) }));
+        const firstUnclaimed = labelled.findIndex((x) => x.label === 'Seat not claimed');
+        const shownSeats = labelled.filter((x, i) => x.label !== 'Seat not claimed' || i === firstUnclaimed);
         const paper = papers.find(p => p.country_code === code) ?? null;
         const late = paper ? isPaperLate(paper.submitted_at, deadline) : false;
         const unread = paper ? countUnread(messagesByPaper[paper.id] ?? [], paper.reviewer_seen_at, currentUserId) : 0;
@@ -124,8 +131,28 @@ export default function PositionPaperRoster({
             <FlagImg code={code} size={22} />
             <div style={{ minWidth: 0 }}>
               <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{cName}</p>
-              {names && (
-                <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', margin: '1px 0 0 0' }}>{names}</p>
+              {shownSeats.length > 0 && (
+                <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', margin: '1px 0 0 0' }}>
+                  {shownSeats.map((x, i) => (
+                    <Fragment key={`${x.seat.user_id ?? x.label}-${i}`}>
+                      {i > 0 && ' & '}
+                      {/* `nested` — a row WITH a paper is a NeuCard whose
+                          onClick pushes to the paper. NeuCard renders a plain
+                          div when given onClick (only its `href` form is an
+                          anchor), so this link is legal here and stops the
+                          click from also opening the paper. An unclaimed seat
+                          has no user_id and stays plain text. */}
+                      <ProfileLink
+                        userId={x.seat.user_id}
+                        name={x.seat.display_name}
+                        nested
+                        style={{ textDecoration: 'underline', textDecorationColor: 'rgba(154,138,120,0.5)', textUnderlineOffset: 2 }}
+                      >
+                        {x.label}
+                      </ProfileLink>
+                    </Fragment>
+                  ))}
+                </p>
               )}
             </div>
 

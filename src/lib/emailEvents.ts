@@ -28,6 +28,7 @@ export interface EventDef {
 
 export const EVENT_REGISTRY = [
   { key: 'application_received', label: 'Application Received', description: 'Sent to a delegate when their application is submitted.', defaultDelivery: 'immediate' },
+  { key: 'draft_reminder', label: 'Unfinished application reminder', description: "Sent to someone who started an application and never submitted it, nudging them back to their saved answers. Queued by the send_draft_reminder RPC (organizer-only, one reminder per draft per 72 hours), not by queueEventEmail. It follows the same superset rule as Question received: with no template row our default still sends, and only a row you have explicitly turned off skips it.", defaultDelivery: 'immediate' },
   { key: 'application_accepted', label: 'Application Accepted', description: 'Sent when an application is accepted.', defaultDelivery: 'immediate' },
   { key: 'application_rejected', label: 'Application Rejected', description: 'Sent when an application is rejected.', defaultDelivery: 'immediate' },
   { key: 'payment_available', label: 'Payment Available', description: "Sent when payment opens up for a delegate. Companion to Application Accepted: on acceptance, this is suppressed for anyone who was actually emailed Application Accepted for the same action. It only sends alone when that email resolved to nothing (off or unconfigured) for them.", defaultDelivery: 'immediate' },
@@ -82,6 +83,10 @@ export type NotificationCategory = 'applications' | 'payments' | 'documents' | '
 
 export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   application_received: 'applications',
+  // Deliberately NOT 'requests': notify_email_reminders is the organizer-side
+  // questions digest, and its profile-page copy says exactly that. An
+  // unfinished-application nudge is a participant application email.
+  draft_reminder: 'applications',
   application_accepted: 'applications',
   application_rejected: 'applications',
   payment_available: 'payments',
@@ -131,13 +136,29 @@ export type PreferenceField =
   | 'notify_email_marketing'
   | 'notify_email_reminders';
 
-type PreferenceRow = Partial<Record<PreferenceField, boolean | null>>;
+export type PreferenceRow = Partial<Record<PreferenceField, boolean | null>>;
 
 // Transactional/functional emails a user can't opt out of without breaking
 // the product: clicking INVITE (chair/import) is itself the consent, and a
 // reply to a question the participant asked themselves isn't a marketing
 // choice, it's the answer they're waiting on.
 const ALWAYS_SEND_EVENTS = new Set(['committee_chair_invite', 'organizer_invite', 'import_join_invite', 'request_reply']);
+
+/** True if this recipient should receive an email in `category` given their
+ *  notification preferences. THE one place a notify_email_* column is read at
+ *  send time — `recipientAllowsEvent` (registry events) and the ad-hoc sender
+ *  in `@/lib/adHocEmail` (organizer-composed one-offs, 'marketing') both go
+ *  through here rather than testing the column themselves. Unregistered /
+ *  imported recipients have no profiles row and so no preference to honour
+ *  yet; they stay eligible. */
+export function recipientAllowsCategory(
+  category: NotificationCategory,
+  profiles: PreferenceRow | null
+): boolean {
+  if (!profiles) return true; // imported, unclaimed: no preferences to honour yet
+  const pref = profiles[PREFERENCE_FIELD[category]];
+  return pref !== false; // default true when null/undefined, same as the profile page
+}
 
 /** True if this recipient should receive eventKey given their notification
  *  preferences. Unregistered/imported recipients (no profiles row) and
@@ -147,11 +168,9 @@ function recipientAllowsEvent(
   profiles: PreferenceRow | null
 ): boolean {
   if (ALWAYS_SEND_EVENTS.has(eventKey)) return true;
-  if (!profiles) return true; // imported, unclaimed: no preferences to honour yet
   const category = NOTIFICATION_CATEGORY[eventKey as EventKey];
   if (!category) return true;
-  const pref = profiles[PREFERENCE_FIELD[category]];
-  return pref !== false; // default true when null/undefined, same as the profile page
+  return recipientAllowsCategory(category, profiles);
 }
 
 // ── Three-state send outcome ─────────────────────────────────────────────────
@@ -464,7 +483,6 @@ export async function turnOnDefaultEmail(
     body_blocks: [],
     enabled: true,
     delivery: event?.defaultDelivery ?? 'immediate',
-    lifecycle: 'draft',
   });
   return { ok: !error, error: error?.message };
 }

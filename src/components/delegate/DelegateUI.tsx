@@ -34,6 +34,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { getFlagUrl } from '@/lib/countries';
 import { OUTFIT, EASE } from '@/components/neu';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 /* ── Tokens ─────────────────────────────────────────────────────────────── */
 
@@ -1210,18 +1211,19 @@ export function Sheet({
 }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
 
+  // `body { overflow: hidden }` used to be inlined here; it does not hold on
+  // iOS Safari, which is exactly where this bottom sheet lives. Shared hook.
+  useScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
     };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     panelRef.current?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
     };
   }, [open, onClose]);
 

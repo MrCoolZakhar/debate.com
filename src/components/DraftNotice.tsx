@@ -1,20 +1,50 @@
 'use client';
 
-// Small non-blocking nudge shown after a platform action's queueEventEmail
-// call resolves to a state that needs organizer attention: either nothing
-// is configured for the event at all ('unconfigured'), or it sent our
-// built-in default copy instead of a drafted one ('sent-default'). Shared by
-// every page that calls queueEventEmail (applications, assignment + its
-// delegations/independents views, committees, communications).
+// Non-blocking nudge shown after a platform action's queueEventEmail call
+// resolves to a state that needs organizer attention: either nothing is
+// configured for the event at all ('unconfigured'), or it sent our built-in
+// default copy instead of a drafted one ('sent-default'). Shared by every page
+// that calls queueEventEmail (applications, assignment + its delegations/
+// independents views, committees, communications).
 //
 // 'off' and 'sent-custom' never reach here — see notifyIfNeeded in emailEvents.ts.
+//
+// ── This is a TOAST now, not a bar ─────────────────────────────────────────
+//
+// It used to paint a full-width amber strip above the page content, which
+// pushed the work the organiser was doing down the screen to tell them about
+// an email — and then took the space back eight seconds later. It now goes to
+// the corner notification stack, the same tinted liquid-glass card the live
+// committee session raises: `notify()` from `@/lib/sessionNotifications`,
+// drawn by the ONE `<NotificationStack/>` mounted in `manage/[slug]/layout`.
+//
+// The public API is deliberately UNCHANGED — `useDraftNotices()` still returns
+// `{ draftNotices, pushDraftNotice, dismissDraftNotice }` and `DraftNoticeList`
+// still takes the same props — so all eight call sites kept working without
+// edits. What changed is what `DraftNoticeList` renders: nothing. It is now a
+// PUMP, not a list. Each queued item is handed to the store (which owns the
+// dedupe, the TTL, dismissal and swipe-to-dismiss) and dropped from local state
+// in the same pass.
+//
+// Why the pump instead of notifying straight from `pushDraftNotice`: the two
+// affordances the card must keep — TURN ON and DRAFT — need `conferenceSlug`
+// and `onTurnOn`, and those are props of the component, not of the hook. Moving
+// them into the hook would have meant editing every call site. The component
+// already has both, so it is the right place to assemble the actions.
+//
+// The hook no longer runs its own 8s `setTimeout` or its own dedupe: the store
+// does both, better. Dedupe is by notification key (`email-draft:<eventKey>`),
+// so a burst of the same event upserts one card rather than stacking.
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getEventLabel } from '@/lib/emailEvents';
+import { notify } from '@/lib/sessionNotifications';
 
-const OUTFIT = "'Outfit', sans-serif";
-const MAX_VISIBLE = 3;
+/** Long enough to read two actions and reach for one. */
+const DRAFT_NOTICE_TTL_MS = 12_000;
+
+const noticeKey = (eventKey: string) => `email-draft:${eventKey}`;
 
 export type DraftNoticeOutcome = 'unconfigured' | 'sent-default';
 
@@ -27,21 +57,20 @@ export interface DraftNoticeItem {
 export function useDraftNotices() {
   const [draftNotices, setDraftNotices] = useState<DraftNoticeItem[]>([]);
 
-  function pushDraftNotice(eventKey: string, outcome: DraftNoticeOutcome = 'unconfigured') {
-    setDraftNotices(prev => {
-      // Dedupe: a notice for this event is already visible, don't stack another.
-      if (prev.some(n => n.eventKey === eventKey)) return prev;
+  const pushDraftNotice = useCallback(
+    (eventKey: string, outcome: DraftNoticeOutcome = 'unconfigured') => {
+      // No dedupe and no expiry timer here any more — this list is a one-shot
+      // queue drained by DraftNoticeList on the next render. The store enforces
+      // one live card per key and owns the countdown.
       const id = `${eventKey}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      setTimeout(() => setDraftNotices(p => p.filter(n => n.id !== id)), 8000);
-      const next = [...prev, { id, eventKey, outcome }];
-      // Cap at MAX_VISIBLE distinct events, the oldest collapses first.
-      return next.length > MAX_VISIBLE ? next.slice(next.length - MAX_VISIBLE) : next;
-    });
-  }
+      setDraftNotices((prev) => [...prev, { id, eventKey, outcome }]);
+    },
+    [],
+  );
 
-  function dismissDraftNotice(id: string) {
-    setDraftNotices(prev => prev.filter(n => n.id !== id));
-  }
+  const dismissDraftNotice = useCallback((id: string) => {
+    setDraftNotices((prev) => prev.filter((n) => n.id !== id));
+  }, []);
 
   return { draftNotices, pushDraftNotice, dismissDraftNotice };
 }
@@ -56,70 +85,49 @@ export function DraftNoticeList({
    *  actions send our default instead of nothing. Omit to hide TURN ON. */
   onTurnOn?: (eventKey: string) => Promise<void>;
 }) {
-  const [turningOnId, setTurningOnId] = useState<string | null>(null);
+  const router = useRouter();
 
-  if (notices.length === 0) return null;
+  useEffect(() => {
+    if (notices.length === 0) return;
+    for (const n of notices) {
+      const label = getEventLabel(n.eventKey);
+      const draftHref = `/manage/${conferenceSlug}/communications?event=${n.eventKey}`;
+      const sentDefault = n.outcome === 'sent-default';
+      notify({
+        key: noticeKey(n.eventKey),
+        kind: 'info',
+        title: sentDefault ? 'Default email sent' : 'No email was sent',
+        body: sentDefault
+          ? `‘${label}’ went out with our built-in copy.`
+          : `Nothing is set up for ‘${label}’.`,
+        ttlMs: DRAFT_NOTICE_TTL_MS,
+        actions: [
+          // TURN ON only exists for 'unconfigured', and only when the host page
+          // gave us a handler — same condition the bar used.
+          ...(!sentDefault && onTurnOn
+            ? [{
+                id: 'turn-on',
+                label: 'TURN ON',
+                tone: 'accept' as const,
+                // Returned so the card stays busy until the write settles;
+                // NotificationStack dismisses it either way afterwards.
+                run: () => onTurnOn(n.eventKey),
+              }]
+            : []),
+          {
+            id: 'draft',
+            label: sentDefault ? 'DRAFT A REPLACEMENT' : 'DRAFT',
+            tone: 'neutral' as const,
+            run: () => { router.push(draftHref); },
+          },
+        ],
+      });
+      // Handed off. The store owns it from here.
+      onDismiss(n.id);
+    }
+  }, [notices, conferenceSlug, onTurnOn, onDismiss, router]);
 
-  async function handleTurnOn(id: string, eventKey: string) {
-    if (!onTurnOn || turningOnId) return;
-    setTurningOnId(id);
-    await onTurnOn(eventKey);
-    setTurningOnId(null);
-    onDismiss(id);
-  }
-
-  return (
-    <div className="flex flex-col gap-2 mb-4">
-      {notices.map(n => (
-        <div
-          key={n.id}
-          className="flex items-center flex-wrap gap-x-2 gap-y-1 rounded-xl px-4 py-2.5 text-sm"
-          style={{ backgroundColor: 'rgba(182,135,31,0.08)', border: '1px solid rgba(182,135,31,0.25)', color: '#8A6614', fontFamily: OUTFIT }}
-        >
-          {n.outcome === 'sent-default' ? (
-            <>
-              <span>Default email sent for &lsquo;{getEventLabel(n.eventKey)}&rsquo;:</span>
-              <Link
-                href={`/manage/${conferenceSlug}/communications?event=${n.eventKey}`}
-                className="font-bold flex-shrink-0"
-                style={{ color: '#8A6614', textDecoration: 'underline' }}
-              >
-                DRAFT A REPLACEMENT
-              </Link>
-            </>
-          ) : (
-            <>
-              <span>No email was sent for &lsquo;{getEventLabel(n.eventKey)}&rsquo;:</span>
-              {onTurnOn && (
-                <button
-                  onClick={() => handleTurnOn(n.id, n.eventKey)}
-                  disabled={turningOnId === n.id}
-                  className="font-bold flex-shrink-0 focus:outline-none"
-                  style={{ color: '#8A6614', textDecoration: 'underline', cursor: turningOnId === n.id ? 'wait' : 'pointer' }}
-                >
-                  {turningOnId === n.id ? 'TURNING ON…' : 'TURN ON'}
-                </button>
-              )}
-              <span>to send our default, or</span>
-              <Link
-                href={`/manage/${conferenceSlug}/communications?event=${n.eventKey}`}
-                className="font-bold flex-shrink-0"
-                style={{ color: '#8A6614', textDecoration: 'underline' }}
-              >
-                DRAFT
-              </Link>
-              <span>your own.</span>
-            </>
-          )}
-          <button
-            onClick={() => onDismiss(n.id)}
-            className="ml-auto flex-shrink-0 focus:outline-none"
-            style={{ color: '#8A6614', fontWeight: 700 }}
-          >
-            ×
-          </button>
-        </div>
-      ))}
-    </div>
-  );
+  // Renders nothing on purpose — see the header note. Kept as a component so
+  // every existing call site keeps its wiring (slug + onTurnOn) in one place.
+  return null;
 }

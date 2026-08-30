@@ -13,6 +13,7 @@ import {
   getSpeakersLists,
   getDocumentsList,
   getPendingMotionsList,
+  caucusRemainingNow,
 } from '@/lib/committeeService';
 import { mergeMessagesById } from '@/lib/chatConversations';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
@@ -266,6 +267,27 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const [committee, setCommittee] = useState<Committee | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Live seconds on the TOTAL caucus clock. This view used to render
+  // `caucus.remainingTime` raw, with no interval at all — but that field is only the value
+  // AT `caucus.totalStartedAt`, so the advisor watched a dead clock that jumped whenever a
+  // chair happened to write, and disagreed with both the chair and the delegates the rest of
+  // the time. Re-derived from the anchor each second (never decremented), so a backgrounded
+  // tab catches up on wake instead of drifting.
+  const [caucusSeconds, setCaucusSeconds] = useState(0);
+  const advisorCaucusAnchor = committee?.caucus?.totalStartedAt ?? null;
+  const advisorCaucusBase = committee?.caucus?.remainingTime ?? null;
+  useEffect(() => {
+    const read = () => caucusRemainingNow(
+      advisorCaucusBase === null
+        ? null
+        : ({ remainingTime: advisorCaucusBase, totalStartedAt: advisorCaucusAnchor } as Committee['caucus']),
+    );
+    setCaucusSeconds(read());
+    if (!advisorCaucusAnchor) return;   // null anchor IS the paused signal
+    const id = setInterval(() => setCaucusSeconds(read()), 1000);
+    return () => clearInterval(id);
+  }, [advisorCaucusAnchor, advisorCaucusBase]);
 
   // Realtime does not replay events missed while the socket was down. Catch chat up on
   // reconnect, tab-visible and back-online.
@@ -549,8 +571,9 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           {/* Unmoderated caucus — show countdown + purpose */}
           {isUnmoderatedCaucus && (
             <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-              <div className="text-5xl font-black font-mono tabular-nums" style={{ color: (caucus?.remainingTime ?? 0) <= 30 ? '#B8844A' : '#EDE7D8' }}>
-                {formatTime(caucus?.remainingTime ?? 0)}
+              {/* caucusSeconds, not caucus.remainingTime — see the derivation above. */}
+              <div className="text-5xl font-black font-mono tabular-nums" style={{ color: caucusSeconds <= 30 ? '#B8844A' : '#EDE7D8' }}>
+                {formatTime(caucusSeconds)}
               </div>
               <p className="text-xs mt-2 font-mono uppercase tracking-wider" style={{ color: 'rgba(238,217,138,0.5)' }}>
                 {committee.caucus?.motionLabel ||

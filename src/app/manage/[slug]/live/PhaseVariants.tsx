@@ -23,7 +23,12 @@ import type { CaucusState } from '@/lib/types';
 import {
   NeuInset, NeuIconDisc, NEU, NEU_GRADIENTS, OUTFIT, EASE,
 } from '@/components/neu';
-import { type LiveCommittee, type CaucusJson, fmtClock } from './LiveModals';
+import { type LiveCommittee, type CaucusJson, fmtClock, votingBody } from './LiveModals';
+// Readable ink. `NEU.muted` is 2.81:1 here, `NEU.amber` 2.74:1, `NEU.green`
+// 4.30:1 and `NEU.deepGold` 2.72:1 — all four were carrying text in this file.
+// The raw palette values survive only on dots, rails and progress fills, where
+// the 3:1 non-text bar applies. See ./tokens for the measurements.
+import { SOFT, AMBER_INK, GREEN_INK, RED } from './tokens';
 
 // ── Clock plumbing ──────────────────────────────────────────────────────────
 
@@ -85,25 +90,110 @@ export function liveCaucusSeconds(caucus: CaucusJson | null | undefined, now: nu
 
 export type CardVariant = 'default' | 'unmoderated' | 'moderated' | 'voting';
 
+/** THE CAUCUS BLOB IS CORROBORATION, THE PHASE IS THE TRUTH.
+ *
+ *  `committees.caucus` is never cleared to `active: false` by anything in the
+ *  app — all 10 caucus blobs in production carry `active: true`, none carries
+ *  anything else — so a room that has long since returned to its speakers list
+ *  still has a full caucus object hanging off it. Selecting the card body from
+ *  `caucus.active` therefore made `dc082142-2f05-4430-8b31-ba745cbe7f1a`
+ *  (code OA3M60, `phase='speakers-list'`, blob `purpose:'motion 3'`) render as a
+ *  live moderated caucus. It is the one row of the ten where phase and blob
+ *  disagree, and the `?? true` fallback was doing all the work.
+ *
+ *  The phase column IS actively written on every transition (MotionsModal calls
+ *  `setPhaseInDB` when a caucus starts, and the chair page writes it back when
+ *  one ends), so it is the authoritative signal. The blob is only read once the
+ *  phase agrees a caucus is running. */
+export function activeCaucus(session: LiveCommittee['session']): CaucusJson | null {
+  if (!session?.caucus) return null;
+  // Honoured if anything ever starts writing it; today nothing does.
+  if (session.caucus.active === false) return null;
+  if (session.phase !== 'moderated-caucus' && session.phase !== 'unmoderated-caucus') return null;
+  return session.caucus;
+}
+
+/** A Consultation of the Whole is stored as an UNMODERATED caucus carrying
+ *  `isConsultation: true` (MotionsModal.tsx:1263) — that flag is the only thing
+ *  separating it from a real unmod, and the chair console keys off exactly this
+ *  (`chair/[code]/page.tsx:626, 785`). A CoW is a FORMAL proceeding, so it must
+ *  never inherit the unmod's "the floor is informal" copy. */
+export function isConsultation(caucus: CaucusJson | null | undefined): boolean {
+  return caucus?.isConsultation === true;
+}
+
+/** Tour de Table is identified by `caucus.purpose`, NOT `motionLabel`.
+ *  `motionLabel` is the renameable, translatable display label — production rows
+ *  carry "Round Robin" and "Cáucus No Moderado" — whereas `purpose` is written as
+ *  the stable English "Tour de Table (…)" string (MotionsModal.tsx:1308, 1344)
+ *  and is what the chair console matches on (`chair/[code]/page.tsx:934`). */
+export function isTourDeTable(caucus: CaucusJson | null | undefined): boolean {
+  return caucus?.purpose?.startsWith('Tour de Table') ?? false;
+}
+
+/** The Room Order tour fills the queue with literal "Speaker 1".."Speaker N"
+ *  placeholders instead of delegations (MotionsModal.tsx:1315-1318), which is why
+ *  the chair console refuses to log speaking time for them
+ *  (`chair/[code]/page.tsx:2804-2807`). They are not countries, so they must never
+ *  be rendered as flags — `flagCodeFor("Speaker 1")` resolves to nothing and the
+ *  strip becomes a row of identical globes. */
+export function isRoomOrderTour(caucus: CaucusJson | null | undefined): boolean {
+  return caucus?.purpose?.includes('Room Order') ?? false;
+}
+
+/** Phases the chair console actively owns and rewrites. If the row says the room
+ *  is in one of these, it is not balloting, whatever a stale document says. */
+const DEBATE_PHASES = new Set(['speakers-list', 'moderated-caucus', 'unmoderated-caucus']);
+
+/** How long a room may show no sign of life before we stop believing it is
+ *  mid-vote. `documents` has NO introduced-at timestamp — only `created_at`,
+ *  which is SUBMISSION time — so document age cannot answer "is this vote live".
+ *  The room's own activity can.
+ *
+ *  6 hours, chosen off the data: the 95th-percentile gap between consecutive
+ *  ledger events inside a committee is 103 minutes, so 6h is >3x the realistic
+ *  quiet stretch during a live sitting (reading time, presentation and Q&A are
+ *  not logged at all, so the window has to absorb them). Every genuinely dormant
+ *  room in production is 24h+ stale, so nothing real sits near the boundary. */
+const VOTING_STALE_MS = 6 * 60 * 60 * 1000;
+
+/** Is this room plausibly balloting RIGHT NOW?
+ *
+ *  Nothing ever clears `documents.status = 'introduced'` except the chair
+ *  resolving the vote, and nothing ever clears `phase = 'voting'` either. Both
+ *  are therefore one-way doors: without a staleness guard a committee that
+ *  introduced a resolution once is pinned to the voting body forever, with its
+ *  motion inset, floor speaker and queue all suppressed. */
+function votingLooksLive(data: LiveCommittee, now: number): boolean {
+  if (!data.lastActivityAt) return false;
+  const t = Date.parse(data.lastActivityAt);
+  return Number.isFinite(t) && now - t < VOTING_STALE_MS;
+}
+
 /** Which body this committee's card should render.
  *
- *  Voting is detected from the phase OR from a draft resolution sitting at
- *  status 'introduced': the standalone /voting/[code] screen never writes
- *  phase='voting', so an introduced DR is the only signal that survives to
- *  this surface. A caucus on the floor wins over a lingering introduced DR,
- *  because the room is demonstrably back in debate. */
-export function cardVariant(data: LiveCommittee): CardVariant {
+ *  Order of authority: a caucus the PHASE confirms > a live vote > the default
+ *  speaker-and-queue layout. Voting is still detected from an introduced draft
+ *  resolution — the standalone /voting/[code] screen never writes phase='voting',
+ *  so that document status is the only signal that reaches this surface — but it
+ *  now has to survive both the phase check and the staleness check. */
+export function cardVariant(data: LiveCommittee, now: number = Date.now()): CardVariant {
   const session = data.session;
   if (!session) return 'default';
-  const caucus = session.caucus && (session.caucus.active ?? true) ? session.caucus : null;
-  const unmod = !!caucus && (caucus.type === 'unmoderated' || session.phase === 'unmoderated-caucus');
-  const mod = !!caucus && !unmod && (caucus.type === 'moderated' || session.phase === 'moderated-caucus');
 
-  if (session.phase === 'voting') return 'voting';
-  if (unmod) return 'unmoderated';
-  if (mod) return 'moderated';
-  if (data.documents.some((d) => d.type === 'draft-resolution' && d.status === 'introduced')) return 'voting';
-  return 'default';
+  // A caucus the phase agrees with wins outright: the room is demonstrably in debate.
+  const caucus = activeCaucus(session);
+  if (caucus) return caucus.type === 'unmoderated' ? 'unmoderated' : 'moderated';
+
+  if (session.phase === 'voting') return votingLooksLive(data, now) ? 'voting' : 'default';
+
+  // Fallback: an introduced draft resolution. Believable only while the room is
+  // in an active debate phase (a pre-session, roll-call or adjourned room is not
+  // balloting) and only while the room still shows signs of life.
+  const introducedDR = data.documents.some((d) => d.type === 'draft-resolution' && d.status === 'introduced');
+  if (!introducedDR) return 'default';
+  if (!DEBATE_PHASES.has(session.phase)) return 'default';
+  return votingLooksLive(data, now) ? 'voting' : 'default';
 }
 
 // ── Shared bits ─────────────────────────────────────────────────────────────
@@ -112,7 +202,7 @@ function Eyebrow({ children, style }: { children: React.ReactNode; style?: React
   return (
     <p
       className="text-[11px] font-bold uppercase"
-      style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em', ...style }}
+      style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em', ...style }}
     >
       {children}
     </p>
@@ -152,7 +242,7 @@ function BigClock({ seconds, color, expired }: { seconds: number; color: string;
         fontSize: 40,
         lineHeight: 1,
         letterSpacing: '0.01em',
-        color: expired ? NEU.amber : color,
+        color: expired ? AMBER_INK : color,
         fontVariantNumeric: 'tabular-nums',
       }}
     >
@@ -175,20 +265,27 @@ export function UnmoderatedBody({ caucus }: { caucus: CaucusJson }) {
   const pct = total > 0 ? (elapsed / total) * 100 : 0;
   const expired = total > 0 && remaining <= 0;
 
+  // A Consultation of the Whole is stored as an unmod but is a FORMAL sitting —
+  // the room stays in session under the chair, it does not break into informal
+  // lobbying. It gets its own label and its own copy.
+  const cow = isConsultation(caucus);
+
   return (
     <div className="mt-4">
-      <Eyebrow style={{ fontSize: 10, marginBottom: 6 }}>Unmoderated caucus</Eyebrow>
+      <Eyebrow style={{ fontSize: 10, marginBottom: 6 }}>
+        {cow ? 'Consultation of the Whole' : 'Unmoderated caucus'}
+      </Eyebrow>
       <NeuInset style={{ padding: '14px 16px', borderRadius: 18 }}>
         <div className="flex items-center gap-3.5">
           <NeuIconDisc gradient={NEU_GRADIENTS.amber} emoji="Hourglass not done" icon={Timer} size={42} />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2 flex-wrap">
               <BigClock seconds={remaining} color={NEU.forest} expired={expired} />
-              <span className="text-xs font-bold" style={{ color: NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+              <span className="text-xs font-bold" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
                 left of {fmtClock(total)}
               </span>
             </div>
-            <p className="text-[11px] font-bold uppercase mt-1" style={{ color: expired ? NEU.amber : running ? NEU.green : NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.07em' }}>
+            <p className="text-[11px] font-bold uppercase mt-1" style={{ color: expired ? AMBER_INK : running ? GREEN_INK : SOFT, fontFamily: OUTFIT, letterSpacing: '0.07em' }}>
               {expired ? 'Time elapsed' : running ? 'Counting down' : 'Clock paused'}
             </p>
           </div>
@@ -197,23 +294,25 @@ export function UnmoderatedBody({ caucus }: { caucus: CaucusJson }) {
         <div className="mt-3">
           <Track pct={pct} from={NEU_GRADIENTS.amber[0]} to={NEU_GRADIENTS.amber[1]} />
           <div className="flex items-center justify-between mt-1.5">
-            <span className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.07em' }}>
+            <span className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.07em' }}>
               {fmtClock(elapsed)} used
             </span>
-            <span className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.07em', fontVariantNumeric: 'tabular-nums' }}>
-              {fmtClock(total)} unmod
+            <span className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.07em', fontVariantNumeric: 'tabular-nums' }}>
+              {fmtClock(total)} {cow ? 'consultation' : 'unmod'}
             </span>
           </div>
         </div>
 
         {caucus.purpose ? (
-          <p className="text-xs mt-2.5 truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }} title={caucus.purpose}>
+          <p className="text-xs mt-2.5 truncate" style={{ color: SOFT, fontFamily: OUTFIT }} title={caucus.purpose}>
             {caucus.purpose}
           </p>
         ) : null}
       </NeuInset>
-      <p className="text-[11px] mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-        The floor is informal — no speakers list runs during an unmod.
+      <p className="text-[11px] mt-2" style={{ color: SOFT, fontFamily: OUTFIT }}>
+        {cow
+          ? 'A formal sitting of the whole committee — the chair keeps the floor, but no speakers list runs.'
+          : 'The floor is informal — no speakers list runs during an unmod.'}
       </p>
     </div>
   );
@@ -242,23 +341,33 @@ export function ModeratedBody({ caucus }: { caucus: CaucusJson }) {
   const capacity = speakingTime > 0 ? Math.floor(total / speakingTime) : 0;
   const spoken = caucus.spokenCountries?.length ?? 0;
 
+  // A Tour de Table is not a caucus with spare slots to fill — every present
+  // delegation speaks exactly once, in a fixed order, and the total time IS
+  // n x speakingTime. "3/12 slots used" reads as spare capacity; the true
+  // reading is progress through the room.
+  const tour = isTourDeTable(caucus);
+
   return (
     <div className="mt-4">
-      <Eyebrow style={{ fontSize: 10, marginBottom: 6 }}>Caucus clock</Eyebrow>
+      <Eyebrow style={{ fontSize: 10, marginBottom: 6 }}>
+        {tour ? 'Tour de Table' : 'Caucus clock'}
+      </Eyebrow>
       <NeuInset style={{ padding: '13px 15px', borderRadius: 18 }}>
         <div className="flex items-center gap-3.5">
           <NeuIconDisc gradient={NEU_GRADIENTS.sage} emoji="Speaking head" icon={Mic} size={38} />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2 flex-wrap">
               <BigClock seconds={remaining} color={NEU.forest} expired={expired} />
-              <span className="text-xs font-bold" style={{ color: NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+              <span className="text-xs font-bold" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
                 left of {fmtClock(total)}
               </span>
             </div>
             {speakingTime > 0 && (
-              <p className="text-[11px] font-bold uppercase mt-1" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.07em', fontVariantNumeric: 'tabular-nums' }}>
+              <p className="text-[11px] font-bold uppercase mt-1" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.07em', fontVariantNumeric: 'tabular-nums' }}>
                 {fmtClock(speakingTime)} per speaker
-                {capacity > 0 && <> · {spoken}/{capacity} slots used</>}
+                {capacity > 0 && (tour
+                  ? <> · {spoken} of {capacity} spoken</>
+                  : <> · {spoken}/{capacity} slots used</>)}
               </p>
             )}
           </div>
@@ -294,14 +403,20 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
   const resolved = [...drs].reverse().find((d) => d.status === 'passed' || d.status === 'failed') ?? null;
   const subject = onFloor ?? resolved;
 
-  const total = data.delegates.length;
-  const voting = data.delegates.filter((d) => d.status === 'present-voting').length;
-  const present = data.delegates.filter((d) => d.status === 'present').length;
+  // Observers are in the room but not in the voting body, so they can never cast
+  // a ballot and must not pad the denominator (chair/[code]/page.tsx:2627-2628).
+  const body = votingBody(data);
+  const total = body.length;
+  const voting = body.filter((d) => d.status === 'present-voting').length;
+  const present = body.filter((d) => d.status === 'present').length;
   const absent = total - voting - present;
   const eligible = voting + present;
 
   const verdict = onFloor ? null : resolved?.status ?? null;
-  const verdictColor = verdict === 'passed' ? NEU.green : verdict === 'failed' ? NEU.amber : NEU.deepGold;
+  // Was green / amber / deepGold — 4.30:1, 2.74:1 and 2.72:1 as text, all
+  // below AA, and 'failed' and 'Balloting' were nearly the same amber. Now
+  // three readable, distinguishable hues: adopted, rejected, still counting.
+  const verdictColor = verdict === 'passed' ? GREEN_INK : verdict === 'failed' ? RED : AMBER_INK;
 
   const pctOf = (n: number) => (total > 0 ? (n / total) * 100 : 0);
 
@@ -316,7 +431,7 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
             <p className="text-sm font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
               {subject ? (subject.docCode || subject.title || 'Draft resolution') : 'Vote in progress'}
             </p>
-            <p className="text-[11px] truncate" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+            <p className="text-[11px] truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>
               {subject?.docCode && subject.title ? subject.title : subject?.sponsors.length ? `Sponsored by ${subject.sponsors.slice(0, 3).join(', ')}` : 'On the floor'}
             </p>
           </div>
@@ -337,12 +452,12 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
         {/* The ballot base — genuinely live, straight off the roll call */}
         <div className="mt-3.5">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.07em' }}>
+            <span className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.07em' }}>
               Ballots expected
             </span>
             <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
               {eligible}
-              <span className="text-xs font-bold" style={{ color: NEU.muted }}> / {total} delegations</span>
+              <span className="text-xs font-bold" style={{ color: SOFT }}> / {total} delegations</span>
             </span>
           </div>
           {/* Three-way roll split: present & voting, present, absent. */}
@@ -364,11 +479,11 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
             {[
               { n: voting, label: 'P & V', color: NEU.forest },
               { n: present, label: 'Present', color: NEU.green },
-              { n: absent, label: 'Absent', color: NEU.muted },
+              { n: absent, label: 'Absent', color: SOFT },
             ].map((k) => (
               <span key={k.label} className="inline-flex items-center gap-1.5">
                 <span className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, backgroundColor: k.color }} />
-                <span className="text-[10px] font-bold uppercase" style={{ color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
+                <span className="text-[10px] font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
                   {k.n} {k.label}
                 </span>
               </span>
@@ -378,7 +493,7 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
 
         {/* Resolution pipeline — how far through its DRs the committee is. */}
         {drs.length > 1 && (
-          <p className="text-[11px] mt-3 flex items-center gap-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+          <p className="text-[11px] mt-3 flex items-center gap-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
             <ScrollText size={12} style={{ flexShrink: 0 }} />
             <span style={{ fontVariantNumeric: 'tabular-nums' }}>
               {drs.filter((d) => d.status === 'passed' || d.status === 'failed').length} of {drs.length} draft resolutions voted on
@@ -388,7 +503,7 @@ export function VotingBody({ data }: { data: LiveCommittee }) {
       </NeuInset>
 
       {/* The honest gap, stated on the card. */}
-      <p className="text-[11px] mt-2 flex items-start gap-1.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+      <p className="text-[11px] mt-2 flex items-start gap-1.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
         <Users size={12} style={{ flexShrink: 0, marginBlockStart: 2 }} />
         <span>Ballots are cast on the chair&apos;s voting screen and are not stored — only the verdict reaches this page.</span>
       </p>
@@ -404,4 +519,28 @@ export function feedbackPulse(data: LiveCommittee): { notes: number; rated: numb
   const rated = data.feedback.filter((f) => Object.values(f.factorScores).some((v) => (v ?? 0) > 0)).length;
   const delegations = new Set(data.feedback.map((f) => f.country)).size;
   return { notes, rated, delegations };
+}
+
+// ── Floor detail ────────────────────────────────────────────────────────────
+
+/** The phase-specific body, for the RECAP MODAL rather than the card.
+ *
+ *  These three bodies used to sit on the card itself, which is what forced four
+ *  different card shapes and, with them, the height chaos the grid suffered
+ *  from. They are detail — a caucus clock only matters once you have chosen a
+ *  room — so they live in the detail view now. The components and the
+ *  `activeCaucus` phase-confirmation are unchanged; only the location moved.
+ *
+ *  It is exported from HERE, not from LiveModals, because this module already
+ *  imports LiveModals and importing back the other way would make the pair
+ *  circular. `RecapModal` takes it as a `floorDetail` node instead. */
+export function FloorDetail({ data }: { data: LiveCommittee }) {
+  const session = data.session;
+  if (!session || session.endedAt) return null;
+  const variant = cardVariant(data);
+  const caucus = activeCaucus(session);
+  if (variant === 'unmoderated' && caucus) return <div className="mb-5"><UnmoderatedBody caucus={caucus} /></div>;
+  if (variant === 'moderated' && caucus) return <div className="mb-5"><ModeratedBody caucus={caucus} /></div>;
+  if (variant === 'voting') return <div className="mb-5"><VotingBody data={data} /></div>;
+  return null;
 }

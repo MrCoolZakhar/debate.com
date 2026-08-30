@@ -27,7 +27,12 @@ export default function Error({
     // if the reload doesn't fix it, the second attempt lands here and IS
     // reported, because then something is genuinely wrong.
     if (recoverFromStaleDeploy(error)) return;
-    reportCrash(error);
+    // 'route': a subtree died and this card replaced it — the nav, the rest of
+    // the app and every other route still work. The server records it either
+    // way, but only pages once it proves recurring, because the overwhelming
+    // majority of throws that land here are React losing a DOM race against a
+    // page translator, which blocks nobody. See src/lib/reportCrash.ts.
+    reportCrash(error, 'route');
   }, [error]);
 
   return (
@@ -53,7 +58,7 @@ export default function Error({
           Something went wrong
         </h2>
         <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.7 }}>
-          This part of the page failed to load. The team has been alerted automatically — try again, or head back to safety.
+          This part of the page failed to load. We&apos;ve logged it automatically — try again, or head back to safety.
         </p>
 
         <div className="flex items-center justify-center gap-2.5 flex-wrap">
