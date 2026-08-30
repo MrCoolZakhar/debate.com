@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { notifyOk } from '@/lib/appNotify';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
-  TrendingUp, Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
+  Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
   Activity, UserRoundCheck, MapPin, RotateCcw,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
@@ -255,7 +255,11 @@ function ShareModal({
   );
 }
 
-// ── Time-series bucketing ──────────────────────────────────────────────────
+// ── Application row shape ─────────────────────────────────────────────────
+// The dashboard's one raw feed of applications. It used to also serve a
+// hand-rolled revenue bar chart (with its own 24H/7D/30D/ALL bucketing
+// helpers); that chart and its bucketing were removed on request, so this is
+// now read only by ParticipantsChart's cumulative roll and the dial counts.
 
 interface AppRow {
   submitted_at: string;
@@ -263,339 +267,6 @@ interface AppRow {
   payment_status: string | null;
   role: string;
   society_id: string | null;
-}
-
-type RangeKey = '24H' | '7D' | '30D' | 'ALL';
-const RANGE_KEYS: RangeKey[] = ['24H', '7D', '30D', 'ALL'];
-const RANGE_PREV_LABEL: Record<RangeKey, string> = {
-  '24H': 'previous 24 h', '7D': 'previous 7 days', '30D': 'previous 30 days', 'ALL': '',
-};
-
-interface Bucket { t: number; label: string; tip: string; apps: number; paid: number }
-
-const DAY = 86400000;
-const HOUR = 3600000;
-
-function startOfDay(t: number): number {
-  const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-function floorHour(t: number): number {
-  const d = new Date(t);
-  d.setMinutes(0, 0, 0);
-  return d.getTime();
-}
-
-/**
- * Buckets applications for the selected range: 24H → hourly, 7D/30D → daily,
- * ALL → weekly from the first application.
- * NOTE: there is no paid_at column on applications, paid rows are bucketed
- * by their submitted_at as an approximation of when the revenue arrived.
- * Also counts paid rows in the previous equivalent window for the delta
- * caption (null for ALL, there is no previous period to compare against).
- */
-function bucketize(rows: AppRow[], range: RangeKey): { buckets: Bucket[]; prevPaid: number | null } {
-  const now = Date.now();
-  let start: number, step: number, count: number;
-  if (range === '24H') {
-    step = HOUR; count = 24; start = floorHour(now) - 23 * HOUR;
-  } else if (range === '7D') {
-    step = DAY; count = 7; start = startOfDay(now) - 6 * DAY;
-  } else if (range === '30D') {
-    step = DAY; count = 30; start = startOfDay(now) - 29 * DAY;
-  } else {
-    step = 7 * DAY;
-    const times = rows.map(r => new Date(r.submitted_at).getTime()).filter(t => Number.isFinite(t));
-    start = startOfDay(times.length > 0 ? Math.min(...times) : now);
-    count = Math.max(2, Math.floor((now - start) / step) + 1);
-  }
-
-  const fmtAxis = (t: number) => range === '24H'
-    ? new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-    : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const fmtTip = (t: number) => range === '24H'
-    ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : range === 'ALL'
-      ? `Week of ${new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
-      : new Date(t).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-
-  const buckets: Bucket[] = Array.from({ length: count }, (_, i) => ({
-    t: start + i * step,
-    label: fmtAxis(start + i * step),
-    tip: fmtTip(start + i * step),
-    apps: 0, paid: 0,
-  }));
-
-  let prevPaid: number | null = range === 'ALL' ? null : 0;
-  const prevStart = start - count * step;
-  for (const r of rows) {
-    const t = new Date(r.submitted_at).getTime();
-    if (!Number.isFinite(t)) continue;
-    if (t < start) {
-      if (prevPaid !== null && t >= prevStart && r.payment_status === 'paid') prevPaid += 1;
-      continue;
-    }
-    const i = Math.min(count - 1, Math.floor((t - start) / step));
-    buckets[i].apps += 1;
-    if (r.payment_status === 'paid') buckets[i].paid += 1;
-  }
-  return { buckets, prevPaid };
-}
-
-// ── Revenue chart, interactive SVG: gold revenue bars only ────────────────
-// Range tabs (24H/7D/30D/ALL), pointer-snapping hover with vertical guide +
-// neumorphic revenue tooltip, gold peak marker, header shows range revenue +
-// delta vs the previous equivalent period. Hand-rolled, no chart libs.
-
-function RevenueChart({
-  rows,
-  fee,
-  currency,
-  financialsHref,
-}: {
-  rows: AppRow[];
-  fee: number;
-  currency: string;
-  financialsHref: string;
-}) {
-  const [range, setRange] = useState<RangeKey>('7D');
-  const [hoverI, setHoverI] = useState<number | null>(null);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const [dims, setDims] = useState({ w: 680, h: 240 });
-
-  // Measure the plot area so the SVG renders at exact pixel size, keeps
-  // text unscaled and makes pointer → bucket math exact.
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const r = entries[0].contentRect;
-      if (r.width > 40 && r.height > 40) setDims({ w: r.width, h: r.height });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const { buckets, prevPaid } = useMemo(() => bucketize(rows, range), [rows, range]);
-
-  const revenue = buckets.map(b => b.paid * fee);
-  const appsTotal = buckets.reduce((a, b) => a + b.apps, 0);
-  const totalRev = revenue.reduce((a, b) => a + b, 0);
-  const prevRev = prevPaid === null ? null : prevPaid * fee;
-  const delta = prevRev === null ? null : totalRev - prevRev;
-
-  const { w: W, h: H } = dims;
-  const padL = 46, padR = 12, padT = 18, padB = 20;
-  const plotW = Math.max(40, W - padL - padR);
-  const plotH = Math.max(40, H - padT - padB);
-  const n = buckets.length;
-  const slot = plotW / n;
-
-  const maxRev = Math.max(...revenue, 1);
-  const hasRevenue = revenue.some(v => v > 0);
-
-  const xc = (i: number) => padL + slot * (i + 0.5);
-  const yRev = (v: number) => padT + plotH - (v / maxRev) * (plotH * 0.88);
-  const baseY = padT + plotH;
-
-  // Dense, serious bars: ~74% of the slot (≈35% gap→bar ratio).
-  const barW = Math.min(44, slot * 0.74);
-
-  // Rounded-top bar path (width parameterised so the hovered bar can grow).
-  const bar = (i: number, v: number, w: number): string => {
-    if (v <= 0) return '';
-    const x = xc(i) - w / 2;
-    const top = yRev(v);
-    const r = Math.min(w / 2, Math.max(2, baseY - top));
-    return `M ${x} ${baseY} L ${x} ${top + r} Q ${x} ${top} ${x + r} ${top} L ${x + w - r} ${top} Q ${x + w} ${top} ${x + w} ${top + r} L ${x + w} ${baseY} Z`;
-  };
-
-  // Peak-revenue bucket → gold dot + tiny label.
-  let peakI = -1;
-  for (let i = 0; i < revenue.length; i++) {
-    if (revenue[i] > 0 && (peakI === -1 || revenue[i] > revenue[peakI])) peakI = i;
-  }
-
-  const guides = hasRevenue
-    ? [0.5, 1].map(f => ({ y: yRev(maxRev * f), v: formatFee(Math.round(maxRev * f), currency) }))
-    : [];
-  const labelEvery = Math.max(1, Math.ceil(n / Math.max(4, Math.floor(plotW / 68))));
-
-  // Snap pointer x to the nearest bucket.
-  function handleMove(e: React.PointerEvent<SVGSVGElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const i = Math.round((x - padL) / slot - 0.5);
-    setHoverI(Math.max(0, Math.min(n - 1, i)));
-  }
-
-  const gid = 'rev-bar-grad';
-
-  return (
-    <div className="flex flex-col" style={{ flex: 1, minHeight: 0 }}>
-      {/* Header, links to financials */}
-      <div className="flex items-center justify-between gap-3 flex-shrink-0" style={{ marginBottom: 10 }}>
-        <Link
-          href={financialsHref}
-          className="flex items-center gap-3 min-w-0 transition-opacity hover:opacity-75"
-          style={{ textDecoration: 'none', cursor: 'pointer' }}
-        >
-          <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji="Chart increasing" icon={TrendingUp} size={36} />
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-2.5">
-              <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 900, color: NEU.ink }}>Revenue</span>
-              <span style={{ fontFamily: OUTFIT, fontSize: 20, fontWeight: 900, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                {formatFee(totalRev, currency)}
-              </span>
-            </div>
-            {delta !== null ? (
-              <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: delta >= 0 ? NEU.green : RED, fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
-                {delta >= 0 ? '▲' : '▼'} {formatFee(Math.abs(delta), currency)} vs {RANGE_PREV_LABEL[range]}
-              </p>
-            ) : (
-              <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, marginTop: 1 }}>
-                All time · {appsTotal} application{appsTotal === 1 ? '' : 's'}
-              </p>
-            )}
-          </div>
-        </Link>
-
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <span className="inline-flex items-center gap-1.5">
-            {RANGE_KEYS.map(k => (
-              <NeuPill key={k} active={range === k} gradient={NEU_GRADIENTS.forest} onClick={() => { setRange(k); setHoverI(null); }}>
-                {k}
-              </NeuPill>
-            ))}
-          </span>
-        </div>
-      </div>
-
-      {/* Plot */}
-      <NeuInset style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
-        <div ref={wrapRef} style={{ position: 'absolute', inset: 8 }}>
-          {rows.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center">
-              <TrendingUp size={24} style={{ color: NEU.muted, opacity: 0.7 }} />
-              <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: NEU.ink, marginTop: 8 }}>No applications yet</p>
-              <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginTop: 2, maxWidth: 300 }}>
-                Once delegates start applying, your application and revenue growth will chart here.
-              </p>
-            </div>
-          ) : (
-            <>
-              <svg
-                width={W}
-                height={H}
-                onPointerMove={handleMove}
-                onPointerLeave={() => setHoverI(null)}
-                style={{ display: 'block', touchAction: 'none' }}
-                role="img"
-                aria-label="Revenue over time"
-              >
-                <defs>
-                  <linearGradient id={gid} x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor={NEU.gold} />
-                    <stop offset="100%" stopColor={NEU.deepGold} />
-                  </linearGradient>
-                </defs>
-
-                {guides.map((g, gi) => (
-                  <g key={gi}>
-                    <line x1={padL} x2={W - padR} y1={g.y} y2={g.y} stroke="rgba(27,56,40,0.08)" strokeWidth={1} />
-                    <text x={padL - 7} y={g.y + 3} textAnchor="end" style={{ fontFamily: OUTFIT, fontSize: 10, fill: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
-                      {g.v}
-                    </text>
-                  </g>
-                ))}
-                <line x1={padL} x2={W - padR} y1={baseY} y2={baseY} stroke="rgba(27,56,40,0.14)" strokeWidth={1} />
-
-                {/* Hover guide */}
-                {hoverI !== null && (
-                  <line x1={xc(hoverI)} x2={xc(hoverI)} y1={padT} y2={baseY} stroke="rgba(27,56,40,0.28)" strokeWidth={1} strokeDasharray="3 3" />
-                )}
-
-                {/* Revenue bars, gold gradient, rounded tops; hovered bar grows */}
-                {hasRevenue && revenue.map((v, i) => (
-                  v > 0 ? (
-                    <path
-                      key={i}
-                      d={bar(i, v, hoverI === i ? barW + 4 : barW)}
-                      fill={`url(#${gid})`}
-                      opacity={hoverI === null ? 0.9 : hoverI === i ? 1 : 0.55}
-                      style={{ transition: `opacity 160ms ${EASE}` }}
-                    />
-                  ) : null
-                ))}
-
-                {/* Peak-revenue marker, gold dot + tiny label */}
-                {peakI >= 0 && (
-                  <g>
-                    <circle cx={xc(peakI)} cy={yRev(revenue[peakI]) - 7} r={3.5} fill={NEU.deepGold} stroke="#FFFFFF" strokeWidth={1.5} />
-                    <text
-                      x={Math.max(padL + 24, Math.min(W - padR - 24, xc(peakI)))}
-                      y={Math.max(10, yRev(revenue[peakI]) - 15)}
-                      textAnchor="middle"
-                      style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, fill: NEU.deepGold, fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {formatFee(revenue[peakI], currency)}
-                    </text>
-                  </g>
-                )}
-
-                {/* X labels */}
-                {buckets.map((b, i) => (
-                  i % labelEvery === 0 ? (
-                    <text key={b.t} x={xc(i)} y={H - 6} textAnchor="middle" style={{ fontFamily: OUTFIT, fontSize: 10, fill: hoverI === i ? NEU.forest : NEU.muted, fontWeight: hoverI === i ? 700 : 400, fontVariantNumeric: 'tabular-nums' }}>
-                      {b.label}
-                    </text>
-                  ) : null
-                ))}
-              </svg>
-
-              {/* No-activity note over an empty range */}
-              {!hasRevenue && (
-                <p
-                  className="absolute inset-x-0 text-center pointer-events-none"
-                  style={{ top: '38%', fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.muted }}
-                >
-                  No activity in this range
-                </p>
-              )}
-
-              {/* Neumorphic hover tooltip, revenue only */}
-              {hoverI !== null && hasRevenue && (
-                <div
-                  className="pointer-events-none"
-                  style={{
-                    position: 'absolute',
-                    left: Math.max(78, Math.min(W - 78, xc(hoverI))),
-                    top: 6,
-                    transform: 'translateX(-50%)',
-                    backgroundColor: NEU.surface,
-                    boxShadow: NEU.outSm,
-                    borderRadius: 12,
-                    padding: '6px 11px',
-                    whiteSpace: 'nowrap',
-                    zIndex: 5,
-                  }}
-                >
-                  <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, color: NEU.muted, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                    {buckets[hoverI].tip}
-                  </p>
-                  <p style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 900, color: NEU.deepGold, fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
-                    {formatFee(revenue[hoverI], currency)}
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </NeuInset>
-    </div>
-  );
 }
 
 // ── Unallocated-delegates alert tile ───────────────────────────────────────
@@ -731,6 +402,17 @@ export interface ActivityEvent {
   name: string;
   detail?: string;
   /**
+   * The person the row is ABOUT. Carried so the full-list modal can show their
+   * profile picture beside the sentence; the compact card deliberately does
+   * not, because it already prints an event-kind disc and an actor chip in a
+   * 34%-wide column and a third face per row would crowd both out.
+   *
+   * `id` is null for an invited-but-unclaimed applicant (no account yet) and
+   * for a delegation-level allocation — in both cases there is no profile and
+   * ProfileLink correctly renders the name unlinked.
+   */
+  subject?: { id: string | null; avatarUrl: string | null };
+  /**
    * The ORGANISER who performed the action, when one is recorded and they are
    * not the subject of the row themselves. Self-service events (a delegate
    * applying, paying, resubmitting) never carry one — nor do rows written
@@ -773,6 +455,20 @@ function roleWord(role: string): string {
   return map[role] ?? 'Delegate';
 }
 
+/**
+ * How many rows the dashboard card itself paints. The rest of the feed lives
+ * one click away in ActivityModal — the state is one array either way, so this
+ * is a display cap, not a fetch cap.
+ */
+const ACTIVITY_INLINE_LIMIT = 8;
+
+/** Absolute stamp for the modal, where there is room to be exact. */
+function activityStamp(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
   const meta = ACTIVITY_META[ev.kind];
   // Every sentence LEADS with the subject's name. The feed now lives in the
@@ -801,6 +497,11 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
         <ProfileLink
           userId={ev.actor.id}
           name={ev.actor.name}
+          /* `nested`: the whole card is a role="button" with an onClick that
+             opens the full-list modal, so without this, clicking the actor
+             would open BOTH their CV and the modal. The card is a div rather
+             than a <button> precisely so this anchor is legal inside it. */
+          nested
           className="flex items-center gap-1.5 flex-shrink-0 max-w-[38%]"
         >
           <Avatar url={ev.actor.avatarUrl} name={ev.actor.name} size={18} />
@@ -824,24 +525,200 @@ function ActivityLine({ ev, now }: { ev: ActivityEvent; now: number }) {
  * one screen no matter how much has just happened.
  */
 export function RecentActivity({ events, now }: { events: ActivityEvent[]; now: number }) {
+  const [showAll, setShowAll] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  // Nothing to expand into: an empty feed opens an empty modal, which is a
+  // dead end rather than a disclosure. The card stays inert until there is
+  // something to show.
+  const openable = events.length > 0;
+  const hidden = Math.max(0, events.length - ACTIVITY_INLINE_LIMIT);
+
   return (
-    <NeuCard className="flex flex-col" style={{ padding: '13px 16px 14px', gap: 10, flex: 1, minHeight: 168 }}>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <Activity size={15} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
-        <h2 style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: NEU.deepGold }}>
-          Recent activity
-        </h2>
-      </div>
-      {events.length === 0 ? (
-        <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
-          Activity will appear here as delegates apply, pay, get allocated, and check in.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          {events.map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
+    <>
+      {/*
+        WHY A MODAL AND NOT A ROUTE
+        The dashboard's whole design constraint is that it fits one screen; the
+        feed is the overflow valve for that. A /manage/[slug]/activity route
+        would need its own nav entry, its own copy of the three queries and the
+        actor-attribution pass, AND a SECTION_PERMS decision in the manage
+        layout — a permission key that has to be right or the URL is open to
+        every organiser. A modal reads the array this card was already handed,
+        adds no route, no permission surface and no second feed, and returns the
+        organiser to the dashboard where they were looking.
+
+        The card is a div with role="button", not a <button>: each row can
+        contain a ProfileLink (an <a>), and an anchor inside a button is
+        invalid HTML that browsers silently unnest. The links pass `nested` so
+        their click does not also open the modal.
+      */}
+      {/*
+        A plain div, NOT <NeuCard>. NeuCard's props are a closed set
+        (children/hover/onClick/href/className/style) and its body forwards only
+        those — role, tabIndex, aria-label and onKeyDown passed to it are
+        silently DROPPED, which would leave this card mouse-clickable but
+        invisible to the keyboard and to a screen reader. JSX spread does not
+        excess-property-check, so that failure is silent at compile time too.
+        The style below reproduces NeuCard's surface exactly (NEU.surface,
+        radius 22, NEU.out) rather than modifying the shared component.
+      */}
+      <div
+        role={openable ? 'button' : undefined}
+        tabIndex={openable ? 0 : undefined}
+        aria-label={openable ? `Recent activity, ${events.length} event${events.length === 1 ? '' : 's'}. Open the full list.` : undefined}
+        onClick={openable ? () => setShowAll(true) : undefined}
+        onKeyDown={openable ? (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowAll(true); }
+        } : undefined}
+        onMouseEnter={openable ? () => setHovered(true) : undefined}
+        onMouseLeave={openable ? () => setHovered(false) : undefined}
+        /* focus-visible ring: the card is keyboard-operable, and without it a
+           keyboard user gets no indication that Enter does anything. */
+        className="flex flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]"
+        style={{
+          backgroundColor: NEU.surface, borderRadius: 22,
+          padding: '13px 16px 14px', gap: 10, flex: 1, minHeight: 168,
+          cursor: openable ? 'pointer' : 'default',
+          boxShadow: openable && hovered ? NEU.outHover : NEU.out,
+          transition: `box-shadow 220ms ${EASE}`,
+        }}
+      >
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Activity size={15} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
+          <h2 style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: NEU.deepGold }}>
+            Recent activity
+          </h2>
+          {openable && (
+            <span
+              className="inline-flex items-center gap-1 flex-shrink-0"
+              style={{
+                marginInlineStart: 'auto', fontFamily: OUTFIT, fontSize: 10,
+                fontWeight: 800, letterSpacing: '0.1em', color: NEU.deepGold,
+                opacity: hovered ? 1 : 0.75, transition: `opacity 220ms ${EASE}`,
+              }}
+            >
+              {hidden > 0 ? `+${hidden} MORE` : 'SEE ALL'}
+              <ArrowRight size={11} />
+            </span>
+          )}
         </div>
-      )}
-    </NeuCard>
+        {events.length === 0 ? (
+          <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted }}>
+            Activity will appear here as delegates apply, pay, get allocated, and check in.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            {events.slice(0, ACTIVITY_INLINE_LIMIT).map(ev => <ActivityLine key={ev.key} ev={ev} now={now} />)}
+          </div>
+        )}
+      </div>
+
+      {showAll && <ActivityModal events={events} now={now} onClose={() => setShowAll(false)} />}
+    </>
+  );
+}
+
+/**
+ * The full feed. Same array the card was given, no second query — the card
+ * simply stops painting after ACTIVITY_INLINE_LIMIT rows.
+ *
+ * The extra width buys back what the 34%-wide card had to spend: the sentence
+ * is no longer truncated, the subject gets their profile picture, and the time
+ * is an absolute stamp instead of "3d ago".
+ */
+function ActivityModal({ events, now, onClose }: { events: ActivityEvent[]; now: number; onClose: () => void }) {
+  useScrollLock(true);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <Portal><div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="All recent activity"
+        className="w-full max-w-lg rounded-2xl flex flex-col"
+        style={{ backgroundColor: NEU.surface, boxShadow: NEU.out, maxHeight: '100%' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2.5 flex-shrink-0" style={{ padding: '18px 20px 12px' }}>
+          <Activity size={17} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
+          <div className="min-w-0">
+            <h2 style={{ fontFamily: OUTFIT, fontSize: 16, fontWeight: 900, color: NEU.ink }}>Recent activity</h2>
+            <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+              {events.length} event{events.length === 1 ? '' : 's'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex-shrink-0 rounded-xl focus:outline-none"
+            style={{
+              marginInlineStart: 'auto', padding: '7px 13px', border: '1.5px solid #DDD4C0',
+              backgroundColor: 'transparent', color: NEU.ink, fontFamily: OUTFIT,
+              fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', cursor: 'pointer',
+            }}
+          >
+            CLOSE
+          </button>
+        </div>
+
+        <div className="flex flex-col" style={{ padding: '0 12px 16px', gap: 2, overflowY: 'auto', minHeight: 0 }}>
+          {events.map(ev => {
+            const meta = ACTIVITY_META[ev.kind];
+            return (
+              <div key={ev.key} className="flex items-start gap-2.5" style={{ padding: '8px 8px', borderRadius: 12 }}>
+                <NeuIconDisc gradient={meta.gradient} icon={meta.icon} size={26} />
+                {/* The subject's own face. `id` null (invited-but-unclaimed
+                    applicant, or a delegation-level allocation) → Avatar falls
+                    back to the initial disc and ProfileLink renders it
+                    unlinked, which is the whole point of both components. */}
+                <ProfileLink userId={ev.subject?.id} name={ev.name} className="flex-shrink-0" style={{ marginTop: 2 }}>
+                  <Avatar url={ev.subject?.avatarUrl ?? null} name={ev.name} size={22} />
+                </ProfileLink>
+                <div className="flex-1 min-w-0">
+                  <p style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.muted, lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+                    <b style={{ color: NEU.ink }}>{ev.name}</b>
+                    {' '}
+                    {ev.kind === 'application' ? `applied${ev.detail ? ` as ${ev.detail}` : ''}`
+                      : ev.kind === 'payment'  ? `paid${ev.detail ? ` ${ev.detail}` : ''}`
+                      : ev.kind === 'checkin'  ? 'checked in'
+                      : ev.kind === 'resubmit' ? 'edited and resubmitted their application'
+                      : ev.kind === 'accepted' ? 'was accepted'
+                      : ev.kind === 'rejected' ? 'was rejected'
+                      : ev.kind === 'decision' ? `was ${ev.detail}`
+                      : `allocated${ev.detail ? ` to ${ev.detail}` : ''}`}
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 3 }}>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>
+                      {activityStamp(ev.ts)} · {timeAgo(ev.ts, now)}
+                    </span>
+                    {ev.actor && (
+                      <ProfileLink
+                        userId={ev.actor.id}
+                        name={ev.actor.name}
+                        className="inline-flex items-center gap-1.5 min-w-0"
+                      >
+                        <Avatar url={ev.actor.avatarUrl} name={ev.actor.name} size={16} />
+                        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: NEU.muted }}>
+                          by {ev.actor.name}
+                        </span>
+                      </ProfileLink>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div></Portal>
   );
 }
 
@@ -932,10 +809,6 @@ export default function DashboardPage() {
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
   const [dash, setDash] = useState<DashData | null>(null);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
-  // Which chart the shared slot is showing. Participants is the default
-  // because it is the taller of the two and therefore the one the page height
-  // is budgeted against.
-  const [chartTab, setChartTab] = useState<'participants' | 'revenue'>('participants');
   // `now` starts at 0 (same on server + client, no hydration mismatch) and is
   // set on mount, then ticked every minute so relative times stay fresh.
   const [now, setNow] = useState(0);
@@ -1049,13 +922,13 @@ export default function DashboardPage() {
       const [appsRes, allocRes, decisionRes] = await Promise.all([
         supabase
           .from('applications')
-          .select('id, user_id, role, submitted_at, paid_at, paid_amount, amount_paid, checked_in_at, checked_in_by, resubmitted_at, invited_name, profiles(display_name)')
+          .select('id, user_id, role, submitted_at, paid_at, paid_amount, amount_paid, checked_in_at, checked_in_by, resubmitted_at, invited_name, profiles(id, display_name, avatar_url)')
           .eq('conference_id', confId)
           .order('submitted_at', { ascending: false })
           .limit(25),
         supabase
           .from('conference_allocations')
-          .select('id, created_at, country_name, user_id, application_id, assigned_by, conference_committees:conference_committee_id(name, abbreviation), profiles:user_id(display_name), societies:society_id(name)')
+          .select('id, created_at, country_name, user_id, application_id, assigned_by, conference_committees:conference_committee_id(name, abbreviation), profiles:user_id(id, display_name, avatar_url), societies:society_id(name)')
           .eq('conference_id', confId)
           .order('created_at', { ascending: false })
           .limit(15),
@@ -1066,7 +939,7 @@ export default function DashboardPage() {
         // decided_at is also what the partial index is built for.
         supabase
           .from('applications')
-          .select('id, user_id, status, decided_at, decided_by, invited_name, profiles(display_name)')
+          .select('id, user_id, status, decided_at, decided_by, invited_name, profiles(id, display_name, avatar_url)')
           .eq('conference_id', confId)
           .not('decided_at', 'is', null)
           .order('decided_at', { ascending: false })
@@ -1080,25 +953,26 @@ export default function DashboardPage() {
       // names/avatars come from one follow-up lookup keyed by these ids.
       const actorBySubject: { key: string; actorId: string; subjectId: string | null }[] = [];
 
-      type ActApp = { id: string; user_id: string | null; role: string; submitted_at: string | null; paid_at: string | null; paid_amount: number | null; amount_paid: number | null; checked_in_at: string | null; checked_in_by: string | null; resubmitted_at: string | null; invited_name: string | null; profiles: { display_name: string } | null };
+      type ActApp = { id: string; user_id: string | null; role: string; submitted_at: string | null; paid_at: string | null; paid_amount: number | null; amount_paid: number | null; checked_in_at: string | null; checked_in_by: string | null; resubmitted_at: string | null; invited_name: string | null; profiles: { id: string; display_name: string; avatar_url: string | null } | null };
       for (const a of (appsRes.data ?? []) as unknown as ActApp[]) {
         const name = a.profiles?.display_name ?? a.invited_name ?? 'Someone';
+        const subject = { id: a.profiles?.id ?? null, avatarUrl: a.profiles?.avatar_url ?? null };
         // submitted / paid / resubmitted are the applicant's OWN doing —
         // self-service, so they deliberately carry no actor.
-        if (a.submitted_at) evs.push({ key: `sub-${a.id}`, ts: new Date(a.submitted_at).getTime(), kind: 'application', name, detail: roleWord(a.role).toLowerCase() });
+        if (a.submitted_at) evs.push({ key: `sub-${a.id}`, ts: new Date(a.submitted_at).getTime(), kind: 'application', name, subject, detail: roleWord(a.role).toLowerCase() });
         if (a.paid_at) {
           const amt = a.paid_amount ?? a.amount_paid;
-          evs.push({ key: `pay-${a.id}`, ts: new Date(a.paid_at).getTime(), kind: 'payment', name, detail: amt != null ? formatFee(Number(amt), currency) : undefined });
+          evs.push({ key: `pay-${a.id}`, ts: new Date(a.paid_at).getTime(), kind: 'payment', name, subject, detail: amt != null ? formatFee(Number(amt), currency) : undefined });
         }
         if (a.checked_in_at) {
           const key = `chk-${a.id}`;
-          evs.push({ key, ts: new Date(a.checked_in_at).getTime(), kind: 'checkin', name });
+          evs.push({ key, ts: new Date(a.checked_in_at).getTime(), kind: 'checkin', name, subject });
           if (a.checked_in_by) actorBySubject.push({ key, actorId: a.checked_in_by, subjectId: a.user_id });
         }
-        if (a.resubmitted_at) evs.push({ key: `res-${a.id}`, ts: new Date(a.resubmitted_at).getTime(), kind: 'resubmit', name });
+        if (a.resubmitted_at) evs.push({ key: `res-${a.id}`, ts: new Date(a.resubmitted_at).getTime(), kind: 'resubmit', name, subject });
       }
 
-      type ActAlloc = { id: string; created_at: string | null; country_name: string | null; user_id: string | null; application_id: string | null; assigned_by: string | null; conference_committees: { name: string; abbreviation: string | null } | null; profiles: { display_name: string } | null; societies: { name: string } | null };
+      type ActAlloc = { id: string; created_at: string | null; country_name: string | null; user_id: string | null; application_id: string | null; assigned_by: string | null; conference_committees: { name: string; abbreviation: string | null } | null; profiles: { id: string; display_name: string; avatar_url: string | null } | null; societies: { name: string } | null };
       // Applications that already have an allocation event this pass; their
       // 'assigned' decision is the same moment told twice, so it is dropped.
       const allocatedAppIds = new Set<string>();
@@ -1108,7 +982,12 @@ export default function DashboardPage() {
         const committee = al.conference_committees?.abbreviation ?? al.conference_committees?.name;
         const detail = [al.country_name, committee].filter(Boolean).join(' · ') || undefined;
         const key = `alloc-${al.id}`;
-        evs.push({ key, ts: new Date(al.created_at).getTime(), kind: 'allocation', name: who, detail });
+        evs.push({
+          key, ts: new Date(al.created_at).getTime(), kind: 'allocation', name: who, detail,
+          // A delegation-level allocation has no `profiles` row — `who` is the
+          // society's name, which is an organisation and not a face.
+          subject: { id: al.profiles?.id ?? null, avatarUrl: al.profiles?.avatar_url ?? null },
+        });
         if (al.application_id) allocatedAppIds.add(al.application_id);
         if (al.assigned_by) actorBySubject.push({ key, actorId: al.assigned_by, subjectId: al.user_id });
       }
@@ -1116,7 +995,7 @@ export default function DashboardPage() {
       // Organiser decisions — the "someone else did this" case the actor chip
       // exists for. Built from their own query so an old application decided
       // today is never outside the window.
-      type ActDecision = { id: string; user_id: string | null; status: string; decided_at: string | null; decided_by: string | null; invited_name: string | null; profiles: { display_name: string } | null };
+      type ActDecision = { id: string; user_id: string | null; status: string; decided_at: string | null; decided_by: string | null; invited_name: string | null; profiles: { id: string; display_name: string; avatar_url: string | null } | null };
       for (const d of (decisionRes.data ?? []) as unknown as ActDecision[]) {
         if (!d.decided_at) continue;
         const word = DECISION_WORD[d.status];
@@ -1130,18 +1009,25 @@ export default function DashboardPage() {
           ts: new Date(d.decided_at).getTime(),
           kind: decisionKind(d.status),
           name: d.profiles?.display_name ?? d.invited_name ?? 'Someone',
+          subject: { id: d.profiles?.id ?? null, avatarUrl: d.profiles?.avatar_url ?? null },
           detail: word,
         });
         if (d.decided_by) actorBySubject.push({ key, actorId: d.decided_by, subjectId: d.user_id });
       }
 
       evs.sort((x, y) => y.ts - x.ts);
-      const top = evs.slice(0, 8);
 
-      // One lookup for the handful of actors actually on screen. Runs after
-      // the slice so a busy conference never fetches profiles it won't show.
-      const shown = new Set(top.map(e => e.key));
-      const pending = actorBySubject.filter(r => shown.has(r.key) && r.actorId !== r.subjectId);
+      // The WHOLE list is kept in state now, not the top 8. The card still
+      // paints only its first few rows (ACTIVITY_INLINE_LIMIT) — clicking it
+      // opens the rest in a modal, and that modal reads this same array. One
+      // feed, one query, one attribution pass; no second fetch on open.
+      //
+      // Attribution therefore has to cover every event rather than only the
+      // visible slice. That is still ONE lookup: the ids are de-duplicated,
+      // and the three queries above are capped at 25/15/15 rows between them,
+      // so the distinct actors are a handful of organisers however busy the
+      // conference is.
+      const pending = actorBySubject.filter(r => r.actorId !== r.subjectId);
       if (pending.length > 0) {
         const { data: actorRows } = await supabase
           .from('profiles')
@@ -1153,12 +1039,12 @@ export default function DashboardPage() {
             .map(p => [p.id, { id: p.id, name: p.display_name ?? 'An organiser', avatarUrl: p.avatar_url }]),
         );
         const actorByKey = new Map(pending.map(r => [r.key, byId.get(r.actorId)]));
-        for (const ev of top) {
+        for (const ev of evs) {
           const actor = actorByKey.get(ev.key);
           if (actor) ev.actor = actor;
         }
       }
-      setActivity(top);
+      setActivity(evs);
     })();
     return () => { cancelled = true; };
   }, [conference?.id, session?.access_token]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1589,47 +1475,15 @@ export default function DashboardPage() {
           </div>
         </NeuCard>
 
-        {/* One chart SLOT, two charts. They answer different questions
-            ("how many people" vs "how much money") so neither could be
-            dropped, but stacking them cost ~230px the single-screen budget
-            does not have. A two-pill switch keeps both at the price of one,
-            and the taller of the two (participants) sets the page height, so
-            switching never grows the page.
-            Participants is full right-column width on purpose: its SVG is a
-            scaled viewBox, so squeezing it sideways shrinks the axis type
-            with it. Revenue measures its own box (ResizeObserver) and so
-            needs a definite height rather than an auto-height card. */}
+        {/* The participants chart, sole occupant of this slot. It used to
+            share the card with a revenue chart behind a two-pill switch; the
+            revenue chart and BOTH pills were removed on request, so the chart
+            now carries its own title (the active pill used to name it, which
+            is why `title` was empty before).
+            Full right-column width on purpose: its SVG is a scaled viewBox,
+            so squeezing it sideways shrinks the axis type with it. */}
         <NeuCard className="flex flex-col flex-shrink-0" style={{ padding: '12px 16px 12px' }}>
-          <div className="flex items-center gap-1.5 flex-shrink-0" style={{ marginBottom: 8 }}>
-            <NeuPill
-              active={chartTab === 'participants'}
-              gradient={NEU_GRADIENTS.forest}
-              onClick={() => setChartTab('participants')}
-            >
-              PARTICIPANTS
-            </NeuPill>
-            <NeuPill
-              active={chartTab === 'revenue'}
-              gradient={NEU_GRADIENTS.gold}
-              onClick={() => setChartTab('revenue')}
-            >
-              REVENUE
-            </NeuPill>
-          </div>
-          {chartTab === 'participants' ? (
-            /* Empty title — the active pill already names the chart, and a
-               second heading would cost a whole row of the budget. */
-            <ParticipantsChart points={participantSeries} title="" />
-          ) : (
-            <div className="flex flex-col" style={{ height: 296 }}>
-              <RevenueChart
-                rows={dash.apps}
-                fee={fee}
-                currency={conference.fee_currency}
-                financialsHref={`/manage/${slug}/financials`}
-              />
-            </div>
-          )}
+          <ParticipantsChart points={participantSeries} />
         </NeuCard>
 
         </div>

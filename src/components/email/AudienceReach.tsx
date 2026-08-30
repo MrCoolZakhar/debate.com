@@ -35,12 +35,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ChevronDown, Plus, X, Search, Users, Send, AlertTriangle, Check,
+  ChevronDown, Plus, X, Search, Users, Send, AlertTriangle, Check, SlidersHorizontal,
 } from 'lucide-react';
 import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { SOFT, AMBER_INK, GREEN_INK, RED, CARD_BORDER, CARD_SHADOW } from '@/app/manage/[slug]/live/tokens';
 import ProfileLink from '@/components/ProfileLink';
 import PopoverLayer from '@/components/email/PopoverLayer';
+import Portal from '@/components/Portal';
 
 const FOREST = '#1B3828';
 const GOLD = '#EED98A';
@@ -248,6 +249,69 @@ function DotField({ dots }: { dots: DotState[] }) {
   );
 }
 
+/** An informational badge. House rule (AGENTS.md → UI RULES): an "i"/hint
+ *  affordance reveals on HOVER and FOCUS, never on click, and its panel is
+ *  portaled so no ancestor's overflow can clip it.
+ *
+ *  This exists so a sentence that used to occupy a whole 29px line of the
+ *  sticky bar — every time, whether or not anyone cared — becomes a glyph and
+ *  a number. The words are not lost; they are one hover away. */
+function HintChip({
+  icon: Icon, label, tone, children,
+}: {
+  icon: typeof AlertTriangle;
+  /** The number/word that stays visible. The prose lives in `children`. */
+  label: string;
+  tone: 'amber' | 'quiet';
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) clearTimeout(closeTimer.current); };
+  /** A close DELAY so the pointer can travel from the chip into the panel. */
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setOpen(false), 180); };
+  useEffect(() => () => cancelClose(), []);
+  const ink = tone === 'amber' ? AMBER_INK : SOFT;
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        aria-label={typeof children === 'string' ? children : label}
+        onMouseEnter={() => { cancelClose(); setOpen(true); }}
+        onMouseLeave={scheduleClose}
+        onFocus={() => { cancelClose(); setOpen(true); }}
+        onBlur={scheduleClose}
+        className="inline-flex items-center gap-1 focus:outline-none flex-shrink-0"
+        style={{
+          minHeight: 26, padding: '4px 9px', borderRadius: 999,
+          border: `1px solid ${tone === 'amber' ? 'rgba(126,81,40,0.30)' : 'rgba(27,56,40,0.16)'}`,
+          backgroundColor: tone === 'amber' ? 'rgba(126,81,40,0.09)' : 'transparent',
+          fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, color: ink,
+          fontVariantNumeric: 'tabular-nums', cursor: 'help',
+        }}
+      >
+        <Icon size={11} strokeWidth={2.6} />
+        {label}
+      </button>
+      <PopoverLayer anchorRef={ref} open={open} onClose={() => setOpen(false)} width={252} maxHeight={200} align="end">
+        <div
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+          style={{
+            padding: '10px 12px', borderRadius: 14,
+            backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW,
+            fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.5, color: ink, textWrap: 'pretty',
+          }}
+        >
+          {children}
+        </div>
+      </PopoverLayer>
+    </>
+  );
+}
+
 function StepHeading({ n, title, hint }: { n: number; title: string; hint?: string }) {
   return (
     <div className="flex items-start gap-2.5 mb-3">
@@ -293,6 +357,21 @@ export default function AudienceReach({
   const closeAddMenu = useCallback(() => setAddMenuOpen(false), []);
   const closeSearch = useCallback(() => onManualQuery(''), [onManualQuery]);
 
+  /** Modal manners: Escape closes it, and the page behind it does not scroll
+   *  while it is up (otherwise the wheel scrolls the builder out from under
+   *  the dialog and you land somewhere else when you close it). */
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   const roleSection = sections.find(s => s.key === 'roles') ?? null;
   const narrowers = useMemo(() => sections.filter(s => s.key !== 'roles' && s.options.length > 0), [sections]);
   const activeNarrowers = useMemo(
@@ -321,85 +400,170 @@ export default function AudienceReach({
   };
 
   return (
-    <div
-      className="mb-4"
-      style={{
-        // Sticky while collapsed so "who gets it" is never off-screen; static
-        // once open, because a tall expanded panel pinned to the viewport
-        // would fight the page's own scroll.
-        position: open || !wide ? 'relative' : 'sticky',
-        // 76, not 0: SiteNav is a `fixed top-0 h-[72px] z-40` floating pill
-        // (src/components/SiteNav.tsx:109) that would otherwise sit straight on
-        // top of the recipient count. This parks the bar just under it.
-        top: 76,
-        zIndex: 30,
-      }}
-    >
-      <div style={panelStyle}>
-        {/* ── The bar ── */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3" style={{ padding: '14px 16px' }}>
-          <span
-            className="inline-flex items-center justify-center flex-shrink-0"
-            style={{
-              width: 46, height: 46, borderRadius: 16,
-              background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}40, ${NEU_GRADIENTS.gold[1]}33), ${NEU.surface}`,
-              boxShadow: NEU.outSm,
-            }}
-          >
-            <Emoji3D name="Busts in silhouette" size={26} fallback={Users} fallbackColor={FOREST} />
-          </span>
-
-          <div className="min-w-0 flex-1" style={{ minWidth: 220 }}>
-            <p style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 900, color: INK, lineHeight: 1.25 }}>
-              Going to <BigNumber n={reachCount} /> {reachCount === 1 ? 'person' : 'people'}
-            </p>
-            <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 12.5, color: SOFT }} title={summary}>
-              {summary}
-            </p>
-          </div>
-
-          <div className="hidden sm:block flex-shrink-0">
-            <ReachMeter reach={reachCount} total={total} />
-          </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => setOpen(o => !o)}
-              aria-expanded={open}
-              className="inline-flex items-center gap-1.5 focus:outline-none"
+    <>
+      <div
+        className="mb-3"
+        style={{
+          // Sticky so "who gets it" is never off-screen. The picker no longer
+          // unfolds inside this bar (it is a modal now), so the bar can stay
+          // sticky in every state instead of dropping to static when opened.
+          position: wide ? 'sticky' : 'relative',
+          // 76, not 0: SiteNav is a `fixed top-0 h-[72px] z-40` floating pill
+          // (src/components/SiteNav.tsx:109) that would otherwise sit straight
+          // on top of the recipient count. This parks the bar just under it.
+          //
+          // ONLY WHEN STICKY. `top` on a `position: relative` box is not an
+          // anchor, it is a 76px shove: the bar rendered 76px below its own
+          // flow slot, leaving a hole above it and overlapping the palette
+          // panel below. That is what it did on every phone (`!wide`) and at
+          // every width while the old drop-down was open.
+          ...(wide ? { top: 76 } : null),
+          zIndex: 30,
+        }}
+      >
+        <div style={panelStyle}>
+          {/* ── The bar. One row, and it stays one row: it is pinned to the top
+              of the screen, so every pixel it takes is a pixel of the email
+              nobody can see. ── */}
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5" style={{ padding: '9px 13px' }}>
+            <span
+              className="inline-flex items-center justify-center flex-shrink-0"
               style={{
-                minHeight: 44, padding: '11px 15px', borderRadius: 999,
-                border: CARD_BORDER, backgroundColor: '#FFFDF8',
-                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.05em',
-                color: FOREST, cursor: 'pointer',
-                transitionProperty: 'background-color', transitionDuration: '180ms',
+                width: 38, height: 38, borderRadius: 13,
+                background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}40, ${NEU_GRADIENTS.gold[1]}33), ${NEU.surface}`,
+                boxShadow: NEU.outSm,
               }}
             >
-              {open ? 'DONE' : 'CHANGE WHO'}
-              <ChevronDown
-                size={13}
-                strokeWidth={2.6}
-                style={{ transform: open ? 'rotate(180deg)' : 'none', transitionProperty: 'transform', transitionDuration: '240ms', transitionTimingFunction: EASE }}
-              />
-            </button>
-            <SendButton onClick={onSend} disabled={sendDisabled} count={reachCount} busy={sendBusyLabel} />
+              <Emoji3D name="Busts in silhouette" size={21} fallback={Users} fallbackColor={FOREST} />
+            </span>
+
+            <div className="min-w-0 flex-1" style={{ minWidth: 190 }}>
+              <p style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 900, color: INK, lineHeight: 1.3 }}>
+                Going to <BigNumber n={reachCount} /> {reachCount === 1 ? 'person' : 'people'}
+              </p>
+              <span className="flex items-start gap-1.5 min-w-0">
+                {/* One line while the bar is PINNED — its height comes
+                    straight out of the email's. A phone's bar is not pinned,
+                    so it gets two. Either way this is a SUMMARY, deliberately
+                    bounded: the sentence in full is the `title`, and it is
+                    restated unabridged as the modal's own subtitle one tap
+                    away, so nothing here is the only copy of anything. */}
+                <span
+                  className={wide ? 'truncate' : ''}
+                  style={{
+                    fontFamily: OUTFIT, fontSize: 12, color: SOFT, lineHeight: 1.45, textWrap: 'pretty',
+                    ...(wide ? null : { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }),
+                  }}
+                  title={summary}
+                >
+                  {summary}
+                </span>
+                {optedOutCount > 0 && (
+                  <HintChip icon={AlertTriangle} tone="amber" label={String(optedOutCount)}>
+                    {optedOutCount} {optedOutCount === 1 ? 'person has' : 'people have'} turned off marketing emails. They are left off automatically and are not in the count.
+                  </HintChip>
+                )}
+              </span>
+            </div>
+
+            <div className="hidden lg:block flex-shrink-0">
+              <ReachMeter reach={reachCount} total={total} />
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={open}
+                className="inline-flex items-center gap-1.5 focus:outline-none"
+                style={{
+                  minHeight: 44, padding: '11px 15px', borderRadius: 999,
+                  border: CARD_BORDER, backgroundColor: '#FFFDF8',
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.05em',
+                  color: FOREST, cursor: 'pointer',
+                  transitionProperty: 'background-color', transitionDuration: '180ms',
+                }}
+              >
+                <SlidersHorizontal size={13} strokeWidth={2.6} />
+                CHANGE WHO
+              </button>
+              <SendButton onClick={onSend} disabled={sendDisabled} count={reachCount} busy={sendBusyLabel} />
+            </div>
           </div>
         </div>
+      </div>
 
-        {optedOutCount > 0 && (
-          <p
-            className="flex items-start gap-1.5"
-            style={{ padding: '0 16px 12px 16px', fontFamily: OUTFIT, fontSize: 11.5, color: AMBER_INK, textWrap: 'pretty' }}
+      {/* ── The picker. A MODAL, not a drop-down.
+          As an inline unfold it was a 954px panel that shoved the whole
+          builder 850px down the page — you changed the audience by losing
+          sight of the email. As a dialog it covers the screen while you are in
+          it and gives it all back when you leave. Everything that worked
+          survives: the six role tiles, "+ Add a filter", the dot field, every
+          per-option count and the running total (now in the footer, next to
+          the way out). ── */}
+      {open && (
+        <Portal>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose who gets this email"
+            onMouseDown={e => { if (e.target === e.currentTarget) setOpen(false); }}
+            style={{
+              position: 'fixed', inset: 0,
+              // Below PopoverLayer's 200 ON PURPOSE: "+ Add a filter" and the
+              // add-a-person typeahead portal themselves to the same layer and
+              // have to float ABOVE this dialog, not behind it.
+              zIndex: 120,
+              backgroundColor: 'rgba(27,56,40,0.42)',
+              display: 'flex',
+              alignItems: wide ? 'center' : 'flex-end',
+              justifyContent: 'center',
+              padding: wide ? 24 : 0,
+            }}
           >
-            <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 2 }} />
-            {optedOutCount} {optedOutCount === 1 ? 'person has' : 'people have'} turned off marketing emails — {optedOutCount === 1 ? 'they are' : 'they are'} left off automatically and not counted above.
-          </p>
-        )}
+            <div
+              style={{
+                ...panelStyle,
+                width: '100%',
+                maxWidth: 860,
+                // A phone gets a bottom sheet: full width, square top corners
+                // against the screen edge, and room left above it so the page
+                // behind stays visible and the sheet reads as a layer.
+                maxHeight: wide ? '86vh' : '92vh',
+                borderRadius: wide ? 24 : '22px 22px 0 0',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                className="flex items-center gap-3 flex-shrink-0"
+                style={{ padding: '14px 16px', borderBottom: '1px solid rgba(27,56,40,0.1)' }}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block" style={{ fontFamily: OUTFIT, fontSize: 15.5, fontWeight: 900, color: INK, textWrap: 'balance' }}>
+                    Who gets this email?
+                  </span>
+                  <span className="block truncate" style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }} title={summary}>
+                    {summary}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className="inline-flex items-center justify-center focus:outline-none flex-shrink-0"
+                  style={{
+                    width: 40, height: 40, borderRadius: 999,
+                    border: CARD_BORDER, backgroundColor: '#FFFDF8', color: SOFT, cursor: 'pointer',
+                  }}
+                >
+                  <X size={15} strokeWidth={2.6} />
+                </button>
+              </div>
 
-        {/* ── The picker ── */}
-        {open && (
-          <div style={{ borderTop: '1px solid rgba(27,56,40,0.1)', padding: '18px 16px 16px' }}>
+              <div className="min-h-0 flex-1" style={{ overflowY: 'auto', padding: '16px 16px 20px' }}>
             {/* Step 3's dot field rides at the TOP: it is the count made
                 visible, so it belongs next to the count, not below the
                 controls that change it. */}
@@ -722,8 +886,14 @@ export default function AudienceReach({
                                           NOT SIGNED UP
                                         </span>
                                       )}
+                                      {/* Neutral information, so it is drawn
+                                          in the neutral colour. It used to be
+                                          a gold-tinted amber pill, which read
+                                          as a warning about a person nothing
+                                          is wrong with — and as ORANGE, which
+                                          is not a colour this app owns. */}
                                       {p.manual && (
-                                        <span className="ml-1.5" style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, backgroundColor: 'rgba(182,135,31,0.16)', color: AMBER_INK }}>
+                                        <span className="ml-1.5" style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.08)', color: FOREST }}>
                                           ADDED BY YOU
                                         </span>
                                       )}
@@ -737,7 +907,13 @@ export default function AudienceReach({
                               {p.optedOut ? (
                                 <span
                                   className="flex-shrink-0"
-                                  style={{ fontSize: 9, fontWeight: 800, fontFamily: OUTFIT, padding: '3px 7px', borderRadius: 999, backgroundColor: 'rgba(182,135,31,0.12)', color: AMBER_INK, border: '1px solid rgba(182,135,31,0.3)' }}
+                                  /* Amber survives here because this IS a
+                                     caution — the one place in this list where
+                                     something is genuinely off. Retinted off
+                                     the gold (#B6871F) it was mixed with and
+                                     onto AMBER_INK's own hue, so it stops
+                                     reading orange. */
+                                  style={{ fontSize: 9, fontWeight: 800, fontFamily: OUTFIT, padding: '3px 7px', borderRadius: 999, backgroundColor: 'rgba(126,81,40,0.10)', color: AMBER_INK, border: '1px solid rgba(126,81,40,0.28)' }}
                                 >
                                   SAID NO
                                 </span>
@@ -761,10 +937,36 @@ export default function AudienceReach({
                 })}
               </div>
             </div>
+              </div>
+
+              <div
+                className="flex items-center gap-3 flex-shrink-0"
+                style={{ padding: '12px 16px', borderTop: '1px solid rgba(27,56,40,0.1)', backgroundColor: NEU.surface }}
+              >
+                <span className="min-w-0 flex-1" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: INK }}>
+                  <BigNumber n={reachCount} /> {reachCount === 1 ? 'person' : 'people'}
+                  <span style={{ fontWeight: 600, color: SOFT }}> of {total.toLocaleString()}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="inline-flex items-center justify-center gap-1.5 focus:outline-none flex-shrink-0"
+                  style={{
+                    minHeight: 44, padding: '11px 22px', borderRadius: 999, border: 'none',
+                    background: `linear-gradient(135deg, ${NEU_GRADIENTS.forest[0]}, ${NEU_GRADIENTS.forest[1]})`,
+                    color: GOLD, fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
+                    cursor: 'pointer', boxShadow: NEU.outSm,
+                  }}
+                >
+                  <Check size={14} strokeWidth={3} />
+                  DONE
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-    </div>
+        </Portal>
+      )}
+    </>
   );
 }
 

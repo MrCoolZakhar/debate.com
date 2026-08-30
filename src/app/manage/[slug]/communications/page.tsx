@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   Mail, AlertTriangle, Send, Bell, Copy, X, ChevronDown, ChevronLeft, ChevronRight, Image as ImageIcon, Palette, Trash2,
   BadgeCheck, MessageSquare, CalendarDays, ArrowRight, Compass, Wrench,
-  Zap, Clock, BookOpen, KeyRound, PenLine, Plus, Wallet, Package,
+  Zap, Clock, BookOpen, KeyRound, PenLine, Plus,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
@@ -21,7 +21,7 @@ import {
 import { EVENT_REGISTRY, queueEventEmail, getEventLabel, notifyIfNeeded, turnOnDefaultEmail, type EventDef, type EventKey } from '@/lib/emailEvents';
 import { EASE } from '@/components/neu';
 import {
-  SOFT, AMBER_INK, GREEN_INK, RED,
+  SOFT, GREEN_INK, RED,
   CARD_BORDER, CARD_SHADOW as LIFTED_SHADOW,
 } from '../live/tokens';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
@@ -43,6 +43,28 @@ import GuidedWalkthrough, {
   TourGold, TourGreen, OTTER_INTRO, OTTER_OUTRO, type WalkthroughStep,
 } from '@/components/GuidedWalkthrough';
 import ProfileLink from '@/components/ProfileLink';
+import Portal from '@/components/Portal';
+
+/** THE GOLD THAT CAN CARRY TEXT — and this page's replacement for `AMBER_INK`.
+ *
+ *  `AMBER_INK` (#7E5128, from ../live/tokens) is contrast-correct but it is a
+ *  burnt ORANGE, and the owner does not want orange anywhere on this surface.
+ *  #6B5A15 is `NEU.deepGold` (#B6871F) walked down the same ramp until it
+ *  matches AMBER_INK's contrast exactly, so nothing regresses:
+ *
+ *    surface                                  AMBER_INK   GOLD_INK
+ *    card #F0EBDD ............................. 5.70:1     5.69:1
+ *    gold chip rgba(182,135,31,0.12) → #E9DFC6  5.12:1     5.11:1
+ *    gold rail rgba(238,217,138,0.35) → #EFE5C0 5.38:1     5.37:1
+ *    page well #EDE7D8 ........................ 5.50:1     5.49:1
+ *
+ *  Hue moves ~40° (orange-yellow) → ~48° (yellow-gold); every AA pass on this
+ *  page is preserved to the second decimal. `NEU.deepGold` itself stays
+ *  rail-, dot- and border-only at 2.72:1, exactly as ../live/tokens says.
+ *
+ *  Defined locally, NOT in ../live/tokens: that file is the live-status
+ *  surface's palette and another workstream reads it. */
+const GOLD_INK = '#6B5A15';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -232,7 +254,7 @@ interface InboxProfile {
 
 const KIND_CHIP: Record<string, { label: string; bg: string; color: string }> = {
   question: { label: 'QUESTION', bg: 'rgba(27,56,40,0.08)', color: '#1B3828' },
-  swap_request: { label: 'SWAP REQUEST', bg: 'rgba(182,135,31,0.16)', color: '#8A6614' },
+  swap_request: { label: 'SWAP REQUEST', bg: 'rgba(182,135,31,0.16)', color: GOLD_INK },
   swap_notice: { label: 'SWAP', bg: 'rgba(154,138,120,0.16)', color: '#6B5F52' },
 };
 
@@ -340,15 +362,21 @@ interface SeedContent {
 
 interface AdHocSeed {
   id: string;
-  icon: typeof Bell;
+  /** The emoji IS the affordance here, and this is the one place on the page
+   *  that earns one. The picker's whole job is "find my template in under a
+   *  second", and four monochrome forest lucide glyphs at 17px all read as
+   *  "an icon" — colour and shape are what make a chooser scannable. Every
+   *  other surface on this page stays on lucide. */
+  emoji: string;
   title: string;
   blurb: string;
   /** Tokens the seeded copy uses — surfaced on the card so the organiser
    *  knows what gets personalised before opening the editor. */
   tokens: EmailTokenKey[];
-  /** One option opens the builder directly; two offer the owner's fork
-   *  (Gavelling template vs write-your-own) inline on the card. */
-  options: { label: string; content: SeedContent }[];
+  /** Exactly one. The per-card "Gavelling template vs write your own" fork is
+   *  gone: the picker now has ONE custom button of its own, so asking the
+   *  question again on two of the four cards was the same choice twice. */
+  content: SeedContent;
 }
 
 const EMPTY_SAVED_AUDIENCE: SavedAudience = {
@@ -363,120 +391,67 @@ const SESSION_CHAIR_DEFAULT = getDefaultEventEmail('session_chair_invite');
 const AD_HOC_SEEDS: AdHocSeed[] = [
   {
     id: 'session-codes-delegates',
-    icon: KeyRound,
+    emoji: '🔑',
     title: 'Session codes — delegates',
     blurb: 'Every allocated delegate gets the join code for their committee room.',
     tokens: ['delegate_name', 'committee', 'session_code'],
-    options: [
-      {
-        label: 'Use the Gavelling template',
-        content: {
-          name: 'Session codes — delegates',
-          subject: SESSION_JOIN_DEFAULT?.subject ?? 'Join your live committee — {{conference_name}}',
-          blocks: SESSION_JOIN_DEFAULT?.blocks ?? [],
-          audience: { roles: ['delegate'] },
-        },
-      },
-      {
-        label: 'Write custom',
-        content: {
-          name: 'Session codes — delegates',
-          subject: '',
-          blocks: [{ type: 'paragraph', content: '' }],
-          audience: { roles: ['delegate'] },
-        },
-      },
-    ],
+    content: {
+      name: 'Session codes — delegates',
+      subject: SESSION_JOIN_DEFAULT?.subject ?? 'Join your live committee — {{conference_name}}',
+      blocks: SESSION_JOIN_DEFAULT?.blocks ?? [],
+      audience: { roles: ['delegate'] },
+    },
   },
   {
     id: 'session-codes-chairs',
-    icon: KeyRound,
+    emoji: '🪑',
     title: 'Session codes — chairs',
     blurb: 'Chairs get their session details and where to find their chair password.',
     tokens: ['delegate_name', 'committee', 'conference_name'],
-    options: [
-      {
-        label: 'Use the Gavelling template',
-        content: {
-          name: 'Session codes — chairs',
-          subject: SESSION_CHAIR_DEFAULT?.subject ?? 'Your session details — {{conference_name}}',
-          blocks: SESSION_CHAIR_DEFAULT?.blocks ?? [],
-          audience: { roles: ['chair'] },
-        },
-      },
-      {
-        label: 'Write custom',
-        content: {
-          name: 'Session codes — chairs',
-          subject: '',
-          blocks: [{ type: 'paragraph', content: '' }],
-          audience: { roles: ['chair'] },
-        },
-      },
-    ],
+    content: {
+      name: 'Session codes — chairs',
+      subject: SESSION_CHAIR_DEFAULT?.subject ?? 'Your session details — {{conference_name}}',
+      blocks: SESSION_CHAIR_DEFAULT?.blocks ?? [],
+      audience: { roles: ['chair'] },
+    },
   },
   {
     id: 'payment-reminder',
-    icon: Wallet,
+    emoji: '💳',
     title: 'Payment reminder',
     blurb: 'A nudge to everyone whose fee is still outstanding.',
     tokens: ['delegate_name', 'role', 'fee'],
-    options: [{
-      label: 'Use this template',
-      content: {
-        name: 'Payment reminder',
-        subject: 'Reminder — your {{conference_name}} fee is still unpaid',
-        blocks: [
-          { type: 'paragraph', content: "Hi {{delegate_name}},\n\nA quick reminder that your {{role}} registration fee of {{fee}} for {{conference_name}} is still outstanding. You can settle it any time from your account — and if you've paid or arranged a waiver in the last day or two, please ignore this." },
-          { type: 'button', label: 'VIEW MY CONFERENCE', destination: 'documents' },
-          { type: 'paragraph', variant: 'small', content: 'Questions about payment? Reply to this email and the organizing team will help.' },
-        ],
-        audience: { paymentStatuses: ['unpaid'] },
-      },
-    }],
+    content: {
+      name: 'Payment reminder',
+      subject: 'Reminder — your {{conference_name}} fee is still unpaid',
+      blocks: [
+        { type: 'paragraph', content: "Hi {{delegate_name}},\n\nA quick reminder that your {{role}} registration fee of {{fee}} for {{conference_name}} is still outstanding. You can settle it any time from your account — and if you've paid or arranged a waiver in the last day or two, please ignore this." },
+        { type: 'button', label: 'VIEW MY CONFERENCE', destination: 'documents' },
+        { type: 'paragraph', variant: 'small', content: 'Questions about payment? Reply to this email and the organizing team will help.' },
+      ],
+      audience: { paymentStatuses: ['unpaid'] },
+    },
   },
   {
     id: 'welcome-pack',
-    icon: Package,
+    emoji: '📦',
     title: 'Welcome / logistics pack',
     blurb: 'Arrival, venue and schedule details in one email before the conference.',
     tokens: ['delegate_name', 'conference_name', 'conference_dates'],
-    options: [{
-      label: 'Use this template',
-      content: {
-        name: 'Welcome pack',
-        subject: 'Welcome to {{conference_name}} — everything you need to know',
-        blocks: [
-          { type: 'paragraph', variant: 'heading', content: 'Welcome to {{conference_name}}' },
-          { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs {{conference_dates}}, and everything you need before you arrive is below.' },
-          { type: 'paragraph', variant: 'heading', content: 'Getting there' },
-          { type: 'paragraph', content: 'Add your venue address, doors-open time and transport tips here.' },
-          { type: 'paragraph', variant: 'heading', content: 'What to bring' },
-          { type: 'paragraph', content: 'Add your dress code, printed materials and anything else to pack here.' },
-          { type: 'button', label: 'VIEW MY CONFERENCE', destination: 'documents' },
-          { type: 'paragraph', variant: 'small', content: "If anything changes we'll email again — this is the one to keep." },
-        ],
-      },
-    }],
-  },
-  {
-    id: 'study-guide-nudge',
-    icon: BookOpen,
-    title: 'Study guide nudge',
-    blurb: 'Point delegates at their study guide before the first session.',
-    tokens: ['delegate_name', 'committee'],
-    options: [{
-      label: 'Use this template',
-      content: {
-        name: 'Study guide nudge',
-        subject: 'Your {{committee}} study guide is waiting',
-        blocks: [
-          { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe study guide for {{committee}} is up. Give it a read before {{conference_name}} begins — it sets the topics, the scope of debate, and what your chairs expect in a position paper.' },
-          { type: 'button', label: 'VIEW MY CONFERENCE', destination: 'documents' },
-        ],
-        audience: { roles: ['delegate'] },
-      },
-    }],
+    content: {
+      name: 'Welcome pack',
+      subject: 'Welcome to {{conference_name}} — everything you need to know',
+      blocks: [
+        { type: 'paragraph', variant: 'heading', content: 'Welcome to {{conference_name}}' },
+        { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs {{conference_dates}}, and everything you need before you arrive is below.' },
+        { type: 'paragraph', variant: 'heading', content: 'Getting there' },
+        { type: 'paragraph', content: 'Add your venue address, doors-open time and transport tips here.' },
+        { type: 'paragraph', variant: 'heading', content: 'What to bring' },
+        { type: 'paragraph', content: 'Add your dress code, printed materials and anything else to pack here.' },
+        { type: 'button', label: 'VIEW MY CONFERENCE', destination: 'documents' },
+        { type: 'paragraph', variant: 'small', content: "If anything changes we'll email again — this is the one to keep." },
+      ],
+    },
   },
 ];
 
@@ -492,6 +467,23 @@ const PANEL: React.CSSProperties = {
   backgroundColor: '#F0EBDD',
   border: CARD_BORDER,
   boxShadow: LIFTED_SHADOW,
+};
+
+/** The pressed well. Neumorphism's other half: `PANEL` is the raised card,
+ *  this is a dent IN that card. Lifted verbatim from the live page's
+ *  now-playing panel (`live/CommitteeCard.tsx:474-479`) — same base colour,
+ *  same inset shadow — so the two surfaces are visibly the same material. */
+const WELL: React.CSSProperties = {
+  backgroundColor: '#EDE7D8',
+  boxShadow: 'inset 2px 2px 6px rgba(27,56,40,0.13), inset -2px -2px 6px rgba(255,255,255,0.8)',
+};
+
+/** A raised token sitting IN a pressed well — the live card's art disc
+ *  (`live/CommitteeCard.tsx:487`). This is the one gesture that makes the
+ *  system read as neumorphic rather than as flat cards with shadows. */
+const RAISED_DISC: React.CSSProperties = {
+  backgroundColor: '#F0EBDD',
+  boxShadow: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px rgba(27,56,40,0.15)',
 };
 
 /** Same three-state rule queueEventEmail applies: a stub row created by TURN ON
@@ -678,10 +670,10 @@ function toggleInSet<T>(set: Set<T>, value: T): Set<T> {
 // 4.30:1 and #B6871F 2.72:1, both fail as text).
 const STATUS_COLORS: Record<string, { dot: string; text: string; bg: string }> = {
   sent:      { dot: '#3D7A52', text: GREEN_INK, bg: 'rgba(61,122,82,0.1)' },
-  scheduled: { dot: '#B6871F', text: AMBER_INK, bg: 'rgba(182,135,31,0.1)' },
+  scheduled: { dot: '#B6871F', text: GOLD_INK, bg: 'rgba(182,135,31,0.1)' },
   draft:     { dot: '#DDD4C0', text: SOFT, bg: 'rgba(154,138,120,0.1)' },
   failed:    { dot: '#8B2020', text: RED, bg: 'rgba(139,32,32,0.1)' },
-  pending:   { dot: '#B6871F', text: AMBER_INK, bg: 'rgba(182,135,31,0.1)' },
+  pending:   { dot: '#B6871F', text: GOLD_INK, bg: 'rgba(182,135,31,0.1)' },
 };
 
 function outboxStatusColor(status: string) {
@@ -892,11 +884,11 @@ function RailCard({
           border: gold ? '1px solid rgba(182,135,31,0.35)' : '1px solid rgba(27,56,40,0.12)',
         }}
       >
-        <Icon size={16} strokeWidth={2} style={{ color: gold ? AMBER_INK : '#1B3828' }} />
+        <Icon size={16} strokeWidth={2} style={{ color: gold ? GOLD_INK : '#1B3828' }} />
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.3, textWrap: 'pretty' }}>
-          {live && <span className="inline-block rounded-full animate-pulse flex-shrink-0" style={{ width: 7, height: 7, backgroundColor: '#B8844A' }} />}
+          {live && <span className="inline-block rounded-full animate-pulse flex-shrink-0" style={{ width: 7, height: 7, backgroundColor: '#B6871F' }} />}
           {title}
         </p>
         {sub && (
@@ -937,6 +929,474 @@ function RailCard({
         </button>
       )}
     </div>
+  );
+}
+
+// ── New-email picker ─────────────────────────────────────────────────────────
+//
+// This was a full-page gallery on its own view: six cards, two of which asked a
+// second question inline ("Gavelling template" vs "write your own"), plus a
+// list of the conference's saved emails underneath. Starting an email meant
+// LEAVING the page you were looking at.
+//
+// It is now a modal with exactly four templates and one custom button, because:
+//
+//   • Only 12 of 157 conferences have ever produced a custom email at all.
+//     A whole page-transition for something 92% of conferences never do is the
+//     wrong weight; a modal is a fork you can back out of in one keystroke.
+//   • The two session-code seeds are the ones organisers genuinely hand-write
+//     (they had been sent 4 and 5 times EVER across the whole platform), so
+//     they keep the real `session_join_invite` / `session_chair_invite` default
+//     copy verbatim — that is why the seeds are worth keeping at all.
+//   • The per-card fork asked the same question the custom button now asks
+//     once, for everybody.
+//   • The saved-emails list left with it: those rows already have a home in
+//     "In the works" on the landing, and duplicating them here made a picker
+//     that grew without bound.
+//
+// Rendered through `Portal` per the repo's floating-layer rule — no ancestor's
+// `overflow` can clip it, and it cannot inherit a stacking context from the
+// band it was opened from.
+function NewEmailModal({
+  onClose, onPick, onCustom,
+}: {
+  onClose: () => void;
+  onPick: (seed: AdHocSeed) => void;
+  onCustom: () => void;
+}) {
+  // Escape closes, and the scroll lock stops the landing drifting behind the
+  // scrim on trackpads.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <Portal>
+      <div
+        className="fixed inset-0 z-[120] flex items-center justify-center p-4 overflow-y-auto"
+        style={{ backgroundColor: 'rgba(27,56,40,0.42)', backdropFilter: 'blur(3px)' }}
+        onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Start a new email"
+      >
+        <div
+          className="relative w-full rounded-3xl p-5 sm:p-6 my-auto"
+          style={{
+            ...PANEL,
+            maxWidth: 680,
+            boxShadow: '-10px -10px 26px rgba(255,255,255,0.55), 16px 18px 46px rgba(27,56,40,0.36)',
+            animation: `commsPop 220ms ${EASE} both`,
+          }}
+        >
+          <style>{`@keyframes commsPop{from{opacity:0;transform:translateY(10px) scale(0.985)}to{opacity:1;transform:none}}`}</style>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute focus:outline-none rounded-lg"
+            style={{ top: 12, right: 12, padding: 8, border: 'none', background: 'none', color: SOFT, cursor: 'pointer', lineHeight: 0 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
+          >
+            <X size={16} />
+          </button>
+
+          <p style={{ color: GOLD_INK, fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em' }}>
+            NEW EMAIL
+          </p>
+          <h2
+            className="font-black"
+            style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 22, letterSpacing: '-0.015em', lineHeight: 1.15, marginBlockStart: 3, textWrap: 'balance' }}
+          >
+            What are you sending?
+          </h2>
+          <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT, marginBlockStart: 5, textWrap: 'pretty', maxWidth: 500 }}>
+            Start from one of these and edit anything, or write your own. Either way you land in
+            the same editor, with a live preview and the audience picker.
+          </p>
+
+          <div className="grid gap-2.5 sm:grid-cols-2" style={{ marginBlockStart: 18 }}>
+            {AD_HOC_SEEDS.map(seed => (
+              <button
+                key={seed.id}
+                type="button"
+                onClick={() => onPick(seed)}
+                className="rounded-2xl p-3.5 text-left flex flex-col focus:outline-none active:scale-[0.98]"
+                style={{
+                  ...WELL,
+                  border: 'none', cursor: 'pointer',
+                  transitionProperty: 'box-shadow, transform',
+                  transitionDuration: '180ms', transitionTimingFunction: EASE,
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.boxShadow =
+                    'inset 3px 3px 9px rgba(27,56,40,0.18), inset -3px -3px 9px rgba(255,255,255,0.9)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;
+                }}
+              >
+                <span className="flex items-start gap-2.5">
+                  <span
+                    className="flex items-center justify-center rounded-xl flex-shrink-0"
+                    style={{ ...RAISED_DISC, width: 38, height: 38, fontSize: 19, lineHeight: 1 }}
+                    aria-hidden
+                  >
+                    {seed.emoji}
+                  </span>
+                  <span className="min-w-0 flex-1 block">
+                    <span
+                      className="block font-bold"
+                      style={{ color: '#1C1410', fontFamily: OUTFIT, fontSize: 13.5, lineHeight: 1.25, textWrap: 'pretty' }}
+                    >
+                      {seed.title}
+                    </span>
+                    <span
+                      className="block"
+                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.4, marginBlockStart: 3, textWrap: 'pretty' }}
+                    >
+                      {seed.blurb}
+                    </span>
+                  </span>
+                </span>
+                {/* What gets personalised, before you open it. */}
+                <span className="flex flex-wrap gap-1" style={{ marginBlockStart: 9 }}>
+                  {seed.tokens.map(tk => (
+                    <span
+                      key={tk}
+                      className="rounded-full px-1.5 py-0.5"
+                      style={{
+                        fontSize: 9.5, fontWeight: 700, fontFamily: OUTFIT, letterSpacing: '0.03em',
+                        backgroundColor: 'rgba(238,217,138,0.34)', color: GOLD_INK,
+                        border: '1px solid rgba(182,135,31,0.32)',
+                      }}
+                    >
+                      {EMAIL_TOKEN_LABELS[tk]}
+                    </span>
+                  ))}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* The one custom button, under a rule so it reads as the other
+              branch rather than a fifth template. */}
+          <div
+            className="flex flex-wrap items-center justify-between gap-3"
+            style={{ marginBlockStart: 18, paddingBlockStart: 15, borderTop: '1px solid rgba(27,56,40,0.11)' }}
+          >
+            <p className="text-xs" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty', flex: '1 1 200px' }}>
+              Nothing here fits? Start from an empty page.
+            </p>
+            <PrimaryBtn icon={PenLine} onClick={onCustom}>WRITE A CUSTOM EMAIL</PrimaryBtn>
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+// ── The console ──────────────────────────────────────────────────────────────
+//
+// WHAT THE DATA SAID, AND WHY THIS PANEL EXISTS.
+//
+// Read against production (157 conferences, 2 049 outbox rows) before any of
+// this was drawn:
+//
+//   • 88 of 157 conferences (56%) have a COMPLETELY EMPTY communications page
+//     — no template, no send, no inbox thread. 89 have never sent one email.
+//     The modal state of this surface is nothing-has-happened.
+//   • The real traffic is automatic: 1 193 platform sends with no template at
+//     all, plus 219 application_received, 72 allocation_assigned, 65
+//     application_accepted, 51 payment_available. Manual blasts are 380 sends
+//     from SEVEN conferences.
+//   • Only 12 of 157 conferences ever drafted a custom email.
+//   • Failure is a MANUAL-send problem: 63 of 380 blast rows failed (16.6%)
+//     against ~0% on the automatic ones.
+//   • 12 of 28 inbox threads (43%) have never had a single organiser reply,
+//     average age 32 days — and the platform already sends "N questions
+//     waiting for a reply" nudges about exactly this.
+//
+// The page used to open on a rail of conditional chips. For the 56% every one
+// of them is absent except a generic "Automatic emails" card, so the surface
+// opened with a whisper — and where something WAS wrong (a 16.6% failure rate)
+// it said so in a 11px pill halfway down the page.
+//
+// So the landing now opens the way the live page's card does: ONE panel, ONE
+// shape, present in every state, and only its CONTENT changes. It states the
+// single truest thing about this conference's mail, in words, and carries the
+// one action that follows from it. The priority ladder below is ordered by how
+// much the data says each state costs the organiser.
+//
+// The rail did not die — it lost its promoted card. Whatever the console is
+// showing, `promoted` names, and the rail skips it. Nothing is ever said twice.
+
+type ConsoleTone = 'alert' | 'live' | 'warn' | 'calm' | 'idle';
+
+/** Which rail chip this console state has absorbed, so the rail can skip it. */
+type PromotedKey = 'draining' | 'unanswered' | 'session-codes' | null;
+
+interface ConsoleModel {
+  tone: ConsoleTone;
+  eyebrow: string;
+  headline: string;
+  sub: string;
+  icon: typeof Bell;
+  /** Animated dot on the eyebrow — only ever true for mail actually in flight. */
+  pulse: boolean;
+  action: { label: string; onClick: () => void } | null;
+  promoted: PromotedKey;
+}
+
+const CONSOLE_INK: Record<ConsoleTone, string> = {
+  alert: RED,
+  live: GOLD_INK,
+  warn: GOLD_INK,
+  calm: GREEN_INK,
+  idle: SOFT,
+};
+
+/** Disc fill per tone. Tinted, never saturated — the disc is a token in a
+ *  well, and the well is ivory. */
+const CONSOLE_DISC: Record<ConsoleTone, string> = {
+  alert: 'linear-gradient(150deg, rgba(139,32,32,0.16), rgba(139,32,32,0.05))',
+  live: 'linear-gradient(150deg, rgba(182,135,31,0.24), rgba(182,135,31,0.07))',
+  warn: 'linear-gradient(150deg, rgba(182,135,31,0.24), rgba(182,135,31,0.07))',
+  calm: 'linear-gradient(150deg, rgba(61,122,82,0.20), rgba(61,122,82,0.06))',
+  idle: 'linear-gradient(150deg, rgba(27,56,40,0.10), rgba(27,56,40,0.03))',
+};
+
+/** Meter fill per tone — the live card's `toneFill`, same two-stop idea. */
+const CONSOLE_FILL: Record<ConsoleTone, [string, string]> = {
+  alert: ['#8B2020', '#B04A4A'],
+  live: ['#B6871F', '#EED98A'],
+  warn: ['#B6871F', '#EED98A'],
+  calm: ['#2F6644', '#3D7A52'],
+  idle: ['#9A8A78', '#C8BEA8'],
+};
+
+/** THE PANEL. Raised card, pressed well inside it, raised disc inside that —
+ *  the three-layer neumorphic stack the live card uses, at the one place on
+ *  this page that has earned the depth.
+ *
+ *  The scrubber is ALWAYS rendered, even at 0%, exactly as on the live card:
+ *  an empty track is a statement, a missing one is a hole. */
+function Console({
+  model, delivered, attempted, meterTone,
+}: {
+  model: ConsoleModel;
+  delivered: number;
+  attempted: number;
+  /** THE METER'S OWN TONE, deliberately separate from `model.tone`.
+   *
+   *  The scrubber measures one thing — how much mail actually landed — and it
+   *  must say the same thing whatever the console is talking about. When the
+   *  console was on "12 questions have never been answered" the bar inherited
+   *  the warn gold and rendered a full gold track, which read as a warning
+   *  about delivery when delivery was in fact perfect. Green means everything
+   *  arrived, gold means some is still moving, red means some did not. */
+  meterTone: ConsoleTone;
+}) {
+  const ink = CONSOLE_INK[model.tone];
+  const [from, to] = CONSOLE_FILL[meterTone];
+  const pct = attempted > 0 ? Math.round((delivered / attempted) * 100) : 0;
+  const Icon = model.icon;
+
+  return (
+    <section
+      className="rounded-3xl p-3.5 sm:p-4 mb-4"
+      style={PANEL}
+      data-tutorial="comms-console"
+      aria-live="polite"
+    >
+      <div className="rounded-2xl p-4 sm:p-5" style={WELL}>
+        <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
+          {/* The art. A raised disc in a pressed well — a token in a slot. */}
+          <span
+            className="flex items-center justify-center rounded-full flex-shrink-0"
+            style={{ ...RAISED_DISC, width: 58, height: 58 }}
+            aria-hidden
+          >
+            <span
+              className="flex items-center justify-center rounded-full"
+              style={{ width: 44, height: 44, background: CONSOLE_DISC[model.tone] }}
+            >
+              <Icon size={22} strokeWidth={2} style={{ color: ink }} />
+            </span>
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p
+              className="font-extrabold uppercase flex items-center gap-1.5"
+              style={{
+                color: ink, fontFamily: OUTFIT, fontSize: 11.5,
+                letterSpacing: '0.09em', lineHeight: 1.25, overflowWrap: 'anywhere',
+              }}
+            >
+              {model.pulse && (
+                <span
+                  className="inline-block rounded-full animate-pulse flex-shrink-0"
+                  style={{ width: 7, height: 7, backgroundColor: '#B6871F' }}
+                />
+              )}
+              {model.eyebrow}
+            </p>
+            {/* The headline. Tight tracking and tabular figures, so a number
+                that ticks while mail drains does not reflow the line. */}
+            <p
+              className="font-extrabold"
+              style={{
+                color: '#1C1410', fontFamily: OUTFIT,
+                fontSize: 'clamp(19px, 2.1vw, 26px)',
+                lineHeight: 1.14, letterSpacing: '-0.016em',
+                textWrap: 'balance', fontVariantNumeric: 'tabular-nums',
+                overflowWrap: 'anywhere', marginBlockStart: 3,
+              }}
+            >
+              {model.headline}
+            </p>
+            <p
+              className="font-medium"
+              style={{
+                color: SOFT, fontFamily: OUTFIT, fontSize: 13,
+                lineHeight: 1.45, marginBlockStart: 4,
+                textWrap: 'pretty', maxWidth: 560,
+              }}
+            >
+              {model.sub}
+            </p>
+          </div>
+
+          {/* The action sits with the statement it follows from, not in a
+              toolbar at the other end of the page.
+              EXACTLY ONE, and it is always the state's own action. NEW EMAIL
+              used to sit here too and the two gradient buttons read as a pair
+              of equals — which is wrong, because on the failure state one of
+              them said "63 emails never arrived" and the other said "write
+              another". NEW EMAIL is a property of the PAGE, not of any state,
+              so it moved to the page header. */}
+          {model.action && (
+            <div className="hidden sm:block flex-shrink-0">
+              <PrimaryBtn onClick={model.action.onClick}>{model.action.label}</PrimaryBtn>
+            </div>
+          )}
+        </div>
+
+        {/* The delivery scrubber. Measures what actually left the building:
+            delivered against everything ever attempted for this conference. */}
+        <div style={{ marginBlockStart: 14 }}>
+          <div
+            className="w-full overflow-hidden"
+            style={{
+              height: 6, borderRadius: 6, backgroundColor: '#F0EBDD',
+              // The empty track keeps its FULL inset. On the live card the
+              // 0.55 dim is fine because that card's track sits on a lighter
+              // well; here a dimmed empty track vanished into the well
+              // completely, which turns "nothing sent yet" into a missing
+              // element rather than a stated one. Only the fill is absent.
+              boxShadow: 'inset 1px 1px 3px rgba(27,56,40,0.18), inset -1px -1px 3px rgba(255,255,255,0.8)',
+            }}
+          >
+            <div
+              style={{
+                inlineSize: `${pct}%`, height: '100%', borderRadius: 6,
+                background: `linear-gradient(90deg, ${from}, ${to})`,
+                transition: `inline-size 900ms ${EASE}`,
+              }}
+            />
+          </div>
+          <div
+            className="flex items-start justify-between gap-3"
+            style={{
+              marginBlockStart: 6, fontFamily: OUTFIT, fontSize: 11,
+              fontWeight: 700, letterSpacing: '0.05em',
+              fontVariantNumeric: 'tabular-nums', color: SOFT,
+            }}
+          >
+            <span className="uppercase">
+              {attempted > 0
+                ? `${delivered.toLocaleString()} of ${attempted.toLocaleString()} delivered`
+                : 'Nothing sent yet'}
+            </span>
+            <span className="uppercase flex-shrink-0" style={{ color: attempted > 0 ? CONSOLE_INK[meterTone] : SOFT }}>
+              {attempted > 0 ? `${pct}%` : '—'}
+            </span>
+          </div>
+        </div>
+
+        {/* Below 640px the action moves under the statement rather than
+            squeezing the headline into a column two words wide. */}
+        {model.action && (
+          <div className="flex sm:hidden" style={{ marginBlockStart: 12 }}>
+            <PrimaryBtn onClick={model.action.onClick}>{model.action.label}</PrimaryBtn>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** One pressed figure in the stat strip. Deliberately tight and identical in
+ *  every state — the live card's "what has happened" band: static facts, low
+ *  contrast in the hierarchy, so the console above keeps dominating. */
+function StatWell({
+  label, value, ink = '#1C1410', onClick, title: wellTitle,
+}: {
+  label: string; value: string | number; ink?: string;
+  onClick?: () => void; title?: string;
+}) {
+  const interactive = !!onClick;
+  const Tag = (interactive ? 'button' : 'div') as 'button';
+  return (
+    <Tag
+      {...(interactive ? { type: 'button' as const, onClick, title: wellTitle } : {})}
+      className={`rounded-xl px-3 py-2.5 text-left min-w-0 focus:outline-none${interactive ? ' active:scale-[0.97]' : ''}`}
+      style={{
+        ...WELL,
+        flex: '1 1 90px',
+        border: 'none',
+        cursor: interactive ? 'pointer' : 'default',
+        transitionProperty: 'box-shadow, transform',
+        transitionDuration: '180ms',
+        transitionTimingFunction: EASE,
+      }}
+      onMouseEnter={interactive ? e => {
+        (e.currentTarget as HTMLElement).style.boxShadow =
+          'inset 3px 3px 8px rgba(27,56,40,0.17), inset -3px -3px 8px rgba(255,255,255,0.85)';
+      } : undefined}
+      onMouseLeave={interactive ? e => {
+        (e.currentTarget as HTMLElement).style.boxShadow = WELL.boxShadow as string;
+      } : undefined}
+    >
+      <span
+        className="block font-extrabold"
+        style={{
+          color: ink, fontFamily: OUTFIT, fontSize: 21, lineHeight: 1.05,
+          letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {value}
+      </span>
+      <span
+        className="block font-bold uppercase"
+        style={{
+          color: SOFT, fontFamily: OUTFIT, fontSize: 9.5,
+          letterSpacing: '0.09em', lineHeight: 1.3, marginBlockStart: 3,
+          textWrap: 'pretty',
+        }}
+      >
+        {label}
+      </span>
+    </Tag>
   );
 }
 
@@ -1020,9 +1480,8 @@ function CommunicationsPageInner() {
   const [duplicatingIds, setDuplicatingIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   // ── Gallery (the fork before the editor) ──
-  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   // Seed card currently showing its Gavelling-template / write-custom choice.
-  const [forkSeedId, setForkSeedId] = useState<string | null>(null);
   // Busy set for the Notifications registry toggle when it has to create the
   // stub row first (never-configured event -> TURN ON), an insert, unlike
   // the instant optimistic flip for an already-existing template row.
@@ -1891,7 +2350,7 @@ function CommunicationsPageInner() {
     setBuilderError('');
     builderJustOpenedRef.current = true;
     builderInitialRef.current = JSON.stringify({ subject: initialSubject, blocks: initialBlocks });
-    setGalleryOpen(false);
+    setPickerOpen(false);
     setBuilderOpen(true);
   }, [templatesByEvent]);
 
@@ -1909,7 +2368,7 @@ function CommunicationsPageInner() {
     setBuilderError('');
     builderJustOpenedRef.current = true;
     builderInitialRef.current = JSON.stringify({ subject: initialSubject, blocks: initialBlocks });
-    setGalleryOpen(false);
+    setPickerOpen(false);
     setBuilderOpen(true);
   }
 
@@ -1932,13 +2391,12 @@ function CommunicationsPageInner() {
     setAudienceRestored(false);
     setBuilderError('');
     builderJustOpenedRef.current = true;
-    setGalleryOpen(false);
+    setPickerOpen(false);
     setBuilderOpen(true);
   }
 
-  function openGallery() {
-    setForkSeedId(null);
-    setGalleryOpen(true);
+  function openPicker() {
+    setPickerOpen(true);
   }
 
   function closeBuilder() {
@@ -2446,12 +2904,140 @@ function CommunicationsPageInner() {
   const goldDefaults = takeGold(autoDefaultCount > 0);
   const goldSessionCodes = takeGold(sessionCodesNudge && railCardVisible('session-codes'));
 
+  // ── The console's model ───────────────────────────────────────────────────
+  // See the block comment above `Console`. One state, chosen by a ladder
+  // ordered by what the production data says each condition actually costs.
+
+  /** Everything this conference has ever put in the outbox, and how much of it
+   *  landed. Both come from `outboxFeed`, which is the whole outbox (capped at
+   *  4 000 rows; the busiest real conference is ~250). */
+  const attemptedTotal = outboxFeed.length;
+  // Plain filters, not `useMemo`: this whole block sits AFTER the loading
+  // early-return, so a hook here would be a conditional hook.
+  const deliveredTotal = outboxFeed.filter(r => r.status === 'sent').length;
+
+  /** Three registry events are `functional: true` — chair invite, organizer
+   *  invite, import join invite — and send whether or not a template row
+   *  exists. On a conference that has never touched this page they are the
+   *  only thing sending, and production says they are also the single biggest
+   *  category of real traffic, so the console must not claim nothing happens. */
+  const alwaysOnCount = (EVENT_REGISTRY as readonly EventDef[]).filter(e => e.functional).length;
+
+  function jumpToInbox() {
+    setInboxStatusFilter(new Set(['open']));
+    setMobileTab('inbox');
+    setSelectedRequestId(null);
+    document.getElementById('comms-inbox-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const consoleModel: ConsoleModel = (() => {
+    // 1 · Failures outrank everything. 63 of 380 manual-blast rows failed in
+    //     production (16.6%) against ~0% on automatic sends, and the page used
+    //     to report that in an 11px pill halfway down the Sent band.
+    if (failedTotal > 0) {
+      return {
+        tone: 'alert',
+        eyebrow: 'NEEDS A LOOK',
+        headline: `${failedTotal} email${failedTotal === 1 ? '' : 's'} never arrived`,
+        sub: failedTotal === 1
+          ? 'One recipient did not receive their email. Open the send below to see who, and why.'
+          : 'Those recipients did not receive their email. Open the sends below to see who, and why — a bad address is the usual cause and is fixable on the application.',
+        icon: AlertTriangle,
+        pulse: false,
+        action: null,
+        promoted: null,
+      };
+    }
+    // 2 · Mail actually in flight. The only state that earns a pulsing dot.
+    if (drainingCount > 0) {
+      return {
+        tone: 'live',
+        eyebrow: 'SENDING NOW',
+        headline: `${drainingCount} email${drainingCount === 1 ? '' : 's'} on the way`,
+        sub: 'Queued and draining. A large send takes a few minutes to work through — you can leave this page.',
+        icon: Zap,
+        pulse: true,
+        action: null,
+        promoted: 'draining',
+      };
+    }
+    // 3 · Unanswered questions. 43% of production threads have never had a
+    //     single organiser reply, average age 32 days, and the platform is
+    //     already emailing organisers about exactly this.
+    if (neverAnsweredCount > 0 && railCardVisible('unanswered')) {
+      return {
+        tone: 'warn',
+        eyebrow: 'WAITING ON YOU',
+        headline: `${neverAnsweredCount} question${neverAnsweredCount === 1 ? '' : 's'} ${neverAnsweredCount === 1 ? 'has' : 'have'} never been answered`,
+        sub: digestOn
+          ? 'Nobody on your team has replied yet. A reminder digest keeps nudging while they wait.'
+          : 'Nobody on your team has replied yet, and the reminder digest is switched off.',
+        icon: MessageSquare,
+        pulse: false,
+        action: { label: 'ANSWER THEM', onClick: jumpToInbox },
+        promoted: 'unanswered',
+      };
+    }
+    // 4 · Session codes, once the conference is close enough to matter.
+    if (sessionCodesNudge && railCardVisible('session-codes')) {
+      return {
+        tone: 'warn',
+        eyebrow: 'BEFORE THE FIRST SESSION',
+        headline: 'Session codes have not gone out',
+        sub: `${conference.acronym || 'The conference'} starts ${daysToStart === 0 ? 'today' : `in ${daysToStart} day${daysToStart === 1 ? '' : 's'}`} and allocated delegates still have no join invite.`,
+        icon: KeyRound,
+        pulse: false,
+        action: {
+          label: 'SEND JOIN INVITES',
+          onClick: () => {
+            const def = EVENT_REGISTRY.find(e => e.key === 'session_join_invite');
+            if (def) { setView('automatic'); openBuilderForEvent(def); }
+          },
+        },
+        promoted: 'session-codes',
+      };
+    }
+    // 5 · THE MODAL STATE. 88 of 157 production conferences reach this page
+    //     with nothing on it at all. It is not an error and it should not read
+    //     like an empty inbox — the platform is already writing to these
+    //     people. Say so.
+    if (attemptedTotal === 0) {
+      return {
+        tone: 'calm',
+        eyebrow: 'NOTHING TO DO YET',
+        headline: enabledCount > 0
+          ? `${enabledCount + alwaysOnCount} emails are ready to send themselves`
+          : 'Gavelling is already writing to your delegates',
+        sub: `Chair invites, organiser invites and account invites always send${enabledCount > 0 ? `, and you have ${enabledCount} more switched on` : ''}. They go out the moment an application lands, a place is offered or a fee clears — you do not have to write them.`,
+        icon: Bell,
+        pulse: false,
+        action: { label: 'SEE WHAT SENDS', onClick: () => setView('automatic') },
+        promoted: null,
+      };
+    }
+    // 6 · Steady state.
+    return {
+      tone: 'calm',
+      eyebrow: 'ALL CLEAR',
+      headline: `${deliveredTotal.toLocaleString()} email${deliveredTotal === 1 ? '' : 's'} delivered`,
+      sub: `Nothing queued and nothing waiting on a reply. ${enabledCount + alwaysOnCount} automatic email${enabledCount + alwaysOnCount === 1 ? '' : 's'} ${enabledCount + alwaysOnCount === 1 ? 'is' : 'are'} still watching for the next thing that happens.`,
+      icon: BadgeCheck,
+      pulse: false,
+      action: null,
+      promoted: null,
+    };
+  })();
+
+  // The rail keeps everything the console did NOT absorb. Nothing is said
+  // twice, which is why the rail can now be a quiet second row.
   const railHasCards =
-    drainingCount > 0 || scheduledRows.length > 0
-    || (neverAnsweredCount > 0 && railCardVisible('unanswered'))
+    (drainingCount > 0 && consoleModel.promoted !== 'draining')
+    || scheduledRows.length > 0
+    || (neverAnsweredCount > 0 && railCardVisible('unanswered') && consoleModel.promoted !== 'unanswered')
     || (draftRemindersDue > 0 && railCardVisible('draft-reminders'))
     || upcomingGuideReleases.length > 0
-    || (sessionCodesNudge && railCardVisible('session-codes'));
+    || (sessionCodesNudge && railCardVisible('session-codes') && consoleModel.promoted !== 'session-codes')
+    || autoDefaultCount > 0;
 
   const eventDef = builderEventKey ? EVENT_REGISTRY.find(e => e.key === builderEventKey) ?? null : null;
   const requireTypedConfirm = finalRecipients.length > 200;
@@ -2829,20 +3415,30 @@ function CommunicationsPageInner() {
               Communications
             </h1>
           </div>
-          <button
-            type="button"
-            onClick={() => setTourOpen(true)}
-            className="flex-shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-1.5 focus:outline-none transition-colors"
-            style={{
-              fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-              color: '#1B3828', backgroundColor: 'transparent', border: `1px solid ${BORDER}`,
-              cursor: 'pointer',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            <Compass size={13} /> TAKE THE TOUR
-          </button>
+          {/* NEW EMAIL lives HERE, not in the console and not in the Sent
+              band's header. It is a property of the page rather than of any
+              one console state, and putting it beside a state action made two
+              gradient buttons of equal weight sit side by side saying
+              unrelated things. One primary per screen region. */}
+          <div className="flex-shrink-0 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTourOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl px-3 focus:outline-none transition-colors"
+              style={{
+                fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                color: '#1B3828', backgroundColor: 'transparent', border: `1px solid ${BORDER}`,
+                cursor: 'pointer', minHeight: 40,
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <Compass size={13} /> <span className="hidden sm:inline">TAKE THE TOUR</span><span className="sm:hidden">TOUR</span>
+            </button>
+            {view === 'landing' && (
+              <PrimaryBtn icon={Plus} onClick={openPicker}>NEW EMAIL</PrimaryBtn>
+            )}
+          </div>
         </div>
       )}
 
@@ -2904,7 +3500,7 @@ function CommunicationsPageInner() {
       )}
 
       {/* ═══ AUTOMATIC EMAILS — the registry, grouped by lifecycle stage ═══ */}
-      {!builderOpen && !galleryOpen && !loading && view === 'automatic' && (
+      {!builderOpen && !loading && view === 'automatic' && (
         <section data-tutorial="comms-automatic">
           <button
             onClick={() => setView('landing')}
@@ -2951,13 +3547,13 @@ function CommunicationsPageInner() {
                     const state = ev.functional
                       ? { text: 'Always sends', color: GREEN_INK }
                       : togglingStub
-                        ? { text: 'Turning on…', color: AMBER_INK }
+                        ? { text: 'Turning on…', color: GOLD_INK }
                         : !template
                           ? { text: 'Not set up', color: SOFT }
                           : template.enabled && hasDraft
                             ? { text: 'On — sends your draft', color: GREEN_INK }
                             : template.enabled
-                              ? { text: 'On — sends our default', color: AMBER_INK }
+                              ? { text: 'On — sends our default', color: GOLD_INK }
                               : { text: 'Off', color: SOFT };
                     return (
                       <div key={ev.key} className="rounded-2xl px-4 py-3" style={PANEL}>
@@ -3014,194 +3610,72 @@ function CommunicationsPageInner() {
         </section>
       )}
 
-      {/* ═══ TEMPLATE GALLERY — the fork before the editor ═══ */}
-      {!builderOpen && galleryOpen && !loading && (
-        <section>
-          <button
-            onClick={() => setGalleryOpen(false)}
-            className="text-xs font-bold mb-4 focus:outline-none"
-            style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = SOFT; }}
-          >
-            ← BACK TO COMMUNICATIONS
-          </button>
-
-          <div className="mb-6">
-            <h2 className="font-black text-xl" style={{ color: '#1C1410', fontFamily: OUTFIT, textWrap: 'balance' }}>
-              Start an email
-            </h2>
-            <p className="text-sm mt-1" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty', maxWidth: 640 }}>
-              Pick a template for the emails conferences usually send, reuse one of your own, or
-              start from nothing. Everything opens in the same editor — write, see the live
-              preview, choose who gets it.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {AD_HOC_SEEDS.map(seed => {
-              const Icon = seed.icon;
-              const forked = forkSeedId === seed.id;
-              return (
-                <div key={seed.id} className="relative rounded-2xl p-4 flex flex-col" style={PANEL}>
-                  <div className="flex items-start gap-3">
-                    <span
-                      className="flex items-center justify-center flex-shrink-0 rounded-xl"
-                      style={{ width: 36, height: 36, background: 'rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.12)' }}
-                    >
-                      <Icon size={17} strokeWidth={2} style={{ color: '#1B3828' }} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.3, textWrap: 'pretty' }}>
-                        {seed.title}
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.45, textWrap: 'pretty' }}>
-                        {seed.blurb}
-                      </p>
-                    </div>
-                  </div>
-                  {seed.tokens.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2.5">
-                      {seed.tokens.map(tk => (
-                        <span
-                          key={tk}
-                          className="rounded-full px-2 py-0.5"
-                          style={{ fontSize: 10, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(238,217,138,0.3)', color: '#8A6614', border: '1px solid rgba(182,135,31,0.35)' }}
-                        >
-                          {EMAIL_TOKEN_LABELS[tk]}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="mt-auto pt-3">
-                    {!forked ? (
-                      <button
-                        type="button"
-                        onClick={() => (seed.options.length === 1 ? openBuilderForSeed(seed.options[0].content) : setForkSeedId(seed.id))}
-                        className="w-full rounded-xl px-3 text-xs font-bold focus:outline-none active:scale-[0.97]"
-                        style={{
-                          minHeight: 40, border: CARD_BORDER, color: '#1B3828', backgroundColor: 'transparent',
-                          fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
-                          transitionProperty: 'background-color, transform', transitionDuration: '160ms', transitionTimingFunction: EASE,
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        USE THIS
-                      </button>
-                    ) : (
-                      // The owner's fork, inline on the card (no popover to clip):
-                      // Gavelling's polished default copy, or a blank custom start
-                      // with the same name + audience preset.
-                      <div className="flex flex-col gap-1.5">
-                        {seed.options.map(opt => (
-                          <button
-                            key={opt.label}
-                            type="button"
-                            onClick={() => openBuilderForSeed(opt.content)}
-                            className="w-full rounded-xl px-3 text-xs font-bold focus:outline-none active:scale-[0.97]"
-                            style={{
-                              minHeight: 40,
-                              background: opt.label.startsWith('Use') ? 'linear-gradient(160deg, #24513A 0%, #1B3828 62%)' : 'transparent',
-                              color: opt.label.startsWith('Use') ? '#EED98A' : '#1B3828',
-                              border: opt.label.startsWith('Use') ? 'none' : CARD_BORDER,
-                              fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
-                            }}
-                          >
-                            {opt.label.toUpperCase()}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => setForkSeedId(null)}
-                          className="text-xs font-semibold focus:outline-none"
-                          style={{ color: SOFT, background: 'none', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '6px 0' }}
-                        >
-                          Never mind
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Start blank */}
-            <div className="rounded-2xl p-4 flex flex-col" style={PANEL}>
-              <div className="flex items-start gap-3">
-                <span
-                  className="flex items-center justify-center flex-shrink-0 rounded-xl"
-                  style={{ width: 36, height: 36, background: 'linear-gradient(150deg, rgba(182,135,31,0.18), rgba(182,135,31,0.06))', border: '1px solid rgba(182,135,31,0.3)' }}
-                >
-                  <PenLine size={17} strokeWidth={2} style={{ color: AMBER_INK }} />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.3 }}>
-                    Start blank
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.45, textWrap: 'pretty' }}>
-                    An empty email — write anything, to anyone.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-auto pt-3">
-                <button
-                  type="button"
-                  onClick={() => openBuilderForAdHoc()}
-                  className="w-full rounded-xl px-3 text-xs font-bold focus:outline-none active:scale-[0.97]"
-                  style={{
-                    minHeight: 40, background: 'linear-gradient(160deg, #24513A 0%, #1B3828 62%)', color: '#EED98A',
-                    border: 'none', fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), 3px 4px 9px rgba(27,56,40,0.26)',
-                  }}
-                >
-                  START BLANK
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* The conference's own saved ad-hoc emails */}
-          {adhocTemplates.length > 0 && (
-            <div className="mt-8">
-              <p className="mb-2" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em' }}>
-                YOUR SAVED EMAILS
-              </p>
-              <div className="flex flex-col gap-2">
-                {adhocTemplates.map(t => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => openBuilderForAdHoc(t)}
-                    className="w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left focus:outline-none active:scale-[0.995]"
-                    style={{ ...PANEL, cursor: 'pointer' }}
-                  >
-                    <span className="min-w-0">
-                      <span className="block font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{t.name}</span>
-                      <span className="block text-xs truncate mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                        {t.subject || '(No subject)'} · Edited {formatDate(t.updated_at)}
-                      </span>
-                    </span>
-                    <ArrowRight size={14} className="flex-shrink-0" style={{ color: '#1B3828' }} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
+      {/* The new-email picker is a MODAL now, not a view: it overlays the
+          landing rather than replacing it, so backing out costs one Escape
+          and never re-mounts the feed behind it. */}
+      {pickerOpen && !builderOpen && (
+        <NewEmailModal
+          onClose={() => setPickerOpen(false)}
+          onPick={seed => openBuilderForSeed(seed.content)}
+          onCustom={() => openBuilderForAdHoc()}
+        />
       )}
 
       {/* ═══ LANDING ═══ */}
-      {!builderOpen && !galleryOpen && !loading && view === 'landing' && (
+      {!builderOpen && !loading && view === 'landing' && (
         <>
-          {/* ── Band 1 · Coming up ── */}
+          {/* ── Band 1 · The console ──
+              The page's one statement, and the one action that follows from
+              it. Same panel in every state; only the words change. */}
+          <Console
+            model={consoleModel}
+            delivered={deliveredTotal}
+            attempted={attemptedTotal}
+            meterTone={failedTotal > 0 ? 'alert' : drainingCount > 0 ? 'live' : attemptedTotal > 0 ? 'calm' : 'idle'}
+          />
+
+          {/* ── Band 2 · The figures ──
+              Static facts, identical in every state, deliberately tight so the
+              console keeps dominating — the live card's "what has happened"
+              band. Pressed wells, tabular figures. Three of the five are also
+              jumps, because a number you cannot act on is trivia. */}
+          <div className="flex flex-wrap gap-2.5 mb-7">
+            <StatWell label="Delivered" value={deliveredTotal.toLocaleString()} ink={deliveredTotal > 0 ? GREEN_INK : '#1C1410'} />
+            <StatWell
+              label="Failed"
+              value={failedTotal.toLocaleString()}
+              ink={failedTotal > 0 ? RED : '#1C1410'}
+            />
+            <StatWell
+              label="Automatic on"
+              value={enabledCount + alwaysOnCount}
+              onClick={() => setView('automatic')}
+              title="Open the automatic-emails registry"
+            />
+            <StatWell
+              label="Unanswered"
+              value={neverAnsweredCount}
+              ink={neverAnsweredCount > 0 ? GOLD_INK : '#1C1410'}
+              onClick={jumpToInbox}
+              title="Jump to the inbox"
+            />
+            <StatWell
+              label="Your emails"
+              value={adhocTemplates.length}
+              onClick={adhocTemplates.length > 0 ? () => setWorklistOpen(true) : openPicker}
+              title={adhocTemplates.length > 0 ? 'Show your saved emails' : 'Start an email'}
+            />
+          </div>
+
+          {/* ── Band 3 · Coming up ──
+              Whatever the console did NOT promote. */}
           <section className="mb-8" data-tutorial="comms-coming-up">
             <p className="mb-2" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em' }}>
               COMING UP
             </p>
             {railHasCards ? (
               <div className="flex flex-wrap items-stretch gap-3">
-                {drainingCount > 0 && (
+                {drainingCount > 0 && consoleModel.promoted !== 'draining' && (
                   <RailCard
                     icon={Zap}
                     live
@@ -3216,7 +3690,7 @@ function CommunicationsPageInner() {
                     sub={`First goes out ${formatSentAt(earliestScheduled)}.`}
                   />
                 )}
-                {neverAnsweredCount > 0 && railCardVisible('unanswered') && (
+                {neverAnsweredCount > 0 && railCardVisible('unanswered') && consoleModel.promoted !== 'unanswered' && (
                   <RailCard
                     icon={MessageSquare}
                     gold={goldUnanswered}
@@ -3225,12 +3699,7 @@ function CommunicationsPageInner() {
                       ? 'A reminder digest keeps nudging your team while these wait.'
                       : 'Still waiting on a first reply from your team.'}
                     actionLabel="Answer them"
-                    onAction={() => {
-                      setInboxStatusFilter(new Set(['open']));
-                      setMobileTab('inbox');
-                      setSelectedRequestId(null);
-                      document.getElementById('comms-inbox-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
+                    onAction={jumpToInbox}
                     onDismiss={() => dismissRailCard('unanswered')}
                   />
                 )}
@@ -3253,7 +3722,7 @@ function CommunicationsPageInner() {
                     onAction={() => router.push(`/manage/${conference.slug}/committees`)}
                   />
                 )}
-                {sessionCodesNudge && railCardVisible('session-codes') && (
+                {sessionCodesNudge && railCardVisible('session-codes') && consoleModel.promoted !== 'session-codes' && (
                   <RailCard
                     icon={KeyRound}
                     gold={goldSessionCodes}
@@ -3267,14 +3736,21 @@ function CommunicationsPageInner() {
                     onDismiss={() => dismissRailCard('session-codes')}
                   />
                 )}
-                <RailCard
-                  icon={Bell}
-                  gold={goldDefaults}
-                  title="Automatic emails"
-                  sub={`${enabledCount} on${autoDefaultCount > 0 ? ` · ${autoDefaultCount} sending our default copy` : ''}`}
-                  actionLabel={autoDefaultCount > 0 ? 'Review them' : 'Open'}
-                  onAction={() => setView('automatic')}
-                />
+                {/* Only when it is a RECOMMENDATION. The plain "N automatic
+                    emails are on" fact moved into the stat strip above, which
+                    is already a jump to the registry — a card that repeated it
+                    unconditionally was the reason this rail was never empty
+                    and therefore never meant anything. */}
+                {autoDefaultCount > 0 && (
+                  <RailCard
+                    icon={Bell}
+                    gold={goldDefaults}
+                    title={`${autoDefaultCount} automatic email${autoDefaultCount === 1 ? '' : 's'} still send our copy`}
+                    sub="They work as they are — but your own wording will sound like your conference."
+                    actionLabel="Review them"
+                    onAction={() => setView('automatic')}
+                  />
+                )}
               </div>
             ) : (
               // Nothing pending — collapse to one quiet line, never dead space.
@@ -3303,30 +3779,24 @@ function CommunicationsPageInner() {
 
           <div className="lg:grid lg:items-start lg:gap-8" style={{ gridTemplateColumns: 'minmax(0,1fr) 400px' }}>
 
-            {/* ── Band 2 · Sent ── */}
+            {/* ── Band 4 · Sent ── */}
             <div className={`${mobileTab === 'sent' ? '' : 'hidden'} lg:block min-w-0`}>
               <section data-tutorial="comms-sent-feed">
-                <div className="flex flex-wrap items-center gap-3 mb-1">
-                  <h2 className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Sent</h2>
-                  {failedTotal > 0 && (
+                {/* The failed / sending pills that used to sit here are gone:
+                    the console states whichever of them is true, in words, at
+                    the top of the page, and the stat strip carries the figure.
+                    NEW EMAIL went the same way — it now rides with the console
+                    instead of being the third thing on this row. */}
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
+                  <h2 className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT, letterSpacing: '-0.015em' }}>Sent</h2>
+                  {attemptedTotal > 0 && (
                     <span
-                      className="rounded-full px-2.5 py-0.5"
-                      style={{ fontSize: 11, fontWeight: 800, fontFamily: OUTFIT, backgroundColor: 'rgba(139,32,32,0.1)', color: RED, border: '1px solid rgba(139,32,32,0.3)', fontVariantNumeric: 'tabular-nums' }}
+                      className="font-bold uppercase"
+                      style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, letterSpacing: '0.08em', fontVariantNumeric: 'tabular-nums' }}
                     >
-                      {failedTotal} failed
+                      {attemptedTotal.toLocaleString()} email{attemptedTotal === 1 ? '' : 's'}
                     </span>
                   )}
-                  {drainingCount > 0 && (
-                    <span
-                      className="rounded-full px-2.5 py-0.5"
-                      style={{ fontSize: 11, fontWeight: 800, fontFamily: OUTFIT, backgroundColor: 'rgba(182,135,31,0.12)', color: AMBER_INK, border: '1px solid rgba(182,135,31,0.35)', fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {drainingCount} sending
-                    </span>
-                  )}
-                  <span className="ml-auto">
-                    <PrimaryBtn icon={Plus} onClick={openGallery}>NEW EMAIL</PrimaryBtn>
-                  </span>
                 </div>
                 <p className="text-sm mb-5" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>
                   Everything this conference has sent — broadcasts you wrote, and the automatic
@@ -3345,10 +3815,16 @@ function CommunicationsPageInner() {
                     >
                       <ChevronDown size={15} style={{ color: '#1C1410', transform: worklistOpen ? 'rotate(180deg)' : 'rotate(0)', transitionProperty: 'transform', transitionDuration: '200ms', transitionTimingFunction: EASE }} />
                       <span className="font-semibold text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                        In the works
+                        Your emails
                       </span>
-                      <span className="text-xs font-bold" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                        {adhocTemplates.length} draft{adhocTemplates.length === 1 ? '' : 's'}
+                      {/* "N drafts" was a lie, and production proves it: ALL
+                          157 template rows carry lifecycle='draft', including
+                          every one that has already been sent. The column is
+                          written on insert and never advanced, so it can only
+                          ever say "draft". These rows are SAVED emails — some
+                          sent, some not — and the word now says so. */}
+                      <span className="text-xs font-bold uppercase" style={{ color: SOFT, fontFamily: OUTFIT, fontSize: 11, letterSpacing: '0.07em', fontVariantNumeric: 'tabular-nums' }}>
+                        {adhocTemplates.length} saved
                       </span>
                     </button>
                     {worklistOpen && (
@@ -3383,14 +3859,14 @@ function CommunicationsPageInner() {
                                 className="flex items-center justify-center flex-shrink-0 rounded-xl"
                                 style={{ width: 30, height: 30, background: 'linear-gradient(150deg, rgba(182,135,31,0.2), rgba(182,135,31,0.07))', border: '1px solid rgba(182,135,31,0.3)' }}
                               >
-                                <Bell size={14} style={{ color: AMBER_INK }} />
+                                <Bell size={14} style={{ color: GOLD_INK }} />
                               </span>
                               <p className="font-semibold text-sm flex-1 truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
                                 {g.label}
                               </p>
                               <span
                                 className="flex-shrink-0 rounded-md px-2 py-0.5"
-                                style={{ fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em', backgroundColor: 'rgba(182,135,31,0.12)', color: AMBER_INK, border: '1px solid rgba(182,135,31,0.3)' }}
+                                style={{ fontSize: 10, fontFamily: OUTFIT, fontWeight: 800, letterSpacing: '0.06em', backgroundColor: 'rgba(182,135,31,0.12)', color: GOLD_INK, border: '1px solid rgba(182,135,31,0.3)' }}
                               >
                                 AUTOMATIC
                               </span>
@@ -3399,7 +3875,7 @@ function CommunicationsPageInner() {
                               <span>{g.count} recipient{g.count === 1 ? '' : 's'}</span>
                               {g.delivered > 0 && <span style={{ color: GREEN_INK, fontWeight: 700 }}>{g.delivered} delivered</span>}
                               {g.failed > 0 && <span style={{ color: RED, fontWeight: 700 }}>{g.failed} failed</span>}
-                              {g.pending > 0 && <span style={{ color: AMBER_INK, fontWeight: 700 }}>{g.pending} sending</span>}
+                              {g.pending > 0 && <span style={{ color: GOLD_INK, fontWeight: 700 }}>{g.pending} sending</span>}
                               <span className="ml-auto flex-shrink-0">{formatDate(g.latestAt)}</span>
                             </div>
                             <div className="mt-3 pt-3 flex flex-col gap-2" style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}>
@@ -3456,7 +3932,7 @@ function CommunicationsPageInner() {
                             </span>
                             {split && split.delivered > 0 && <span style={{ color: GREEN_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.delivered} delivered</span>}
                             {split && split.failed > 0 && <span style={{ color: RED, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.failed} failed</span>}
-                            {split && split.pending > 0 && <span style={{ color: AMBER_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.pending} sending</span>}
+                            {split && split.pending > 0 && <span style={{ color: GOLD_INK, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{split.pending} sending</span>}
                             <span className="ml-auto flex-shrink-0">
                               {email.sent_at ? `Sent ${formatDate(email.sent_at)}` : `${formatDate(email.created_at)}`}
                             </span>
@@ -3841,7 +4317,7 @@ function CommunicationsPageInner() {
                     {/* Swap details */}
                     {(selectedRequest.kind === 'swap_request' || selectedRequest.kind === 'swap_notice') && (
                       <div className="rounded-xl p-3.5 mt-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.09)' }}>
-                        <p className="text-xs font-bold mb-1.5" style={{ color: AMBER_INK, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
+                        <p className="text-xs font-bold mb-1.5" style={{ color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
                           SWAP DETAILS
                         </p>
                         <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
@@ -3889,7 +4365,7 @@ function CommunicationsPageInner() {
                                 link to. No `nested` — the message column is a plain div with
                                 no click handler of its own. */}
                             {!mine && (
-                              <span className="mb-1" style={{ fontSize: 10, fontWeight: 700, color: AMBER_INK, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+                              <span className="mb-1" style={{ fontSize: 10, fontWeight: 700, color: GOLD_INK, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
                                 <ProfileLink userId={m.sender_user_id} name={senderName}>
                                   {senderName.toUpperCase()}
                                 </ProfileLink>
@@ -3966,7 +4442,7 @@ function CommunicationsPageInner() {
           {builderError && (
             <div
               className="flex items-center gap-2 rounded-xl px-4 py-3 mb-4 text-sm"
-              style={{ backgroundColor: 'rgba(182,135,31,0.08)', border: '1px solid rgba(182,135,31,0.2)', color: AMBER_INK, fontFamily: OUTFIT }}
+              style={{ backgroundColor: 'rgba(182,135,31,0.08)', border: '1px solid rgba(182,135,31,0.2)', color: GOLD_INK, fontFamily: OUTFIT }}
             >
               <AlertTriangle size={14} style={{ flexShrink: 0 }} />
               {builderError}
@@ -3985,7 +4461,7 @@ function CommunicationsPageInner() {
                 <p className="text-xs leading-relaxed" style={{ color: SOFT, fontFamily: OUTFIT, maxWidth: 620, textWrap: 'pretty' }}>
                   {eventDef?.description}
                 </p>
-                <p className="text-xs mt-2" style={{ color: AMBER_INK, fontFamily: OUTFIT, textWrap: 'pretty' }}>
+                <p className="text-xs mt-2" style={{ color: GOLD_INK, fontFamily: OUTFIT, textWrap: 'pretty' }}>
                   Its audience is fixed by the event — turn it on from Automatic emails once you&apos;re happy with the draft.
                 </p>
               </div>

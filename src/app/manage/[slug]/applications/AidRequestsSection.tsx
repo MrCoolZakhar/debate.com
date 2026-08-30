@@ -16,6 +16,8 @@ import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { NEU, OUTFIT } from '@/components/neu';
+import Avatar from '@/components/Avatar';
+import ProfileLink from '@/components/ProfileLink';
 import { type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 
 interface AidRequestRow {
@@ -37,7 +39,9 @@ interface AidRequestRow {
     id: string;
     role: string;
     payment_status: string;
-    profiles: { display_name: string; email: string } | null;
+    // `id` is profiles.id, needed for the public MUN CV link; `avatar_url` is
+    // public.profiles.avatar_url, the single column profile pictures live in.
+    profiles: { id: string; display_name: string; email: string; avatar_url: string | null } | null;
   } | null;
 }
 
@@ -70,7 +74,7 @@ function StatusChip({ status }: { status: AidRequestRow['status'] }) {
   const s = STATUS_STYLES[status];
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold"
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold flex-shrink-0"
       style={{ fontSize: 9, fontFamily: OUTFIT, letterSpacing: '0.08em', backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}` }}
     >
       {s.label}
@@ -120,7 +124,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
         .select(`
           id, application_id, user_id, statement, requested_amount, custom_answers, status, granted_amount, reviewed_at, created_at,
           society_id, societies (name),
-          applications (id, role, payment_status, profiles (display_name, email))
+          applications (id, role, payment_status, profiles (id, display_name, email, avatar_url))
         `)
         .eq('conference_id', conferenceId)
         .order('created_at', { ascending: false }),
@@ -323,25 +327,70 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
               ? (r.societies?.name ?? 'Unknown delegation')
               : (r.applications?.profiles?.display_name ?? 'Unknown applicant');
             const { amount: fee, currency } = roleFeeFor(isDelegation ? 'delegate' : (r.applications?.role ?? ''));
+            // The person behind the request: the applicant on an individual
+            // request, the advisor who filed the pool on a delegation one.
+            // Profile picture comes from public.profiles.avatar_url, joined in
+            // through applications → profiles in loadRequests().
+            const person = r.applications?.profiles ?? null;
             return (
-              <button
+              /* A div with role="button", not a <button>: the row now contains a
+                 ProfileLink (an <a>), and an anchor inside a button is invalid
+                 HTML that browsers silently unnest. The link passes `nested` so
+                 clicking the name opens the CV without also opening the review
+                 modal. */
+              <div
                 key={r.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => openReview(r)}
-                className="w-full text-left rounded-2xl px-5 py-4 focus:outline-none transition-shadow"
-                style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none' }}
+                onKeyDown={(e) => {
+                  // Only the row itself. Without this, Enter on the focused CV
+                  // link would navigate AND open the review modal — `nested`
+                  // stops the click, but the keydown still bubbles.
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReview(r); }
+                }}
+                /* focus-visible ring: the row is keyboard-operable, and
+                   `focus:outline-none` alone would leave a keyboard user with
+                   no idea which row Enter is about to open. */
+                className="w-full text-left rounded-2xl px-5 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F] transition-shadow"
+                style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, border: 'none', cursor: 'pointer' }}
               >
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <p className="font-semibold text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
                     {isDelegation ? (
                       <>
+                        <p className="font-semibold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
                         <DelegationChip />
-                        <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-                          {r.applications?.profiles?.display_name ?? 'Unknown advisor'}
-                        </span>
+                        {/* The advisor is a person, so they get the picture here —
+                            the row's headline is the delegation, not a face.
+                            inkSoft, not muted: muted is a 3.15:1 wash and must not
+                            carry a readable name (see NEU in components/neu). */}
+                        <ProfileLink
+                          nested
+                          userId={person?.id}
+                          name={person?.display_name}
+                          className="flex items-center gap-2.5 min-w-0"
+                        >
+                          <Avatar url={person?.avatar_url ?? null} name={person?.display_name ?? '?'} size={20} />
+                          <span className="text-xs truncate" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+                            {person?.display_name ?? 'Unknown advisor'}
+                          </span>
+                        </ProfileLink>
                       </>
                     ) : (
-                      <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{roleLabel(r.applications?.role ?? '')}</span>
+                      <>
+                        <ProfileLink
+                          nested
+                          userId={person?.id}
+                          name={person?.display_name}
+                          className="flex items-center gap-2.5 min-w-0"
+                        >
+                          <Avatar url={person?.avatar_url ?? null} name={name} size={26} />
+                          <p className="font-semibold text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{name}</p>
+                        </ProfileLink>
+                        <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{roleLabel(r.applications?.role ?? '')}</span>
+                      </>
                     )}
                     <StatusChip status={r.status} />
                   </div>
@@ -354,7 +403,7 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
                     <span className="text-[11px]" style={{ color: NEU.muted, fontFamily: OUTFIT }}>{formatDate(r.created_at)}</span>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -367,9 +416,26 @@ export default function AidRequestsSection({ conferenceId, conferenceSlug, aidBl
             style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 480, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
           >
             <div className="flex items-center justify-between gap-3">
-              <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                {reviewing.applications?.profiles?.display_name ?? 'Unknown applicant'}
-              </p>
+              {/* Wrapper div, not the ProfileLink itself, carries the flex row:
+                  an unclaimed account renders the children bare, and without it
+                  the avatar and the name would become separate justify-between
+                  items and drift apart. Picture is public.profiles.avatar_url. */}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <ProfileLink
+                  userId={reviewing.applications?.profiles?.id}
+                  name={reviewing.applications?.profiles?.display_name}
+                  className="flex items-center gap-2.5 min-w-0"
+                >
+                  <Avatar
+                    url={reviewing.applications?.profiles?.avatar_url ?? null}
+                    name={reviewing.applications?.profiles?.display_name ?? '?'}
+                    size={32}
+                  />
+                  <p className="font-black text-lg truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    {reviewing.applications?.profiles?.display_name ?? 'Unknown applicant'}
+                  </p>
+                </ProfileLink>
+              </div>
               <StatusChip status={reviewing.status} />
             </div>
             <p className="text-xs -mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>

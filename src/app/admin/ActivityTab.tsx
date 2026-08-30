@@ -24,6 +24,11 @@ import {
   UserPlus, CalendarPlus, Globe, Layers, FileText, RotateCcw, Gavel, LogIn,
   Wallet, MessageSquare, Star, Award, Megaphone, Mail, Info, ArrowUpRight,
 } from 'lucide-react';
+// The local `Avatar` that used to live here was byte-for-byte the shared one
+// (same 0.34 radius, same 10%-forest disc, same 0.44 letter), so it is gone and
+// this imports the real component instead. src/components/Avatar.tsx exists
+// precisely to stop that copy being written a sixth time.
+import Avatar from '@/components/Avatar';
 import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -99,29 +104,6 @@ function dayLabel(iso: string): string {
   if (d.toDateString() === today.toDateString()) return 'Today';
   if (d.toDateString() === yest.toDateString()) return 'Yesterday';
   return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-function Avatar({ url, name, size = 26 }: { url: string | null; name: string; size?: number }) {
-  if (url) {
-    return (
-      /* eslint-disable-next-line @next/next/no-img-element */
-      <img src={url} alt="" className="object-cover flex-shrink-0"
-           style={{ width: size, height: size, borderRadius: Math.round(size * 0.34) }} />
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className="flex items-center justify-center flex-shrink-0"
-      style={{
-        width: size, height: size, borderRadius: Math.round(size * 0.34),
-        backgroundColor: 'rgba(27,56,40,0.10)', color: FOREST,
-        fontFamily: OUTFIT, fontWeight: 900, fontSize: Math.round(size * 0.44),
-      }}
-    >
-      {(name.trim().charAt(0) || '?').toUpperCase()}
-    </span>
-  );
 }
 
 /** Read-only explainer, opens on HOVER (and focus) per the UI rules, portaled

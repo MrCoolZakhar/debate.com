@@ -18,9 +18,14 @@ export function createPillNode(tokenKey: string): HTMLSpanElement {
   span.textContent = EMAIL_TOKEN_LABELS[tokenKey as EmailTokenKey] ?? tokenKey;
   Object.assign(span.style, {
     display: 'inline-block',
+    // Pale gold fill with FOREST ink, which is the house pairing (a gold
+    // button in `neu.tsx` carries forest text). It used to be #8A6614 ink on a
+    // #B6871F-tinted rim — a warm brown on gold that composites to orange, a
+    // colour this app does not own, on the most repeated object in the whole
+    // builder. Forest on this fill also measures ~10.6:1 instead of ~4.6:1.
     backgroundColor: 'rgba(238,217,138,0.35)',
-    color: '#8A6614',
-    border: '1px solid rgba(182,135,31,0.4)',
+    color: '#1B3828',
+    border: '1px solid rgba(27,56,40,0.20)',
     borderRadius: '999px',
     padding: '1px 10px',
     fontSize: '12.5px',

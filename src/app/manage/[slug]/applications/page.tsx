@@ -4224,15 +4224,26 @@ export default function ApplicationsPage() {
                         className="draftRowOpen flex items-center gap-3 min-w-0 flex-1"
                         title={`View ${name}'s MUN CV`}
                       >
+                        {/* The person's actual profile picture when they have
+                            one — `avatar_url` was already selected by
+                            loadDrafts and typed on DraftRow; only the render
+                            ignored it, so every draft showed a letter even for
+                            an account with a photo.
+                            The dashed ring stays either way: it is what says
+                            "this application is unfinished", and it belongs to
+                            the row's state, not to whether we have a face. */}
                         <div
-                          className="flex-shrink-0 flex items-center justify-center rounded-xl"
+                          className="flex-shrink-0 flex items-center justify-center rounded-xl overflow-hidden"
                           style={{
                             width: 34, height: 34,
                             border: `1.5px dashed ${DRAFT_DASH}`,
                             color: NEU.muted, fontFamily: OUTFIT, fontWeight: 800, fontSize: 14,
                           }}
                         >
-                          {name.trim().charAt(0).toUpperCase() || '?'}
+                          {d.avatar_url
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            ? <img src={d.avatar_url} alt="" className="w-full h-full object-cover" />
+                            : (name.trim().charAt(0).toUpperCase() || '?')}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.inkSoft }}>

@@ -49,6 +49,7 @@ import { renderEmailHtml, resolveEmailTheme, type EmailRenderConference } from '
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
+import { LogoDisc } from '@/components/LogoDisc';
 import { SOFT, AMBER_INK, GREEN_INK, RED, CARD_BORDER, CARD_SHADOW } from '@/app/manage/[slug]/live/tokens';
 import {
   buildParagraphDom, serializeParagraphDom, insertTextAtRange, insertPillAtRange,
@@ -198,7 +199,7 @@ function HighlightedText({ text }: { text: string }) {
     <>
       {segments.map((seg, i) =>
         seg.unresolved ? (
-          <span key={i} style={{ backgroundColor: 'rgba(182,135,31,0.22)', color: '#7A5A0F', padding: '0 3px', borderRadius: 3, fontWeight: 600 }}>
+          <span key={i} style={{ backgroundColor: 'rgba(126,81,40,0.14)', color: AMBER_INK, padding: '0 3px', borderRadius: 3, fontWeight: 700 }}>
             {seg.text}
           </span>
         ) : (
@@ -269,12 +270,19 @@ function ActionButton({
   );
 }
 
-/** Small pressed-in track holding mutually exclusive choices. */
+/** Small pressed-in track holding mutually exclusive choices.
+ *
+ *  An option may drop its `label` when its icon already says the whole thing
+ *  (a monitor and a handset for laptop/phone width) — in which case `title` is
+ *  REQUIRED, and carries both the tooltip and the accessible name. */
 function Segmented<T extends string>({
   value, options, onChange, grow,
 }: {
   value: T;
-  options: { value: T; label: string; icon?: typeof Monitor }[];
+  options: (
+    | { value: T; label: string; title?: string; icon?: typeof Monitor }
+    | { value: T; label?: undefined; title: string; icon: typeof Monitor }
+  )[];
   onChange: (v: T) => void;
   grow?: boolean;
 }) {
@@ -289,12 +297,20 @@ function Segmented<T extends string>({
           <button
             key={o.value}
             type="button"
+            title={o.title ?? o.label}
+            aria-label={o.title ?? o.label}
+            aria-pressed={active}
             onMouseDown={e => e.preventDefault()}
             onClick={() => onChange(o.value)}
             className={`inline-flex items-center justify-center gap-1.5 focus:outline-none ${grow ? 'flex-1' : ''}`}
             style={{
-              minHeight: 30,
-              padding: '5px 12px',
+              // 34, not 30: with the track's own 3px inset that makes the
+              // control 40px tall, the floor for a dense desktop hit area —
+              // and an icon-only segment has no words to enlarge its target.
+              minHeight: 34,
+              // An icon-only option gets a near-square, so the track does not
+              // end up with a 44px-wide button holding a 13px glyph.
+              padding: o.label ? '5px 12px' : '5px 11px',
               borderRadius: 999,
               border: 'none',
               background: active ? `linear-gradient(135deg, ${FOREST}, #2E6041)` : 'transparent',
@@ -884,9 +900,9 @@ export default function EmailComposer({
                   fontFamily: OUTFIT,
                   fontSize: 11.5,
                   fontWeight: 800,
-                  color: '#7A5A0F',
+                  color: FOREST,
                   backgroundColor: 'rgba(238,217,138,0.42)',
-                  border: '1px solid rgba(182,135,31,0.42)',
+                  border: '1px solid rgba(27,56,40,0.20)',
                   cursor: 'pointer',
                   transitionProperty: 'background-color, transform',
                   transitionDuration: '180ms',
@@ -985,7 +1001,7 @@ export default function EmailComposer({
           className="absolute inset-x-0 flex items-center justify-center"
           style={{ top: 0, height: 16, opacity: shown ? 1 : 0, transitionProperty: 'opacity', transitionDuration: '160ms' }}
         >
-          <span style={{ flex: 1, height: 1, backgroundColor: 'rgba(182,135,31,0.5)' }} />
+          <span style={{ flex: 1, height: 1, backgroundColor: 'rgba(27,56,40,0.22)' }} />
         </div>
         <button
           type="button"
@@ -995,9 +1011,9 @@ export default function EmailComposer({
           style={{
             top: -5, marginLeft: -13, width: 26, height: 26, borderRadius: 999,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '1px solid rgba(182,135,31,0.5)',
+            border: '1px solid rgba(27,56,40,0.22)',
             backgroundColor: open ? NEU_GRADIENTS.gold[0] : '#FFFDF8',
-            color: '#7A5A0F', cursor: 'pointer',
+            color: FOREST, cursor: 'pointer',
             opacity: shown ? 1 : 0,
             pointerEvents: shown ? 'auto' : 'none',
             boxShadow: '0 2px 6px rgba(27,56,40,0.16)',
@@ -1041,7 +1057,6 @@ export default function EmailComposer({
   function blockFrame(block: LocalBlock, index: number) {
     const isSelected = selectedId === block._id;
     const toolsShown = isSelected || hoverId === block._id;
-    const variant = block.type === 'paragraph' ? (block.variant ?? 'body') : null;
     return (
       <div
         ref={el => { blockNodes.current[block._id] = el; }}
@@ -1062,100 +1077,58 @@ export default function EmailComposer({
           cursor: block.type === 'paragraph' ? 'text' : 'pointer',
         }}
       >
-        {/* The block's own toolbar. Floats ABOVE the block, anchored left — the
-            gesture everyone already knows from a document editor. Revealed on
-            hover as well as on selection, so it is discoverable without a
-            click. For a paragraph it carries the three sizes and the two marks
-            inline, because those are the controls people reach for mid-sentence
-            and a trip to the side panel breaks the sentence. */}
-        <div
-          className="absolute flex items-center gap-0.5"
+        {/* ── THE BLOCK'S HANDLE ──────────────────────────────────────────
+            This used to be a nine-control bar floating at `top: -17` over the
+            block — i.e. HALF ON THE BLOCK'S OWN FIRST LINE and half on the one
+            above it, revealed by mere hover, so moving the pointer across a
+            finished email covered the words you were reading with a toolbar.
+            That is the collision the owner reported.
+
+            It is not repositioned, it is DOCKED. Everything it carried already
+            had a stable home in the properties panel one column to the right —
+            size, bold/italic, delete — and move up/down has now joined them
+            there. Bold and italic also still answer to ⌘B / ⌘I with the caret
+            exactly where it was, which is the only truly in-place way to mark
+            a word anyway.
+
+            What is left on the paper is the one thing that genuinely has to be
+            ON the object: the drag handle. It lives in the SHEET'S OWN 40px
+            LEFT MARGIN — the strip of paper the renderer guarantees is blank
+            from the top of the email to the bottom — so it cannot overlap a
+            glyph at any block, in any position, by construction rather than by
+            a flip heuristic. One icon, no text. ── */}
+        <span
+          draggable
+          onDragStart={e => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', block._id);
+            setDragging({ kind: 'move', id: block._id });
+          }}
+          onDragEnd={() => { setDragging(null); setDropIndex(null); }}
+          onClick={e => { e.stopPropagation(); setSelectedId(block._id); }}
+          role="button"
+          tabIndex={-1}
+          aria-label={`Drag to move — block ${index + 1} of ${blocks.length}`}
+          title={`Drag to move — block ${index + 1} of ${blocks.length}`}
+          className="absolute inline-flex items-center justify-center"
           style={{
-            top: -17, left: -4, padding: 3, borderRadius: 999,
-            backgroundColor: NEU.surface, border: CARD_BORDER, boxShadow: CARD_SHADOW,
+            // -28, measured: blockFrame's own `margin: 0 -10px` already hangs
+            // it 10px into the sheet's 40px paper margin, so the free strip is
+            // 0…30px from the sheet's edge. -28 puts this 26px handle at 2…28.
+            left: -28, top: 4, width: 26, height: 30, borderRadius: 9,
+            backgroundColor: isSelected ? NEU_GRADIENTS.gold[0] : 'rgba(27,56,40,0.06)',
+            color: isSelected ? FOREST : SOFT,
+            cursor: 'grab',
             opacity: toolsShown ? 1 : 0,
             pointerEvents: toolsShown ? 'auto' : 'none',
-            transitionProperty: 'opacity',
+            transitionProperty: 'opacity, background-color, color',
             transitionDuration: '160ms',
+            transitionTimingFunction: EASE,
             zIndex: 5,
           }}
         >
-          <span
-            draggable
-            onDragStart={e => {
-              e.dataTransfer.effectAllowed = 'move';
-              e.dataTransfer.setData('text/plain', block._id);
-              setDragging({ kind: 'move', id: block._id });
-            }}
-            onDragEnd={() => { setDragging(null); setDropIndex(null); }}
-            title="Drag to move"
-            className="inline-flex items-center justify-center"
-            style={{ width: 26, height: 26, borderRadius: 999, cursor: 'grab', color: SOFT }}
-          >
-            <GripVertical size={13} />
-          </span>
-          <button type="button" title="Move up" disabled={index === 0} onClick={e => { e.stopPropagation(); moveBlock(block._id, -1); }}
-            className="inline-flex items-center justify-center focus:outline-none disabled:opacity-30"
-            style={{ width: 26, height: 26, borderRadius: 999, border: 'none', background: 'transparent', color: FOREST, cursor: 'pointer' }}>
-            <ChevronUp size={14} strokeWidth={2.4} />
-          </button>
-          <button type="button" title="Move down" disabled={index === blocks.length - 1} onClick={e => { e.stopPropagation(); moveBlock(block._id, 1); }}
-            className="inline-flex items-center justify-center focus:outline-none disabled:opacity-30"
-            style={{ width: 26, height: 26, borderRadius: 999, border: 'none', background: 'transparent', color: FOREST, cursor: 'pointer' }}>
-            <ChevronDown size={14} strokeWidth={2.4} />
-          </button>
-
-          {variant && (
-            <>
-              <span style={{ width: 1, height: 18, backgroundColor: 'rgba(27,56,40,0.14)', margin: '0 3px' }} />
-              {VARIANT_META.map(v => (
-                <button
-                  key={v.value}
-                  type="button"
-                  title={v.label}
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={e => { e.stopPropagation(); setVariant(block._id, v.value); }}
-                  className="inline-flex items-center justify-center focus:outline-none"
-                  style={{
-                    minWidth: 26, height: 26, padding: '0 7px', borderRadius: 999, border: 'none',
-                    background: variant === v.value ? FOREST : 'transparent',
-                    color: variant === v.value ? GOLD : SOFT,
-                    fontFamily: OUTFIT, fontSize: 10, fontWeight: 900, letterSpacing: '0.04em',
-                    cursor: 'pointer',
-                    transitionProperty: 'background, color', transitionDuration: '180ms',
-                  }}
-                >
-                  {v.value === 'heading' ? 'H' : v.value === 'body' ? 'T' : 'S'}
-                </button>
-              ))}
-              <span style={{ width: 1, height: 18, backgroundColor: 'rgba(27,56,40,0.14)', margin: '0 3px' }} />
-              {([['bold', Bold], ['italic', Italic]] as const).map(([cmd, Icon]) => (
-                <button
-                  key={cmd}
-                  type="button"
-                  title={cmd === 'bold' ? 'Bold (⌘B)' : 'Italic (⌘I)'}
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={e => { e.stopPropagation(); setSelectedId(block._id); setActiveTarget(block._id); applyMarkToBlock(block._id, cmd); }}
-                  className="inline-flex items-center justify-center focus:outline-none"
-                  style={{
-                    width: 26, height: 26, borderRadius: 999, border: 'none',
-                    background: isSelected && fmt[cmd] ? 'rgba(27,56,40,0.13)' : 'transparent',
-                    color: FOREST, cursor: 'pointer',
-                  }}
-                >
-                  <Icon size={13} strokeWidth={2.6} />
-                </button>
-              ))}
-            </>
-          )}
-
-          <span style={{ width: 1, height: 18, backgroundColor: 'rgba(27,56,40,0.14)', margin: '0 3px' }} />
-          <button type="button" title="Remove" onClick={e => { e.stopPropagation(); deleteBlock(block._id); }}
-            className="inline-flex items-center justify-center focus:outline-none"
-            style={{ width: 26, height: 26, borderRadius: 999, border: 'none', background: 'transparent', color: RED, cursor: 'pointer' }}>
-            <Trash2 size={13} strokeWidth={2.3} />
-          </button>
-        </div>
+          <GripVertical size={14} strokeWidth={2.2} />
+        </span>
 
         {block.type === 'paragraph' && (
           <ParagraphEditor
@@ -1205,12 +1178,12 @@ export default function EmailComposer({
                 className="flex flex-col items-center justify-center gap-1"
                 style={{
                   height: 132, borderRadius: 10,
-                  border: '2px dashed rgba(182,135,31,0.45)',
+                  border: '2px dashed rgba(27,56,40,0.22)',
                   backgroundColor: 'rgba(238,217,138,0.12)',
-                  color: '#7A5A0F', fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
+                  color: FOREST, fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
                 }}
               >
-                <Emoji3D name="Framed picture" size={26} fallback={ImageIcon} fallbackColor="#7A5A0F" />
+                <Emoji3D name="Framed picture" size={26} fallback={ImageIcon} fallbackColor={FOREST} />
                 Pick a picture in the panel
               </span>
             )}
@@ -1282,12 +1255,21 @@ export default function EmailComposer({
             )}
           </div>
         )}
+        {/* This chip is printed ON the conference's own accent colour, which
+            is an arbitrary hex somebody picked in Design — it can be anything,
+            including an orange. A 0.9-alpha white therefore tinted itself with
+            whatever was behind it and the muted grey inside it had no
+            guaranteed contrast at all. Near-opaque house ivory with forest ink
+            and a forest hairline instead: the same chip on every conference,
+            legible on any accent (10.7:1), and unmistakably Gavelling's rather
+            than the accent's. */}
         <span
           style={{
             position: 'absolute', left: 10, top: 11,
             padding: '3px 9px', borderRadius: 999,
             fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
-            backgroundColor: 'rgba(255,255,255,0.9)', color: SOFT,
+            backgroundColor: 'rgba(255,253,248,0.94)', color: FOREST,
+            border: '1px solid rgba(27,56,40,0.14)',
           }}
         >
           ADDED FOR YOU
@@ -1354,7 +1336,8 @@ export default function EmailComposer({
             display: 'inline-block', marginBottom: 12,
             padding: '3px 9px', borderRadius: 999,
             fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
-            backgroundColor: 'rgba(255,255,255,0.85)', color: SOFT,
+            backgroundColor: 'rgba(255,253,248,0.94)', color: FOREST,
+            border: '1px solid rgba(27,56,40,0.14)',
           }}
         >
           ADDED FOR YOU
@@ -1522,19 +1505,48 @@ export default function EmailComposer({
       {selected && (
         <>
           <div style={{ height: 1, backgroundColor: 'rgba(27,56,40,0.1)', margin: '18px 0 12px' }} />
-          <button
-            type="button"
-            onClick={() => deleteBlock(selected._id)}
-            className="inline-flex items-center gap-1.5 focus:outline-none"
-            style={{
-              minHeight: 40, padding: '9px 14px', borderRadius: 999,
-              border: '1px solid rgba(139,32,32,0.28)', backgroundColor: 'transparent',
-              fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.05em',
-              color: RED, cursor: 'pointer',
-            }}
-          >
-            <Trash2 size={13} strokeWidth={2.3} /> REMOVE THIS BLOCK
-          </button>
+          {/* Move up / down. These came off the floating block toolbar when it
+              was docked (see the note in `blockFrame`): a chevron pair is the
+              one control on this screen that needs no label at all, so they
+              are icons with titles, sitting beside the destructive action they
+              are usually reached for alongside. */}
+          <div className="flex items-center gap-1.5">
+            {([[-1, ChevronUp, 'Move up'], [1, ChevronDown, 'Move down']] as const).map(([dir, Icon, label]) => {
+              const idx = blocks.findIndex(b => b._id === selected._id);
+              const blocked = dir === -1 ? idx <= 0 : idx < 0 || idx >= blocks.length - 1;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  disabled={blocked}
+                  onClick={() => moveBlock(selected._id, dir)}
+                  className="inline-flex items-center justify-center focus:outline-none disabled:opacity-30"
+                  style={{
+                    width: 40, height: 40, borderRadius: 999,
+                    border: '1px solid rgba(27,56,40,0.14)', backgroundColor: '#FFFDF8',
+                    color: FOREST, cursor: blocked ? 'default' : 'pointer',
+                  }}
+                >
+                  <Icon size={15} strokeWidth={2.5} />
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => deleteBlock(selected._id)}
+              className="ml-auto inline-flex items-center gap-1.5 focus:outline-none"
+              style={{
+                minHeight: 40, padding: '9px 14px', borderRadius: 999,
+                border: '1px solid rgba(139,32,32,0.28)', backgroundColor: 'transparent',
+                fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.05em',
+                color: RED, cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={13} strokeWidth={2.3} /> REMOVE
+            </button>
+          </div>
         </>
       )}
     </div>
@@ -1604,50 +1616,33 @@ export default function EmailComposer({
 
   const canvasColumn = (
     <div className="min-w-0">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <Segmented
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'edit' as const, label: 'WRITE', icon: Pencil },
-            { value: 'preview' as const, label: 'SEE IT FOR REAL', icon: Eye },
-          ]}
+      {/* ── The inbox row: the subject where it actually lands, AND the one
+          toggle that acts on the whole sheet.
+          These were two stacked rows. Between them they cost 132px of the
+          screen ABOVE the paper, every time the builder opened, on a laptop
+          that only has 800 of them — which is most of why the owner never saw
+          the top of their own email. The mode toggle is a property of the
+          sheet, so it rides on the sheet's own header rather than on a strip
+          of its own; on a phone it wraps to a second line INSIDE this panel,
+          which costs a line rather than a whole panel and its margin.
+          The old row's TEST button is gone, not moved: the properties panel
+          has carried "SEND ME A TEST", with the same handler and a sentence
+          explaining it, the whole time. ── */}
+      <div
+        className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2"
+        style={{ ...panelStyle, borderRadius: 18, padding: '10px 12px' }}
+      >
+        {/* The conference's own mark, on the house's near-white disc rather
+            than on a forest chip. Conference logos are arbitrary uploads —
+            dark seals, transparent PNGs — which is exactly the case LogoDisc
+            exists for, and a dark seal on a dark chip is invisible. */}
+        <LogoDisc
+          src={conference.logo_url}
+          alt={conference.acronym}
+          size={38}
+          fallbackText={conference.acronym.slice(0, 2)}
         />
-        {mode === 'preview' && (
-          <Segmented
-            value={previewWidth}
-            onChange={setPreviewWidth}
-            options={[
-              { value: 'desktop' as const, label: 'LAPTOP', icon: Monitor },
-              { value: 'mobile' as const, label: 'PHONE', icon: Smartphone },
-            ]}
-          />
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          {asPicker}
-          <ActionButton size="sm" tone="quiet" icon={Send} onClick={handleSendTest} disabled={sendingTest || !accessToken || !organizerEmail}>
-            {sendingTest ? 'SENDING…' : 'TEST'}
-          </ActionButton>
-        </div>
-      </div>
-
-      {/* Subject — the inbox row, because that is literally where it lands */}
-      <div className="mb-3 flex items-center gap-3" style={{ ...panelStyle, borderRadius: 18, padding: '12px 14px' }}>
-        <span
-          className="inline-flex items-center justify-center flex-shrink-0 overflow-hidden"
-          style={{ width: 38, height: 38, borderRadius: 999, backgroundColor: FOREST, boxShadow: NEU.outSm }}
-        >
-          {conference.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={conference.logo_url} alt="" style={{ width: 38, height: 38, objectFit: 'cover' }} />
-          ) : (
-            <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 900, color: GOLD }}>
-              {conference.acronym.slice(0, 2).toUpperCase()}
-            </span>
-          )}
-        </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1" style={{ minWidth: 200 }}>
           <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', color: SOFT }}>
             {conference.acronym.toUpperCase()} · {conference.contact_email}
           </p>
@@ -1665,7 +1660,35 @@ export default function EmailComposer({
             }}
           />
         </div>
+        <div className="flex-shrink-0">
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'edit' as const, label: 'WRITE', icon: Pencil },
+              { value: 'preview' as const, label: 'SEE IT FOR REAL', icon: Eye },
+            ]}
+          />
+        </div>
       </div>
+
+      {/* Preview-only controls. They have no meaning while you are writing, so
+          they do not take a row while you are writing. LAPTOP/PHONE are icons
+          alone: a monitor and a handset say it, and the words were the widest
+          thing in the row. */}
+      {mode === 'preview' && (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Segmented
+            value={previewWidth}
+            onChange={setPreviewWidth}
+            options={[
+              { value: 'desktop' as const, title: 'Laptop width', icon: Monitor },
+              { value: 'mobile' as const, title: 'Phone width', icon: Smartphone },
+            ]}
+          />
+          <div className="ml-auto">{asPicker}</div>
+        </div>
+      )}
 
       {/* Desk */}
       <div
@@ -1676,7 +1699,11 @@ export default function EmailComposer({
           backgroundColor: DESK,
           borderRadius: 22,
           boxShadow: DESK_WELL,
-          padding: wide ? '28px 24px' : '18px 12px',
+          // Asymmetric on purpose: the top inset is the last thing standing
+          // between the fold and the email, so it is the thinnest it can be
+          // and still read as paper resting on a desk. The bottom keeps the
+          // original weight, where it costs nothing.
+          padding: wide ? '14px 24px 26px' : '12px 12px 20px',
           minHeight: 420,
         }}
       >
@@ -1935,7 +1962,7 @@ function ImageProperties({
           value={block.alt}
           onChange={e => onPatch({ alt: e.target.value })}
           placeholder="e.g. Delegates in the opening ceremony"
-          style={{ ...FIELD_STYLE, borderColor: block.url && !block.alt.trim() ? 'rgba(182,135,31,0.6)' : 'rgba(27,56,40,0.13)' }}
+          style={{ ...FIELD_STYLE, borderColor: block.url && !block.alt.trim() ? 'rgba(126,81,40,0.55)' : 'rgba(27,56,40,0.13)' }}
         />
         {block.url && !block.alt.trim() && (
           <p className="mt-1.5 flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: AMBER_INK, lineHeight: 1.5, textWrap: 'pretty' }}>

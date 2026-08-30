@@ -485,12 +485,21 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
           <div className="flex flex-col gap-1">
             {pledgingMembers.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-2 py-1">
-                <span className="text-xs truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                  {/* Pledger's name links to their MUN CV — this row has no
-                      clickable ancestor, so no `nested` here. */}
-                  <ProfileLink userId={m.user_id} name={m.profiles?.display_name}>
-                    {m.profiles?.display_name ?? 'Unknown'}
-                  </ProfileLink> <span style={{ color: '#9A8A78' }}>· {pledgeText(m)}</span>
+                <span className="flex items-center gap-2 min-w-0 text-xs" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                  {/* avatar_url rides along on every member row via
+                      POOL_MEMBER_SELECT's `profiles (display_name, avatar_url)`
+                      — the same source MemberRow above reads, and the same
+                      MemberAvatar, so both lists in this panel look alike.
+                      Left unlinked here, exactly as in MemberRow: the name is
+                      the CV link, the picture is decoration. */}
+                  <MemberAvatar name={m.profiles?.display_name ?? 'Unknown'} url={m.profiles?.avatar_url ?? null} size={22} />
+                  <span className="truncate">
+                    {/* Pledger's name links to their MUN CV — this row has no
+                        clickable ancestor, so no `nested` here. */}
+                    <ProfileLink userId={m.user_id} name={m.profiles?.display_name}>
+                      {m.profiles?.display_name ?? 'Unknown'}
+                    </ProfileLink> <span style={{ color: '#9A8A78' }}>· {pledgeText(m)}</span>
+                  </span>
                 </span>
                 <span
                   className="flex-shrink-0"

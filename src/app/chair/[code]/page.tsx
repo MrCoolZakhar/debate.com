@@ -28,6 +28,8 @@ import ChatDisabledNotice from '@/components/ChatDisabledNotice';
 import { getCommitteeFlags } from '@/lib/committeeFlags';
 import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
+import SidebarResizer from '@/components/SidebarResizer';
+import { SIDEBAR_DEFAULT_WIDTH, loadSidebarWidth, saveSidebarWidth } from '@/lib/sidebarWidth';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import NotificationStack, { type NotificationExtra } from '@/components/notifications/NotificationStack';
@@ -1328,6 +1330,19 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [timerRunning, setTimerRunning] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showRollCall, setShowRollCall] = useState(true);
+  /**
+   * Draggable roster-sidebar width. Starts at the historical w-[22rem] so the
+   * server-rendered markup matches; the stored preference is adopted in an
+   * effect below, because localStorage cannot be read during render.
+   *
+   * AGENTS.md RULE 3/4: this is its own isolated atom, exactly like
+   * speakerTimeRemaining. It never enters the committee object, so it can
+   * never call updateLocal and can never move `localUpdateTime`. The drag
+   * itself does not even come through here — SidebarResizer paints
+   * `sidebarRef.current.style.width` per frame and commits once on release.
+   */
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const [showSliders, setShowSliders] = useState(false);
   const [gslListView, setGslListView] = useState<'az' | 'queue'>('az');
   const [showMotions, setShowMotions] = useState(false);
@@ -2274,6 +2289,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (!committee?.code) return;
     saveChatReadCounts(committee.code, { role: 'chair', identity: myChairName }, chatReadCounts);
   }, [chatReadCounts, committee?.code, myChairName]);
+
+  // ── Sidebar width ─────────────────────────────────────────────────────────
+  // Adopted after mount (localStorage is an external store; reading it during
+  // render would desync the server markup). Keyed by READER for the same
+  // reason the chat read-state is — two chairs on one dais laptop must not
+  // resize the roster for each other. See src/lib/sidebarWidth.ts.
+  useEffect(() => {
+    const stored = loadSidebarWidth({ role: 'chair', identity: myChairName });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (stored !== null) setSidebarWidth(stored);
+  }, [myChairName]);
+
+  // One commit per gesture (pointer release, or one keypress on the focused
+  // separator) — never per frame. Writes localStorage and nothing else: no DB
+  // write, no committee mutation, so `localUpdateTime` stays where it was.
+  const handleSidebarResize = useCallback((next: number) => {
+    setSidebarWidth(next);
+    saveSidebarWidth({ role: 'chair', identity: myChairName }, next);
+  }, [myChairName]);
 
   // ── Notifications ─────────────────────────────────────────────────────────
   // See src/lib/sessionNotifications.ts for the four rules this obeys. The store is
@@ -3416,8 +3450,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         )}
         {committee.phase !== 'pre-session' && (
           <>
+            {/* Sidebar width is now inline and user-set (was w-[22rem] = 352px,
+                which is still the default and the SSR value). `borderRight`
+                moved to SidebarResizer below: the divider IS the border now, so
+                keeping both would draw two rules side by side. The main column
+                is flex-1, so it reflows as this narrows or widens. */}
             {showRollCall && (
-              <aside data-tutorial="speakers-sidebar" className="w-[22rem] flex flex-col overflow-hidden shrink-0" style={{ backgroundColor: '#1B3828', borderRight: '1px solid #3D7A52' }}>
+              <aside
+                ref={sidebarRef}
+                data-tutorial="speakers-sidebar"
+                className="flex flex-col overflow-hidden shrink-0"
+                style={{ width: sidebarWidth, backgroundColor: '#1B3828' }}
+              >
                 {/* The committee's identity, stated ONCE for this whole column. RollCallPanel
                     below gets `hideIdentity` so it no longer prints the name and topic a
                     second time, one line down and behind its own border. Compact on purpose:
@@ -3515,6 +3559,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )}
                 </div>
               </aside>
+            )}
+            {showRollCall && (
+              <SidebarResizer
+                width={sidebarWidth}
+                targetRef={sidebarRef}
+                onCommit={handleSidebarResize}
+                label={t('rollcall_resize_sidebar')}
+              />
             )}
             <main className="flex-1 overflow-hidden flex flex-col min-w-0 min-h-0">
               {committee.phase === 'moderated-caucus' && committee.caucus && (
