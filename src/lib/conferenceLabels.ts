@@ -16,7 +16,19 @@
  *     `appendEditionYear` never doubles a year the label already carries.
  */
 
-import { appendEditionYear } from '@/lib/presetNames';
+/** Append the edition year to a label, unless the label already carries it.
+ *  "Already carries it" covers both the full year ("Hult 2026") and the
+ *  two-digit shorthand acronyms are usually built from ("XMUN26"), which is
+ *  why we do not simply reuse presetNames' appendEditionYear here. */
+function withYear(label: string, year: string | null): string {
+  const base = label.trim();
+  if (!year) return base;
+  if (!base) return year;
+  if (base.includes(year)) return base;
+  // Trailing two-digit shorthand: "XMUN26" for 2026, but not "MUN20" for 2026.
+  if (base.endsWith(year.slice(2)) && /[A-Za-z]\d{2}$/.test(base)) return base;
+  return `${base} ${year}`;
+}
 
 /** Everything the label helpers need. Deliberately structural, so both DB rows
  *  and hand-built objects satisfy it. */
@@ -39,12 +51,12 @@ export function editionYear(conf: ConferenceLabelInput): string | null {
 
 /** The acronym as it should be shown: organiser's text + edition year. */
 export function conferenceAcronymLabel(conf: ConferenceLabelInput): string {
-  return appendEditionYear((conf.acronym ?? '').trim(), editionYear(conf));
+  return withYear((conf.acronym ?? '').trim(), editionYear(conf));
 }
 
 /** The full name as it should be shown: organiser's text + edition year. */
 export function conferenceFullNameLabel(conf: ConferenceLabelInput): string {
-  return appendEditionYear((conf.full_name ?? '').trim(), editionYear(conf));
+  return withYear((conf.full_name ?? '').trim(), editionYear(conf));
 }
 
 /** Both labels at once, for headers that print the acronym big and the full

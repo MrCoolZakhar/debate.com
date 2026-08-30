@@ -6,7 +6,7 @@
 // neumorphic styling. Value in/out is an ISO date string (YYYY-MM-DD).
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, Clock, X as XIcon } from 'lucide-react';
 import Portal from '@/components/Portal';
 
 const OUTFIT = "'Outfit', sans-serif";
@@ -27,6 +27,27 @@ function toISO(d: Date): string {
 function fmt(d: Date): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
 }
+
+// ── Time mode ──────────────────────────────────────────────────────────────
+// With `withTime`, value/onChange speak 'YYYY-MM-DDTHH:mm' (the same local,
+// zone-free shape <input type="datetime-local"> used) instead of 'YYYY-MM-DD'.
+// The calendar is unchanged; a clock row is added under the grid, and the
+// trigger prints "16 Jul 2026 · 09:00".
+
+/** 'HH:mm' out of a datetime-local string, defaulting to 09:00. */
+function timeOf(value: string | null | undefined): { h: number; m: number } {
+  const t = /T(\d{2}):(\d{2})/.exec(value ?? '');
+  return t ? { h: Number(t[1]), m: Number(t[2]) } : { h: 9, m: 0 };
+}
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+function fmtTime(h: number, m: number): string {
+  return `${pad2(h)}:${pad2(m)}`;
+}
+
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -34,6 +55,7 @@ function startOfDay(d: Date): Date {
 export function DatePicker({
   value, onChange, min, max, placeholder = 'Select a date', disabled, initialView,
   id, describedBy, invalid = false, variant = 'default',
+  withTime = false, clearable = false, zoneNote,
 }: {
   value: string;
   onChange: (iso: string) => void;
@@ -59,9 +81,25 @@ export function DatePicker({
    * inset shadow and a focus ring. 'default' is the original inline trigger.
    */
   variant?: 'default' | 'well';
+  /**
+   * Datetime mode. `value` / `onChange` become 'YYYY-MM-DDTHH:mm' (local,
+   * zone-free — exactly what <input type="datetime-local"> carried), the
+   * popover grows a time row, and the trigger reads "16 Jul 2026 · 09:00".
+   */
+  withTime?: boolean;
+  /** Adds a clear (×) affordance for optional dates. Emits ''. */
+  clearable?: boolean;
+  /** Small line printed under the time row, e.g. the organiser's timezone. */
+  zoneNote?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => parseISO(value), [value]);
+  const { h: hour, m: minute } = useMemo(() => timeOf(value), [value]);
+
+  /** Emit in whichever shape this instance speaks. */
+  const emit = useCallback((iso: string, h = hour, m = minute) => {
+    onChange(withTime ? `${iso}T${fmtTime(h, m)}` : iso);
+  }, [onChange, withTime, hour, minute]);
   const minDate = useMemo(() => parseISO(min), [min]);
   const maxDate = useMemo(() => parseISO(max), [max]);
   const [view, setView] = useState<Date>(() => selected ?? parseISO(initialView) ?? new Date());
@@ -169,7 +207,24 @@ export function DatePicker({
         }}
       >
         <CalendarDays size={17} style={{ color: '#B6871F', flexShrink: 0 }} />
-        <span>{selected ? fmt(selected) : placeholder}</span>
+        <span className="flex-1 truncate">
+          {selected ? (withTime ? `${fmt(selected)} · ${fmtTime(hour, minute)}` : fmt(selected)) : placeholder}
+        </span>
+        {clearable && selected && !disabled && (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label="Clear date"
+            onClick={(e) => { e.stopPropagation(); onChange(''); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); onChange(''); } }}
+            className="flex items-center justify-center flex-shrink-0 rounded-full"
+            style={{ width: 20, height: 20, color: '#9A8A78', cursor: 'pointer' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)'; (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+          >
+            <XIcon size={13} strokeWidth={2.6} />
+          </span>
+        )}
       </button>
 
       {open && pos && (
@@ -219,7 +274,7 @@ export function DatePicker({
               const off = disabledDay(d);
               return (
                 <button key={i} type="button" disabled={off}
-                  onClick={() => { onChange(toISO(d)); setOpen(false); }}
+                  onClick={() => { emit(toISO(d)); if (!withTime) setOpen(false); }}
                   className="aspect-square rounded-lg flex items-center justify-center focus:outline-none"
                   style={{
                     fontFamily: OUTFIT, fontSize: 13, fontWeight: isSel ? 800 : 500, fontVariantNumeric: 'tabular-nums',
@@ -234,6 +289,47 @@ export function DatePicker({
               );
             })}
           </div>
+
+          {/* Time row. Only in datetime mode: the calendar alone cannot answer
+              "9am or midnight?", and an application window that silently opens
+              at 00:00 is the bug this replaces. */}
+          {withTime && (
+            <div className="mt-3 pt-3" style={{ borderTop: '1px solid #DDD4C0' }}>
+              <div className="flex items-center gap-2">
+                <Clock size={15} strokeWidth={2.2} style={{ color: '#B6871F', flexShrink: 0 }} />
+                <select
+                  aria-label="Hour"
+                  value={hour}
+                  onChange={(e) => emit(selected ? toISO(selected) : toISO(view), Number(e.target.value), minute)}
+                  className="focus:outline-none rounded-lg px-2 py-1.5"
+                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {HOURS.map(h => <option key={h} value={h}>{pad2(h)}</option>)}
+                </select>
+                <span style={{ fontFamily: OUTFIT, fontWeight: 800, color: '#9A8A78' }}>:</span>
+                <select
+                  aria-label="Minute"
+                  value={MINUTES.includes(minute) ? minute : 0}
+                  onChange={(e) => emit(selected ? toISO(selected) : toISO(view), hour, Number(e.target.value))}
+                  className="focus:outline-none rounded-lg px-2 py-1.5"
+                  style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {MINUTES.map(m => <option key={m} value={m}>{pad2(m)}</option>)}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="ml-auto rounded-lg px-3 py-1.5 focus:outline-none"
+                  style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.08em', backgroundColor: '#1B3828', color: '#EED98A', border: 'none', cursor: 'pointer' }}
+                >
+                  DONE
+                </button>
+              </div>
+              {zoneNote && (
+                <p style={{ fontFamily: OUTFIT, fontSize: 11, color: '#9A8A78', margin: '8px 0 0' }}>{zoneNote}</p>
+              )}
+            </div>
+          )}
         </div>
         </Portal>
       )}

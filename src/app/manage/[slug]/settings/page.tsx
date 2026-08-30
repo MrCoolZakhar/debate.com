@@ -18,7 +18,7 @@ import { UN_COUNTRIES } from '@/lib/countries';
 import { Pill } from '@/app/account/accountUi';
 import { useConfirmModal, ConfirmModal } from '@/components/ConfirmModal';
 import Portal from '@/components/Portal';
-import { NEU, OUTFIT, EASE } from '@/components/neu';
+import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
@@ -33,6 +33,11 @@ import { activeFeePhase, type FeePhase } from '@/lib/finance';
 import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import {
+  ROLE_ORDER, ROLE_EMOJI, ROLE_BLURB, RoleBookmarks, StepDisc, InfoHint,
+  SettingsModal, ModalButton, CopyToRolesModal, SetupIntro, Segmented, SegmentedNote,
+  type RoleStatus as RoleStatusKind,
+} from './applicationsUi';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
@@ -142,7 +147,7 @@ const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
 
 // ── Constants & helpers ────────────────────────────────────────────────────
 
-const ROLES = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 'observer'] as const;
+const ROLES = ROLE_ORDER;
 
 // Pinned USD/EUR/GBP + alphabetical rest, split once for every currency
 // picker in this page, mirrors the creation flow's symbol+code display.
@@ -169,7 +174,7 @@ const ROLE_ICONS: Record<string, typeof User> = {
   'observer': Eye,
 };
 
-type RoleStatus = 'OPEN' | 'SCHEDULED' | 'CLOSED' | 'OFF';
+type RoleStatus = RoleStatusKind;
 
 /** Four states, not two. A role can be switched on while its window has
  *  already closed, and "enabled" alone would report that as live. */
@@ -193,9 +198,11 @@ const STATUS_STYLE: Record<RoleStatus, { fg: string; bg: string; dot: string }> 
  *  the step has nothing unresolved, the label, its subtitle, and a chevron.
  *  Module scope on purpose: a component declared inside the page would be a new
  *  type every render, remounting QuestionBuilder and losing its editing state. */
-function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle' }: {
+function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', hint }: {
   n: number; label: string; sub: string; complete: boolean; open: boolean; onClick: () => void;
   status?: 'idle' | 'saving' | 'saved';
+  /** One paragraph explaining what this step decides, on a hover "i". */
+  hint?: string;
 }) {
   return (
     <button
@@ -205,20 +212,11 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle' }:
       className="w-full flex items-center gap-3 text-left focus:outline-none"
       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
     >
-      <span
-        className="flex items-center justify-center flex-shrink-0"
-        style={{
-          width: '24px', height: '24px', borderRadius: '999px',
-          backgroundColor: complete ? '#1B3828' : 'rgba(27,56,40,0.08)',
-          color: complete ? '#EED98A' : '#1C1410',
-          fontFamily: "'Outfit', sans-serif", fontSize: '12px', fontWeight: 800,
-        }}
-      >
-        {complete ? <Check size={14} strokeWidth={3} style={{ color: '#EED98A' }} /> : n}
-      </span>
+      <StepDisc n={n} complete={complete} />
       <span className="min-w-0 flex-1">
-        <span className="block font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+        <span className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           {label}
+          {hint && <InfoHint label={`About ${label}`} text={hint} />}
         </span>
         <span className="block text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
           {sub}
@@ -244,9 +242,18 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle' }:
 }
 
 const STEPS = [
-  { n: 1, label: 'General info', sub: 'Dates, capacity and how applications are handled' },
-  { n: 2, label: 'Fees', sub: 'What this role costs and when the price changes' },
-  { n: 3, label: 'Form', sub: 'The questions this role answers when applying' },
+  {
+    n: 1, label: 'General info', sub: 'Dates, capacity and how applications are handled',
+    hint: 'The window this role can apply in, and what happens to an application once it arrives. Nothing is public before the opening time, and the link starts working on its own the moment it passes — you do not have to be at a keyboard. Max accepted is the ceiling on how many you will take; acceptance decides whether they are let in automatically or wait for you to review them; payment decides how early they can pay.',
+  },
+  {
+    n: 2, label: 'Fees', sub: 'What this role costs and when the price changes',
+    hint: 'One flat price, plus optional phases if the price moves over time — an early-bird window, a standard window, a late window. Whichever phase covers today is the price an applicant is quoted and charged. When no phase covers today, the flat fee applies. Phases may not overlap, because two prices for one day has no answer.',
+  },
+  {
+    n: 3, label: 'Form', sub: 'The questions this role answers when applying',
+    hint: 'The questions this role fills in when they apply: short answers, long answers, choices, uploads. Each role has its own form, because an advisor and a delegate have almost nothing in common to say. Reordering and rewording is safe at any time; answers already submitted are kept exactly as they were given.',
+  },
 ] as const;
 
 /** True when any two dated fee phases have intersecting [start, end] windows. */
@@ -2339,57 +2346,29 @@ export default function SettingsPage() {
                 ? { filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none' }
                 : undefined}
             >
-              {/* ── Role tabs ── */}
-              <div className="flex flex-wrap gap-2 mb-5">
-                {ROLES.map(r => {
-                  const rc = roleConfigs.find(c => c.role === r);
-                  const st = roleStatus(rc, Date.now());
-                  const active = r === role;
-                  const Icon = ROLE_ICONS[r] ?? User;
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setActiveRole(r)}
-                      className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
-                      style={{
-                        padding: '6px 13px',
-                        borderRadius: '999px',
-                        fontFamily: "'Outfit', sans-serif",
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        backgroundColor: active ? '#1B3828' : 'transparent',
-                        color: active ? '#EED98A' : '#7A6E5E',
-                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        boxShadow: active ? '0 3px 10px rgba(27,56,40,0.22)' : 'none',
-                        opacity: st === 'OFF' ? 0.6 : 1,
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    >
-                      <span
-                        suppressHydrationWarning
-                        style={{
-                          width: '6px', height: '6px', borderRadius: '999px', flexShrink: 0,
-                          backgroundColor: active && st === 'OPEN' ? '#EED98A' : STATUS_STYLE[st].dot,
-                        }}
-                      />
-                      <Icon size={12} strokeWidth={2.5} />
-                      {roleLabel(r)}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* ── Role bookmarks. Icon above the name, active tab raised and
+                  joined to the panel below it. Order follows how a conference
+                  is actually staffed, not the alphabet. ── */}
+              <RoleBookmarks
+                roles={ROLES}
+                active={role}
+                statusOf={(r) => roleStatus(roleConfigs.find(c => c.role === r), Date.now())}
+                onPick={setActiveRole}
+              />
 
               {/* ── Role header bar. Never collapses: this is the one place that
                   answers "is this role live". ── */}
-              <div style={cardStyle}>
+              <div style={{ ...cardStyle, borderTopLeftRadius: '4px' }}>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className="font-black" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontSize: '18px' }}>
+                  <span
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{ width: 40, height: 40, borderRadius: '999px', background: 'linear-gradient(145deg, #FFFDF9, #E4DCCB)', boxShadow: NEU.outSm }}
+                  >
+                    <Emoji3D name={ROLE_EMOJI[role] ?? 'Bust in silhouette'} size={24} />
+                  </span>
+                  <span className="inline-flex items-center gap-2 font-black" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontSize: '18px' }}>
                     {roleLabel(role)}
+                    <InfoHint label={`What a ${roleLabel(role)} is`} text={ROLE_BLURB[role] ?? ''} size={17} />
                   </span>
                   <span
                     suppressHydrationWarning
@@ -2445,42 +2424,51 @@ export default function SettingsPage() {
 
                   <div style={cardStyle}>
                     <StepHeader
-                      n={STEPS[0].n} label={STEPS[0].label} sub={STEPS[0].sub}
+                      n={STEPS[0].n} label={STEPS[0].label} sub={STEPS[0].sub} hint={STEPS[0].hint}
                       complete={stepComplete[1]} open={openStep === 1}
                       onClick={() => setOpenStep(1)}
                     />
                     {openStep === 1 && (
                       <div className="mt-5">
+                        {/* Opens / Closes. The shared friendly picker in
+                            datetime mode, not a native control: the same
+                            calendar the fee phases already use, plus the hour
+                            the window actually turns over. */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                           <div>
-                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Opens</label>
-                            <input
-                              type="datetime-local"
-                              // Prerendered server-side where local time is UTC, so the
-                              // corrected value differs from the client's on any other zone.
-                              suppressHydrationWarning
-                              defaultValue={toDatetimeLocal(config.applications_open_at)}
-                              onFocus={fgInput}
-                              onBlur={(e) => {
-                                e.currentTarget.style.borderColor = '#DDD4C0';
-                                saveRoleConfig(role, { applications_open_at: fromDatetimeLocal(e.target.value) });
-                              }}
-                              style={inputStyle}
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              Opens
+                              <InfoHint
+                                label="About the opening time"
+                                text="The moment this role starts taking applications. Before it, the application link says the window has not opened yet and shows the date and time it will. Nothing needs doing at that moment — it opens itself. Leave it empty to have the role open the instant you switch it on."
+                              />
+                            </label>
+                            <DatePicker
+                              withTime
+                              clearable
+                              value={toDatetimeLocal(config.applications_open_at)}
+                              onChange={(v) => saveRoleConfig(role, { applications_open_at: fromDatetimeLocal(v) })}
+                              placeholder="Opens as soon as it is switched on"
+                              zoneNote={`Times are in ${localZoneLabel()}.`}
                             />
                           </div>
 
                           <div>
-                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Closes</label>
-                            <input
-                              type="datetime-local"
-                              suppressHydrationWarning
-                              defaultValue={toDatetimeLocal(config.applications_close_at)}
-                              onFocus={fgInput}
-                              onBlur={(e) => {
-                                e.currentTarget.style.borderColor = '#DDD4C0';
-                                saveRoleConfig(role, { applications_close_at: fromDatetimeLocal(e.target.value) });
-                              }}
-                              style={inputStyle}
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              Closes
+                              <InfoHint
+                                label="About the closing time"
+                                text="The moment this role stops taking new applications. Applications already in progress are not deleted — the form simply stops accepting new ones, and the role reads as CLOSED. Leave it empty to keep it open until you switch the role off yourself."
+                              />
+                            </label>
+                            <DatePicker
+                              withTime
+                              clearable
+                              value={toDatetimeLocal(config.applications_close_at)}
+                              onChange={(v) => saveRoleConfig(role, { applications_close_at: fromDatetimeLocal(v) })}
+                              min={toDatetimeLocal(config.applications_open_at).slice(0, 10) || undefined}
+                              placeholder="Stays open until switched off"
+                              zoneNote={`Times are in ${localZoneLabel()}.`}
                             />
                           </div>
 
@@ -2490,7 +2478,13 @@ export default function SettingsPage() {
                             </p>
                           </div>
                           <div>
-                            <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Max Accepted</label>
+                            <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                              Max accepted
+                              <InfoHint
+                                label="About max accepted"
+                                text="The most people you will accept into this role. It is a ceiling on acceptances, not on applications — people can keep applying past it, you simply cannot accept more than this many. Leave it empty for no limit."
+                              />
+                            </label>
                             <input
                               type="number"
                               min={1}
@@ -2507,8 +2501,12 @@ export default function SettingsPage() {
                         </div>
                         {/* Acceptance */}
                         <div className="mt-4">
-                          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                             Acceptance
+                            <InfoHint
+                              label="About acceptance"
+                              text="Auto-accept lets everyone in the moment they submit — right for observers, advisors and any role where you are not really choosing. Manual review holds every application as pending until someone on your team decides, which is what you want wherever places are limited or the answers matter."
+                            />
                           </label>
                           <div className="flex gap-2">
                             {([
@@ -2538,8 +2536,12 @@ export default function SettingsPage() {
                         </div>
                         {/* Payment */}
                         <div className="mt-4">
-                          <label className="block text-xs font-semibold mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                          <label className="text-xs font-semibold mb-1.5 flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                             Payment
+                            <InfoHint
+                              label="About payment timing"
+                              text="When the pay button appears for this role. After application charges on submission, which fills your account early but means refunding anyone you turn down. After acceptance only charges the people you actually took, and is the safer default wherever you review. Pay at any time leaves it entirely up to them."
+                            />
                           </label>
                           <div className="flex gap-2">
                             {PAYMENT_TIMING_OPTIONS.map(opt => {
@@ -2570,8 +2572,12 @@ export default function SettingsPage() {
                         {/* Resubmission */}
                         <div className="mt-4 flex items-center justify-between gap-3">
                           <div>
-                            <label className="block text-xs font-semibold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                               Allow resubmission
+                              <InfoHint
+                                label="About resubmission"
+                                text="With this on, an applicant you have denied can reopen their form, change their answers and send it back for another look. Useful when denials are usually about a missing detail rather than a real no. With it off, a denial is final and they cannot apply again for this role."
+                              />
                             </label>
                             <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                               Let denied applicants edit and resubmit.
@@ -2589,7 +2595,7 @@ export default function SettingsPage() {
 
                   <div style={cardStyle}>
                     <StepHeader
-                      n={STEPS[1].n} label={STEPS[1].label} sub={STEPS[1].sub}
+                      n={STEPS[1].n} label={STEPS[1].label} sub={STEPS[1].sub} hint={STEPS[1].hint}
                       complete={stepComplete[2]} open={openStep === 2}
                       onClick={() => setOpenStep(2)}
                     />
@@ -2770,7 +2776,7 @@ export default function SettingsPage() {
 
                   <div style={cardStyle}>
                     <StepHeader
-                      n={STEPS[2].n} label={STEPS[2].label} sub={STEPS[2].sub}
+                      n={STEPS[2].n} label={STEPS[2].label} sub={STEPS[2].sub} hint={STEPS[2].hint}
                       complete={stepComplete[3]} open={openStep === 3}
                       onClick={() => setOpenStep(3)}
                       status={blocksSaveState}

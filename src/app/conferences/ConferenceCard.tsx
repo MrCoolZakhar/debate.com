@@ -92,6 +92,13 @@ function formatDateRange(start: string | null, end: string | null): string {
   return formatConferenceDates(start, end, { style: 'dmy-end-year' });
 }
 
+/** Dense cards drop the year from the date chip: the heading right below it
+ *  already ends in the edition year, and at four columns the full form was
+ *  colliding with the format chip on the opposite corner. */
+function formatDateRangeDense(start: string | null, end: string | null): string {
+  return formatConferenceDates(start, end, { style: 'dm-upper' });
+}
+
 export function ConferenceCard({
   conf, hovered, onHover, onLeave, onClick, compact = false, heroCompact = false, goldGlow = false, applied = false, member = false,
 }: {
@@ -349,12 +356,12 @@ export function ConferenceCard({
               backgroundColor: 'rgba(20,36,27,0.5)',
               backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
               border: '1px solid rgba(250,248,243,0.2)',
-              padding: '3px 10px', borderRadius: '9999px',
+              padding: dense ? '2.5px 8px' : '3px 10px', borderRadius: '9999px',
             }}
           >
-            <CalendarDays size={12} style={{ color: '#EED98A', flexShrink: 0 }} />
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
-              {formatDateRange(conf.start_date, conf.end_date)}
+            <CalendarDays size={dense ? 11 : 12} style={{ color: '#EED98A', flexShrink: 0 }} />
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em', fontSize: dense ? '10px' : '11.5px', color: '#FAF8F3', whiteSpace: 'nowrap' }}>
+              {dense ? formatDateRangeDense(conf.start_date, conf.end_date) : formatDateRange(conf.start_date, conf.end_date)}
             </span>
           </span>
         )}
@@ -363,11 +370,11 @@ export function ConferenceCard({
           <span
             className="absolute top-3 right-3"
             style={{
-              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.12em',
+              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: dense ? '8.5px' : '9px', letterSpacing: dense ? '0.09em' : '0.12em',
               color: '#FAF8F3', backgroundColor: 'rgba(20,36,27,0.45)',
               backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
               border: '1px solid rgba(250,248,243,0.18)',
-              padding: '3px 10px', borderRadius: '9999px',
+              padding: dense ? '2.5px 8px' : '3px 10px', borderRadius: '9999px',
             }}
           >
             {conf.format.toUpperCase().replace('-', ' ')}
