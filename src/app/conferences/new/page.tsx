@@ -30,6 +30,7 @@ import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
 import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
+import { acronymProblem } from '@/lib/conferenceLabels';
 
 const CURRENCY_GROUPS = currencyPickerGroups();
 
@@ -271,12 +272,6 @@ function suggestAcronym(fullName: string): string {
   return initials;
 }
 
-function acronymProblem(acr: string): string {
-  const upper = acr.toUpperCase();
-  if (upper.length < 2) return 'Acronym must be at least 2 characters.';
-  if (!/^[A-Z0-9]+$/.test(upper)) return 'Acronym can only contain letters and numbers.';
-  return '';
-}
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
@@ -461,7 +456,7 @@ export default function NewConferencePage() {
           slug,
           organizer_id: user.id,
           full_name: fullName,
-          acronym: acronym.toUpperCase(),
+          acronym: acronym.trim(),
           contact_email: contactEmail,
           student_level: studentLevel,
           start_date: datesTbd ? null : (startDate || null),
@@ -654,9 +649,9 @@ export default function NewConferencePage() {
                       value={acronym}
                       onChange={(e) => {
                         acronymTouched.current = true;
-                        setAcronym(e.target.value.toUpperCase());
+                        setAcronym(e.target.value);
                       }}
-                      placeholder="e.g. TEIMUN"
+                      placeholder="e.g. TEIMUN, or Model NATO Germany"
                       style={{ ...bigInputStyle, letterSpacing: '0.08em', fontVariantNumeric: 'tabular-nums' }}
                       onFocus={focusForest}
                       onBlur={blurClear}
@@ -665,7 +660,7 @@ export default function NewConferencePage() {
                       <ErrorNote>{acronymError}</ErrorNote>
                     ) : (
                       <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, marginTop: 8 }}>
-                        Suggested from your conference name. Use whatever acronym your conference goes by.
+                        Suggested from your conference name. Use whatever your conference actually goes by — &ldquo;MODEL NATO GERMANY&rdquo; is as valid as &ldquo;TEIMUN&rdquo;. The edition year is added automatically.
                       </p>
                     )}
                   </div>
@@ -1118,7 +1113,7 @@ export default function NewConferencePage() {
                 onBack={back}
               >
                 <div className="flex flex-col gap-2.5">
-                  <ReviewRow label="Conference" value={`${fullName} (${acronym.toUpperCase()})`} onEdit={() => editFromReview(1)} />
+                  <ReviewRow label="Conference" value={`${fullName} (${acronym.trim()})`} onEdit={() => editFromReview(1)} />
                   <ReviewRow label="Format" value={format === 'in-person' ? 'In person' : format === 'online' ? 'Online' : 'Hybrid'} onEdit={() => editFromReview(2)} />
                   <ReviewRow label="Level" value={studentLevel === 'school' ? 'High school' : studentLevel === 'university' ? 'University' : 'Both'} onEdit={() => editFromReview(3)} />
                   <ReviewRow label="Location" value={`${city}, ${country}`} onEdit={() => editFromReview(4)} />

@@ -43,7 +43,7 @@ import { ArrowRight, Check, Users, CalendarDays, Gavel, MapPin } from 'lucide-re
 import { getCountryByName } from '@/lib/countries';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
-import { appendEditionYear } from '@/lib/presetNames';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
@@ -115,10 +115,9 @@ export function ConferenceCard({
   const countryObj = getCountryByName(conf.country);
   // "Oxford, GB", ISO country code instead of the full country name (or flag)
   const countryCode = countryObj ? countryObj.code.toUpperCase() : conf.country;
-  const editionYear = conf.start_date ? conf.start_date.slice(0, 4) : null;
   // Heading = acronym + edition year, but never doubled if the acronym/name
   // already carries that year (e.g. "Hult 2026" stays "Hult 2026").
-  const headingLabel = appendEditionYear(conf.acronym, editionYear);
+  const headingLabel = conferenceAcronymLabel(conf);
   const initials = conf.acronym.slice(0, 3).toUpperCase();
   // Hide the date chip entirely when dates are TBD or missing (no "TBD" text).
   const showDates = !conf.dates_tbd && !!conf.start_date;

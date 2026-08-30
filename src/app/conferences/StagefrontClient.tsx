@@ -12,9 +12,19 @@ import { fetchDelegateFees, applyDelegateFee } from '@/lib/publicFees';
 import { LabConference, LabReview, ratingMap } from './landing-lab/shared';
 import VariantStagefront from './landing-lab/VariantStagefront';
 
+export interface PlatformStats {
+  total_conferences: number;
+  published_conferences: number;
+  countries: number;
+}
+
 export default function StagefrontClient() {
   const [conferences, setConferences] = useState<LabConference[]>([]);
   const [reviews, setReviews] = useState<LabReview[]>([]);
+  // Real platform totals, including conferences still being set up. RLS hides
+  // those rows from anon, so the numbers come from a counts-only definer RPC
+  // rather than from the `conferences` rows the cards are built from.
+  const [stats, setStats] = useState<PlatformStats | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -37,9 +47,13 @@ export default function StagefrontClient() {
       setReviews((reviewRes.data as LabReview[]) ?? []);
     }
     fetchData();
+    supabase.rpc('public_conference_stats').then(({ data }) => {
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) setStats(row as PlatformStats);
+    });
   }, []);
 
   const ratings = useMemo(() => ratingMap(reviews), [reviews]);
 
-  return <VariantStagefront conferences={conferences} ratings={ratings} />;
+  return <VariantStagefront conferences={conferences} ratings={ratings} stats={stats} />;
 }

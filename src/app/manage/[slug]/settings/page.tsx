@@ -32,6 +32,7 @@ import {
 import { activeFeePhase, type FeePhase } from '@/lib/finance';
 import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
+import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
@@ -2050,9 +2051,10 @@ export default function SettingsPage() {
 
   async function handleSaveDetails() {
     if (!conference || detailsSaving) return;
-    const upperAcr = acronym.toUpperCase().trim();
-    if (!upperAcr) {
-      setAcronymError('Acronym is required.');
+    const trimmedAcr = acronym.trim();
+    const acrProblem = acronymProblem(trimmedAcr);
+    if (acrProblem) {
+      setAcronymError(acrProblem);
       return;
     }
     setAcronymError('');
@@ -2074,7 +2076,7 @@ export default function SettingsPage() {
     }
     const { data, error } = await supabase.from('conferences').update({
       full_name: fullName,
-      acronym: upperAcr,
+      acronym: trimmedAcr,
       contact_email: contactEmail || null,
       student_level: studentLevel || null,
       start_date: datesTbd ? null : (startDate || null),
@@ -2866,19 +2868,22 @@ export default function SettingsPage() {
                 <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Acronym</label>
                 <input
                   type="text"
-                  value={acronym.toUpperCase()}
+                  value={acronym}
                   onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
                   onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
                   onBlur={(e) => {
-                    const upper = e.target.value.toUpperCase().trim();
-                    if (!upper) setAcronymError('Acronym is required.'); else setAcronymError('');
+                    setAcronymError(acronymProblem(e.target.value));
                     e.currentTarget.style.borderColor = '#DDD4C0';
                   }}
-                  placeholder="e.g. LIMUN"
+                  placeholder="e.g. LIMUN, or Model NATO Germany"
                   style={inputStyle}
                 />
-                {acronymError && (
+                {acronymError ? (
                   <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{acronymError}</p>
+                ) : (
+                  <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                    Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong>
+                  </p>
                 )}
               </div>
               <div className="flex-1">

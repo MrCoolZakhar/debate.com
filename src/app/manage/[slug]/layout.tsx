@@ -14,6 +14,7 @@ import Loader from '@/components/Loader';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import type { EmailTheme } from '@/lib/emailHtml';
 import { financialsAreReadOnly } from '@/lib/organizerPermissions';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import NotificationStack from '@/components/notifications/NotificationStack';
 
@@ -883,7 +884,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.75'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
           >
-            {conference?.acronym ?? '...'}
+            {conference ? conferenceAcronymLabel(conference) : '...'}
           </Link>
         </div>
 

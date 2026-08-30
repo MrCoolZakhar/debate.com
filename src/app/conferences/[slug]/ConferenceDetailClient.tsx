@@ -24,6 +24,7 @@ import { fetchDelegateFees, type ResolvedFee } from '@/lib/publicFees';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
 import { appendEditionYear } from '@/lib/presetNames';
+import { conferenceAcronymLabel, conferenceFullNameLabel } from '@/lib/conferenceLabels';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
@@ -1401,10 +1402,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               ) : null}
               <div className="min-w-0">
                 <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', color: '#EED98A', letterSpacing: '0.14em', marginBottom: '6px' }}>
-                  {conference.acronym}
+                  {conferenceAcronymLabel(conference)}
                 </p>
                 <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
-                  {conference.full_name}
+                  {conferenceFullNameLabel(conference)}
                 </h1>
                 <div className="flex items-center flex-wrap gap-x-4 gap-y-1.5">
                   <span className="flex items-center gap-2">

@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Search, SlidersHorizontal, ArrowLeft, LayoutGrid, Rows3, Users, ArrowRight, Check,
-  CalendarDays, Ticket, Globe, ChevronDown, CalendarArrowUp, CalendarArrowDown,
-  MapPin, Monitor, School, GraduationCap,
+  CalendarDays, Ticket, Globe, CalendarArrowUp, CalendarArrowDown,
+  MapPin, Monitor, School, GraduationCap, Plus,
 } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
@@ -106,39 +106,6 @@ function countryNameFromCode(code: string | null | undefined): string | null {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function FilterPill({
-  label, active, onClick,
-}: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="px-3.5 py-2 rounded-full text-[11.5px] font-bold transition-all focus:outline-none"
-      style={{
-        backgroundColor: active ? '#1B3828' : '#FAF8F3',
-        color: active ? '#EED98A' : '#1C1410',
-        border: active ? '1px solid #1B3828' : '1.5px solid #D8CDB6',
-        fontFamily: "'Outfit', sans-serif",
-        letterSpacing: '0.07em',
-        whiteSpace: 'nowrap',
-      }}
-      onMouseEnter={(e) => {
-        if (active) return;
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)';
-        (e.currentTarget as HTMLElement).style.color = '#1B3828';
-        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(27,56,40,0.35)';
-      }}
-      onMouseLeave={(e) => {
-        if (active) return;
-        (e.currentTarget as HTMLElement).style.backgroundColor = '#FAF8F3';
-        (e.currentTarget as HTMLElement).style.color = '#1C1410';
-        (e.currentTarget as HTMLElement).style.borderColor = '#D8CDB6';
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
 // ── View toggle (grid / list) ─────────────────────────────────────────────
 
 const VIEW_STORAGE_KEY = 'gavelling-explore-view';
@@ -201,179 +168,6 @@ function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: Explo
 // ── Date sort toggle (soonest ↔ latest) ───────────────────────────────────
 
 type DateSort = 'asc' | 'desc';
-
-function DateSortChip({ sort, onToggle }: { sort: DateSort; onToggle: () => void }) {
-  const soonest = sort === 'asc';
-  const Icon = soonest ? CalendarArrowUp : CalendarArrowDown;
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={soonest ? 'Sorted by date, soonest first, click for latest first' : 'Sorted by date, latest first, click for soonest first'}
-      title={soonest ? 'Date · soonest first' : 'Date · latest first'}
-      className="flex items-center gap-1.5 rounded-full py-2.5 px-4 font-bold text-[12.5px] transition-colors focus:outline-none flex-shrink-0"
-      style={{
-        backgroundColor: 'rgba(237,231,216,0.5)',
-        color: '#4A4238',
-        border: '1px solid rgba(221,212,192,0.9)',
-        fontFamily: "'Outfit', sans-serif",
-        letterSpacing: '0.07em',
-        fontVariantNumeric: 'tabular-nums',
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)';
-        (e.currentTarget as HTMLElement).style.color = '#1B3828';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.5)';
-        (e.currentTarget as HTMLElement).style.color = '#4A4238';
-      }}
-    >
-      <Icon size={15} strokeWidth={2.25} />
-      DATE
-      <span aria-hidden style={{ fontSize: '12.5px', lineHeight: 1 }}>{soonest ? '↑' : '↓'}</span>
-    </button>
-  );
-}
-
-// ── Region control (user country · all · continents) ─────────────────────
-
-function RegionControl({
-  region, userCountry, onChange,
-}: {
-  region: string; // '' = all, 'country' = user country, else continent key
-  userCountry: string | null;
-  onChange: (r: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
-
-  const currentLabel =
-    region === 'country' && userCountry ? (
-      <>
-        {userCode && <FlagImg code={userCode} size={17} />}
-        <span className="truncate">{userCountry.toUpperCase()}</span>
-      </>
-    ) : region && CONTINENT_LABELS[region] ? (
-      <span className="truncate">{CONTINENT_LABELS[region].toUpperCase()}</span>
-    ) : (
-      <>
-        <Emoji3D name="Globe with meridians" size={18} fallback={Globe} fallbackColor="#4A4238" style={{ filter: 'none' }} />
-        <span className="truncate">ALL REGIONS</span>
-      </>
-    );
-
-  const optionStyle = (active: boolean): React.CSSProperties => ({
-    fontFamily: "'Outfit', sans-serif",
-    fontWeight: 700,
-    fontSize: '12.5px',
-    letterSpacing: '0.06em',
-    color: active ? '#EED98A' : '#1C1410',
-    backgroundColor: active ? '#1B3828' : 'transparent',
-    width: '100%',
-    textAlign: 'left' as const,
-    padding: '10px 13px',
-    borderRadius: '11px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '9px',
-    whiteSpace: 'nowrap',
-  });
-
-  function pick(r: string) {
-    onChange(r);
-    setOpen(false);
-  }
-
-  return (
-    <div ref={ref} className="relative flex-shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Region"
-        className="flex items-center gap-2 rounded-full py-2.5 px-4 font-bold text-[12.5px] transition-colors focus:outline-none"
-        style={{
-          backgroundColor: region ? '#1B3828' : 'rgba(237,231,216,0.5)',
-          color: region ? '#EED98A' : '#4A4238',
-          border: region ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
-          fontFamily: "'Outfit', sans-serif",
-          letterSpacing: '0.07em',
-          maxWidth: '210px',
-        }}
-        onMouseEnter={(e) => {
-          if (region) return;
-          (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.08)';
-          (e.currentTarget as HTMLElement).style.color = '#1B3828';
-        }}
-        onMouseLeave={(e) => {
-          if (region) return;
-          (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(237,231,216,0.5)';
-          (e.currentTarget as HTMLElement).style.color = '#4A4238';
-        }}
-      >
-        {currentLabel}
-        <ChevronDown size={14} strokeWidth={2.5} style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms ease' }} />
-      </button>
-
-      {open && (
-        <div
-          role="listbox"
-          aria-label="Region"
-          className="absolute right-0 z-50 mt-2 p-2"
-          style={{
-            minWidth: '236px',
-            backgroundColor: '#FAF8F3',
-            border: '1px solid rgba(221,212,192,0.95)',
-            borderRadius: '16px',
-            boxShadow: '0 16px 44px rgba(27,56,40,0.16), 0 2px 8px rgba(27,56,40,0.08)',
-          }}
-        >
-          {userCountry && (
-            <>
-              <button role="option" aria-selected={region === 'country'} style={optionStyle(region === 'country')} onClick={() => pick('country')}
-                onMouseEnter={(e) => { if (region !== 'country') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                onMouseLeave={(e) => { if (region !== 'country') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-              >
-                {userCode && <FlagImg code={userCode} size={17} />}
-                {userCountry.toUpperCase()}
-                <span style={{ marginLeft: 'auto', fontSize: '9.5px', letterSpacing: '0.12em', color: region === 'country' ? 'rgba(238,217,138,0.75)' : '#B6871F' }}>NEAR YOU</span>
-              </button>
-              <div className="my-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.7)' }} />
-            </>
-          )}
-          <button role="option" aria-selected={region === ''} style={optionStyle(region === '')} onClick={() => pick('')}
-            onMouseEnter={(e) => { if (region !== '') (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-            onMouseLeave={(e) => { if (region !== '') (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor={region === '' ? '#EED98A' : '#1C1410'} style={{ filter: 'none' }} />
-            ALL REGIONS
-          </button>
-          {CONTINENT_KEYS.map(key => (
-            <button key={key} role="option" aria-selected={region === key} style={optionStyle(region === key)} onClick={() => pick(key)}
-              onMouseEnter={(e) => { if (region !== key) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-              onMouseLeave={(e) => { if (region !== key) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              {CONTINENT_LABELS[key].toUpperCase()}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── List row (myMUN-style directory row) ──────────────────────────────────
 
@@ -602,6 +396,223 @@ function ConferenceListRow({
   );
 }
 
+
+// ── Filter rail (mymun-style: filters live in a column beside the grid) ────
+// One vertical stack of grouped controls, sticky on desktop so filtering never
+// means scrolling back to the top. On narrow screens the whole rail collapses
+// behind a FILTERS button and expands in flow above the results.
+
+function RailHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="mb-2.5"
+      style={{
+        fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '10px',
+        letterSpacing: '0.16em', textTransform: 'uppercase', color: '#9A8A78', margin: '0 0 10px',
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+/** One filter row. Reads as a list item, not a pill: full width, a check
+ *  gutter on the left so the ticked and unticked rows stay optically aligned. */
+function RailOption({
+  label, active, onClick, icon: Icon, flagCode, note,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  icon?: RowIcon;
+  flagCode?: string;
+  note?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={active}
+      onClick={onClick}
+      className="w-full flex items-center text-left focus:outline-none"
+      style={{
+        gap: '9px',
+        padding: '7px 10px',
+        borderRadius: '10px',
+        backgroundColor: active ? '#1B3828' : 'transparent',
+        color: active ? '#EED98A' : '#4A4238',
+        border: 'none',
+        cursor: 'pointer',
+        fontFamily: "'Outfit', sans-serif",
+        fontWeight: active ? 700 : 600,
+        fontSize: '12.5px',
+        transition: 'background-color 140ms ease, color 140ms ease',
+      }}
+      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+    >
+      {flagCode ? (
+        <FlagImg code={flagCode} size={16} />
+      ) : Icon ? (
+        <Icon size={14} strokeWidth={2.2} style={{ flexShrink: 0, color: active ? '#EED98A' : '#2A5A3C' }} />
+      ) : (
+        <span
+          aria-hidden
+          style={{
+            width: '14px', height: '14px', borderRadius: '5px', flexShrink: 0,
+            border: active ? '1px solid rgba(238,217,138,0.6)' : '1px solid rgba(154,138,120,0.5)',
+            backgroundColor: active ? 'rgba(238,217,138,0.2)' : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {active && <Check size={10} strokeWidth={3.5} style={{ color: '#EED98A' }} />}
+        </span>
+      )}
+      <span className="truncate flex-1">{label}</span>
+      {note && (
+        <span style={{ fontSize: '9px', letterSpacing: '0.12em', fontWeight: 800, color: active ? 'rgba(238,217,138,0.75)' : '#B6871F' }}>
+          {note}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function FilterRail({
+  searchQuery, onSearch,
+  region, userCountry, onRegion,
+  formatFilter, onFormat,
+  levelFilter, onLevel,
+  applicationsOpen, onApplicationsOpen,
+  dateSort, onDateSort,
+  hasActiveFilters, onClear,
+}: {
+  searchQuery: string; onSearch: (v: string) => void;
+  region: string; userCountry: string | null; onRegion: (r: string) => void;
+  formatFilter: string; onFormat: (v: 'in-person' | 'online' | 'hybrid' | '') => void;
+  levelFilter: string; onLevel: (v: 'school' | 'university' | 'both' | '') => void;
+  applicationsOpen: boolean; onApplicationsOpen: (v: boolean) => void;
+  dateSort: DateSort; onDateSort: (v: DateSort) => void;
+  hasActiveFilters: boolean; onClear: () => void;
+}) {
+  const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
+
+  const group: React.CSSProperties = {
+    paddingBottom: '16px',
+    marginBottom: '16px',
+    borderBottom: '1px solid rgba(221,212,192,0.85)',
+  };
+
+  return (
+    <div
+      style={{
+        backgroundColor: 'rgba(250,248,243,0.78)',
+        backdropFilter: 'blur(18px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
+        border: '1px solid rgba(221,212,192,0.9)',
+        borderRadius: '20px',
+        padding: '18px 16px',
+        boxShadow: '0 10px 34px rgba(27,56,40,0.09), 0 1px 0 rgba(255,255,255,0.6) inset',
+      }}
+    >
+      {/* Search */}
+      <div style={group}>
+        <div className="relative flex items-center">
+          <Search size={16} className="absolute left-3 pointer-events-none" style={{ color: '#9A8A78' }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Search name or city…"
+            aria-label="Search conferences"
+            className="w-full py-2.5 pl-9 pr-3 text-[13px] focus:outline-none"
+            style={{
+              border: '1px solid rgba(221,212,192,0.9)',
+              borderRadius: '11px',
+              backgroundColor: '#FFFDF9',
+              color: '#1C1410',
+              fontFamily: "'Outfit', sans-serif",
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(221,212,192,0.9)'; }}
+          />
+        </div>
+      </div>
+
+      {/* Region */}
+      <div style={group} role="listbox" aria-label="Region">
+        <RailHeading>Region</RailHeading>
+        {userCountry && (
+          <RailOption
+            label={userCountry}
+            active={region === 'country'}
+            onClick={() => onRegion(region === 'country' ? '' : 'country')}
+            flagCode={userCode}
+            note="NEAR YOU"
+          />
+        )}
+        <RailOption
+          label="All regions"
+          active={region === ''}
+          onClick={() => onRegion('')}
+          icon={Globe}
+        />
+        {CONTINENT_KEYS.map(key => (
+          <RailOption
+            key={key}
+            label={CONTINENT_LABELS[key]}
+            active={region === key}
+            onClick={() => onRegion(region === key ? '' : key)}
+          />
+        ))}
+      </div>
+
+      {/* Format */}
+      <div style={group} role="listbox" aria-label="Format">
+        <RailHeading>Format</RailHeading>
+        <RailOption label="In person" active={formatFilter === 'in-person'} onClick={() => onFormat(formatFilter === 'in-person' ? '' : 'in-person')} icon={MapPin} />
+        <RailOption label="Online"    active={formatFilter === 'online'}    onClick={() => onFormat(formatFilter === 'online' ? '' : 'online')}    icon={Monitor} />
+        <RailOption label="Hybrid"    active={formatFilter === 'hybrid'}    onClick={() => onFormat(formatFilter === 'hybrid' ? '' : 'hybrid')}    icon={Globe} />
+      </div>
+
+      {/* Level */}
+      <div style={group} role="listbox" aria-label="Student level">
+        <RailHeading>Level</RailHeading>
+        <RailOption label="High school" active={levelFilter === 'school'}     onClick={() => onLevel(levelFilter === 'school' ? '' : 'school')}         icon={School} />
+        <RailOption label="University"  active={levelFilter === 'university'} onClick={() => onLevel(levelFilter === 'university' ? '' : 'university')} icon={GraduationCap} />
+        <RailOption label="Both"        active={levelFilter === 'both'}       onClick={() => onLevel(levelFilter === 'both' ? '' : 'both')} />
+      </div>
+
+      {/* Sort + applications */}
+      <div style={{ ...group, borderBottom: hasActiveFilters ? group.borderBottom : 'none', marginBottom: hasActiveFilters ? 16 : 0, paddingBottom: hasActiveFilters ? 16 : 0 }}>
+        <RailHeading>Sort &amp; status</RailHeading>
+        <RailOption
+          label={dateSort === 'asc' ? 'Soonest first' : 'Latest first'}
+          active={false}
+          onClick={() => onDateSort(dateSort === 'asc' ? 'desc' : 'asc')}
+          icon={dateSort === 'asc' ? CalendarArrowUp : CalendarArrowDown}
+        />
+        <RailOption label="Applications open" active={applicationsOpen} onClick={() => onApplicationsOpen(!applicationsOpen)} />
+      </div>
+
+      {hasActiveFilters && (
+        <button
+          onClick={onClear}
+          className="w-full focus:outline-none"
+          style={{
+            fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px',
+            letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8B2020',
+            background: 'transparent', border: '1px solid rgba(139,32,32,0.25)',
+            borderRadius: '10px', padding: '8px', cursor: 'pointer',
+          }}
+        >
+          Clear all filters
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Empty state SVG ────────────────────────────────────────────────────────
 
 function EmptySVG() {
@@ -770,10 +781,25 @@ export default function ConferencesExploreClient() {
   // "Conferences around you" heading. Clears the moment the visitor picks a region.
   const aroundYouMode = aroundYouDefault && region === '' && !regionTouched;
 
-  // Headline count = what's actually browsable. Counts only the concluded
-  // exclusion, NOT the search/region/format filters, so the hero line stays a
-  // stable "here's how big the circuit is" rather than jumping as you filter.
+  // Headline count = every conference on the platform, published or still
+  // being set up, from a definer RPC (RLS hides unpublished rows from anon, and
+  // this returns counts only). It answers "how big is Gavelling", which is a
+  // different question from "how many can I click right now" — the results rule
+  // below the filters answers that one. Falls back to the browsable count if
+  // the RPC is unavailable, so the line is never blank.
+  const [totalConferences, setTotalConferences] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.rpc('public_conference_stats').then(({ data }) => {
+      if (cancelled) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      const n = (row as { total_conferences?: number } | null)?.total_conferences;
+      if (typeof n === 'number' && n > 0) setTotalConferences(n);
+    });
+    return () => { cancelled = true; };
+  }, []);
   const upcomingCount = useMemo(() => conferences.filter(c => !hasConcluded(c)).length, [conferences]);
+  const headlineCount = totalConferences ?? (loading ? null : upcomingCount);
 
   const filtered = useMemo(() => conferences.filter(c => {
     // Finished conferences are dropped from the directory — nobody browsing for
@@ -864,10 +890,10 @@ export default function ConferencesExploreClient() {
         <SiteNav hideLanguage />
 
         {/* ── Editorial header ─────────────────────────────────────── */}
-        <header className="px-6 md:px-14 pt-8 pb-8">
+        <header className="px-6 md:px-10 pt-8 pb-7">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-[11px] mb-6 transition-colors font-semibold"
+            className="inline-flex items-center gap-1.5 text-[11px] mb-5 transition-colors font-semibold"
             style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none', letterSpacing: '0.08em', textTransform: 'uppercase' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
@@ -876,7 +902,7 @@ export default function ConferencesExploreClient() {
             Back to conferences
           </Link>
 
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
             <div>
               <p
                 className="mb-2 font-bold"
@@ -887,7 +913,7 @@ export default function ConferencesExploreClient() {
               <h1
                 style={{
                   fontFamily: "'Outfit', sans-serif", fontWeight: 900,
-                  fontSize: 'clamp(36px, 4.5vw, 60px)', lineHeight: 1.02, color: '#1C1410', margin: 0,
+                  fontSize: 'clamp(32px, 4vw, 52px)', lineHeight: 1.02, color: '#1C1410', margin: 0,
                 }}
               >
                 Explore{' '}
@@ -895,174 +921,110 @@ export default function ConferencesExploreClient() {
                 <span style={{ color: '#B6871F' }}>.</span>
               </h1>
               <p
-                className="mt-3"
-                style={{ fontFamily: "'Outfit', sans-serif", fontSize: '14px', color: '#8A7D6C', maxWidth: '440px', lineHeight: 1.6 }}
+                className="mt-2.5"
+                style={{ fontFamily: "'Outfit', sans-serif", fontSize: '14px', color: '#8A7D6C', maxWidth: '460px', lineHeight: 1.6 }}
               >
-                {loading
+                {headlineCount === null
                   ? 'Loading the directory…'
-                  : `${upcomingCount} conference${upcomingCount === 1 ? '' : 's'} across every continent. Find where you debate next.`}
+                  : `${headlineCount} conference${headlineCount === 1 ? '' : 's'} across every continent. Find where you debate next.`}
               </p>
             </div>
+
+            {/* Organise: a plus and the verb. The old sentence-length label was
+                the loudest thing on a page about browsing, not creating. */}
             <button
               onClick={() => router.push('/conferences/new')}
-              className="self-start md:self-auto flex-shrink-0 rounded-2xl py-3.5 px-7 font-bold text-[13px] transition-all focus:outline-none"
+              className="self-start md:self-auto flex-shrink-0 inline-flex items-center gap-2 rounded-full py-3 px-6 font-bold text-[13px] transition-all focus:outline-none"
               style={{
                 backgroundColor: '#1B3828', color: '#EED98A',
                 fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em',
+                border: 'none', cursor: 'pointer',
                 boxShadow: '0 8px 24px rgba(27,56,40,0.22)',
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
             >
-              ORGANISE A CONFERENCE →
+              <Plus size={17} strokeWidth={2.6} />
+              ORGANISE
             </button>
           </div>
         </header>
 
-        {/* ── Floating glass filter bar, one uncrowded row ─────────── */}
-        <div className="sticky z-30 px-4 md:px-10" style={{ top: '12px' }}>
-          <div
+        {/* ── Directory: filter rail beside the grid ───────────────── */}
+        <main className="flex-1 px-6 md:px-10 pb-16 flex flex-col lg:flex-row" style={{ gap: '26px', alignItems: 'flex-start' }}>
+
+          {/* Mobile: the rail folds behind one button rather than pushing the
+              results a screen and a half down. */}
+          <button
+            onClick={() => setFiltersOpen(v => !v)}
+            className="lg:hidden w-full flex items-center justify-center gap-2 rounded-full py-3 font-bold text-[12.5px] focus:outline-none"
             style={{
-              backgroundColor: 'rgba(250,248,243,0.72)',
-              backdropFilter: 'blur(20px) saturate(1.5)',
-              WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
-              border: '1px solid rgba(221,212,192,0.85)',
-              borderRadius: filtersOpen ? '24px' : '9999px',
-              boxShadow: '0 12px 40px rgba(27,56,40,0.12), 0 1px 0 rgba(255,255,255,0.6) inset',
-              transition: 'border-radius 260ms ease',
+              backgroundColor: filtersOpen ? '#1B3828' : 'rgba(250,248,243,0.8)',
+              color: filtersOpen ? '#EED98A' : '#4A4238',
+              border: filtersOpen ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+              fontFamily: "'Outfit', sans-serif", letterSpacing: '0.09em', cursor: 'pointer',
             }}
           >
-            <div className="flex items-center gap-2.5 px-2.5 py-2.5 md:px-4 flex-wrap md:flex-nowrap">
-              {/* Search */}
-              <div className="relative flex items-center flex-1" style={{ minWidth: '190px' }}>
-                <Search size={18} className="absolute left-3.5 pointer-events-none" style={{ color: '#9A8A78' }} />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search name, city, country…"
-                  className="w-full py-2.5 pl-11 pr-3 text-[15px] focus:outline-none"
-                  style={{
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: '#1C1410',
-                    fontFamily: "'Outfit', sans-serif",
-                  }}
-                />
-              </div>
+            <SlidersHorizontal size={15} />
+            FILTERS
+            {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filtersOpen ? '#EED98A' : '#B6871F' }} />}
+          </button>
 
-              {/* Hairline divider */}
-              <div className="hidden md:block w-px h-7 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
+          <aside
+            aria-label="Filters"
+            className={`${filtersOpen ? 'block' : 'hidden'} lg:block lg:sticky flex-shrink-0`}
+            style={{ width: '100%', maxWidth: '250px', top: '20px' }}
+          >
+            <FilterRail
+              searchQuery={searchQuery} onSearch={setSearchQuery}
+              region={region} userCountry={userCountry} onRegion={changeRegion}
+              formatFilter={formatFilter} onFormat={setFormatFilter}
+              levelFilter={levelFilter} onLevel={setLevelFilter}
+              applicationsOpen={applicationsOpen} onApplicationsOpen={setApplicationsOpen}
+              dateSort={dateSort} onDateSort={setDateSort}
+              hasActiveFilters={hasActiveFilters} onClear={clearFilters}
+            />
+          </aside>
 
-              {/* Region, visitor's country first, then all / continents */}
-              <RegionControl region={region} userCountry={userCountry} onChange={changeRegion} />
-
-              {/* Date sort, soonest ↔ latest */}
-              <DateSortChip sort={dateSort} onToggle={() => setDateSort(s => (s === 'asc' ? 'desc' : 'asc'))} />
-
-              {/* View toggle (grid / list) */}
-              <ViewToggle view={view} onChange={changeView} />
-
-              {/* Hairline divider */}
-              <div className="hidden md:block w-px h-7 flex-shrink-0" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
-
-              {/* Filters toggle, format / level / applications live in the drawer */}
-              <button
-                onClick={() => setFiltersOpen(v => !v)}
-                className="flex items-center gap-2 rounded-full py-2.5 px-4 font-bold text-[12.5px] transition-colors focus:outline-none flex-shrink-0"
-                style={{
-                  backgroundColor: filtersOpen ? '#1B3828' : 'rgba(237,231,216,0.5)',
-                  color: filtersOpen ? '#EED98A' : '#4A4238',
-                  border: filtersOpen ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.07em',
-                }}
-              >
-                <SlidersHorizontal size={15} />
-                FILTERS
-                {hasActiveFilters && (
-                  <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: filtersOpen ? '#EED98A' : '#B6871F' }}
-                  />
-                )}
-              </button>
-            </div>
-
-            {/* Expanded filter panel, inside the glass container */}
-            {filtersOpen && (
-              <div
-                className="px-4 md:px-5 py-4 flex flex-wrap items-center gap-2"
-                style={{ borderTop: '1px solid rgba(221,212,192,0.7)' }}
-              >
-                <span className="text-[11px] font-bold mr-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase' }}>Format</span>
-                <FilterPill label="IN-PERSON"  active={formatFilter === 'in-person'}  onClick={() => setFormatFilter(f => f === 'in-person' ? '' : 'in-person')} />
-                <FilterPill label="ONLINE"     active={formatFilter === 'online'}     onClick={() => setFormatFilter(f => f === 'online' ? '' : 'online')} />
-                <FilterPill label="HYBRID"     active={formatFilter === 'hybrid'}     onClick={() => setFormatFilter(f => f === 'hybrid' ? '' : 'hybrid')} />
-
-                <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
-
-                <span className="text-[11px] font-bold mr-1" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase' }}>Level</span>
-                <FilterPill label="HIGH SCHOOL" active={levelFilter === 'school'}     onClick={() => setLevelFilter(l => l === 'school' ? '' : 'school')} />
-                <FilterPill label="UNIVERSITY" active={levelFilter === 'university'} onClick={() => setLevelFilter(l => l === 'university' ? '' : 'university')} />
-                <FilterPill label="BOTH"       active={levelFilter === 'both'}       onClick={() => setLevelFilter(l => l === 'both' ? '' : 'both')} />
-
-                <div className="w-px h-5 mx-1" style={{ backgroundColor: 'rgba(221,212,192,0.9)' }} />
-
-                <FilterPill label="APPLICATIONS OPEN" active={applicationsOpen} onClick={() => setApplicationsOpen(v => !v)} />
-
-                {hasActiveFilters && (
-                  <button
-                    onClick={clearFilters}
-                    className="ml-auto text-[11px] underline focus:outline-none"
-                    style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}
-                  >
-                    Clear all
-                  </button>
-                )}
+          <section className="flex-1 min-w-0 w-full">
+            {/* Results rule — what this column is showing, plus the one control
+                that belongs to the results rather than the filters. */}
+            {!loading && displayed.length > 0 && (
+              <div className="flex items-center gap-4 mb-6">
+                <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                  {aroundYouMode ? (
+                    <>
+                      <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
+                      CONFERENCES AROUND YOU
+                    </>
+                  ) : countryMode ? (
+                    <>
+                      {userCode && <FlagImg code={userCode} size={17} />}
+                      CONFERENCES IN {userCountry!.toUpperCase()}
+                      {displayed.length < sorted.length ? ` · ${displayed.length} OF ${sorted.length}` : ''}
+                    </>
+                  ) : (
+                    <>
+                      <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
+                      SHOWING {sorted.length} {sorted.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}
+                    </>
+                  )}
+                </span>
+                <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
+                <ViewToggle view={view} onChange={changeView} />
               </div>
             )}
-          </div>
-        </div>
-
-        {/* ── Main content ─────────────────────────────────────────── */}
-        <main className="flex-1 px-6 md:px-14 pt-10 pb-16">
-          {/* Results rule */}
-          {!loading && displayed.length > 0 && (
-            <div className="flex items-center gap-4 mb-7">
-              <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                {aroundYouMode ? (
-                  <>
-                    <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
-                    CONFERENCES AROUND YOU
-                  </>
-                ) : countryMode ? (
-                  <>
-                    {userCode && <FlagImg code={userCode} size={17} />}
-                    CONFERENCES IN {userCountry!.toUpperCase()}
-                    {displayed.length < sorted.length ? ` · ${displayed.length} OF ${sorted.length}` : ''}
-                  </>
-                ) : (
-                  <>
-                    <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
-                    SHOWING {sorted.length} {sorted.length === 1 ? 'CONFERENCE' : 'CONFERENCES'}
-                  </>
-                )}
-              </span>
-              <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
-            </div>
-          )}
 
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
-              {Array.from({ length: 6 }).map((_, i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" style={{ gap: '20px' }}>
+              {Array.from({ length: 8 }).map((_, i) => (
                 <div
                   key={i}
                   className="rounded-[20px] overflow-hidden"
                   style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}
                 >
-                  <div className="animate-pulse" style={{ height: '104px', backgroundColor: '#DDD4C0' }} />
-                  <div className="p-5">
+                  <div className="animate-pulse" style={{ height: '72px', backgroundColor: '#DDD4C0' }} />
+                  <div className="p-4">
                     <div className="animate-pulse rounded-full mb-3" style={{ width: '56px', height: '10px', backgroundColor: '#E4DCCB' }} />
                     <div className="animate-pulse rounded-lg mb-2" style={{ width: '80%', height: '16px', backgroundColor: '#E4DCCB' }} />
                     <div className="animate-pulse rounded-lg mb-4" style={{ width: '55%', height: '12px', backgroundColor: '#EDE7D8' }} />
@@ -1127,11 +1089,12 @@ export default function ConferencesExploreClient() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" style={{ gap: '20px' }}>
               {displayed.map(conf => (
                 <ConferenceCard
                   key={conf.id}
                   conf={conf}
+                  compact
                   applied={appliedIds.has(conf.id)}
                   member={isMember(conf)}
                   hovered={hoveredId === conf.id}
@@ -1164,6 +1127,7 @@ export default function ConferencesExploreClient() {
               </button>
             </div>
           )}
+          </section>
         </main>
 
         {/* Footer */}
