@@ -192,8 +192,9 @@ const STATUS_STYLE: Record<RoleStatus, { fg: string; bg: string; dot: string }> 
  *  the step has nothing unresolved, the label, its subtitle, and a chevron.
  *  Module scope on purpose: a component declared inside the page would be a new
  *  type every render, remounting QuestionBuilder and losing its editing state. */
-function StepHeader({ n, label, sub, complete, open, onClick }: {
+function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle' }: {
   n: number; label: string; sub: string; complete: boolean; open: boolean; onClick: () => void;
+  status?: 'idle' | 'saving' | 'saved';
 }) {
   return (
     <button
@@ -222,6 +223,16 @@ function StepHeader({ n, label, sub, complete, open, onClick }: {
           {sub}
         </span>
       </span>
+      {status === 'saving' && (
+        <span className="text-xs flex-shrink-0" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Saving...
+        </span>
+      )}
+      {status === 'saved' && (
+        <span className="text-xs flex items-center gap-1 flex-shrink-0" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
+          <Check size={12} strokeWidth={3} /> Saved
+        </span>
+      )}
       <ChevronDown
         size={18}
         strokeWidth={2.2}
@@ -552,6 +563,7 @@ export default function SettingsPage() {
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
   const [roleConfigError, setRoleConfigError] = useState('');
+  const [blocksSaveState, setBlocksSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   // Roles with at least one application already in the pipeline (submitted or
   // further along) — used only to show a quiet caution in the question
   // builder when rewording a question those applicants may have already
@@ -713,6 +725,15 @@ export default function SettingsPage() {
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
   const roleSeq = useRef(0);
+  // Inline question editing fires on every keystroke. These hold the pending
+  // blocks per role, the debounce timer, and a promise chain that keeps two
+  // writes for the same role from ever overlapping (same reasoning as the
+  // per-organizer serial chains in the team tab).
+  const blocksPendingRef = useRef<Map<string, FormBlock[]>>(new Map());
+  const blocksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blocksChainRef = useRef<Promise<void>>(Promise.resolve());
+  const blocksSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushRef = useRef<(role?: string) => void>(() => {});
   const rolesWithApplicationsSeq = useRef(0);
   const orgSeq = useRef(0);
   const invitesSeq = useRef(0);
@@ -1755,9 +1776,84 @@ export default function SettingsPage() {
     );
   }
 
+  /** Patch local state at once so typing stays responsive, then debounce the
+   *  write. Do NOT route this through saveRoleConfig: that would delay its
+   *  optimistic patch too, and typing would appear to do nothing. */
   function handleBlocksChange(next: FormBlock[]) {
-    void saveRoleConfig(selectedRole, { custom_questions: next });
+    const role = selectedRole;
+    setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, custom_questions: next } : rc)));
+    setRoleConfigError('');
+    blocksPendingRef.current.set(role, next);
+    setBlocksSaveState('saving');
+    if (blocksTimerRef.current) clearTimeout(blocksTimerRef.current);
+    blocksTimerRef.current = setTimeout(() => {
+      blocksTimerRef.current = null;
+      persistBlocks(role);
+    }, 400);
   }
+
+  /** Writes the pending blocks for one role, appended to the serial chain so
+   *  two writes for that role can never be in flight at once. On failure we
+   *  reload rather than roll back: local state has moved on by several
+   *  keystrokes, so any snapshot we could restore is already stale. */
+  function persistBlocks(role: string) {
+    const pending = blocksPendingRef.current.get(role);
+    if (!pending) return;
+    blocksPendingRef.current.delete(role);
+    blocksChainRef.current = blocksChainRef.current.then(async () => {
+      if (!conference || !session) return;
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) {
+        setBlocksSaveState('idle');
+        setRoleConfigError('Your session has expired, please refresh and sign in again.');
+        return;
+      }
+      const { data, error } = await supabase
+        .from('application_role_configs')
+        .update({ custom_questions: pending })
+        .eq('conference_id', conference.id)
+        .eq('role', role)
+        .select('id');
+      if (error || !data || data.length === 0) {
+        setBlocksSaveState('idle');
+        setRoleConfigError('Could not save your questions. Reloading the latest saved version.');
+        void loadRoleConfigs();
+        return;
+      }
+      setBlocksSaveState('saved');
+      if (blocksSavedTimerRef.current) clearTimeout(blocksSavedTimerRef.current);
+      blocksSavedTimerRef.current = setTimeout(() => setBlocksSaveState('idle'), 2000);
+    });
+  }
+
+  /** Cancel the debounce and write now. Called before anything can read stale
+   *  data: switching role, switching tab, leaving the Form step, unmounting. */
+  function flushBlocks(role: string = selectedRole) {
+    if (blocksTimerRef.current) {
+      clearTimeout(blocksTimerRef.current);
+      blocksTimerRef.current = null;
+    }
+    persistBlocks(role);
+  }
+
+  flushRef.current = flushBlocks;
+
+  // Role or tab changed, or the page is unmounting. The role is captured on
+  // the way in so the cleanup flushes the role that was actually being edited.
+  useEffect(() => {
+    const role = selectedRole;
+    return () => { flushRef.current(role); };
+  }, [selectedRole, activeTab]);
+
+  // Leaving the Form step. Its panel is about to collapse, so write now.
+  useEffect(() => {
+    if (openStep !== 3) flushRef.current();
+  }, [openStep]);
+
+  // Never leave a "Saved" timer running past unmount.
+  useEffect(() => () => {
+    if (blocksSavedTimerRef.current) clearTimeout(blocksSavedTimerRef.current);
+  }, []);
 
   // Deep-copies a block with a fresh id, so the copy is fully independent of
   // the source (including its options array, the only nested mutable field).
@@ -2675,6 +2771,7 @@ export default function SettingsPage() {
                       n={STEPS[2].n} label={STEPS[2].label} sub={STEPS[2].sub}
                       complete={stepComplete[3]} open={openStep === 3}
                       onClick={() => setOpenStep(3)}
+                      status={blocksSaveState}
                     />
                     {openStep === 3 && (
                       <div className="mt-5">
