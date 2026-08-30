@@ -483,7 +483,6 @@ function FilterRail({
   region, userCountry, onRegion,
   formatFilter, onFormat,
   levelFilter, onLevel,
-  applicationsOpen, onApplicationsOpen,
   dateSort, onDateSort,
   hasActiveFilters, onClear,
 }: {
@@ -491,7 +490,6 @@ function FilterRail({
   region: string; userCountry: string | null; onRegion: (r: string) => void;
   formatFilter: string; onFormat: (v: 'in-person' | 'online' | 'hybrid' | '') => void;
   levelFilter: string; onLevel: (v: 'school' | 'university' | 'both' | '') => void;
-  applicationsOpen: boolean; onApplicationsOpen: (v: boolean) => void;
   dateSort: DateSort; onDateSort: (v: DateSort) => void;
   hasActiveFilters: boolean; onClear: () => void;
 }) {
@@ -585,14 +583,13 @@ function FilterRail({
 
       {/* Sort + applications */}
       <div style={{ ...group, borderBottom: hasActiveFilters ? group.borderBottom : 'none', marginBottom: hasActiveFilters ? 16 : 0, paddingBottom: hasActiveFilters ? 16 : 0 }}>
-        <RailHeading>Sort &amp; status</RailHeading>
+        <RailHeading>Sort</RailHeading>
         <RailOption
           label={dateSort === 'asc' ? 'Soonest first' : 'Latest first'}
           active={false}
           onClick={() => onDateSort(dateSort === 'asc' ? 'desc' : 'asc')}
           icon={dateSort === 'asc' ? CalendarArrowUp : CalendarArrowDown}
         />
-        <RailOption label="Applications open" active={applicationsOpen} onClick={() => onApplicationsOpen(!applicationsOpen)} />
       </div>
 
       {hasActiveFilters && (
@@ -643,7 +640,6 @@ export default function ConferencesExploreClient() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [formatFilter, setFormatFilter] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
   const [levelFilter, setLevelFilter] = useState<'school' | 'university' | 'both' | ''>('');
-  const [applicationsOpen, setApplicationsOpen] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   // Region: '' = all regions, 'country' = visitor's own country, else a continent key.
@@ -842,13 +838,12 @@ export default function ConferencesExploreClient() {
   function clearFilters() {
     setFormatFilter('');
     setLevelFilter('');
-    setApplicationsOpen(false);
     setRegion('');
     setRegionTouched(true);
     setSearchQuery('');
   }
 
-  const hasActiveFilters = !!formatFilter || !!levelFilter || applicationsOpen || !!searchQuery || (!!region && region !== 'country');
+  const hasActiveFilters = !!formatFilter || !!levelFilter || !!searchQuery || (!!region && region !== 'country');
 
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
 
@@ -982,7 +977,6 @@ export default function ConferencesExploreClient() {
               region={region} userCountry={userCountry} onRegion={changeRegion}
               formatFilter={formatFilter} onFormat={setFormatFilter}
               levelFilter={levelFilter} onLevel={setLevelFilter}
-              applicationsOpen={applicationsOpen} onApplicationsOpen={setApplicationsOpen}
               dateSort={dateSort} onDateSort={setDateSort}
               hasActiveFilters={hasActiveFilters} onClear={clearFilters}
             />
@@ -990,9 +984,11 @@ export default function ConferencesExploreClient() {
 
           <section className="flex-1 min-w-0 w-full">
             {/* Results rule — what this column is showing, plus the one control
-                that belongs to the results rather than the filters. */}
-            {!loading && displayed.length > 0 && (
-              <div className="flex items-center gap-4 mb-6">
+                that belongs to the results rather than the filters. The rule's
+                LABEL depends on there being results; the view toggle does not,
+                so it stays put while you filter down to nothing and back. */}
+            <div className="flex items-center gap-4 mb-6">
+              {!loading && displayed.length > 0 ? (
                 <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                   {aroundYouMode ? (
                     <>
@@ -1012,10 +1008,18 @@ export default function ConferencesExploreClient() {
                     </>
                   )}
                 </span>
-                <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
-                <ViewToggle view={view} onChange={changeView} />
-              </div>
-            )}
+              ) : (
+                <span
+                  className="inline-flex items-center gap-2"
+                  style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap' }}
+                >
+                  <Emoji3D name="Globe with meridians" size={17} fallback={Globe} fallbackColor="#9A8A78" style={{ filter: 'none' }} />
+                  {loading ? 'LOADING…' : 'NO MATCHES'}
+                </span>
+              )}
+              <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
+              <ViewToggle view={view} onChange={changeView} />
+            </div>
 
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style={{ gap: '20px' }}>
@@ -1057,22 +1061,28 @@ export default function ConferencesExploreClient() {
                 </button>
               </div>
             ) : (
+              /* Two different nothings. "Your filters matched nothing" wants a
+                 way back to the full list; "the directory is empty" wants an
+                 invitation to fill it. Telling a searcher the product is
+                 launching soon, next to 157 conferences, is neither. */
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <EmptySVG />
                 <h2 className="font-semibold text-lg mt-6 mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                  No conferences listed yet
+                  {hasActiveFilters ? 'Nothing matches that' : 'No conferences listed yet'}
                 </h2>
-                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  Gavelling Conferences is launching soon. Be the first to list your conference.
+                <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", maxWidth: '360px' }}>
+                  {hasActiveFilters
+                    ? 'Try a different search, a wider region, or clear the filters to see the whole directory.'
+                    : 'Gavelling Conferences is launching soon. Be the first to list your conference.'}
                 </p>
                 <button
-                  onClick={() => router.push('/conferences/new')}
+                  onClick={() => (hasActiveFilters ? clearFilters() : router.push('/conferences/new'))}
                   className="rounded-xl py-3 px-6 font-bold text-sm tracking-widest transition-colors focus:outline-none"
-                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
+                  style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em', border: 'none', cursor: 'pointer' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
                 >
-                  ORGANISE A CONFERENCE →
+                  {hasActiveFilters ? 'CLEAR FILTERS' : 'ORGANISE A CONFERENCE →'}
                 </button>
               </div>
             )

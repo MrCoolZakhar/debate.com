@@ -40,7 +40,10 @@ export function CountryField({
   invalid,
   describedBy,
 }: CountryFieldProps) {
+  const listId = `${id ?? 'country'}-listbox`;
   const [open, setOpen] = useState(false);
+  // Which row the keyboard is on. -1 = none highlighted yet.
+  const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -78,14 +81,19 @@ export function CountryField({
     };
   }, [open, place]);
 
+  const shown = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    return (q ? UN_COUNTRIES.filter(c => c.name.toLowerCase().includes(q)) : UN_COUNTRIES).slice(0, 40);
+  }, [value]);
+
+  function choose(name: string) {
+    onChange(name);
+    setOpen(false);
+    setActive(-1);
+  }
+
   const country = getCountryByName(value);
   const flag = country ? getFlagUrl(country.code) : null;
-
-  const matches = useMemo(() => {
-    const q = value.trim().toLowerCase();
-    if (!q) return UN_COUNTRIES;
-    return UN_COUNTRIES.filter(c => c.name.toLowerCase().includes(q));
-  }, [value]);
 
   return (
     <div ref={wrapRef} className="relative">
@@ -120,18 +128,53 @@ export function CountryField({
           aria-describedby={describedBy}
           autoComplete="country-name"
           placeholder={placeholder}
-          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(-1); }}
           onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; setOpen(true); }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = invalid ? '#8B2020' : '#DDD4C0'; }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = invalid ? '#8B2020' : '#DDD4C0';
+            // Safe to close here: the rows preventDefault on mousedown, so
+            // picking one never blurs the input first. Without this, the open
+            // list stayed over whatever field came next and swallowed the
+            // first click meant for it.
+            setOpen(false);
+            setActive(-1);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') { setOpen(false); setActive(-1); return; }
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              if (!open) { setOpen(true); return; }
+              const step = e.key === 'ArrowDown' ? 1 : -1;
+              setActive(prev => {
+                const next = prev + step;
+                if (next < 0) return shown.length - 1;
+                if (next >= shown.length) return 0;
+                return next;
+              });
+              return;
+            }
+            if (e.key === 'Enter' && open) {
+              // Only intercept Enter when a row is actually highlighted, so it
+              // still submits the form otherwise.
+              const pick = shown[active] ?? (shown.length === 1 ? shown[0] : null);
+              if (pick) { e.preventDefault(); choose(pick.name); }
+            }
+          }}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
           className="w-full focus:outline-none"
           style={{ ...inputStyle, paddingLeft: '44px', paddingRight: '16px' }}
         />
       </div>
 
-      {open && matches.length > 0 && pos && (
+      {open && shown.length > 0 && pos && (
         <Portal>
           <div
             ref={menuRef}
+            id={listId}
+            role="listbox"
             className="rounded-xl overflow-y-auto"
             style={{
               position: 'fixed',
@@ -148,16 +191,21 @@ export function CountryField({
               boxShadow: '0 16px 40px rgba(27,56,40,0.16)',
             }}
           >
-            {matches.slice(0, 40).map(c => (
+            {shown.map((c, i) => (
               <button
                 key={c.code}
                 type="button"
+                role="option"
+                aria-selected={i === active}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { onChange(c.name); setOpen(false); }}
+                onClick={() => choose(c.name)}
                 className="w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm focus:outline-none"
-                style={{ background: 'none', border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                style={{
+                  background: i === active ? 'rgba(27,56,40,0.09)' : 'none',
+                  border: 'none', color: '#1C1410', fontFamily: OUTFIT, cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { setActive(i); (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = i === active ? 'rgba(27,56,40,0.09)' : 'transparent'; }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img

@@ -477,9 +477,9 @@ export default function VariantStagefront({
               // public_conference_stats — every conference on Gavelling, not
               // only the published ones these cards are drawn from. The
               // delegates figure keeps its display-only launch offset.
-              { n: stats?.total_conferences ?? conferences.length, label: 'Conferences on the board' },
+              { n: stats?.total_conferences ?? (conferences.length || null), label: 'Conferences on the board' },
               { n: conferences.reduce((s, c) => s + (c.expected_delegates || 0), 0) + 20000, label: 'Delegates expected' },
-              { n: stats?.countries ?? new Set(conferences.map(c => c.country)).size, label: 'Countries' },
+              { n: stats?.countries ?? (new Set(conferences.map(c => c.country)).size || null), label: 'Countries' },
             ].map((stat, i) => (
               <div
                 key={stat.label}
@@ -491,7 +491,11 @@ export default function VariantStagefront({
                     fontSize: 'clamp(38px, 4.5vw, 74px)', lineHeight: 1, color: FOREST, letterSpacing: '-0.01em',
                   }}
                 >
-                  {stat.n.toLocaleString()}
+                  {/* Null while both the RPC and the card fetch are still in
+                      flight. The old +100/+30 offsets made a zero impossible;
+                      without them, a real "0 conferences" would flash on every
+                      first paint. An em dash holds the space instead. */}
+                  {stat.n === null ? '—' : stat.n.toLocaleString()}
                 </span>
                 <span
                   style={{

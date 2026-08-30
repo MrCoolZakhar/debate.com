@@ -49,14 +49,21 @@ export function editionYear(conf: ConferenceLabelInput): string | null {
   return /^\d{4}/.test(sd) ? sd.slice(0, 4) : null;
 }
 
-/** The acronym as it should be shown: organiser's text + edition year. */
+/** The acronym as it should be shown: organiser's text + edition year.
+ *  A blank acronym stays blank — `withYear('', '2026')` would otherwise return
+ *  a bare "2026", which is truthy enough to defeat every caller's fallback and
+ *  render a conference as the year it happens in. The column is plain `text`
+ *  with no constraint, so rows predating validation really do have one. */
 export function conferenceAcronymLabel(conf: ConferenceLabelInput): string {
-  return withYear((conf.acronym ?? '').trim(), editionYear(conf));
+  const acr = (conf.acronym ?? '').trim();
+  return acr ? withYear(acr, editionYear(conf)) : '';
 }
 
-/** The full name as it should be shown: organiser's text + edition year. */
+/** The full name as it should be shown: organiser's text + edition year.
+ *  Blank in, blank out, for the same reason as the acronym above. */
 export function conferenceFullNameLabel(conf: ConferenceLabelInput): string {
-  return withYear((conf.full_name ?? '').trim(), editionYear(conf));
+  const full = (conf.full_name ?? '').trim();
+  return full ? withYear(full, editionYear(conf)) : '';
 }
 
 /** Both labels at once, for headers that print the acronym big and the full

@@ -104,10 +104,19 @@ export async function GET(request: NextRequest) {
     }
     const { data: profile } = await supabase
       .from('profiles')
-      .select('education_level')
+      .select('education_level, nationality, date_of_birth')
       .eq('id', userId)
       .maybeSingle();
-    if (!profile || profile.education_level == null) {
+    // Two separate reasons to send someone to onboarding. education_level is
+    // the original "has not onboarded" signal. nationality/date_of_birth are
+    // required at sign-up but only the e-mail form asks for them, so every
+    // Google account — and every account created before they were required —
+    // can be missing them while having onboarded long ago. Those users get the
+    // basics screen, which is the only unskippable thing in onboarding, and
+    // then land on the questionnaire they can skip as usual.
+    const needsOnboarding = !profile || profile.education_level == null;
+    const needsBasics = !!profile && (!profile.nationality || !profile.date_of_birth);
+    if (needsOnboarding || needsBasics) {
       if (next === '/auth/onboarding') return `${origin}/auth/onboarding`;
       return `${origin}/auth/onboarding?next=${encodeURIComponent(next)}`;
     }

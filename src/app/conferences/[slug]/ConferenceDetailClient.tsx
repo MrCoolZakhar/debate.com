@@ -3056,7 +3056,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               className="truncate"
                               style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410', margin: 0, letterSpacing: '0.01em' }}
                             >
-                              {appendEditionYear(p.acronym.toUpperCase(), pYear ? String(pYear) : null)}
+                              {conferenceAcronymLabel({ acronym: p.acronym, year: pYear ?? null })}
                             </p>
                             {pLocation && (
                               <p className="truncate mt-0.5" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', color: '#9A8A78', margin: '2px 0 0 0', letterSpacing: '0.03em' }}>

@@ -4797,7 +4797,11 @@ export default function SettingsPage() {
             aria-label="Choose a privilege bundle"
             style={{
               position: 'fixed', left: bundleMenuPos.left, top: bundleMenuPos.top,
-              width: 276, zIndex: 120,
+              // Above the member sheet (130), because the trigger now lives
+              // INSIDE that sheet. At 120 the menu painted behind the sheet's
+              // scrim and every click meant to pick a bundle landed on the
+              // overlay instead — which closed the sheet.
+              width: 276, zIndex: 140,
               backgroundColor: '#FFFDF9', border: '1.5px solid #D8CDB6', borderRadius: 18,
               boxShadow: '0 12px 34px rgba(27,56,40,0.18), 0 2px 6px rgba(27,56,40,0.08)',
               padding: 8,

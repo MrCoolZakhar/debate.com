@@ -87,16 +87,22 @@ export default function OnboardingPage() {
       if (cancelled) return;
       if (!data.user) { router.replace('/'); return; }
       setUserId(data.user.id);
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('nationality, date_of_birth')
         .eq('id', data.user.id)
         .maybeSingle();
       if (cancelled) return;
-      const row = profile as { nationality: string | null; date_of_birth: string | null } | null;
-      setBasicsNationality(row?.nationality ?? '');
-      setBasicsDob(row?.date_of_birth ?? '');
-      setBasicsNeeded(!row?.nationality || !row?.date_of_birth);
+      // A row we could not read is NOT a row with blanks in it. Raising the
+      // gate on a transient fetch error, an RLS refusal, or a profiles row the
+      // signup trigger has not committed yet would show an unskippable screen
+      // whose save has nothing to update — the user would fill it in, be let
+      // through, and still have no nationality. Fall through instead.
+      if (error || !profile) { setBasicsNeeded(false); return; }
+      const row = profile as { nationality: string | null; date_of_birth: string | null };
+      setBasicsNationality(row.nationality ?? '');
+      setBasicsDob(row.date_of_birth ?? '');
+      setBasicsNeeded(!row.nationality || !row.date_of_birth);
     });
     return () => { cancelled = true; };
   }, [supabase, router]);
@@ -111,12 +117,20 @@ export default function OnboardingPage() {
     if (age === null || age < 0 || age > 120) { setBasicsError('That date of birth doesn’t look right.'); return; }
     if (age < 13) { setBasicsError('You need to be at least 13 to use Gavelling.'); return; }
     setBasicsSaving(true);
-    const { error } = await supabase
+    // `.select('id')` is load-bearing: an update that matches zero rows comes
+    // back with error === null, so without it a save that changed nothing
+    // would let the user through with the fields still blank — exactly the
+    // state this screen exists to prevent.
+    const { data, error } = await supabase
       .from('profiles')
       .update({ nationality: country.name, date_of_birth: basicsDob })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select('id');
     setBasicsSaving(false);
-    if (error) { setBasicsError('Could not save that. Please try again.'); return; }
+    if (error || !data || data.length === 0) {
+      setBasicsError('Could not save that. Please refresh and try again.');
+      return;
+    }
     setBasicsNeeded(false);
   }
 
