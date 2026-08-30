@@ -31,6 +31,9 @@ import { renderEmailHtml, resolveEmailTheme, type EmailTheme } from '@/lib/email
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { queueAdHocEmail } from '@/lib/adHocEmail';
 import EmailComposer, { type PreviewCandidate } from '@/components/EmailComposer';
+import AudienceReach, {
+  type AudienceSection, type AudienceSectionDef, type DotState, type ReachGroup,
+} from '@/components/email/AudienceReach';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
@@ -726,49 +729,6 @@ function TabPill({ active, onClick, children }: { active: boolean; onClick: () =
   );
 }
 
-function MultiChipGroup({
-  label, options, selected, onToggle, counts, maxHeight,
-}: {
-  label: string; options: { value: string; label: string }[]; selected: Set<string>; onToggle: (v: string) => void;
-  /** Per-choice live reach, keyed by option value — rendered as "Unpaid (61)". */
-  counts?: Record<string, number>;
-  maxHeight?: number;
-}) {
-  return (
-    <div className="mb-3">
-      <p className="text-xs font-bold mb-1.5" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
-        {label.toUpperCase()}
-      </p>
-      <div className="flex flex-wrap gap-1.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
-        {options.map(o => {
-          const active = selected.has(o.value);
-          const count = counts?.[o.value];
-          return (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => onToggle(o.value)}
-              className="rounded-full px-2.5 py-1 text-xs font-semibold focus:outline-none transition-colors"
-              style={{
-                border: active ? '1px solid #1B3828' : `1px solid ${BORDER}`,
-                backgroundColor: active ? '#1B3828' : 'transparent',
-                color: active ? '#EED98A' : '#4A4238',
-                fontFamily: OUTFIT,
-              }}
-            >
-              {o.label}
-              {count !== undefined && (
-                <span style={{ fontVariantNumeric: 'tabular-nums', color: active ? 'rgba(238,217,138,0.8)' : SOFT }}>
-                  {' '}({count})
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 const COLOR_PALETTE = ['#1B3828', '#8A6614', '#8B2020', '#2A4B7C', '#5C3A72', '#1C1410'];
 const BUTTON_COLOR_PALETTE = ['#EED98A', '#F3E3A1', '#B6871F', '#9AC6A8', '#DCEAF5', '#F5D6C6'];
@@ -1103,8 +1063,6 @@ function CommunicationsPageInner() {
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [manuallyAddedIds, setManuallyAddedIds] = useState<Set<string>>(new Set());
   const [manualSearch, setManualSearch] = useState('');
-  // Expanded groups in the "who gets it" recipient summary.
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // ── Send confirmation ──
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
@@ -1684,6 +1642,94 @@ function CommunicationsPageInner() {
       .slice(0, 8);
   }, [applications, manualSearch, matchedRecipients]);
 
+  // ── Adapters for the "who gets it" bar ────────────────────────────────────
+  // AudienceReach is a pure presentation of the SAME state and the SAME
+  // matcher the send pipeline uses — it holds none of its own. Everything
+  // below is a reshape, never a second source of truth.
+
+  function toggleAudience(section: AudienceSection, value: string) {
+    if (section === 'roles') setSelRoles(s => toggleInSet(s, value));
+    else if (section === 'payment') setSelPayment(s => toggleInSet(s, value));
+    else if (section === 'committees') setSelCommittees(s => toggleInSet(s, value));
+    else if (section === 'delegations') setSelDelegations(s => toggleInSet(s, value));
+    else if (section === 'attendance') setSelAttendance(s => toggleInSet(s, value));
+    else if (section === 'status') setSelStatus(s => toggleInSet(s, value));
+    else setSelAid(s => toggleInSet(s, value));
+  }
+
+  function clearAudienceSection(section: AudienceSection) {
+    const empty = new Set<string>();
+    if (section === 'roles') setSelRoles(empty);
+    else if (section === 'payment') setSelPayment(empty);
+    else if (section === 'committees') setSelCommittees(empty);
+    else if (section === 'delegations') setSelDelegations(empty);
+    else if (section === 'attendance') setSelAttendance(empty);
+    else if (section === 'status') setSelStatus(empty);
+    else setSelAid(empty);
+  }
+
+  /** `phrase` is how each filter reads inside the plain-English summary
+   *  sentence, with `{v}` standing in for the chosen option labels — so
+   *  "Delegates marked unpaid in DISEC" comes out of the same data the chips
+   *  are built from, rather than being written twice. */
+  const audienceSections = useMemo<AudienceSectionDef[]>(() => [
+    { key: 'roles', label: 'Roles', emoji: 'Busts in silhouette', phrase: '', options: ROLE_OPTIONS, selected: selRoles, counts: countsFor('roles', ROLE_OPTIONS) },
+    { key: 'payment', label: 'Payment', emoji: 'Money bag', phrase: 'marked {v}', options: PAYMENT_OPTIONS, selected: selPayment, counts: countsFor('payment', PAYMENT_OPTIONS) },
+    { key: 'committees', label: 'Committees', emoji: 'Ballot box with ballot', phrase: 'in {v}', options: committeeOptions, selected: selCommittees, counts: countsFor('committees', committeeOptions) },
+    { key: 'delegations', label: 'Delegations', emoji: 'People holding hands', phrase: 'from {v}', options: delegationOptions, selected: selDelegations, counts: countsFor('delegations', delegationOptions) },
+    { key: 'attendance', label: 'Coming or not', emoji: 'Ticket', phrase: 'who are {v}', options: ATTENDANCE_OPTIONS, selected: selAttendance, counts: countsFor('attendance', ATTENDANCE_OPTIONS) },
+    { key: 'status', label: 'Application status', emoji: 'Page facing up', phrase: 'whose application is {v}', options: APP_STATUS_OPTIONS, selected: selStatus, counts: countsFor('status', APP_STATUS_OPTIONS) },
+    { key: 'aid', label: 'Financial aid', emoji: 'Money with wings', phrase: 'with {v}', options: AID_OPTIONS, selected: selAid, counts: countsFor('aid', AID_OPTIONS) },
+  ], [selRoles, selPayment, selCommittees, selDelegations, selAttendance, selStatus, selAid, committeeOptions, delegationOptions, countsFor]);
+
+  /** One dot per eligible person, in `eligibleApplications` order — which is
+   *  stable across filter changes, so dots light up and dim in place instead
+   *  of reshuffling. Opted-out people are matched but not sent to, and get
+   *  their own state rather than silently vanishing. */
+  const audienceDots = useMemo<DotState[]>(() => {
+    const inSet = new Set(matchedRecipients.map(a => a.id));
+    return eligibleApplications.map(a =>
+      inSet.has(a.id)
+        ? (a.profiles?.notify_email_marketing === false ? 'opted' : 'in')
+        : 'out'
+    );
+  }, [eligibleApplications, matchedRecipients]);
+
+  const reachGroups = useMemo<ReachGroup[]>(
+    () => recipientGroups.map(g => ({
+      key: g.key,
+      label: g.label,
+      optedOut: g.optedOut,
+      members: g.members.map(a => {
+        const detail = [
+          roleLabel(a.role),
+          a.assigned_committee ? (a.assigned_committee.abbreviation ?? a.assigned_committee.name) : null,
+          a.assigned_country_name,
+        ].filter(Boolean).join(' · ');
+        return {
+          id: a.id,
+          name: a.profiles?.display_name ?? a.invited_name ?? 'Unknown',
+          sub: detail || (a.profiles?.email ?? a.invited_email ?? '—'),
+          avatarUrl: a.profiles?.avatar_url ?? null,
+          userId: a.user_id,
+          registered: !!a.profiles,
+          optedOut: a.profiles?.notify_email_marketing === false,
+          manual: manuallyAddedIds.has(a.id),
+        };
+      }),
+    })),
+    [recipientGroups, manuallyAddedIds]
+  );
+
+  const reachManualMatches = useMemo(
+    () => manualMatches.map(a => ({
+      id: a.id,
+      name: a.profiles?.display_name ?? a.invited_name ?? 'Unknown',
+      sub: a.profiles?.email ?? a.invited_email ?? '—',
+    })),
+    [manualMatches]
+  );
+
   // Role- and phase-aware {{fee}}, mirrors queueEventEmail's own resolution
   // (src/lib/emailEvents.ts) so a preview/test-send never shows a different
   // number than the real send that follows it. Falls back to the retired
@@ -1802,7 +1848,6 @@ function CommunicationsPageInner() {
     setExcludedIds(new Set());
     setManuallyAddedIds(new Set());
     setManualSearch('');
-    setExpandedGroups(new Set());
     setAudienceRestored(false);
   }
 
@@ -2824,20 +2869,11 @@ function CommunicationsPageInner() {
             >
               {savingTemplate ? 'SAVING...' : 'SAVE'}
             </button>
-            {/* No lifecycle ceremony: SEND is always here, and always routes
-                through the confirm modal (typed SEND above 200 recipients). */}
-            {builderEventKey === null && (
-              <button
-                onClick={handleOpenSendConfirm}
-                disabled={sending || openingSend}
-                className="rounded-xl py-2 px-4 text-sm font-bold focus:outline-none transition-colors disabled:opacity-60"
-                style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT, minHeight: 40 }}
-                onMouseEnter={e => { if (!(sending || openingSend)) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-              >
-                {sending ? 'QUEUEING...' : openingSend ? 'SAVING...' : `SEND${finalRecipients.length > 0 ? ` TO ${finalRecipients.length}` : ''}`}
-              </button>
-            )}
+            {/* SEND is NOT here any more — it moved onto the "who gets it" bar
+                (AudienceReach), beside the recipient count it acts on. Same
+                handler, same confirm modal, same typed-SEND gate above 200.
+                Event templates never had one and still don't: their audience
+                is fixed by the event and they are turned on, not sent. */}
           </div>
         </div>
       )}
@@ -4015,232 +4051,37 @@ function CommunicationsPageInner() {
               testSendContext={testSendContext}
               accessToken={session?.access_token ?? null}
               organizerEmail={profile?.email ?? null}
+              reachSlot={builderEventKey === null ? (
+                /* "Who gets it" rides ABOVE the three zones, sticky, so the
+                   answer to the only question anybody has is never scrolled
+                   off. It also carries SEND — the header keeps BACK and SAVE,
+                   which are about the draft; sending is about the audience. */
+                <AudienceReach
+                  sections={audienceSections}
+                  onToggle={toggleAudience}
+                  onClearSection={clearAudienceSection}
+                  onClearAll={resetAudience}
+                  dots={audienceDots}
+                  reachCount={finalRecipients.length}
+                  optedOutCount={optedOutCount}
+                  groups={reachGroups}
+                  manualQuery={manualSearch}
+                  onManualQuery={setManualSearch}
+                  manualMatches={reachManualMatches}
+                  onAddPerson={id => {
+                    setManuallyAddedIds(prev => new Set(prev).add(id));
+                    setManualSearch('');
+                  }}
+                  onRemovePerson={handleExcludeRecipient}
+                  manualAddedCount={manuallyAddedIds.size}
+                  excludedCount={excludedIds.size}
+                  restored={audienceRestored}
+                  onSend={handleOpenSendConfirm}
+                  sendDisabled={sending || openingSend || finalRecipients.length === 0}
+                  sendBusyLabel={sending ? 'QUEUEING…' : openingSend ? 'SAVING…' : null}
+                />
+              ) : undefined}
             />
-
-          {/* ── The "who" step — an explicit panel, not a buried sidebar ── */}
-          {builderEventKey === null && (
-            <section className="mt-8">
-              <div className="rounded-2xl p-5" style={PANEL}>
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
-                  <h3 className="font-black text-base" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                    Who gets it
-                  </h3>
-                  <p
-                    className="text-xs font-bold"
-                    style={{ color: finalRecipients.length === 0 ? AMBER_INK : GREEN_INK, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    Sending to {finalRecipients.length}
-                  </p>
-                  {optedOutCount > 0 && (
-                    <p className="text-xs" style={{ color: AMBER_INK, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                      {optedOutCount} opted out of marketing emails — excluded automatically.
-                    </p>
-                  )}
-                  {audienceRestored && (
-                    <span className="ml-auto flex items-center gap-2">
-                      <span style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT, fontWeight: 600 }}>
-                        Saved audience loaded
-                      </span>
-                      <button
-                        type="button"
-                        onClick={resetAudience}
-                        className="text-xs font-bold focus:outline-none"
-                        style={{ color: '#1B3828', backgroundColor: 'transparent', border: 'none', fontFamily: OUTFIT, cursor: 'pointer', padding: '6px 0' }}
-                      >
-                        CLEAR
-                      </button>
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs mb-4" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>
-                  No filters means everyone. Each count shows who that chip reaches with your other
-                  filters applied.
-                </p>
-
-                <div className="lg:grid lg:items-start lg:gap-8" style={{ gridTemplateColumns: 'minmax(0,5fr) minmax(0,7fr)' }}>
-                  {/* Filters */}
-                  <div>
-                    <MultiChipGroup label="Roles" options={ROLE_OPTIONS} selected={selRoles} onToggle={v => setSelRoles(s => toggleInSet(s, v))} counts={countsFor('roles', ROLE_OPTIONS)} />
-                    <MultiChipGroup label="Payment status" options={PAYMENT_OPTIONS} selected={selPayment} onToggle={v => setSelPayment(s => toggleInSet(s, v))} counts={countsFor('payment', PAYMENT_OPTIONS)} />
-                    {committeeOptions.length > 0 && (
-                      <MultiChipGroup label="Committees" options={committeeOptions} selected={selCommittees} onToggle={v => setSelCommittees(s => toggleInSet(s, v))} counts={countsFor('committees', committeeOptions)} maxHeight={140} />
-                    )}
-                    <MultiChipGroup label="Delegations" options={delegationOptions} selected={selDelegations} onToggle={v => setSelDelegations(s => toggleInSet(s, v))} counts={countsFor('delegations', delegationOptions)} maxHeight={140} />
-                    <MultiChipGroup label="Attendance" options={ATTENDANCE_OPTIONS} selected={selAttendance} onToggle={v => setSelAttendance(s => toggleInSet(s, v))} counts={countsFor('attendance', ATTENDANCE_OPTIONS)} />
-                    <MultiChipGroup label="Application status" options={APP_STATUS_OPTIONS} selected={selStatus} onToggle={v => setSelStatus(s => toggleInSet(s, v))} counts={countsFor('status', APP_STATUS_OPTIONS)} />
-                    <MultiChipGroup label="Financial aid" options={AID_OPTIONS} selected={selAid} onToggle={v => setSelAid(s => toggleInSet(s, v))} counts={countsFor('aid', AID_OPTIONS)} />
-                  </div>
-
-                  {/* Recipients, grouped */}
-                  <div className="mt-4 lg:mt-0">
-                    <div className="relative mb-2">
-                      <input
-                        value={manualSearch}
-                        onChange={e => setManualSearch(e.target.value)}
-                        placeholder="Add anyone by name or email..."
-                        className="w-full rounded-xl px-3 py-2 text-xs focus:outline-none"
-                        style={{ border: `1px solid ${BORDER}`, color: '#1C1410', backgroundColor: '#FFFFFF', fontFamily: OUTFIT, minHeight: 36 }}
-                      />
-                      {manualMatches.length > 0 && (
-                        <div
-                          className="absolute left-0 right-0 rounded-xl shadow-lg overflow-y-auto"
-                          style={{ top: 'calc(100% + 4px)', maxHeight: 200, backgroundColor: '#FFFFFF', border: `1px solid ${BORDER}`, zIndex: 10 }}
-                        >
-                          {manualMatches.map(a => (
-                            <button
-                              key={a.id}
-                              onClick={() => {
-                                setManuallyAddedIds(prev => new Set(prev).add(a.id));
-                                setManualSearch('');
-                              }}
-                              className="w-full text-left px-3 py-2 text-xs focus:outline-none"
-                              style={{ color: '#1C1410', fontFamily: OUTFIT }}
-                              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                            >
-                              {a.profiles?.display_name ?? a.invited_name ?? 'Unknown'}
-                              <span style={{ color: SOFT }}> · {a.profiles?.email ?? a.invited_email ?? '—'}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-1.5" style={{ maxHeight: 440, overflowY: 'auto' }}>
-                      {recipientGroups.length === 0 && (
-                        <p className="text-xs py-2" style={{ color: SOFT, fontFamily: OUTFIT }}>
-                          No recipients match yet. Adjust filters or add someone manually.
-                        </p>
-                      )}
-                      {recipientGroups.map(g => {
-                        const open = expandedGroups.has(g.key);
-                        return (
-                          <div key={g.key} className="rounded-xl" style={{ backgroundColor: '#FAF8F3', border: '1px solid rgba(27,56,40,0.09)' }}>
-                            <button
-                              type="button"
-                              onClick={() => setExpandedGroups(s => toggleInSet(s, g.key))}
-                              aria-expanded={open}
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-left focus:outline-none"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', minHeight: 40 }}
-                            >
-                              <ChevronDown
-                                size={13}
-                                className="flex-shrink-0"
-                                style={{ color: SOFT, transform: open ? 'rotate(180deg)' : 'rotate(0)', transitionProperty: 'transform', transitionDuration: '200ms', transitionTimingFunction: EASE }}
-                              />
-                              <span className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
-                                {g.label}
-                              </span>
-                              <span className="text-xs flex-shrink-0" style={{ color: SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                                — {g.members.length}
-                              </span>
-                              {g.optedOut > 0 && (
-                                <span className="text-xs flex-shrink-0" style={{ color: AMBER_INK, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
-                                  · {g.optedOut} opted out
-                                </span>
-                              )}
-                            </button>
-                            {open && (
-                              <div className="flex flex-col gap-1 px-2.5 pb-2.5">
-                                {g.members.map(a => {
-                                  const optedOut = a.profiles?.notify_email_marketing === false;
-                                  const name = a.profiles?.display_name ?? a.invited_name ?? 'Unknown';
-                                  const detail = [
-                                    roleLabel(a.role),
-                                    a.assigned_committee ? (a.assigned_committee.abbreviation ?? a.assigned_committee.name) : null,
-                                    a.assigned_country_name,
-                                  ].filter(Boolean).join(' · ');
-                                  return (
-                                    <div
-                                      key={a.id}
-                                      className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5"
-                                      style={{ backgroundColor: '#FFFFFF', border: '1px solid #F0EDE6' }}
-                                      title={a.profiles?.email ?? a.invited_email ?? undefined}
-                                    >
-                                      <ProfileLink userId={a.user_id} name={name}>
-                                        <span className="flex items-center gap-2 min-w-0">
-                                          {a.profiles?.avatar_url ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img
-                                              src={a.profiles.avatar_url}
-                                              alt=""
-                                              className="rounded-full object-cover flex-shrink-0"
-                                              style={{ width: 24, height: 24, outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1 }}
-                                            />
-                                          ) : (
-                                            <span
-                                              className="flex items-center justify-center rounded-full flex-shrink-0"
-                                              style={{ width: 24, height: 24, backgroundColor: 'rgba(27,56,40,0.1)', color: '#1B3828', fontSize: 11, fontWeight: 700, fontFamily: OUTFIT }}
-                                            >
-                                              {name.charAt(0).toUpperCase()}
-                                            </span>
-                                          )}
-                                          <span className="min-w-0">
-                                            <span className="block text-xs font-semibold truncate" style={{ color: optedOut ? SOFT : '#1C1410', fontFamily: OUTFIT }}>
-                                              {name}
-                                              {!a.profiles && (
-                                                <span className="ml-1.5 rounded px-1.5 py-0.5" style={{ fontSize: 9, fontWeight: 700, backgroundColor: 'rgba(154,138,120,0.14)', color: SOFT }}>
-                                                  NOT REGISTERED
-                                                </span>
-                                              )}
-                                              {manuallyAddedIds.has(a.id) && (
-                                                <span className="ml-1.5 rounded px-1.5 py-0.5" style={{ fontSize: 9, fontWeight: 700, backgroundColor: 'rgba(182,135,31,0.14)', color: AMBER_INK }}>
-                                                  MANUAL
-                                                </span>
-                                              )}
-                                            </span>
-                                            <span className="block truncate" style={{ fontSize: 10.5, color: SOFT, fontFamily: OUTFIT }}>
-                                              {detail || (a.profiles?.email ?? a.invited_email ?? '—')}
-                                            </span>
-                                          </span>
-                                        </span>
-                                      </ProfileLink>
-                                      {optedOut ? (
-                                        <span
-                                          className="flex-shrink-0 rounded-md px-1.5 py-0.5"
-                                          style={{ fontSize: 9, fontWeight: 700, fontFamily: OUTFIT, backgroundColor: 'rgba(182,135,31,0.12)', color: AMBER_INK, border: '1px solid rgba(182,135,31,0.3)' }}
-                                        >
-                                          OPTED OUT
-                                        </span>
-                                      ) : (
-                                        <button
-                                          onClick={() => handleExcludeRecipient(a.id)}
-                                          title={manuallyAddedIds.has(a.id) ? 'Remove manual add' : 'Exclude from this send'}
-                                          className="flex-shrink-0 rounded-md p-1 focus:outline-none"
-                                          style={{ border: '1px solid rgba(139,32,32,0.25)', backgroundColor: 'transparent', cursor: 'pointer' }}
-                                        >
-                                          <X size={11} style={{ color: RED }} />
-                                        </button>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3 mt-5 pt-4" style={{ borderTop: '1px solid rgba(27,56,40,0.09)' }}>
-                  <p className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: '#1C1410', fontFamily: OUTFIT, maxWidth: 480, textWrap: 'pretty' }}>
-                    <AlertTriangle size={14} style={{ color: AMBER_INK, flexShrink: 0, marginTop: 1 }} />
-                    Sending queues one email per recipient and starts delivery immediately. Large
-                    sends may take a few minutes to fully drain.
-                  </p>
-                  <PrimaryBtn
-                    icon={Send}
-                    onClick={handleOpenSendConfirm}
-                    disabled={sending || openingSend || finalRecipients.length === 0}
-                  >
-                    {sending ? 'QUEUEING...' : openingSend ? 'SAVING...' : `SEND TO ${finalRecipients.length}`}
-                  </PrimaryBtn>
-                </div>
-              </div>
-            </section>
-          )}
         </div>
       )}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2, Megaphone, FileCheck, Radio } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -303,12 +303,53 @@ export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
   useScrollLock(true);
   useModalEscape(onClose);
 
+  // The narrow bookmark strip is ONE scrolling row, so the tab you are on can
+  // be off-screen. Bring it back whenever the active bookmark CHANGES.
+  //
+  // Deliberately not `scrollIntoView`: it scrolls ancestors as well as the
+  // strip, and inside a portaled, scroll-locked dialog it under-scrolled (the
+  // active tab was left half under the fade). This scrolls the one element that
+  // should move, by exactly the amount needed, keeping the tab clear of the
+  // 22px fade at either end.
+  //
+  // No dependency array — `rail` is a fresh closure every render, so a dep on
+  // it would fire this on every render regardless. The `lastActive` guard is
+  // what makes it act once per tab change instead.
+  const topRailRef = useRef<HTMLDivElement | null>(null);
+  const lastActiveTabRef = useRef<string | null>(null);
+  useEffect(() => {
+    const el = topRailRef.current;
+    if (!el) return;
+    const active = el.querySelector<HTMLElement>('[aria-current="page"]');
+    const key = active?.textContent ?? null;
+    if (key === lastActiveTabRef.current) return;
+    lastActiveTabRef.current = key;
+    if (!active) return;
+    const a = active.getBoundingClientRect();
+    const c = el.getBoundingClientRect();
+    const PAD = 26;
+    // Assigning `scrollLeft` rather than `scrollBy({behavior:'smooth'})`:
+    // measured, the smooth form is a NO-OP on this element (the dialog's scroll
+    // lock is in force and the environment may be honouring reduced motion),
+    // while the instant form works. A tab strip that jumps to the right place
+    // beats one that animates nowhere.
+    if (a.right > c.right - PAD) el.scrollLeft += a.right - c.right + PAD;
+    else if (a.left < c.left + 6) el.scrollLeft += a.left - c.left - 6;
+  });
+
   // Portal'd so the dim backdrop escapes the manage layout's `relative z-10`
   // content wrapper and covers the header/sidebar too.
   return (
     <Portal>
+      {/* `lg:pe-[156px]` when there is a side rail, and it is a bug fix.
+          The rail hangs 148px PAST the card's inline end, but only the CARD was
+          centred — so at 1024px (the width the side rail switches on at) the
+          card's right edge landed at 892 and the rail's at 1040, 16px off the
+          screen. Reserving the rail's width as end padding centres the pair
+          instead of the card, which is what "tucked under the card's edge"
+          means once the tabs are part of the object. */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
+        className={`fixed inset-0 z-50 flex items-center justify-center px-3 py-5 sm:px-4 sm:py-8${rail ? ' lg:pe-[156px]' : ''}`}
         style={{ backgroundColor: 'rgba(27,20,16,0.42)' }}
         onClick={onClose}
       >
@@ -321,17 +362,47 @@ export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
 
             BELOW `lg` (1024px) THE RAIL IS NOT A SIDE RAIL AT ALL. There is not
             enough room beside a 672–760px card on a narrow screen — the tabs
-            would be pushed off-screen or over the backdrop's edge — so it
-            becomes a horizontal strip ABOVE the card. Same component, same
-            always-visible contract, no clipping either way. */}
+            would be pushed off-screen or over the backdrop's edge — so the
+            bookmarks come off the TOP of the card instead.
+
+            IT IS ONE ROW, AND IT SCROLLS. It used to be `flex-wrap`, which at
+            375px measured 106px tall — three rows of six pills stacked above a
+            card whose own max-height still assumed one. That is the thing the
+            owner is looking at when he says the bookmarks are wrong. A wrapping
+            strip also has no stable height, so `max-h` could not be right for
+            both a three-row and a one-row case, and the card ran off the bottom
+            of the screen.
+
+            So: `flex-nowrap` + `overflow-x: auto`, one fixed row of 46px
+            bookmarks, tucked 12px under the card's top edge exactly as the side
+            rail tucks under its inline edge — same object, same bookmark reading, rotated. The
+            active tab is scrolled into view on mount and on change, so the tab
+            you are on is never the one off-screen. */}
         <div
-          className="w-full relative flex flex-col"
+          className="w-full relative flex flex-col min-h-0"
           style={{ maxWidth }}
           onClick={(e) => e.stopPropagation()}
         >
           {rail && (
             <>
-              <div className="lg:hidden flex flex-wrap gap-1.5" style={{ marginBlockEnd: 8 }}>
+              <div
+                ref={topRailRef}
+                className="lg:hidden flex flex-nowrap items-end overflow-x-auto flex-shrink-0"
+                style={{
+                  // -12 rather than -10: the card must cover the strip's own
+                  // 6px horizontal scrollbar (globals.css styles it visibly and
+                  // is a shared file this change does not touch) as well as the
+                  // bookmarks' square bottom edge.
+                  gap: 4, zIndex: 0, marginBlockEnd: -12,
+                  scrollbarWidth: 'none', msOverflowStyle: 'none',
+                  // The strip runs to the card's edges, but the last bookmark
+                  // must not sit flush against the rounded corner — and the
+                  // fade tells a reader there is more strip to scroll to.
+                  paddingInlineEnd: 14,
+                  WebkitMaskImage: 'linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%)',
+                  maskImage: 'linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%)',
+                }}
+              >
                 {rail(false)}
               </div>
               <div
@@ -346,7 +417,7 @@ export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
             </>
           )}
         <div
-          className={`w-full rounded-[22px] p-8 relative overflow-y-auto${rail ? ' max-h-[calc(100vh-170px)] lg:max-h-[calc(100vh-64px)]' : ''}`}
+          className={`w-full rounded-[22px] p-5 sm:p-7 lg:p-8 relative overflow-y-auto${rail ? ' max-h-[calc(100vh-94px)] sm:max-h-[calc(100vh-118px)] lg:max-h-[calc(100vh-64px)]' : ''}`}
           style={{
             backgroundColor: NEU.surface, boxShadow: NEU.out, fontFamily: OUTFIT,
             // The card paints ON TOP of the rail, so the tabs read as bookmarks
@@ -379,10 +450,15 @@ export function ModalShell({ children, onClose, maxWidth = 672, rail }: {
  *  the tabs are in DOM order, which is why the narrow strip can be the same
  *  component rotated into a row rather than a second implementation.
  *
- *  `side` renders the bookmark shape: square on the edge that meets the card,
- *  rounded on the outside, tucked 10px under the card by the rail's own
- *  negative margin so the two read as one object. The narrow variant is a
- *  plain pill, because a bookmark hanging off the top of a card is just a tab.
+ *  BOTH orientations are the same bookmark shape — square on the edge that
+ *  meets the card, rounded on the outside, tucked 10px under the card by the
+ *  rail's own negative margin so the two read as one object. `side` puts that
+ *  edge on the inline start; the narrow variant puts it on the bottom.
+ *
+ *  The narrow variant used to be a free-floating pill, which is what let the
+ *  strip wrap into three rows of tabs hovering over a card they had no visible
+ *  relationship to. It is now 46px tall — a real touch target, measured up
+ *  from 31 — and physically attached to the card's top edge.
  *
  *  COLOUR: the label is `NEU.forest` (10.73:1) when active and `SOFT` (5.55:1)
  *  when not. Neither is `NEU.muted`, which is 2.81:1 and decoration only. */
@@ -411,7 +487,9 @@ export function RailTab({
         fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: ink,
         backgroundColor: active ? NEU.surface : NEU.base,
         boxShadow: active
-          ? '6px 4px 12px rgba(27,56,40,0.16), -2px -2px 6px rgba(255,255,255,0.7)'
+          ? (side
+              ? '6px 4px 12px rgba(27,56,40,0.16), -2px -2px 6px rgba(255,255,255,0.7)'
+              : '4px 6px 12px rgba(27,56,40,0.16), -2px -2px 6px rgba(255,255,255,0.7)')
           : NEU.outSm,
         ...(side
           ? {
@@ -420,13 +498,21 @@ export function RailTab({
               width: 158, justifyContent: 'flex-start',
               transform: active ? 'translateX(3px)' : 'translateX(0)',
             }
-          : { borderRadius: 999, padding: '7px 12px' }),
+          : {
+              // Bookmark, not pill: rounded on top, square where it meets the
+              // card. 44px tall INCLUDING the 10px that is tucked under the
+              // card, so the visible tab is 34px and the touch target is 44.
+              borderRadius: '12px 12px 0 0',
+              padding: '11px 13px 22px 13px',
+              minHeight: 46, flexShrink: 0, whiteSpace: 'nowrap',
+              transform: active ? 'translateY(3px)' : 'translateY(0)',
+            }),
         transitionProperty: 'transform, box-shadow, background-color, color',
         transitionDuration: '200ms', transitionTimingFunction: EASE,
       }}
     >
       <Icon size={13} style={{ flexShrink: 0, color: ink }} />
-      <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{label}</span>
+      <span className="min-w-0" style={{ overflowWrap: side ? 'anywhere' : 'normal' }}>{label}</span>
       {typeof count === 'number' && count > 0 && (
         <span
           style={{
@@ -456,12 +542,28 @@ function StatTile({ icon: Icon, emoji, gradient, value, label, onClick, title }:
    *  clipped by the modal's own scroll container. */
   title?: string;
 }) {
+  // THE TILE STACKS BELOW `sm`, AND THAT IS THE FIX, NOT A PREFERENCE.
+  //
+  // Measured at 375px: the grid is two columns, so a tile is 133px wide. Take
+  // its 28px of padding, the 36px disc and the 12px gap and the text column is
+  // left with 55px. "Total speaking time" needs 102px and was `truncate`d to
+  // "Total spea…"; worse, the VALUE was truncated too — `9/11` needs 38px and
+  // had 7, so the headline figure on the Delegates-present tile rendered as a
+  // sliver. That is a large part of "scores seem broken" on a phone.
+  //
+  // Below `sm` the disc sits ABOVE the figure instead of beside it, which hands
+  // the full 105px to both lines, and the label wraps rather than truncating.
   const body = (
     <>
-      <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={36} />
+      <span className="flex-shrink-0 hidden sm:inline-flex">
+        <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={36} />
+      </span>
+      <span className="flex-shrink-0 inline-flex sm:hidden">
+        <NeuIconDisc gradient={gradient} emoji={emoji} icon={Icon} size={26} />
+      </span>
       <div className="min-w-0 text-left">
-        <p className="font-black text-xl leading-none" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
-        <p className="text-[11px] font-semibold mt-1 truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>{label}</p>
+        <p className="font-black text-lg sm:text-xl leading-none" style={{ color: NEU.ink, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+        <p className="text-[11px] font-semibold mt-1 leading-tight" style={{ color: SOFT, fontFamily: OUTFIT, textWrap: 'pretty' }}>{label}</p>
       </div>
     </>
   );
@@ -471,9 +573,9 @@ function StatTile({ icon: Icon, emoji, gradient, value, label, onClick, title }:
     return (
       <button
         onClick={onClick}
-        className="flex items-center gap-3 w-full focus:outline-none"
+        className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3 w-full focus:outline-none"
         style={{
-          backgroundColor: NEU.base, borderRadius: 14, padding: '13px 14px',
+          backgroundColor: NEU.base, borderRadius: 14, padding: '11px 12px',
           boxShadow: NEU.inSm, border: 'none', cursor: 'pointer',
           transition: `box-shadow 200ms ${EASE}`,
         }}
@@ -486,11 +588,11 @@ function StatTile({ icon: Icon, emoji, gradient, value, label, onClick, title }:
     );
   }
   return (
-    <NeuInset className="flex items-center gap-3" style={{ padding: '13px 14px', borderRadius: 14 }}>
+    <NeuInset className="flex items-center gap-3" style={{ padding: '11px 12px', borderRadius: 14 }}>
       {/* The caveat rides on a wrapper rather than on `NeuInset`, which takes no
           `title` — and `neu.tsx` is a shared surface another workstream is
           editing, so it is not widened for this. */}
-      <span title={title} className="flex items-center gap-3 w-full min-w-0">{body}</span>
+      <span title={title} className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3 w-full min-w-0">{body}</span>
     </NeuInset>
   );
 }
@@ -632,14 +734,21 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
               <NeuInset key={cf.country} style={{ borderRadius: 14, overflow: 'hidden' }}>
                 <button
                   onClick={() => setExpanded(isOpen ? null : cf.country)}
-                  className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT }}
+                  className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left focus:outline-none"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT, minHeight: 48 }}
                 >
                   <FlagImg code={flagCodeFor(cf.country)} size={20} />
-                  <span className="text-sm font-bold flex-1 truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{cf.country}</span>
+                  {/* THE ROW WRAPS BELOW `sm` INSTEAD OF CRUSHING THE NAME.
+                      Flag, rating pill, speech count and chevron are all
+                      `flex-shrink-0`, so at 375px the delegation had 101px and
+                      "United Kingdom" truncated. A 140px basis makes the trailing
+                      controls drop to a second line — right-aligned by the pill's
+                      own auto margin — rather than eating the one thing the row
+                      exists to name. */}
+                  <span className="text-sm font-bold flex-1 basis-[140px] truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{cf.country}</span>
                   {cf.headline !== null && (
                     <span
-                      className="text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0"
+                      className="text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0 ms-auto"
                       style={{ color: NEU.forest, backgroundColor: NEU.surface, boxShadow: NEU.outSm, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}
                       title={`Mean of every factor rating this delegation has received, out of ${scaleMax}`}
                     >
@@ -1192,10 +1301,15 @@ export function RecapModal({
               {[{ label: 'Top delegate', row: top }, ...(quietest ? [{ label: 'Quietest delegate', row: quietest }] : [])].map((entry) => (
                 <NeuInset
                   key={entry.label}
-                  className="flex items-center gap-3"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1"
                   style={{ padding: '11px 14px', borderRadius: 14 }}
                 >
-                  <span className="text-[11px] font-bold uppercase flex-shrink-0" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em', width: 130 }}>
+                  {/* The label was `width: 130` at every width. On a phone that
+                      left 69px for the delegation and truncated "United
+                      Kingdom" to "United Kin…" — so it wraps onto its own line
+                      below `sm` and only becomes a fixed column when there is
+                      room for one. */}
+                  <span className="text-[11px] font-bold uppercase flex-shrink-0 basis-full sm:basis-[130px]" style={{ color: SOFT, fontFamily: OUTFIT, letterSpacing: '0.08em' }}>
                     {entry.label}
                   </span>
                   <FlagImg code={flagCodeFor(entry.row.country)} size={20} />
@@ -1431,8 +1545,8 @@ export function RosterBody({ data }: { data: LiveCommittee }) {
               <NeuInset key={d.country} style={{ borderRadius: 14, overflow: 'hidden' }}>
                 <button
                   onClick={() => setExpanded(isOpen ? null : d.country)}
-                  className="w-full flex items-center gap-3 px-3.5 py-3 text-left focus:outline-none"
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT }}
+                  className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left focus:outline-none"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: OUTFIT, minHeight: 48 }}
                 >
                   <span
                     className="flex items-center justify-center rounded-full overflow-hidden flex-shrink-0"
@@ -1440,7 +1554,11 @@ export function RosterBody({ data }: { data: LiveCommittee }) {
                   >
                     <FlagImg code={flagCodeFor(d.country)} size={22} />
                   </span>
-                  <div className="min-w-0 flex-1">
+                  {/* Same wrap rule as the feedback row above: the status pill
+                      ("PRESENT & VOTING") and the chevron are unshrinkable and
+                      left the caption 63px at 375px, truncating "Represents
+                      Germany". They drop to a second line instead. */}
+                  <div className="min-w-0 flex-1 basis-[140px]">
                     {/* Name = the delegation's country (delegates join by nation; no personal name is stored) */}
                     <p className="text-sm font-extrabold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{d.country}</p>
                     <p className="text-[11px] truncate" style={{ color: SOFT, fontFamily: OUTFIT }}>
@@ -1448,7 +1566,7 @@ export function RosterBody({ data }: { data: LiveCommittee }) {
                     </p>
                   </div>
                   <span
-                    className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex-shrink-0 ms-auto"
                     style={{ color: meta.color, backgroundColor: NEU.surface, boxShadow: `0 0 0 1.5px ${meta.ring}, ${NEU.outSm}`, fontFamily: OUTFIT, letterSpacing: '0.04em' }}
                   >
                     <span className="rounded-full" style={{ width: 7, height: 7, backgroundColor: meta.dot }} />

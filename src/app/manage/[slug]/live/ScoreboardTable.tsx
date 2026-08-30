@@ -246,25 +246,29 @@ export function ScoreboardTable({
             <button
               onClick={() => onExpand(open ? null : r.key)}
               aria-expanded={open}
-              className="w-full focus:outline-none"
+              className="w-full focus:outline-none px-3 py-2.5 md:px-[18px] md:py-[11px]"
               style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                paddingInline: 18, paddingBlock: 11,
+                display: 'flex', alignItems: 'center', gap: 10,
                 background: open ? 'rgba(27,56,40,0.05)' : 'transparent',
-                border: 'none', cursor: 'pointer', textAlign: 'start', flexWrap: 'wrap',
+                border: 'none', cursor: 'pointer', textAlign: 'start',
+                // NEVER `flex-wrap: wrap` again — see the block comment below.
+                flexWrap: 'nowrap', minHeight: 52,
                 transition: `background 160ms ${EASE}`,
               }}
               onMouseEnter={(e) => { if (!open) (e.currentTarget as HTMLElement).style.background = 'rgba(27,56,40,0.03)'; }}
               onMouseLeave={(e) => { if (!open) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
-              <span style={{ width: 28, fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end', flexShrink: 0 }}>
+              <span className="hidden md:inline-block" style={{ width: 28, fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end', flexShrink: 0 }}>
                 {sortKey === 'name' ? '' : i + 1}
               </span>
               <span style={{ width: 22, flexShrink: 0, display: 'inline-flex' }}>
                 <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} />
               </span>
-              <span style={{ flex: '1 1 140px', minWidth: 0 }}>
+              <span style={{ flex: '1 1 0', minWidth: 0 }}>
                 <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 600, fontSize: 13.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span className="md:hidden" style={{ color: SOFT, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                    {sortKey === 'name' ? '' : `${i + 1}. `}
+                  </span>
                   {displayCountry(r.country)}
                 </span>
                 {(r.status === 'absent' || r.isObserver) && (
@@ -272,9 +276,54 @@ export function ScoreboardTable({
                     {r.isObserver ? 'Observer' : 'Absent'}
                   </span>
                 )}
+                {/* The COMMITTEE column below is `hidden md:inline-block`, so on
+                    the conference-wide scoreboard — the only caller that asks
+                    for it — the room a delegation belongs to would simply
+                    vanish on a phone. It reappears here instead. */}
+                {showCommitteeColumn && (
+                  <span
+                    className="block md:hidden"
+                    style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={r.committeeName}
+                  >
+                    {committeeDisplayName(r.committeeName, r.committeeAbbrev)}
+                  </span>
+                )}
+                {/* THE PHONE ROW, AND WHY IT EXISTS.
+                    The column header above is `hidden md:flex`, so below 768px
+                    nothing labelled these figures — and the row was
+                    `flex-wrap: wrap`, so at 375px it broke into three lines and
+                    rendered as `1 · flag · United States` / `4  10m 40s  1` /
+                    `128 ›`: 110px tall, four bare numbers, and the score badge
+                    orphaned on its own line under the rank. That is what "scores
+                    seem broken" is.
+                    Below `md` the three secondary figures move here as ONE
+                    labelled line under the delegation, the score badge stays on
+                    the right where a score belongs, and the row never wraps. */}
+                <span
+                  // `flex md:hidden`, NOT an inline `display: flex` — an inline
+                  // style beats the utility class, so `md:hidden` could not turn
+                  // it off and both the phone line and the desktop columns
+                  // rendered at once above 768px.
+                  className="flex md:hidden"
+                  style={{
+                    alignItems: 'center', gap: 5, marginBlockStart: 3,
+                    fontFamily: OUTFIT, fontSize: 11, color: SOFT,
+                    fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+                    overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}
+                >
+                  {r.gslSpeeches + r.caucusSpeeches} {r.gslSpeeches + r.caucusSpeeches === 1 ? 'speech' : 'speeches'}
+                  <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+                  {formatSpeakingTime(r.speakingSeconds)}
+                  <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+                  <MessageSquareQuote size={11} strokeWidth={2.2} style={{ flexShrink: 0, color: noteCount ? NEU.forest : SOFT, opacity: noteCount ? 1 : 0.55 }} />
+                  {noteCount}
+                </span>
               </span>
               {showCommitteeColumn && (
                 <span
+                  className="hidden md:inline-block"
                   style={{ width: 120, flexShrink: 0, fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   title={r.committeeName}
                 >
@@ -282,19 +331,20 @@ export function ScoreboardTable({
                 </span>
               )}
               <span
+                className="hidden md:inline-block"
                 style={{ width: 70, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}
                 title={`${r.gslSpeeches} GSL · ${r.caucusSpeeches} caucus`}
               >
                 {r.gslSpeeches + r.caucusSpeeches}
               </span>
-              <span style={{ width: 78, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}>
+              <span className="hidden md:inline-block" style={{ width: 78, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}>
                 {formatSpeakingTime(r.speakingSeconds)}
               </span>
-              <span style={{ width: 62, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: noteCount ? NEU.forest : SOFT, opacity: noteCount ? 1 : 0.55, fontVariantNumeric: 'tabular-nums', textAlign: 'end', display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+              <span className="hidden md:inline-flex" style={{ width: 62, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: noteCount ? NEU.forest : SOFT, opacity: noteCount ? 1 : 0.55, fontVariantNumeric: 'tabular-nums', textAlign: 'end', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                 <MessageSquareQuote size={12} strokeWidth={2.2} />
                 {noteCount}
               </span>
-              <span style={{ width: 62, flexShrink: 0, textAlign: 'end' }}>
+              <span className="w-auto md:w-[62px]" style={{ flexShrink: 0, textAlign: 'end' }}>
                 <span
                   style={{
                     fontFamily: OUTFIT, fontWeight: 800, fontSize: 12.5, fontVariantNumeric: 'tabular-nums',

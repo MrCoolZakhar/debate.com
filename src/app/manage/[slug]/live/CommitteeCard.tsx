@@ -242,7 +242,7 @@ function QueueFlag({
   const art = <DelegationMark country={country} size={UP_NEXT_FLAG} />;
   if (!onOpen) {
     return (
-      <span className="flex-shrink-0" style={{ lineHeight: 0 }} title={label}>{art}</span>
+      <span className="flex-shrink-0" style={{ lineHeight: 0, padding: 5 }} title={label}>{art}</span>
     );
   }
   return (
@@ -257,7 +257,12 @@ function QueueFlag({
       onBlur={(e) => shrink(e.currentTarget)}
       className="flex-shrink-0 focus:outline-none"
       style={{
-        lineHeight: 0, border: 'none', padding: 0, background: 'none',
+        // 5px of padding, with the strip's gap dropped to 0 to pay for it:
+        // a 20x20 flag is a 20x20 hit area, which is the smallest control on
+        // this page. This makes it 30x30 without changing the visual spacing
+        // and without two flags' hit areas overlapping — which they would at
+        // the 44px the guidance wants, since ten of them share one 280px row.
+        lineHeight: 0, border: 'none', padding: 5, background: 'none',
         cursor: 'pointer', position: 'relative',
         transformOrigin: 'center bottom',
         transitionProperty: 'transform',
@@ -359,10 +364,10 @@ function QueueOverflow({
         style={{
           color: SOFT, fontFamily: OUTFIT, fontSize: 11,
           fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-          marginInlineStart: 2, border: 'none', cursor: 'pointer',
+          marginInlineStart: 3, border: 'none', cursor: 'pointer',
           backgroundColor: open ? NEU.base : 'transparent',
           boxShadow: open ? NEU.inSm : 'none',
-          borderRadius: 999, padding: '3px 6px',
+          borderRadius: 999, padding: '8px 8px',
           transitionProperty: 'box-shadow, background-color, scale',
           transitionDuration: '180ms', transitionTimingFunction: EASE,
         }}
@@ -656,7 +661,7 @@ function NowPlayingPanel({
               >
                 {np.next.label}
               </p>
-              <div className="flex flex-wrap items-center" style={{ gap: 5 }}>
+              <div className="flex flex-wrap items-center" style={{ gap: 0 }}>
                 {np.next.names.map((n, i) => (
                   <QueueFlag key={`${n}-${i}`} country={n} position={i + 1} onOpen={onOpenDelegate} />
                 ))}
@@ -717,7 +722,13 @@ function Chip({
   // breaking across two lines inside a 12px-tall capsule. The strip that holds
   // these pills wraps instead, so a pill that will not fit moves to the next
   // row whole rather than being cut.
-  const cls = 'inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 whitespace-nowrap';
+  // `py-[7px]` rather than `py-1`: at 26px tall these were the smallest
+  // touch targets on the whole surface after the queue flags. 34px is what
+  // the strip can give without a pill's hit area colliding with the row
+  // above or below it (the strip's own `rowGap` is 6, lifted to 8 for the
+  // same reason) — 44 is not reachable here without the chips becoming the
+  // loudest thing on a card whose subject is the panel above them.
+  const cls = 'inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-[7px] rounded-full flex-shrink-0 whitespace-nowrap';
   if (!onClick) {
     return <span className={cls} title={title} style={base}>{children}</span>;
   }
@@ -1229,11 +1240,11 @@ export function CommitteeCard({
             shrink and clip at 1280. */}
         <div
           className="flex items-center gap-1.5 flex-wrap min-w-0"
-          style={{ marginBlockStart: 9, marginBlockEnd: 9, rowGap: 6 }}
+          style={{ marginBlockStart: 9, marginBlockEnd: 9, rowGap: 8 }}
         >
           <button
             onClick={(e) => { e.stopPropagation(); onOpenRoster(data); }}
-            className="inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-1 rounded-full focus:outline-none active:scale-[0.96] flex-shrink-0 whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 text-[12px] font-bold px-2.5 py-[7px] rounded-full focus:outline-none active:scale-[0.96] flex-shrink-0 whitespace-nowrap"
             style={{
               backgroundColor: NEU.surface, boxShadow: NEU.outSm, color: SOFT,
               fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums',
@@ -1295,7 +1306,7 @@ export function CommitteeCard({
           // order silently wipes the divider.
           border: 'none',
           borderBlockStart: `1px solid ${CARD_BORDER_COLOR}`,
-          padding: `10px ${PAD_END}px 10px ${PAD_START}px`,
+          padding: `12px ${PAD_END}px 12px ${PAD_START}px`,
           color: NEU.forest, fontFamily: OUTFIT,
           backgroundColor: 'transparent',
           cursor: 'pointer',

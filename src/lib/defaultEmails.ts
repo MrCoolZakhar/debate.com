@@ -23,13 +23,27 @@ export interface DefaultEventEmail {
   blocks: EmailBlock[];
 }
 
-const VIEW_CONFERENCE_BUTTON: EmailBlock = { type: 'button', label: 'VIEW MY CONFERENCE', destination: 'documents' };
+// ── House style for the defaults ─────────────────────────────────────────────
+// Every default follows the same three-beat rhythm the renderer is built for:
+//
+//   1. heading  — the news, in five words or fewer, no greeting
+//   2. body     — "Hi {{delegate_name}}," then what happened and what it means
+//   3. button   — one action, sentence case, describing the destination
+//   4. small    — optional: the honest footnote (what we still don't know,
+//                 what the reader should do if it looks wrong)
+//
+// Headings never repeat the subject line verbatim, and never promise anything
+// the product doesn't actually do. Button labels are sentence case: SHOUTING
+// CAPS read as an ad, and these are not ads.
+
+const VIEW_CONFERENCE_BUTTON: EmailBlock = { type: 'button', label: 'View my conference', destination: 'documents' };
 
 export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   application_received: {
     subject: "We've received your application to {{conference_name}}",
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThanks for applying to {{conference_name}} as a {{role}}. Your application has been submitted and is now with the organizing team for review — we'll be in touch as soon as there's a decision." },
+      { type: 'paragraph', variant: 'heading', content: 'Your application is in' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThanks for applying to {{conference_name}} as a {{role}}. Your application is now with the organizing team for review.\n\nThere is nothing further for you to do right now — we'll email you as soon as there's a decision." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -53,162 +67,190 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   application_accepted: {
     subject: "You're in! Your {{conference_name}} application has been accepted",
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nGood news — your application to {{conference_name}} as a {{role}} has been accepted. We're glad to have you with us, and you'll find everything you need for the run-up to the conference in your account." },
+      { type: 'paragraph', variant: 'heading', content: "You're in" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour application to {{conference_name}} as a {{role}} has been accepted. We're glad to have you with us.\n\nYour committee allocation, any fee you owe, and the documents your chairs publish all live in one place — open your conference view to see where things stand." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   application_rejected: {
     subject: 'An update on your {{conference_name}} application',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThank you for your interest in {{conference_name}}. After careful review, we're not able to offer you a place this time. We know that's disappointing, and we appreciate the time you put into applying — we hope to see you at a future conference." },
+      { type: 'paragraph', variant: 'heading', content: 'About your application' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThank you for applying to {{conference_name}}. After review, we aren't able to offer you a place this time.\n\nWe know that's a disappointing thing to read, and it isn't a judgement on you as a delegate — good conferences turn away strong applicants every year simply because there are more of them than there are seats. We hope you'll apply again." },
     ],
   },
   payment_available: {
     subject: 'Payment is now open for {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nPayment for your {{role}} registration at {{conference_name}} is now open — the fee is {{fee}}. You can pay any time before the conference from your account." },
+      { type: 'paragraph', variant: 'heading', content: 'Your fee is ready to pay' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nPayment for your {{role}} registration at {{conference_name}} is now open. The fee is **{{fee}}**.\n\nYou can pay any time before the conference — open your conference view for the payment details the organizing team has set." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   payment_received: {
     subject: 'Payment received — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThis confirms we've received your payment of {{fee}} for {{conference_name}}. Your registration is fully settled — thank you." },
+      { type: 'paragraph', variant: 'heading', content: 'Payment received' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nWe've recorded your payment of **{{fee}}** for {{conference_name}}. Your registration is fully settled — thank you.\n\nKeep this email as your confirmation." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   fee_waived: {
     subject: 'Your {{conference_name}} fee has been waived',
     blocks: [
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour registration fee for {{conference_name}} has been waived — there is nothing further for you to pay. We look forward to seeing you there.' },
+      { type: 'paragraph', variant: 'heading', content: 'Your fee has been waived' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe organizing team has waived your registration fee for {{conference_name}}. There is nothing further for you to pay, and your place is unaffected.\n\nWe look forward to seeing you there.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   aid_approved: {
     subject: 'Your financial aid request for {{conference_name}} has been approved',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nGood news — your financial aid request for {{conference_name}} has been approved. The organizing team will apply the support to your balance; you don't need to do anything further right now." },
+      { type: 'paragraph', variant: 'heading', content: 'Your aid request was approved' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour financial aid request for {{conference_name}} has been approved. The organizing team will apply the support to your balance." },
       VIEW_CONFERENCE_BUTTON,
+      { type: 'paragraph', variant: 'small', content: "You don't need to do anything right now. Your conference view will show the updated amount once the team has applied it." },
     ],
   },
   aid_denied: {
     subject: 'An update on your financial aid request for {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThank you for requesting financial aid for {{conference_name}}. After review, the organizing team isn't able to offer aid at this time, and the standard registration fee applies. If your circumstances change, feel free to reach out to the organizing team." },
+      { type: 'paragraph', variant: 'heading', content: 'About your aid request' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nThank you for requesting financial aid for {{conference_name}}. After review, the organizing team isn't able to offer aid this time, so the standard registration fee applies.\n\nIf your circumstances change, or if there's context the team didn't have, you're welcome to write back and ask them to look again." },
     ],
   },
   allocation_assigned: {
     subject: 'Your committee allocation for {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour committee allocation for {{conference_name}} is ready: you've been placed in {{committee}}, representing {{country}}. Start your research early — study guides and position paper details are in your account." },
+      { type: 'paragraph', variant: 'heading', content: 'Your allocation is ready' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been placed in **{{committee}}**, representing **{{country}}**, at {{conference_name}}.\n\nThat's your brief for the whole conference, so it's worth starting early. Study guides and position paper details appear in your conference view as your chairs publish them." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   allocation_changed: {
     subject: 'Your committee allocation has changed — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour allocation for {{conference_name}} has been updated. You're now placed in {{committee}}, representing {{country}}. Please double-check your research and position paper against the new committee and country." },
+      { type: 'paragraph', variant: 'heading', content: 'Your allocation has changed' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour allocation for {{conference_name}} has been updated. You're now in **{{committee}}**, representing **{{country}}**." },
       VIEW_CONFERENCE_BUTTON,
+      { type: 'paragraph', variant: 'small', content: 'If you had already started a position paper, check it against the new committee and country before you go any further.' },
     ],
   },
   allocation_removed: {
     subject: 'Your committee allocation has been removed — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour committee allocation for {{conference_name}} has been removed. You currently don't hold a committee or country placement — the organizing team will follow up if a new one is on the way, or you're welcome to reach out with any questions." },
+      { type: 'paragraph', variant: 'heading', content: 'Your allocation has been removed' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour committee allocation for {{conference_name}} has been removed, so you don't currently hold a committee or country placement.\n\nThis is usually a step in a reshuffle rather than the end of the story — the organizing team will be in touch if a new allocation is on the way. If you weren't expecting this, reply and ask." },
     ],
   },
   pledge_received: {
     subject: 'Delegation pledge received — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour pledge to cover delegation spots for {{delegation_name}} at {{conference_name}} has been marked received. Thank you for organizing payment on behalf of your delegation.' },
+      { type: 'paragraph', variant: 'heading', content: 'Pledge received' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour pledge to cover delegation spots for {{delegation_name}} at {{conference_name}} has been marked received. Thank you for handling payment on behalf of your delegation.\n\nYour conference view shows which spots the pledge covers and who is currently holding them.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   added_to_delegation: {
     subject: "You've joined {{delegation_name}} — {{conference_name}}",
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been added to {{delegation_name}}'s delegation for {{conference_name}}. Your head delegate or faculty advisor can now see you as part of their group." },
+      { type: 'paragraph', variant: 'heading', content: "You're part of {{delegation_name}}" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been added to {{delegation_name}}'s delegation for {{conference_name}}. Your head delegate and faculty advisor can now see you as part of their group, and any spots the delegation has paid for can be assigned to you." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   removed_from_delegation: {
     subject: 'You have left {{delegation_name}} — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been removed from {{delegation_name}}'s delegation for {{conference_name}}. Your registration itself is unaffected — reach out to the organizing team if this doesn't look right." },
+      { type: 'paragraph', variant: 'heading', content: "You've left {{delegation_name}}" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been removed from {{delegation_name}}'s delegation for {{conference_name}}. Your own registration is unaffected — you are still applying or attending exactly as before.\n\nIf that doesn't look right, get in touch with your head delegate or the organizing team." },
     ],
   },
   spot_received: {
     subject: "You've been given a paid spot — {{conference_name}}",
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nGood news — a paid delegation spot for {{conference_name}} has been transferred to you, so your registration is now covered. Nothing further to pay." },
+      { type: 'paragraph', variant: 'heading', content: 'Your spot is paid for' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nA paid delegation spot for {{conference_name}} has been transferred to you, so your registration is now covered. There's nothing further for you to pay." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   spot_lost: {
     subject: 'A change to your paid spot — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour paid delegation spot for {{conference_name}} has been transferred to another delegate, so your registration now shows as unpaid. Please get in touch with your head delegate, faculty advisor, or the organizing team about settling payment." },
+      { type: 'paragraph', variant: 'heading', content: 'Your paid spot has moved' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe paid delegation spot that was covering your registration at {{conference_name}} has been transferred to another delegate, so your registration now shows as unpaid.\n\nYour place is not cancelled. Speak to your head delegate, faculty advisor, or the organizing team about how payment will be settled.' },
     ],
   },
   not_attending: {
     subject: "You've been marked not attending — {{conference_name}}",
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been marked as not attending {{conference_name}}. If you held a committee allocation, it has been released back to the pool. If this was a mistake, please contact the organizing team." },
+      { type: 'paragraph', variant: 'heading', content: "You're marked as not attending" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been marked as not attending {{conference_name}}. If you held a committee allocation, it has been released back to the pool for someone else.\n\nIf this was a mistake, contact the organizing team as soon as you can — allocations get taken quickly." },
     ],
   },
   attendance_restored: {
     subject: 'Your attendance has been restored — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou're back on as attending {{conference_name}}. Your registration is active again — check your account for your current committee and payment status." },
+      { type: 'paragraph', variant: 'heading', content: "You're back on the list" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour registration for {{conference_name}} is active again.\n\nWorth checking: your committee allocation may have been released while you were marked as not attending, so confirm your current committee and payment status." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   documents_published: {
     subject: 'Your study guide is up for {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe study guide for your committee at {{conference_name}} has just been released. Take a look before the next session.' },
+      { type: 'paragraph', variant: 'heading', content: 'Your study guide is up' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe study guide for your committee at {{conference_name}} has been published. It sets the topics, the scope of debate, and what your chairs expect you to have read.\n\nGive yourself time with it before the first session.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   chair_assigned: {
     subject: "You've been assigned as a chair — {{conference_name}}",
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been assigned as a chair of {{committee}} at {{conference_name}}. Your session tools — roll call, speakers list, motions, and voting — will be ready under this committee closer to the conference." },
+      { type: 'paragraph', variant: 'heading', content: "You're chairing {{committee}}" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been assigned as a chair of **{{committee}}** at {{conference_name}}.\n\nYour session tools — roll call, speakers list, motions, documents, and voting — appear under this committee, and your session code arrives closer to the conference." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   committee_chair_invite: {
     subject: "You're invited to chair {{committee}} at {{conference_name}}",
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been invited to chair {{committee}} at {{conference_name}}. Accepting adds this conference to your Gavelling account and gives you access to your chair tools." },
-      { type: 'button', label: 'ACCEPT INVITATION', destination: 'chair_invite_accept' },
+      { type: 'paragraph', variant: 'heading', content: "You've been invited to chair" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} has invited you to chair **{{committee}}**.\n\nAccepting adds the conference to your Gavelling account and opens your chair tools — roll call, speakers list, motions, documents, and voting." },
+      { type: 'button', label: 'Accept the invitation', destination: 'chair_invite_accept' },
+      { type: 'paragraph', variant: 'small', content: "If you weren't expecting this invitation, you can ignore it — nothing happens until you accept." },
     ],
   },
   organizer_invite: {
     subject: "You're invited to help organize {{conference_name}}",
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been invited to join the organizing team of {{conference_name}} as an organizer. Accepting gives you access to the conference management dashboard, where organizers manage applications, committees, and communications." },
-      { type: 'button', label: 'ACCEPT INVITATION', destination: 'organizer_invite_accept' },
+      { type: 'paragraph', variant: 'heading', content: "You've been invited to organize" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} has invited you to join its organizing team.\n\nAccepting opens the management dashboard, where organizers handle applications, committees, allocations, finances, and communications." },
+      { type: 'button', label: 'Accept the invitation', destination: 'organizer_invite_accept' },
+      { type: 'paragraph', variant: 'small', content: "If you weren't expecting this invitation, you can ignore it — nothing happens until you accept." },
     ],
   },
   session_chair_invite: {
     subject: 'Your session details for {{committee}} — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} is live. Your session code and chair password for {{committee}} are ready in your chair dashboard — use them to open your committee room when it's time to gavel in." },
+      { type: 'paragraph', variant: 'heading', content: '{{conference_name}} is live' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour session code and chair code for **{{committee}}** are ready in your chair dashboard. Use them to open your committee room when it's time to gavel in.\n\nDelegates join with the session code; the chair code is what gives you the dais." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   session_join_invite: {
     subject: 'Join your live committee — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{conference_name}} is live. Your session code for {{committee}} is {{session_code}}. Use it to join your committee room — see you on the floor." },
+      { type: 'paragraph', variant: 'heading', content: 'Your committee is open' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} is live. Your session code for **{{committee}}** is **{{session_code}}**.\n\nUse it to join your committee room — see you on the floor.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
   request_reply: {
     subject: 'Re: {{request_subject}}',
     blocks: [
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe organizing team for {{conference_name}} has replied to your question. Sign in to see the full reply and continue the conversation if needed.' },
+      { type: 'paragraph', variant: 'heading', content: 'The team replied' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe organizing team for {{conference_name}} has answered your question, “{{request_subject}}”.\n\nOpen your conference view to read the full reply and carry on the conversation there.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -219,22 +261,28 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   request_received: {
     subject: 'New question from {{delegate_name}} — {{request_subject}}',
     blocks: [
-      { type: 'paragraph', content: '{{delegate_name}} has asked {{conference_name}} a question on Gavelling.\n\nSubject: {{request_subject}}\n\n{{request_body}}' },
-      { type: 'button', label: 'OPEN THE INBOX', destination: 'custom', url: '' },
+      { type: 'paragraph', variant: 'heading', content: 'A delegate has a question' },
+      { type: 'paragraph', content: '{{delegate_name}} asked {{conference_name}} about “{{request_subject}}”.' },
+      { type: 'paragraph', content: '{{request_body}}' },
+      { type: 'button', label: 'Reply in the inbox', destination: 'custom', url: '' },
+      { type: 'paragraph', variant: 'small', content: 'Reply from the inbox rather than this email — the delegate sees your answer in their conference view, and the thread stays with the conference.' },
     ],
   },
   delegation_swap: {
     subject: 'Your committee allocation has been swapped — {{conference_name}}',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nAs part of a delegation swap within {{delegation_name}}, your committee allocation for {{conference_name}} has changed. You're now placed in {{committee}}, representing {{country}} — please update your research accordingly." },
+      { type: 'paragraph', variant: 'heading', content: 'Your allocation has been swapped' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{delegation_name}} has swapped allocations within its delegation, and yours has changed as part of it. You're now in **{{committee}}**, representing **{{country}}**, at {{conference_name}}." },
       VIEW_CONFERENCE_BUTTON,
+      { type: 'paragraph', variant: 'small', content: 'Any research or position paper you had started applies to your old committee — check it against the new one before you continue.' },
     ],
   },
   import_join_invite: {
     subject: 'Your {{conference_name}} registration is on Gavelling',
     blocks: [
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs on Gavelling. Your registration is ready and waiting for you. Open your invitation to activate your account, and everything attaches automatically.' },
-      { type: 'button', label: 'VIEW MY INVITATION', destination: 'import_claim' },
+      { type: 'paragraph', variant: 'heading', content: 'Your registration is waiting' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} runs on Gavelling, and your registration is already there under this email address — committee, country, and payment status included.\n\nOpen your invitation to activate your account. Everything attaches itself; you do not need to register again.' },
+      { type: 'button', label: 'View my invitation', destination: 'import_claim' },
     ],
   },
 };
