@@ -95,7 +95,7 @@ const CONTINENTS: ContinentDef[] = [
       'Kazakhstan', 'Uzbekistan', 'Turkmenistan', 'Kyrgyzstan', 'Tajikistan',
       'Afghanistan', 'Iran', 'Iraq', 'Saudi Arabia', 'United Arab Emirates',
       'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Yemen', 'Jordan', 'Lebanon',
-      'Syria', 'Israel', 'Palestine', 'Turkey', 'Azerbaijan', 'Armenia',
+      'Syria', 'Israel', 'Palestine', 'Türkiye', 'Azerbaijan', 'Armenia',
       'Georgia', 'Taiwan', 'Hong Kong', 'Macao', 'Brunei', 'East Timor', 'Maldives',
     ],
   },

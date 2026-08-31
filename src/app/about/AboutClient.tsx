@@ -57,7 +57,7 @@ const AMBASSADORS = [
   // Europe
   { name: 'Eva Dubost',              country: 'France',         initials: 'ED', photo: '/ambassador-photos/eva_ambassador.webp', photoPosition: 'center 42%' },
   { name: 'Sophia Baah',             country: 'United Kingdom', initials: 'SB', photo: '/ambassador-photos/sophia_ambassador.webp', photoPosition: 'center 45%' },
-  { name: 'Yağmur Akman',            country: 'Turkey',         initials: 'YA', photo: '/ambassador-photos/yagmur_ambassador.webp', photoPosition: '46% 42%' },
+  { name: 'Yağmur Akman',            country: 'Türkiye',         initials: 'YA', photo: '/ambassador-photos/yagmur_ambassador.webp', photoPosition: '46% 42%' },
   { name: 'Petru-Serban Radulescu',  country: 'Romania',        initials: 'PR', photo: '/ambassador-photos/petru_ambassador.webp', photoPosition: 'center 13%' },
   // North America
   { name: 'Adam Epstein',            country: 'Canada',         initials: 'AE', photo: '/ambassador-photos/adam_ambassador.webp', photoPosition: 'center 40%' },

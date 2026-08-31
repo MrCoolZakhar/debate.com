@@ -217,7 +217,7 @@ export const UN_COUNTRIES: Country[] = [
   { name: 'Tonga', code: 'TO' },
   { name: 'Trinidad and Tobago', code: 'TT' },
   { name: 'Tunisia', code: 'TN' },
-  { name: 'Turkey', code: 'TR' },
+  { name: 'Türkiye', code: 'TR' },
   { name: 'Turkmenistan', code: 'TM' },
   { name: 'Tuvalu', code: 'TV' },
   { name: 'Uganda', code: 'UG' },
@@ -236,8 +236,29 @@ export const UN_COUNTRIES: Country[] = [
   { name: 'European Union', code: 'EU' },
 ];
 
+/**
+ * Former or alternate spellings that must keep resolving to a current country.
+ *
+ * Türkiye asked the UN to retire "Turkey" in English in 2022 and the UN
+ * adopted it, so that is the name the app shows. But roughly 120 rows across
+ * profiles, conferences, delegates and speakers lists were written under the
+ * old spelling, and every allocation, flag and nationality lookup goes through
+ * an exact name match — renaming the canonical entry without this table would
+ * quietly unresolve all of them. It also catches the diacritic-free "Turkiye"
+ * that anyone without an ü on their keyboard will type.
+ *
+ * Keyed on the folded (lowercased, accent-stripped) form.
+ */
+const COUNTRY_NAME_ALIASES: Record<string, string> = {
+  turkey: 'Türkiye',
+  turkiye: 'Türkiye',
+};
+
 export function getCountryByName(name: string): Country | undefined {
-  return UN_COUNTRIES.find((c) => c.name.toLowerCase() === name.toLowerCase());
+  const direct = UN_COUNTRIES.find((c) => c.name.toLowerCase() === name.toLowerCase());
+  if (direct) return direct;
+  const aliased = COUNTRY_NAME_ALIASES[fold(name)];
+  return aliased ? UN_COUNTRIES.find((c) => c.name === aliased) : undefined;
 }
 
 export function getCountryByCode(code: string): Country | undefined {
@@ -449,6 +470,9 @@ export function findCountryFlexible(input: string): string | null {
   // exact across EN names
   let hit = UN_COUNTRIES.find((c) => fold(c.name) === n);
   if (hit) return hit.name;
+  // retired spellings, before the loose fallback below starts guessing
+  const aliased = COUNTRY_NAME_ALIASES[n];
+  if (aliased) return aliased;
   // exact across ES/FR dictionaries (value match → map code back to EN canonical name)
   for (const dict of [COUNTRY_NAMES_ES, COUNTRY_NAMES_FR]) {
     const codeEntry = Object.entries(dict).find(([, v]) => fold(v) === n);
@@ -489,7 +513,7 @@ export function startsWithCountryQuery(enName: string, query: string, language: 
 
 // ── Continents ───────────────────────────────────────────────────────────────
 // Follows the UN M49 geoscheme for the handful of transcontinental cases
-// (Russia → Europe, Turkey/Georgia/Armenia/Azerbaijan/Cyprus → Asia).
+// (Russia → Europe, Türkiye/Georgia/Armenia/Azerbaijan/Cyprus → Asia).
 
 export type Continent = 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania';
 

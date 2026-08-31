@@ -76,7 +76,7 @@ export const FIFA_MEMBERS: string[] = [
   'Australia', 'Iran', 'Saudi Arabia', 'Qatar', 'Senegal', 'Morocco', 'Nigeria',
   'Ghana', 'Cameroon', 'Egypt', 'Algeria', 'Tunisia', "Côte d'Ivoire",
   'Ecuador', 'Chile', 'Peru', 'Paraguay', 'Denmark', 'Sweden', 'Norway',
-  'Switzerland', 'Austria', 'Poland', 'Serbia', 'Ukraine', 'Russia', 'Turkey', 'Greece',
+  'Switzerland', 'Austria', 'Poland', 'Serbia', 'Ukraine', 'Russia', 'Türkiye', 'Greece',
 ];
 
 // House of Commons — ROLE/character-based: UK front- and back-bench posts plus
