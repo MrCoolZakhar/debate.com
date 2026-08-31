@@ -194,12 +194,18 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
     <div
       role="tablist"
       aria-label="Application roles"
-      className="flex items-end overflow-x-auto"
-      style={{ gap: 6, paddingTop: 4, scrollbarWidth: 'none' }}
+      className="grid items-end"
+      style={{ gridTemplateColumns: `repeat(${roles.length}, minmax(0, 1fr))`, gap: 6, paddingTop: 4 }}
     >
       {roles.map(role => {
         const on = role === active;
         const st = statusOf(role);
+        // Open versus everything else, said by the whole tab rather than by a
+        // 6px dot: a closed role is dimmed and its name goes muted. Selection
+        // sits on top of that, so a dimmed role you are editing still reads as
+        // the one you are editing.
+        const open = st === 'OPEN';
+        const rest = open ? 1 : 0.55;
         return (
           <button
             key={role}
@@ -208,9 +214,8 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
             aria-selected={on}
             onClick={() => onPick(role)}
             title={ROLE_BLURB[role]}
-            className="flex flex-col items-center flex-shrink-0 focus:outline-none"
+            className="flex flex-col items-center w-full min-w-0 focus:outline-none"
             style={{
-              minWidth: 96,
               padding: on ? '11px 12px 14px' : '9px 12px 11px',
               // Bookmark: rounded at the top, square at the bottom, so the
               // active tab reads as part of the panel it opens.
@@ -223,12 +228,12 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
                 : 'none',
               border: 'none',
               cursor: 'pointer',
-              opacity: on ? 1 : st === 'OFF' ? 0.5 : 0.78,
+              opacity: on ? 1 : rest,
               transform: on ? 'translateY(0)' : 'translateY(3px)',
               transition: 'transform 220ms cubic-bezier(0.22,1,0.36,1), box-shadow 220ms, opacity 180ms',
             }}
             onMouseEnter={(e) => { if (!on) { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; } }}
-            onMouseLeave={(e) => { if (!on) { (e.currentTarget as HTMLElement).style.opacity = st === 'OFF' ? '0.5' : '0.78'; (e.currentTarget as HTMLElement).style.transform = 'translateY(3px)'; } }}
+            onMouseLeave={(e) => { if (!on) { (e.currentTarget as HTMLElement).style.opacity = String(rest); (e.currentTarget as HTMLElement).style.transform = 'translateY(3px)'; } }}
           >
             {/* Icon above the name, seated on its own disc so the emoji has
                 somewhere to cast a shadow. */}
@@ -245,14 +250,14 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
             </span>
             <span
               className="flex items-center"
-              style={{ gap: 5, fontFamily: OUTFIT, fontSize: 11, fontWeight: on ? 800 : 700, letterSpacing: '0.04em', color: on ? NEU.ink : NEU.inkSoft, whiteSpace: 'nowrap' }}
+              style={{ gap: 5, fontFamily: OUTFIT, fontSize: 11, fontWeight: on ? 800 : 700, letterSpacing: '0.04em', color: on ? NEU.ink : open ? NEU.forest : NEU.muted, minWidth: 0 }}
             >
               <span
                 suppressHydrationWarning
                 aria-hidden
-                style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, backgroundColor: STATUS_STYLE[st].dot }}
+                style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, backgroundColor: STATUS_STYLE[st].dot, opacity: open ? 1 : 0.6 }}
               />
-              {roleLabel(role)}
+              <span className="truncate">{roleLabel(role)}</span>
             </span>
           </button>
         );
