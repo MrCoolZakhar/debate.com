@@ -447,7 +447,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
           <div className="flex items-center gap-2">
             <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-              className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors disabled:opacity-60">
+              className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors disabled:opacity-60 gv-lift">
               {uploading ? '⏳ …' : fileName ? `📎 ${fileName}` : t('delegate_doc_attach_btn')}
             </button>
             {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">{t('delegate_doc_remove')}</button>}
@@ -1572,6 +1572,18 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   }
 
   // ── Queue rows ────────────────────────────────────────────────────────────
+  /* Speeches per country. `parseSpeakingLogs` already runs on this page for
+     the delegate's own stats and returns every country's entries, not just
+     theirs — the rest was being filtered away and thrown out. Counted once
+     here rather than per row. */
+  /* Deliberately not a useMemo: this sits below the page's early returns, so a
+     hook here would be called conditionally. It is one pass over the message
+     list, and this view has no per-second timer to re-render it. */
+  const speechCounts: Record<string, number> = {};
+  for (const e of parseSpeakingLogs(committee)) {
+    if (e.country) speechCounts[e.country] = (speechCounts[e.country] ?? 0) + 1;
+  }
+
   const queueRows = (limit?: number) =>
     (typeof limit === 'number' ? committee.speakersList.slice(0, limit) : committee.speakersList).map((s, i) => (
       <QueueRow
@@ -1580,6 +1592,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         code={getCountryByName(s.country)?.code ?? ''}
         name={getCountryDisplayName(s.country, language)}
         isSelf={s.country === country}
+        spoken={speechCounts[s.country] ?? 0}
         speakingLabel={t('delegate_speaking_chip')}
         youLabel={t('delegate_you_chip')}
       />
@@ -1672,6 +1685,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                   code={getCountryByName(s.country)?.code ?? ''}
                   name={getCountryDisplayName(s.country, language)}
                   isSelf={s.country === country}
+                  spoken={speechCounts[s.country] ?? 0}
                   speakingLabel={t('delegate_speaking_chip')}
                   youLabel={t('delegate_you_chip')}
                 />

@@ -157,7 +157,7 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: '#EED98A' }} />
             <span className="text-sm font-black tracking-wide" style={{ color: '#EED98A' }}>Scoreboard</span>
             <div className="ms-auto flex items-center gap-2">
-              <button onClick={exportCsv} className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>Export CSV</button>
+              <button onClick={exportCsv} className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift" style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>Export CSV</button>
               <button onClick={onClose} className="text-[#EDE7D8] hover:text-white text-lg leading-none">✕</button>
             </div>
           </div>
@@ -240,7 +240,7 @@ export default function ScoreboardPanel({ committee, onClose }: { committee: Com
                   <input value={awardNote} onChange={(e) => setAwardNote(e.target.value)} placeholder="Reason (required)"
                     className="w-full text-sm bg-white border border-[#DDD4C0] rounded-lg px-2.5 py-1.5 mb-2 outline-none focus:border-[#1B3828]" style={{ color: '#1C1410' }} />
                   <button onClick={submitManual} disabled={!awardAmt || !awardNote.trim()}
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-40" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>Apply</button>
+                    className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-40 gv-lift" style={{ backgroundColor: '#1B3828', color: '#EED98A' }}>Apply</button>
                 </div>
               </div>
             )}

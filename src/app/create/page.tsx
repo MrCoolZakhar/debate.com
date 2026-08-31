@@ -727,7 +727,7 @@ function CreatePageInner() {
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(BUNDLES).map(([key, bundle]) => (
                       <button key={key} onClick={() => addBundle(key)}
-                        className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all"
+                        className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all gv-lift"
                         style={{ backgroundColor: '#FAF8F3', color: '#1B3828', border: '1px solid #DDD4C0' }}
                         onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; el.style.borderColor = '#1B3828'; }}
                         onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#FAF8F3'; el.style.color = '#1B3828'; el.style.borderColor = '#DDD4C0'; }}>
@@ -914,12 +914,12 @@ function CreatePageInner() {
           {/* Footer */}
           <div className="flex items-center gap-3 px-6 py-4 shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
             <button onClick={() => setPasteReview(null)}
-              className="px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors"
+              className="px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors gv-lift"
               style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0' }}>
               {t('create_review_cancel')}
             </button>
             <button onClick={commitPasteReview} disabled={pasteReview.length === 0}
-              className="flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30"
+              className="flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 gv-lift"
               style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
               onMouseEnter={(e) => { if (pasteReview.length) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>

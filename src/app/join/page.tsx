@@ -459,7 +459,7 @@ function JoinPageInner() {
                     </p>
                     <button
                       onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code + '&mode=' + mode))}
-                      className="w-full focus:outline-none"
+                      className="w-full focus:outline-none gv-lift"
                       style={{ padding: '10px 0', borderRadius: 10, border: 'none', backgroundColor: '#1B3828', fontSize: 13, fontWeight: 700, color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', cursor: 'pointer' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}

@@ -568,13 +568,13 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
                   <div className="flex items-center gap-1 shrink-0">
                     {onAddFirst && (
                       <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddFirst(d.id); setQuery(''); }}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors">
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors gv-lift">
                         ↑ First
                       </button>
                     )}
                     {onAddLast && (
                       <button onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onAddLast(d.id); setQuery(''); }}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors">
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#B6871F] font-bold border border-[#C8BAA8] transition-colors gv-lift">
                         ↓ Last
                       </button>
                     )}
@@ -591,7 +591,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
       </div>
       {onEndCaucus && (
         <button onClick={onEndCaucus}
-          className="shrink-0 px-5 py-3 rounded-xl font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
+          className="shrink-0 px-5 py-3 rounded-xl font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors gv-lift">
           {t('caucus_end')}
         </button>
       )}
@@ -790,7 +790,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
         </div>
       )}
       {!isViewOnly && <div className="flex gap-3 flex-wrap justify-center">
-        <button onClick={handleToggleUnmodClock} className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+        <button onClick={handleToggleUnmodClock} className={`gv-lift flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${running ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
           {running ? (
             <span className="flex items-center justify-center gap-2">
               <span className="flex gap-[3px] items-center">
@@ -801,15 +801,15 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
             </span>
           ) : t('gsl_start')}
         </button>
-        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
+        <button onClick={() => setShowExtendUnmod((v) => !v)} className="px-4 py-3 rounded-xl font-bold bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none gv-lift">
           {t('caucus_extend')}
         </button>
         {cowEnabled && (
-          <button onClick={() => { setCowOpen((v) => !v); }} className="px-4 py-3 rounded-xl font-bold bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border border-[#B8844A]/30 text-[#B8844A] transition-colors focus:outline-none">
+          <button onClick={() => { setCowOpen((v) => !v); }} className="px-4 py-3 rounded-xl font-bold bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border border-[#B8844A]/30 text-[#B8844A] transition-colors focus:outline-none gv-lift">
             {t('cow_timer')}
           </button>
         )}
-        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors focus:outline-none">
+        <button onClick={handleEndCaucus} className="px-8 py-3 rounded-xl font-black bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors focus:outline-none gv-lift">
           {t('caucus_end')}
         </button>
       </div>}
@@ -824,7 +824,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
             <div className="flex gap-2 mb-3">
               {[30, 60, 90].map((s) => (
                 <button key={s} onClick={() => { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); }}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
+                  className={`gv-lift flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
                     cowRemaining === s && !cowActive ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]' : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#B8844A]/50'
                   }`}>
                   {s}s
@@ -844,7 +844,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
               <span className="text-xs font-black self-center shrink-0" style={{ color: '#6A5A4A' }}>s</span>
               <button
                 onClick={() => { const s = parseInt(cowCustom, 10); if (s > 0) { setCowActive(false); setCowRemaining(s); setCowSetSecs(s); setCowCustom(''); } }}
-                className="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide bg-[#B8844A] hover:bg-[#B8844A]/80 text-[#1C1410] transition-colors focus:outline-none shrink-0"
+                className="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide bg-[#B8844A] hover:bg-[#B8844A]/80 text-[#1C1410] transition-colors focus:outline-none shrink-0 gv-lift"
                 aria-label="Set custom time"
               >
                 ✓
@@ -861,11 +861,11 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
             </div>
             <div className="flex gap-2">
               <button onClick={() => setCowActive((r) => !r)}
-                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${cowActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+                className={`gv-lift flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${cowActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
                 {cowActive ? t('rtr_pause') : t('rtr_start')}
               </button>
               <button onClick={() => { setCowActive(false); setCowRemaining(cowDefaultSecs); setCowSetSecs(cowDefaultSecs); setCowCustom(''); }}
-                className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors">
+                className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors gv-lift">
                 ↺
               </button>
             </div>
@@ -897,7 +897,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
             <span className="text-xs text-[#9A8A78] shrink-0">m</span>
           </div>
           <button onClick={() => handleExtendUnmod(extendMinsUnmod * 60)}
-            className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
+            className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none gv-lift">
             {t('gsl_add_time_extended')}
           </button>
         </div>
@@ -1082,11 +1082,11 @@ function ModeratedCaucusMain({
           {!sessionEnded && !isViewOnly && (
             <div className="shrink-0 flex gap-2 w-full max-w-sm flex-wrap justify-center px-4 pb-3 mx-auto">
               <button onClick={handleRestartTime} title="Restart speaker time"
-                className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
+                className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors gv-lift">
                 ↺
               </button>
               <button onClick={handleToggleTimer}
-                className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
+                className={`gv-lift flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}>
                 {timerRunning ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="flex gap-[3px] items-center">
@@ -1098,16 +1098,16 @@ function ModeratedCaucusMain({
                 ) : t('gsl_start')}
               </button>
               <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: '14px' }}>
+                className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap gv-lift" style={{ fontSize: '14px' }}>
                 {t('gsl_next')}
               </button>
               <button onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')} title="Add time"
-                className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
+                className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center gv-lift" style={{ fontSize: '8px', minWidth: '52px' }}>
                 {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
               </button>
               {!isTdT && (
                 <button onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
-                  className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
+                  className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A] gv-lift">
                   {t('gsl_right_to_reply')}
                 </button>
               )}
@@ -1142,7 +1142,7 @@ function ModeratedCaucusMain({
             {!isViewOnly && <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>}
             {!sessionEnded && !isViewOnly && (
               <button onClick={handleNextCaucusSpeaker} disabled={queue.length === 0}
-                className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
+                className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none gv-lift">
                 {t('gsl_call_first')}
               </button>
             )}
@@ -1162,7 +1162,7 @@ function ModeratedCaucusMain({
               </div>
               {!isViewOnly && <div className="relative" ref={extendRef}>
                 <button onClick={() => setShowExtendMod((v) => !v)}
-                  className="px-3 py-2 rounded-lg font-bold text-xs bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
+                  className="px-3 py-2 rounded-lg font-bold text-xs bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none gv-lift">
                   {t('caucus_extend')}
                 </button>
                 {showExtendMod && (
@@ -1190,14 +1190,14 @@ function ModeratedCaucusMain({
                       <span className="text-xs text-[#9A8A78] shrink-0">m</span>
                     </div>
                     <button onClick={() => handleExtendMod(extendMinsMod * 60)}
-                      className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none">
+                      className="w-full py-1.5 rounded-lg text-xs font-black bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EDE7D8] transition-colors focus:outline-none gv-lift">
                       {t('gsl_add_time_extended')}
                     </button>
                   </div>
                 )}
               </div>}
               {!isViewOnly && <button onClick={handleEndCaucus}
-                className="px-8 py-3 rounded-lg font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors">
+                className="px-8 py-3 rounded-lg font-black text-sm bg-[#8B2020] hover:bg-[#7A1C1C] text-white transition-colors gv-lift">
                 {t('caucus_end')}
               </button>}
             </div>
@@ -2619,7 +2619,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           <p className="mb-6" style={{ color: '#6A5A4A' }}>This is a conference session. Sign in to verify you chair this committee.</p>
           <button
             onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code))}
-            className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+            className="font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
             style={{ backgroundColor: '#1B3828' }}
           >
             SIGN IN
@@ -3219,7 +3219,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
         <button onClick={() => { navigator.clipboard.writeText(committee.code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
           data-tutorial="join-code"
-          className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0">
+          className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0 gv-lift">
           {copied ? '✓' : committee.code}
         </button>
         <button onClick={() => setShowScoreboard(true)} title="Scoreboard"
@@ -3343,7 +3343,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     {desiredStatus === 'present-voting' ? 'P+V' : 'P'}
                   </span>
                   <button onClick={() => handleApproveJoinRequest(m.id, delegateId, desiredStatus)}
-                    className="ms-1 px-3 py-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EED98A] text-xs rounded-lg font-black transition-colors">{t('session_approve')}</button>
+                    className="ms-1 px-3 py-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-[#EED98A] text-xs rounded-lg font-black transition-colors gv-lift">{t('session_approve')}</button>
                   <button onClick={() => handleDenyJoinRequest(m.id)}
                     className="px-2.5 py-1 bg-transparent hover:bg-[#8B2020]/10 border border-[#8B2020]/40 text-[#8B2020] text-xs rounded-lg font-bold transition-colors">{t('session_deny')}</button>
                 </div>
@@ -3376,7 +3376,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <p className="text-xl mb-12" style={{ color: '#6A5A4A' }}>{t('session_suspended_desc')}</p>
                 {anotherChairResuming ? (
                   <>
-                    <button disabled className="px-12 py-5 rounded-2xl cursor-not-allowed font-black text-xl" style={{ backgroundColor: '#DDD4C0', color: '#9A8A78' }}>
+                    <button disabled className="px-12 py-5 rounded-2xl cursor-not-allowed font-black text-xl gv-lift-dark" style={{ backgroundColor: '#DDD4C0', color: '#9A8A78' }}>
                       {t('session_resume_btn')}
                     </button>
                     <p className="text-sm mt-4" style={{ color: '#B8844A' }}>{t('session_resuming_other').replace('{name}', committee.resumingChair ?? '')}</p>
@@ -3387,7 +3387,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       <button
                         onClick={handleTakeOverResume}
                         disabled={resumeBusy}
-                        className="mt-5 px-6 py-3 rounded-xl font-black text-sm transition-colors focus:outline-none disabled:opacity-60"
+                        className="mt-5 px-6 py-3 rounded-xl font-black text-sm transition-colors focus:outline-none disabled:opacity-60 gv-lift-dark"
                         style={{ backgroundColor: '#8B5A20', color: '#EDE7D8', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}>
                         {resumeBusy ? '…' : t('session_resume_takeover')}
                       </button>
@@ -3397,7 +3397,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   <button
                     onClick={handleResumeClick}
                     disabled={resumeBusy}
-                    className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none disabled:opacity-70 disabled:cursor-wait" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+                    className="px-12 py-5 text-white text-xl font-black rounded-2xl transition-colors focus:outline-none disabled:opacity-70 disabled:cursor-wait gv-lift-dark" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
                     onMouseEnter={(e) => { if (!resumeBusy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
                     {t('session_resume_btn')}
@@ -3752,13 +3752,13 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       {!sessionEnded && !isViewOnly && (
                         <div className="shrink-0 flex gap-2 w-full max-w-sm flex-wrap justify-center px-4 pb-3 mx-auto">
                           <button onClick={handleRestartTime} title="Restart time"
-                            className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors">
+                            className="px-3 py-3 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] hover:border-[#1B3828] rounded-xl font-bold text-sm text-[#6A5A4A] transition-colors gv-lift">
                             ↺
                           </button>
                           <button onClick={handleToggleTimer}
                             data-tutorial="timer-toggle"
                             disabled={gslRequireNextSpeaker && isLastGSLSpeaker}
-                            className={`flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${
+                            className={`gv-lift flex-1 py-3 px-6 rounded-xl font-bold text-base transition-colors focus:outline-none ${
                               timerRunning ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' :
                               (gslRequireNextSpeaker && isLastGSLSpeaker) ? 'bg-[#DDD4C0] text-[#9A8A78] cursor-not-allowed' :
                               'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
@@ -3774,20 +3774,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                             ) : t('gsl_start')}
                           </button>
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
-                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap" style={{ fontSize: '14px' }}>
+                            className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap gv-lift" style={{ fontSize: '14px' }}>
                             {t('gsl_next')}
                           </button>
                           <button
                             onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
                             data-tutorial="add-time-button"
                             title="Add time"
-                            className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center" style={{ fontSize: '8px', minWidth: '52px' }}>
+                            className="px-2 py-2 border rounded-xl font-black uppercase tracking-wide transition-colors bg-[#EDE7D8] hover:bg-[#DDD4C0] border-[#DDD4C0] text-[#1B3828] leading-tight text-center gv-lift" style={{ fontSize: '8px', minWidth: '52px' }}>
                             {t('gsl_add_time').split('\n')[0]}<br />{t('gsl_add_time').split('\n')[1]}
                           </button>
                           <button
                             onClick={() => setActivePopover(activePopover === 'rightToReply' ? null : 'rightToReply')}
                             data-tutorial="rtr-button"
-                            className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A]">
+                            className="px-3 py-3 border rounded-xl font-black text-xs uppercase tracking-wide transition-colors bg-[#B8844A]/15 hover:bg-[#B8844A]/25 border-[#B8844A]/30 text-[#B8844A] gv-lift">
                             {t('gsl_right_to_reply')}
                           </button>
                         </div>
@@ -3812,7 +3812,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       )}
                       {!sessionEnded && !isViewOnly && (
                         <button data-tutorial="call-first-speaker" onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
-                          className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none">
+                          className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none gv-lift">
                           {t('gsl_call_first')}
                         </button>
                       )}
@@ -3826,7 +3826,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <div className="flex gap-1.5">
                       {[45, 60, 75, 90].map((preset) => (
                         <button key={preset} onClick={() => handleSetSpeakerTimeLimit(preset)}
-                          className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === preset ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                          className={`gv-lift text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${speakerTimeLimit === preset ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {preset}s
                         </button>
                       ))}
@@ -3927,7 +3927,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             <div className="flex gap-2 mb-2">
               {[15, 30, 60].map((s) => (
                 <button key={s} onClick={() => { handleAddExtraTime(s); setActivePopover(null); }}
-                  className="flex-1 py-2 bg-[#EDE7D8] hover:bg-[#1B3828] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1B3828] hover:text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors">
+                  className="flex-1 py-2 bg-[#EDE7D8] hover:bg-[#1B3828] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1B3828] hover:text-[#EED98A] text-xs rounded-lg font-black uppercase tracking-wide transition-colors gv-lift">
                   +{s}s
                 </button>
               ))}
@@ -3945,7 +3945,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <button
                 onClick={() => { const n = parseInt(extraTimeSecs); if (n > 0) { handleAddExtraTime(n); setActivePopover(null); } }}
                 disabled={!extraTimeSecs || parseInt(extraTimeSecs) <= 0}
-                className="px-2 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors">
+                className="px-2 py-1.5 bg-[#1B3828] hover:bg-[#2A5A3C] disabled:opacity-40 text-[#EED98A] text-xs rounded-lg font-black transition-colors gv-lift">
                 {t('gsl_add_time_btn')}
               </button>
             </div>
@@ -4001,7 +4001,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     <button
                       key={s}
                       onClick={() => setRtrSeconds(s)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
+                      className={`gv-lift flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-colors border ${
                         rtrSeconds === s
                           ? 'bg-[#B8844A] border-[#B8844A] text-[#1C1410]'
                           : 'bg-[#EDE7D8] border-[#DDD4C0] text-[#6A5A4A] hover:border-[#B8844A]/50'
@@ -4020,7 +4020,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     setRtrOpen(true);
                   }}
                   disabled={!rtrCountry}
-                  className="w-full py-2 bg-[#B8844A] hover:bg-[#B8844A]/80 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-black uppercase tracking-wide transition-colors"
+                  className="w-full py-2 bg-[#B8844A] hover:bg-[#B8844A]/80 disabled:opacity-40 disabled:cursor-not-allowed text-[#1C1410] text-xs rounded-lg font-black uppercase tracking-wide transition-colors gv-lift"
                 >
                   {t('gsl_grant')}
                 </button>
@@ -4052,7 +4052,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setRtrTimerActive((r) => !r)}
-                    className={`flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${
+                    className={`gv-lift flex-1 py-2 rounded-lg font-bold text-xs transition-colors ${
                       rtrTimerActive ? 'bg-[#B6871F] hover:bg-[#B6871F]/80 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'
                     }`}
                   >
@@ -4066,7 +4066,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       setRtrTimeRemaining(rtrSeconds);
                       setActivePopover(null);
                     }}
-                    className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors"
+                    className="px-3 py-2 rounded-lg font-bold text-xs bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#6A5A4A] transition-colors gv-lift"
                   >
                     {t('rtr_done')}
                   </button>

@@ -186,7 +186,7 @@ function InfoHint({ head, body }: { head: string; body: string }) {
         ref={btnRef} type="button" tabIndex={0} aria-label={head}
         onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
         onClick={(e) => e.preventDefault()}
-        className="shrink-0 w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] font-black leading-none transition-colors focus:outline-none"
+        className="shrink-0 w-[15px] h-[15px] rounded-full inline-flex items-center justify-center text-[10px] font-black leading-none transition-colors focus:outline-none gv-lift"
         style={{ border: '1px solid #C5B9A8', color: '#6A5A4A', backgroundColor: '#FAF8F3' }}
       >
         i
@@ -474,7 +474,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
           <div className="flex gap-1.5 flex-1 flex-wrap">
             {enabledTypes.map((motionType) => (
               <button key={motionType} type="button" onClick={() => setType(motionType)}
-                className={`px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
+                className={`gv-lift px-3 py-2 rounded-xl border font-bold text-base transition-all flex-1 min-w-[120px] ${
                   type === motionType ? 'bg-[#1B3828] border-[#2A5A3C] text-white' : 'bg-transparent border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'
                 }`}>
                 {typeMeta[motionType].label}
@@ -484,11 +484,11 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
           {/* Special debate control buttons, half size, red, stacked */}
           <div className="flex flex-col gap-1 self-stretch">
             <button type="button" onClick={() => setType('suspend-debate')}
-              className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
+              className={`gv-lift px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'suspend-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
               {t('motions_suspend')}
             </button>
             <button type="button" onClick={() => setType('end-debate')}
-              className={`px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
+              className={`gv-lift px-2 flex-1 rounded-lg border text-xs font-bold transition-colors ${type === 'end-debate' ? 'bg-[#8B2020] border-red-700 text-white' : 'border-[#8B2020]/40 bg-[#8B2020]/20 text-[#8B2020] hover:bg-[#8B2020]/20'}`}>
               {t('motions_end_debate')}
             </button>
           </div>
@@ -566,7 +566,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     <div className="flex gap-2 mt-1.5">
                       {[30, 45, 60, 90, 120].map((t) => (
                         <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
-                          className={`text-xs px-2.5 py-1 rounded-lg transition-colors focus:outline-none ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                          className={`gv-lift text-xs px-2.5 py-1 rounded-lg transition-colors focus:outline-none ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {t}s
                         </button>
                       ))}
@@ -576,15 +576,15 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     <label className="block text-sm font-semibold text-[#6A5A4A] mb-1">{t('motions_speaking_order')}</label>
                     <div className="flex gap-3">
                       <button onClick={() => setTourOrder('asc')}
-                        className={`flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'asc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         {t('motions_az')}
                       </button>
                       <button onClick={() => setTourOrder('desc')}
-                        className={`flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'desc' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         {t('motions_za')}
                       </button>
                       <button onClick={() => setTourOrder('custom')}
-                        className={`flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                        className={`gv-lift flex-1 py-2 rounded-xl font-bold text-sm transition-colors focus:outline-none ${tourOrder === 'custom' ? 'bg-[#1B3828] text-white' : 'bg-transparent border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                         {t('motions_room_order')}
                       </button>
                     </div>
@@ -619,7 +619,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                 <div className="flex gap-2 mt-2">
                   {[2, 5, 10, 15, 20].map((m) => (
                     <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr('0'); }}
-                      className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                      className={`gv-lift text-xs px-2.5 py-1.5 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                       {m}m
                     </button>
                   ))}
@@ -661,7 +661,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     <div className="flex gap-1.5 mt-2 flex-wrap">
                       {[2, 5, 10, 15, 20].map((m) => (
                         <button key={m} onClick={() => { setTotalMinsStr(String(m)); setTotalSecsStr('0'); }}
-                          className={`text-xs px-2 py-1 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                          className={`gv-lift text-xs px-2 py-1 rounded-lg transition-colors ${totalMins === m && totalSecs === 0 ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {m}m
                         </button>
                       ))}
@@ -678,7 +678,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                     <div className="flex gap-1.5 mt-2 flex-wrap">
                       {[30, 45, 60, 90, 120].map((t) => (
                         <button key={t} onClick={() => setSpeakingTimeStr(String(t))}
-                          className={`text-xs px-2 py-1 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
+                          className={`gv-lift text-xs px-2 py-1 rounded-lg transition-colors ${speakingTime === t ? 'bg-[#1B3828] text-white font-bold' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:text-[#1B3828]'}`}>
                           {t}s
                         </button>
                       ))}
@@ -710,7 +710,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
           {error && <p className="text-[#8B2020] text-sm font-medium mb-3">{error}</p>}
           {!isViewOnly && (
             <button onClick={submit} disabled={!canSubmit() || belowQuorum}
-              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-5 rounded-2xl text-base font-black transition-colors focus:outline-none gv-lift" style={{ letterSpacing: '0.05em' }}>
               {editingMotion ? t('motions_edit_btn') : t('motions_raise_btn')}
             </button>
           )}
@@ -949,17 +949,17 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             <button onClick={() => { if (!acceptBlocked) onAccepted(m); }}
               disabled={acceptBlocked}
               title={acceptBlocked ? 'Saving…' : undefined}
-              className={`flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              className={`gv-lift flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
               {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
             </button>
             <button onClick={() => onRemove(m.id)}
               disabled={pendingIds.has(m.id)}
-              className={`flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
               {t('motions_reject_btn')}
             </button>
             <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
               title="Edit motion"
-              className="bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none" style={{ fontFamily: "'DM Mono', monospace" }}>
+              className="bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "'DM Mono', monospace" }}>
               {t('motions_edit_label')}
             </button>
           </div>
@@ -1021,7 +1021,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           {!isViewOnly && (
             <button
               onClick={onBack}
-              className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none"
+              className="w-full bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-3 rounded-2xl font-black text-sm transition-colors shrink-0 focus:outline-none gv-lift"
               style={{ letterSpacing: '0.05em' }}
             >
               {t('motions_raise_motion_btn')}
@@ -1398,7 +1398,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
             {t('motions_yes')}
@@ -1411,7 +1411,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
             {t('motions_no')}
@@ -1531,12 +1531,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
               )}
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setView('raise')}
-                  className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all">
+                  className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all gv-lift">
                   {t('motions_raise_list_btn')}
                 </button>
                 {pending.length > 0 && (
                   <button onClick={() => setView('vote')}
-                    className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors">
+                    className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors gv-lift">
                     {t('motions_vote_list_btn')}
                   </button>
                 )}

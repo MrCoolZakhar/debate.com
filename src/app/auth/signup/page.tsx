@@ -174,6 +174,24 @@ function SignUpInner() {
     }
   }
 
+  /** Raw Supabase auth errors are not written for the person reading them, and
+   *  the two that actually happen here both have a useful answer:
+   *
+   *  • already confirmed — resend refuses, and the user reads that as "the
+   *    emails stopped coming". Their account is live; they need sign-in.
+   *  • rate limited — the emails really did stop, for a few minutes, and
+   *    "try again shortly" is the whole message. */
+  function resendMessage(raw: string): string {
+    const m = raw.toLowerCase();
+    if (m.includes('already confirmed') || m.includes('already been confirmed') || m.includes('already registered')) {
+      return 'This email is already confirmed, so there is nothing left to send. Sign in below and you are in.';
+    }
+    if (m.includes('rate limit') || m.includes('security purposes') || m.includes('only request this after')) {
+      return 'That is a few too many in a row — wait a minute or two and try once more.';
+    }
+    return raw;
+  }
+
   function resendSignupEmail(): Promise<string | null> {
     return supabase.auth
       .resend({
@@ -181,8 +199,8 @@ function SignUpInner() {
         email,
         options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
       })
-      .then(({ error }) => (error ? error.message : null))
-      .catch((e) => (e instanceof Error ? e.message : 'Could not resend right now. Please try again.'));
+      .then(({ error }) => (error ? resendMessage(error.message) : null))
+      .catch((e) => (e instanceof Error ? resendMessage(e.message) : 'Could not resend right now. Please try again.'));
   }
 
   async function handleGoogleSignUp() {
@@ -292,22 +310,41 @@ function SignUpInner() {
           intro="We sent a 6-digit code to"
           onVerify={async (token) => {
             const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
-            if (error) return 'That code is not right, or it has expired. Request a new one below.';
+            /* A failure here does NOT reliably mean the person typed it wrong.
+               The code and the emailed link are the same one-time token, and
+               mail providers routinely fetch links in a message before the
+               recipient ever opens it — Gmail does. When that happens the
+               account is confirmed by the scanner and the code the user then
+               types is already spent, so the honest answer is "you may already
+               be done", not "you got it wrong". Telling people the latter is
+               what left a real applicant locked out for two days. */
+            if (error) return 'That code didn’t work — it may already have been used. If you opened the link in your email, your account is probably active already: try signing in below.';
             setPhase('verified');
             return null;
           }}
           onResend={resendSignupEmail}
           footer={
-            <button
-              type="button"
-              onClick={() => { setPhase('form'); setError(''); }}
-              className="text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded"
-              style={{ color: '#9A8A78', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', outlineColor: '#1B3828' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-            >
-              Wrong email? Start over
-            </button>
+            <div className="flex flex-col items-center" style={{ gap: 10 }}>
+              {/* The escape hatch that was missing. Someone whose token was
+                  spent by a mail scanner is already confirmed and needs a door
+                  to sign-in, not another code they cannot use. */}
+              <span className="text-sm" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                Already confirmed?{' '}
+                <Link href={withNext('/auth/signin', searchParams)} className="font-semibold" style={{ color: '#1B3828' }}>
+                  Sign in instead
+                </Link>
+              </span>
+              <button
+                type="button"
+                onClick={() => { setPhase('form'); setError(''); }}
+                className="text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 rounded"
+                style={{ color: '#9A8A78', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', outlineColor: '#1B3828' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+              >
+                Wrong email? Start over
+              </button>
+            </div>
           }
         />
       ) : (

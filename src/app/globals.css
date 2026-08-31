@@ -321,3 +321,81 @@ html, body {
     text-wrap: pretty;
   }
 }
+/* ── Sessions: buttons that lift off the surface ───────────────────────────
+   The sessions side had no button primitive at all — 237 hand-written
+   <button>s, Tailwind classes and inline styles mixed freely, almost none of
+   them carrying a shadow. Rather than write a shadow onto every one of them by
+   hand (and have hover/press/disabled drift apart immediately), the depth is a
+   class. Add `gv-lift` and the button gets a resting shadow, a deeper one on
+   hover with a 1px rise, a collapsed one on press, and none at all when
+   disabled — because a disabled button that still floats reads as clickable.
+
+   Two recipes, because the chair view is two surfaces. On ivory the shadow is
+   forest-tinted (rgba(27,56,40,…)), matching what create/voting/chat already
+   use. On the forest sidebar and forest modal headers that same tint is
+   literally invisible, so `gv-lift-dark` goes near-black and adds a hairline
+   top rim to give the edge something to catch.
+
+   Inline `style={{ boxShadow }}` beats a class, so any button that already
+   hand-rolls its own shadow keeps it and simply ignores this. */
+.gv-lift {
+  box-shadow: 0 1px 2px rgba(27, 56, 40, 0.10), 0 4px 10px rgba(27, 56, 40, 0.16);
+  transition:
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    color 150ms ease;
+}
+.gv-lift:hover:not(:disabled) {
+  box-shadow: 0 2px 5px rgba(27, 56, 40, 0.13), 0 8px 18px rgba(27, 56, 40, 0.22);
+  transform: translateY(-1px);
+}
+.gv-lift:active:not(:disabled) {
+  box-shadow: 0 1px 2px rgba(27, 56, 40, 0.16);
+  transform: translateY(1px);
+}
+.gv-lift:disabled {
+  box-shadow: none;
+  transform: none;
+}
+
+.gv-lift-dark {
+  box-shadow:
+    0 1px 2px rgba(5, 4, 3, 0.32),
+    0 4px 12px rgba(5, 4, 3, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition:
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    color 150ms ease;
+}
+.gv-lift-dark:hover:not(:disabled) {
+  box-shadow:
+    0 2px 5px rgba(5, 4, 3, 0.36),
+    0 9px 22px rgba(5, 4, 3, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+.gv-lift-dark:active:not(:disabled) {
+  box-shadow: 0 1px 3px rgba(5, 4, 3, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translateY(1px);
+}
+.gv-lift-dark:disabled {
+  box-shadow: none;
+  transform: none;
+}
+
+/* The rise is decoration; the shadow still communicates depth without it. */
+@media (prefers-reduced-motion: reduce) {
+  .gv-lift,
+  .gv-lift-dark {
+    transition: box-shadow 180ms ease, background-color 150ms ease, color 150ms ease;
+  }
+  .gv-lift:hover:not(:disabled),
+  .gv-lift-dark:hover:not(:disabled),
+  .gv-lift:active:not(:disabled),
+  .gv-lift-dark:active:not(:disabled) {
+    transform: none;
+  }
+}

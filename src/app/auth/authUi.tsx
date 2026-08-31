@@ -967,10 +967,17 @@ export async function destinationAfterVerify(supabase: SupabaseClient, next: str
   if (!user) return `/auth/signin?next=${encodeURIComponent(next)}&verified=1`;
   const { data: profile } = await supabase
     .from('profiles')
-    .select('education_level')
+    .select('education_level, nationality, date_of_birth')
     .eq('id', user.id)
     .maybeSingle();
-  if (!profile || profile.education_level == null) {
+  // Same two reasons as destinationFor. education_level is the original "has
+  // not onboarded" signal; nationality/date_of_birth are required at sign-up
+  // but only the e-mail form asks for them, so an account can be missing them
+  // while having onboarded long ago. Confirming by code must not answer this
+  // differently from confirming by link.
+  const needsOnboarding = !profile || profile.education_level == null;
+  const needsBasics = !!profile && (!profile.nationality || !profile.date_of_birth);
+  if (needsOnboarding || needsBasics) {
     return next === '/auth/onboarding' ? '/auth/onboarding' : `/auth/onboarding?next=${encodeURIComponent(next)}`;
   }
   return next;

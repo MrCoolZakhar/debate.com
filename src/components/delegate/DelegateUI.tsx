@@ -185,7 +185,7 @@ export function DelegateStyles() {
          own, so the chip yields rather than clipping the country name — the
          one piece of information the row exists to carry. */
       @media (max-width: 419px) {
-        .dgv-speaking-tag, .dgv-you-chip { display: none }
+        .dgv-speaking-tag, .dgv-you-chip, .dgv-spoken-mark { display: none }
       }
 
       @media (min-width: 700px) {
@@ -1069,6 +1069,23 @@ export function ChunkyButton({
  * outline+chip — precisely so they can both be true at once without either
  * cancelling the other out.
  */
+/**
+ * One delegation in the queue.
+ *
+ * The row used to be transparent with a bare numeral, which made the queue read
+ * as a list of words rather than a list of delegations. Three things give each
+ * one presence without changing the row's height — and the height matters,
+ * because the board is a fixed 100dvh and `useFitCount(44, 12)` on the delegate
+ * page measures capacity against exactly 44px:
+ *
+ *   • a real surface, so the row is an object you could point at;
+ *   • a position badge graded by how close the delegation is to the floor,
+ *     reusing the same escalation the delegate's own status card runs on —
+ *     next-up is forest and unmissable, the tail is quiet;
+ *   • `spoken`, the count of speeches this delegation has already given, which
+ *     is the one fact a delegate scanning the queue actually wants and which
+ *     the page already has in memory from `parseSpeakingLogs`.
+ */
 export function QueueRow({
   position,
   code,
@@ -1078,6 +1095,7 @@ export function QueueRow({
   speakingLabel,
   youLabel,
   compact,
+  spoken = 0,
 }: {
   position: number;
   code: string;
@@ -1087,7 +1105,19 @@ export function QueueRow({
   speakingLabel: string;
   youLabel: string;
   compact?: boolean;
+  /** Speeches this delegation has already given this session. 0 hides the mark. */
+  spoken?: number;
 }) {
+  // Position 1 is next on the floor and gets the loudest badge; 2–3 are warm;
+  // everything past that is deliberately quiet, so the top of the queue reads
+  // first. Mirrors `heatFor` without pulling its Heat type into a dumb row.
+  const imminence = position <= 1 ? 'next' : position <= 3 ? 'warm' : 'calm';
+  const badgeBg =
+    imminence === 'next' ? DG.forest
+      : imminence === 'warm' ? 'rgba(27,56,40,0.16)'
+        : 'rgba(27,56,40,0.07)';
+  const badgeFg = imminence === 'next' ? DG.gold : DG.forest;
+
   return (
     <div
       style={{
@@ -1095,7 +1125,11 @@ export function QueueRow({
         minHeight: speaking ? 56 : compact ? 40 : 44,
         padding: speaking ? '7px 9px' : '5px 7px',
         borderRadius: 14,
-        background: speaking ? `linear-gradient(180deg, ${DG.goldLift}, ${DG.gold})` : 'transparent',
+        background: speaking
+          ? `linear-gradient(180deg, ${DG.goldLift}, ${DG.gold})`
+          // A whisper of a surface. Enough to bound the row as an object,
+          // faint enough that eight of them stacked do not read as stripes.
+          : isSelf ? 'rgba(27,56,40,0.06)' : 'rgba(27,56,40,0.028)',
         border: isSelf ? `2px solid ${DG.forest}` : '2px solid transparent',
         boxShadow: speaking ? `0 4px 0 ${DG.goldEdge}, 0 8px 16px rgba(27,56,40,0.18)` : 'none',
       }}
@@ -1109,8 +1143,8 @@ export function QueueRow({
           style={{
             width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
             display: 'grid', placeItems: 'center',
-            background: 'rgba(27,56,40,0.07)',
-            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: DG.forest,
+            background: badgeBg,
+            fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: badgeFg,
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -1129,6 +1163,27 @@ export function QueueRow({
       >
         {name}
       </span>
+
+      {/* Already spoken. Drops out on a narrow row before the country name
+          does, and never appears for a delegation still waiting on its first
+          speech — an empty marker on every row is noise, not information. */}
+      {!speaking && spoken > 0 && (
+        <span
+          className="dgv-spoken-mark"
+          title={`${spoken} ${spoken === 1 ? 'speech' : 'speeches'} so far`}
+          style={{
+            flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3,
+            fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800,
+            color: DG.faint, fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          <span
+            aria-hidden
+            style={{ width: 5, height: 5, borderRadius: '50%', background: DG.green, display: 'inline-block' }}
+          />
+          {spoken}
+        </span>
+      )}
 
       {isSelf && (
         <span

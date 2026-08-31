@@ -201,7 +201,7 @@ function VotingHeader({ committeeName, onBack, onEndDebate, onOpenSettings, rule
       </div>
       <button
         onClick={onBack}
-        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0"
+        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0 gv-lift"
         style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -210,7 +210,7 @@ function VotingHeader({ committeeName, onBack, onEndDebate, onOpenSettings, rule
       </button>
       <button
         onClick={onEndDebate}
-        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0"
+        className="text-xs px-3 py-1.5 rounded-lg font-black transition-colors shrink-0 gv-lift"
         style={{ backgroundColor: '#8B2020', color: 'white' }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
@@ -605,7 +605,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               )}
               <button
                 type="submit"
-                className="w-full font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none"
+                className="w-full font-black text-white px-6 py-3 rounded-xl transition-colors focus:outline-none gv-lift"
                 style={{ backgroundColor: '#1B3828' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -1016,13 +1016,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex gap-3 w-full max-w-3xl mb-4">
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for')}
-              className="flex-1 bg-[#2A7A3C] hover:bg-[#3D8A52] border border-[#2A7A3C] text-white font-black text-base py-6 rounded-2xl transition-colors"
+              className="flex-1 bg-[#2A7A3C] hover:bg-[#3D8A52] border border-[#2A7A3C] text-white font-black text-base py-6 rounded-2xl transition-colors gv-lift"
             >
               {t('voting_in_favour')}
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'for-rights')}
-              className="flex-1 bg-[#1B5C2E] hover:bg-[#2A7A3C] border border-[#3D7A52] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
+              className="flex-1 bg-[#1B5C2E] hover:bg-[#2A7A3C] border border-[#3D7A52] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug gv-lift"
             >
               {t('voting_in_favour')}<br />{t('voting_with_rights_label')}
             </button>
@@ -1030,12 +1030,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               (rollCallStatuses[currentDelegate.id] ?? currentDelegate.status) === 'present' ? (
                 <button
                   onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'abstain')}
-                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors"
+                  className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] border border-[#C8BAA8] text-[#6A5A4A] font-black text-base py-6 rounded-2xl transition-colors gv-lift"
                 >
                   {t('voting_abstain')}
                 </button>
               ) : (
-                <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed">
+                <button disabled className="flex-1 bg-[#EDE7D8] border border-[#DDD4C0] text-[#9A8A78] font-black text-base py-6 rounded-2xl opacity-40 cursor-not-allowed gv-lift">
                   {t('voting_abstain_pv')}
                 </button>
               )
@@ -1043,20 +1043,20 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             {!inPassRound && (
               <button
                 onClick={() => handlePass(currentDelegate.id)}
-                className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] text-[#6A5A4A] font-black text-sm py-6 rounded-2xl transition-colors"
+                className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] text-[#6A5A4A] font-black text-sm py-6 rounded-2xl transition-colors gv-lift"
               >
                 {t('voting_pass')}
               </button>
             )}
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against-rights')}
-              className="flex-1 bg-[#7A2020] hover:bg-[#8B3030] border border-[#7A2020] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug"
+              className="flex-1 bg-[#7A2020] hover:bg-[#8B3030] border border-[#7A2020] text-[#EED98A] font-black text-sm py-6 rounded-2xl transition-colors leading-snug gv-lift"
             >
               {t('voting_against')}<br />{t('voting_with_rights_label')}
             </button>
             <button
               onClick={() => castVoteAndAdvance(currentDelegate.id, currentDelegate.country, 'against')}
-              className="flex-1 bg-[#8B2020] hover:bg-[#A03030] border border-[#8B2020] text-white font-black text-base py-6 rounded-2xl transition-colors"
+              className="flex-1 bg-[#8B2020] hover:bg-[#A03030] border border-[#8B2020] text-white font-black text-base py-6 rounded-2xl transition-colors gv-lift"
             >
               {t('voting_against')}
             </button>
@@ -1154,7 +1154,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           </p>
           <button
             onClick={handleFinishVoting}
-            className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2"
+            className="bg-[#1B3828] hover:bg-[#2A5A3C] text-white px-12 py-4 rounded-2xl font-black text-lg transition-colors mt-2 gv-lift"
           >
             {withRights.length > 0
               ? t('voting_proceed_rights').replace('{n}', String(withRights.length))
@@ -1206,13 +1206,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="flex gap-2 mt-3 flex-wrap justify-center">
               <button
                 onClick={() => setRightsRunning((r) => !r)}
-                className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}
+                className={`gv-lift px-6 py-2.5 rounded-xl font-bold text-sm transition-colors ${rightsRunning ? 'bg-yellow-600 hover:bg-yellow-500 text-white' : 'bg-[#2A5A3C] hover:bg-[#3D7A52] text-white'}`}
               >
                 {rightsRunning ? t('voting_pause') : t('voting_start')}
               </button>
               {[30, 45, 60, 90, 120].map((s) => (
                 <button key={s} onClick={() => setRightsTimerLimit(s)}
-                  className={`px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${rightsTimerLimit === s ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:bg-[#C8BAA8]'}`}>
+                  className={`gv-lift px-3 py-2.5 rounded-xl font-bold text-xs transition-colors ${rightsTimerLimit === s ? 'bg-[#1B3828] text-white' : 'bg-[#DDD4C0] text-[#6A5A4A] hover:bg-[#C8BAA8]'}`}>
                   {s}s
                 </button>
               ))}
@@ -1262,7 +1262,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
           <button
             onClick={() => { setRightsRunning(false); handleNextRightsSpeaker(); }}
-            className="w-full max-w-md bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-lg transition-colors"
+            className="w-full max-w-md bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-lg transition-colors gv-lift"
           >
             {rightsIndex + 1 < orderedRights.length ? t('voting_next_rights') : t('voting_see_result')}
           </button>
@@ -1360,7 +1360,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="flex gap-3">
             <button
               onClick={() => startNewVote(selectedDoc.id)}
-              className="py-3 px-6 rounded-xl font-bold transition-colors"
+              className="py-3 px-6 rounded-xl font-bold transition-colors gv-lift"
               style={{ backgroundColor: '#DDD4C0', color: '#1B3828', border: '1.5px solid #C8BAA8' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#C8BAA8'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
@@ -1378,7 +1378,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </button>
             <button
               onClick={() => setShowEndDebateConfirm(true)}
-              className="py-3 px-6 rounded-xl font-bold transition-colors"
+              className="py-3 px-6 rounded-xl font-bold transition-colors gv-lift"
               style={{ backgroundColor: '#8B2020', color: 'white', border: '1.5px solid #A03030' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}
@@ -1421,7 +1421,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <div className="px-6 py-4 flex gap-3">
               <button
                 onClick={() => setShowEndDebateConfirm(false)}
-                className="flex-1 py-3 rounded-xl font-bold text-sm transition-colors"
+                className="flex-1 py-3 rounded-xl font-bold text-sm transition-colors gv-lift"
                 style={{ backgroundColor: '#EDE7D8', color: '#1C1410', border: '1.5px solid #DDD4C0' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#DDD4C0'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EDE7D8'; }}
@@ -1430,7 +1430,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
               </button>
               <button
                 onClick={() => { setShowEndDebateConfirm(false); handleEndDebate(); }}
-                className="flex-1 py-3 rounded-xl font-black text-sm transition-colors"
+                className="flex-1 py-3 rounded-xl font-black text-sm transition-colors gv-lift"
                 style={{ backgroundColor: '#8B2020', color: 'white' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#A03030'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}

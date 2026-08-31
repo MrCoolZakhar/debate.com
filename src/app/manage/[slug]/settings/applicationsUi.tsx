@@ -41,15 +41,15 @@ export const ROLE_EMOJI: Record<string, string> = {
 
 export const ROLE_BLURB: Record<string, string> = {
   'head-delegate':
-    'The student who leads a delegation. They register their school or society, invite their own delegates, hold the delegation’s allocations, and are usually the person you invoice. Open this first — a head delegate with nowhere to apply cannot bring anyone with them.',
+    'The student who leads a delegation. They register their school or society, invite their own delegates, hold the delegation’s allocations, and are usually the person you invoice. Open this first, because a head delegate with nowhere to apply cannot bring anyone with them.',
   'delegate':
     'The individual applying to represent a country in a committee. This is the role most of your applicants use, and the one whose form, fee and preference questions do the most work.',
   'faculty-advisor':
     'The teacher or staff member accompanying a school delegation. They do not debate; they supervise, and they normally need a different fee and a much shorter form than the students they travel with.',
   'observer':
-    'Someone attending without a seat in a committee — press, a visiting academic, a guest from a partner conference. They see the schedule and the venue, but never appear in an allocation.',
+    'Someone attending without a seat in a committee: press, a visiting academic, a guest from a partner conference. They see the schedule and the venue, but never appear in an allocation.',
   'chair':
-    'The people you recruit to run committees. Chair applications usually open on their own timeline, close earlier than delegate applications, and ask completely different questions — which is why the role has its own everything.',
+    'The people you recruit to run committees. Chair applications usually open on their own timeline, close earlier than delegate applications, and ask completely different questions, which is why the role has its own everything.',
 };
 
 export function roleLabel(role: string): string {
@@ -194,12 +194,18 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
     <div
       role="tablist"
       aria-label="Application roles"
-      className="flex items-end overflow-x-auto"
-      style={{ gap: 6, paddingTop: 4, scrollbarWidth: 'none' }}
+      className="grid items-end"
+      style={{ gridTemplateColumns: `repeat(${roles.length}, minmax(0, 1fr))`, gap: 6, paddingTop: 4 }}
     >
       {roles.map(role => {
         const on = role === active;
         const st = statusOf(role);
+        // Open versus everything else, said by the whole tab rather than by a
+        // 6px dot: a closed role is dimmed and its name goes muted. Selection
+        // sits on top of that, so a dimmed role you are editing still reads as
+        // the one you are editing.
+        const open = st === 'OPEN';
+        const rest = open ? 1 : 0.55;
         return (
           <button
             key={role}
@@ -208,9 +214,8 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
             aria-selected={on}
             onClick={() => onPick(role)}
             title={ROLE_BLURB[role]}
-            className="flex flex-col items-center flex-shrink-0 focus:outline-none"
+            className="flex flex-col items-center w-full min-w-0 focus:outline-none"
             style={{
-              minWidth: 96,
               padding: on ? '11px 12px 14px' : '9px 12px 11px',
               // Bookmark: rounded at the top, square at the bottom, so the
               // active tab reads as part of the panel it opens.
@@ -223,12 +228,12 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
                 : 'none',
               border: 'none',
               cursor: 'pointer',
-              opacity: on ? 1 : st === 'OFF' ? 0.5 : 0.78,
+              opacity: on ? 1 : rest,
               transform: on ? 'translateY(0)' : 'translateY(3px)',
               transition: 'transform 220ms cubic-bezier(0.22,1,0.36,1), box-shadow 220ms, opacity 180ms',
             }}
             onMouseEnter={(e) => { if (!on) { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; } }}
-            onMouseLeave={(e) => { if (!on) { (e.currentTarget as HTMLElement).style.opacity = st === 'OFF' ? '0.5' : '0.78'; (e.currentTarget as HTMLElement).style.transform = 'translateY(3px)'; } }}
+            onMouseLeave={(e) => { if (!on) { (e.currentTarget as HTMLElement).style.opacity = String(rest); (e.currentTarget as HTMLElement).style.transform = 'translateY(3px)'; } }}
           >
             {/* Icon above the name, seated on its own disc so the emoji has
                 somewhere to cast a shadow. */}
@@ -245,14 +250,14 @@ export function RoleBookmarks({ roles, active, statusOf, onPick }: {
             </span>
             <span
               className="flex items-center"
-              style={{ gap: 5, fontFamily: OUTFIT, fontSize: 11, fontWeight: on ? 800 : 700, letterSpacing: '0.04em', color: on ? NEU.ink : NEU.inkSoft, whiteSpace: 'nowrap' }}
+              style={{ gap: 5, fontFamily: OUTFIT, fontSize: 11, fontWeight: on ? 800 : 700, letterSpacing: '0.04em', color: on ? NEU.ink : open ? NEU.forest : NEU.muted, minWidth: 0 }}
             >
               <span
                 suppressHydrationWarning
                 aria-hidden
-                style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, backgroundColor: STATUS_STYLE[st].dot }}
+                style={{ width: 6, height: 6, borderRadius: 999, flexShrink: 0, backgroundColor: STATUS_STYLE[st].dot, opacity: open ? 1 : 0.6 }}
               />
-              {roleLabel(role)}
+              <span className="truncate">{roleLabel(role)}</span>
             </span>
           </button>
         );
@@ -491,7 +496,7 @@ export const SETUP_SLIDES: SetupSlide[] = [
     key: 'window',
     title: 'When the doors open',
     body:
-      'Every role has its own window. Pick the day and the hour applications open, the day and hour they close, and how many people you will take. Nothing is public before the opening time, and the moment it passes the application link starts working on its own — you do not have to be at a keyboard.',
+      'Every role has its own window. Pick the day and the hour applications open, the day and hour they close, and how many people you will take. Nothing is public before the opening time, and the moment it passes the application link starts working on its own, so you do not have to be at a keyboard.',
     image: '/onboarding/hall-01.jpg',
     emoji: 'Spiral calendar',
   },
@@ -507,7 +512,7 @@ export const SETUP_SLIDES: SetupSlide[] = [
     key: 'form',
     title: 'What you ask them',
     body:
-      'Build the form this role fills in. Short answers, long answers, choices, uploads — and for delegates, the committee and country preferences your allocation runs on. Different roles ask different things, which is exactly why each one has its own form.',
+      'Build the form this role fills in. Short answers, long answers, choices, uploads, and for delegates the committee and country preferences your allocation runs on. Different roles ask different things, which is exactly why each one has its own form.',
     image: '/onboarding/classroom-01.jpg',
     emoji: 'Memo',
   },
