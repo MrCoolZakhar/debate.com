@@ -575,7 +575,9 @@ export default function SettingsPage() {
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
   const [roleConfigError, setRoleConfigError] = useState('');
-  const [blocksSaveState, setBlocksSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  type SaveState = 'idle' | 'saving' | 'saved';
+  const [stepSaveState, setStepSaveState] = useState<Record<number, SaveState>>({ 1: 'idle', 2: 'idle', 3: 'idle' });
+  const savedTimersRef = useRef<Record<number, ReturnType<typeof setTimeout> | null>>({ 1: null, 2: null, 3: null });
   // Roles with at least one application already in the pipeline (submitted or
   // further along) — used only to show a quiet caution in the question
   // builder when rewording a question those applicants may have already
@@ -744,7 +746,6 @@ export default function SettingsPage() {
   const blocksPendingRef = useRef<Map<string, FormBlock[]>>(new Map());
   const blocksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blocksChainRef = useRef<Promise<void>>(Promise.resolve());
-  const blocksSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushRef = useRef<(role?: string) => void>(() => {});
   const rolesWithApplicationsSeq = useRef(0);
   const orgSeq = useRef(0);
@@ -989,7 +990,42 @@ export default function SettingsPage() {
 
   // ── Role config save ────────────────────────────────────────────────────
 
+  /** Which step a write belongs to, derived from the columns being written.
+   *  Keeps saveRoleConfig's signature untouched at every call site. is_enabled
+   *  is deliberately absent: the role toggle lives in the header bar, not in a
+   *  step, so it lights nothing. */
+  const STEP_OF_FIELD: Record<string, number> = {
+    applications_open_at: 1, applications_close_at: 1, max_accepted: 1,
+    auto_accept: 1, payment_timing: 1, allow_resubmission: 1,
+    fee_amount: 2, fee_currency: 2, fee_phases: 2,
+    custom_questions: 3,
+  };
+
+  function stepForUpdates(updates: Record<string, unknown>): number | null {
+    for (const key of Object.keys(updates)) {
+      const step = STEP_OF_FIELD[key];
+      if (step) return step;
+    }
+    return null;
+  }
+
+  function markStep(step: number | null, state: SaveState) {
+    if (!step) return;
+    if (savedTimersRef.current[step]) {
+      clearTimeout(savedTimersRef.current[step] as ReturnType<typeof setTimeout>);
+      savedTimersRef.current[step] = null;
+    }
+    setStepSaveState(prev => ({ ...prev, [step]: state }));
+    if (state === 'saved') {
+      savedTimersRef.current[step] = setTimeout(() => {
+        setStepSaveState(prev => ({ ...prev, [step]: 'idle' }));
+        savedTimersRef.current[step] = null;
+      }, 2000);
+    }
+  }
+
   async function saveRoleConfig(role: string, updates: Partial<RoleConfig>) {
+    const step = stepForUpdates(updates as Record<string, unknown>);
     if (!conference) return;
     if (!session) return;
 
@@ -998,11 +1034,13 @@ export default function SettingsPage() {
     const previous = roleConfigs;
     setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, ...updates } : rc)));
     setRoleConfigError('');
+    markStep(step, 'saving');
 
     const supabase = await getFreshAuthedClient();
     if (!supabase) {
       setRoleConfigs(previous);
       setRoleConfigError('Your session has expired, please refresh and sign in again.');
+      markStep(step, 'idle');
       return;
     }
 
@@ -1018,6 +1056,9 @@ export default function SettingsPage() {
       // no-op update (0 rows matched, no error) is treated as a failure too.
       setRoleConfigs(previous);
       setRoleConfigError(error ? error.message : "Couldn't save, that role config wasn't found.");
+      markStep(step, 'idle');
+    } else {
+      markStep(step, 'saved');
     }
   }
 
@@ -1903,7 +1944,7 @@ export default function SettingsPage() {
     setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, custom_questions: next } : rc)));
     setRoleConfigError('');
     blocksPendingRef.current.set(role, next);
-    setBlocksSaveState('saving');
+    markStep(3, 'saving');
     if (blocksTimerRef.current) clearTimeout(blocksTimerRef.current);
     blocksTimerRef.current = setTimeout(() => {
       blocksTimerRef.current = null;
@@ -1923,7 +1964,7 @@ export default function SettingsPage() {
       if (!conference || !session) return;
       const supabase = await getFreshAuthedClient();
       if (!supabase) {
-        setBlocksSaveState('idle');
+        markStep(3, 'idle');
         setRoleConfigError('Your session has expired, please refresh and sign in again.');
         return;
       }
@@ -1934,14 +1975,12 @@ export default function SettingsPage() {
         .eq('role', role)
         .select('id');
       if (error || !data || data.length === 0) {
-        setBlocksSaveState('idle');
+        markStep(3, 'idle');
         setRoleConfigError('Could not save your questions. Reloading the latest saved version.');
         void loadRoleConfigs();
         return;
       }
-      setBlocksSaveState('saved');
-      if (blocksSavedTimerRef.current) clearTimeout(blocksSavedTimerRef.current);
-      blocksSavedTimerRef.current = setTimeout(() => setBlocksSaveState('idle'), 2000);
+      markStep(3, 'saved');
     });
   }
 
@@ -1970,8 +2009,11 @@ export default function SettingsPage() {
   }, [openStep]);
 
   // Never leave a "Saved" timer running past unmount.
-  useEffect(() => () => {
-    if (blocksSavedTimerRef.current) clearTimeout(blocksSavedTimerRef.current);
+  useEffect(() => {
+    const timers = savedTimersRef.current;
+    return () => {
+      for (const t of Object.values(timers)) if (t) clearTimeout(t);
+    };
   }, []);
 
   // Deep-copies a block with a fresh id, so the copy is fully independent of
@@ -2571,7 +2613,7 @@ export default function SettingsPage() {
                   <div style={cardStyle}>
                     <StepHeader
                       n={STEPS[0].n} label={STEPS[0].label} sub={STEPS[0].sub} hint={STEPS[0].hint}
-                      complete={stepComplete[1]} open={openStep === 1}
+                      complete={stepComplete[1]} open={openStep === 1} status={stepSaveState[1]}
                       onClick={() => setOpenStep(openStep === 1 ? 0 : 1)}
                     />
                     {openStep === 1 && (
@@ -2748,7 +2790,7 @@ export default function SettingsPage() {
                   <div style={cardStyle}>
                     <StepHeader
                       n={STEPS[1].n} label={STEPS[1].label} sub={STEPS[1].sub} hint={STEPS[1].hint}
-                      complete={stepComplete[2]} open={openStep === 2}
+                      complete={stepComplete[2]} open={openStep === 2} status={stepSaveState[2]}
                       onClick={() => setOpenStep(openStep === 2 ? 0 : 2)}
                     />
                     {openStep === 2 && (
@@ -2953,7 +2995,7 @@ export default function SettingsPage() {
                       n={STEPS[2].n} label={STEPS[2].label} sub={STEPS[2].sub} hint={STEPS[2].hint}
                       complete={stepComplete[3]} open={openStep === 3}
                       onClick={() => setOpenStep(openStep === 3 ? 0 : 3)}
-                      status={blocksSaveState}
+                      status={stepSaveState[3]}
                     />
                     {openStep === 3 && (
                       <div className="mt-5">
