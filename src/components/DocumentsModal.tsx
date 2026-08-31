@@ -325,7 +325,7 @@ function StageTimer({
         <>
           <p className="text-lg mb-8" style={{ color: '#6A5A4A' }}>{t('documents_stage_complete').replace('{stage}', String(label))}</p>
           <button onClick={onComplete}
-            className="px-10 py-4 rounded-2xl font-black text-lg transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', color: 'white' }}
+            className="px-10 py-4 rounded-2xl font-black text-lg transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', color: 'white' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
             {t('documents_continue_btn')}
@@ -415,14 +415,14 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
               await suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
               setShowSuspended(true);
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
             YES
           </button>
           <button
             onClick={() => { setShowSuspendVote(false); setShowProceedPanel(false); }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
             NO
@@ -452,7 +452,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
           <div className={`w-full max-w-sm px-8 py-10 rounded-2xl ${result === 'passed' ? 'bg-green-950/40 border border-green-800/40' : 'bg-red-950/40 border border-red-800/40'}`}>
             <p className={`text-4xl font-black mb-2 ${result === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{result === 'passed' ? t('documents_vote_passed') : t('documents_vote_failed')}</p>
             <p className="text-sm text-[#6A5A4A]">{forVotes} {t('documents_vote_result_for')} · {against} {t('documents_vote_result_against')} · {abstain} {t('documents_vote_result_abstain')}</p>
-            <button onClick={onDone} className="mt-6 px-8 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] transition-colors">{t('documents_back_to_documents')}</button>
+            <button onClick={onDone} className="mt-6 px-8 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] transition-colors gv-lift">{t('documents_back_to_documents')}</button>
           </div>
           <button
             onClick={() => setShowProceedPanel(true)}
@@ -485,7 +485,7 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
                   <button
                     onClick={() => { if (suspendProposer.trim()) setShowSuspendVote(true); }}
                     disabled={!suspendProposer.trim()}
-                    className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3 rounded-xl font-bold transition-colors">
+                    className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3 rounded-xl font-bold transition-colors gv-lift">
                     Raise Motion →
                   </button>
                 </div>
@@ -509,13 +509,13 @@ function DocumentVote({ doc, committee, onDone, onStatusChange }: {
             <div key={label} className="flex items-center justify-between bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-3">
               <span className={`font-bold text-sm ${color}`}>{label}</span>
               <div className="flex items-center gap-3">
-                <button onClick={() => set((v) => Math.max(0, v - 1))} className="w-8 h-8 rounded-full bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] font-bold flex items-center justify-center">−</button>
+                <button onClick={() => set((v) => Math.max(0, v - 1))} className="w-8 h-8 rounded-full bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] font-bold flex items-center justify-center gv-lift">−</button>
                 <span className="text-2xl font-black text-[#1C1410] w-8 text-center">{value}</span>
-                <button onClick={() => set((v) => v + 1)} className="w-8 h-8 rounded-full bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] font-bold flex items-center justify-center">+</button>
+                <button onClick={() => set((v) => v + 1)} className="w-8 h-8 rounded-full bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] font-bold flex items-center justify-center gv-lift">+</button>
               </div>
             </div>
           ))}
-          <button onClick={finalize} className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-base transition-colors mt-2">Finalize Vote →</button>
+          <button onClick={finalize} className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-base transition-colors mt-2 gv-lift">Finalize Vote →</button>
         </div>
       )}
     </div>
@@ -684,12 +684,12 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         </p>
       )}
       {isSubmitting ? (
-        <button disabled className="w-full bg-[#9A8A78] text-white py-3.5 rounded-xl font-bold cursor-not-allowed">
+        <button disabled className="w-full bg-[#9A8A78] text-white py-3.5 rounded-xl font-bold cursor-not-allowed gv-lift">
           Uploading…
         </button>
       ) : (
         <button onClick={handleSubmit} disabled={!canSubmit}
-          className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3.5 rounded-xl font-bold transition-colors">
+          className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3.5 rounded-xl font-bold transition-colors gv-lift">
           {limitReached
             ? t('documents_limit_reached').replace('{current}', String(existingCount)).replace('{limit}', String(limit))
             : isDuplicate
@@ -750,7 +750,7 @@ function TimingSetup({ doc, committee, onStart, onSkip }: {
 
         <div className="flex gap-3 pt-2">
           <button onClick={() => onStart(readingMins, presentationMins, qaMins)}
-            className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors focus:outline-none" style={{ letterSpacing: '0.05em' }}>
+            className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-3.5 rounded-2xl font-black transition-colors focus:outline-none gv-lift" style={{ letterSpacing: '0.05em' }}>
             {t('documents_start_btn')}
           </button>
           <button onClick={onSkip}
@@ -900,11 +900,11 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           {canDecide && (
             <div className="flex gap-2">
               <button onClick={() => onApprovalChange(doc.id, 'approved')}
-                className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none">
+                className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
                 {t('documents_approve')}
               </button>
               <button onClick={() => onApprovalChange(doc.id, 'rejected')}
-                className="flex-1 py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none"
+                className="flex-1 py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift"
                 style={{ backgroundColor: '#8B2020', color: '#EDE7D8' }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
@@ -916,7 +916,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           {/* Introduce / advance button, withheld until approved when approval is required */}
           {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && !approvalBlocksIntroduce && (
             <button onClick={handleAdvance}
-              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none">
+              className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
               {needsPresentation ? `${t('documents_introduce')} →` : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
             </button>
           )}
@@ -1114,7 +1114,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               const count = (committee.documents ?? []).filter((d) => d.type === tabItem && (d.status === 'submitted' || d.status === 'on-floor')).length;
               return (
                 <button key={tabItem} onClick={() => setTab(tabItem)}
-                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === tabItem ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
+                  className={`gv-lift flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors relative ${tab === tabItem ? 'bg-[#1B3828] text-white' : 'bg-[#EDE7D8] border border-[#DDD4C0] text-[#6A5A4A] hover:border-[#1B3828]'}`}>
                   {docName(committee, tabItem, 'plural', tabItem === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'))}
                   {count > 0 && (
                     <span className={`ms-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${tab === tabItem ? 'bg-white/30 text-white' : 'bg-[#1B3828] text-white'}`}>{count}</span>
@@ -1155,7 +1155,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
               )}
               {!isViewOnly && (
                 <button onClick={() => setShowForm(true)}
-                  className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                  className="w-full bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#DDD4C0] hover:border-[#1B3828] text-[#1C1410] py-3.5 rounded-2xl font-bold transition-all mt-2 text-center focus:outline-none gv-lift" style={{ fontFamily: "'Outfit', sans-serif" }}>
                   + {t('documents_submit_new_doc', { doc: tabSingularName })}
                 </button>
               )}

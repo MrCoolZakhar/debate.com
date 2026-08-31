@@ -22,7 +22,7 @@ function CodeCopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-      className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-mono text-xl tracking-widest font-black transition-all focus:outline-none"
+      className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-mono text-xl tracking-widest font-black transition-all focus:outline-none gv-lift"
       style={{ backgroundColor: '#1B3828', color: '#EED98A', letterSpacing: '0.12em' }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -44,7 +44,7 @@ function ChairPasswordDisplay({ password }: { password: string }) {
       onClick={() => { navigator.clipboard.writeText(password); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
       onMouseEnter={() => setRevealed(true)}
       onMouseLeave={() => { setRevealed(false); }}
-      className="w-full flex items-center justify-between rounded-xl px-4 py-2.5 font-mono text-sm font-bold tracking-widest transition-all focus:outline-none group"
+      className="w-full flex items-center justify-between rounded-xl px-4 py-2.5 font-mono text-sm font-bold tracking-widest transition-all focus:outline-none group gv-lift"
       style={{ backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', color: '#1B3828' }}
     >
       <span style={{ letterSpacing: revealed ? '0.12em' : '0.05em', filter: revealed ? 'none' : 'blur(4px)', transition: 'filter 0.2s ease', userSelect: revealed ? 'text' : 'none' }}>
@@ -999,7 +999,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                         </p>
                         <button
                           onClick={() => { upd('vetoCountries', seatedNames); upd('vetoMode', 'custom'); }}
-                          className="mt-2 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-colors focus:outline-none"
+                          className="mt-2 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-colors focus:outline-none gv-lift"
                           style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
@@ -1170,7 +1170,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                   </div>
                 ))}
               </div>
-              <button onClick={addSource} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add source</button>
+              <button onClick={addSource} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors gv-lift" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add source</button>
 
               {/* Ranking factors */}
               <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
@@ -1192,7 +1192,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                     </div>
                   ))}
                 </div>
-                <button onClick={addFactor} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add factor</button>
+                <button onClick={addFactor} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors gv-lift" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add factor</button>
                 <div className="mt-3">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs" style={{ color: '#6A5A4A' }}>Rating scale max</span>

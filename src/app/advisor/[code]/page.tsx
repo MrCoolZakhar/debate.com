@@ -201,7 +201,7 @@ function CollapsedDelegateCard({
   return (
     <button
       onClick={onSelect}
-      className="flex flex-col items-center gap-1 w-20 h-20 justify-center rounded-xl transition-all duration-200 shrink-0 focus:outline-none"
+      className="flex flex-col items-center gap-1 w-20 h-20 justify-center rounded-xl transition-all duration-200 shrink-0 focus:outline-none gv-lift"
       style={{ backgroundColor: '#1B3828', border: '2px solid transparent' }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
