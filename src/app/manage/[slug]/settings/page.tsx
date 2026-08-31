@@ -132,10 +132,10 @@ const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: stri
 // conferences.delegate_preference_mode; read by the apply flow to decide which
 // pickers (committees / countries / neither) to show.
 const PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
-  { value: 'committees_and_countries', label: 'COMMITTEES + COUNTRIES', desc: 'Delegates rank committee-and-country pairings — the fullest picture for allocation.' },
+  { value: 'committees_and_countries', label: 'COMMITTEES + COUNTRIES', desc: 'Delegates rank committee-and-country pairings, the fullest picture for allocation.' },
   { value: 'committees_only', label: 'COMMITTEES', desc: 'Delegates rank committees only; you assign the countries.' },
   { value: 'countries_only', label: 'COUNTRIES', desc: 'Delegates rank countries only; committees follow from the country.' },
-  { value: 'none', label: 'NONE', desc: 'No preference step — you allocate everyone manually.' },
+  { value: 'none', label: 'NONE', desc: 'No preference step. You allocate everyone manually.' },
 ];
 
 const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
@@ -230,11 +230,11 @@ function StepHeader({ n, label, sub, complete, open, onClick, status = 'idle', h
 const STEPS = [
   {
     n: 1, label: 'General info', sub: 'Dates, capacity and how applications are handled',
-    hint: 'The window this role can apply in, and what happens to an application once it arrives. Nothing is public before the opening time, and the link starts working on its own the moment it passes — you do not have to be at a keyboard. Max accepted is the ceiling on how many you will take; acceptance decides whether they are let in automatically or wait for you to review them; payment decides how early they can pay.',
+    hint: 'The window this role can apply in, and what happens to an application once it arrives. Nothing is public before the opening time, and the link starts working on its own the moment it passes, so you do not have to be at a keyboard. Max accepted is the ceiling on how many you will take; acceptance decides whether they are let in automatically or wait for you to review them; payment decides how early they can pay.',
   },
   {
     n: 2, label: 'Fees', sub: 'What this role costs and when the price changes',
-    hint: 'One flat price, plus optional phases if the price moves over time — an early-bird window, a standard window, a late window. Whichever phase covers today is the price an applicant is quoted and charged. When no phase covers today, the flat fee applies. Phases may not overlap, because two prices for one day has no answer.',
+    hint: 'One flat price, plus optional phases if the price moves over time: an early-bird window, a standard window, a late window. Whichever phase covers today is the price an applicant is quoted and charged. When no phase covers today, the flat fee applies. Phases may not overlap, because two prices for one day has no answer.',
   },
   {
     n: 3, label: 'Form', sub: 'The questions this role answers when applying',
@@ -1530,7 +1530,7 @@ export default function SettingsPage() {
     // A conference with dates set to TBD (or no start date yet) can never be
     // public — mirrors the DB CHECK `conferences_tbd_not_public`.
     if (next && (conference.dates_tbd || !conference.start_date)) {
-      setPrivacyError('Add conference dates before publishing — a conference with dates set to TBD stays private.');
+      setPrivacyError('Add conference dates before publishing. A conference with dates set to TBD stays private.');
       return;
     }
     setPublicToggleSaving(true);
@@ -2117,7 +2117,7 @@ export default function SettingsPage() {
     const maxValue = parseBound(maxAge, 'Maximum');
     if (maxValue === 'bad') return;
     if (value !== null && maxValue !== null && value > maxValue) {
-      setMinAgeError('The minimum age cannot be above the maximum age — nobody would be eligible.');
+      setMinAgeError('The minimum age cannot be above the maximum age, so nobody would be eligible.');
       return;
     }
     setMinAgeSaving(true);
@@ -2586,7 +2586,7 @@ export default function SettingsPage() {
                               Opens
                               <InfoHint
                                 label="About the opening time"
-                                text="The moment this role starts taking applications. Before it, the application link says the window has not opened yet and shows the date and time it will. Nothing needs doing at that moment — it opens itself. Leave it empty to have the role open the instant you switch it on."
+                                text="The moment this role starts taking applications. Before it, the application link says the window has not opened yet and shows the date and time it will. Nothing needs doing at that moment. It opens itself. Leave it empty to have the role open the instant you switch it on."
                               />
                             </label>
                             <DatePicker
@@ -2604,7 +2604,7 @@ export default function SettingsPage() {
                               Closes
                               <InfoHint
                                 label="About the closing time"
-                                text="The moment this role stops taking new applications. Applications already in progress are not deleted — the form simply stops accepting new ones, and the role reads as CLOSED. Leave it empty to keep it open until you switch the role off yourself."
+                                text="The moment this role stops taking new applications. Applications already in progress are not deleted. The form simply stops accepting new ones, and the role reads as CLOSED. Leave it empty to keep it open until you switch the role off yourself."
                               />
                             </label>
                             <DatePicker
@@ -2634,7 +2634,7 @@ export default function SettingsPage() {
                               Max accepted
                               <InfoHint
                                 label="About max accepted"
-                                text="The most people you will accept into this role. It is a ceiling on acceptances, not on applications — people can keep applying past it, you simply cannot accept more than this many. Leave it empty for no limit."
+                                text="The most people you will accept into this role. It is a ceiling on acceptances, not on applications. People can keep applying past it, you simply cannot accept more than this many. Leave it empty for no limit."
                               />
                             </label>
                             <input
@@ -2657,7 +2657,7 @@ export default function SettingsPage() {
                             Acceptance
                             <InfoHint
                               label="About acceptance"
-                              text="Auto-accept lets everyone in the moment they submit — right for observers, advisors and any role where you are not really choosing. Manual review holds every application as pending until someone on your team decides, which is what you want wherever places are limited or the answers matter."
+                              text="Auto-accept lets everyone in the moment they submit, which is right for observers, advisors and any role where you are not really choosing. Manual review holds every application as pending until someone on your team decides, which is what you want wherever places are limited or the answers matter."
                             />
                           </label>
                           <div className="flex gap-2">
@@ -2807,7 +2807,7 @@ export default function SettingsPage() {
                                   Fee phases
                                   <InfoHint
                                     label="About fee phases"
-                                    text="Optional date windows that override the flat fee — an early-bird rate, a standard rate, a late rate. Whichever phase contains today is what an applicant is quoted and charged; on a day no phase covers, the flat fee applies. Both dates are inclusive, and a phase missing either one is skipped entirely."
+                                    text="Optional date windows that override the flat fee: an early-bird rate, a standard rate, a late rate. Whichever phase contains today is what an applicant is quoted and charged; on a day no phase covers, the flat fee applies. Both dates are inclusive, and a phase missing either one is skipped entirely."
                                   />
                                 </label>
                                 <div className="flex items-center" style={{ gap: 12 }}>
@@ -2983,7 +2983,7 @@ export default function SettingsPage() {
               onConfirm={(targets) => void copyPhasesToRoles(targets)}
               busy={copyPhasesBusy}
               title="Set this up for another role too?"
-              sub={`${roleLabel(role)} fee phases are saved. Most conferences run the same windows for every role — tick the ones that should get an identical ladder and the same fee.`}
+              sub={`${roleLabel(role)} fee phases are saved. Most conferences run the same windows for every role, so tick the ones that should get an identical ladder and the same fee.`}
               roles={ROLES.filter(r => r !== role)}
             />
 
@@ -3363,7 +3363,7 @@ export default function SettingsPage() {
                   Dates are to be decided (TBD)
                 </span>
                 <span className="block text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  A TBD conference stays private (no public link) until you add dates — applications can still open.
+                  A TBD conference stays private (no public link) until you add dates. Applications can still open.
                 </span>
               </span>
             </button>
@@ -3482,7 +3482,7 @@ export default function SettingsPage() {
               Delegation allocation swaps
               <InfoHint
                 label="About allocation swaps"
-                text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them — a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."
+                text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them, putting a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."
               />
             </p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
@@ -3516,7 +3516,7 @@ export default function SettingsPage() {
               Age of participants
               <InfoHint
                 label="About the age range"
-                text="Both bounds are inclusive and both are measured on your conference's start date, not on the day someone applies — so a delegate who turns sixteen the week before still counts as sixteen. Leave either end empty for no limit at that end. Applicants outside the range are told before they fill anything in, rather than after."
+                text="Both bounds are inclusive and both are measured on your conference's start date, not on the day someone applies, so a delegate who turns sixteen the week before still counts as sixteen. Leave either end empty for no limit at that end. Applicants outside the range are told before they fill anything in, rather than after."
               />
             </p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
@@ -3683,7 +3683,7 @@ export default function SettingsPage() {
             id: 'custom',
             label: 'Custom access',
             note: 'Only the pages picked for them',
-            hint: 'Opens exactly the sections lit up on their card. Section access is a navigation gate in this app, not a database rule — treat it as "what they are meant to use", not as a security boundary.',
+            hint: 'Opens exactly the sections lit up on their card. Section access is a navigation gate in this app, not a database rule. Treat it as "what they are meant to use", not as a security boundary.',
             accent: '#B8844A',
             rows: others.filter(o => detectBundle(o.permissions) === 'custom'),
           },
@@ -3933,7 +3933,7 @@ export default function SettingsPage() {
               </p>
               <p className="text-sm mt-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty' }}>
                 {canManageTeam
-                  ? 'Your team as a hierarchy: who holds the conference, who can do everything, and who has been given a hand-picked set of pages. Everyone is listed on your public conference page by default — hide anyone from their card.'
+                  ? 'Your team as a hierarchy: who holds the conference, who can do everything, and who has been given a hand-picked set of pages. Everyone is listed on your public conference page by default, and you can hide anyone from their card.'
                   : 'Your team as a hierarchy: who holds the conference, who can do everything, and who has been given a hand-picked set of pages.'}
               </p>
             </div>
@@ -4165,7 +4165,7 @@ export default function SettingsPage() {
 
         {!view.is_public && (view.dates_tbd || !view.start_date) ? (
           <p className="text-sm mt-3" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
-            Add conference dates to publish — TBD conferences stay private.
+            Add conference dates to publish. TBD conferences stay private.
           </p>
         ) : (
           <p className="text-sm mt-3" style={{ color: view.is_public ? '#1B3828' : '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
@@ -4786,7 +4786,7 @@ export default function SettingsPage() {
                   />
                   <p className="text-xs mt-2" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, textWrap: 'pretty', lineHeight: 1.5 }}>
                     This is the title shown beside their photo on your public conference page. They
-                    are listed publicly by default — you can hide anyone from their card on the team
+                    are listed publicly by default, and you can hide anyone from their card on the team
                     page. It has nothing to do with what they can open in this dashboard.
                   </p>
                 </>
@@ -4868,7 +4868,7 @@ export default function SettingsPage() {
                           type="button"
                           disabled={!interactive}
                           aria-pressed={on}
-                          title={`${s.label} — ${s.blurb}`}
+                          title={`${s.label}: ${s.blurb}`}
                           onClick={interactive ? () => setInviteCustomPerms(prev => {
                             const next = { ...prev, [s.key]: !prev[s.key] };
                             if (!next[s.key]) delete next[s.key];
@@ -4912,7 +4912,7 @@ export default function SettingsPage() {
                   )}
                   {inviteBundle === 'custom' && Object.values(bundlePermissions('custom', inviteCustomPerms)).every(v => v !== true) && (
                     <p className="text-xs mt-3" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
-                      Nothing picked yet — they would join able to see the dashboard and nothing else.
+                      Nothing picked yet. They would join able to see the dashboard and nothing else.
                     </p>
                   )}
                 </>
@@ -5229,7 +5229,7 @@ export default function SettingsPage() {
                               type="button"
                               onClick={interactive ? () => toggleOrgPermission(org.id, s.key) : undefined}
                               disabled={!interactive}
-                              title={`${s.label} — ${on ? 'can open' : 'cannot open'}. ${s.blurb}`}
+                              title={`${s.label}: ${on ? 'can open' : 'cannot open'}. ${s.blurb}`}
                               aria-pressed={on}
                               aria-label={`${s.label}: ${on ? 'granted' : 'not granted'}`}
                               className="flex items-center gap-1.5 focus:outline-none"

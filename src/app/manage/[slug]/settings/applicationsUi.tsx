@@ -41,15 +41,15 @@ export const ROLE_EMOJI: Record<string, string> = {
 
 export const ROLE_BLURB: Record<string, string> = {
   'head-delegate':
-    'The student who leads a delegation. They register their school or society, invite their own delegates, hold the delegation’s allocations, and are usually the person you invoice. Open this first — a head delegate with nowhere to apply cannot bring anyone with them.',
+    'The student who leads a delegation. They register their school or society, invite their own delegates, hold the delegation’s allocations, and are usually the person you invoice. Open this first, because a head delegate with nowhere to apply cannot bring anyone with them.',
   'delegate':
     'The individual applying to represent a country in a committee. This is the role most of your applicants use, and the one whose form, fee and preference questions do the most work.',
   'faculty-advisor':
     'The teacher or staff member accompanying a school delegation. They do not debate; they supervise, and they normally need a different fee and a much shorter form than the students they travel with.',
   'observer':
-    'Someone attending without a seat in a committee — press, a visiting academic, a guest from a partner conference. They see the schedule and the venue, but never appear in an allocation.',
+    'Someone attending without a seat in a committee: press, a visiting academic, a guest from a partner conference. They see the schedule and the venue, but never appear in an allocation.',
   'chair':
-    'The people you recruit to run committees. Chair applications usually open on their own timeline, close earlier than delegate applications, and ask completely different questions — which is why the role has its own everything.',
+    'The people you recruit to run committees. Chair applications usually open on their own timeline, close earlier than delegate applications, and ask completely different questions, which is why the role has its own everything.',
 };
 
 export function roleLabel(role: string): string {
@@ -496,7 +496,7 @@ export const SETUP_SLIDES: SetupSlide[] = [
     key: 'window',
     title: 'When the doors open',
     body:
-      'Every role has its own window. Pick the day and the hour applications open, the day and hour they close, and how many people you will take. Nothing is public before the opening time, and the moment it passes the application link starts working on its own — you do not have to be at a keyboard.',
+      'Every role has its own window. Pick the day and the hour applications open, the day and hour they close, and how many people you will take. Nothing is public before the opening time, and the moment it passes the application link starts working on its own, so you do not have to be at a keyboard.',
     image: '/onboarding/hall-01.jpg',
     emoji: 'Spiral calendar',
   },
@@ -512,7 +512,7 @@ export const SETUP_SLIDES: SetupSlide[] = [
     key: 'form',
     title: 'What you ask them',
     body:
-      'Build the form this role fills in. Short answers, long answers, choices, uploads — and for delegates, the committee and country preferences your allocation runs on. Different roles ask different things, which is exactly why each one has its own form.',
+      'Build the form this role fills in. Short answers, long answers, choices, uploads, and for delegates the committee and country preferences your allocation runs on. Different roles ask different things, which is exactly why each one has its own form.',
     image: '/onboarding/classroom-01.jpg',
     emoji: 'Memo',
   },
