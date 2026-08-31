@@ -26,13 +26,19 @@ import {
  */
 
 const COPY: Record<string, { title: string; body: string }> = {
+  /* Both of these are reached most often by someone whose token was spent
+     before they ever used it: a confirmation link and its 6-digit code are the
+     same one-time token, and mail providers fetch links in a message on the
+     recipient's behalf — Gmail does. The account is then already confirmed and
+     the person is one sign-in away, so the copy leads with that instead of
+     leaving them to conclude their registration failed. */
   expired: {
-    title: 'This link has expired',
-    body: 'The link you followed is no longer valid. Email links expire quickly and can only be used once.',
+    title: 'This link has already been used',
+    body: 'Email links expire quickly and only work once — and your mail provider may well have opened it before you did. If this was a sign-up confirmation, your account is most likely active already: sign in below and you are in.',
   },
   invalid: {
-    title: 'This link isn’t valid',
-    body: 'We couldn’t verify this link. It may have already been used, or been copied incorrectly. Signing in again will take you straight back to where you were headed.',
+    title: 'This link has already been used',
+    body: 'We couldn’t verify this link. Email links only work once, and your mail provider may have opened it before you did. If this was a sign-up confirmation, your account is most likely active already: sign in below and you are in.',
   },
   missing: {
     title: 'Nothing to confirm here',
@@ -135,6 +141,11 @@ function AuthErrorInner() {
           </>
         ) : (
           <>
+            Forgotten your password?{' '}
+            <Link href="/auth/forgot" className="font-semibold" style={{ color: '#1B3828' }}>
+              Reset it
+            </Link>
+            {' · '}
             Need an account?{' '}
             <Link href={signUpHref} className="font-semibold" style={{ color: '#1B3828' }}>
               Sign up
