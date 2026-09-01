@@ -119,7 +119,7 @@ function SignInInner() {
           <CodeVerifyScreen
             email={unconfirmedEmail}
             startCooldown
-            intro="Your email is not confirmed yet. We sent a 6-digit code to"
+            intro="Your email is not confirmed yet. We sent a confirmation email to"
             onVerify={async (token) => {
               const { error } = await supabase.auth.verifyOtp({ email: unconfirmedEmail, token, type: 'signup' });
               if (error) return 'That code is not right, or it has expired. Request a new one below.';
@@ -238,7 +238,7 @@ function SignInInner() {
           </p>
 
           <p className="text-xs text-center mt-3" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-            Never got your confirmation code?{' '}
+            Never got your confirmation email?{' '}
             <Link href={withNext('/auth/confirm', searchParams)} className="font-semibold" style={{ color: '#1B3828' }}>
               Confirm your email
             </Link>
