@@ -307,7 +307,7 @@ function SignUpInner() {
         <CodeVerifyScreen
           email={email}
           startCooldown
-          intro="We sent a 6-digit code to"
+          intro="We sent a confirmation email to"
           onVerify={async (token) => {
             const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
             /* A failure here does NOT reliably mean the person typed it wrong.
