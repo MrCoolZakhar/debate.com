@@ -22,14 +22,6 @@ export const OUTFIT = "'Outfit', sans-serif";
  * Length of the email confirmation code. This MUST match Supabase's
  * Authentication > Sign In / Providers > Email > "Email OTP Length" setting.
  * They are two halves of one contract and there is no runtime check.
- *
- * The OTHER half of that contract is the mailer template. `{{ .Token }}` in
- * Authentication > Emails > "Confirm signup" is what actually puts a code in
- * the message; a template built around `{{ .ConfirmationURL }}` sends a link
- * and no code at all. This screen used to assert "we sent you a 6-digit code"
- * regardless, which is how people ended up staring at an input with nothing to
- * type into it. The copy now covers both, and clicking the link still works,
- * so the two can be changed in either order without stranding anyone.
  */
 export const CODE_LENGTH = 6;
 
@@ -906,14 +898,6 @@ export function CodeVerifyScreen({
             fontWeight: 700,
           }}
         />
-        {/* The confirmation email may carry a link, a code, or both depending
-            on how the mailer template is configured, and this screen has no way
-            to know which. Asserting "we sent you a code" when the email holds
-            only a link is what left people staring at a box they had nothing to
-            type into. Both paths end in the same place, so say both. */}
-        <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-          No code in your email? Clicking the link in it confirms you just the same.
-        </p>
       </div>
 
       {/* An incomplete code holds the button in its disabled styling, but only
@@ -930,7 +914,7 @@ export function CodeVerifyScreen({
         <SecondaryButton onClick={handleResend} disabled={active || verifying || resending}>
           <span className="inline-flex items-center justify-center gap-2">
             <RotateCw size={15} className={resending ? 'animate-spin' : ''} />
-            {resending ? 'SENDING...' : active ? `RESEND EMAIL (${remaining}s)` : 'RESEND EMAIL'}
+            {resending ? 'SENDING...' : active ? `RESEND CODE (${remaining}s)` : 'RESEND CODE'}
           </span>
         </SecondaryButton>
       </div>

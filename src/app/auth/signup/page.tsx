@@ -307,18 +307,10 @@ function SignUpInner() {
         <CodeVerifyScreen
           email={email}
           startCooldown
-          intro="We sent a confirmation email to"
+          intro="We sent a 6-digit code to"
           onVerify={async (token) => {
             const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
-            /* A failure here does NOT reliably mean the person typed it wrong.
-               The code and the emailed link are the same one-time token, and
-               mail providers routinely fetch links in a message before the
-               recipient ever opens it — Gmail does. When that happens the
-               account is confirmed by the scanner and the code the user then
-               types is already spent, so the honest answer is "you may already
-               be done", not "you got it wrong". Telling people the latter is
-               what left a real applicant locked out for two days. */
-            if (error) return 'That code didn’t work — it may already have been used. If you opened the link in your email, your account is probably active already: try signing in below.';
+            if (error) return 'That code is not right, or it has expired. Request a new one below.';
             setPhase('verified');
             return null;
           }}
