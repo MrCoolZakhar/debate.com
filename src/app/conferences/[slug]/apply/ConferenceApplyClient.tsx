@@ -1135,12 +1135,14 @@ function ConferenceApplyInner() {
     : committees.reduce((n, c) => n + committeeSlotInfo(c.id).openCount, 0);
   const minPrefs = Math.min(3, availableUnitCount);
 
-  // F15: faculty advisors skip Experience entirely, MUN experience level
-  // doesn't apply to them, so experience_level submits null for this role.
+  // F15: faculty advisors, staff and observers skip Experience entirely.
+  // None of them sit in a committee, so MUN experience level has no bearing
+  // on their application and experience_level submits null for these roles.
   // Chair and secretariat get a dedicated experience editor of their own
   // (a later prompt); pulling this section for them now would leave them
-  // with nothing, so only staff is added here alongside faculty-advisor.
-  const skipExperience = role === 'faculty-advisor' || role === 'staff';
+  // with nothing, so only staff and observer are added here alongside
+  // faculty-advisor.
+  const skipExperience = role === 'faculty-advisor' || role === 'staff' || role === 'observer';
 
   // Custom questions live in their OWN step (shown for ANY role that has them,
   // placed right before Overview) — NOT bolted onto Experience. Advisors skip

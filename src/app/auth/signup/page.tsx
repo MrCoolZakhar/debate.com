@@ -187,7 +187,7 @@ function SignUpInner() {
       return 'This email is already confirmed, so there is nothing left to send. Sign in below and you are in.';
     }
     if (m.includes('rate limit') || m.includes('security purposes') || m.includes('only request this after')) {
-      return 'That is a few too many in a row — wait a minute or two and try once more.';
+      return 'That is a few too many in a row. Wait a minute or two and try once more.';
     }
     return raw;
   }
