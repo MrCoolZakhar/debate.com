@@ -23,10 +23,12 @@ const OUTFIT = "'Outfit', sans-serif";
 // Order is deliberate and matches how a conference is actually staffed: the
 // delegations come first (head delegates bring the delegates), then the adults
 // who travel with them, then the people watching, then the team you recruit
-// separately. Chair is last because chair applications run on their own
-// timeline and are never the first thing an organiser sets up.
+// separately. Chair, secretariat and staff sit at the end together because all
+// three are people the organiser recruits directly rather than applicants who
+// attend, with chair first among them since chair applications run on their
+// own timeline and are never the first thing an organiser sets up.
 
-export const ROLE_ORDER = ['head-delegate', 'delegate', 'faculty-advisor', 'observer', 'chair'] as const;
+export const ROLE_ORDER = ['head-delegate', 'delegate', 'faculty-advisor', 'observer', 'chair', 'secretariat', 'staff'] as const;
 export type RoleKey = (typeof ROLE_ORDER)[number];
 
 /** Fluent 3D emoji per role. Every one of these asset paths is verified to
@@ -37,6 +39,7 @@ export const ROLE_EMOJI: Record<string, string> = {
   'faculty-advisor': 'Graduation cap',
   'observer': 'Eyes',
   'chair': 'Hammer',
+  'secretariat': 'Clipboard',
 };
 
 export const ROLE_BLURB: Record<string, string> = {
@@ -50,6 +53,10 @@ export const ROLE_BLURB: Record<string, string> = {
     'Someone attending without a seat in a committee: press, a visiting academic, a guest from a partner conference. They see the schedule and the venue, but never appear in an allocation.',
   'chair':
     'The people you recruit to run committees. Chair applications usually open on their own timeline, close earlier than delegate applications, and ask completely different questions, which is why the role has its own everything.',
+  'secretariat':
+    'The team that runs the conference with you. Accepting a secretariat application makes that person an organiser straight away and opens their permissions so you can choose what they see. Use this instead of inviting your team one address at a time.',
+  'staff':
+    'Volunteers and helpers: runners, tech, registration desk, press. They do not sit in a committee and they do not express preferences, so their form is the shortest one here. Open it when you need hands rather than delegates.',
 };
 
 export function roleLabel(role: string): string {

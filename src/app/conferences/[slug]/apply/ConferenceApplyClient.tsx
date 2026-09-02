@@ -68,7 +68,6 @@ interface Conference {
   /** Used as the Questions-stage plate image when the conference has one;
    *  falls back to a deterministic /public/onboarding photo. */
   banner_url: string | null;
-  delegate_preference_mode: PreferenceMode;
   credits_sponsored: boolean;
 }
 
@@ -84,6 +83,9 @@ interface RoleConfig {
   payment_timing: 'after_application' | 'after_acceptance' | 'anytime' | string;
   custom_questions: unknown[];
   fee_phases: FeePhase[] | null;
+  /** Organiser-controlled, per role: what this role may express as
+   *  preferences on the apply form. 'none' for any role that can't. */
+  preference_mode: PreferenceMode;
 }
 
 interface CommitteeOption {
@@ -1098,16 +1100,22 @@ function ConferenceApplyInner() {
         ? `${minAgeLimit}+`
         : `UP TO ${maxAgeLimit}`;
 
-  const isPreferenceRole = role === 'delegate' || role === 'head-delegate';
+  // Not hardcoded to delegate/head-delegate any more: a role expresses
+  // preferences exactly when its own role config says so.
+  const isPreferenceRole = (roleConfig?.preference_mode ?? 'none') !== 'none';
   const isObserver = role === 'observer';
   const isInvoicingRole = role === 'head-delegate' || role === 'faculty-advisor';
-  // Chairs and observers are never part of a society/delegation — the
-  // Independent/With-a-society step has nothing to ask them.
-  const showSocietyStep = role !== 'chair' && role !== 'observer';
+  // Chairs, observers, secretariat and staff are never part of a
+  // society/delegation — the Independent/With-a-society step has nothing to
+  // ask them.
+  const showSocietyStep = role !== 'chair' && role !== 'observer' && role !== 'secretariat' && role !== 'staff';
 
-  // ── Preference mode (organiser-controlled). Governs whether the Preferences
-  // step appears at all, and which pickers it shows.
-  const prefMode: PreferenceMode = conference?.delegate_preference_mode ?? 'committees_and_countries';
+  // ── Preference mode (organiser-controlled, per role). Governs whether the
+  // Preferences step appears at all, and which pickers it shows. Falls back
+  // to 'none' (not the fullest mode) while roleConfig is still loading, so a
+  // slow load shows no preference step rather than briefly showing the wrong
+  // one.
+  const prefMode: PreferenceMode = roleConfig?.preference_mode ?? 'none';
   const showPreferenceStep = isPreferenceRole && prefMode !== 'none';
   const showCommitteePick = prefMode === 'committees_and_countries' || prefMode === 'committees_only';
   const showCountryPick = prefMode === 'committees_and_countries' || prefMode === 'countries_only';
@@ -1129,7 +1137,10 @@ function ConferenceApplyInner() {
 
   // F15: faculty advisors skip Experience entirely, MUN experience level
   // doesn't apply to them, so experience_level submits null for this role.
-  const skipExperience = role === 'faculty-advisor';
+  // Chair and secretariat get a dedicated experience editor of their own
+  // (a later prompt); pulling this section for them now would leave them
+  // with nothing, so only staff is added here alongside faculty-advisor.
+  const skipExperience = role === 'faculty-advisor' || role === 'staff';
 
   // Custom questions live in their OWN step (shown for ANY role that has them,
   // placed right before Overview) — NOT bolted onto Experience. Advisors skip
@@ -1542,7 +1553,7 @@ function ConferenceApplyInner() {
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, max_age, logo_url, banner_url, delegate_preference_mode, credits_sponsored')
+      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, max_age, logo_url, banner_url, credits_sponsored')
       .eq('slug', slug)
       .single();
 

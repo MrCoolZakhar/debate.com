@@ -59,6 +59,7 @@ interface RoleConfig {
   custom_questions: unknown[];
   fee_phases: FeePhase[] | null;
   allow_resubmission: boolean;
+  preference_mode: string;
 }
 
 interface Organizer {
@@ -128,15 +129,31 @@ const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: stri
   { value: 'anytime', label: 'PAY AT ANY TIME', desc: 'Applicants can view everything and pay whenever.' },
 ];
 
-// What a delegate may express as preferences on the apply form. Persisted on
-// conferences.delegate_preference_mode; read by the apply flow to decide which
-// pickers (committees / countries / neither) to show.
+// What a role may express as preferences on the apply form. Persisted per role
+// on application_role_configs.preference_mode; read by the apply flow to
+// decide which pickers (committees / countries / neither) to show. Delegate
+// and head-delegate may use any of the four; chair may only use
+// committees_only or none (see CHAIR_PREF_MODE_OPTIONS below); every other
+// role is always 'none' and never shows the preference card at all.
 const PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: 'committees_and_countries', label: 'COMMITTEES + COUNTRIES', desc: 'Delegates rank committee-and-country pairings, the fullest picture for allocation.' },
   { value: 'committees_only', label: 'COMMITTEES', desc: 'Delegates rank committees only; you assign the countries.' },
   { value: 'countries_only', label: 'COUNTRIES', desc: 'Delegates rank countries only; committees follow from the country.' },
   { value: 'none', label: 'NONE', desc: 'No preference step. You allocate everyone manually.' },
 ];
+
+// Chair's cut-down version: a chair picks which committee they would like to
+// chair, never a country, so the country pairing options do not apply.
+const CHAIR_PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: 'committees_only', label: 'CHOOSE A COMMITTEE', desc: 'Chairs rank which committee they would like to chair; you assign from their ranking.' },
+  { value: 'none', label: 'NONE', desc: 'No preference step. You assign every chair to a committee yourself.' },
+];
+
+/** Roles whose preference_mode can be anything other than 'none'. Mirrors the
+ *  database's second CHECK constraint on application_role_configs. */
+function roleCanHavePreference(role: string): boolean {
+  return role === 'delegate' || role === 'head-delegate' || role === 'chair';
+}
 
 const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: 'off', label: 'OFF', desc: 'Only organizers manage allocations.' },
@@ -241,6 +258,14 @@ const STEPS = [
     hint: 'The questions this role fills in when they apply: short answers, long answers, choices, uploads. Each role has its own form, because an advisor and a delegate have almost nothing in common to say. Reordering and rewording is safe at any time; answers already submitted are kept exactly as they were given.',
   },
 ] as const;
+
+/** Fees (step 2) doesn't apply to secretariat or staff: nobody charges their
+ *  own volunteers or their own secretariat, and the database already seeds
+ *  fee_amount 0 for both. Used both by the render (which card to show) and by
+ *  auto-advance (which step to land on next), so the two never disagree. */
+function stepsForRole(role: string): typeof STEPS[number][] {
+  return role === 'secretariat' || role === 'staff' ? STEPS.filter(s => s.n !== 2) : [...STEPS];
+}
 
 /** True when any two dated fee phases have intersecting [start, end] windows. */
 function feePhasesOverlap(phases: FeePhase[]): boolean {
@@ -566,9 +591,9 @@ export default function SettingsPage() {
   const [swapMode, setSwapMode] = useState('request');
   const [swapModeError, setSwapModeError] = useState('');
 
-  // Delegate preference mode (Applications tab). Not part of the layout's
-  // conference column allowlist, so it's loaded + saved directly here.
-  const [prefMode, setPrefMode] = useState('committees_and_countries');
+  // Preference mode is per-role, on application_role_configs.preference_mode
+  // (roleConfigs, already loaded). prefMode itself is derived below from the
+  // selected role's config row, not held as its own state.
   const [prefModeSaving, setPrefModeSaving] = useState(false);
   const [prefModeError, setPrefModeError] = useState('');
 
@@ -1192,27 +1217,11 @@ export default function SettingsPage() {
     setSwapModeSaving(false);
   }
 
-  // delegate_preference_mode isn't in the layout's conference column allowlist,
-  // so read it straight from the row when the conference loads.
-  useEffect(() => {
-    if (!conference || !session) return;
-    let cancelled = false;
-    (async () => {
-      const supabase = getAuthedClient(session.access_token);
-      const { data } = await supabase
-        .from('conferences')
-        .select('delegate_preference_mode')
-        .eq('id', conference.id)
-        .maybeSingle();
-      if (cancelled) return;
-      const mode = (data as { delegate_preference_mode: string } | null)?.delegate_preference_mode;
-      if (mode) setPrefMode(mode);
-    })();
-    return () => { cancelled = true; };
-  }, [conference?.id, session]);
-
   // Same verified-write pattern as saveSwapMode: control-busy, exact rollback
-  // (local prefMode only flips after the DB write is confirmed).
+  // (roleConfigs only picks up the new value after the DB write is confirmed,
+  // never before — prefMode is derived from roleConfigs, so this is what
+  // makes it visibly flip). Writes application_role_configs, not conferences:
+  // preference_mode is per role now, not a single conference-wide column.
   async function savePrefMode(mode: string) {
     if (!conference || prefModeSaving) return;
     setPrefModeSaving(true);
@@ -1226,9 +1235,10 @@ export default function SettingsPage() {
     }
 
     const { data, error } = await supabase
-      .from('conferences')
-      .update({ delegate_preference_mode: mode })
-      .eq('id', conference.id)
+      .from('application_role_configs')
+      .update({ preference_mode: mode })
+      .eq('conference_id', conference.id)
+      .eq('role', selectedRole)
       .select('id');
 
     if (error || !data || data.length !== 1) {
@@ -1236,7 +1246,7 @@ export default function SettingsPage() {
       setPrefModeError(saveFailMessage(error));
       return;
     }
-    setPrefMode(mode);
+    setRoleConfigs(prev => prev.map(rc => (rc.role === selectedRole ? { ...rc, preference_mode: mode } : rc)));
     setPrefModeSaving(false);
   }
 
@@ -1866,6 +1876,11 @@ export default function SettingsPage() {
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
   const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
   const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
+  // Derived, not held in state: whichever role's bookmark is selected, this
+  // always reflects that role's own row, and needs no effect to keep in sync.
+  const prefMode: string = selectedConfig?.preference_mode ?? 'none';
+  const prefModeOptions = selectedRole === 'chair' ? CHAIR_PREF_MODE_OPTIONS : PREF_MODE_OPTIONS;
+  const showPrefCard = roleCanHavePreference(selectedRole);
   const otherRoles = ROLES.filter(r => r !== selectedRole);
   const [copyNotice, setCopyNotice] = useState('');
 
@@ -1920,7 +1935,8 @@ export default function SettingsPage() {
     // advances to nothing, which is the end of the flow.
     // Past the last step there is nowhere to go, and 0 (all collapsed) is now
     // a legal resting place rather than a step stuck open behind you.
-    const next = STEPS[STEPS.findIndex(st => st.n === openStep) + 1];
+    const roleSteps = stepsForRole(activeRole);
+    const next = roleSteps[roleSteps.findIndex(st => st.n === openStep) + 1];
     setOpenStep(next ? next.n : 0);
   }, [activeRole, openStep, stepComplete]);
 
@@ -2518,6 +2534,9 @@ export default function SettingsPage() {
         const enabled = config?.is_enabled ?? false;
         const status = roleStatus(config, Date.now());
         const chip = STATUS_STYLE[status];
+        // Nobody charges their own volunteers or their own secretariat: the
+        // Fees step doesn't apply to either, so it isn't shown at all.
+        const showFeesStep = role !== 'secretariat' && role !== 'staff';
         return (
           <>
             {/* The gate blurs the real screen rather than replacing it: this is
@@ -2787,6 +2806,7 @@ export default function SettingsPage() {
                     )}
                   </div>
 
+                  {showFeesStep && (
                   <div style={cardStyle}>
                     <StepHeader
                       n={STEPS[1].n} label={STEPS[1].label} sub={STEPS[1].sub} hint={STEPS[1].hint}
@@ -2989,6 +3009,7 @@ export default function SettingsPage() {
                       </div>
                     )}
                   </div>
+                  )}
 
                   <div style={cardStyle}>
                     <StepHeader
@@ -3026,7 +3047,7 @@ export default function SettingsPage() {
               busy={copyPhasesBusy}
               title="Set this up for another role too?"
               sub={`${roleLabel(role)} fee phases are saved. Most conferences run the same windows for every role, so tick the ones that should get an identical ladder and the same fee.`}
-              roles={ROLES.filter(r => r !== role)}
+              roles={ROLES.filter(r => r !== role && r !== 'secretariat' && r !== 'staff')}
             />
 
             {/* Not dismissible by design: no close, no backdrop click, no Escape.
@@ -3458,64 +3479,74 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* ── What delegates rank ── */}
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              <Emoji3D name="Globe showing europe-africa" size={20} fallback={Globe} fallbackColor="#1B3828" />
-              Delegate preferences
-              <InfoHint
-                label="About delegate preferences"
-                text="What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."
-              />
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
-              {PREF_MODE_OPTIONS.map(opt => {
-                const active = prefMode === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => savePrefMode(opt.value)}
-                    disabled={prefModeSaving}
-                    className="flex items-center rounded-xl focus:outline-none"
-                    style={{
-                      gap: 10, padding: '11px 13px', textAlign: 'left',
-                      backgroundColor: active ? '#1B3828' : 'transparent',
-                      color: active ? '#EED98A' : '#1C1410',
-                      border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                      boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-                      fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-                      opacity: prefModeSaving ? 0.6 : 1,
-                      cursor: prefModeSaving ? 'wait' : 'pointer',
-                    }}
-                  >
-                    {/* The two things being ranked, drawn rather than described:
-                        a committee emblem and a flag. */}
-                    <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
-                      {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                      {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                      {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                    </span>
-                    <span className="min-w-0">{opt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-2 mt-2.5">
-              {prefModeSaving && (
-                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-              )}
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                {PREF_MODE_OPTIONS.find(o => o.value === prefMode)?.desc}
+          {/* ── What the selected role ranks. Only roles that can hold a
+              preference get this card at all — faculty-advisor, observer,
+              secretariat and staff render nothing here, not a disabled
+              version of it. ── */}
+          {showPrefCard && (
+            <div style={cardStyle}>
+              <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                <Emoji3D name="Globe showing europe-africa" size={20} fallback={Globe} fallbackColor="#1B3828" />
+                {selectedRole === 'chair' ? 'Chair preferences' : 'Delegate preferences'}
+                <InfoHint
+                  label={selectedRole === 'chair' ? 'About chair preferences' : 'About delegate preferences'}
+                  text={selectedRole === 'chair'
+                    ? "Whether a chair applicant is asked to rank which committee they would like to chair. Choose a committee gives you their ranking to work from; None skips the step and leaves every committee assignment to you."
+                    : "What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."}
+                />
               </p>
+              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                {selectedRole === 'chair'
+                  ? 'Choose whether chairs rank which committee they want, or whether you assign committees yourself.'
+                  : 'Choose what delegates rank when they apply. The application form shows only the pickers you enable here.'}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
+                {prefModeOptions.map(opt => {
+                  const active = prefMode === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => savePrefMode(opt.value)}
+                      disabled={prefModeSaving}
+                      className="flex items-center rounded-xl focus:outline-none"
+                      style={{
+                        gap: 10, padding: '11px 13px', textAlign: 'left',
+                        backgroundColor: active ? '#1B3828' : 'transparent',
+                        color: active ? '#EED98A' : '#1C1410',
+                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                        boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
+                        fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                        opacity: prefModeSaving ? 0.6 : 1,
+                        cursor: prefModeSaving ? 'wait' : 'pointer',
+                      }}
+                    >
+                      {/* The thing(s) being ranked, drawn rather than described:
+                          a committee emblem and, for roles that pair it with a
+                          country, a flag. */}
+                      <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
+                        {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                        {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                        {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                      </span>
+                      <span className="min-w-0">{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2 mt-2.5">
+                {prefModeSaving && (
+                  <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                )}
+                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  {prefModeOptions.find(o => o.value === prefMode)?.desc}
+                </p>
+              </div>
+              {prefModeError && (
+                <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
+              )}
             </div>
-            {prefModeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
-            )}
-          </div>
+          )}
 
           {/* ── Swaps ── */}
           <div style={cardStyle}>
