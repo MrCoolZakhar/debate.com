@@ -15,6 +15,7 @@ import { notifyErr, clearErr } from '@/lib/appNotify';
 import { NEU, EASE, NeuPill } from '@/components/neu';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
+import { safeStorageKey } from '@/lib/storageKey';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -122,7 +123,7 @@ function UploadStudyGuideModal({
     setUploading(true);
     setUploadError('');
     const supabase = getAuthedClient(session.access_token);
-    const path = `${conferenceId}/${selectedCommitteeId}/${Date.now()}_${selectedFile.name}`;
+    const path = safeStorageKey(`${conferenceId}/${selectedCommitteeId}`, String(Date.now()), selectedFile.name);
     const { error: storageError } = await supabase.storage
       .from('study-guides')
       .upload(path, selectedFile, { contentType: 'application/pdf' });

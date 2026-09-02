@@ -45,6 +45,7 @@ import {
 } from '@/lib/committeeService';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { safeStorageKey } from '@/lib/storageKey';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function abbreviateCommitteeName(name: string): string {
@@ -361,7 +362,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
     setFileName(file.name);
     setUploading(true);
     try {
-      const path = committee.id + '/' + Date.now() + '-' + file.name;
+      const path = safeStorageKey(committee.id, String(Date.now()), file.name);
       // NO upsert. The bucket grants anon INSERT but not UPDATE, and `upsert: true`
       // needs both — every attachment was being refused with a 403 that only
       // reached the console, so the button silently snapped back to "Attach file".

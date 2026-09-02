@@ -51,6 +51,7 @@ import { getGateState, roleLabel, statusPriority } from '../participant/shared';
 import AidRequestModal from '../participant/AidRequestModal';
 import DelegationCreditsCard from '../participant/DelegationCreditsCard';
 import PledgeInvoicingCard from '../participant/PledgeInvoicingCard';
+import { safeStorageKey } from '@/lib/storageKey';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1378,7 +1379,7 @@ function ProofUploadModal({
     setSubmitting(true);
     setError('');
     const supabase = getAuthedClient(accessToken);
-    const path = `${conferenceId}/${crypto.randomUUID()}-${file.name}`;
+    const path = safeStorageKey(conferenceId, crypto.randomUUID(), file.name);
     const { error: uploadError } = await supabase.storage
       .from('payment-proofs')
       .upload(path, file, { contentType: file.type });
@@ -1387,7 +1388,11 @@ function ProofUploadModal({
       // The payer is holding a receipt for money they have already sent and
       // cannot hand it over. Nothing about this reaches an error boundary.
       reportBlocked('upload payment proof', uploadError, { conferenceId, invoiceCount: invoiceIds.length });
-      setError(uploadError.message || 'Could not upload your proof. Please try again.');
+      // The raw message here is a storage-layer string — "Invalid key: <uuid>/
+      // <uuid>-Screenshot ....png" — which tells a payer nothing they can act
+      // on and reads like their receipt was rejected. The detail still goes to
+      // reportBlocked above, where someone can actually use it.
+      setError('Could not upload your proof. Please try again, or send it to the organisers directly.');
       return;
     }
     const { data, error: rpcError } = await supabase.rpc('create_manual_payment_batch', {
