@@ -508,9 +508,13 @@ export default function SettingsPage() {
   const { user, session, profile } = useAuth();
   // Deep-links from the dashboard checklist pass ?tab= to land on the right
   // sub-tab (e.g. "Set up your conference page" → conference). Falls back to
-  // applications for any missing/unknown value.
+  // applications for any missing/unknown value. 'team' is the alias the
+  // secretariat accept redirect uses (?tab=team&highlight=<organizer id>) —
+  // same tab as 'organizers', named the way a person reading the URL would
+  // expect rather than the internal section key.
   const initialTab = ((): 'applications' | 'conference' | 'organizers' | 'privacy' => {
     const t = searchParams.get('tab') ?? searchParams.get('section');
+    if (t === 'team') return 'organizers';
     return t === 'conference' || t === 'organizers' || t === 'privacy' ? t : 'applications';
   })();
   const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>(initialTab);
@@ -610,6 +614,23 @@ export default function SettingsPage() {
   const [rolesWithApplications, setRolesWithApplications] = useState<Set<string>>(new Set());
   const { confirm, modal: confirmModal } = useConfirmModal();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
+  // ── Team highlight, from the secretariat-accept redirect ─────────────────
+  // ?highlight=<organizer id> scrolls that member's card into view and gives
+  // its existing accent ring a brief, brighter pulse, so the person who was
+  // just accepted is obviously the one who landed on this page.
+  const highlightOrgId = searchParams.get('highlight');
+  const [highlightPulse, setHighlightPulse] = useState(false);
+  const highlightedRef = useRef(false);
+  useEffect(() => {
+    if (!highlightOrgId || activeTab !== 'organizers' || highlightedRef.current) return;
+    const el = document.getElementById(`organizer-${highlightOrgId}`);
+    if (!el) return;
+    highlightedRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightPulse(true);
+    const t = setTimeout(() => setHighlightPulse(false), 2600);
+    return () => clearTimeout(t);
+  }, [highlightOrgId, activeTab, organizers]);
   // The form builder edits whichever role the tab is on.
   const selectedRole = activeRole;
   const [inviteEmail, setInviteEmail] = useState('');
@@ -3856,10 +3877,16 @@ export default function SettingsPage() {
           // and dimmed — and wears a struck-through eye. No pill needed; the
           // picture itself says it, and the switch is in the sheet.
           const hidden = !org.show_on_public;
+          // The just-accepted secretariat member (?highlight=<organizer id>).
+          // A brief, brighter widening of the SAME accent ring every card
+          // already wears — not a new highlight style, the existing one
+          // turned up for a moment.
+          const isHighlighted = highlightPulse && org.id === highlightOrgId;
 
           return (
             <div
               key={org.id}
+              id={`organizer-${org.id}`}
               className="relative flex flex-col items-center text-center"
               style={{ ...cardWidth(t), padding: t.pad, borderRadius: t.radius }}
             >
@@ -3872,7 +3899,10 @@ export default function SettingsPage() {
               <div
                 style={{
                   position: 'relative', width: t.avatar, height: t.avatar, borderRadius: 999,
-                  boxShadow: `0 0 0 5px ${NEU.base}, 0 0 0 8px ${accent}, 0 0 0 9px ${accent}33, 0 12px 30px rgba(27,56,40,0.18)`,
+                  boxShadow: isHighlighted
+                    ? `0 0 0 5px ${NEU.base}, 0 0 0 11px ${NEU.gold}, 0 0 0 15px ${NEU.gold}55, 0 14px 34px rgba(182,135,31,0.5)`
+                    : `0 0 0 5px ${NEU.base}, 0 0 0 8px ${accent}, 0 0 0 9px ${accent}33, 0 12px 30px rgba(27,56,40,0.18)`,
+                  transition: 'box-shadow 900ms ease',
                 }}
               >
                 <ProfileLink userId={org.user_id} name={name} className="flex-shrink-0">

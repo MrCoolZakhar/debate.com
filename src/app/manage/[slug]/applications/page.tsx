@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  ArrowRight, BadgeCheck, Ban, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
+  ArrowRight, BadgeCheck, Ban, Briefcase, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, Info, Landmark, LogOut, MapPin,
   Mail, MessageSquareText, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X,
@@ -37,6 +37,9 @@ import {
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
+// Same vocabulary the team invite wizard in Settings uses — never a parallel
+// list. Only the library, not the wizard component itself.
+import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1696,6 +1699,7 @@ function CommitteeFilter({
 export default function ApplicationsPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlStatus = searchParams.get('status');
   const urlPayment = searchParams.get('payment');
@@ -1797,6 +1801,18 @@ export default function ApplicationsPage() {
   const [composeBody, setComposeBody] = useState('');
   const [composeError, setComposeError] = useState('');
   useScrollLock(composeOpen);
+
+  // ── Secretariat accept modal. Accepting a secretariat application makes the
+  // applicant an organizer immediately (accept_secretariat_application RPC),
+  // so the permissions decision happens up front, here, rather than being
+  // silently defaulted. Sections start unchecked — a mis-click must never
+  // hand someone the financials.
+  const [secretariatModal, setSecretariatModal] = useState<{ appId: string; prevRow: Application } | null>(null);
+  const [secretariatSections, setSecretariatSections] = useState<Set<string>>(new Set());
+  const [secretariatPublicTitle, setSecretariatPublicTitle] = useState('');
+  const [secretariatBusy, setSecretariatBusy] = useState(false);
+  const [secretariatError, setSecretariatError] = useState('');
+  useScrollLock(!!secretariatModal);
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -2194,10 +2210,26 @@ export default function ApplicationsPage() {
     setApplications(cur => cur.map(a => (a.id === row.id ? row : a)));
   }
 
+  // Secretariat is not a plain status flip: accepting one makes the applicant
+  // an organizer immediately, so the permissions decision has to happen up
+  // front rather than being defaulted to nothing (or, worse, to everything).
+  // Shared by both accept paths (fresh accept and reinstate-from-withdrawn).
+  function openSecretariatAcceptModal(appId: string, prevRow: Application) {
+    setSecretariatModal({ appId, prevRow });
+    setSecretariatSections(new Set());
+    setSecretariatPublicTitle('');
+    setSecretariatError('');
+  }
+
   function handleAccept(appId: string) {
     if (!session || !conference || busyIds.has(appId)) return;
     const prevRow = applications.find(a => a.id === appId);
     if (!prevRow) return;
+
+    if (prevRow.role === 'secretariat') {
+      openSecretariatAcceptModal(appId, prevRow);
+      return;
+    }
 
     setActionError('');
     markBusy(appId, true);
@@ -2245,6 +2277,83 @@ export default function ApplicationsPage() {
         setActionError('Could not accept the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
+  }
+
+  // Confirm handler for the secretariat accept modal. Goes through the
+  // accept_secretariat_application RPC — NEVER a direct conference_organizers
+  // write, which RLS would silently accept and insert zero rows for an
+  // organizer without team rights. A verified write: an error, or data that
+  // comes back null, is treated as a failure and rolls back the optimistic
+  // row, surfacing the RPC's own exception message rather than a generic one
+  // — that message is already written for a person to read.
+  function handleAcceptSecretariat() {
+    if (!secretariatModal || !conference || secretariatBusy) return;
+    const { appId, prevRow } = secretariatModal;
+    const permissions = bundlePermissions(
+      'custom',
+      Object.fromEntries([...secretariatSections].map(key => [key, true])),
+    );
+    const publicTitle = secretariatPublicTitle.trim() || null;
+
+    setSecretariatBusy(true);
+    setSecretariatError('');
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: the card flips to ACCEPTED immediately, same as any other
+    // accept.
+    applyRow(appId, { status: 'accepted' });
+
+    (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) throw new Error('Your session has expired, please refresh and sign in again.');
+      const { data, error } = await supabase.rpc('accept_secretariat_application', {
+        p_application_id: appId,
+        p_permissions: permissions,
+        p_public_title: publicTitle,
+      });
+      // Verified write: an error, or null data, is a failure. The RPC's own
+      // exception is already written for a person to read — surfaced as-is,
+      // never swallowed or replaced with something generic.
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error('Could not accept the application. Please try again.');
+      const organizerId = data as string;
+
+      // Secondary effects, exactly what a plain accept does — a failure here
+      // must NOT roll back the accept or block the redirect. A secretariat
+      // application is an ordinary application in every other respect.
+      try {
+        const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
+        notifyIfNeeded(result, pushDraftNotice);
+        const acceptedIds = new Set(result.queuedApplicationIds ?? []);
+
+        const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
+        if (roleConfig?.payment_timing === 'after_acceptance') {
+          const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId], undefined, { suppressIds: acceptedIds });
+          notifyIfNeeded(payResult, pushDraftNotice);
+        }
+
+        const pool = poolForRole(prevRow.role);
+        if (prevRow.society_id && pool) {
+          await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
+        }
+      } catch {
+        setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
+      }
+
+      return organizerId;
+    })()
+      .then((organizerId) => {
+        setSecretariatModal(null);
+        if (conference) router.push(`/manage/${conference.slug}/settings?tab=team&highlight=${organizerId}`);
+      })
+      .catch((e: unknown) => {
+        restoreRow(prevRow);
+        setSecretariatError(e instanceof Error ? e.message : 'Could not accept the application. The change was reverted.');
+      })
+      .finally(() => {
+        markBusy(appId, false);
+        setSecretariatBusy(false);
+      });
   }
 
   function handleReject(appId: string) {
@@ -2664,6 +2773,11 @@ export default function ApplicationsPage() {
     if (!session || busyIds.has(appId)) return;
     const prevRow = applications.find(a => a.id === appId);
     if (!prevRow) return;
+
+    if (prevRow.role === 'secretariat') {
+      openSecretariatAcceptModal(appId, prevRow);
+      return;
+    }
 
     setActionError('');
     markBusy(appId, true);
@@ -3381,7 +3495,10 @@ export default function ApplicationsPage() {
   const isAcceptBlockedByFee = (a: Application) =>
     gatingAppIds.has(a.id) || (!!a.society_id && gatingSocietyIds.has(a.society_id));
   const ACCEPT_BLOCKED_MESSAGE = "A required fee is unpaid. They can be accepted once it's paid.";
-  const bulkAcceptable = bulkEligibleApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
+  // Secretariat is excluded from bulk accept, never accepted silently: each
+  // one needs its own permissions decision in the modal, which bulk cannot
+  // offer. accept_secretariat_application is still the only path for them.
+  const bulkAcceptable = bulkEligibleApps.filter(a => a.status === 'submitted' && a.role !== 'secretariat' && !isAcceptBlockedByFee(a));
   const bulkRejectable = bulkEligibleApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
   const bulkCheckInable = bulkEligibleApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
   const bulkPayable = bulkEligibleApps.filter(payEligible);
@@ -4366,40 +4483,53 @@ export default function ApplicationsPage() {
               // Attendance-filtered too (bulkEligibleApps), so blockedCount
               // below reflects fee-blocked exclusions only — a not-attending
               // submitted row is accounted for by the skipped-selection note,
-              // not miscounted here as "unpaid".
+              // not miscounted here as "unpaid". Secretariat is its own
+              // category, called out separately rather than folded into
+              // "unpaid": each one needs its own permissions decision, which
+              // bulk cannot offer.
               const submittedSelected = bulkEligibleApps.filter(a => a.status === 'submitted');
-              const blockedCount = submittedSelected.length - bulkAcceptable.length;
               if (submittedSelected.length === 0) return null;
-              return bulkAcceptable.length > 0 ? (
-                <button
-                  onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
-                  title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded. ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
-                  className="inline-flex items-center gap-1.5 focus:outline-none"
-                  style={{
-                    padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
-                    background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-                    boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
-                    animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
-                  }}
-                >
-                  <Check size={14} strokeWidth={2.8} />
-                  Accept {bulkAcceptable.length}
-                  {blockedCount > 0 && ` (${blockedCount} unpaid)`}
-                </button>
-              ) : (
-                <span
-                  title={ACCEPT_BLOCKED_MESSAGE}
-                  className="inline-flex items-center gap-1.5"
-                  style={{
-                    padding: '8px 15px', borderRadius: 999, border: '1px solid rgba(184,132,74,0.4)', cursor: 'not-allowed',
-                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#9A6B2F',
-                    backgroundColor: 'rgba(184,132,74,0.1)',
-                  }}
-                >
-                  <Check size={14} strokeWidth={2.8} />
-                  Accept fee unpaid
-                </span>
+              const secretariatSkipped = submittedSelected.filter(a => a.role === 'secretariat').length;
+              const blockedCount = submittedSelected.length - secretariatSkipped - bulkAcceptable.length;
+              return (
+                <>
+                  {bulkAcceptable.length > 0 ? (
+                    <button
+                      onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
+                      title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded. ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
+                      className="inline-flex items-center gap-1.5 focus:outline-none"
+                      style={{
+                        padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
+                        background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                        boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+                        animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
+                      }}
+                    >
+                      <Check size={14} strokeWidth={2.8} />
+                      Accept {bulkAcceptable.length}
+                      {blockedCount > 0 && ` (${blockedCount} unpaid)`}
+                    </button>
+                  ) : blockedCount > 0 ? (
+                    <span
+                      title={ACCEPT_BLOCKED_MESSAGE}
+                      className="inline-flex items-center gap-1.5"
+                      style={{
+                        padding: '8px 15px', borderRadius: 999, border: '1px solid rgba(184,132,74,0.4)', cursor: 'not-allowed',
+                        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#9A6B2F',
+                        backgroundColor: 'rgba(184,132,74,0.1)',
+                      }}
+                    >
+                      <Check size={14} strokeWidth={2.8} />
+                      Accept fee unpaid
+                    </span>
+                  ) : null}
+                  {secretariatSkipped > 0 && (
+                    <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: '#9A6B2F', fontStyle: 'italic' }}>
+                      {secretariatSkipped} secretariat application{secretariatSkipped === 1 ? '' : 's'} left out, each needs its own permissions decision.
+                    </span>
+                  )}
+                </>
               );
             })()}
             {bulkCheckInable.length > 0 && (
@@ -5376,6 +5506,156 @@ export default function ApplicationsPage() {
                     Need buttons or a saved template? Communications
                   </Link>
                 )}
+              </div>
+            </div>
+          </div></Portal>
+        );
+      })()}
+
+      {/* Secretariat accept modal (Part One/Two). Accepting a secretariat
+          application makes the applicant an organizer immediately, so the
+          permissions decision happens here, up front, instead of defaulting
+          to something. Every section starts unchecked on purpose — a
+          mis-click here must never hand someone the financials, and most of
+          these sections are navigation only with no database enforcement
+          behind them. */}
+      {secretariatModal && (() => {
+        const name = secretariatModal.prevRow.profiles?.display_name ?? secretariatModal.prevRow.invited_name ?? 'this applicant';
+        const close = () => { if (!secretariatBusy) { setSecretariatModal(null); setSecretariatError(''); } };
+        const fieldStyle: React.CSSProperties = {
+          width: '100%', padding: '10px 13px', borderRadius: 12,
+          border: '1.5px solid #DDD4C0', backgroundColor: NEU.base,
+          fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink, outline: 'none',
+        };
+        const labelStyle: React.CSSProperties = { fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: NEU.inkSoft, textTransform: 'uppercase' };
+        return (
+          <Portal><div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
+            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onClick={close}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Accept ${name} and add to the team`}
+              className="w-full max-w-lg rounded-2xl overflow-y-auto"
+              style={{ maxHeight: '86vh', backgroundColor: NEU.surface, boxShadow: NEU.out, padding: 26 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Briefcase} size={46} />
+                  <div className="min-w-0">
+                    <p style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.25 }}>
+                      Add {name} to your team?
+                    </p>
+                    <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.55 }}>
+                      Accepting makes them an organizer immediately, and you can change what they see anytime in Settings, Organizing Team.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={close}
+                  disabled={secretariatBusy}
+                  aria-label="Close"
+                  className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+                  style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', cursor: secretariatBusy ? 'default' : 'pointer', color: NEU.inkSoft, opacity: secretariatBusy ? 0.5 : 1 }}
+                >
+                  <X size={16} strokeWidth={2.6} />
+                </button>
+              </div>
+
+              <p className="mb-2" style={labelStyle}>What can they open?</p>
+              <div className="flex flex-col gap-2 mb-5">
+                {ORGANIZER_SECTIONS.map(s => {
+                  const on = secretariatSections.has(s.key);
+                  const Icon = s.icon;
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      disabled={secretariatBusy}
+                      aria-pressed={on}
+                      onClick={() => setSecretariatSections(prev => {
+                        const next = new Set(prev);
+                        if (next.has(s.key)) next.delete(s.key); else next.add(s.key);
+                        return next;
+                      })}
+                      className="w-full flex items-start gap-3 text-left focus:outline-none"
+                      style={{
+                        padding: '11px 13px', borderRadius: 14,
+                        backgroundColor: on ? 'rgba(27,56,40,0.07)' : 'transparent',
+                        border: on ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                        cursor: secretariatBusy ? 'default' : 'pointer',
+                        opacity: secretariatBusy ? 0.6 : 1,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="flex items-center justify-center flex-shrink-0"
+                        style={{ width: 20, height: 20, marginTop: 1, borderRadius: 6, backgroundColor: on ? '#1B3828' : 'transparent', border: on ? 'none' : '1.5px solid #CFC6B4' }}
+                      >
+                        {on && <Check size={13} strokeWidth={3.2} style={{ color: '#EED98A' }} />}
+                      </span>
+                      <Icon size={16} strokeWidth={2.2} style={{ marginTop: 2, flexShrink: 0, color: on ? '#1B3828' : NEU.inkSoft }} />
+                      <span className="min-w-0">
+                        <span className="block" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink }}>{s.label}</span>
+                        <span className="block mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft, lineHeight: 1.4 }}>{s.blurb}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mb-2">
+                <label className="block mb-2" style={labelStyle} htmlFor="secretariatPublicTitle">
+                  Public title (optional)
+                </label>
+                <input
+                  id="secretariatPublicTitle"
+                  value={secretariatPublicTitle}
+                  onChange={e => setSecretariatPublicTitle(e.target.value)}
+                  disabled={secretariatBusy}
+                  placeholder="e.g. Secretary-General"
+                  style={fieldStyle}
+                />
+              </div>
+
+              {secretariatError && (
+                <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER, lineHeight: 1.5 }}>
+                  {secretariatError}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 mt-5">
+                <button
+                  onClick={handleAcceptSecretariat}
+                  disabled={secretariatBusy}
+                  className="inline-flex items-center justify-center gap-2 focus:outline-none"
+                  style={{
+                    minHeight: 44, padding: '0 22px', borderRadius: 999, border: 'none',
+                    fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
+                    color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                    boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+                    cursor: secretariatBusy ? 'default' : 'pointer', opacity: secretariatBusy ? 0.75 : 1,
+                  }}
+                >
+                  <Check size={15} strokeWidth={2.7} />
+                  {secretariatBusy ? 'ADDING…' : 'ACCEPT AND ADD TO TEAM'}
+                </button>
+                <button
+                  onClick={close}
+                  disabled={secretariatBusy}
+                  className="inline-flex items-center focus:outline-none"
+                  style={{
+                    minHeight: 44, padding: '0 18px', borderRadius: 999, border: 'none',
+                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                    color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+                    cursor: secretariatBusy ? 'default' : 'pointer', opacity: secretariatBusy ? 0.6 : 1,
+                  }}
+                >
+                  CANCEL
+                </button>
               </div>
             </div>
           </div></Portal>
