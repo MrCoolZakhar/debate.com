@@ -13,6 +13,7 @@ import { getCountryByName, getFlagUrl, getCountryDisplayName, matchesCountryQuer
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
+import { safeStorageKey } from '@/lib/storageKey';
 import {
   addDocument as addDocumentInDB,
   updateDocumentStatus as updateDocumentStatusInDB,
@@ -560,7 +561,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
     setFileName(file.name);
     setIsUploading(true);
     try {
-      const path = committee.id + '/' + Date.now() + '-' + file.name;
+      const path = safeStorageKey(committee.id, String(Date.now()), file.name);
       // NO upsert — see the matching note on the delegate page. The bucket grants
       // anon INSERT but not UPDATE, so `upsert: true` was refused with a 403 that
       // never surfaced. Date.now() in the path makes upsert pointless anyway.
