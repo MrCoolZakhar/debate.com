@@ -1118,10 +1118,32 @@ async function insertAllocation(
       return 'That country does not have a second seat in this committee.';
     }
     if (insertErr.code === '23505') {
-      // Two indexes catch a repeat allocation: the old (committee, user_id) one
-      // for registered delegates, and the partial (committee, application_id)
-      // one that also covers imported delegates, whose null user_id the first
-      // index cannot dedupe.
+      // CONFERENCE-WIDE duplicate: this delegate already sits somewhere else.
+      // Nothing enforced this until conference_allocations_one_seat_per_delegate
+      // — the organiser side checked nothing at all, so the same person could
+      // hold two countries in two rooms. Worth one extra query on the error path
+      // to name the room, because "already allocated" while staring at a board
+      // of twenty countries is unactionable.
+      if (insertErr.message.includes('one_seat_per_delegate')) {
+        let held = '';
+        if (userId) {
+          const { data } = await supabase
+            .from('conference_allocations')
+            .select('country_name, conference_committees(name, abbreviation)')
+            .eq('conference_id', conferenceId)
+            .eq('user_id', userId)
+            .limit(1)
+            .maybeSingle();
+          const row = data as { country_name: string; conference_committees: { name: string; abbreviation: string | null } | { name: string; abbreviation: string | null }[] | null } | null;
+          const cc = Array.isArray(row?.conference_committees) ? row?.conference_committees[0] : row?.conference_committees;
+          if (cc) held = ` They hold ${cc.abbreviation || cc.name}${row?.country_name ? ` (${row.country_name})` : ''}.`;
+        }
+        return `This delegate is already allocated in another committee.${held} Remove that seat first — nobody can sit in two rooms.`;
+      }
+      // Two further indexes catch a repeat allocation within ONE committee: the
+      // old (committee, user_id) one for registered delegates, and the partial
+      // (committee, application_id) one that also covers imported delegates,
+      // whose null user_id the first index cannot dedupe.
       return insertErr.message.includes('user_id') || insertErr.message.includes('_application_key')
         ? 'This delegate already has an allocation in this committee.'
         : insertErr.message.includes('country_code')

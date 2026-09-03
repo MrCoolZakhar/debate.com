@@ -34,7 +34,26 @@ export interface ImageBlock {
   alt: string;
 }
 
-export type EmailBlock = ParagraphBlock | ButtonBlock | ImageBlock;
+/**
+ * Labelled facts — "Committee: UNSC", "Country: Brazil", "Fee: ₹3,500" — as
+ * discrete rows rather than a sentence.
+ *
+ * The single most useful thing mymun's emails do. Their newsletter answers
+ * Where? / When? / Fee? / Deadline? as labelled fields, and the reader gets
+ * every answer without reading a word of prose. Our allocation email buried
+ * the two facts a delegate actually needs — their committee and their country
+ * — mid-paragraph, where they are easy to skim past and impossible to find
+ * again three weeks later when they are packing.
+ *
+ * Values go through the same token resolution as a paragraph, so `{{committee}}`
+ * works here exactly as it does in body copy.
+ */
+export interface FactsBlock {
+  type: 'facts';
+  items: { label: string; value: string }[];
+}
+
+export type EmailBlock = ParagraphBlock | ButtonBlock | ImageBlock | FactsBlock;
 
 // ── Inline marks (**bold** / *italic*) ───────────────────────────────────────
 // Markdown-ish emphasis shared by the renderer (emailHtml) and the composer
@@ -188,6 +207,14 @@ export function flattenBlocksToPlainText(blocks: EmailBlock[], conference: Butto
     .map(b => {
       if (b.type === 'paragraph') return stripInlineMarks(b.content);
       if (b.type === 'button') return `${b.label}: ${resolveButtonUrl(b, conference, extra)}`;
+      // The text/plain alternative matters more here than anywhere else: these
+      // ARE the facts, so a client rendering only text must still get them.
+      if (b.type === 'facts') {
+        return b.items
+          .filter(i => i.label.trim() || i.value.trim())
+          .map(i => `${stripInlineMarks(i.label)}: ${stripInlineMarks(i.value)}`)
+          .join('\n');
+      }
       return b.alt;
     })
     .filter(s => s.trim().length > 0)

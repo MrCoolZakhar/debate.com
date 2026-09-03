@@ -12,8 +12,16 @@ export default function robots(): MetadataRoute.Robots {
           '/delegate/',
           '/voting/',
           '/advisor/',
+          // Sub-paths only — the trailing slash deliberately leaves the bare
+          // /join and /create indexable, which is where the SEO value is.
           '/join/',
           '/create/',
+          // But NEVER the parameterised form. /join?code=ABC123 is a real URL
+          // this page reads, so an indexed query string would publish a live
+          // session code into search results. Both pages canonicalise to their
+          // bare path, so nothing of value is lost.
+          '/join?',
+          '/create?',
           // Conferences private surfaces (auth-gated dashboards & flows)
           '/manage/',
           '/admin',

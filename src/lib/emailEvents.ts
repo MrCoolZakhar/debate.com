@@ -295,6 +295,7 @@ interface ConferenceRow {
   instagram_url: string | null;
   facebook_url: string | null;
   tiktok_url: string | null;
+  whatsapp_url: string | null;
   website_url: string | null;
 }
 
@@ -363,7 +364,7 @@ export async function queueEventEmail(
   const [{ data: confData }, { data: recipientsData }, { data: roleConfigsData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, website_url')
+      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -402,6 +403,7 @@ export async function queueEventEmail(
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
     website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
@@ -521,7 +523,7 @@ export async function queueChairInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, website_url')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -544,6 +546,7 @@ export async function queueChairInviteEmail(
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
     website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
@@ -607,7 +610,7 @@ export async function queueOrganizerInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, website_url')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -630,6 +633,7 @@ export async function queueOrganizerInviteEmail(
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
     website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
@@ -699,7 +703,7 @@ export async function queueImportJoinInviteEmails(
   const [{ data: confData }, { data: templateData }, { data: claimData }, { data: allocData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, website_url')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -735,6 +739,7 @@ export async function queueImportJoinInviteEmails(
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
     website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
@@ -862,7 +867,7 @@ export async function queueRequestReceivedEmail(
   const [{ data: confData }, { data: templateData }, { data: organizerData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, website_url')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -891,6 +896,7 @@ export async function queueRequestReceivedEmail(
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
     website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };

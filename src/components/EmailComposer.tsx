@@ -1477,6 +1477,39 @@ export default function EmailComposer({
           />
         )}
 
+        {/* A labelled-facts block, read-only for now.
+            It cannot be created or edited here yet, but it MUST be shown: the
+            default allocation, payment and receipt emails contain one, and
+            turnOnDefaultEmail copies those blocks into the organiser's own
+            template. Without this branch the block still survived a save (the
+            per-type `&&` guards mean nothing is dropped from state) but showed
+            as a blank card, so an organiser would be looking at an unexplained
+            gap where their delegate sees committee and country. */}
+        {block.type === 'facts' && (
+          <div style={{ padding: '2px 0 22px' }}>
+            <div style={{ backgroundColor: '#FAF8F3', borderRadius: 10, padding: '14px 18px', outline: '1px solid rgba(0,0,0,0.07)', outlineOffset: -1 }}>
+              {block.items.map((it, i) => (
+                <div
+                  key={`${it.label}-${i}`}
+                  style={{
+                    display: 'flex', gap: 14, alignItems: 'baseline',
+                    padding: i === 0 ? '0 0 9px' : '9px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid #E7E1D3',
+                  }}
+                >
+                  <span style={{ width: 130, flexShrink: 0, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#6E6456' }}>
+                    {it.label}
+                  </span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: '#241E17' }}>{it.value}</span>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: 11, color: '#6E6456', paddingTop: 7, textAlign: 'center' }}>
+              These fields fill in per delegate and are not editable yet.
+            </p>
+          </div>
+        )}
+
         {block.type === 'button' && (
           <ButtonBlockCanvas
             block={block}

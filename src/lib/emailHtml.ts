@@ -104,6 +104,7 @@ export interface EmailRenderConference {
   website_url?: string | null;
   tiktok_url?: string | null;
   facebook_url?: string | null;
+  whatsapp_url?: string | null;
 }
 
 export interface RenderEmailHtmlArgs {
@@ -466,19 +467,32 @@ function renderReplyPanel(conference: EmailRenderConference, accent: string): st
   </td></tr>`;
 }
 
-/** Social links the conference actually has. Text, not icon images: a remote
- *  icon is blocked by default in Outlook and Gmail's "ask before displaying"
- *  mode, and a row of alt-text boxes is worse than a row of words. */
-function socialLinks(conference: EmailRenderConference): { label: string; url: string }[] {
-  const pairs: [string, string | null | undefined][] = [
-    ['Instagram', conference.instagram_url],
-    ['Facebook', conference.facebook_url],
-    ['TikTok', conference.tiktok_url],
-    ['Website', conference.website_url],
+/**
+ * Social links the conference actually has, as line-art icons.
+ *
+ * The icons are hosted PNGs (public/email/*.png), monochrome in the footer's
+ * own ink so they sit at footer weight rather than shouting. Remote images ARE
+ * blocked by default in Outlook and in Gmail's ask-before-displaying mode —
+ * which is why each one's `alt` is its plain label. A client that blocks the
+ * image shows "Instagram · Facebook", i.e. it degrades to exactly the text row
+ * this replaced, rather than to a line of broken-image boxes.
+ *
+ * The web-side social row in ConferenceDetailClient currently draws Facebook
+ * with a Globe, TikTok with a Music note and WhatsApp with a MessageCircle —
+ * lucide dropped its brand icons, and those stand-ins were never replaced.
+ * These are proper marks; the web row is worth bringing in line separately.
+ */
+function socialLinks(conference: EmailRenderConference): { label: string; url: string; icon: string }[] {
+  const pairs: [string, string, string | null | undefined][] = [
+    ['Instagram', 'instagram', conference.instagram_url],
+    ['Facebook', 'facebook', conference.facebook_url],
+    ['TikTok', 'tiktok', conference.tiktok_url],
+    ['WhatsApp', 'whatsapp', conference.whatsapp_url],
+    ['Website', 'website', conference.website_url],
   ];
-  const out: { label: string; url: string }[] = [];
-  for (const [label, url] of pairs) {
-    if (url && /^https?:\/\//i.test(url)) out.push({ label, url });
+  const out: { label: string; url: string; icon: string }[] = [];
+  for (const [label, icon, url] of pairs) {
+    if (url && /^https?:\/\//i.test(url)) out.push({ label, url, icon });
   }
   return out;
 }
@@ -599,6 +613,45 @@ function renderBlock(
     </td></tr>`;
   }
 
+  if (block.type === 'facts') {
+    const items = block.items
+      .map(i => ({ label: i.label.trim(), value: resolveTokens(i.value, ctx).trim() }))
+      .filter(i => i.label && i.value);
+    if (!items.length) return '';
+
+    /* A panel of labelled rows, not a sentence. This is the mymun idea: their
+       newsletter answers Where? / When? / Fee? / Deadline? as fields, and a
+       reader gets every answer without reading prose. Our allocation email put
+       a delegate's committee and country mid-paragraph, where they are easy to
+       skim past and impossible to find again three weeks later.
+
+       Two columns via a real table with a fixed-width label cell — Outlook has
+       no grid, no flexbox and unreliable percentage widths on divs, so a table
+       is the only layout that holds. Rows are separated by a hairline rather
+       than by margins, for the same reason. */
+    const rows = items
+      .map((i, idx) => {
+        const border = idx === 0 ? '' : `border-top:1px solid ${HAIRLINE};`;
+        return `<tr>
+          <td class="e-hair e-muted" width="150" style="width:150px;${border}padding:${idx === 0 ? '0' : '11px'} 14px 11px 0;font-family:${SANS};font-size:11px;line-height:1.4;font-weight:bold;letter-spacing:0.1em;text-transform:uppercase;color:${MUTED};vertical-align:top;">
+            ${escapeHtml(i.label)}
+          </td>
+          <td class="e-hair e-ink" style="${border}padding:${idx === 0 ? '0' : '11px'} 0 11px 0;font-family:${SANS};font-size:16px;line-height:1.45;font-weight:bold;color:${INK};vertical-align:top;">
+            ${escapeHtml(i.value)}
+          </td>
+        </tr>`;
+      })
+      .join('');
+
+    return `<tr><td class="email-padding" style="padding:2px 0 24px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-panel" style="background-color:${CHIP_BG};border-radius:10px;">
+        <tr><td style="padding:16px 20px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table>
+        </td></tr>
+      </table>
+    </td></tr>`;
+  }
+
   const url = resolveButtonUrl(block, conference, { chairInviteToken, organizerInviteToken, importClaimToken });
   const label = block.label?.trim() || BUTTON_FALLBACK_LABEL[block.destination] || 'Open link';
   const btnBg = theme.buttonColor;
@@ -673,12 +726,14 @@ export function renderEmailHtml({
     `&nbsp;&middot;&nbsp;<a href="${escapeHtml(siteUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">gavelling.com</a>`;
 
   const socials = socialLinks(conference);
+  // A table, not inline-blocks: Outlook collapses inline-block spacing, and a
+  // one-row table with padded cells is the only layout that holds everywhere.
   const socialRow = socials.length
-    ? `<div class="e-muted" style="font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};padding-top:9px;">` +
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:11px;"><tr>` +
       socials
-        .map(x => `<a href="${escapeHtml(x.url)}" target="_blank" style="color:${MUTED};text-decoration:underline;">${escapeHtml(x.label)}</a>`)
-        .join('&nbsp;&middot;&nbsp;') +
-      `</div>`
+        .map(x => `<td style="padding:0 7px;"><a href="${escapeHtml(x.url)}" target="_blank" style="color:${MUTED};text-decoration:none;"><img src="${escapeHtml(siteUrl)}/email/${x.icon}.png" width="22" height="22" alt="${escapeHtml(x.label)}" style="display:block;width:22px;height:22px;border:0;" /></a></td>`)
+        .join('') +
+      `</tr></table>`
     : '';
 
   /* The registered-company lines. companyDetails.ts has held verified
