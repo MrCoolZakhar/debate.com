@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
-  Settings2, Globe, EyeOff, ArrowUp, ArrowDown, Trash2,
+  Settings2, Globe, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -21,6 +21,7 @@ import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
+import { safeStorageKey } from '@/lib/storageKey';
 import { DatePicker } from '@/components/DatePicker';
 import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
 import {
@@ -101,12 +102,34 @@ interface PartnerConf {
   start_date: string | null;
 }
 
+/** A partner row is one of exactly two shapes, enforced by the
+ *  `conference_partners_one_shape` check constraint:
+ *
+ *    • a linked Gavelling conference — `partner_conference_id` set, every
+ *      `company_*` column null, `approved` owned by the other team;
+ *    • a free-form company the organiser typed in themselves —
+ *      `partner_conference_id` null, `company_name` non-blank. There is no
+ *      counterparty to ask, so the DB trigger marks these approved on insert.
+ *
+ *  `partner_conference_id === null` is therefore the discriminator; there is
+ *  deliberately no separate `kind` column to fall out of sync with it. */
 interface PartnerLink {
   id: string;
   sort_order: number;
   approved: boolean;
-  partner_conference_id: string;
+  partner_conference_id: string | null;
+  company_name: string | null;
+  company_logo_url: string | null;
+  company_description: string | null;
   conf: PartnerConf | null;
+}
+
+/** Name shown for either shape, so callers never branch on the discriminator
+ *  just to render a label. */
+function partnerLabel(link: PartnerLink): string {
+  return link.partner_conference_id === null
+    ? (link.company_name ?? 'Partner')
+    : (link.conf?.acronym ?? 'Unknown conference');
 }
 
 interface IncomingPartnerClaim {
@@ -745,13 +768,24 @@ export default function SettingsPage() {
   const [lineageBusy, setLineageBusy] = useState<string | null>(null);
   const [lineageError, setLineageError] = useState('');
 
-  // Partner conferences
+  // Partners: linked Gavelling conferences and free-form companies
   const [partners, setPartners] = useState<PartnerLink[]>([]);
   const [incomingPartnerClaims, setIncomingPartnerClaims] = useState<IncomingPartnerClaim[]>([]);
   const [partnerQuery, setPartnerQuery] = useState('');
   const [partnerResults, setPartnerResults] = useState<PartnerConf[]>([]);
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
   const [partnerError, setPartnerError] = useState('');
+  // Which kind of partner is being added. null = neither picked yet, so the
+  // card shows the two-way chooser instead of either form. The conference
+  // flow is unchanged behind 'conference'.
+  const [partnerKind, setPartnerKind] = useState<null | 'conference' | 'company'>(null);
+  const [companyName, setCompanyName] = useState('');
+  const [companyDescription, setCompanyDescription] = useState('');
+  // Uploaded ahead of the row: the logo lands in storage first and the row is
+  // inserted with its public URL, so a half-filled form never writes a row.
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const [companyLogoUploading, setCompanyLogoUploading] = useState(false);
+  const [companySaving, setCompanySaving] = useState(false);
 
   // Organizers + privacy inline error surfaces
   const [organizersError, setOrganizersError] = useState('');
@@ -897,22 +931,25 @@ export default function SettingsPage() {
     const supabase = getAuthedClient(session.access_token);
     const { data: links } = await supabase
       .from('conference_partners')
-      .select('id, sort_order, approved, partner_conference_id')
+      .select('id, sort_order, approved, partner_conference_id, company_name, company_logo_url, company_description')
       .eq('conference_id', conference.id)
       .order('sort_order', { ascending: true });
     if (seq !== partnersSeq.current) return;
     const rows = (links as Omit<PartnerLink, 'conf'>[] | null) ?? [];
 
+    // Company rows have no conference to hydrate — passing their null id into
+    // the `.in()` would query for "id is null" and return nothing useful.
+    const confIds = rows.map(r => r.partner_conference_id).filter((id): id is string => id !== null);
     const details: Record<string, PartnerConf> = {};
-    if (rows.length > 0) {
+    if (confIds.length > 0) {
       const { data: confs } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
-        .in('id', rows.map(r => r.partner_conference_id));
+        .in('id', confIds);
       if (seq !== partnersSeq.current) return;
       for (const c of (confs as PartnerConf[] | null) ?? []) details[c.id] = c;
     }
-    setPartners(rows.map(r => ({ ...r, conf: details[r.partner_conference_id] ?? null })));
+    setPartners(rows.map(r => ({ ...r, conf: r.partner_conference_id ? details[r.partner_conference_id] ?? null : null })));
   }, [conference, session]);
 
   const loadIncomingPartnerClaims = useCallback(async () => {
@@ -1024,7 +1061,7 @@ export default function SettingsPage() {
         .neq('id', conference.id)
         .or(`acronym.ilike.%${q}%,full_name.ilike.%${q}%`)
         .limit(8);
-      const linkedIds = new Set(partners.map(p => p.partner_conference_id));
+      const linkedIds = new Set(partners.map(p => p.partner_conference_id).filter(Boolean));
       setPartnerResults(((data as PartnerConf[] | null) ?? []).filter(c => !linkedIds.has(c.id)));
     }, 300);
     return () => clearTimeout(timer);
@@ -1751,7 +1788,7 @@ export default function SettingsPage() {
     setWithdrawingClaim(false);
   }
 
-  // ── Partner conference actions ──────────────────────────────────────────
+  // ── Partner actions ─────────────────────────────────────────────────────
 
   function handleAddPartner(conf: PartnerConf) {
     if (!conference || !session) return;
@@ -1765,6 +1802,9 @@ export default function SettingsPage() {
       sort_order: sortOrder,
       approved: false,
       partner_conference_id: conf.id,
+      company_name: null,
+      company_logo_url: null,
+      company_description: null,
       conf,
     }]);
     setPartnerQuery('');
@@ -1789,6 +1829,92 @@ export default function SettingsPage() {
         setPartners(prev => prev.map(p => p.id === tempId ? { ...p, id: (data as { id: string }).id } : p));
       }
     })();
+  }
+
+  /** Company logo, uploaded before the partner row exists so the insert can
+   *  carry a final URL. The object key goes through safeStorageKey because a
+   *  raw filename is not a legal Storage key: macOS screenshots carry a
+   *  U+202F narrow no-break space and any non-ASCII name (Ödeme, reçu) is
+   *  refused outright — see src/lib/storageKey.ts. */
+  async function handleCompanyLogoUpload(file: File) {
+    if (!session || !conference || companyLogoUploading) return;
+    if (file.size > 5 * 1024 * 1024) { setPartnerError('Logo must be under 5MB.'); return; }
+    setCompanyLogoUploading(true);
+    setPartnerError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setCompanyLogoUploading(false);
+      setPartnerError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const path = safeStorageKey(`partner-logos/${conference.id}`, crypto.randomUUID(), file.name);
+    const { error } = await supabase.storage
+      .from('conference-assets')
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (error) {
+      setCompanyLogoUploading(false);
+      setPartnerError("Couldn't upload the logo: " + error.message);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
+    setCompanyLogoUrl(urlData.publicUrl);
+    setCompanyLogoUploading(false);
+  }
+
+  function resetCompanyDraft() {
+    setCompanyName('');
+    setCompanyDescription('');
+    setCompanyLogoUrl(null);
+  }
+
+  /** Adds a free-form company partner. Unlike the conference flow this awaits
+   *  and verifies the insert rather than painting optimistically: the row is
+   *  built from text the organiser just typed, and silently losing it to a
+   *  rolled-back optimistic row is worse than a half-second of "Adding…". */
+  async function handleAddCompanyPartner() {
+    if (!conference || !session || companySaving) return;
+    const name = companyName.trim();
+    if (!name) { setPartnerError('Give the company a name.'); return; }
+    setCompanySaving(true);
+    setPartnerError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setCompanySaving(false);
+      setPartnerError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const sortOrder = partners.length;
+    const { data, error } = await supabase.from('conference_partners').insert({
+      conference_id: conference.id,
+      // Null partner_conference_id is what makes this a company row; the DB
+      // check constraint refuses a row that carries both shapes.
+      partner_conference_id: null,
+      company_name: name,
+      company_logo_url: companyLogoUrl,
+      company_description: companyDescription.trim() || null,
+      sort_order: sortOrder,
+    }).select('id, approved').single();
+    if (error || !data) {
+      setCompanySaving(false);
+      setPartnerError(error?.message ?? "Couldn't add this partner. Please try again.");
+      return;
+    }
+    const row = data as { id: string; approved: boolean };
+    setPartners(prev => [...prev, {
+      id: row.id,
+      sort_order: sortOrder,
+      // The guard trigger approves company rows on insert (nobody to ask);
+      // trust what came back rather than assuming.
+      approved: row.approved,
+      partner_conference_id: null,
+      company_name: name,
+      company_logo_url: companyLogoUrl,
+      company_description: companyDescription.trim() || null,
+      conf: null,
+    }]);
+    resetCompanyDraft();
+    setPartnerKind(null);
+    setCompanySaving(false);
   }
 
   function handleMovePartner(idx: number, dir: -1 | 1) {
@@ -1826,7 +1952,9 @@ export default function SettingsPage() {
   async function handleRemovePartner(link: PartnerLink) {
     if (!session) return;
     if (link.id.startsWith('temp-')) return; // still being created
-    const label = link.conf?.acronym ?? 'this conference';
+    const label = link.partner_conference_id === null
+      ? (link.company_name ?? 'this partner')
+      : (link.conf?.acronym ?? 'this conference');
     const { confirmed } = await confirm({
       title: `Remove the partner link with ${label}?`,
       confirmLabel: 'Remove',
@@ -4507,16 +4635,157 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* ── Partner conferences card ── */}
+      {/* ── Partners card ── */}
       <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Partner conferences
+          Partners
         </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Showcase partner conferences on your public page. Links only appear once the partner conference&apos;s team approves them.
+        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Showcase partner conferences and sponsoring companies on your public page. A conference link only appears
+          once that conference&apos;s team approves it; a company you add yourself appears straight away.
         </p>
 
+        {/* Kind chooser. Asked first because the two flows share nothing: one
+            searches Gavelling for a conference to link, the other takes a name,
+            a logo and a description typed here. */}
+        <div className="flex flex-wrap gap-2 mb-5">
+          {([
+            { key: 'conference' as const, label: 'CONFERENCE', icon: Building2, hint: 'Link another Gavelling conference' },
+            { key: 'company' as const, label: 'COMPANY', icon: Briefcase, hint: 'Add a sponsor or partner organisation' },
+          ]).map(({ key, label, icon: KindIcon, hint }) => {
+            const active = partnerKind === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                title={hint}
+                onClick={() => {
+                  // Re-clicking the open kind closes it, so the card can go
+                  // back to being just the list of partners.
+                  setPartnerKind(active ? null : key);
+                  setPartnerError('');
+                  setPartnerQuery('');
+                  setPartnerResults([]);
+                }}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-bold focus:outline-none transition-colors"
+                style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  backgroundColor: active ? '#1B3828' : 'transparent',
+                  color: active ? '#EED98A' : '#6E5F4E',
+                  border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                  cursor: 'pointer',
+                }}
+              >
+                <KindIcon size={13} strokeWidth={2.4} style={{ color: active ? '#EED98A' : '#B6871F' }} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Company form */}
+        {partnerKind === 'company' && (
+          <div
+            className="mb-6 rounded-xl p-4"
+            style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <PartnerDisc logoUrl={companyLogoUrl} acronym={companyName || '?'} size={44} />
+              <div className="flex-1 min-w-0">
+                <label
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold"
+                  style={{
+                    fontFamily: "'Outfit', sans-serif",
+                    letterSpacing: '0.06em',
+                    color: '#1B3828',
+                    border: '1.5px solid #DDD4C0',
+                    backgroundColor: '#FFFDF9',
+                    cursor: companyLogoUploading ? 'default' : 'pointer',
+                    opacity: companyLogoUploading ? 0.6 : 1,
+                  }}
+                >
+                  {companyLogoUploading ? 'UPLOADING…' : companyLogoUrl ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={companyLogoUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      // Clear the input so picking the same file twice still
+                      // fires a change event (a retry after a failed upload).
+                      e.target.value = '';
+                      if (file) void handleCompanyLogoUpload(file);
+                    }}
+                  />
+                </label>
+                <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  PNG or JPG, under 5MB. Optional.
+                </p>
+              </div>
+            </div>
+
+            <input
+              type="text"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Company name"
+              maxLength={120}
+              style={{ ...inputStyle, marginBottom: '10px' }}
+              onFocus={fgInput}
+              onBlur={bgInput}
+            />
+            <textarea
+              value={companyDescription}
+              onChange={(e) => setCompanyDescription(e.target.value)}
+              placeholder="What do they do, and how are they involved? Shown when a visitor opens this partner."
+              rows={3}
+              maxLength={600}
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            />
+
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => void handleAddCompanyPartner()}
+                disabled={companySaving || companyLogoUploading || !companyName.trim()}
+                className="rounded-lg py-2 px-4 font-bold text-[11px] focus:outline-none transition-colors"
+                style={{
+                  backgroundColor: companySaving || !companyName.trim() ? '#DDD4C0' : '#1B3828',
+                  color: companySaving || !companyName.trim() ? '#9A8A78' : '#EED98A',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  border: 'none',
+                  cursor: companySaving || !companyName.trim() ? 'default' : 'pointer',
+                }}
+              >
+                {companySaving ? 'ADDING…' : 'ADD PARTNER'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { resetCompanyDraft(); setPartnerKind(null); setPartnerError(''); }}
+                disabled={companySaving}
+                className="rounded-lg py-2 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: '#9A8A78',
+                  border: 'none',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  cursor: companySaving ? 'default' : 'pointer',
+                }}
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Typeahead add */}
+        {partnerKind === 'conference' && (
         <div className="relative mb-6">
           <input
             type="text"
@@ -4561,6 +4830,7 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Linked partners */}
         <p
@@ -4571,47 +4841,60 @@ export default function SettingsPage() {
         </p>
         {partners.length === 0 ? (
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            No partner conferences linked yet.
+            No partners added yet.
           </p>
         ) : (
           <div className="flex flex-col">
             {partners.map((link, idx) => {
               const isLast = idx === partners.length - 1;
               const conf = link.conf;
+              const isCompany = link.partner_conference_id === null;
               const year = conf?.start_date ? new Date(conf.start_date + 'T00:00:00').getFullYear() : null;
-              const cityLine = conf ? [conf.city, conf.country].filter(Boolean).join(', ') : '';
+              // Second line: where the conference is, or what the company
+              // does. Companies have no city and conferences no description,
+              // so the two never compete for the row.
+              const subLine = isCompany
+                ? (link.company_description ?? '')
+                : (conf ? [conf.city, conf.country].filter(Boolean).join(', ') : '');
               return (
                 <div
                   key={link.id}
                   className="flex items-center gap-3 py-3"
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
                 >
-                  <PartnerDisc logoUrl={conf?.logo_url ?? null} acronym={conf?.acronym ?? '?'} />
+                  <PartnerDisc
+                    logoUrl={isCompany ? link.company_logo_url : (conf?.logo_url ?? null)}
+                    acronym={partnerLabel(link)}
+                  />
                   <div className="flex-1 min-w-0">
                     <p
                       className="truncate"
                       style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
                     >
-                      {conf?.acronym ?? 'Unknown conference'}{year ? ` ${year}` : ''}
+                      {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
                     </p>
-                    {cityLine && (
+                    {subLine && (
                       <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        {cityLine}
+                        {subLine}
                       </p>
                     )}
                   </div>
 
+                  {/* A company has no counterparty team, so "pending approval"
+                      would be a lie — it is live the moment it is added. */}
                   <span
                     className="flex-shrink-0 rounded-full px-2.5 py-1 font-bold"
                     style={{
                       fontSize: '10px',
                       letterSpacing: '0.08em',
                       fontFamily: "'Outfit', sans-serif",
-                      backgroundColor: link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
-                      color: link.approved ? '#2A5A3C' : '#8A6614',
+                      backgroundColor: isCompany
+                        ? 'rgba(182,135,31,0.14)'
+                        : link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
+                      color: isCompany ? '#8A6614' : link.approved ? '#2A5A3C' : '#8A6614',
                     }}
                   >
-                    {link.approved ? 'APPROVED' : 'PENDING APPROVAL'}
+                    {isCompany ? 'COMPANY' : link.approved ? 'APPROVED' : 'PENDING APPROVAL'}
                   </span>
 
                   <div className="flex items-center flex-shrink-0">
@@ -4642,7 +4925,7 @@ export default function SettingsPage() {
                   <button
                     onClick={() => handleRemovePartner(link)}
                     disabled={partnerBusy === link.id}
-                    aria-label={`Remove ${conf?.acronym ?? 'partner'}`}
+                    aria-label={`Remove ${partnerLabel(link)}`}
                     className="text-sm font-semibold focus:outline-none flex-shrink-0 px-1 transition-colors"
                     style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: 'pointer', opacity: partnerBusy === link.id ? 0.4 : 1 }}
                   >

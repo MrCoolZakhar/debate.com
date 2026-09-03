@@ -24,7 +24,8 @@ import { fetchDelegateFees, type ResolvedFee } from '@/lib/publicFees';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { normalizeBlocks } from '@/lib/customQuestions';
 import { appendEditionYear } from '@/lib/presetNames';
-import { conferenceAcronymLabel, conferenceFullNameLabel } from '@/lib/conferenceLabels';
+import { conferenceAcronymLabel, conferenceFullNameLabel, conferenceLabels } from '@/lib/conferenceLabels';
+import ConferencePartners, { type PartnerEntry } from '@/components/ConferencePartners';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
@@ -33,7 +34,6 @@ import { SidebarCardSkeleton } from '@/components/Skeleton';
 import Loader from '@/components/Loader';
 import {
   CommitteeEditorModal,
-  MonogramMedallion,
   ModalOverlay,
   type EditableCommittee,
 } from '@/components/CommitteeEditorModal';
@@ -134,6 +134,18 @@ interface PartnerConference {
   city: string | null;
   country: string | null;
   start_date: string | null;
+}
+
+/** One `conference_partners` row as this page reads it. Either shape: a linked
+ *  conference (partner_conference_id set) or a company typed in by the
+ *  organiser (partner_conference_id null + company_* columns). */
+interface PartnerLinkRow {
+  id: string;
+  partner_conference_id: string | null;
+  company_name: string | null;
+  company_logo_url: string | null;
+  company_description: string | null;
+  sort_order: number;
 }
 
 interface DisplayChair {
@@ -768,8 +780,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const [reviewText, setReviewText] = useState('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState('');
-  // Partner conferences (public, mutually approved)
-  const [partners, setPartners] = useState<PartnerConference[]>([]);
+  // Partners: mutually-approved conferences and organiser-added companies,
+  // flattened into one display shape by the loader below.
+  const [partners, setPartners] = useState<PartnerEntry[]>([]);
   // Organizer in-place editing (only reachable when isOrganizerViewer)
   const [editModal, setEditModal] = useState<null | 'banner' | 'logo' | 'description' | 'about'>(null);
   const [editSaving, setEditSaving] = useState(false);
@@ -874,29 +887,63 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     // hold a full-page spinner on ~6 more sequential round-trips.
     setLoading(false);
 
-    // Partner conferences, anon reads; RLS only exposes approved links on
-    // public conferences, and private partners drop out of the details select.
+    // Partners, anon reads; RLS only exposes approved links on public
+    // conferences, and private partner conferences drop out of the details
+    // select. A row is a linked conference (partner_conference_id set) or a
+    // free-form company (partner_conference_id null + company_* columns) —
+    // never both, per the conference_partners_one_shape check constraint.
     const { data: partnerLinks } = await supabase
       .from('conference_partners')
-      .select('partner_conference_id, sort_order')
+      .select('id, partner_conference_id, company_name, company_logo_url, company_description, sort_order')
       .eq('conference_id', conf.id)
       .eq('approved', true)
       .order('sort_order', { ascending: true });
-    const partnerIds = ((partnerLinks ?? []) as { partner_conference_id: string }[]).map(r => r.partner_conference_id);
+    const partnerRows = (partnerLinks ?? []) as PartnerLinkRow[];
+    const partnerIds = partnerRows
+      .map(r => r.partner_conference_id)
+      .filter((id): id is string => id !== null);
+
+    let confById = new Map<string, PartnerConference>();
     if (partnerIds.length > 0) {
       const { data: partnerConfs } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
         .in('id', partnerIds);
-      const orderOf = new Map(partnerIds.map((id, i) => [id, i]));
-      setPartners(
-        (((partnerConfs ?? []) as PartnerConference[])).sort(
-          (a, b) => (orderOf.get(a.id) ?? 0) - (orderOf.get(b.id) ?? 0)
-        )
-      );
-    } else {
-      setPartners([]);
+      confById = new Map(((partnerConfs ?? []) as PartnerConference[]).map(c => [c.id, c]));
     }
+
+    // Sort order is already applied by the query; mapping in place keeps it.
+    // A conference partner whose row RLS hid (it went private) has no details
+    // to show, so it is dropped rather than rendered as an unnamed disc.
+    setPartners(
+      partnerRows.flatMap<PartnerEntry>(row => {
+        if (row.partner_conference_id === null) {
+          return [{
+            id: row.id,
+            kind: 'company',
+            name: (row.company_name ?? '').trim() || 'Partner',
+            fullName: null,
+            logoUrl: row.company_logo_url,
+            description: row.company_description,
+            href: null,
+            location: null,
+          }];
+        }
+        const c = confById.get(row.partner_conference_id);
+        if (!c) return [];
+        const labels = conferenceLabels(c);
+        return [{
+          id: row.id,
+          kind: 'conference',
+          name: labels.primary,
+          fullName: labels.secondary,
+          logoUrl: c.logo_url,
+          description: null,
+          href: `/conferences/${c.slug}`,
+          location: [c.city, c.country].filter(Boolean).join(', ') || null,
+        }];
+      })
+    );
 
     // Reviews, public content, anon client
     const { data: reviewsData } = await supabase
@@ -3030,61 +3077,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 );
               })()}
 
-              {/* Partner conferences, mutually approved, prestige gold cards */}
-              {partners.length > 0 && (
-                <div className="mb-6">
-                  <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 14px 0' }}>
-                    PARTNER CONFERENCES
-                  </p>
-                  <div
-                    className="flex gap-4 overflow-x-auto"
-                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', padding: '4px', margin: '-4px' }}
-                  >
-                    {partners.map(p => {
-                      const pCountry = p.country ? getCountryByName(p.country) : null;
-                      const pYear = p.start_date ? new Date(p.start_date + 'T00:00:00').getFullYear() : null;
-                      const pLocation = [p.city, pCountry?.code].filter(Boolean).join(' · ');
-                      return (
-                        <Link
-                          key={p.id}
-                          href={`/conferences/${p.slug}`}
-                          className="flex-shrink-0 flex items-center gap-4 rounded-[20px] px-5 py-4"
-                          style={{
-                            minWidth: '260px',
-                            backgroundColor: '#FAF8F3',
-                            backgroundImage: 'linear-gradient(135deg, rgba(238,217,138,0.16) 0%, rgba(238,217,138,0) 60%)',
-                            border: '1px solid rgba(238,217,138,0.9)',
-                            boxShadow: '0 10px 30px rgba(182,135,31,0.16)',
-                            textDecoration: 'none',
-                            transition: `transform 300ms ${EASE}, box-shadow 300ms ${EASE}`,
-                          }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-3px)'; el.style.boxShadow = '0 16px 40px rgba(182,135,31,0.28)'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = '0 10px 30px rgba(182,135,31,0.16)'; }}
-                        >
-                          {p.logo_url ? (
-                            <LogoDisc src={p.logo_url} alt={p.acronym} size={56} fallbackText={p.acronym.slice(0, 3)} />
-                          ) : (
-                            <MonogramMedallion text={p.acronym} isCrisis={false} size={56} />
-                          )}
-                          <div className="min-w-0">
-                            <p
-                              className="truncate"
-                              style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410', margin: 0, letterSpacing: '0.01em' }}
-                            >
-                              {conferenceAcronymLabel({ acronym: p.acronym, year: pYear ?? null })}
-                            </p>
-                            {pLocation && (
-                              <p className="truncate mt-0.5" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', color: '#9A8A78', margin: '2px 0 0 0', letterSpacing: '0.03em' }}>
-                                {pLocation}
-                              </p>
-                            )}
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {/* Partners — logo + name only, everything else behind the
+                  popup. Floats in the left gutter on a wide screen and falls
+                  back to an inline strip when there is no room; see
+                  components/ConferencePartners.tsx. */}
+              <ConferencePartners partners={partners} />
 
               </div>
               )}
