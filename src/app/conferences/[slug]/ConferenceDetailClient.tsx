@@ -437,26 +437,34 @@ export interface ConferenceDetailClientProps {
    *  their own route rather than the component guessing it from the URL.
    *  After mount the tab is client state — see `showTab`. */
   initialView: TabKey;
+  /** The conference row, fetched on the server so the page's real content —
+   *  name, acronym, dates, place — is in the HTML a crawler receives rather
+   *  than arriving later behind a spinner. Null for a private conference,
+   *  where the server deliberately fetches nothing and the client's authed
+   *  path takes over. */
+  initialConference?: Conference | null;
+  /** Committee names and topics, same reason. */
+  initialCommittees?: Committee[];
   /** The role segment from /conferences/[slug]/role/[role], or null on the
    *  bare /role resolver route (initialView === 'overview' | 'reviews'
    *  never carry a role). Seeds `activeRole`. */
   initialRole?: string | null;
 }
 
-export default function ConferenceDetailClient({ initialView, initialRole = null }: ConferenceDetailClientProps) {
+export default function ConferenceDetailClient({ initialView, initialRole = null, initialConference = null, initialCommittees = [] }: ConferenceDetailClientProps) {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const router = useRouter();
   const { user, session, profile, loading: authLoading } = useAuth();
 
-  const [conference, setConference] = useState<Conference | null>(null);
-  const [committees, setCommittees] = useState<Committee[]>([]);
+  const [conference, setConference] = useState<Conference | null>(initialConference);
+  const [committees, setCommittees] = useState<Committee[]>(initialCommittees);
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   /* Pricing read through the RLS-bypassing fees view, so an unpublished
      conference still shows its real price to a visitor holding the link. */
   const [viewFee, setViewFee] = useState<ResolvedFee | null>(null);
   const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialConference);
   const [notFound, setNotFound] = useState(false);
   const [myAllocation, setMyAllocation] = useState<ParticipantAllocation | null>(null);
   // Distinct from `loading`: the conference/committees essentials resolve
@@ -1160,8 +1168,15 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     if (data) setCommitteeEditor({ committee: data as EditableCommittee });
   }
 
-  // Loading
-  if (authLoading || loading) {
+  // Loading.
+  //
+  // `authLoading` is true during the server render and on first client paint,
+  // so gating on it alone meant this component ALWAYS returned a spinner to a
+  // crawler — the whole page was invisible to search. With a server-seeded
+  // conference there is something real to draw immediately, and the viewer's
+  // own applications/allocation arrive under `participantDataLoading` without
+  // holding the page back.
+  if ((authLoading && !conference) || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
         <Loader size={72} label="Loading conference" />

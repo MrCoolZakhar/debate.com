@@ -2560,7 +2560,13 @@ export default function SettingsPage() {
         // Fees step doesn't apply to either, so it isn't shown at all.
         const showFeesStep = role !== 'secretariat' && role !== 'staff';
         return (
-          <>
+          /* `position: relative` so the payment gate below can cover THIS panel
+             and nothing else. It used to be a full-screen portal, which also
+             covered the section rail — an organiser who had not finished
+             financial onboarding could not reach Conference, Organizers or
+             Privacy either, on a page where none of those have anything to do
+             with taking money. */
+          <div style={{ position: 'relative' }}>
             {/* The gate blurs the real screen rather than replacing it: this is
                 a step not yet done, not an error, and seeing what is waiting
                 behind it is the point. */}
@@ -3098,15 +3104,17 @@ export default function SettingsPage() {
             />
 
             {/* Not dismissible by design: no close, no backdrop click, no Escape.
-                It goes away when financial onboarding is done, and not before. */}
+                It goes away when financial onboarding is done, and not before.
+                Scoped to this panel, NOT the viewport: applications are the only
+                thing that depends on being able to take money, so they are the
+                only thing that should be locked. */}
             {applicationsGated && (
-              <Portal>
-                <div
-                  role="dialog"
-                  aria-modal="true"
-                  className="fixed inset-0 z-[80] flex items-center justify-center px-4"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.28)' }}
-                >
+              <div
+                role="region"
+                aria-label="Applications locked until financial setup is finished"
+                className="absolute inset-0 z-20 flex items-start justify-center px-4 pt-10"
+                style={{ backgroundColor: 'rgba(27,56,40,0.18)', borderRadius: 16 }}
+              >
                   <div
                     className="flex flex-col items-center text-center"
                     style={{ ...cardStyle, marginBottom: 0, padding: '48px 32px', maxWidth: '520px', boxShadow: '0 24px 70px rgba(27,56,40,0.28)' }}
@@ -3138,9 +3146,8 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </div>
-              </Portal>
             )}
-          </>
+          </div>
         );
       })()}
 
