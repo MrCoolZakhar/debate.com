@@ -887,12 +887,24 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     // hold a full-page spinner on ~6 more sequential round-trips.
     setLoading(false);
 
-    // Partners, anon reads; RLS only exposes approved links on public
-    // conferences, and private partner conferences drop out of the details
-    // select. A row is a linked conference (partner_conference_id set) or a
+    // Partners. A row is a linked conference (partner_conference_id set) or a
     // free-form company (partner_conference_id null + company_* columns) —
     // never both, per the conference_partners_one_shape check constraint.
-    const { data: partnerLinks } = await supabase
+    //
+    // READ AS THE VIEWER, not anonymously. The RLS policy exposes a partner
+    // three ways: approved-on-a-public-conference, you organise the host, or
+    // you organise the partner. An anon client can only ever satisfy the
+    // first, so an organiser previewing their own UNPUBLISHED conference saw
+    // no partners at all — they added one, came to look, and the section was
+    // simply absent. That is the same situation the conference row itself
+    // handles with an authed retry a few dozen lines above; partners never got
+    // the same treatment.
+    //
+    // Anonymous visitors are unaffected: with no session this is still the
+    // anon client, and RLS still hides unapproved links and private hosts.
+    // The gate is the policy, not the choice of client.
+    const partnerClient = session ? getAuthedClient(session.access_token) : supabase;
+    const { data: partnerLinks } = await partnerClient
       .from('conference_partners')
       .select('id, partner_conference_id, company_name, company_logo_url, company_description, sort_order')
       .eq('conference_id', conf.id)
@@ -905,7 +917,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
     let confById = new Map<string, PartnerConference>();
     if (partnerIds.length > 0) {
-      const { data: partnerConfs } = await supabase
+      // Same client for the same reason: a partner conference that is still
+      // private is readable by ITS organiser, and dropping it here would leave
+      // a linked row with no name to render.
+      const { data: partnerConfs } = await partnerClient
         .from('conferences')
         .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
         .in('id', partnerIds);
