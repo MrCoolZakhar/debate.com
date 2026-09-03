@@ -1183,10 +1183,19 @@ export default function DashboardPage() {
       title: 'Invite chairs',
       sub: committeeCount === 0
         ? 'Add committees first, then invite a chair to each dais.'
-        : committeesNeedingChairs > 0
-          ? `${committeesNeedingChairs} committee${committeesNeedingChairs === 1 ? '' : 's'} with nobody on the dais yet.`
-          : 'Every committee has a chair assigned or invited.',
-      done: committeeCount > 0 && committeesNeedingChairs === 0,
+        : committeesNeedingChairs === committeeCount
+          ? 'Invite a chair to any one committee to get started.'
+          : committeesNeedingChairs > 0
+            ? `${committeesNeedingChairs} of ${committeeCount} still need someone on the dais.`
+            : 'Every committee has a chair assigned or invited.',
+      // ONE chair invited is enough to tick this. Requiring every dais staffed
+      // made the bar scale with ambition and it was the single biggest killer
+      // on the checklist: conferences with 1-2 committees passed 49% of the
+      // time, those with 3-5 passed 14%. Harvard WorldMUN (10 committees) and
+      // MUNBU Workshop (73 delegate applications already in) were both marked
+      // incomplete for what is genuinely months of recruiting. Chasing the rest
+      // is the job of the chair-reminder emails, not of a binary tick.
+      done: committeeCount > 0 && committeesNeedingChairs < committeeCount,
       // Committees, not assignment: inviting a chair starts from the committee
       // you are staffing.
       onClick: () => router.push(`/manage/${slug}/committees`),
