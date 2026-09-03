@@ -44,6 +44,7 @@
 //    block + `[data-ogsc]` for Outlook. See DARK MODE below.
 
 import { resolveTokens, splitResolvedText, type EmailTokenContext } from './emailTokens';
+import { companyLegalLines } from './companyDetails';
 import {
   type EmailBlock,
   type ButtonDestination,
@@ -72,7 +73,13 @@ export interface EmailTheme {
 export const DEFAULT_EMAIL_THEME: Required<EmailTheme> = {
   headerStyle: 'banner',
   accentColor: '#1B3828',
-  buttonColor: '#EED98A',
+  // Forest, NOT the pale gold this used to be. Gold #EED98A on the white card
+  // is 1.41:1 — the CTA was reliably the palest thing on the page, on emails
+  // whose entire job is to be clicked (a delegate's fee, an acceptance). Worse,
+  // `inkOn()` correctly answered that pale fill with near-black ink, which is
+  // exactly the treatment a client gives a DISABLED button. Forest on white is
+  // 12.7:1. Gold stays the accent, where a thin ornamental line is the point.
+  buttonColor: '#1B3828',
   showLogo: true,
   footerLine: '',
 };
@@ -89,6 +96,14 @@ export interface EmailRenderConference {
   logo_url: string | null;
   contact_email: string;
   email_theme?: EmailTheme | null;
+  /* Socials for the footer. All optional: a caller that does not select them
+     simply renders no social row, so adding them broke no existing send path.
+     Worth threading through — 106 of 170 conferences already have an Instagram
+     URL set, and none of it was reaching a single email. */
+  instagram_url?: string | null;
+  website_url?: string | null;
+  tiktok_url?: string | null;
+  facebook_url?: string | null;
 }
 
 export interface RenderEmailHtmlArgs {
@@ -101,6 +116,23 @@ export interface RenderEmailHtmlArgs {
   organizerInviteToken?: string;
   /** Per-recipient token for an 'import_claim' button block, if one is present. */
   importClaimToken?: string;
+  /**
+   * What kind of email this is, which decides the masthead.
+   *
+   * 'transactional' (an event: accepted, allocated, fee ready) puts a small
+   * identity mark ABOVE the card and shows no banner. The reader already knows
+   * which conference this is; what they need is the news, and a 170px banner
+   * plus a second identity band pushed it below the fold of a Gmail reading
+   * pane. mymun does the same — a small platform mark on the field, then
+   * straight into the headline.
+   *
+   * 'broadcast' (an organiser's own composed blast) keeps the full banner
+   * masthead, where the artwork IS the point.
+   *
+   * Defaults to 'broadcast', which is the behaviour every existing caller
+   * already had — so no send path changes look until it opts in.
+   */
+  variant?: 'transactional' | 'broadcast';
 }
 
 // ── Type + colour system ─────────────────────────────────────────────────────
@@ -125,8 +157,13 @@ const HAIRLINE = '#E7E1D3';
 const FOOTER_BG = '#F7F4EC';
 
 // Dark-mode counterparts, applied via the <style> block only.
-const D_PAGE_BG = '#14130F';
-const D_CARD_BG = '#1D1B16';
+// The card has to be VISIBLE against the page. These were #14130F and #1D1B16
+// — nine points apart, 1.04:1, so in dark mode the card simply stopped
+// existing and the email became a floating column of text. Widened, and the
+// hairline below does the rest: at the dark end an explicit edge draws a card
+// far more reliably than a background delta does.
+const D_PAGE_BG = '#0E0D0A';
+const D_CARD_BG = '#232019';
 /* The logo chip stays LIGHT in dark mode, on purpose.
    A conference logo is an arbitrary upload: dark seals and dark-ink wordmarks
    are common, and painting them onto a near-black tile makes them vanish. This
@@ -137,7 +174,7 @@ const D_CHIP_BG = '#F4F1EA';
 const D_INK = '#F3EFE6';
 const D_INK_SOFT = '#CFC7B8';
 const D_MUTED = '#A79D8D';
-const D_HAIRLINE = '#332F26';
+const D_HAIRLINE = '#3A352A';
 const D_FOOTER_BG = '#1A1813';
 
 const BANNER_HEIGHT = 170;
@@ -381,10 +418,87 @@ function renderIdentityRow(
   </td></tr>`;
 }
 
-function renderHeader(conference: EmailRenderConference, siteUrl: string, theme: Required<EmailTheme>): string {
+/**
+ * The transactional masthead: a small logo disc and the acronym, sitting on the
+ * page field ABOVE the card rather than inside it.
+ *
+ * This replaces a stack of two header bands — a 170px banner AND a bordered
+ * identity row — that between them put three horizontal rules ahead of any
+ * content. That composition is right for an announcement blast and wrong for
+ * "your fee is ready to pay", where the first thing in the reading pane should
+ * be the sentence, not a group photo.
+ *
+ * A disc, not a rounded square, matching LogoDisc on the web side and the
+ * share card. Kept light in dark mode for the same reason as the in-card chip:
+ * a conference logo is an arbitrary upload and dark seals are common.
+ */
+function renderAboveCardIdentity(conference: EmailRenderConference, logoAbs: string | null): string {
+  const acronym = conference.acronym || conference.full_name;
+  return `<tr><td align="center" style="padding:0 0 18px 0;">
+    ${logoAbs
+      ? `<div style="padding:0 0 10px 0;"><img src="${escapeHtml(logoAbs)}" width="54" height="54" alt="${escapeHtml(acronym)}" class="e-chip"
+             style="display:inline-block;width:54px;height:54px;object-fit:contain;border-radius:27px;background-color:${CHIP_BG};" /></div>`
+      : ''}
+    <div class="e-muted" style="font-family:${SERIF};font-size:15px;line-height:1.3;font-weight:bold;letter-spacing:0.14em;color:${MUTED};text-transform:uppercase;">
+      ${escapeHtml(acronym)}
+    </div>
+  </td></tr>`;
+}
+
+/**
+ * "Questions? Reply to this email and it reaches the {acronym} team."
+ *
+ * True, not a comforting fiction: `send-emails` sets the outbox row's
+ * `reply_to` from `conferences.contact_email`, so a reply genuinely lands with
+ * the organisers. mymun carries the same line for the same reason, and it is
+ * the cheapest possible answer to "who do I even ask".
+ */
+function renderReplyPanel(conference: EmailRenderConference, accent: string): string {
+  return `<tr><td class="email-padding" style="padding:2px 0 4px 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-panel" style="background-color:${CHIP_BG};border-radius:10px;">
+      <tr>
+        <td class="e-rule" width="4" style="width:4px;background-color:${accent};font-size:0;line-height:0;border-radius:10px 0 0 10px;">&nbsp;</td>
+        <td class="e-soft" style="padding:15px 18px;font-family:${SANS};font-size:14px;line-height:1.6;color:${INK_SOFT};">
+          <strong class="e-ink" style="color:${INK};">Questions?</strong> Reply to this email and it reaches the ${escapeHtml(conference.acronym || conference.full_name)} team.
+        </td>
+      </tr>
+    </table>
+  </td></tr>`;
+}
+
+/** Social links the conference actually has. Text, not icon images: a remote
+ *  icon is blocked by default in Outlook and Gmail's "ask before displaying"
+ *  mode, and a row of alt-text boxes is worse than a row of words. */
+function socialLinks(conference: EmailRenderConference): { label: string; url: string }[] {
+  const pairs: [string, string | null | undefined][] = [
+    ['Instagram', conference.instagram_url],
+    ['Facebook', conference.facebook_url],
+    ['TikTok', conference.tiktok_url],
+    ['Website', conference.website_url],
+  ];
+  const out: { label: string; url: string }[] = [];
+  for (const [label, url] of pairs) {
+    if (url && /^https?:\/\//i.test(url)) out.push({ label, url });
+  }
+  return out;
+}
+
+function renderHeader(
+  conference: EmailRenderConference,
+  siteUrl: string,
+  theme: Required<EmailTheme>,
+  transactional: boolean
+): string {
   const bannerAbs = absolutizeUrl(conference.banner_url, siteUrl);
   const logoAbs = theme.showLogo ? absolutizeUrl(conference.logo_url, siteUrl) : null;
-  const useBanner = theme.headerStyle === 'banner' && !!bannerAbs;
+  // A transactional email never shows the banner: its identity mark already
+  // sits above the card, and the two together were the double header.
+  const useBanner = !transactional && theme.headerStyle === 'banner' && !!bannerAbs;
+
+  // ...and it shows no in-card identity row either, for the same reason.
+  if (transactional) {
+    return `<tr><td class="e-spine" style="height:4px;line-height:4px;font-size:0;background-color:${theme.accentColor};">&nbsp;</td></tr>`;
+  }
   const accent = theme.accentColor;
 
   // A 5px accent spine at the very top. It is the cheapest possible way to
@@ -448,8 +562,17 @@ function renderBlock(
         style: `padding:0 0 20px 0;font-family:${SANS};font-size:16px;line-height:1.7;color:${INK};`,
         gap: 15,
       },
+      // 30px, not 23px. At 23px against 16px body the ratio was 1.44:1, and
+      // the identity row's 20px bold serif acronym actually out-shouted it —
+      // "You're in" rendered smaller than the conference's own name, so the
+      // masthead won every email. mymun runs roughly 28px against 16px.
+      // Coloured with the accent rather than ink: it is the one line that
+      // should carry the conference's colour. Through `readableOn`, because
+      // accentColor is organiser-settable and production already holds a pale
+      // blue (#DCEAF5) — a headline is the last thing that may be unreadable,
+      // so a too-light accent is darkened until it clears 4.5:1.
       heading: {
-        style: `padding:2px 0 12px 0;font-family:${SERIF};font-size:23px;line-height:1.3;font-weight:bold;letter-spacing:-0.01em;color:${INK};`,
+        style: `padding:2px 0 14px 0;font-family:${SERIF};font-size:30px;line-height:1.18;font-weight:bold;letter-spacing:-0.015em;color:${readableOn(theme.accentColor, CARD_BG)};`,
         gap: 8,
       },
       small: {
@@ -457,7 +580,9 @@ function renderBlock(
         gap: 10,
       },
     };
-    const inkClass = variant === 'small' ? 'e-muted' : 'e-ink';
+    // The heading owns its colour (the accent), so it takes `e-accent` and is
+    // brightened in dark mode rather than being flattened to body ink.
+    const inkClass = variant === 'small' ? 'e-muted' : variant === 'heading' ? 'e-accent' : 'e-ink';
     const body = renderParagraphChunks(resolveTokens(block.content, ctx), linkColor, cell[variant].gap);
     if (!body) return '';
     return `<tr><td class="email-padding ${inkClass}" style="${cell[variant].style}">${body}</td></tr>`;
@@ -478,17 +603,21 @@ function renderBlock(
   const label = block.label?.trim() || BUTTON_FALLBACK_LABEL[block.destination] || 'Open link';
   const btnBg = theme.buttonColor;
   const btnInk = inkOn(btnBg);
-  const btnBorder = mixHex(btnBg, '#000000', 0.16);
   // Bulletproof CTA: background-colour, border-radius and padding all live on
   // the <td>, never on the <a> — Outlook (and older Gmail app builds) drop
   // padding/border-radius declared only on an inline <a>, silently collapsing
-  // the button into a bare underlined link. The 1px border is what keeps the
-  // shape when a dark-mode client repaints the fill.
-  return `<tr><td align="center" style="padding:10px 0 26px 0;">
+  // the button into a bare underlined link.
+  //
+  // No border any more. It existed to give the old pale-gold fill an edge it
+  // could not give itself; on a solid fill it only muddies the shape. Centred,
+  // like mymun's — a centred button at roughly a third of the way down is the
+  // single most-clicked arrangement in transactional mail, and left-aligning it
+  // let it sit in the body's optical rhythm and read as another paragraph.
+  return `<tr><td align="center" style="padding:14px 0 30px 0;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td align="center" bgcolor="${btnBg}" class="e-btn" style="background-color:${btnBg};border:1px solid ${btnBorder};border-radius:8px;">
+      <td align="center" bgcolor="${btnBg}" class="e-btn" style="background-color:${btnBg};border-radius:10px;">
         <a href="${escapeHtml(url)}" target="_blank" class="e-btn-a"
-           style="display:block;padding:15px 34px;font-family:${SANS};font-size:15px;font-weight:bold;line-height:20px;letter-spacing:0.01em;color:${btnInk};text-decoration:none;">
+           style="display:block;padding:17px 40px;font-family:${SANS};font-size:16px;font-weight:bold;line-height:20px;letter-spacing:0.01em;color:${btnInk};text-decoration:none;">
           ${escapeHtml(label)}
         </a>
       </td>
@@ -522,8 +651,10 @@ export function renderEmailHtml({
   chairInviteToken,
   organizerInviteToken,
   importClaimToken,
+  variant = 'broadcast',
 }: RenderEmailHtmlArgs): string {
   const siteUrl = getSiteUrl();
+  const transactional = variant === 'transactional';
   const theme = resolveEmailTheme(conference.email_theme);
   const linkColor = readableOn(theme.accentColor, CARD_BG);
   const bodyRows = blocks
@@ -532,6 +663,63 @@ export function renderEmailHtml({
   const footerLine = theme.footerLine.trim();
   const preheader = buildPreheader(blocks, ctx);
   const prefsUrl = `${siteUrl}/account/profile`;
+  const logoAbs = theme.showLogo ? absolutizeUrl(conference.logo_url, siteUrl) : null;
+
+  // "Sent to you by X through Gavelling" + the preference links. Identical in
+  // both variants; only where it sits differs.
+  const sentBy =
+    `Sent to you by ${escapeHtml(conference.acronym || conference.full_name)} through Gavelling, the platform it runs on.` +
+    `<br><a href="${escapeHtml(prefsUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">Email preferences</a>` +
+    `&nbsp;&middot;&nbsp;<a href="${escapeHtml(siteUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">gavelling.com</a>`;
+
+  const socials = socialLinks(conference);
+  const socialRow = socials.length
+    ? `<div class="e-muted" style="font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};padding-top:9px;">` +
+      socials
+        .map(x => `<a href="${escapeHtml(x.url)}" target="_blank" style="color:${MUTED};text-decoration:underline;">${escapeHtml(x.label)}</a>`)
+        .join('&nbsp;&middot;&nbsp;') +
+      `</div>`
+    : '';
+
+  /* The registered-company lines. companyDetails.ts has held verified
+     Companies House values since August and emailHtml.ts has never imported
+     it — only the web footer did — so every email we have ever sent carried no
+     legal entity and no registered address. companyLegalLines() returns []
+     while a value is unverified, so nothing invented can ship. */
+  const legal = companyLegalLines();
+  const legalRow = legal.length
+    ? `<div class="e-muted" style="font-family:${SANS};font-size:11px;line-height:1.65;color:${MUTED};padding-top:12px;">` +
+      legal.map(l => escapeHtml(l)).join('<br>') +
+      `</div>`
+    : '';
+
+  // Broadcast: footer stays a band inside the card, as it was.
+  const cardFooter = `<tr>
+            <td class="email-padding e-footer e-hair" style="background-color:${FOOTER_BG};border-top:1px solid ${HAIRLINE};padding:26px 40px 28px 40px;">
+              <div class="e-soft" style="font-family:${SANS};font-size:13px;line-height:1.6;font-weight:bold;color:${INK_SOFT};">${escapeHtml(conference.full_name)}</div>
+              <div class="e-muted" style="font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};padding-top:2px;">
+                <a href="mailto:${escapeHtml(conference.contact_email)}" style="color:${MUTED};text-decoration:underline;">${escapeHtml(conference.contact_email)}</a>
+              </div>
+              ${socialRow}
+              <div class="e-muted" style="font-family:${SANS};font-size:12px;line-height:1.7;color:${MUTED};padding-top:14px;">${sentBy}</div>
+              ${legalRow}
+            </td>
+          </tr>`;
+
+  // Transactional: footer sits on the page field BELOW the card, centred.
+  // Off the card it stops competing with the message, and the legal block can
+  // be as dense as it needs to be without weighing down the content.
+  const fieldFooter = `<tr>
+            <td align="center" class="email-padding" style="padding:22px 24px 0 24px;">
+              <div class="e-soft" style="font-family:${SERIF};font-size:14px;line-height:1.6;font-weight:bold;color:${INK_SOFT};">${escapeHtml(conference.full_name)}</div>
+              <div class="e-muted" style="font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};padding-top:2px;">
+                <a href="mailto:${escapeHtml(conference.contact_email)}" style="color:${MUTED};text-decoration:underline;">${escapeHtml(conference.contact_email)}</a>
+              </div>
+              ${socialRow}
+              <div class="e-muted" style="font-family:${SANS};font-size:12px;line-height:1.7;color:${MUTED};padding-top:16px;border-top:1px solid ${HAIRLINE};margin-top:16px;">${sentBy}</div>
+              ${legalRow}
+            </td>
+          </tr>`;
 
   // DARK MODE. Three behaviours in the wild: Apple Mail and Outlook.com do a
   // *partial* invert unless told otherwise, the Gmail apps do a *full* invert
@@ -562,12 +750,25 @@ export function renderEmailHtml({
     .e-footer { background-color: ${D_FOOTER_BG} !important; border-color: ${D_HAIRLINE} !important; }
     .e-chip { background-color: ${D_CHIP_BG} !important; box-shadow: 0 0 0 1px rgba(255,255,255,0.22) !important; }
     .e-link { color: ${mixHex(theme.accentColor, '#FFFFFF', 0.55)} !important; }
+    /* The CTA is now a solid brand colour, and forest on a near-black card is
+       about 1.2:1 — the button would disappear exactly where the old pale gold
+       used to work. Lifted toward the light, with ink to match. Any future
+       change to a solid dark button needs this pair or dark mode regresses. */
+    .e-btn { background-color: ${mixHex(theme.buttonColor, '#FFFFFF', 0.30)} !important; }
+    .e-btn-a { color: ${inkOn(mixHex(theme.buttonColor, '#FFFFFF', 0.30))} !important; }
+    .e-accent, .e-accent div, .e-accent strong { color: ${mixHex(theme.accentColor, '#FFFFFF', 0.62)} !important; }
+    .e-rule { background-color: ${mixHex(theme.accentColor, '#FFFFFF', 0.40)} !important; }
+    .e-panel { background-color: #1B1811 !important; }
   }
   [data-ogsc] .e-page { background-color: ${D_PAGE_BG} !important; }
   [data-ogsc] .e-card { background-color: ${D_CARD_BG} !important; }
   [data-ogsc] .e-ink, [data-ogsc] .e-ink div { color: ${D_INK} !important; }
   [data-ogsc] .e-muted, [data-ogsc] .e-muted div { color: ${D_MUTED} !important; }
-  [data-ogsc] .e-footer { background-color: ${D_FOOTER_BG} !important; }`;
+  [data-ogsc] .e-footer { background-color: ${D_FOOTER_BG} !important; }
+  [data-ogsc] .e-btn { background-color: ${mixHex(theme.buttonColor, '#FFFFFF', 0.30)} !important; }
+  [data-ogsc] .e-btn-a { color: ${inkOn(mixHex(theme.buttonColor, '#FFFFFF', 0.30))} !important; }
+  [data-ogsc] .e-accent, [data-ogsc] .e-accent div { color: ${mixHex(theme.accentColor, '#FFFFFF', 0.62)} !important; }
+  [data-ogsc] .e-panel { background-color: #1B1811 !important; }`;
 
   return `<!doctype html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
@@ -588,39 +789,30 @@ export function renderEmailHtml({
   ${preheader ? `<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;color:${PAGE_BG};">${escapeHtml(preheader)}&#8199;&#65279;&#847; &#8199;&#65279;&#847; &#8199;&#65279;&#847; &#8199;&#65279;&#847; &#8199;&#65279;&#847; &#8199;&#65279;&#847;</div>` : ''}
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-page" style="background-color:${PAGE_BG};">
     <tr>
-      <td align="center" style="padding:32px 16px 40px 16px;">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="email-container e-card e-hair"
-               style="width:600px;max-width:600px;background-color:${CARD_BG};border:1px solid ${HAIRLINE};border-radius:14px;overflow:hidden;">
-          ${renderHeader(conference, siteUrl, theme)}
-          <tr>
-            <td class="email-padding e-card" style="background-color:${CARD_BG};padding:34px 40px 8px 40px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                ${bodyRows}
-              </table>
-            </td>
-          </tr>
-          ${footerLine ? `<tr>
-            <td class="email-padding e-card e-soft" style="background-color:${CARD_BG};padding:6px 40px 24px 40px;font-family:${SANS};font-size:14px;line-height:1.65;color:${INK_SOFT};">
-              ${escapeHtml(footerLine).replace(/\n/g, '<br>')}
-            </td>
-          </tr>` : ''}
-          <tr>
-            <td class="email-padding e-footer e-hair" style="background-color:${FOOTER_BG};border-top:1px solid ${HAIRLINE};padding:26px 40px 28px 40px;">
-              <div class="e-soft" style="font-family:${SANS};font-size:13px;line-height:1.6;font-weight:bold;color:${INK_SOFT};">
-                ${escapeHtml(conference.full_name)}
-              </div>
-              <div class="e-muted" style="font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};padding-top:2px;">
-                <a href="mailto:${escapeHtml(conference.contact_email)}" style="color:${MUTED};text-decoration:underline;">${escapeHtml(conference.contact_email)}</a>
-              </div>
-              <div class="e-muted" style="font-family:${SANS};font-size:12px;line-height:1.7;color:${MUTED};padding-top:14px;">
-                Sent to you by ${escapeHtml(conference.acronym || conference.full_name)} through Gavelling, the platform it runs on.
-                <br>
-                <a href="${escapeHtml(prefsUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">Manage email preferences</a>
-                &nbsp;&middot;&nbsp;
-                <a href="${escapeHtml(siteUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">gavelling.com</a>
-              </div>
-            </td>
-          </tr>
+      <td align="center" style="padding:${transactional ? '30px' : '32px'} 16px 40px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="email-container" style="width:600px;max-width:600px;">
+          ${transactional ? renderAboveCardIdentity(conference, logoAbs) : ''}
+          <tr><td style="padding:0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-card e-hair"
+                   style="background-color:${CARD_BG};border:1px solid ${HAIRLINE};border-radius:${transactional ? 16 : 14}px;overflow:hidden;">
+              ${renderHeader(conference, siteUrl, theme, transactional)}
+              <tr>
+                <td class="email-padding e-card" style="background-color:${CARD_BG};padding:${transactional ? '44px 44px 10px 44px' : '34px 40px 8px 40px'};">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    ${bodyRows}
+                    ${transactional ? renderReplyPanel(conference, theme.accentColor) : ''}
+                  </table>
+                </td>
+              </tr>
+              ${footerLine ? `<tr>
+                <td class="email-padding e-card e-soft" style="background-color:${CARD_BG};padding:${transactional ? '18px 44px 26px 44px' : '6px 40px 24px 40px'};font-family:${SANS};font-size:14px;line-height:1.65;color:${INK_SOFT};">
+                  ${escapeHtml(footerLine).replace(/\n/g, '<br>')}
+                </td>
+              </tr>` : `<tr><td class="e-card" style="background-color:${CARD_BG};height:${transactional ? 18 : 0}px;line-height:0;font-size:0;">&nbsp;</td></tr>`}
+              ${transactional ? '' : cardFooter}
+            </table>
+          </td></tr>
+          ${transactional ? fieldFooter : ''}
         </table>
       </td>
     </tr>
