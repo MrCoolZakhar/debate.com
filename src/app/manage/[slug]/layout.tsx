@@ -265,7 +265,7 @@ function SideRail({
             }}
           >
             <span className="block text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
-              {conference?.acronym ?? '…'}{year ? ` ${year}` : ''}
+              {conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}
             </span>
             {conference && (
               <span
@@ -469,7 +469,7 @@ function SidebarContent({
         />
         <div className="min-w-0">
           <span className="block text-sm font-extrabold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
-            {conference?.acronym ?? '…'}{year ? ` ${year}` : ''}
+            {conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}
           </span>
           {conference && (
             <span

@@ -24,9 +24,16 @@ function withYear(label: string, year: string | null): string {
   const base = label.trim();
   if (!year) return base;
   if (!base) return year;
+  // Full year already present: "Hult 2026", "CONCORDIA MUN 2027".
   if (base.includes(year)) return base;
-  // Trailing two-digit shorthand: "XMUN26" for 2026, but not "MUN20" for 2026.
-  if (base.endsWith(year.slice(2)) && /[A-Za-z]\d{2}$/.test(base)) return base;
+  // Two-digit shorthand at the end, however the organiser separated it —
+  // "SISMUN26", "MUNBU 27", "BUFFALOMUN'26", "NASH CON 26". The character
+  // before it may be a letter, a space, an apostrophe or nothing at all; the
+  // one thing it must not be is another digit, or "MUN2026" would look like
+  // it ends in "26" for the year 2026 twice over. A different two-digit
+  // number ("MUN20" in 2026) is left alone and correctly gets its year.
+  const yy = year.slice(2);
+  if (new RegExp(`(?:^|[^0-9])${yy}$`).test(base)) return base;
   return `${base} ${year}`;
 }
 
