@@ -6,13 +6,6 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import DemoGate from '@/components/DemoGate';
 import CreditsWelcomeGate from '@/components/CreditsWelcomeGate';
 
-// PLACEHOLDER — not a real token. Get the real one from Search Console:
-// https://search.google.com/search-console → Settings → Ownership
-// verification → HTML tag method → copy the `content` value (it looks like
-// a long opaque string, no quotes). Paste it here to verify gavelling.com as
-// a property; until then this renders a meta tag that verifies nothing.
-const GOOGLE_SITE_VERIFICATION = 'REPLACE_WITH_GOOGLE_SEARCH_CONSOLE_TOKEN';
-
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
   title: {
@@ -47,9 +40,10 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'Gavelling', url: 'https://gavelling.com' }],
   creator: 'Gavelling',
-  verification: {
-    google: GOOGLE_SITE_VERIFICATION,
-  },
+  /* No `verification` key on purpose. gavelling.com is already a verified
+     Search Console property via the file method — public/google0ba54760c43d1bc3.html,
+     live and serving 200. A second meta-tag verification would be redundant,
+     and the placeholder token that briefly sat here verified nothing at all. */
   robots: {
     index: true,
     follow: true,
