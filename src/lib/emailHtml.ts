@@ -45,6 +45,7 @@
 
 import { resolveTokens, splitResolvedText, type EmailTokenContext } from './emailTokens';
 import { companyLegalLines } from './companyDetails';
+import { conferenceAcronymLabel } from './conferenceLabels';
 import {
   type EmailBlock,
   type ButtonDestination,
@@ -105,6 +106,8 @@ export interface EmailRenderConference {
   tiktok_url?: string | null;
   facebook_url?: string | null;
   whatsapp_url?: string | null;
+  /** Only for the edition year in the masthead ("SISMUN 2026"). */
+  start_date?: string | null;
 }
 
 export interface RenderEmailHtmlArgs {
@@ -134,6 +137,13 @@ export interface RenderEmailHtmlArgs {
    * already had — so no send path changes look until it opts in.
    */
   variant?: 'transactional' | 'broadcast';
+  /**
+   * Per-recipient imagery for `facts` rows that declare an `iconFrom`.
+   * Deliberately passed in rather than tokenised: an organiser editing a
+   * template should never have to paste an asset URL, and these differ for
+   * every single recipient.
+   */
+  media?: { countryCode?: string | null; committeeEmblem?: string | null };
 }
 
 // ── Type + colour system ─────────────────────────────────────────────────────
@@ -434,13 +444,22 @@ function renderIdentityRow(
  * a conference logo is an arbitrary upload and dark seals are common.
  */
 function renderAboveCardIdentity(conference: EmailRenderConference, logoAbs: string | null): string {
-  const acronym = conference.acronym || conference.full_name;
-  return `<tr><td align="center" style="padding:0 0 18px 0;">
+  // WITH THE EDITION YEAR. The masthead said "SISMUN" where every other
+  // surface in the product says "SISMUN 2026" — and the year is the single
+  // most useful disambiguator in a mailbox, because a delegate who did last
+  // year's conference has the previous edition's mail sitting right above it.
+  // conferenceAcronymLabel is the same helper the share cards and the site
+  // use, so it never doubles a year that is already in the acronym.
+  const acronym =
+    conferenceAcronymLabel({ acronym: conference.acronym, start_date: conference.start_date ?? null }) ||
+    conference.acronym ||
+    conference.full_name;
+  return `<tr><td align="center" style="padding:0 0 20px 0;">
     ${logoAbs
-      ? `<div style="padding:0 0 10px 0;"><img src="${escapeHtml(logoAbs)}" width="54" height="54" alt="${escapeHtml(acronym)}" class="e-chip"
-             style="display:inline-block;width:54px;height:54px;object-fit:contain;border-radius:27px;background-color:${CHIP_BG};" /></div>`
+      ? `<div style="padding:0 0 11px 0;"><img src="${escapeHtml(logoAbs)}" width="58" height="58" alt="${escapeHtml(acronym)}" class="e-chip"
+             style="display:inline-block;width:58px;height:58px;object-fit:contain;border-radius:29px;background-color:${CHIP_BG};" /></div>`
       : ''}
-    <div class="e-muted" style="font-family:${SERIF};font-size:15px;line-height:1.3;font-weight:bold;letter-spacing:0.14em;color:${MUTED};text-transform:uppercase;">
+    <div class="e-accent" style="font-family:${SANS};font-size:15px;line-height:1.3;font-weight:800;letter-spacing:0.12em;color:${INK_SOFT};text-transform:uppercase;">
       ${escapeHtml(acronym)}
     </div>
   </td></tr>`;
@@ -560,6 +579,7 @@ function renderBlock(
   ctx: EmailTokenContext,
   theme: Required<EmailTheme>,
   linkColor: string,
+  media?: RenderEmailHtmlArgs['media'],
   chairInviteToken?: string,
   organizerInviteToken?: string,
   importClaimToken?: string
@@ -576,17 +596,21 @@ function renderBlock(
         style: `padding:0 0 20px 0;font-family:${SANS};font-size:16px;line-height:1.7;color:${INK};`,
         gap: 15,
       },
-      // 30px, not 23px. At 23px against 16px body the ratio was 1.44:1, and
-      // the identity row's 20px bold serif acronym actually out-shouted it —
-      // "You're in" rendered smaller than the conference's own name, so the
-      // masthead won every email. mymun runs roughly 28px against 16px.
-      // Coloured with the accent rather than ink: it is the one line that
-      // should carry the conference's colour. Through `readableOn`, because
-      // accentColor is organiser-settable and production already holds a pale
-      // blue (#DCEAF5) — a headline is the last thing that may be unreadable,
-      // so a too-light accent is darkened until it clears 4.5:1.
+      // BOLD SANS, not serif. The serif was the wrong read of mymun: look at
+      // their "Your assignment comes next" and it is a heavy geometric sans in
+      // their brand navy, with the body in the same family beneath it. A serif
+      // headline over a sans body reads as a newsletter masthead, which is the
+      // opposite of what a transactional email wants.
+      //
+      // 29px against 16px body. Weight 800, not `bold` (700) — the whole
+      // effect depends on the headline being visibly heavier than the bolded
+      // words inside the body copy, or it stops being a headline.
+      //
+      // Coloured with the accent, through `readableOn`: accentColor is
+      // organiser-settable and production already holds a pale blue (#DCEAF5),
+      // and a headline is the last thing that may be unreadable.
       heading: {
-        style: `padding:2px 0 14px 0;font-family:${SERIF};font-size:30px;line-height:1.18;font-weight:bold;letter-spacing:-0.015em;color:${readableOn(theme.accentColor, CARD_BG)};`,
+        style: `padding:2px 0 14px 0;font-family:${SANS};font-size:29px;line-height:1.2;font-weight:800;letter-spacing:-0.021em;color:${readableOn(theme.accentColor, CARD_BG)};`,
         gap: 8,
       },
       small: {
@@ -614,8 +638,24 @@ function renderBlock(
   }
 
   if (block.type === 'facts') {
+    // The flag comes from twemoji as a PNG, not the SVG the web app uses:
+    // Outlook and several Android clients will not render an SVG <img> at all,
+    // and a flag that silently disappears is worse than none. Same CDN the
+    // share-card route already fetches from.
+    const flagUrl = (code?: string | null): string | null => {
+      const cc = (code ?? '').trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(cc)) return null;
+      const pts = [...cc].map(ch => (ch.codePointAt(0)! + 0x1f1a5).toString(16)).join('-');
+      return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${pts}.png`;
+    };
+    const iconFor = (from?: 'country' | 'committee'): string | null => {
+      if (from === 'country') return flagUrl(media?.countryCode);
+      if (from === 'committee') return absolutizeUrl(media?.committeeEmblem ?? null, getSiteUrl());
+      return null;
+    };
+
     const items = block.items
-      .map(i => ({ label: i.label.trim(), value: resolveTokens(i.value, ctx).trim() }))
+      .map(i => ({ label: i.label.trim(), value: resolveTokens(i.value, ctx).trim(), icon: iconFor(i.iconFrom) }))
       .filter(i => i.label && i.value);
     if (!items.length) return '';
 
@@ -636,8 +676,10 @@ function renderBlock(
           <td class="e-hair e-muted" width="150" style="width:150px;${border}padding:${idx === 0 ? '0' : '11px'} 14px 11px 0;font-family:${SANS};font-size:11px;line-height:1.4;font-weight:bold;letter-spacing:0.1em;text-transform:uppercase;color:${MUTED};vertical-align:top;">
             ${escapeHtml(i.label)}
           </td>
-          <td class="e-hair e-ink" style="${border}padding:${idx === 0 ? '0' : '11px'} 0 11px 0;font-family:${SANS};font-size:16px;line-height:1.45;font-weight:bold;color:${INK};vertical-align:top;">
-            ${escapeHtml(i.value)}
+          <td class="e-hair e-ink" style="${border}padding:${idx === 0 ? '0' : '11px'} 0 11px 0;font-family:${SANS};font-size:16px;line-height:1.45;font-weight:bold;color:${INK};vertical-align:middle;">
+            ${i.icon
+              ? `<img src="${escapeHtml(i.icon)}" width="24" height="24" alt="" style="width:24px;height:24px;object-fit:contain;border-radius:4px;vertical-align:middle;margin-right:9px;" />`
+              : ''}<span style="vertical-align:middle;">${escapeHtml(i.value)}</span>
           </td>
         </tr>`;
       })
@@ -666,9 +708,16 @@ function renderBlock(
   // like mymun's — a centred button at roughly a third of the way down is the
   // single most-clicked arrangement in transactional mail, and left-aligning it
   // let it sit in the body's optical rhythm and read as another paragraph.
+  // A gentle vertical gradient, light at the top. Three layers on purpose:
+  // `bgcolor` for Outlook (which ignores CSS backgrounds entirely),
+  // `background-color` as the base every client understands, and
+  // `background-image` on top for the ones that render gradients. Any client
+  // that drops the gradient still gets the solid brand colour, so this can
+  // never degrade below where it was.
+  const btnTop = mixHex(btnBg, '#FFFFFF', 0.16);
   return `<tr><td align="center" style="padding:14px 0 30px 0;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td align="center" bgcolor="${btnBg}" class="e-btn" style="background-color:${btnBg};border-radius:10px;">
+      <td align="center" bgcolor="${btnBg}" class="e-btn" style="background-color:${btnBg};background-image:linear-gradient(180deg, ${btnTop} 0%, ${btnBg} 100%);border-radius:10px;">
         <a href="${escapeHtml(url)}" target="_blank" class="e-btn-a"
            style="display:block;padding:17px 40px;font-family:${SANS};font-size:16px;font-weight:bold;line-height:20px;letter-spacing:0.01em;color:${btnInk};text-decoration:none;">
           ${escapeHtml(label)}
@@ -705,13 +754,14 @@ export function renderEmailHtml({
   organizerInviteToken,
   importClaimToken,
   variant = 'broadcast',
+  media,
 }: RenderEmailHtmlArgs): string {
   const siteUrl = getSiteUrl();
   const transactional = variant === 'transactional';
   const theme = resolveEmailTheme(conference.email_theme);
   const linkColor = readableOn(theme.accentColor, CARD_BG);
   const bodyRows = blocks
-    .map(b => renderBlock(b, conference, ctx, theme, linkColor, chairInviteToken, organizerInviteToken, importClaimToken))
+    .map(b => renderBlock(b, conference, ctx, theme, linkColor, media, chairInviteToken, organizerInviteToken, importClaimToken))
     .join('');
   const footerLine = theme.footerLine.trim();
   const preheader = buildPreheader(blocks, ctx);
@@ -720,6 +770,16 @@ export function renderEmailHtml({
 
   // "Sent to you by X through Gavelling" + the preference links. Identical in
   // both variants; only where it sits differs.
+  /* The Gavelling mark, so the footer is signed rather than just worded.
+     /gavelling-mark.png is the SQUARE mark and is already live in production —
+     deliberately not one of the new public/email/* icons, which only exist
+     after a deploy. See public/README.md on never using the wide lockup here:
+     a small square render of GavellingLogo.png crops to a meaningless
+     crescent. */
+  const brandMark =
+    `<img src="${escapeHtml(siteUrl)}/gavelling-mark.png" width="26" height="26" alt="Gavelling" ` +
+    `style="display:block;width:26px;height:26px;border:0;margin:0 auto 9px;opacity:0.75;" />`;
+
   const sentBy =
     `Sent to you by ${escapeHtml(conference.acronym || conference.full_name)} through Gavelling, the platform it runs on.` +
     `<br><a href="${escapeHtml(prefsUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">Email preferences</a>` +
@@ -766,12 +826,12 @@ export function renderEmailHtml({
   // be as dense as it needs to be without weighing down the content.
   const fieldFooter = `<tr>
             <td align="center" class="email-padding" style="padding:22px 24px 0 24px;">
-              <div class="e-soft" style="font-family:${SERIF};font-size:14px;line-height:1.6;font-weight:bold;color:${INK_SOFT};">${escapeHtml(conference.full_name)}</div>
+              <div class="e-soft" style="font-family:${SANS};font-size:14px;line-height:1.6;font-weight:800;color:${INK_SOFT};">${escapeHtml(conference.full_name)}</div>
               <div class="e-muted" style="font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};padding-top:2px;">
                 <a href="mailto:${escapeHtml(conference.contact_email)}" style="color:${MUTED};text-decoration:underline;">${escapeHtml(conference.contact_email)}</a>
               </div>
               ${socialRow}
-              <div class="e-muted" style="font-family:${SANS};font-size:12px;line-height:1.7;color:${MUTED};padding-top:16px;border-top:1px solid ${HAIRLINE};margin-top:16px;">${sentBy}</div>
+              <div class="e-muted" style="font-family:${SANS};font-size:12px;line-height:1.7;color:${MUTED};padding-top:18px;border-top:1px solid ${HAIRLINE};margin-top:18px;">${brandMark}${sentBy}</div>
               ${legalRow}
             </td>
           </tr>`;

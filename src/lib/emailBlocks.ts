@@ -50,7 +50,14 @@ export interface ImageBlock {
  */
 export interface FactsBlock {
   type: 'facts';
-  items: { label: string; value: string }[];
+  items: {
+    label: string;
+    value: string;
+    /** Draw a small image beside the value. Not a URL: the renderer resolves it
+     *  from the recipient's own data, so a template can say "show the flag"
+     *  without a template author ever handling an asset path. */
+    iconFrom?: 'country' | 'committee';
+  }[];
 }
 
 export type EmailBlock = ParagraphBlock | ButtonBlock | ImageBlock | FactsBlock;

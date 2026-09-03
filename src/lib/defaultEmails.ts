@@ -139,9 +139,12 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYou have your seat for {{conference_name}}.' },
       // The committee and the country as FACTS, not buried mid-sentence. This
       // is the line a delegate comes back to this email for, weeks later.
+      // The emblem and the flag, not just the words. This is the email a
+      // delegate screenshots and sends to their friends; it should look like
+      // their seat, not like a database row.
       { type: 'facts', items: [
-        { label: 'Committee', value: '{{committee}}' },
-        { label: 'Representing', value: '{{country}}' },
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
       ] },
       { type: 'paragraph', content: "That's your brief for the whole conference, so it's worth starting early. Study guides and position paper details appear in your conference view as your chairs publish them." },
       VIEW_CONFERENCE_BUTTON,
@@ -153,8 +156,8 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       { type: 'paragraph', variant: 'heading', content: 'Your allocation has changed' },
       { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour allocation for {{conference_name}} has been updated. You are now in:' },
       { type: 'facts', items: [
-        { label: 'Committee', value: '{{committee}}' },
-        { label: 'Representing', value: '{{country}}' },
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
       ] },
       VIEW_CONFERENCE_BUTTON,
       { type: 'paragraph', variant: 'small', content: 'If you had already started a position paper, check it against the new committee and country before you go any further.' },

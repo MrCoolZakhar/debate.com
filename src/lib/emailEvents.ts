@@ -268,8 +268,9 @@ interface RecipientRow {
   society_id: string | null;
   payment_status: string | null;
   societies: { name: string } | null;
-  assigned_committee: { abbreviation: string | null; name: string } | null;
+  assigned_committee: { abbreviation: string | null; name: string; logo_url: string | null } | null;
   assigned_country_name: string | null;
+  assigned_country_code: string | null;
   profiles: {
     display_name: string; email: string | null;
     notify_email_applications: boolean | null; notify_email_payments: boolean | null; notify_email_documents: boolean | null;
@@ -372,8 +373,9 @@ export async function queueEventEmail(
       .select(`
         id, role, society_id, payment_status,
         societies (name),
-        assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
+        assigned_committee:conference_committees!assigned_committee_id (abbreviation, name, logo_url),
         assigned_country_name,
+        assigned_country_code,
         profiles (display_name, email, notify_email_applications, notify_email_payments, notify_email_documents, notify_email_marketing),
         invited_email, invited_name
       `)
@@ -400,6 +402,7 @@ export async function queueEventEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
@@ -431,7 +434,15 @@ export async function queueEventEmail(
       recipient_email: app.profiles?.email ?? app.invited_email ?? null,
       subject: resolveTokens(subjectSource, ctx),
       body: resolveTokens(flatBody, ctx),
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, variant: 'transactional' }),
+      body_html: renderEmailHtml({
+        blocks, conference: renderConf, ctx, variant: 'transactional',
+        // Per-recipient, so a `facts` row asking for 'country' or 'committee'
+        // draws THIS delegate's flag and THIS committee's emblem.
+        media: {
+          countryCode: app.assigned_country_code ?? null,
+          committeeEmblem: app.assigned_committee?.logo_url ?? null,
+        },
+      }),
       status: 'pending' as const,
       ...(opts?.sendAfter ? { send_after: opts.sendAfter } : {}),
     };
@@ -543,6 +554,7 @@ export async function queueChairInviteEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
@@ -630,6 +642,7 @@ export async function queueOrganizerInviteEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
@@ -736,6 +749,7 @@ export async function queueImportJoinInviteEmails(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
@@ -893,6 +907,7 @@ export async function queueRequestReceivedEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
