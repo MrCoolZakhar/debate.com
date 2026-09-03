@@ -769,12 +769,16 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState('');
+  // Its own component, its own useAuth() — so its own stable token. See the
+  // note on loadCommittees: depending on the session OBJECT re-runs this on
+  // every token refresh and around tab focus.
+  const accessToken = session?.access_token;
 
   useEffect(() => {
-    if (!session) return;
+    if (!accessToken) return;
     let cancelled = false;
     (async () => {
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(accessToken);
       const { data } = await supabase
         .from('applications')
         .select('id, user_id, status, assigned_committee_id, profiles (id, display_name, email, avatar_url)')
@@ -784,7 +788,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
       if (!cancelled) setApplicants((data ?? []) as unknown as ChairApplicant[]);
     })();
     return () => { cancelled = true; };
-  }, [session, conferenceId]);
+  }, [accessToken, conferenceId]);
 
   const currentIds = new Set(committee.chair_user_ids ?? []);
   const visible = (applicants ?? [])
@@ -975,6 +979,12 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
 export default function CommitteesPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so any loader that depends on
+   *  `session` refetches on each of those; the token is a string and only
+   *  changes when it really changes. Use this in loader deps, and keep using
+   *  `session` for anything that needs the rest of it. */
+  const accessToken = session?.access_token;
   const [committees, setCommittees] = useState<Committee[]>([]);
   // Chairs who have been invited but have not accepted. Kept in its own piece
   // of state rather than folded into `committees`, because it comes from a
@@ -1045,10 +1055,10 @@ export default function CommitteesPage() {
   // `silent` skips the page-level loading flag so background refetches never
   // unmount the grid; the seq guard drops stale responses.
   const loadCommittees = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++loadSeq.current;
     if (!opts?.silent) setLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     // The dais is two queries, not one: seated chairs ride along on the
     // committee row (display_chairs), pending invitations live in their own
     // table. Fetched together so a card never renders half a dais.
@@ -1078,20 +1088,29 @@ export default function CommitteesPage() {
 
     setCommittees(rows.map((c, i) => ({ ...c, slotCount: slotCounts[i] })));
     setLoading(false);
-    // `session` belongs in here. Without it the callback is created once, on
-    // whatever session value existed when `conference` resolved — and the
-    // guard on the first line returns early if that was null. Nothing then
-    // re-triggers the effect when auth arrives a moment later, so the grid
-    // sits empty on a cold load with a slow token refresh and only fills after
-    // a manual reload. The `loadSeq` guard above already makes a second,
-    // overlapping run safe, which is why adding the dep is free.
-  }, [conference, session]);
+    // Depends on the TOKEN, not on the session object.
+    //
+    // The bug being fixed: with `[conference]` alone, this callback was built
+    // once against whatever session existed when `conference` resolved. If
+    // auth had not landed yet the guard above returned early, and nothing ever
+    // re-triggered the effect — the grid sat empty until something else forced
+    // a re-render.
+    //
+    // But `session` is the wrong dependency. AuthProvider calls setSession on
+    // EVERY onAuthStateChange event with a fresh object out of the SDK, so its
+    // identity changes on each token refresh (roughly hourly) and on the
+    // events fired around tab focus — each one would refetch every committee
+    // and its slot counts for no reason. `access_token` is a string, so it
+    // compares by value: identical across those events, different only when
+    // the token genuinely changes or when it arrives for the first time, which
+    // is exactly the transition this needs to catch.
+  }, [conference, accessToken]);
 
   useEffect(() => { loadCommittees(); }, [loadCommittees]);
 
   const loadReleaseSettings = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conference || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conferences')
       .select('session_release_same_time, session_release_all_at_once, session_release_advisors_at')
@@ -1102,7 +1121,11 @@ export default function CommitteesPage() {
     setReleaseAllAtOnce(row?.session_release_all_at_once ?? true);
     setReleaseAdvisorsAt(row?.session_release_advisors_at ?? null);
     setReleaseSettingsLoaded(true);
-  }, [conference, session]);
+    // Was `[conference, session]`, which was CORRECT — it loaded properly — but
+    // re-ran on every auth event, refetching these three columns on each token
+    // refresh. Same reasoning as loadCommittees above: the token is the part
+    // that actually matters and the part that is stable.
+  }, [conference, accessToken]);
 
   useEffect(() => { loadReleaseSettings(); }, [loadReleaseSettings]);
 

@@ -530,6 +530,15 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { conference, refreshConferenceQuiet } = useManage();
   const { user, session, profile } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so a loader that depends on
+   *  `session` refetches on each of those — and here that means the seven
+   *  loaders the mount effect below fires together. The token is a string and
+   *  only changes when it really changes, including the first time it arrives:
+   *  the transition an auth-guarded loader must catch or it never runs at all.
+   *  The action handlers below keep using `session`; they run on a click, not
+   *  off a dependency array. */
+  const accessToken = session?.access_token;
   // Deep-links from the dashboard checklist pass ?tab= to land on the right
   // sub-tab (e.g. "Set up your conference page" → conference). Falls back to
   // applications for any missing/unknown value. 'team' is the alias the
@@ -839,9 +848,9 @@ export default function SettingsPage() {
 
   const loadRoleConfigs = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++roleSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('application_role_configs')
       .select('*')
@@ -851,16 +860,20 @@ export default function SettingsPage() {
       setRoleConfigs(data as RoleConfig[]);
       setConfigVersion(v => v + 1);
     }
-  }, [conference]);
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback was built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returned
+    // early with nothing left to re-trigger the effect.
+  }, [conference, accessToken]);
 
   // Count query on applications for (conference_id, role): any role with a
   // submitted-or-further application surfaces a quiet caution in the question
   // builder when its existing questions get reworded.
   const loadRolesWithApplications = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++rolesWithApplicationsSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const results = await Promise.all(ROLES.map(async (role) => {
       const { count } = await supabase
         .from('applications')
@@ -872,13 +885,13 @@ export default function SettingsPage() {
     }));
     if (seq !== rolesWithApplicationsSeq.current) return;
     setRolesWithApplications(new Set(results.filter(r => r.hasApplications).map(r => r.role)));
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const loadOrganizers = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++orgSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conference_organizers')
       .select('id, role, user_id, permissions, public_title, show_on_public, sort_order, profiles(display_name, email, avatar_url)')
@@ -887,21 +900,21 @@ export default function SettingsPage() {
       .order('created_at', { ascending: true });
     if (seq !== orgSeq.current) return;
     if (data) applyOrganizers(() => data as unknown as Organizer[]);
-  }, [conference, applyOrganizers]);
+  }, [conference, accessToken, applyOrganizers]);
 
   const loadPendingInvites = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++invitesSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const rows = await listPendingOrganizerInvites(supabase, conference.id);
     if (seq !== invitesSeq.current) return;
     setPendingInvites(rows);
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const loadLineage = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++lineageSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
 
     // Incoming claims: other conferences claiming this one as their previous edition.
     // Goes through a SECURITY DEFINER RPC because the successor may be private.
@@ -923,12 +936,12 @@ export default function SettingsPage() {
     } else {
       setPredecessorInfo(null);
     }
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const loadPartners = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++partnersSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data: links } = await supabase
       .from('conference_partners')
       .select('id, sort_order, approved, partner_conference_id, company_name, company_logo_url, company_description')
@@ -950,23 +963,23 @@ export default function SettingsPage() {
       for (const c of (confs as PartnerConf[] | null) ?? []) details[c.id] = c;
     }
     setPartners(rows.map(r => ({ ...r, conf: r.partner_conference_id ? details[r.partner_conference_id] ?? null : null })));
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const loadIncomingPartnerClaims = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++incomingSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase.rpc('list_incoming_partner_claims');
     if (seq !== incomingSeq.current) return;
     setIncomingPartnerClaims(
       ((data as IncomingPartnerClaim[] | null) ?? []).filter(c => c.my_conference_id === conference.id)
     );
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const ensureRoleConfigs = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data: existing } = await supabase
       .from('application_role_configs')
       .select('id')
@@ -989,7 +1002,11 @@ export default function SettingsPage() {
     }));
     await supabase.from('application_role_configs').insert(defaults);
     await loadRoleConfigs();
-  }, [conference, loadRoleConfigs]);
+    // accessToken belongs here even though this WRITES: without it a page that
+    // mounts before auth lands seeds nothing and never retries. Re-running it
+    // is harmless — the calling effect only fires while roleConfigs is still
+    // empty, and the select above bails the moment any row already exists.
+  }, [conference, accessToken, loadRoleConfigs]);
 
   useEffect(() => {
     if (!conference) return;
@@ -1049,11 +1066,11 @@ export default function SettingsPage() {
   // Partner typeahead: debounced authed search over public conferences,
   // excluding this conference and anything already linked.
   useEffect(() => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const q = partnerQuery.trim();
     if (q.length < 2) { setPartnerResults([]); return; }
     const timer = setTimeout(async () => {
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(accessToken);
       const { data } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
@@ -1065,7 +1082,9 @@ export default function SettingsPage() {
       setPartnerResults(((data as PartnerConf[] | null) ?? []).filter(c => !linkedIds.has(c.id)));
     }, 300);
     return () => clearTimeout(timer);
-  }, [partnerQuery, conference?.id, session, partners]);
+    // accessToken, not session: a token refresh would otherwise restart this
+    // debounced search mid-typing for no reason.
+  }, [partnerQuery, conference?.id, accessToken, partners]);
 
   useEffect(() => {
     if (!conference || roleConfigs.length > 0) return;

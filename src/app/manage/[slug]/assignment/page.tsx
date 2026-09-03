@@ -3155,6 +3155,12 @@ function ChairBoardPanel({
 export default function AssignmentPage() {
   const { conference, refreshConferenceQuiet } = useManage();
   const { session, loading: authLoading } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus); the token is a string and
+   *  only changes when it really changes, so it is what loader deps key on.
+   *  The action handlers below keep using `session` — they need `session.user`
+   *  and they run on a click, not off a dependency array. */
+  const accessToken = session?.access_token;
   const [accepted, setAccepted] = useState<AcceptedApp[]>([]);
   const [committees, setCommittees] = useState<CommitteeData[]>([]);
   const [chairApps, setChairApps] = useState<ChairApp[]>([]);
@@ -3210,12 +3216,12 @@ export default function AssignmentPage() {
 
   const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++loadSeq.current;
     // silent: background refresh, never flips the page-level loading flag,
     // so the board stays mounted and interactive while fresh data arrives.
     if (!opts?.silent) setLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
 
     const [appRes, commRes, chairRes, inviteRes, socRes, socAppsRes] = await Promise.all([
       supabase
@@ -3326,7 +3332,13 @@ export default function AssignmentPage() {
     } else {
       setHistory({});
     }
-  }, [conference, session?.access_token]);
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback is built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returns
+    // early with nothing left to re-trigger the effect. The session object is
+    // the wrong dep — its identity changes on every auth event, which would
+    // reload the whole board on each token refresh.
+  }, [conference, accessToken]);
 
   useEffect(() => {
     if (authLoading) return;

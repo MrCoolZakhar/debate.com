@@ -1718,6 +1718,12 @@ function CommitteeFilter({
 export default function ApplicationsPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so any loader that depends on
+   *  `session` refetches on each of those; the token is a string and only
+   *  changes when it really changes. Use this in loader guards and deps, and
+   *  keep using `session` for anything that needs the rest of it. */
+  const accessToken = session?.access_token;
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlStatus = searchParams.get('status');
@@ -1865,10 +1871,10 @@ export default function ApplicationsPage() {
 
   const loadApplications = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++loadSeq.current;
     if (!opts?.silent) setLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     // Materialize this conference's invoices first, so the gating query right
     // below is guaranteed to see any app-fee invoice a submitted application
     // now owes (same sync-before-read pattern as financials/invoices and
@@ -1944,7 +1950,13 @@ export default function ApplicationsPage() {
     } else {
       setCvCounts({});
     }
-  }, [conference, session?.access_token]);
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback is built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returns
+    // early with nothing left to re-trigger the effect. `session` itself is
+    // the wrong dep — its identity changes on every auth event — so the string
+    // token is what belongs here.
+  }, [conference, accessToken]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
@@ -1963,8 +1975,8 @@ export default function ApplicationsPage() {
   //
   // If this query fails the drafts section simply stays empty.
   const loadDrafts = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conference || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('application_draft_status')
       .select('id, user_id, role, updated_at, reminders_sent, last_reminder_at, reminder_opt_out, display_name, email, avatar_url, nationality')
@@ -1972,7 +1984,7 @@ export default function ApplicationsPage() {
       .order('updated_at', { ascending: false });
 
     setDrafts((data ?? []) as unknown as DraftRow[]);
-  }, [conference, session?.access_token]);
+  }, [conference, accessToken]);
 
   useEffect(() => { loadDrafts(); }, [loadDrafts]);
 
@@ -2085,12 +2097,12 @@ export default function ApplicationsPage() {
   useEffect(() => {
     const app = applications.find(a => a.id === reviewId);
     const uid = app?.user_id;
-    if (!reviewId || !uid || !session) { setPreviewCv(null); return; }
+    if (!reviewId || !uid || !accessToken) { setPreviewCv(null); return; }
     let cancelled = false;
     setPreviewCv(null);
     setPreviewCvLoading(true);
     (async () => {
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(accessToken);
       const { data } = await supabase
         .from('mun_cv_entries')
         .select('id, entry_type, conference_name, committee, allocation, awards, award, logo_url, event_date, description')
@@ -2105,18 +2117,21 @@ export default function ApplicationsPage() {
       setPreviewCvLoading(false);
     })();
     return () => { cancelled = true; };
+    // `applications` is deliberately not a dep — this only needs the user_id
+    // behind the currently reviewed row, and re-running on every list refetch
+    // would re-fire the CV query for no reason.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewId, session?.access_token]);
+  }, [reviewId, accessToken]);
 
   // Fetch the applicant's financial_aid_requests row on demand — surfaces aid
   // in the review modal so an organiser doesn't have to switch to the
   // Financial Aid tab. Read-only here; approve/deny still lives there.
   useEffect(() => {
-    if (!reviewId || !session) { setPreviewAid(null); return; }
+    if (!reviewId || !accessToken) { setPreviewAid(null); return; }
     let cancelled = false;
     setPreviewAid(null);
     (async () => {
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(accessToken);
       const { data } = await supabase
         .from('financial_aid_requests')
         .select('id, statement, requested_amount, status, granted_amount, created_at')
@@ -2128,17 +2143,17 @@ export default function ApplicationsPage() {
       setPreviewAid((data as PreviewAidRequest | null) ?? null);
     })();
     return () => { cancelled = true; };
-  }, [reviewId, session?.access_token]);
+  }, [reviewId, accessToken]);
 
   // ── Quick-allocate committee load (#7) ──────────────────────────────────────
   // Lazy, once: fetched the first time an organiser opens a Plus popover. Pulls
   // each committee's country seats plus the country_codes already allocated, so
   // the picker only ever offers genuinely open seats.
   const loadAllocCommittees = useCallback(async () => {
-    if (!conference || !session || allocLoadedRef.current) return;
+    if (!conference || !accessToken || allocLoadedRef.current) return;
     allocLoadedRef.current = true;
     setAllocLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conference_committees')
       .select(`
@@ -2163,7 +2178,7 @@ export default function ApplicationsPage() {
     }));
     setAllocCommittees(mapped);
     setAllocLoading(false);
-  }, [conference, session?.access_token]);
+  }, [conference, accessToken]);
 
   // Optimistic inline allocation: flip the row to 'assigned' with the chosen
   // committee/country immediately, mark that seat taken locally so a second

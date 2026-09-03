@@ -161,6 +161,16 @@ type Tab = 'import' | 'imported';
 export default function ImportPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  /** The two stable primitives the loaders below key on. AuthProvider replaces
+   *  the session OBJECT on every auth event (token refresh, tab focus), so a
+   *  loader depending on `session` refetches on each of those; the token is a
+   *  string and only changes when it really changes — including the first time
+   *  it arrives, which is the transition an auth-guarded loader has to catch.
+   *  `conference` is likewise an object a background refresh can swap for an
+   *  equal-but-new one, so the id is what belongs in a dep array. The action
+   *  handlers below keep using `session`/`conference`; they run on a click. */
+  const accessToken = session?.access_token;
+  const conferenceId = conference?.id;
   const { confirm, modal: confirmModal } = useConfirmModal();
   const searchParams = useSearchParams();
 
@@ -192,16 +202,16 @@ export default function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadUnclaimedCount = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conferenceId || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { count } = await supabase
       .from('applications')
       .select('id', { count: 'exact', head: true })
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .is('user_id', null)
       .not('invited_email', 'is', null);
     setUnclaimedCount(count ?? 0);
-  }, [conference?.id, session?.access_token]);
+  }, [conferenceId, accessToken]);
 
   useEffect(() => { loadUnclaimedCount(); }, [loadUnclaimedCount]);
 
@@ -209,12 +219,12 @@ export default function ImportPage() {
   // conference_allocations row, the state pre-amendment imports could leave
   // behind. Re-checked after every repair run so the banner clears itself.
   const loadOrphanAllocations = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conferenceId || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data: candidates } = await supabase
       .from('applications')
       .select('id, assigned_committee_id, assigned_country_code, assigned_country_name')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .is('user_id', null)
       .not('assigned_committee_id', 'is', null);
     const rows = (candidates ?? []) as OrphanAllocationRow[];
@@ -222,11 +232,11 @@ export default function ImportPage() {
     const { data: allocs } = await supabase
       .from('conference_allocations')
       .select('application_id')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .in('application_id', rows.map(r => r.id));
     const covered = new Set(((allocs ?? []) as { application_id: string | null }[]).map(a => a.application_id));
     setOrphanRows(rows.filter(r => !covered.has(r.id)));
-  }, [conference?.id, session?.access_token]);
+  }, [conferenceId, accessToken]);
 
   useEffect(() => { loadOrphanAllocations(); }, [loadOrphanAllocations]);
 
@@ -1097,9 +1107,14 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const autoFixedRef = useRef(false);
 
+  // accessToken, not the session object: the token is a string, so this only
+  // re-runs when auth first arrives or genuinely rotates, not on the churn
+  // AuthProvider produces on every auth event.
+  const accessToken = session?.access_token;
+
   const load = useCallback(async () => {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('applications')
       .select('id, invited_name, invited_email, role, status, user_id')
@@ -1108,7 +1123,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
       .order('user_id', { ascending: true, nullsFirst: true })
       .order('invited_name', { ascending: true });
     setRows((data ?? []) as ImportedDelegateRow[]);
-  }, [conference.id, session?.access_token]);
+  }, [conference.id, accessToken]);
 
   useEffect(() => { load(); }, [load]);
 

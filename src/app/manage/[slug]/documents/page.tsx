@@ -363,6 +363,14 @@ function SectionIntro({ title, description }: { title: string; description: stri
 export default function DocumentsPage() {
   const { conference } = useManage();
   const { user, session } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so any loader that depends on
+   *  `session` refetches on each of those; the token is a string and only
+   *  changes when it really changes — including the first time it arrives,
+   *  which is the transition a loader guarded on auth has to catch. The action
+   *  handlers below keep using `session`; they run on a click, not off a
+   *  dependency array. */
+  const accessToken = session?.access_token;
 
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [committees, setCommittees] = useState<CommitteeTab[]>([]);
@@ -415,8 +423,8 @@ export default function DocumentsPage() {
 
   const loadCommittees = useCallback(async () => {
     if (!conference) return [];
-    if (!session) return [];
-    const supabase = getAuthedClient(session.access_token);
+    if (!accessToken) return [];
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conference_committees')
       .select('id, name, abbreviation, logo_url, committee_type, position_paper_deadline, pp_submissions_enabled, study_guides_publish_at, notification_email')
@@ -426,7 +434,12 @@ export default function DocumentsPage() {
     setCommittees(rows);
     setLoading(false);
     return rows;
-  }, [conference, session?.access_token]);
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback is built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returns
+    // early with nothing left to re-trigger the effect. The session object is
+    // the wrong dep — its identity changes on every auth event.
+  }, [conference, accessToken]);
 
   useEffect(() => {
     loadCommittees().then(rows => {
@@ -438,8 +451,8 @@ export default function DocumentsPage() {
   }, [loadCommittees]);
 
   const loadConferenceSettings = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conference || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conferences')
       .select('pp_deadline_per_committee, position_paper_deadline, sg_publish_per_committee, study_guides_publish_at')
@@ -454,15 +467,15 @@ export default function DocumentsPage() {
     setSgPerCommittee(row?.sg_publish_per_committee ?? false);
     setSgGlobalPublishAt(row?.study_guides_publish_at ?? null);
     setSettingsLoaded(true);
-  }, [conference, session?.access_token]);
+  }, [conference, accessToken]);
 
   useEffect(() => { loadConferenceSettings(); }, [loadConferenceSettings]);
 
   const loadStudyGuides = useCallback(async () => {
     if (!selectedCommitteeId) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++guideReqSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('study_guides')
       .select('id, title, file_url, file_name, file_size_bytes, is_published, published_at, created_at')
@@ -470,13 +483,16 @@ export default function DocumentsPage() {
       .order('created_at', { ascending: false });
     if (seq !== guideReqSeq.current) return; // stale response, a newer load superseded this one
     setStudyGuides((data ?? []) as StudyGuide[]);
-  }, [selectedCommitteeId]);
+    // accessToken, not session: the token is a string, so this re-runs when
+    // auth first arrives (or genuinely rotates) and not on the session-object
+    // churn AuthProvider produces on every auth event.
+  }, [selectedCommitteeId, accessToken]);
 
   const loadPapers = useCallback(async () => {
     if (!selectedCommitteeId) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++paperReqSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const [{ data: allocData, error: allocError }, { data: paperData, error: paperError }] = await Promise.all([
       supabase
         .from('conference_allocations')
@@ -501,7 +517,8 @@ export default function DocumentsPage() {
     const paperRows = (paperData ?? []) as RosterPaper[];
     setPapers(paperRows);
     setMessagesByPaper(await fetchMessageStubsForPapers(supabase, paperRows.map(p => p.id)));
-  }, [selectedCommitteeId]);
+    // accessToken, not session — see loadStudyGuides above.
+  }, [selectedCommitteeId, accessToken]);
 
   useEffect(() => {
     loadStudyGuides();

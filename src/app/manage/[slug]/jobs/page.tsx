@@ -118,6 +118,12 @@ function ApplicationsPanel({
   onStatusChange: () => void;
 }) {
   const { session } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so depending on it would
+   *  refetch this panel on each of those; the token is a string and only
+   *  changes when it really changes — including the first time it arrives,
+   *  which is what a panel mounted before auth landed has to catch. */
+  const accessToken = session?.access_token;
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [panelError, setPanelError] = useState('');
@@ -125,8 +131,8 @@ function ApplicationsPanel({
   const [busyAppIds, setBusyAppIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     supabase
       .from('job_applications')
       .select('id, cover_note, status, submitted_at, profiles (id, display_name, email, avatar_url)')
@@ -136,7 +142,7 @@ function ApplicationsPanel({
         setApps((data as unknown as Application[]) ?? []);
         setLoading(false);
       });
-  }, [postingId]);
+  }, [postingId, accessToken]);
 
   function handleStatus(appId: string, newStatus: string) {
     if (!session || busyAppIds.has(appId)) return;
@@ -681,6 +687,10 @@ type CategoryTab = typeof CATEGORIES[number];
 export default function JobBoardPage() {
   const { conference } = useManage();
   const { user, session } = useAuth();
+  /** The stable half of `session` — see ApplicationsPanel above. The action
+   *  handlers below keep using `session`; they run on a click, not off a
+   *  dependency array. */
+  const accessToken = session?.access_token;
 
   const [postings, setPostings] = useState<JobPosting[]>([]);
   const [appCounts, setAppCounts] = useState<Record<string, number>>({});
@@ -712,9 +722,9 @@ export default function JobBoardPage() {
 
   const fetchAll = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++fetchSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
 
     const [{ data: postingsData }, { data: committeesData }] = await Promise.all([
       supabase
@@ -755,7 +765,14 @@ export default function JobBoardPage() {
     }
 
     setLoading(false);
-  }, [conference]);
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback was built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returned
+    // early with nothing left to re-trigger the effect — the board sat empty
+    // until something else forced a re-render. The session object is the wrong
+    // dep: its identity changes on every auth event, which would refetch every
+    // posting and its per-posting count on each token refresh.
+  }, [conference, accessToken]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 

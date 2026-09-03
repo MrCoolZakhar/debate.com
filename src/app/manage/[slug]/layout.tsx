@@ -591,7 +591,16 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const slug = params.slug;
 
   const { user, session, profile, signOut, loading: authLoading } = useAuth();
+  /** The two stable primitives the inbox badge keys on. AuthProvider replaces
+   *  the session OBJECT on every auth event (token refresh, tab focus), so
+   *  depending on it would refetch the badge on each of those; the token is a
+   *  string and only changes when it really changes — including the first time
+   *  it arrives, which is the transition an auth-guarded loader has to catch.
+   *  `conference` is likewise an object a background refresh can swap for an
+   *  equal-but-new one, so the id is what belongs in the dep array. */
+  const accessToken = session?.access_token;
   const [conference, setConference] = useState<Conference | null>(null);
+  const conferenceId = conference?.id;
   const [loadingConf, setLoadingConf] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
@@ -610,12 +619,12 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   // messages. seen_by_organizer is a separate legacy flag (still read by
   // DelegationsView's unseen-society tracking) and is NOT this definition.
   const loadInboxBadge = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conferenceId || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data: reqData } = await supabase
       .from('conference_requests')
       .select('id, organizer_seen_at')
-      .eq('conference_id', conference.id);
+      .eq('conference_id', conferenceId);
     const requests = (reqData ?? []) as { id: string; organizer_seen_at: string | null }[];
     if (requests.length === 0) { setInboxBadge(0); return; }
 
@@ -630,7 +639,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       messages.some(m => m.request_id === r.id && (!r.organizer_seen_at || m.created_at > r.organizer_seen_at))
     ).length;
     setInboxBadge(unreadCount);
-  }, [conference?.id, session?.access_token]);
+  }, [conferenceId, accessToken]);
 
   useEffect(() => { loadInboxBadge(); }, [loadInboxBadge]);
 
