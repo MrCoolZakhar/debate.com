@@ -20,7 +20,7 @@
 import { hasConcluded } from '@/lib/conferenceDates';
 import { supabase } from '@/lib/supabase';
 import { versionToken } from '@/lib/ogVersion';
-import { CardShell, renderCard } from '../../_shared/card';
+import { CardShell, type CardChip, renderCard } from '../../_shared/card';
 
 export const runtime = 'nodejs';
 
@@ -75,9 +75,15 @@ export async function GET(
   // No counts is not a failure worth showing: the card falls back to the plain
   // wordmark line rather than printing "0 conferences", which would be both
   // wrong and actively off-putting.
-  const footer = counts
-    ? `${plural(counts.conferences, 'conference', 'conferences')} · ${plural(counts.countries, 'country', 'countries')}`
-    : 'gavelling.com';
+  //
+  // One chip per count, matching the conference card's date/place split — two
+  // separate facts read as two facts, where a joined line reads as a caption.
+  const chips: CardChip[] = counts
+    ? [
+        { label: plural(counts.conferences, 'conference', 'conferences') },
+        { label: plural(counts.countries, 'country', 'countries') },
+      ]
+    : [{ label: 'gavelling.com' }];
 
   const res = await renderCard(
     <CardShell
@@ -89,7 +95,7 @@ export async function GET(
       // for; the brand row says whose it is.
       headline="Find your next MUN"
       subhead="Conferences, applications and committee software — all in one place."
-      footer={footer}
+      chips={chips}
     />,
   );
 

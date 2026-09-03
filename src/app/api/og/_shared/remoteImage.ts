@@ -23,14 +23,14 @@
  *
  * SHARP IS OPTIONAL AT RUNTIME, DELIBERATELY
  *
- * `sharp` is currently a devDependency. Vercel installs devDependencies at
- * build time and Next's tracer pulls the native binary into the function, so
- * this works today — but a dependency-pruning change could take it away
- * without touching this file. Every entry point below therefore degrades to
- * "no image" rather than throwing: a card with no banner is a good card on a
- * flat forest field, and a card that 500s is a bare URL in someone's group
- * chat. Promoting sharp to a real `dependency` is the right hardening step.
+ * `sharp` is a real `dependency` (it was a devDependency, which happened to
+ * work only because Vercel installs devDeps at build time). Every entry point
+ * below still degrades to "no image" rather than throwing, because a card with
+ * no banner is a good card on a flat forest field, and a card that 500s is a
+ * bare URL in someone's group chat.
  */
+
+import { getCountryByName, getFlagUrl } from '@/lib/countries';
 
 /** Never spend more than this on one organiser asset. Two of them plus the
  *  render still has to finish inside a serverless invocation. */
@@ -46,7 +46,13 @@ const MAX_SOURCE_BYTES = 16 * 1024 * 1024;
  *  turns the card renderer into an SSRF proxy that will fetch an arbitrary URL
  *  (including internal addresses) on request. Storage URLs are the only thing
  *  the uploader ever writes, so the restriction costs nothing. */
-const ALLOWED_ASSET_HOSTS = new Set(['luruhkwrgisytejswlas.supabase.co']);
+const ALLOWED_ASSET_HOSTS = new Set([
+  'luruhkwrgisytejswlas.supabase.co',
+  // Country flags (twemoji SVGs), for the place chip. Not organiser-controlled:
+  // the only thing we ever build against this host is a two-letter ISO code
+  // resolved from our own country table, so no row can steer a fetch here.
+  'cdn.jsdelivr.net',
+]);
 
 function isAllowedAssetUrl(raw: string): boolean {
   try {
@@ -234,4 +240,59 @@ export async function encodeCard(
   } catch {
     return { body: raw, contentType: 'image/png' };
   }
+}
+
+// ── Country flags ────────────────────────────────────────────────────────────
+
+/**
+ * The flag for a country NAME, as a small PNG data URI.
+ *
+ * Why not the flag emoji: a flag emoji is a pair of regional-indicator
+ * codepoints, and Outfit has no glyph for them. Satori would render either the
+ * bare letters ("IN") or tofu — which is worse than no flag at all. Why not an
+ * SVG `<img>`: satori's image handling is raster-oriented and an SVG source is
+ * the same gamble as the WebP banners were. So it is fetched and rasterised,
+ * like every other remote asset on this card.
+ *
+ * Cached per country code at module scope. A lambda serving one conference's
+ * card repeatedly pays the fetch once; the miss costs one small request against
+ * a CDN we already trust for nothing else.
+ *
+ * `null` for a country we cannot resolve — a made-up place, a crisis committee's
+ * fictional state, a typo. The place chip then simply carries no flag, which is
+ * the correct outcome rather than a fallback globe nobody asked for.
+ */
+const flagCache = new Map<string, string | null>();
+
+export async function loadFlagDataUri(countryName: string | null | undefined): Promise<string | null> {
+  const name = (countryName ?? '').trim();
+  if (!name) return null;
+
+  const country = getCountryByName(name);
+  if (!country) return null;
+  const code = country.code.toUpperCase();
+
+  const cached = flagCache.get(code);
+  if (cached !== undefined) return cached;
+
+  const result = await (async (): Promise<string | null> => {
+    const sharp = await loadSharp();
+    if (!sharp) return null;
+    const bytes = await fetchBytes(getFlagUrl(code));
+    if (!bytes) return null;
+    try {
+      // Drawn at 30px; rasterised at 60 so it stays crisp and still costs
+      // roughly a kilobyte inside the finished JPEG.
+      const png = await sharp(bytes, { density: 300 })
+        .resize({ height: 60, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
+      return `data:image/png;base64,${png.toString('base64')}`;
+    } catch {
+      return null;
+    }
+  })();
+
+  flagCache.set(code, result);
+  return result;
 }

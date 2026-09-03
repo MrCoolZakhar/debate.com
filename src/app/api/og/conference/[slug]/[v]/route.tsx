@@ -31,11 +31,12 @@ import {
   CARD_HEIGHT,
   CARD_WIDTH,
   CardShell,
+  type CardChip,
   clampToTwoLines,
   fallbackCard,
   renderCard,
 } from '../../../_shared/card';
-import { loadBannerDataUri, loadLogo } from '../../../_shared/remoteImage';
+import { loadBannerDataUri, loadFlagDataUri, loadLogo } from '../../../_shared/remoteImage';
 
 export const runtime = 'nodejs';
 
@@ -106,9 +107,19 @@ export async function GET(
   const { primary, secondary } = conferenceLabels(conf);
   const headline = primary || 'Model UN Conference';
 
+  // Date and place are two SEPARATE chips, not one "date · place" line. Each is
+  // a distinct question a delegate has ("when is it", "where is it"), and a
+  // joined line answers neither at a glance.
   const dates = formatConferenceDates(conf.start_date, conf.end_date, { fallback: '' });
   const place = [conf.city?.trim(), conf.country?.trim()].filter(Boolean).join(', ');
-  const footer = [dates, place].filter(Boolean).join(' · ') || null;
+  // Resolved from our own country table, so an unrecognisable "country" (a
+  // crisis committee's invented state, a typo) simply yields no flag.
+  const flag = place ? await loadFlagDataUri(conf.country) : null;
+
+  const chips: CardChip[] = [
+    ...(dates ? [{ label: dates }] : []),
+    ...(place ? [{ label: place, flag }] : []),
+  ];
 
   const res = await renderCard(
     <CardShell
@@ -118,7 +129,7 @@ export async function GET(
       // 30px type in an 820px column; see `clampToTwoLines` for why this is a
       // character budget rather than a CSS line clamp.
       subhead={secondary ? clampToTwoLines(secondary, 30, 820) : null}
-      footer={footer}
+      chips={chips}
     />,
   );
 

@@ -129,6 +129,10 @@ export function clampToTwoLines(text: string, fontSize: number, width: number): 
   return `${stem.trimEnd()}…`;
 }
 
+/** The conference logo disc. 25% larger than it began: at thumbnail size in a
+ *  chat list the badge is the first thing recognised, before any word is read. */
+const LOGO_CHIP = 145;
+
 // ── Layout pieces ────────────────────────────────────────────────────────────
 
 /** The logo chip: the mark on a plate, so a transparent PNG has something to
@@ -142,31 +146,44 @@ function LogoChip({ src, plate }: { src: string; plate: 'ivory' | 'forest' }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: 116,
-        height: 116,
-        borderRadius: 28,
-        padding: 14,
+        width: LOGO_CHIP,
+        height: LOGO_CHIP,
+        // A disc, not a rounded square — the same shape a conference logo takes
+        // everywhere else in the product (LogoDisc / NeuIconDisc), and the same
+        // shape mymun gives a conference badge on its newsletter artwork.
+        borderRadius: 999,
+        padding: 22,
         backgroundColor: dark ? 'rgba(12,26,19,0.92)' : IVORY,
         border: dark ? `2px solid ${GOLD}` : '2px solid rgba(255,255,255,0.9)',
         boxShadow: '0 18px 44px rgba(6,16,11,0.55)',
       }}
     >
       {/* `contain`, never `cover`: a wide lockup must stay a wide lockup.
-          Stretching it into the square is the specific ugliness we avoid. */}
-      <img src={src} width={88} height={88} style={{ objectFit: 'contain' }} alt="" />
+          Stretching it to fill the disc is the specific ugliness we avoid.
+          100px inside a 145px disc is the inscribed square (145 / sqrt2 ~= 102),
+          so square logo art lands wholly inside the circle and none of its
+          corners are clipped by the radius. LogoDisc in the app pads only 7%
+          and does let corners clip; a share card is less forgiving, because a
+          clipped logo there reads as a rendering fault rather than a crop. */}
+      <img src={src} width={100} height={100} style={{ objectFit: 'contain' }} alt="" />
     </div>
   );
 }
 
-/** The dates · place pill under the name. */
-function FooterChip({ label }: { label: string }) {
+/** One fact under the name — a date, or a place with its flag.
+ *
+ *  Deliberately one chip per fact rather than a single "date · place" run-on.
+ *  A joined line is scanned as decoration; two discrete pills are scanned as
+ *  two answers, which is the same reason mymun's newsletter breaks Where? and
+ *  When? into separate labelled fields instead of one sentence. */
+function Chip({ label, flag }: { label: string; flag?: string | null }) {
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
         borderRadius: 999,
-        padding: '13px 28px',
+        padding: flag ? '12px 28px 12px 20px' : '13px 28px',
         backgroundColor: 'rgba(238,217,138,0.13)',
         border: '1px solid rgba(238,217,138,0.42)',
         color: GOLD,
@@ -175,6 +192,15 @@ function FooterChip({ label }: { label: string }) {
         letterSpacing: 0.2,
       }}
     >
+      {flag ? (
+        <img
+          src={flag}
+          width={30}
+          height={30}
+          style={{ objectFit: 'contain', marginRight: 13 }}
+          alt=""
+        />
+      ) : null}
       {label}
     </div>
   );
@@ -197,14 +223,16 @@ function BrandRow() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 48,
-            height: 48,
-            borderRadius: 14,
+            width: 56,
+            height: 56,
+            // A disc, matching LogoChip above and the mark's treatment
+            // everywhere else in the product.
+            borderRadius: 999,
             backgroundColor: IVORY,
-            marginRight: 13,
+            marginRight: 14,
           }}
         >
-          <img src={MARK_DATA_URI} width={38} height={38} style={{ objectFit: 'contain' }} alt="" />
+          <img src={MARK_DATA_URI} width={42} height={42} style={{ objectFit: 'contain' }} alt="" />
         </div>
       ) : null}
       <div
@@ -212,12 +240,14 @@ function BrandRow() {
           display: 'flex',
           color: IVORY,
           opacity: 0.82,
-          fontSize: 27,
-          fontWeight: 700,
-          letterSpacing: 0.4,
+          fontSize: 25,
+          fontWeight: 800,
+          // Caps. At this size, letterspacing is what stops set capitals
+          // reading as a shout instead of a wordmark.
+          letterSpacing: 2.4,
         }}
       >
-        Gavelling
+        GAVELLING
       </div>
     </div>
   );
@@ -236,8 +266,15 @@ export interface CardShellProps {
   /** Secondary line, already clamped. `null` when it would repeat the
    *  headline. */
   subhead: string | null;
-  /** The dates · place pill. `null` when we know neither. */
-  footer: string | null;
+  /** The facts under the name, one pill each — dates, then place with its
+   *  flag. Empty when we know none of them. */
+  chips: CardChip[];
+}
+
+export interface CardChip {
+  label: string;
+  /** Small PNG data URI. Place chips only, and only for a country we resolved. */
+  flag?: string | null;
 }
 
 /**
@@ -247,7 +284,7 @@ export interface CardShellProps {
  * only the field behind it changes. That is what stops the no-assets case from
  * looking like a broken version of the rich one.
  */
-export function CardShell({ backdrop, logo, headline, subhead, footer }: CardShellProps) {
+export function CardShell({ backdrop, logo, headline, subhead, chips }: CardShellProps) {
   const headlineSize = acronymFontSize(headline);
 
   return (
@@ -349,7 +386,7 @@ export function CardShell({ backdrop, logo, headline, subhead, footer }: CardShe
       >
         {/* Fixed-height slot, occupied or not, so the block below lands in the
             same place on every card in the set. */}
-        <div style={{ display: 'flex', height: 116 }}>
+        <div style={{ display: 'flex', height: LOGO_CHIP }}>
           {logo ? <LogoChip src={logo.dataUri} plate={logo.plate} /> : null}
         </div>
 
@@ -394,7 +431,13 @@ export function CardShell({ backdrop, logo, headline, subhead, footer }: CardShe
               marginTop: 30,
             }}
           >
-            {footer ? <FooterChip label={footer} /> : <div style={{ display: 'flex' }} />}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {chips.map((c, i) => (
+                <div key={c.label} style={{ display: 'flex', marginLeft: i === 0 ? 0 : 14 }}>
+                  <Chip label={c.label} flag={c.flag} />
+                </div>
+              ))}
+            </div>
             <BrandRow />
           </div>
         </div>
@@ -451,7 +494,7 @@ export function fallbackCard(): React.ReactElement {
       logo={null}
       headline="Gavelling"
       subhead="Model UN conferences, applications and committee software — in one place."
-      footer="gavelling.com"
+      chips={[{ label: 'gavelling.com' }]}
     />
   );
 }
