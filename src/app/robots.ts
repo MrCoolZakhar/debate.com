@@ -22,6 +22,9 @@ export default function robots(): MetadataRoute.Robots {
           // bare path, so nothing of value is lost.
           '/join?',
           '/create?',
+          // Token-bearing, and acts on GET. Must never be crawled: a bot
+          // following it would unsubscribe a real person.
+          '/unsubscribe',
           // Conferences private surfaces (auth-gated dashboards & flows)
           '/manage/',
           '/admin',
