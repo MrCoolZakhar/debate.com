@@ -502,7 +502,8 @@ const REVIEW_CSS = `
 .appRevMain { grid-column: 2; min-width: 0; }
 .appRevRail { grid-column: 1; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 /* Nothing to put in the rail (an invited row has no profile, and a faculty
-   advisor has no preferences) — don't reserve a column for a void. */
+   advisor or a chair with preferences off has none of the things this rail
+   shows). Don't reserve a column for a void. */
 .appRevGrid.appRevNoRail { grid-template-columns: minmax(0, 1fr); }
 .appRevGrid.appRevNoRail .appRevMain { grid-column: 1; }
 @media (max-width: 900px) {
@@ -3767,6 +3768,9 @@ export default function ApplicationsPage() {
             const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
             const email = app.profiles?.email ?? app.invited_email ?? '';
             const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
+            // A chair may rank committees (preference_mode 'committees_only'),
+            // never a country — allocation stays isDelegate-only below.
+            const showsPreferences = isDelegate || app.role === 'chair';
             const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
 
             // No recorded level → treat as the lowest tier "beginner" (#11).
@@ -4008,7 +4012,7 @@ export default function ApplicationsPage() {
                         </div>
                       </div>
                       );
-                    })() : isDelegate && prefs.length > 0 ? (
+                    })() : showsPreferences && prefs.length > 0 ? (
                       // Preferences and the allocate control now sit SIDE BY
                       // SIDE, not stacked: the emblem + the three ranked
                       // preferences take the pane, and ALLOCATE is the rail
@@ -4016,7 +4020,9 @@ export default function ApplicationsPage() {
                       // of making it are read together. Below `sm` (a 375px
                       // phone) there is no room for a rail, so it wraps
                       // underneath at full width. All existing allocation
-                      // logic/handlers unchanged.
+                      // logic/handlers unchanged. canAllocate is isDelegate-only,
+                      // so a chair here never gets an ALLOCATE control, only a
+                      // read-only look at their ranked committees.
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3" style={{ minHeight: MID_BLOCK_H }}>
                         <div className="flex items-center gap-4 min-w-0 flex-1">
                           <LogoDisc
@@ -4027,19 +4033,19 @@ export default function ApplicationsPage() {
                           />
                           <div className="min-w-0 flex-1">
                             <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase', marginBottom: 4 }}>
-                              Preferences
+                              {app.role === 'chair' ? 'Committee preferences' : 'Preferences'}
                             </p>
                             <div className="flex flex-col gap-1">
                               {prefs.slice(0, 3).map(p => (
                                 <span
                                   key={p.preference_order}
                                   className="inline-flex items-center gap-1.5 w-fit max-w-full"
-                                  title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}
+                                  title={app.role === 'chair' ? (p.conference_committees?.name ?? 'Unknown') : `${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}
                                   style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
                                 >
                                   <span style={{ color: NEU.deepGold, fontWeight: 900 }}>{p.preference_order}.</span>
                                   <span className="truncate">{committeeAbbr(p.conference_committees)}</span>
-                                  <CountryFlag name={p.country_name} code={p.country_code} size={15} />
+                                  {app.role !== 'chair' && <CountryFlag name={p.country_name} code={p.country_code} size={15} />}
                                 </span>
                               ))}
                             </div>
@@ -4662,6 +4668,10 @@ export default function ApplicationsPage() {
         const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
         const email = app.profiles?.email ?? app.invited_email ?? '';
         const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
+        // A chair may rank committees (preference_mode 'committees_only'),
+        // never a country — allocation elsewhere in this pane stays
+        // isDelegate-only.
+        const showsPreferences = isDelegate || app.role === 'chair';
         const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
         // No recorded level → treat as "beginner" (#11).
         const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
@@ -4849,7 +4859,7 @@ export default function ApplicationsPage() {
         };
 
         const hasContextRail = !!app.profiles?.nationality
-          || (isDelegate && prefs.length > 0)
+          || (showsPreferences && prefs.length > 0)
           || ((app.status === 'assigned' || app.status === 'checked-in') && !!app.assigned_country_name)
           || (app.status === 'checked-in' && !!app.checked_in_at)
           // Always shown for chair/secretariat, even with zero entries: the
@@ -5056,19 +5066,23 @@ export default function ApplicationsPage() {
                               </div>
                             )
                           ))}
-                          {isDelegate && prefs.length > 0 && railRow(MapPin, 'Preferences', (
+                          {showsPreferences && prefs.length > 0 && railRow(MapPin, app.role === 'chair' ? 'Committee preferences' : 'Preferences', (
                             <div className="flex flex-col gap-1.5">
                               {prefs.map(p => (
                                 <span
                                   key={p.preference_order}
                                   className="inline-flex items-center gap-2"
-                                  title={`${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
+                                  title={app.role === 'chair' ? (p.conference_committees?.name ?? 'Unknown') : `${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
                                   style={{ fontVariantNumeric: 'tabular-nums' }}
                                 >
                                   <span style={{ color: NEU.inkSoft, fontWeight: 800, minWidth: 14 }}>{p.preference_order}.</span>
                                   <span style={{ fontWeight: 700 }}>{committeeAbbr(p.conference_committees)}</span>
-                                  <CountryFlag name={p.country_name} code={p.country_code} size={14} />
-                                  <span style={{ color: NEU.inkSoft, fontWeight: 500 }}>{p.country_name}</span>
+                                  {app.role !== 'chair' && (
+                                    <>
+                                      <CountryFlag name={p.country_name} code={p.country_code} size={14} />
+                                      <span style={{ color: NEU.inkSoft, fontWeight: 500 }}>{p.country_name}</span>
+                                    </>
+                                  )}
                                 </span>
                               ))}
                             </div>
