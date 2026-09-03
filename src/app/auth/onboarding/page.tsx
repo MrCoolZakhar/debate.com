@@ -12,12 +12,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, Pencil } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { createAuthClient } from '@/lib/supabase-auth';
 import { WizardShell, TwoTabPick, CardSelect, type WizardOption } from '@/components/wizard';
-import { CVEntryModal, ENTRY_TYPE_MAP, type CVEntry } from '@/components/CVEntryModal';
-import { LogoDisc } from '@/components/LogoDisc';
-import { monogramFor } from '@/app/account/accountUi';
+import { CVEntryModal, type CVEntry } from '@/components/CVEntryModal';
+import { CVSummaryRow } from '@/components/CVSummaryRow';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 import { FlagImg } from '@/components/FlagImg';
 import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
@@ -423,7 +422,7 @@ export default function OnboardingPage() {
           >
             <div className="flex flex-col gap-3">
               {cvEntries.map((entry) => (
-                <ConfSummaryRow key={entry.id} entry={entry} onEdit={() => openEditConf(entry)} />
+                <CVSummaryRow key={entry.id} entry={entry} onEdit={() => openEditConf(entry)} />
               ))}
 
               <button
@@ -477,73 +476,6 @@ export default function OnboardingPage() {
         />
       )}
     </div>
-  );
-}
-
-// ── Added-conference summary row (mirrors the profile CV timeline card) ───────
-// A compact read-back of a saved mun_cv_entries row: conference logo, name, and
-// a role chip. Click to reopen the shared CVEntryModal and edit / delete it.
-
-function ConfSummaryRow({ entry, onEdit }: { entry: CVEntry; onEdit: () => void }) {
-  const type = ENTRY_TYPE_MAP[entry.entry_type] ?? ENTRY_TYPE_MAP.delegate;
-  const detail =
-    entry.entry_type === 'delegate' ? [entry.allocation, entry.committee].filter(Boolean).join(' · ')
-    : entry.entry_type === 'chair' ? entry.committee
-    : entry.allocation;
-
-  return (
-    <button
-      type="button"
-      onClick={onEdit}
-      className="flex items-center gap-3.5 w-full text-left focus:outline-none"
-      style={{
-        padding: '14px 16px',
-        borderRadius: 18,
-        border: `1.5px solid ${type.border}`,
-        backgroundColor: NEU.surface,
-        boxShadow: NEU.outSm,
-        cursor: 'pointer',
-        transition: `all 200ms ${EASE}`,
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-    >
-      <LogoDisc src={entry.logo_url} size={44} fallbackText={monogramFor(entry.conference_name)} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className="truncate"
-            style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 15, color: NEU.ink, letterSpacing: '-0.01em' }}
-          >
-            {entry.conference_name}
-          </span>
-          <span
-            style={{
-              fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
-              textTransform: 'uppercase', color: type.chipInk,
-              padding: '2px 8px', borderRadius: 999,
-              background: `linear-gradient(150deg, ${type.accent}1C, ${type.accent}0C), ${NEU.surface}`,
-              border: `1px solid ${type.accent}33`,
-            }}
-          >
-            {type.label}
-          </span>
-        </div>
-        {detail && (
-          <span
-            className="block truncate"
-            // The only place the saved allocation / committee is read back,
-            // so it has to be legible: NEU.muted is 2.78:1 on the card surface.
-            style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 2 }}
-          >
-            {detail}
-          </span>
-        )}
-      </div>
-      {/* Not decorative: this glyph is the only standing cue that the row is
-          editable, so it owes the 3:1 non-text minimum. NEU.muted is 2.78:1. */}
-      <Pencil size={15} strokeWidth={2.2} style={{ color: NEU.inkSoft, flexShrink: 0 }} />
-    </button>
   );
 }
 

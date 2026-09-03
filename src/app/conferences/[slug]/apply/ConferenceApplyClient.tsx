@@ -26,7 +26,8 @@ import {
 } from '@/lib/applyDraft';
 import { NEU, NeuInset, NeuCard, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { WizardShell, TwoTabPick } from '@/components/wizard';
-import { CVEntryModal } from '@/components/CVEntryModal';
+import { CVEntryModal, type CVEntry, type ExperienceEntry } from '@/components/CVEntryModal';
+import { CVSummaryRow } from '@/components/CVSummaryRow';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
@@ -86,6 +87,9 @@ interface RoleConfig {
   /** Organiser-controlled, per role: what this role may express as
    *  preferences on the apply form. 'none' for any role that can't. */
   preference_mode: PreferenceMode;
+  /** Chair/secretariat only (DB CHECK enforces this) — whether this role gets
+   *  the dedicated MUN-experience step instead of the generic rank step. */
+  collect_mun_experience: boolean;
 }
 
 interface CommitteeOption {
@@ -321,7 +325,7 @@ function QuestionRecapRow({
 /** The wizard's stages. The old inline `as const` array widened to string[]
  *  through its conditional spreads, so the step kind was never actually
  *  narrowed — naming the union here fixes that and types the label lookup. */
-type StepKindName = 'society' | 'invoicing' | 'preferences' | 'experience' | 'questions' | 'overview';
+type StepKindName = 'society' | 'invoicing' | 'preferences' | 'experience' | 'munExperience' | 'questions' | 'overview';
 
 /**
  * Floor height (px) for a step's title block + body, passed to every
@@ -353,6 +357,7 @@ const STEP_LABEL: Record<StepKindName, string> = {
   invoicing: 'Invoicing',
   preferences: 'Preferences',
   experience: 'Experience',
+  munExperience: 'MUN experience',
   questions: 'Questions',
   overview: 'Overview',
 };
@@ -1008,6 +1013,30 @@ function ConferenceApplyInner() {
   // the applicant add a conference without leaving the flow.
   const [cvModalOpen, setCvModalOpen] = useState(false);
   const [cvRefreshing, setCvRefreshing] = useState(false);
+
+  // ── MUN experience step (chair/secretariat only, toggled per role by the
+  // organiser). A list of real conferences OWNED by this application — a
+  // snapshot, not a live view of the MUN CV. Never written to mun_cv_entries
+  // except via the two explicit actions below (Import / Save to my MUN CV).
+  const [experienceEntries, setExperienceEntries] = useState<ExperienceEntry[]>([]);
+  // This applicant's actual mun_cv_entries rows — null until first loaded.
+  // Backs both "Import from my MUN CV" and the "already on your CV" dedup
+  // check Save-to-CV relies on.
+  const [munCvRows, setMunCvRows] = useState<CVEntry[] | null>(null);
+  const [munExpModalOpen, setMunExpModalOpen] = useState(false);
+  // null = adding a fresh entry; otherwise the entry being edited.
+  const [munExpEditing, setMunExpEditing] = useState<ExperienceEntry | null>(null);
+  const [savingToCv, setSavingToCv] = useState(false);
+  const [cvSaveResult, setCvSaveResult] = useState<{ addedCount: number } | null>(null);
+  const [cvSaveError, setCvSaveError] = useState('');
+  // A confirmed "Added N…" state must never outlive the list it described —
+  // any further add/remove/edit invalidates it rather than leaving a stale
+  // banner claiming something about the current list that isn't true.
+  useEffect(() => {
+    setCvSaveResult(null);
+    setCvSaveError('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [experienceEntries]);
   // The choosable experience slider's track — pointer x is mapped to a band.
   const expTrackRef = useRef<HTMLDivElement | null>(null);
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
@@ -1138,11 +1167,18 @@ function ConferenceApplyInner() {
   // F15: faculty advisors, staff and observers skip Experience entirely.
   // None of them sit in a committee, so MUN experience level has no bearing
   // on their application and experience_level submits null for these roles.
-  // Chair and secretariat get a dedicated experience editor of their own
-  // (a later prompt); pulling this section for them now would leave them
-  // with nothing, so only staff and observer are added here alongside
-  // faculty-advisor.
-  const skipExperience = role === 'faculty-advisor' || role === 'staff' || role === 'observer';
+  // Chair and secretariat ALSO never see this generic beginner-to-expert rank
+  // step, whether or not the dedicated MUN-experience section (below) is
+  // switched on for them — that rank is meaningless for someone who is
+  // chairing. They get their own step instead (renderStepMunExperience).
+  const skipExperience = role === 'faculty-advisor' || role === 'staff' || role === 'observer'
+    || role === 'chair' || role === 'secretariat';
+
+  // Organiser-toggled, chair/secretariat only (the DB CHECK on
+  // application_role_configs refuses true for every other role). When off,
+  // these two roles simply have no experience step at all — that's correct
+  // and is the default.
+  const showMunExperienceStep = (role === 'chair' || role === 'secretariat') && (roleConfig?.collect_mun_experience ?? false);
 
   // Custom questions live in their OWN step (shown for ANY role that has them,
   // placed right before Overview) — NOT bolted onto Experience. Advisors skip
@@ -1176,6 +1212,7 @@ function ConferenceApplyInner() {
     ...(isInvoicingRole ? (['invoicing'] as const) : []),
     ...(showPreferenceStep ? (['preferences'] as const) : []),
     ...(skipExperience ? [] : (['experience'] as const)),
+    ...(showMunExperienceStep ? (['munExperience'] as const) : []),
     ...(hasCustomQuestions ? (['questions'] as const) : []),
     'overview',
   ];
@@ -1273,6 +1310,7 @@ function ConferenceApplyInner() {
     willPledgeAdvisors,
     advisorsPledged,
     preferences,
+    experienceEntries,
     experienceLevel,
     customAnswers,
     questionPage,
@@ -1419,6 +1457,7 @@ function ConferenceApplyInner() {
         setWillPledgeAdvisors(a.willPledgeAdvisors);
         setAdvisorsPledged(a.advisorsPledged);
         setPreferences(a.preferences);
+        setExperienceEntries(a.experienceEntries ?? []);
         setExperienceLevel(a.experienceLevel);
         setCustomAnswers(a.customAnswers);
         setQuestionPage(a.questionPage);
@@ -1871,6 +1910,27 @@ function ConferenceApplyInner() {
     setExperienceLevel(experienceProgress(c).level);
   }
 
+  // Real mun_cv_entries rows for the chair/secretariat MUN-experience step —
+  // Import and Save-to-CV both need actual rows, not just a count, so this is
+  // separate from refreshCvCount above (which only ever re-derives the rank).
+  async function loadMunCvRows() {
+    if (!session || !user) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase
+      .from('mun_cv_entries')
+      .select('id, entry_type, conference_name, committee, allocation, expertise_level, award, awards, photos, description, logo_url, conference_id, event_date, source, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+    if (error) return;
+    setMunCvRows((data as CVEntry[] | null) ?? []);
+  }
+
+  useEffect(() => {
+    if (!session || !user || !showMunExperienceStep || munCvRows !== null) return;
+    loadMunCvRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, user, showMunExperienceStep, munCvRows]);
+
   // Delete handler wired into the shared CVEntryModal (only reachable when
   // editing an existing entry — the inline "add" flow never triggers it).
   async function handleDeleteCvEntry(id: string) {
@@ -2145,6 +2205,9 @@ function ConferenceApplyInner() {
         insertPayload.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
         insertPayload.advisors_pledged = willPledgeAdvisors ? (advisorsPledged || 0) : 0;
       }
+      if (showMunExperienceStep) {
+        insertPayload.experience_entries = experienceEntries;
+      }
 
       const { data: app, error: appError } = await supabase
         .from('applications')
@@ -2282,6 +2345,9 @@ function ConferenceApplyInner() {
         updates.pledge_type = willPledgeSpots ? 'delegation' : null;
         updates.spots_pledged = willPledgeSpots ? (spotsPledged || 0) : 0;
         updates.advisors_pledged = willPledgeAdvisors ? (advisorsPledged || 0) : 0;
+      }
+      if (showMunExperienceStep) {
+        updates.experience_entries = experienceEntries;
       }
       if (showPreferenceStep) {
         // Same row shape as the fresh-submit insert, minus application_id
@@ -3485,6 +3551,284 @@ function ConferenceApplyInner() {
   }
 
   /**
+   * Chair/secretariat MUN-experience step (organiser-toggled via
+   * application_role_configs.collect_mun_experience). A real list of
+   * conferences OWNED by this application — a snapshot taken now, never a
+   * live view of the applicant's MUN CV. No beginner-to-expert rank anywhere
+   * here; applications.experience_level still gets written at submit exactly
+   * as it does for every role, this step just never shows or edits it.
+   *
+   * An empty list is a valid, complete answer — a first-time chair is a real
+   * applicant, so nothing here blocks Continue.
+   */
+  function renderStepMunExperience() {
+    const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
+    const isAlreadyOnCv = (e: ExperienceEntry): boolean => {
+      // An imported entry stays recognized as "from the CV" even after being
+      // edited — source_cv_entry_id is never cleared by an edit, so a typo
+      // fixed here never rewrites CV history via Save-to-CV.
+      if (e.source_cv_entry_id) return true;
+      if (!munCvRows) return false;
+      return munCvRows.some(row =>
+        norm(row.conference_name) === norm(e.conference_name)
+        && norm(row.committee) === norm(e.committee)
+        && norm(row.event_date) === norm(e.event_date)
+      );
+    };
+    const newEntries = experienceEntries.filter(e => !isAlreadyOnCv(e));
+
+    const importedCvIds = new Set(
+      experienceEntries.map(e => e.source_cv_entry_id).filter((id): id is string => !!id),
+    );
+    const importableRows = (munCvRows ?? []).filter(row => !importedCvIds.has(row.id));
+
+    // Newest first by event date; entries with no date sort last. Stable sort
+    // keeps same-date (or both-null) entries in their original append order,
+    // which stands in for "created order" without a separate timestamp.
+    const sortedEntries = [...experienceEntries].sort((a, b) => {
+      const ad = a.event_date ? new Date(a.event_date).getTime() : -Infinity;
+      const bd = b.event_date ? new Date(b.event_date).getTime() : -Infinity;
+      return bd - ad;
+    });
+
+    function openAddEntry() {
+      setMunExpEditing(null);
+      setMunExpModalOpen(true);
+    }
+    function openEditEntry(entry: ExperienceEntry) {
+      setMunExpEditing(entry);
+      setMunExpModalOpen(true);
+    }
+    function removeEntry(id: string) {
+      // Removes from THIS application only — never touches the MUN CV, so no
+      // confirmation dialog.
+      setExperienceEntries(prev => prev.filter(e => e.id !== id));
+    }
+    function handleImportFromCv() {
+      if (!munCvRows || importableRows.length === 0) return;
+      const imported: ExperienceEntry[] = importableRows.map(row => ({
+        id: crypto.randomUUID(),
+        source_cv_entry_id: row.id,
+        entry_type: row.entry_type,
+        conference_name: row.conference_name,
+        committee: row.committee,
+        allocation: row.allocation,
+        event_date: row.event_date,
+        awards: row.awards,
+        description: row.description,
+      }));
+      setExperienceEntries(prev => [...prev, ...imported]);
+    }
+    async function handleSaveToMunCv() {
+      if (!session || !user || savingToCv || newEntries.length === 0) return;
+      setSavingToCv(true);
+      setCvSaveError('');
+      const supabase = getAuthedClient(session.access_token);
+      const rows = newEntries.map(e => ({
+        user_id: user.id,
+        source: 'manual' as const,
+        entry_type: e.entry_type,
+        conference_name: e.conference_name,
+        committee: e.committee,
+        allocation: e.allocation,
+        expertise_level: null,
+        event_date: e.event_date,
+        awards: e.awards,
+        award: e.awards[0] ?? 'None',
+        photos: [] as string[],
+        description: e.description,
+        logo_url: null,
+        conference_id: null,
+      }));
+      try {
+        const { data, error } = await supabase.from('mun_cv_entries').insert(rows).select('id');
+        if (error || !data || data.length !== rows.length) {
+          throw new Error(error?.message ?? 'Could not save to your MUN CV. Please try again.');
+        }
+        setCvSaveResult({ addedCount: rows.length });
+        await loadMunCvRows();
+        await refreshCvCount();
+      } catch (err: unknown) {
+        setCvSaveError(err instanceof Error ? err.message : 'Could not save to your MUN CV. Please try again.');
+      } finally {
+        setSavingToCv(false);
+      }
+    }
+
+    const importLabel =
+      munCvRows === null ? 'Loading your MUN CV…'
+      : munCvRows.length === 0 ? 'Import from my MUN CV'
+      : importableRows.length === 0 ? 'Everything on your MUN CV is already here'
+      : `Import ${importableRows.length} from my MUN CV`;
+    const importDisabled = munCvRows === null || importableRows.length === 0;
+
+    const saveLabel =
+      savingToCv ? 'Saving…'
+      : newEntries.length === 0 ? 'Everything here is already on your MUN CV'
+      : `Add ${newEntries.length} new conference${newEntries.length === 1 ? '' : 's'} to your MUN CV`;
+    const saveDisabled = savingToCv || newEntries.length === 0 || munCvRows === null;
+
+    return (
+      <WizardShell
+        step={step}
+        total={totalSteps}
+        labels={stepLabels}
+        minBodyHeight={STEP_MIN_BODY}
+        onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
+        title="MUN experience"
+        sub="List the conferences you have chaired or staffed. Import them from your MUN CV, or add them one at a time."
+      >
+        {sortedEntries.length > 0 && (
+          <div className="flex flex-col gap-3 mb-4">
+            {sortedEntries.map(entry => (
+              <CVSummaryRow
+                key={entry.id}
+                entry={{ ...entry, logo_url: null }}
+                onEdit={() => openEditEntry(entry)}
+                onRemove={() => removeEntry(entry.id)}
+              />
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={openAddEntry}
+          className="flex items-center justify-center gap-2.5 w-full focus:outline-none"
+          style={{
+            fontFamily: OUTFIT,
+            fontWeight: 700,
+            fontSize: 14,
+            color: NEU.forest,
+            padding: sortedEntries.length > 0 ? '14px 20px' : '22px 20px',
+            borderRadius: 18,
+            border: '2px dashed rgba(27,56,40,0.18)',
+            backgroundColor: NEU.surface,
+            boxShadow: NEU.outSm,
+            cursor: 'pointer',
+            transition: `all 200ms ${EASE}`,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.borderColor = NEU.forest; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(27,56,40,0.18)'; }}
+        >
+          <Plus size={17} strokeWidth={2.6} />
+          {sortedEntries.length > 0 ? 'Add another conference' : 'Add a conference'}
+        </button>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={handleImportFromCv}
+            disabled={importDisabled}
+            className="w-full flex items-center justify-center gap-2.5 rounded-2xl px-5 py-3 focus:outline-none"
+            style={{
+              backgroundColor: NEU.surface,
+              boxShadow: importDisabled ? NEU.inSm : NEU.outSm,
+              border: '1.5px solid rgba(182,135,31,0.4)',
+              cursor: importDisabled ? 'default' : 'pointer',
+              opacity: munCvRows === null ? 0.7 : 1,
+              transition: `box-shadow 220ms ${EASE}`,
+            }}
+            onMouseEnter={(e) => { if (!importDisabled) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = importDisabled ? NEU.inSm : NEU.outSm; }}
+          >
+            <Emoji3D name="Counterclockwise arrows button" size={22} fallback={Sparkles} fallbackColor={NEU.deepGold} />
+            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink }}>{importLabel}</span>
+          </button>
+          {munCvRows !== null && munCvRows.length === 0 && (
+            <p className="text-center text-xs mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+              Nothing on your MUN CV yet.{' '}
+              <Link href="/account/cv" className="font-semibold" style={{ color: NEU.forest }}>
+                Add conferences there
+              </Link>
+              , then come back to import them.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={handleSaveToMunCv}
+            disabled={saveDisabled}
+            className="w-full flex items-center justify-center gap-2.5 rounded-2xl px-5 py-3 focus:outline-none"
+            style={{
+              backgroundColor: cvSaveResult ? 'rgba(27,56,40,0.08)' : NEU.surface,
+              boxShadow: saveDisabled ? NEU.inSm : NEU.outSm,
+              border: cvSaveResult ? '1.5px solid rgba(27,56,40,0.3)' : '1.5px solid #DDD4C0',
+              cursor: saveDisabled ? 'default' : 'pointer',
+              transition: `box-shadow 220ms ${EASE}`,
+            }}
+            onMouseEnter={(e) => { if (!saveDisabled) (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = saveDisabled ? NEU.inSm : NEU.outSm; }}
+          >
+            {cvSaveResult ? <Check size={17} strokeWidth={2.8} style={{ color: NEU.forest }} /> : null}
+            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: cvSaveResult ? NEU.forest : NEU.ink }}>
+              {cvSaveResult ? `Added ${cvSaveResult.addedCount} conference${cvSaveResult.addedCount === 1 ? '' : 's'} to your MUN CV` : saveLabel}
+            </span>
+          </button>
+          <p className="text-center text-xs mt-2" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
+            Independent of submitting. This writes to your MUN CV right away, and stays there even if you later remove the entry from this application.
+          </p>
+          {cvSaveError && (
+            <p className="text-center text-xs mt-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+              {cvSaveError}
+            </p>
+          )}
+        </div>
+
+        <WizardFooter onNext={handleContinue} nextLabel="Continue" primary />
+
+        {munExpModalOpen && user && (
+          <CVEntryModal
+            existing={munExpEditing ? {
+              id: munExpEditing.id,
+              entry_type: munExpEditing.entry_type,
+              conference_name: munExpEditing.conference_name,
+              committee: munExpEditing.committee,
+              allocation: munExpEditing.allocation,
+              expertise_level: null,
+              award: munExpEditing.awards[0] ?? 'None',
+              awards: munExpEditing.awards,
+              photos: [],
+              description: munExpEditing.description,
+              logo_url: null,
+              conference_id: null,
+              event_date: munExpEditing.event_date,
+              source: 'manual',
+              created_at: new Date().toISOString(),
+            } : null}
+            userId={user.id}
+            onClose={() => { setMunExpModalOpen(false); setMunExpEditing(null); }}
+            onSaved={() => {}}
+            onDelete={async () => {}}
+            onPersist={(entry) => {
+              const built: ExperienceEntry = {
+                id: munExpEditing?.id ?? crypto.randomUUID(),
+                // Never cleared on edit — this is what makes an edited
+                // imported entry still recognized as "already on the CV".
+                source_cv_entry_id: munExpEditing?.source_cv_entry_id ?? null,
+                entry_type: entry.entry_type,
+                conference_name: entry.conference_name,
+                committee: entry.committee,
+                allocation: entry.allocation,
+                event_date: entry.event_date,
+                awards: entry.awards,
+                description: entry.description,
+              };
+              setExperienceEntries(prev =>
+                munExpEditing
+                  ? prev.map(e => (e.id === built.id ? built : e))
+                  : [...prev, built]
+              );
+            }}
+          />
+        )}
+      </WizardShell>
+    );
+  }
+
+  /**
    * Dedicated custom-questions step. Shown for ANY role whose role config has
    * questions (hasCustomQuestions), placed right before Overview — so advisors
    * (and any role that skips Experience) still see and answer their questions
@@ -4323,6 +4667,7 @@ function ConferenceApplyInner() {
         {currentStepKind === 'invoicing' && renderStepInvoicing()}
         {currentStepKind === 'preferences' && renderStep3Preferences()}
         {currentStepKind === 'experience' && renderStepExperience()}
+        {currentStepKind === 'munExperience' && renderStepMunExperience()}
         {currentStepKind === 'questions' && renderStepQuestions()}
         {currentStepKind === 'overview' && renderStepOverview()}
 

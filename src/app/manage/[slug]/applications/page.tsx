@@ -40,6 +40,10 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 // Same vocabulary the team invite wizard in Settings uses — never a parallel
 // list. Only the library, not the wizard component itself.
 import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
+// Same role-label vocabulary the MUN CV timeline uses (Delegate/Chair/Faculty
+// Advisor/Secretariat/Other), so a chair/secretariat application's listed
+// conferences read consistently with how the applicant's own CV describes them.
+import { ENTRY_TYPE_MAP, type EntryType } from '@/components/CVEntryModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -111,6 +115,20 @@ interface Application {
   // the INVITED badge and, when this role has no configured fee at all, the
   // standalone WAIVED chip that stands in for the payment menu.
   fee_waiver_source: string | null;
+  // Chair/secretariat only: the conferences the applicant listed on this
+  // application (a snapshot taken at application time — never re-derived
+  // from their MUN CV after the fact). Every other role's array is empty.
+  experience_entries: {
+    id: string;
+    source_cv_entry_id: string | null;
+    entry_type: string;
+    conference_name: string;
+    committee: string;
+    allocation: string;
+    event_date: string | null;
+    awards: string[];
+    description: string | null;
+  }[];
 }
 
 // The applicant's financial_aid_requests row, fetched on demand when the
@@ -1855,6 +1873,7 @@ export default function ApplicationsPage() {
         .from('applications')
         .select(`
           id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
+          experience_entries,
           payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
@@ -4646,6 +4665,17 @@ export default function ApplicationsPage() {
         const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
         // No recorded level → treat as "beginner" (#11).
         const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
+        // Chair/secretariat only: the conferences they listed on THIS
+        // application (a snapshot, never re-derived from a live MUN CV).
+        // Newest first, stable so entries with the same/no date keep the
+        // order they were added in.
+        const isMunExperienceRole = app.role === 'chair' || app.role === 'secretariat';
+        const munExperience = [...(app.experience_entries ?? [])].sort((a, b) => {
+          if (!a.event_date && !b.event_date) return 0;
+          if (!a.event_date) return 1;
+          if (!b.event_date) return -1;
+          return b.event_date.localeCompare(a.event_date);
+        });
         const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
         // Includes archived questions so a deleted question's answer stays
@@ -4821,7 +4851,10 @@ export default function ApplicationsPage() {
         const hasContextRail = !!app.profiles?.nationality
           || (isDelegate && prefs.length > 0)
           || ((app.status === 'assigned' || app.status === 'checked-in') && !!app.assigned_country_name)
-          || (app.status === 'checked-in' && !!app.checked_in_at);
+          || (app.status === 'checked-in' && !!app.checked_in_at)
+          // Always shown for chair/secretariat, even with zero entries: the
+          // row says "No MUN experience listed" rather than not existing.
+          || isMunExperienceRole;
 
         // Invited/claim-path rows carry no profile at all — no nationality, no
         // age, no MUN CV — and a faculty advisor has no country preferences
@@ -4967,6 +5000,61 @@ export default function ApplicationsPage() {
                               <CountryFlag name={app.profiles.nationality} size={16} />
                               {app.profiles.nationality}
                             </span>
+                          ))}
+                          {isMunExperienceRole && railRow(GraduationCap, `MUN experience (${munExperience.length})`, (
+                            munExperience.length === 0 ? (
+                              <span style={{ color: NEU.inkSoft, fontStyle: 'italic', fontWeight: 500 }}>
+                                No MUN experience listed
+                              </span>
+                            ) : (
+                              <div className="flex flex-col gap-2.5">
+                                {munExperience.map((entry) => {
+                                  const type = ENTRY_TYPE_MAP[entry.entry_type as EntryType] ?? ENTRY_TYPE_MAP.other;
+                                  const detail = [entry.allocation, entry.committee].filter(Boolean).join(' · ');
+                                  return (
+                                    <div key={entry.id} className="flex flex-col gap-1">
+                                      <span className="inline-flex items-center gap-1.5 flex-wrap" style={{ fontWeight: 800 }}>
+                                        {entry.conference_name}
+                                        <span
+                                          style={{
+                                            fontSize: 9.5, fontWeight: 800, letterSpacing: '0.05em',
+                                            textTransform: 'uppercase', color: type.chipInk,
+                                            padding: '1px 7px', borderRadius: 999,
+                                            background: `linear-gradient(150deg, ${type.accent}1C, ${type.accent}0C), ${NEU.surface}`,
+                                            border: `1px solid ${type.accent}33`,
+                                          }}
+                                        >
+                                          {type.label}
+                                        </span>
+                                      </span>
+                                      {(detail || entry.event_date) && (
+                                        <span style={{ color: NEU.inkSoft, fontSize: 12.5, fontWeight: 500, lineHeight: 1.5 }}>
+                                          {[detail, entry.event_date ? formatDate(entry.event_date) : null].filter(Boolean).join('  ·  ')}
+                                        </span>
+                                      )}
+                                      {entry.awards.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-0.5">
+                                          {entry.awards.map((award) => (
+                                            <span
+                                              key={award}
+                                              className="inline-flex items-center"
+                                              style={{
+                                                fontSize: 10.5, fontFamily: OUTFIT, fontWeight: 700,
+                                                padding: '1px 7px', borderRadius: 999,
+                                                backgroundColor: 'rgba(182,135,31,0.14)', color: REVIEW_AID_INK,
+                                                border: '1px solid rgba(182,135,31,0.35)',
+                                              }}
+                                            >
+                                              {award}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )
                           ))}
                           {isDelegate && prefs.length > 0 && railRow(MapPin, 'Preferences', (
                             <div className="flex flex-col gap-1.5">

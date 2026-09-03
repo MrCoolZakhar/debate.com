@@ -60,6 +60,7 @@ interface RoleConfig {
   fee_phases: FeePhase[] | null;
   allow_resubmission: boolean;
   preference_mode: string;
+  collect_mun_experience: boolean;
 }
 
 interface Organizer {
@@ -2823,6 +2824,31 @@ export default function SettingsPage() {
                             size="md"
                           />
                         </div>
+                        {/* MUN experience — chair and secretariat only. The
+                            database CHECK refuses true for every other role,
+                            so a control for them could never work and must
+                            not exist, not even disabled. */}
+                        {(role === 'chair' || role === 'secretariat') && (
+                          <div className="mt-4 flex items-center justify-between gap-3">
+                            <div>
+                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                Ask for MUN experience
+                                <InfoHint
+                                  label="About MUN experience"
+                                  text="Delegates and head delegates are not affected by this setting, on or off: their experience level feeds committee allocation directly, so it is never collected this way for them."
+                                />
+                              </label>
+                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                Applicants list the conferences they have chaired or staffed, and can import them from their Gavelling MUN CV.
+                              </p>
+                            </div>
+                            <PillToggle
+                              value={config.collect_mun_experience ?? false}
+                              onChange={(v) => saveRoleConfig(role, { collect_mun_experience: v })}
+                              size="md"
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

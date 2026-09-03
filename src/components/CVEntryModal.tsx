@@ -52,6 +52,23 @@ export interface CVEntry {
   created_at: string;
 }
 
+/** One item in applications.experience_entries (chair/secretariat MUN
+ *  experience step). A snapshot taken at application time — not a
+ *  mun_cv_entries row. `source_cv_entry_id` is the CV row this was imported
+ *  from, or null when typed by hand on the application; it is what lets a
+ *  later "already on your CV" check work without re-matching on content. */
+export interface ExperienceEntry {
+  id: string;
+  source_cv_entry_id: string | null;
+  entry_type: EntryType;
+  conference_name: string;
+  committee: string;
+  allocation: string;
+  event_date: string | null;
+  awards: string[];
+  description: string | null;
+}
+
 // ── Entry-type config ────────────────────────────────────────────────────────
 // Each experience type has its own accent, corner-badge glyph, card border and
 // role chip, so the timeline reads by role at a glance (delegate=forest,
@@ -499,6 +516,7 @@ export function CVEntryModal({
   onSaved,
   onDelete,
   userId,
+  onPersist,
 }: {
   existing: CVEntry | null;
   onClose: () => void;
@@ -511,6 +529,19 @@ export function CVEntryModal({
   onSaved: (added?: CVEntry) => void;
   onDelete: (id: string) => Promise<void>;
   userId: string;
+  /**
+   * When supplied, the modal composes a CVEntry from its fields and hands it
+   * here INSTEAD of touching mun_cv_entries — its own insert and update paths
+   * are skipped entirely, `onSaved` is not called, and no network write
+   * happens. Used by the apply flow's chair/secretariat MUN experience step,
+   * where an entry lives on the application (a snapshot), not the CV. The
+   * photo uploader and the internal Delete button are both hidden in this
+   * mode: photos would orphan storage files for a CV row that may never
+   * exist, and Delete would otherwise call `onDelete` against a real CV row
+   * id, which this caller must never touch — removal from the application is
+   * handled entirely outside this modal.
+   */
+  onPersist?: (entry: CVEntry) => void;
 }) {
   const { session } = useAuth();
   // Modal: the account page behind must not scroll while this is open.
@@ -844,6 +875,23 @@ export function CVEntryModal({
       logo_url:        resolvedLogo,
       conference_id:   conferenceId,
     };
+
+    if (onPersist) {
+      // No mun_cv_entries write at all: compose the same shape an insert
+      // would have produced and hand it to the caller. `id` is either the
+      // entry being edited (its identity on the application never changes)
+      // or a fresh client-side id for a brand-new one.
+      const composed: CVEntry = {
+        id: existing?.id ?? crypto.randomUUID(),
+        ...payload,
+        source: 'manual',
+        created_at: existing?.created_at ?? new Date().toISOString(),
+      };
+      setSubmitting(false);
+      onPersist(composed);
+      onClose();
+      return;
+    }
 
     let dbErr;
     // On a NEW entry we read the inserted row back so the parent can celebrate
@@ -1258,7 +1306,11 @@ export function CVEntryModal({
             </div>
           )}
 
-          {/* Photos */}
+          {/* Photos — hidden entirely when onPersist is supplied: photos live
+              in storage against a real mun_cv_entries row, and uploading one
+              for an application entry that may never become a CV row would
+              leave orphaned files in the conference-assets bucket. */}
+          {!onPersist && (
           <div>
             <label className="block text-[13px] font-semibold mb-2" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
               Conference Photos
@@ -1318,6 +1370,7 @@ export function CVEntryModal({
               onChange={(e) => handlePhotoFiles(e.target.files)}
             />
           </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button
@@ -1347,8 +1400,12 @@ export function CVEntryModal({
           </div>
 
           {/* Delete — only for manual (self-reported) entries. Verified entries
-              are owned by the platform and cannot be removed from here. */}
-          {existing && !isVerified && (
+              are owned by the platform and cannot be removed from here. Also
+              hidden whenever onPersist is supplied: this button calls
+              `onDelete` against a real mun_cv_entries row id, which an
+              application-entry caller must never touch — removal from the
+              application is a separate affordance outside this modal. */}
+          {existing && !isVerified && !onPersist && (
             <div className="pt-3 mt-1" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
               <button
                 type="button"
