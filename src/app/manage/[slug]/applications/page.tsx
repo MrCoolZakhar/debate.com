@@ -1799,6 +1799,11 @@ export default function ApplicationsPage() {
   // so the submitted list stays the page's subject.
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  /** Drafts as a VIEW, driven by the stat tile, rather than only as a
+   *  collapsed panel at the bottom of the page. Mutually exclusive with the
+   *  application list: switching to it hides the list entirely, the same way
+   *  the Allocated tile narrows it. */
+  const [draftsView, setDraftsView] = useState(false);
   // No draft drawer, by ruling: there is nothing inside a draft an organiser
   // may open. A row is the whole surface. (There used to be a read-only
   // drawer rendering the partial answers, preferences and pledges — removed.)
@@ -3605,14 +3610,18 @@ export default function ApplicationsPage() {
   const toggleStatusGroupTile = (group: string[]) => setFilters(f => ({ ...f, payment: new Set(), status: sameSet(f.status, group) ? new Set() : new Set(group) }));
   const togglePaymentTile = (v: string) => setFilters(f => ({ ...f, status: new Set(), payment: (f.payment.size === 1 && f.payment.has(v)) ? new Set() : new Set([v]) }));
 
-  // Order (#10): Total, Accepted, Allocated, Paid, Unpaid, Checked in — Checked
-  // in rightmost. Every tile applies its matching filter on click. Allocated is
-  // shown as a fraction of Accepted ("29 / 32") so it can never read as larger
-  // than the pool it is drawn from.
+  // Order: Total, Accepted, Allocated, Paid, Unpaid, Checked in, then Drafts.
+  // Every tile applies its matching filter on click.
+  //
+  // Allocated is a PLAIN COUNT. It used to read "29 / 32" — a fraction of
+  // Accepted — which was defensive (it could never look larger than the pool
+  // it comes from) but made the one tile in the row that answers "how many are
+  // seated?" the only one you had to do arithmetic on. Every other tile is a
+  // number; this one is now too.
   const statItems: { label: string; value: number | string; emoji: string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
     { label: 'Total',      value: stats.total,     emoji: 'Card index',          icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
     { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',   icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusGroupTileActive(ACCEPTED_GROUP),  onClick: () => toggleStatusGroupTile(ACCEPTED_GROUP) },
-    { label: 'Allocated',  value: `${stats.assigned} / ${stats.accepted}`, emoji: 'Round pushpin', icon: BadgeCheck, gradient: NEU_GRADIENTS.gold, active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
+    { label: 'Allocated',  value: stats.assigned,  emoji: 'Round pushpin',       icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
     { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',           icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
     { label: 'Unpaid',     value: stats.unpaid,    emoji: 'Hourglass not done',  icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
     { label: 'Checked in', value: stats.checkedIn, emoji: 'Busts in silhouette', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
@@ -3693,18 +3702,40 @@ export default function ApplicationsPage() {
         }}
       />
 
-      {/* Stat tiles — compact, six clickable filters (#10). */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      {/* Stat tiles, plus Drafts.
+          Drafts used to live in a collapsed panel further down the page, which
+          is the wrong place for the only group of people here who have not
+          finished applying — they are the most recoverable and the easiest to
+          forget. It now sits in the same row and switches the list the same
+          way the other tiles do.
+          A 20-column grid rather than 7 equal ones: the six counts take three
+          columns each and Drafts takes two, so it reads as a smaller, separate
+          thing without the other tiles having to shrink much to make room. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[repeat(20,minmax(0,1fr))] gap-3 mb-6">
         {statItems.map(s => (
-          <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
+          <div key={s.label} className="lg:col-span-3">
+            <NeuStatTile emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
+          </div>
         ))}
+        <div className="lg:col-span-2">
+          <NeuStatTile
+            emoji="Memo"
+            icon={PencilLine}
+            gradient={NEU_GRADIENTS.amber}
+            value={drafts.length}
+            label="Drafts"
+            compact
+            onClick={() => setDraftsView(v => !v)}
+            active={draftsView}
+          />
+        </div>
       </div>
 
       {/* Visible reminder that a filter is narrowing the list — a role/status/
           payment/date filter can never silently hide rows again. Withdrawn/
           removed applicants are excluded from the default view on purpose
           (not a user-applied filter), so they're left out of this count too. */}
-      {!loading && filtered.length < defaultScopeCount && (
+      {!draftsView && !loading && filtered.length < defaultScopeCount && (
         <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted }}>
           Showing {filtered.length} of {defaultScopeCount} — filters active
         </p>
@@ -3718,7 +3749,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Empty state */}
-      {!loading && filtered.length === 0 && (
+      {!draftsView && !loading && filtered.length === 0 && (
         <NeuCard style={{ padding: '48px 24px' }}>
           <div className="flex flex-col items-center text-center">
             <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Inbox tray" size={48} />
@@ -3733,7 +3764,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Select-all bar */}
-      {!loading && filtered.length > 0 && (
+      {!draftsView && !loading && filtered.length > 0 && (
         <div className="flex items-center gap-2.5 mb-3 px-1">
           <SelectBox
             checked={allVisibleSelected}
@@ -3753,7 +3784,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Application list */}
-      {!loading && filtered.length > 0 && (
+      {!draftsView && !loading && filtered.length > 0 && (
         <div className="flex flex-col gap-3" style={{ paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
           {/* The whole card is the preview affordance (#1) — the separate
               PREVIEW button is gone, so it can never be clipped by the card's
@@ -4270,7 +4301,7 @@ export default function ApplicationsPage() {
           the DraftRow comment block.
 
           Counts: this section reads `drafts`. Nothing above it does. */}
-      {!loading && drafts.length > 0 && (
+      {!loading && (draftsView || drafts.length > 0) && (
         <div style={{ marginTop: 26, paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
           <div
             style={{
@@ -4325,7 +4356,7 @@ export default function ApplicationsPage() {
               </span>
             </button>
 
-            {draftsOpen && (
+            {(draftsOpen || draftsView) && (
               <div className="flex flex-col gap-2.5" style={{ padding: '0 11px' }}>
                 {drafts.map(d => {
                   const name = d.display_name ?? 'Unknown applicant';

@@ -166,6 +166,9 @@ const CARD_BG = '#FFFFFF';
 const CHIP_BG = '#FAF8F3';
 const HAIRLINE = '#E7E1D3';
 const FOOTER_BG = '#F7F4EC';
+/** Bullet marker. Deep enough to sit on white (the pale brand gold is 1.4:1
+ *  there, which is why it is not the button colour either). */
+const GOLD_DOT = '#C9A63A';
 
 // Dark-mode counterparts, applied via the <style> block only.
 // The card has to be VISIBLE against the page. These were #14130F and #1D1B16
@@ -354,9 +357,50 @@ function renderParagraphChunks(resolved: string, linkColor: string, gap: number)
   return chunks
     .map((c, i) => {
       const margin = i === chunks.length - 1 ? 0 : gap;
+      const list = renderBulletList(c, linkColor, margin);
+      if (list) return list;
       return `<div style="margin:0 0 ${margin}px 0;">${renderMarkedHtml(c, linkColor)}</div>`;
     })
     .join('');
+}
+
+/**
+ * A chunk whose every line starts with "- " becomes a real list.
+ *
+ * Previously these rendered as `<br>- item`, i.e. a hyphen and a line break —
+ * which is what a plain-text email looks like, not what a list looks like. The
+ * chair reminder is mostly a list of what the room can do, so this is the
+ * difference between something a chair skims and something they scroll past.
+ *
+ * A two-cell table row per item rather than <ul>: Outlook's list indentation is
+ * unpredictable and Gmail strips list-style in places, whereas a fixed-width
+ * marker cell beside a text cell renders identically everywhere. The marker is
+ * a small gold disc — brand, and enough colour to break up a wall of forest
+ * and ink without adding an image that a client might block.
+ *
+ * Returns null when the chunk is not a list, so ordinary paragraphs are
+ * untouched.
+ */
+function renderBulletList(chunk: string, linkColor: string, marginBottom: number): string | null {
+  const lines = chunk.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return null;
+  if (!lines.every(l => /^[-•]\s+/.test(l))) return null;
+
+  const rows = lines
+    .map(l => l.replace(/^[-•]\s+/, ''))
+    .map(
+      (text, idx, all) => `<tr>
+        <td width="20" valign="top" style="width:20px;padding:0 0 ${idx === all.length - 1 ? 0 : 9}px 0;">
+          <div style="width:6px;height:6px;border-radius:3px;background-color:${GOLD_DOT};margin-top:8px;font-size:0;line-height:0;">&nbsp;</div>
+        </td>
+        <td valign="top" style="padding:0 0 ${idx === all.length - 1 ? 0 : 9}px 0;font-family:${SANS};font-size:15.5px;line-height:1.6;">
+          ${renderMarkedHtml(text, linkColor)}
+        </td>
+      </tr>`,
+    )
+    .join('');
+
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:2px 0 ${marginBottom}px 0;">${rows}</table>`;
 }
 
 // ── Header ───────────────────────────────────────────────────────────────────
