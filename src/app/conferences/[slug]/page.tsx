@@ -1,8 +1,20 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
-import { OG_IMAGE_URL, pageMetadata } from '@/lib/seo';
+import { notFound } from 'next/navigation';
+import { absoluteUrl, pageMetadata } from '@/lib/seo';
+import { conferenceOgImageUrl } from '@/lib/ogVersion';
 import { supabase } from '@/lib/supabase';
 import ConferenceDetailClient from './ConferenceDetailClient';
+
+// Server-rendered shell only; the client always does its own live fetch on
+// mount (ConferenceDetailClient's fetchAll, unconditional) with the right
+// auth context, so a stale hour-old server seed never reaches the screen —
+// it only affects how fresh the pre-hydration HTML/metadata a crawler sees
+// is. Safe for the private-conference path too: nothing here reads cookies
+// or headers, and a private conference's `full`/`schema` stay null
+// regardless of cache freshness (gated on `conf.is_public`, not on when the
+// row was fetched), so there is nothing user-specific to go stale.
+export const revalidate = 3600;
 
 interface ConfMeta {
   full_name: string;
@@ -18,11 +30,12 @@ interface ConfMeta {
   format: string | null;
 }
 
-const FALLBACK_IMAGE = OG_IMAGE_URL;
 
 // One DB round-trip shared between generateMetadata and the page render
 // (React request-level cache), so adding the Event schema costs nothing extra.
-const getConference = cache(async (slug: string): Promise<ConfMeta | null> => {
+// Exported so sibling routes (e.g. ../reviews/page.tsx) can reuse the same
+// cached fetch for their own title instead of adding a duplicate query.
+export const getConference = cache(async (slug: string): Promise<ConfMeta | null> => {
   try {
     const { data } = await supabase
       .from('conferences')
@@ -107,12 +120,28 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const conf = await getConference(slug);
 
   if (!conf) {
-    // Still needs its own og:url — a card that claims to be the homepage shares
-    // the homepage's preview-cache entry on Facebook/WhatsApp.
+    // NOTE on status codes: this route has a loading.tsx, which makes Next
+    // stream the page behind a Suspense boundary — the 200 status for that
+    // shell is already committed by the time the page body's notFound()
+    // (below) resolves, and Next can't take it back. Verified two ways: (1)
+    // an isolated prod build with loading.tsx removed DOES return a real
+    // 404 for this same request; put it back and it's 200 again, regardless
+    // of user-agent. (2) calling notFound() here in generateMetadata too
+    // does NOT fix the status either — metadata streams independently in
+    // this Next version — and it actively makes things worse: with no
+    // explicit metadata to fall back on, the response leaks the ROOT
+    // layout's `index, follow` alongside Next's own noindex tag instead of
+    // one clean noindex. So: explicit metadata here (real noindex, real
+    // title) + the page body's notFound() (real not-found content) is the
+    // best available fix without touching loading.tsx, which is out of
+    // scope for this pass and has its own UX tradeoff (removing it trades
+    // the branded loading skeleton for a blank shell while a slow-loading
+    // *valid* conference's DB round-trips resolve).
     return pageMetadata({
       title: 'Conference',
       description: 'A Model UN conference on Gavelling.',
       path: `/conferences/${slug}`,
+      robots: { index: false, follow: false },
     });
   }
 
@@ -126,9 +155,34 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     : bits
       ? `Model UN conference — ${bits}. Apply on Gavelling.`
       : 'A Model UN conference on Gavelling. Apply now.';
-  // Banner is the hero for the large card; fall back to the logo, then the
-  // site image. Storage URLs are already absolute.
-  const image = conf.banner_url || conf.logo_url || FALLBACK_IMAGE;
+  /* The share card is RENDERED, not the raw banner.
+   
+     Pointing og:image at the organiser's upload had two failure modes that
+     between them account for the "our WhatsApp preview is wrong / missing"
+     reports. First, that URL is stable for the life of the row, and WhatsApp,
+     iMessage and Facebook cache the image against the URL essentially forever
+     — so replacing a banner or fixing an acronym never reaches a link already
+     sitting in a group chat, no matter what we send back in Cache-Control.
+     Second, the raw file is whatever was uploaded: a 4.7MB photo that scrapers
+     give up on, a WebP many of them cannot decode, or an off-ratio image that
+     gets cropped into nonsense.
+   
+     /api/og/conference/... solves both. It draws a real card (name, acronym,
+     dates, place, the organiser's artwork composited at the right ratio),
+     re-encodes to a ~50KB JPEG, and carries a version token that changes when
+     any visible field changes AND rotates daily — so a re-share picks up the
+     new card, and a stale one self-heals within 24h. The token is pure cache
+     identity; the route ignores it.
+   
+     Kept for conferences that are private: the page is noindex, but a private
+     link shared in a chat still deserves its preview, and the card exposes
+     nothing the link itself doesn't. There is no fallback branch any more:
+     the route always renders something, even for a row it cannot find.
+   
+     The JSON-LD `image` below deliberately still points at the raw artwork —
+     Google's Event rich result wants the event's own picture, not a card with
+     our branding across it. */
+  const image = conferenceOgImageUrl(slug, conf);
 
   return pageMetadata({
     title: name,
@@ -136,6 +190,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     path: `/conferences/${slug}`,
     image,
     imageAlt: name,
+    // We render this one ourselves, so the dimensions are known rather than guessed.
+    imageSize: { width: 1200, height: 630 },
     // Private conferences stay reachable by link but out of search indexes.
     // Public ones get EXPLICIT index/follow + rich-preview directives (rather
     // than inheriting silently) so results can show large image + full snippet.
@@ -189,7 +245,7 @@ function eventSchema(
     eventAttendanceMode: attendanceMode,
     eventStatus: 'https://schema.org/EventScheduled',
     url: `https://gavelling.com/conferences/${slug}`,
-    ...(conf.banner_url || conf.logo_url ? { image: [conf.banner_url || conf.logo_url] } : {}),
+    ...(conf.banner_url || conf.logo_url ? { image: [absoluteUrl(conf.banner_url || conf.logo_url || '')] } : {}),
     location:
       conf.format === 'online'
         ? { '@type': 'VirtualLocation', url: `https://gavelling.com/conferences/${slug}` }
@@ -213,6 +269,11 @@ function eventSchema(
 export default async function ConferenceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const conf = await getConference(slug);
+  // getConference has no is_public filter, so this is null ONLY when the row
+  // genuinely doesn't exist — a private conference still comes back here
+  // (with is_public: false) and must keep rendering for an owner holding the
+  // link. Only a missing row is a real 404.
+  if (!conf) notFound();
   // Server-fetched seed for the client view. Public rows only; null for a
   // private conference, which leaves the client's existing authed path intact.
   const full = conf?.is_public ? await getConferenceFull(slug) : null;

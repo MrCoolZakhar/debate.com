@@ -27,6 +27,8 @@ export default function robots(): MetadataRoute.Robots {
           '/conferences/*/apply',
           '/conferences/*/pay',
           '/conferences/*/participant',
+          '/conferences/*/role',
+          '/conferences/*/papers',
           // Dev-only
           '/grain-dev/',
         ],
