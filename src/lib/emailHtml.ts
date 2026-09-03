@@ -777,12 +777,37 @@ function renderBlock(
  *  whatever text it finds first — historically the footer or an alt attribute.
  *  Derived from the first real paragraph so it is always true to the email. */
 function buildPreheader(blocks: EmailBlock[], ctx: EmailTokenContext): string {
-  const first = blocks.find(b => b.type === 'paragraph' && b.content.trim());
-  if (!first || first.type !== 'paragraph') return '';
-  const flat = stripInlineMarks(resolveTokens(first.content, ctx))
-    .replace(/⚠(\w+)⚠/g, '')
+  const paragraphs = blocks.filter(
+    (b): b is Extract<EmailBlock, { type: 'paragraph' }> => b.type === 'paragraph' && !!b.content.trim(),
+  );
+  if (paragraphs.length === 0) return '';
+
+  // A bullet list makes a terrible preheader: it reads "- one - two - three"
+  // in the one line Gmail shows beside the subject. Prefer the first paragraph
+  // that ISN'T a list, and only fall back to a list if that is all there is —
+  // in which case the markers are stripped and the items joined with a middot,
+  // which at least reads as a sentence fragment rather than as raw markup.
+  const isList = (c: string) => {
+    const lines = c.split('\n').map(l => l.trim()).filter(Boolean);
+    return lines.length >= 2 && lines.every(l => /^[-•]\s+/.test(l));
+  };
+
+  // Skip the heading too. The preheader sits directly beside the subject in
+  // the inbox, and a heading is usually a restatement of it — "Your allocation
+  // is ready" next to "Your committee allocation for SISMUN 2026" spends the
+  // one line of extra context saying the same thing twice. The first body
+  // paragraph is what actually adds something.
+  const body = paragraphs.filter(p => (p.variant ?? 'body') !== 'heading');
+  const pool = body.length > 0 ? body : paragraphs;
+  const chosen = pool.find(p => !isList(p.content)) ?? pool[0];
+  const raw = stripInlineMarks(resolveTokens(chosen.content, ctx)).replace(/⚠(\w+)⚠/g, '');
+  const flat = (isList(chosen.content)
+    ? raw.split('\n').map(l => l.trim().replace(/^[-•]\s+/, '')).filter(Boolean).join(' · ')
+    : raw
+  )
     .replace(/\s+/g, ' ')
     .trim();
+
   if (!flat) return '';
   return flat.length > 140 ? `${flat.slice(0, 137).trimEnd()}…` : flat;
 }
