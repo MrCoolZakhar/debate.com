@@ -64,6 +64,10 @@ export interface Conference {
   min_age: number | null;
   max_age: number | null;
   allocation_swap_mode: string;
+  /** TRUE (default) = seating a delegate emails them their allocation right
+   *  away. FALSE = the organiser releases allocation emails in waves from the
+   *  Assignment page. Per-delegate send state is on conference_allocations. */
+  allocation_email_auto: boolean;
   email_theme: EmailTheme;
   financial_aid_enabled: boolean;
   aid_questions: unknown[];
@@ -106,7 +110,7 @@ const CONFERENCE_COLUMNS = [
   'stripe_account_id', 'connect_onboarding_status', 'payout_country', 'payment_method',
   'external_payment_url', 'external_payment_note', 'payment_gate_exempt', 'organizer_id',
   'predecessor_conference_id', 'predecessor_approved', 'min_age', 'max_age',
-  'allocation_swap_mode', 'email_theme',
+  'allocation_swap_mode', 'allocation_email_auto', 'email_theme',
   'financial_aid_enabled', 'aid_questions', 'aid_intro',
 ].join(', ');
 

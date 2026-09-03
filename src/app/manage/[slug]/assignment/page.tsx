@@ -16,6 +16,9 @@ import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
 import IndependentsView from '@/app/manage/[slug]/assignment/IndependentsView';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
+import {
+  queueAllocationEmails, allocationSendMessage, AllocationEmailBar, type AllocationTarget,
+} from '@/app/manage/[slug]/assignment/allocationEmails';
 import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { useConfirmModal } from '@/components/ConfirmModal';
@@ -67,7 +70,12 @@ interface AllocationRow {
   user_id: string | null;
   country_code: string;
   country_name: string;
+  // TRUE once this delegate has actually been queued their allocation email.
+  // Written in exactly one place — queueAllocationEmails — and only for
+  // recipients that really got an outbox row, so it is never a claim that
+  // somebody was told when they were not.
   allocation_sent: boolean;
+  allocation_sent_at?: string | null;
   application_id: string | null;
   // Which seat of the slot this row occupies (1 or 2). Uniqueness is now
   // (conference_committee_id, country_code, seat); a delegation_size 1 slot
@@ -1068,6 +1076,13 @@ function RailSourceToggle({ value, onChange }: { value: 'delegates' | 'delegatio
 // `actorId` is the organiser doing the seating (auth user id) — stamped on
 // conference_allocations.assigned_by and applications.decided_by so the
 // dashboard activity feed can show who made the change.
+//
+// `emailNow` is the whole point of the allocation email now being reliable:
+// EVERY path that seats a delegate runs through here, so the announcement is
+// queued here too rather than at five separate call sites (which is how it came
+// to be queued at none of them). Callers pass the conference's
+// allocation_email_auto flag; the manual-release flow passes false and sends
+// later from the header control.
 // Returns an error message, or null on success.
 async function insertAllocation(
   supabase: ReturnType<typeof getAuthedClient>,
@@ -1077,6 +1092,8 @@ async function insertAllocation(
   slot: SlotRow,
   seat: number,
   actorId: string,
+  emailNow: boolean,
+  pushDraftNotice?: (eventKey: string, outcome: 'unconfigured' | 'sent-default') => void,
 ): Promise<string | null> {
   // An imported applicant has no account yet, so app.profiles is null and
   // user_id stays null until they claim their invite. conference_allocations
@@ -1122,6 +1139,20 @@ async function insertAllocation(
     decided_by: actorId,
     decided_at: new Date().toISOString(),
   }).eq('id', app.id);
+
+  // Strictly AFTER the applications update: queueEventEmail resolves the
+  // {{committee}} and {{country}} tokens by reading that row back, so queueing
+  // any earlier would email a delegate a blank allocation.
+  if (emailNow) {
+    try {
+      const result = await queueAllocationEmails(supabase, conferenceId, [app.id]);
+      if (pushDraftNotice) notifyIfNeeded(result, pushDraftNotice);
+    } catch {
+      // The seat is saved either way. A failed queue leaves allocation_sent
+      // false, so the delegate shows as still waiting and the header control
+      // can send them in the next wave.
+    }
+  }
 
   return null;
 }
@@ -1456,12 +1487,13 @@ interface DropAllocateModalProps {
    *  decided once across all committees and passed in rather than re-derived
    *  from this one committee's fill. */
   needy?: boolean;
+  pushDraftNotice?: (eventKey: string, outcome: 'unconfigured' | 'sent-default') => void;
   onClose: () => void;
   onConflict: (payload: { app: AcceptedApp; slot: SlotRow; seat: number; sibling: AllocationRow }) => void;
   onAssigned: (slot: SlotRow, seat: number, msg: string) => void;
 }
 
-function DropAllocateModal({ committee, app, needy = false, onClose, onConflict, onAssigned }: DropAllocateModalProps) {
+function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onClose, onConflict, onAssigned }: DropAllocateModalProps) {
   const { session } = useAuth();
   const { conference } = useManage();
   const [busySlotId, setBusySlotId] = useState<string | null>(null);
@@ -1500,7 +1532,10 @@ function DropAllocateModal({ committee, app, needy = false, onClose, onConflict,
     setBusySlotId(slot.id);
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat, session.user.id);
+    const err = await insertAllocation(
+      supabase, conference.id, committee, app, slot, seat, session.user.id,
+      conference.allocation_email_auto, pushDraftNotice,
+    );
     setBusySlotId(null);
     if (err) { setError(err); return; }
     onAssigned(slot, seat, `${app.profiles?.display_name ?? app.invited_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
@@ -1695,7 +1730,12 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
   const { conference } = useManage();
   const [selectedApp, setSelectedApp] = useState<AcceptedApp | null>(preSelectedApp ?? null);
   const [selectedSlot, setSelectedSlot] = useState<SlotRow | null>(preSelectedSlot ?? null);
-  const [sendEmail, setSendEmail] = useState(false);
+  // Follows the conference's release mode: on automatic (the default) this is
+  // pre-ticked and the row below just states what will happen; on manual
+  // release it starts off and is the organiser's "…but email this one now"
+  // escape hatch. A MOVE never uses it — that queues allocation_changed
+  // instead, and both firing would email the same delegate twice.
+  const [sendEmail, setSendEmail] = useState(conference?.allocation_email_auto ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -1734,7 +1774,13 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
     setError('');
     const supabase = getAuthedClient(session.access_token);
 
-    const insertErr = await insertAllocation(supabase, conference.id, committee, selectedApp, selectedSlot, seat, session.user.id);
+    // A move announces itself with allocation_changed further down, so it never
+    // also queues the allocation_assigned announcement.
+    const emailNow = !moveFrom && sendEmail;
+    const insertErr = await insertAllocation(
+      supabase, conference.id, committee, selectedApp, selectedSlot, seat, session.user.id,
+      emailNow, pushDraftNotice,
+    );
     if (insertErr) {
       setError(insertErr);
       setSaving(false);
@@ -1752,20 +1798,13 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
       }
     }
 
-    if (sendEmail) {
-      // Key off application_id, not user_id. An imported applicant's user_id is
-      // null, and .eq('user_id', null) matches no rows, so the allocation would
-      // silently stay marked unsent. Every delegate allocation has an
-      // application_id, imported or not.
-      await supabase
-        .from('conference_allocations')
-        .update({ allocation_sent: true, allocation_sent_at: new Date().toISOString() })
-        .eq('conference_committee_id', committee.id)
-        .eq('application_id', selectedApp.id);
-    }
-
+    // allocation_sent is no longer flipped here. It used to be set by this
+    // block WITHOUT any email being queued, which is how a conference could
+    // show every delegate as emailed having sent nothing. queueAllocationEmails
+    // (inside insertAllocation above) is now the only writer, and it marks only
+    // the recipients that genuinely got an outbox row.
     setSaving(false);
-    onAssigned(selectedApp, selectedSlot, seat, sendEmail);
+    onAssigned(selectedApp, selectedSlot, seat, emailNow);
     onClose();
   }
 
@@ -1909,19 +1948,29 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
           )}
         </div>
 
-        {/* Send email toggle */}
-        <label className="flex items-center gap-3 mb-5 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={sendEmail}
-            onChange={e => setSendEmail(e.target.checked)}
-            className="rounded"
-            style={{ accentColor: NEU.forest, width: 16, height: 16 }}
-          />
-          <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-            Send allocation email immediately after assigning
-          </span>
-        </label>
+        {/* Allocation email. A move is announced by allocation_changed, so the
+            choice is not offered there. */}
+        {moveFrom ? (
+          <p className="text-xs mb-5" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+            They will be emailed that their allocation has changed.
+          </p>
+        ) : (
+          <label className="flex items-center gap-3 mb-5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendEmail}
+              onChange={e => setSendEmail(e.target.checked)}
+              className="rounded"
+              style={{ accentColor: NEU.forest, width: 16, height: 16 }}
+            />
+            <span className="text-xs" style={{ color: NEU.inkSoft, fontFamily: OUTFIT }}>
+              Email them their committee and country now
+              {!conference?.allocation_email_auto && (
+                <span style={{ color: NEU.muted }}> — allocation emails are on manual release</span>
+              )}
+            </span>
+          </label>
+        )}
 
         {error && <ModalError msg={error} />}
 
@@ -2019,7 +2068,10 @@ function DelegationConflictModal({
     setBusy('remove');
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat, session.user.id);
+    const err = await insertAllocation(
+      supabase, conference.id, committee, app, slot, seat, session.user.id,
+      conference.allocation_email_auto, pushDraftNotice,
+    );
     if (err) { setBusy(null); setError(err); return; }
     const { error: delErr } = await supabase.from('conference_allocations').delete().eq('id', sibling.id);
     if (delErr) {
@@ -2051,7 +2103,10 @@ function DelegationConflictModal({
     setBusy('add');
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertAllocation(supabase, conference.id, committee, { ...app, society_id: siblingSocId }, slot, seat, session.user.id);
+    const err = await insertAllocation(
+      supabase, conference.id, committee, { ...app, society_id: siblingSocId }, slot, seat, session.user.id,
+      conference.allocation_email_auto, pushDraftNotice,
+    );
     if (err) { setBusy(null); setError(err); return; }
     const { data, error: socErr } = await supabase
       .from('applications')
@@ -2078,7 +2133,10 @@ function DelegationConflictModal({
     setBusy('add');
     setError('');
     const supabase = getAuthedClient(session.access_token);
-    const err = await insertAllocation(supabase, conference.id, committee, app, slot, seat, session.user.id);
+    const err = await insertAllocation(
+      supabase, conference.id, committee, app, slot, seat, session.user.id,
+      conference.allocation_email_auto, pushDraftNotice,
+    );
     if (err) { setBusy(null); setError(err); return; }
     const { data, error: socErr } = await supabase
       .from('applications')
@@ -3073,7 +3131,7 @@ function ChairBoardPanel({
 // ── AssignmentPage ────────────────────────────────────────────────────────────
 
 export default function AssignmentPage() {
-  const { conference } = useManage();
+  const { conference, refreshConferenceQuiet } = useManage();
   const { session, loading: authLoading } = useAuth();
   const [accepted, setAccepted] = useState<AcceptedApp[]>([]);
   const [committees, setCommittees] = useState<CommitteeData[]>([]);
@@ -3107,8 +3165,8 @@ export default function AssignmentPage() {
   const [dragChairAppId, setDragChairAppId] = useState<string | null>(null);
   const [chairDropTargetId, setChairDropTargetId] = useState<string | null>(null);
   const [inviteModalCommitteeId, setInviteModalCommitteeId] = useState<string | null>(null);
-  const [sendingAll, setSendingAll] = useState(false);
   const [sendingAllocationEmails, setSendingAllocationEmails] = useState(false);
+  const [pendingAuto, setPendingAuto] = useState<boolean | null>(null);
   const [quickAssigning, setQuickAssigning] = useState<string | null>(null); // suggestion key in flight
   // Which suggestion card is expanded to show the delegate's full detail.
   const [expandedSuggestionKey, setExpandedSuggestionKey] = useState<string | null>(null);
@@ -3159,7 +3217,7 @@ export default function AssignmentPage() {
           id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs,
           committee_country_slots (id, country_code, country_name, delegation_size, importance),
           conference_allocations (
-            id, user_id, country_code, country_name, allocation_sent, application_id, society_id, seat,
+            id, user_id, country_code, country_name, allocation_sent, allocation_sent_at, application_id, society_id, seat,
             profiles (id, display_name, email, nationality, date_of_birth, mun_experience_level, avatar_url),
             delegation:society_id (name),
             applications:application_id (
@@ -3282,6 +3340,7 @@ export default function AssignmentPage() {
       country_code: slot.country_code,
       country_name: slot.country_name,
       allocation_sent: sent,
+      allocation_sent_at: sent ? new Date().toISOString() : null,
       application_id: app.id,
       seat,
       profiles: app.profiles ? { display_name: app.profiles.display_name, avatar_url: app.profiles.avatar_url } : null,
@@ -3355,11 +3414,14 @@ export default function AssignmentPage() {
     const supabase = getAuthedClient(session.access_token);
     const conferenceId = conference.id;
 
-    const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot, seat);
+    const tempRow = applyLocalAllocation(sug.committee, sug.app, sug.slot, seat, conference.allocation_email_auto);
     showFlash('ok', `${sug.app.profiles?.display_name ?? sug.app.invited_name} assigned to ${sug.slot.country_name} in ${sug.committee.abbreviation ?? sug.committee.name}.`);
 
     (async () => {
-      const err = await insertAllocation(supabase, conferenceId, sug.committee, sug.app, sug.slot, seat, session.user.id);
+      const err = await insertAllocation(
+        supabase, conferenceId, sug.committee, sug.app, sug.slot, seat, session.user.id,
+        conference.allocation_email_auto, pushDraftNotice,
+      );
       if (err) {
         rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
         // The seat was shown as filled and then silently vanished. ONE report
@@ -3385,50 +3447,104 @@ export default function AssignmentPage() {
     });
   }
 
-  function handleSendAllAllocations() {
-    if (!committees.length || sendingAll) return;
-    if (!session) return;
-    setSendingAll(true);
-    const supabase = getAuthedClient(session.access_token);
-    const committeeIds = committees.map(c => c.id);
-    // Optimistic: flip every unsent allocation locally; remember which ones so
-    // a failed write restores exactly those rows.
-    const flippedIds = new Set(
-      committees.flatMap(c => c.conference_allocations.filter(a => !a.allocation_sent).map(a => a.id))
-    );
-    setCommittees(prev => prev.map(c => ({
-      ...c,
-      conference_allocations: c.conference_allocations.map(a => (a.allocation_sent ? a : { ...a, allocation_sent: true })),
-    })));
-
-    (async () => {
-      const { error } = await supabase
-        .from('conference_allocations')
-        .update({ allocation_sent: true, allocation_sent_at: new Date().toISOString() })
-        .in('conference_committee_id', committeeIds)
-        .eq('allocation_sent', false);
-      if (error) {
-        setCommittees(prev => prev.map(c => ({
-          ...c,
-          conference_allocations: c.conference_allocations.map(a => (flippedIds.has(a.id) ? { ...a, allocation_sent: false } : a)),
-        })));
-        // ONE batched .in() update covers every committee, so this is one
-        // report for the whole conference — never one per committee.
-        reportBlocked('send all allocations', error, {
-          committeeCount: committeeIds.length, allocationCount: flippedIds.size,
+  // ── Allocation email release ───────────────────────────────────────────────
+  // The whole "who has been told their committee and country" surface. There
+  // used to be two adjacent header buttons here: SEND ALL ALLOCATIONS, which
+  // flipped conference_allocations.allocation_sent and queued NO email at all,
+  // and SEND ALLOCATION EMAILS, which queued emails and marked nobody. Both are
+  // gone — queueAllocationEmails does the two together or neither.
+  const allocationTargets: AllocationTarget[] = useMemo(() => {
+    const out: AllocationTarget[] = [];
+    for (const c of committees) {
+      const label = c.abbreviation ?? c.name;
+      for (const a of c.conference_allocations) {
+        // Delegation (block) seats have no application_id — the society holds
+        // the country until it hands the seat to one of its delegates, and
+        // there is nobody to email yet.
+        if (!a.application_id) continue;
+        out.push({
+          applicationId: a.application_id,
+          name: a.profiles?.display_name ?? a.applications?.invited_name ?? 'Unnamed delegate',
+          committee: label,
+          countryCode: a.country_code,
+          countryName: a.country_name,
+          sent: a.allocation_sent,
+          sentAt: a.allocation_sent_at ?? null,
         });
-        showFlash('err', 'Could not send allocations.');
       }
-    })().catch((e) => {
-      setCommittees(prev => prev.map(c => ({
-        ...c,
-        conference_allocations: c.conference_allocations.map(a => (flippedIds.has(a.id) ? { ...a, allocation_sent: false } : a)),
-      })));
-      reportBlocked('send all allocations', e, {
-        committeeCount: committeeIds.length, allocationCount: flippedIds.size,
-      });
-      showFlash('err', 'Could not send allocations.');
-    }).finally(() => setSendingAll(false));
+    }
+    return out;
+  }, [committees]);
+
+  // The conference row is the truth; `pendingAuto` is only the in-flight
+  // override that makes the toggle answer instantly. No mirroring effect —
+  // once refreshConferenceQuiet lands, the override clears and the context
+  // value takes over, which is also what the assign modals read.
+  const autoAllocationEmail = pendingAuto ?? conference?.allocation_email_auto ?? true;
+
+  function handleToggleAutoAllocationEmail(next: boolean) {
+    if (!session || !conference || pendingAuto !== null) return;
+    setPendingAuto(next);
+    const supabase = getAuthedClient(session.access_token);
+    const conferenceId = conference.id;
+    (async () => {
+      const { data, error } = await supabase
+        .from('conferences')
+        .update({ allocation_email_auto: next })
+        .eq('id', conferenceId)
+        .select('id');
+      if (error || !data || data.length !== 1) {
+        showFlash('err', 'Could not change how allocation emails are sent.');
+        return;
+      }
+      // The assign modals read conference.allocation_email_auto straight off
+      // the manage context, so the context has to learn about this too.
+      await refreshConferenceQuiet();
+      showFlash('ok', next
+        ? 'Allocation emails will now send automatically as you seat delegates.'
+        : 'Allocation emails are on manual release — nobody is emailed until you send.');
+    })().catch(() => {
+      showFlash('err', 'Could not change how allocation emails are sent.');
+    }).finally(() => setPendingAuto(null));
+  }
+
+  async function handleReleaseAllocationEmails(applicationIds: string[], scope: 'new' | 'all' | 'custom') {
+    if (!session || !conference || sendingAllocationEmails) return;
+    const ids = Array.from(new Set(applicationIds));
+    if (ids.length === 0) {
+      showFlash('err', 'Nobody selected.');
+      return;
+    }
+    // Re-sending is legitimate (a delegate who lost the email, a corrected
+    // country), but it must never be a surprise — so say how many of this wave
+    // have already had it.
+    const idSet = new Set(ids);
+    const alreadySent = allocationTargets.filter(t => t.sent && idSet.has(t.applicationId)).length;
+    const { confirmed } = await confirm({
+      title: `Email ${ids.length} delegate${ids.length === 1 ? '' : 's'}?`,
+      body: alreadySent > 0
+        ? `Each one is sent their own committee and country. ${alreadySent} of them ${alreadySent === 1 ? 'has' : 'have'} already had this email — they will get it again.`
+        : 'Each one is sent their own committee and country.',
+      confirmLabel: 'Send',
+    });
+    if (!confirmed) return;
+
+    setSendingAllocationEmails(true);
+    const supabase = getAuthedClient(session.access_token);
+    try {
+      const result = await queueAllocationEmails(supabase, conference.id, ids);
+      notifyIfNeeded(result, pushDraftNotice);
+      const flash = allocationSendMessage(result, ids.length);
+      showFlash(flash.kind, flash.msg);
+      // Pull the real allocation_sent / allocation_sent_at back rather than
+      // guessing which recipients the preference gate dropped.
+      loadData({ silent: true });
+    } catch (e) {
+      reportBlocked('send allocation emails', e, { conferenceId: conference.id, recipientCount: ids.length, scope });
+      showFlash('err', 'Could not send the allocation emails.');
+    } finally {
+      setSendingAllocationEmails(false);
+    }
   }
 
   const inFlightRemoveIds = useRef(new Set<string>());
@@ -3500,36 +3616,6 @@ export default function AssignmentPage() {
       });
       showFlash('err', 'Could not remove this allocation.');
     }).finally(() => inFlightRemoveIds.current.delete(allocation.id));
-  }
-
-  // Batch-queue allocation_assigned (delivery: manual) for every currently
-  // assigned application, derived from the committees already loaded here —
-  // conference_allocations rows are only ever created for delegate/head-delegate
-  // committee assignments, so this never includes chairs.
-  async function handleSendAllocationEmails() {
-    if (!session || !conference) return;
-    const applicationIds = Array.from(new Set(
-      committees.flatMap(c => c.conference_allocations.map(a => a.application_id)).filter((id): id is string => !!id)
-    ));
-    if (applicationIds.length === 0) {
-      showFlash('err', 'No assigned delegates to email.');
-      return;
-    }
-    const { confirmed } = await confirm({
-      title: 'Queue allocation emails?',
-      body: `Queue allocation emails for ${applicationIds.length} assigned delegate${applicationIds.length === 1 ? '' : 's'}?`,
-      confirmLabel: 'Queue Emails',
-    });
-    if (!confirmed) return;
-
-    setSendingAllocationEmails(true);
-    const supabase = getAuthedClient(session.access_token);
-    const result = await queueEventEmail(supabase, conference.id, 'allocation_assigned', applicationIds);
-    setSendingAllocationEmails(false);
-    notifyIfNeeded(result, pushDraftNotice);
-    if (result.outcome === 'sent-custom' || result.outcome === 'sent-default') {
-      showFlash('ok', `Queued ${result.queued ?? 0} allocation email${(result.queued ?? 0) === 1 ? '' : 's'}.`);
-    }
   }
 
   async function handleAssignChair(chairApp: ChairApp, committee: CommitteeData) {
@@ -3967,21 +4053,14 @@ export default function AssignmentPage() {
           <h1 className="font-black text-2xl" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Assignment</h1>
         </div>
         {mode === 'delegates' && (
-          <div className="flex gap-2.5 flex-wrap">
-            <NeuButton
-              onClick={handleSendAllocationEmails}
-              disabled={sendingAllocationEmails}
-              gradient={NEU_GRADIENTS.gold}
-            >
-              {sendingAllocationEmails ? 'QUEUEING...' : 'SEND ALLOCATION EMAILS'}
-            </NeuButton>
-            <NeuButton
-              onClick={handleSendAllAllocations}
-              disabled={sendingAll}
-            >
-              {sendingAll ? 'SENDING...' : 'SEND ALL ALLOCATIONS'}
-            </NeuButton>
-          </div>
+          <AllocationEmailBar
+            autoSend={autoAllocationEmail}
+            onToggleAuto={handleToggleAutoAllocationEmail}
+            togglePending={pendingAuto !== null}
+            targets={allocationTargets}
+            busy={sendingAllocationEmails}
+            onSend={handleReleaseAllocationEmails}
+          />
         )}
       </div>
 
@@ -4468,6 +4547,7 @@ export default function AssignmentPage() {
           committee={dropModalCommittee}
           app={dropModalApp}
           needy={needyCommitteeIds.has(dropModalCommittee.id)}
+          pushDraftNotice={pushDraftNotice}
           onClose={() => setDropModal(null)}
           onConflict={payload => { setConflict({ committee: dropModalCommittee, ...payload }); setDropModal(null); }}
           onAssigned={(slot, seat, msg) => {
