@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { queueEventEmail, queueRequestReceivedEmail, type QueueEventEmailResult } from '@/lib/emailEvents';
+import { queueAllocationEmails, ALLOCATION_EVENT_KEY } from '@/lib/allocationEmail';
 import type { getAuthedClient } from '@/lib/supabase-auth';
 import type { EmailTokenContext } from '@/lib/emailTokens';
 
@@ -26,7 +27,9 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publi
 // 'request_received' is the one organizer-directed event reachable here: the
 // participant who asked the question is the trigger, but the recipients are
 // the organizing team, so it takes a requestId rather than applicationIds.
-const ALLOWED_EVENTS = new Set(['application_received', 'delegation_swap', 'request_received']);
+// 'allocation_assigned' likewise takes an allocationId, not applicationIds —
+// see the branch below for why naming the recipient is not the caller's job.
+const ALLOWED_EVENTS = new Set(['application_received', 'delegation_swap', 'request_received', ALLOCATION_EVENT_KEY]);
 const LEADER_STATUSES = ['accepted', 'assigned', 'checked-in'];
 
 interface QueueParticipantBody {
@@ -36,6 +39,8 @@ interface QueueParticipantBody {
   extraCtx?: EmailTokenContext;
   /** 'request_received' only: the conference_requests row that was just opened. */
   requestId?: string;
+  /** 'allocation_assigned' only: the seat that was just filled. */
+  allocationId?: string;
 }
 
 async function isOrganizer(admin: SupabaseClient, callerId: string, conferenceId: string): Promise<boolean> {
@@ -79,6 +84,61 @@ async function authorizeDelegationSwap(admin: SupabaseClient, callerId: string, 
   return (leaderRows?.length ?? 0) > 0;
 }
 
+/**
+ * A delegation leader seating one of their own block members.
+ *
+ * The interesting part is what this function does NOT take from the caller:
+ * the recipient. Every other event here is handed applicationIds and checks
+ * them; this one is handed only the seat, and reads the occupant back out of
+ * the row `delegation_assign_seat` just wrote. A leader therefore cannot
+ * address the allocation email at anyone — not another delegation's delegate,
+ * not an organiser — only at whoever is actually sitting in a seat their
+ * delegation owns, right now. That is a much narrower grant than adding the
+ * event key to ALLOWED_EVENTS and reusing the applicationIds path would be.
+ *
+ * Returns the seated application id on success so the caller does not have to
+ * re-read the row it just authorized.
+ */
+async function authorizeAllocationAssigned(
+  admin: SupabaseClient,
+  callerId: string,
+  conferenceId: string,
+  allocationId: string,
+): Promise<{ ok: true; applicationId: string } | { ok: false }> {
+  const { data } = await admin
+    .from('conference_allocations')
+    .select('id, conference_id, society_id, application_id, user_id')
+    .eq('id', allocationId)
+    .maybeSingle();
+  const alloc = data as {
+    id: string; conference_id: string | null; society_id: string | null;
+    application_id: string | null; user_id: string | null;
+  } | null;
+
+  if (!alloc || alloc.conference_id !== conferenceId) return { ok: false };
+  // Not a delegation block seat: individual seats are the organiser's to
+  // announce, and this route is the participant side.
+  if (!alloc.society_id) return { ok: false };
+  // An empty seat has nobody to tell. This is also the guard that makes the
+  // unassign branch of delegation_assign_seat a no-op here.
+  if (!alloc.application_id || !alloc.user_id) return { ok: false };
+
+  if (await isOrganizer(admin, callerId, conferenceId)) return { ok: true, applicationId: alloc.application_id };
+
+  const { data: leaderRows } = await admin
+    .from('applications')
+    .select('id')
+    .eq('user_id', callerId)
+    .eq('conference_id', conferenceId)
+    .eq('society_id', alloc.society_id)
+    .in('role', ['faculty-advisor', 'head-delegate'])
+    .in('status', LEADER_STATUSES)
+    .limit(1);
+  if ((leaderRows?.length ?? 0) > 0) return { ok: true, applicationId: alloc.application_id };
+
+  return { ok: false };
+}
+
 export async function POST(req: NextRequest) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
@@ -97,7 +157,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
   }
-  const { conferenceId, eventKey, applicationIds, extraCtx, requestId } = body;
+  const { conferenceId, eventKey, applicationIds, extraCtx, requestId, allocationId } = body;
   if (!conferenceId || !eventKey) {
     return NextResponse.json({ error: 'Missing conferenceId or eventKey.' }, { status: 400 });
   }
@@ -105,8 +165,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Event "${eventKey}" cannot be queued from the participant side.` }, { status: 403 });
   }
   const isRequestReceived = eventKey === 'request_received';
+  const isAllocationAssigned = eventKey === ALLOCATION_EVENT_KEY;
   if (isRequestReceived) {
     if (!requestId) return NextResponse.json({ error: 'Missing requestId.' }, { status: 400 });
+  } else if (isAllocationAssigned) {
+    if (!allocationId) return NextResponse.json({ error: 'Missing allocationId.' }, { status: 400 });
   } else if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
     return NextResponse.json({ error: 'Missing applicationIds.' }, { status: 400 });
   }
@@ -163,6 +226,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ outcome: queued > 0 ? 'sent-default' : 'no-recipients', drafted: false, queued, eventKey } satisfies QueueEventEmailResult);
     } catch (err) {
       console.error('[queue-participant] queueRequestReceivedEmail threw:', err);
+      return NextResponse.json({ outcome: 'unconfigured', drafted: false, queued: 0, eventKey } satisfies QueueEventEmailResult);
+    }
+  }
+
+  // A delegation leader seating a member: same announcement the organiser's
+  // own seat write sends, queued and marked by the same shared helper, so a
+  // block delegate is told where they sit and the organiser's roster counts
+  // them as told. Before this, a leader-seated delegate got nothing AND showed
+  // as unsent forever — invisible to "All new", because nothing was ever
+  // sending to them.
+  if (isAllocationAssigned) {
+    const auth = await authorizeAllocationAssigned(admin, callerId, conferenceId, allocationId!);
+    if (!auth.ok) {
+      return NextResponse.json({ error: 'Not authorized to queue this event.' }, { status: 403 });
+    }
+
+    // The organiser's release mode governs the leader's writes too. On manual
+    // release the organiser is deliberately holding allocations back to send
+    // in waves, and a leader filling a seat must not leak one out early. The
+    // seat simply stays unsent, which is exactly what puts it in the next
+    // "All new" wave. 'off' is the existing outcome for "an organiser chose
+    // this, skip silently" — shouldNotify() correctly raises no nudge for it.
+    const { data: confRow } = await admin
+      .from('conferences')
+      .select('allocation_email_auto')
+      .eq('id', conferenceId)
+      .maybeSingle();
+    if ((confRow as { allocation_email_auto: boolean | null } | null)?.allocation_email_auto === false) {
+      return NextResponse.json({ outcome: 'off', drafted: false, queued: 0, eventKey } satisfies QueueEventEmailResult);
+    }
+
+    try {
+      const allocResult = await queueAllocationEmails(
+        admin as unknown as ReturnType<typeof getAuthedClient>, conferenceId, [auth.applicationId],
+      );
+      return NextResponse.json(allocResult);
+    } catch (err) {
+      console.error('[queue-participant] queueAllocationEmails threw:', err);
       return NextResponse.json({ outcome: 'unconfigured', drafted: false, queued: 0, eventKey } satisfies QueueEventEmailResult);
     }
   }

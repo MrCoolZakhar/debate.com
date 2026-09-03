@@ -979,3 +979,40 @@ export async function queueParticipantEventEmail(
     return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
   }
 }
+
+/**
+ * The allocation announcement, raised by a DELEGATION LEADER who has just
+ * seated one of their own block members.
+ *
+ * Separate from queueParticipantEventEmail because it names a SEAT, not
+ * recipients: the server reads the occupant out of the allocation row itself,
+ * so a leader can only ever email whoever is actually sitting in a seat their
+ * delegation owns. See authorizeAllocationAssigned in the route.
+ *
+ * Safe to fire without awaiting — every failure path returns rather than
+ * throws, so a seat assignment is never blocked by the email.
+ */
+export async function queueLeaderAllocationEmail(
+  accessToken: string,
+  conferenceId: string,
+  allocationId: string
+): Promise<QueueEventEmailResult> {
+  const eventKey = 'allocation_assigned';
+  const eventLabel = getEventLabel(eventKey);
+  try {
+    const res = await fetch('/api/emails/queue-participant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ conferenceId, eventKey, allocationId }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      console.error(`[queueLeaderAllocationEmail] rejected (${res.status}):`, body?.error);
+      return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
+    }
+    return await res.json() as QueueEventEmailResult;
+  } catch (err) {
+    console.error('[queueLeaderAllocationEmail] request threw:', err);
+    return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
+  }
+}

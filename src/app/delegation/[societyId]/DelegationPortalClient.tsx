@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { queueLeaderAllocationEmail } from '@/lib/emailEvents';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { NEU, NEU_GRADIENTS, EASE, OUTFIT, NeuCard, NeuIconDisc } from '@/components/neu';
@@ -554,10 +555,22 @@ export default function DelegationPortalClient() {
       setBusyId(null);
       return;
     }
+
+    // Tell the delegate where they are sitting — the same announcement the
+    // organiser's own seat write sends. Seating somebody here used to be the
+    // one path onto a committee that emailed nobody: the delegate found out by
+    // logging in and looking, and the organiser's roster went on showing them
+    // as never told. Fire-and-forget on purpose — the seat is already saved,
+    // and the route swallows every failure rather than throwing, so a mail
+    // problem can never undo an assignment. Unassigning announces nothing.
+    if (member && society) {
+      void queueLeaderAllocationEmail(session.access_token, society.conferenceId, seat.id);
+    }
+
     // Reconcile with server truth (the RPC also mirrors onto applications).
     await load({ silent: true });
     setBusyId(null);
-  }, [session, busyId, seats, load]);
+  }, [session, busyId, seats, load, society]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const memberByUserId = new Map(members.map((m) => [m.user_id, m]));
