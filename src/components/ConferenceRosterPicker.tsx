@@ -12,7 +12,7 @@
 // Reuses shared logic (findCountryFlexible, UN_COUNTRIES) rather than copying.
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ } from 'lucide-react';
+import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible } from '@/lib/countries';
 import {
@@ -385,19 +385,26 @@ export function ConferenceCommitteeNameInput({ value, onChange, onPresetSelect }
 
 interface ReviewRow { name: string; isCountry: boolean }
 
-export function ConferenceRosterPicker({ mode, value, onChange }: {
+// ── The selected roster, as its own panel ────────────────────────────────────
+//
+// Split out of ConferenceRosterPicker so the committee editor can dock it
+// OUTSIDE its main bubble (next to the chairs panel) where it has room to
+// breathe. Nothing was duplicated to do it: every mutation here is a pure
+// function of `value` + `onChange`, and the three pieces of state that are
+// genuinely local to the list (which row is being renamed, and the
+// display-only sort) came with it.
+//
+// Rows are CARDS, not one-line strips, and their controls are always visible
+// rather than revealed on hover — the old hover-only remove/rename simply did
+// not exist on a touch device.
+export function ConferenceRosterSelected({ mode, value, onChange, style, className }: {
   mode: 'country' | 'character';
   value: RosterEntry[];
   onChange: (roster: RosterEntry[]) => void;
+  style?: React.CSSProperties;
+  className?: string;
 }) {
   const isCharacter = mode === 'character';
-  const [search, setSearch] = useState('');
-  const [pasteText, setPasteText] = useState('');
-  const [pasteError, setPasteError] = useState('');
-  const [review, setReview] = useState<ReviewRow[] | null>(null);
-  // The paste-review overlay is a modal. Ref-counted, so when it opens on top
-  // of the committee editor modal the editor's own lock survives its close.
-  useScrollLock(!!review);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
   // Display-only ordering of the selected list. 'entered' keeps insertion order;
@@ -405,30 +412,6 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
   // This never mutates `value` — handlers below always resolve the ORIGINAL
   // index — so parent state/observer/tier semantics are untouched.
   const [orderMode, setOrderMode] = useState<'entered' | 'az' | 'importance'>('entered');
-
-  const names = value.map((r) => r.name);
-  const nameSet = new Set(names.map((n) => n.toLowerCase()));
-
-  const available = isCharacter
-    ? []
-    : UN_COUNTRIES.filter((c) => !nameSet.has(c.name.toLowerCase()) && c.name.toLowerCase().includes(search.toLowerCase()));
-
-  const searchAnchorRef = useRef<HTMLDivElement>(null);
-  const searchMenuOpen = !!(search.trim() && (available.length > 0 || !nameSet.has(search.trim().toLowerCase())));
-  const searchPos = useAnchoredDropdown(searchMenuOpen, searchAnchorRef, 300);
-
-  const add = (name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed || nameSet.has(trimmed.toLowerCase())) return;
-    onChange([...value, entry(trimmed)]);
-  };
-
-  const addBundle = (key: string) => {
-    const bundle = BUNDLES[key];
-    if (!bundle) return;
-    const additions = bundle.members.filter((m) => !nameSet.has(m.toLowerCase())).map((m) => entry(m));
-    onChange([...value, ...additions]);
-  };
 
   const removeIdx = (idx: number) => onChange(value.filter((_, i) => i !== idx));
 
@@ -462,6 +445,222 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
     }
     return rows;
   }, [value, orderMode]);
+
+  return (
+    <div className={`flex flex-col min-h-0 ${className ?? ''}`} style={style}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <label style={{ ...labelStyle, marginBottom: 0 }}>{isCharacter ? 'Selected characters' : 'Selected countries'}</label>
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.3)', padding: '1px 6px', borderRadius: 999, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+            {value.length}
+          </span>
+          <HoverInfo>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#B6871F' }}>Reading this list</p>
+            <div className="mt-2.5 flex gap-2.5">
+              <span className="shrink-0 mt-0.5"><Megaphone size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} /></span>
+              <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
+                <b style={{ color: '#1C1410' }}>Observer</b> (megaphone) marks a seat as a non-voting observer — they can speak but hold no vote. Click to toggle; lit gold = observer.
+              </p>
+            </div>
+            <div className="mt-2.5 flex gap-2.5">
+              <span className="shrink-0 mt-1"><DashLegend tier="high" /></span>
+              <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
+                <b style={{ color: '#1C1410' }}>Importance dashes</b> rank how sought-after a seat is. They steer allocation &amp; assignment — higher tiers are offered to stronger applicants and surface first in suggestions.
+              </p>
+            </div>
+            <div className="mt-2.5 flex items-center gap-3" style={{ borderTop: '1px solid #EDE7D8', paddingTop: 10 }}>
+              {(['standard', 'low', 'medium', 'high'] as const).map((t) => (
+                <span key={t} className="inline-flex items-center gap-1">
+                  <DashLegend tier={t} />
+                  <span style={{ fontSize: 9.5, color: '#9A8A78', fontWeight: 600 }}>{TIER_META[t].label}</span>
+                </span>
+              ))}
+            </div>
+          </HoverInfo>
+        </div>
+        <div className="flex items-center gap-2">
+          {value.length > 0 && (
+            <button
+              onClick={() => onChange([])}
+              className="text-xs font-bold uppercase tracking-wide transition-colors focus:outline-none"
+              style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9 }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+            >
+              CLEAR ALL
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Order toggle — A–Z ↔ Importance (country mode only). Display-only. */}
+      {!isCharacter && value.length > 1 && (
+        <div className="flex items-center gap-1 mb-2 rounded-lg p-0.5 self-start" style={{ backgroundColor: '#EFE9DB', border: '1px solid #E1D9C6' }}>
+          {([
+            { key: 'az', label: 'A–Z', icon: <ArrowDownAZ size={11} strokeWidth={2} /> },
+            { key: 'importance', label: 'Importance', icon: <DashLegend tier="high" /> },
+          ] as const).map((opt) => {
+            const active = orderMode === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setOrderMode((cur) => (cur === opt.key ? 'entered' : opt.key))}
+                aria-pressed={active}
+                title={active ? 'Sorted — click to restore added order' : `Sort by ${opt.label === 'A–Z' ? 'name' : 'importance'}`}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition-colors focus:outline-none"
+                style={{
+                  fontFamily: "'Outfit', sans-serif", fontSize: 9.5, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                  color: active ? '#EED98A' : '#6E5F4E',
+                  backgroundColor: active ? '#1B3828' : 'transparent',
+                  boxShadow: active ? '0 1px 3px rgba(27,56,40,0.22)' : undefined,
+                }}
+              >
+                {opt.icon}
+                <span>{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* The cards themselves. `auto-fill` at a 188px minimum is what makes this
+          fit at every width the editor is used at: one column in the docked
+          rail (~300px), two or three when the rail widens on a large screen or
+          the panel wraps full-width on a small one. No breakpoints to keep in
+          sync with the modal's own. */}
+      <div
+        className="flex-1 rounded-xl min-h-0"
+        style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', overflowY: 'auto', padding: value.length === 0 ? 0 : 8 }}
+      >
+        {value.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full px-3 py-8">
+            <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'NO CHARACTERS' : 'NO COUNTRIES'}</p>
+            <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'Type or paste names to add' : 'Search, use bundles, or paste'}</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(188px, 1fr))', gap: 8 }}>
+            {displayRows.map(({ r: row, i: idx }) => {
+              const found = isCharacter ? undefined : getCountryByName(row.name);
+              const isCustom = !found;
+              const isEditing = editingIdx === idx;
+              const isObserver = !!row.isObserver;
+              return (
+                <div
+                  key={`${row.name}-${idx}`}
+                  className="flex flex-col gap-1.5 transition-colors"
+                  style={{ border: '1px solid #E7DFCB', borderRadius: 12, backgroundColor: '#FFFDF8', padding: '9px 10px' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#C9BEA2'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#E7DFCB'; }}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {found
+                      ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: 26, height: 18, objectFit: 'cover', borderRadius: 3, flexShrink: 0, boxShadow: '0 0 0 1px rgba(0,0,0,0.08)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      : (isCharacter
+                          ? <Users size={17} strokeWidth={1.5} style={{ color: '#B6871F', flexShrink: 0 }} />
+                          : <Globe size={17} strokeWidth={1.5} style={{ color: '#9A8A78', flexShrink: 0 }} />)
+                    }
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') commitRename(idx, editDraft); else if (e.key === 'Escape') setEditingIdx(null); }}
+                        onBlur={() => commitRename(idx, editDraft)}
+                        className="flex-1 min-w-0 text-[13.5px] bg-transparent outline-none"
+                        style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
+                      />
+                    ) : (
+                      <span className="flex-1 min-w-0 text-[13.5px] font-semibold truncate" title={row.name} style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                        {row.name}
+                      </span>
+                    )}
+                  </div>
+                  {!isEditing && (
+                    <div className="flex items-center gap-1.5" style={{ borderTop: '1px solid #F0EDE6', paddingTop: 5 }}>
+                      {/* Importance — country mode only. Vertical dashes: count + colour encode the tier. */}
+                      {!isCharacter && (
+                        <ImportanceDashes tier={row.importance} onClick={() => cycleTier(idx)} />
+                      )}
+                      {/* Observer toggle — countries AND characters, mirrors /create's megaphone */}
+                      <button
+                        onClick={() => toggleObserver(idx)}
+                        title={isObserver ? 'Observer — click to make a voting delegate' : 'Mark as observer'}
+                        aria-pressed={isObserver}
+                        className="focus:outline-none transition-transform active:scale-90 shrink-0"
+                        style={{ color: isObserver ? '#B6871F' : '#B3A794' }}
+                      >
+                        <Megaphone size={13} strokeWidth={1.75} />
+                      </button>
+                      <span className="flex-1" />
+                      {/* Rename — custom entries & all characters */}
+                      {(isCustom || isCharacter) && (
+                        <button onClick={() => { setEditingIdx(idx); setEditDraft(row.name); }} className="focus:outline-none shrink-0" style={{ color: '#B3A794' }} title="Rename" aria-label={`Rename ${row.name}`}><PenLine size={13} /></button>
+                      )}
+                      <button
+                        onClick={() => removeIdx(idx)}
+                        className="focus:outline-none shrink-0"
+                        style={{ color: '#B3A794', lineHeight: 0 }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#B3A794'; }}
+                        title="Remove"
+                        aria-label={`Remove ${row.name}`}
+                      >
+                        <X size={13} strokeWidth={2.4} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function ConferenceRosterPicker({ mode, value, onChange, showSelected = true }: {
+  mode: 'country' | 'character';
+  value: RosterEntry[];
+  onChange: (roster: RosterEntry[]) => void;
+  /** False when the caller renders `ConferenceRosterSelected` itself somewhere
+   *  else — the committee editor docks it outside its main panel. */
+  showSelected?: boolean;
+}) {
+  const isCharacter = mode === 'character';
+  const [search, setSearch] = useState('');
+  const [pasteText, setPasteText] = useState('');
+  const [pasteError, setPasteError] = useState('');
+  const [review, setReview] = useState<ReviewRow[] | null>(null);
+  // The paste-review overlay is a modal. Ref-counted, so when it opens on top
+  // of the committee editor modal the editor's own lock survives its close.
+  useScrollLock(!!review);
+
+  const names = value.map((r) => r.name);
+  const nameSet = new Set(names.map((n) => n.toLowerCase()));
+
+  const available = isCharacter
+    ? []
+    : UN_COUNTRIES.filter((c) => !nameSet.has(c.name.toLowerCase()) && c.name.toLowerCase().includes(search.toLowerCase()));
+
+  const searchAnchorRef = useRef<HTMLDivElement>(null);
+  const searchMenuOpen = !!(search.trim() && (available.length > 0 || !nameSet.has(search.trim().toLowerCase())));
+  const searchPos = useAnchoredDropdown(searchMenuOpen, searchAnchorRef, 300);
+
+  const add = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || nameSet.has(trimmed.toLowerCase())) return;
+    onChange([...value, entry(trimmed)]);
+  };
+
+  const addBundle = (key: string) => {
+    const bundle = BUNDLES[key];
+    if (!bundle) return;
+    const additions = bundle.members.filter((m) => !nameSet.has(m.toLowerCase())).map((m) => entry(m));
+    onChange([...value, ...additions]);
+  };
 
   // Paste. Countries → fuzzy-match + review/rename step. Characters → add all
   // pasted lines verbatim (no country matching), deduped case-insensitively.
@@ -520,7 +719,11 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
   };
 
   return (
-    <div className="flex gap-5" style={{ minHeight: 340 }}>
+    // The old `minHeight: 340` existed only to stop the add column from being
+    // shorter than the selected list beside it. With the list docked elsewhere
+    // there is nothing to match, and the floor was forcing the editor to
+    // scroll for no reason.
+    <div className="flex gap-5">
       {/* Left: add controls */}
       <div className="flex flex-col gap-3 flex-1 min-w-0">
         {/* Search & Add */}
@@ -615,9 +818,13 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
             value={pasteText}
             onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
             placeholder={isCharacter ? 'Fidel Castro\nNikita Khrushchev\nJohn F. Kennedy…' : 'France\nGermany\nBrazil, India…'}
-            rows={8}
+            /* 8 rows → 4. This is a paste TARGET, not a place anyone reads a
+               list back: it scrolls, it is resize-y, and the 8-row default was
+               ~90px of the committee editor's height — the single biggest
+               reason the main step did not fit a 900px-tall viewport. */
+            rows={4}
             className="flex-1 rounded-xl px-3 py-2.5 text-sm resize-y focus:outline-none"
-            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif", minHeight: 150, lineHeight: 1.55 }}
+            style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif", minHeight: 92, lineHeight: 1.55 }}
           />
           <div className="flex items-center gap-2 mt-2">
             <button
@@ -635,162 +842,16 @@ export function ConferenceRosterPicker({ mode, value, onChange }: {
         </div>
       </div>
 
-      {/* Right: selected list */}
-      <div className="flex flex-col" style={{ width: 280, flexShrink: 0 }}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5">
-            <label style={{ ...labelStyle, marginBottom: 0 }}>Selected</label>
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.3)', padding: '1px 6px', borderRadius: 999, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
-              {value.length}
-            </span>
-            <HoverInfo>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#B6871F' }}>Reading this list</p>
-              <div className="mt-2.5 flex gap-2.5">
-                <span className="shrink-0 mt-0.5"><Megaphone size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} /></span>
-                <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
-                  <b style={{ color: '#1C1410' }}>Observer</b> (megaphone) marks a seat as a non-voting observer — they can speak but hold no vote. Click to toggle; lit gold = observer.
-                </p>
-              </div>
-              <div className="mt-2.5 flex gap-2.5">
-                <span className="shrink-0 mt-1"><DashLegend tier="high" /></span>
-                <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
-                  <b style={{ color: '#1C1410' }}>Importance dashes</b> rank how sought-after a seat is. They steer allocation &amp; assignment — higher tiers are offered to stronger applicants and surface first in suggestions.
-                </p>
-              </div>
-              <div className="mt-2.5 flex items-center gap-3" style={{ borderTop: '1px solid #EDE7D8', paddingTop: 10 }}>
-                {(['standard', 'low', 'medium', 'high'] as const).map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1">
-                    <DashLegend tier={t} />
-                    <span style={{ fontSize: 9.5, color: '#9A8A78', fontWeight: 600 }}>{TIER_META[t].label}</span>
-                  </span>
-                ))}
-              </div>
-            </HoverInfo>
-          </div>
-          <div className="flex items-center gap-2">
-            {value.length > 0 && (
-              <button
-                onClick={() => onChange([])}
-                className="text-xs font-bold uppercase tracking-wide transition-colors focus:outline-none"
-                style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-              >
-                CLEAR ALL
-              </button>
-            )}
-          </div>
-        </div>
-        {/* Order toggle — A–Z ↔ Importance (country mode only). Display-only. */}
-        {!isCharacter && value.length > 1 && (
-          <div className="flex items-center gap-1 mb-2 rounded-lg p-0.5 self-start" style={{ backgroundColor: '#EFE9DB', border: '1px solid #E1D9C6' }}>
-            {([
-              { key: 'az', label: 'A–Z', icon: <ArrowDownAZ size={11} strokeWidth={2} /> },
-              { key: 'importance', label: 'Importance', icon: <DashLegend tier="high" /> },
-            ] as const).map((opt) => {
-              const active = orderMode === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setOrderMode((cur) => (cur === opt.key ? 'entered' : opt.key))}
-                  aria-pressed={active}
-                  title={active ? 'Sorted — click to restore added order' : `Sort by ${opt.label === 'A–Z' ? 'name' : 'importance'}`}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition-colors focus:outline-none"
-                  style={{
-                    fontFamily: "'Outfit', sans-serif", fontSize: 9.5, fontWeight: 700,
-                    textTransform: 'uppercase', letterSpacing: '0.05em',
-                    color: active ? '#EED98A' : '#6E5F4E',
-                    backgroundColor: active ? '#1B3828' : 'transparent',
-                    boxShadow: active ? '0 1px 3px rgba(27,56,40,0.22)' : undefined,
-                  }}
-                >
-                  {opt.icon}
-                  <span>{opt.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div className="flex-1 rounded-xl overflow-hidden" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', maxHeight: 320, overflowY: 'auto' }}>
-          {value.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full px-3 py-8">
-              <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'NO CHARACTERS' : 'NO COUNTRIES'}</p>
-              <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'Type or paste names to add' : 'Search, use bundles, or paste'}</p>
-            </div>
-          ) : (
-            displayRows.map(({ r: row, i: idx }) => {
-              const found = isCharacter ? undefined : getCountryByName(row.name);
-              const isCustom = !found;
-              const isEditing = editingIdx === idx;
-              const isObserver = !!row.isObserver;
-              return (
-                <div
-                  key={`${row.name}-${idx}`}
-                  className="flex items-center gap-2.5 px-3.5 py-2.5 group transition-colors"
-                  style={{ borderBottom: '1px solid #F0EDE6' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}
-                >
-                  {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: 22, height: 16, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    : (isCharacter
-                        ? <Users size={15} strokeWidth={1.5} style={{ color: '#B6871F', flexShrink: 0 }} />
-                        : <Globe size={15} strokeWidth={1.5} style={{ color: '#9A8A78', flexShrink: 0 }} />)
-                  }
-                  {isEditing ? (
-                    <input
-                      autoFocus
-                      value={editDraft}
-                      onChange={(e) => setEditDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') commitRename(idx, editDraft); else if (e.key === 'Escape') setEditingIdx(null); }}
-                      onBlur={() => commitRename(idx, editDraft)}
-                      className="flex-1 text-[13px] bg-transparent outline-none"
-                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
-                    />
-                  ) : (
-                    <span className="flex-1 text-[13px] truncate min-w-0" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      <span className="truncate">{row.name}</span>
-                    </span>
-                  )}
-                  {!isEditing && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      {/* Importance — country mode only. Vertical dashes: count + colour encode the tier. */}
-                      {!isCharacter && (
-                        <ImportanceDashes tier={row.importance} onClick={() => cycleTier(idx)} />
-                      )}
-                      {/* Observer toggle — countries AND characters, mirrors /create's megaphone */}
-                      <button
-                        onClick={() => toggleObserver(idx)}
-                        title={isObserver ? 'Observer — click to make a voting delegate' : 'Mark as observer'}
-                        aria-pressed={isObserver}
-                        className="focus:outline-none transition-transform active:scale-90 shrink-0"
-                        style={{ color: isObserver ? '#B6871F' : '#9A8A78', opacity: isObserver ? 1 : undefined }}
-                      >
-                        <Megaphone size={12} strokeWidth={1.75} className={isObserver ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'} />
-                      </button>
-                      {/* Rename — custom entries & all characters */}
-                      {(isCustom || isCharacter) && (
-                        <button onClick={() => { setEditingIdx(idx); setEditDraft(row.name); }} className="opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none" style={{ color: '#9A8A78' }} title="Rename"><PenLine size={12} /></button>
-                      )}
-                      <button
-                        onClick={() => removeIdx(idx)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-xs focus:outline-none"
-                        style={{ color: '#9A8A78' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                        title="Remove"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
+      {/* Right: selected list, unless the caller is placing it itself. */}
+      {showSelected && (
+        <ConferenceRosterSelected
+          mode={mode}
+          value={value}
+          onChange={onChange}
+          style={{ width: 280, flexShrink: 0, maxHeight: 320 }}
+        />
+      )}
+
 
       {/* Paste review overlay (country mode) — sits above the editor modal */}
       {review && (
