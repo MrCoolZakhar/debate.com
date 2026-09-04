@@ -20,7 +20,7 @@ import {
 // so GREEN_INK carries the words and `NEU.green` survives on dots and fills
 // only, where the 3:1 non-text bar applies. See ./tokens for the full sweep.
 import { type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
-import { CommitteeScoreboardBody } from './ScoreboardTable';
+import { CommitteeScoreboardBody } from '@/components/ScoreboardTable';
 import { SOFT, GREEN_INK } from './tokens';
 import { committeeIdentity } from './identity';
 

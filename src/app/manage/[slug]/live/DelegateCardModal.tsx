@@ -34,7 +34,7 @@ import {
   type ConferenceScoreboard, type ScoreboardDelegateRow,
 } from '@/lib/conferenceScoreboard';
 import { type LiveCommittee, ModalShell, flagCodeFor } from './LiveModals';
-import { DelegateDetail, displayCountry } from './ScoreboardTable';
+import { DelegateDetail, displayCountry } from '@/components/ScoreboardTable';
 import { committeeIdentity } from './cardModel';
 import { allocationKey, type AllocationIndex, type AllocatedPerson } from './allocations';
 import { SOFT, RED, GREEN_INK, AMBER_INK, CARD_BORDER_COLOR } from './tokens';

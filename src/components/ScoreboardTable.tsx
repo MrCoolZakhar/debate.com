@@ -9,14 +9,22 @@
 //   • the conference-wide `/manage/[slug]/scoreboard` route, which keeps the
 //     cross-committee comparison and the CSV export.
 //
+//   • and, since the move to `src/components/`, the CHAIR's own session
+//     scoreboard (`ScoreboardPanel`), which used to carry a second, plainer
+//     implementation of the same list and drill-in. It feeds this table from
+//     the in-memory committee via `buildSessionScoreboardRows`
+//     (`src/lib/sessionScoreboard.ts`) instead of from Supabase.
+//
 // It was extracted rather than duplicated. It also drops the hardcoded palette
 // the standalone page was carrying — `#FAF8F3`, `#D8CDB6` and above all
 // `#9A8A78`, which measures 2.71:1 on this background and was labelling every
 // column header and every secondary fact in the table.
 //
-// Colocated under `live/` because that is where the new primary caller lives and
-// because this change is scoped to this surface; `src/components/` is the
-// natural long-term home once someone can move it there.
+// It was colocated under `live/` while the conferences dashboard was its only
+// caller; it now lives here, its documented long-term home, because the chair
+// console is a caller too and `live/` is not importable as a shared component
+// root. `live/tokens.ts` still re-exports the palette, so nothing on the
+// conferences side changed.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useMemo, useState } from 'react';
@@ -30,11 +38,13 @@ import {
   formatSpeakingTime, COMMENT_LEVEL_LABEL,
   type ConferenceScoreboard, type ScoreboardDelegateRow,
 } from '@/lib/conferenceScoreboard';
-import { SOFT, RED, CARD_BORDER_COLOR } from './tokens';
+import { SOFT, RED, CARD_BORDER_COLOR } from './scoreboardTokens';
 
-// Manage surfaces are English-only, so country names resolve against 'en'.
+// Manage surfaces are English-only, so country names resolve against 'en' unless
+// a caller says otherwise. The chair console IS translated, so it passes its own
+// locale down; every conferences-side caller omits it and keeps 'en'.
 const LOCALE = 'en';
-export const displayCountry = (c: string) => getCountryDisplayName(c, LOCALE);
+export const displayCountry = (c: string, locale: string = LOCALE) => getCountryDisplayName(c, locale);
 
 export type SortKey = 'score' | 'speeches' | 'time' | 'comments' | 'name';
 
@@ -46,9 +56,11 @@ export const SORTS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'DELEGATION' },
 ];
 
-export function sortScoreboardRows(rows: ScoreboardDelegateRow[], sortKey: SortKey): ScoreboardDelegateRow[] {
+export function sortScoreboardRows(
+  rows: ScoreboardDelegateRow[], sortKey: SortKey, locale: string = LOCALE,
+): ScoreboardDelegateRow[] {
   const byName = (a: ScoreboardDelegateRow, b: ScoreboardDelegateRow) =>
-    displayCountry(a.country).localeCompare(displayCountry(b.country), LOCALE);
+    displayCountry(a.country, locale).localeCompare(displayCountry(b.country, locale), locale);
   const withComments = (r: ScoreboardDelegateRow) => r.comments.filter((c) => c.content.trim()).length;
   return [...rows].sort((a, b) => {
     switch (sortKey) {
@@ -92,7 +104,17 @@ const SECTION_LABEL: React.CSSProperties = {
   color: NEU.forest, marginBlockEnd: 8,
 };
 
-export function DelegateDetail({ row }: { row: ScoreboardDelegateRow }) {
+export function DelegateDetail({ row, summary = false, extra }: {
+  row: ScoreboardDelegateRow;
+  /** Opt-in activity strip above the breakdown — everything this delegation has
+   *  actually DONE this session, not only what it scored for. Off by default so
+   *  the organiser drill-in is unchanged; the chair's scoreboard turns it on. */
+  summary?: boolean;
+  /** Slot under the breakdown. The chair's scoreboard puts its manual
+   *  award / deduct control here; the organiser passes nothing, because on the
+   *  conferences side this view is read-only — only chairs award points. */
+  extra?: React.ReactNode;
+}) {
   // Group the ledger by source, exactly as the chair's drill-in does. Only one
   // row is ever expanded at a time and a ledger is a few dozen entries, so this
   // runs on render without memoisation.
@@ -105,8 +127,33 @@ export function DelegateDetail({ row }: { row: ScoreboardDelegateRow }) {
   }
   const comments = row.comments.filter((c) => c.content.trim());
 
+  const speeches = row.gslSpeeches + row.caucusSpeeches;
+
   return (
     <div style={{ backgroundColor: 'rgba(27,56,40,0.035)', borderBlockStart: `1px solid ${CARD_BORDER_COLOR}`, padding: '16px 18px' }}>
+      {summary && (
+        <>
+          <p style={SECTION_LABEL}>THIS SESSION</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBlockEnd: 18 }}>
+            <Stat label="SPEECHES" value={String(speeches)} title={`${row.gslSpeeches} on the speakers' list · ${row.caucusSpeeches} in caucus`} />
+            <Stat label="SPEAKING TIME" value={formatSpeakingTime(row.speakingSeconds)} />
+            <Stat label="MOTIONS" value={String(row.motions)} title="Motions this delegation raised" />
+            <Stat label="RIGHTS OF REPLY" value={String(row.rightsOfReply)} />
+            <Stat label="WP / DR" value={`${row.workingPapers} / ${row.draftResolutions}`} title={`Sponsored ${row.workingPapers} working paper(s) and ${row.draftResolutions} draft resolution(s)`} />
+            <Stat label="CHAIR NOTES" value={String(comments.length)} />
+            {/* OBJECTIVE, NOT THE BADGE. The score badge on the row is the
+                HEADLINE — objective points blended with chair quality per
+                `scoreBlend`. The ledger below sums to the objective total, so
+                whenever a blend is set the two legitimately differ, and the
+                fix is to label them, not to print one number twice. */}
+            <Stat
+              label={row.quality != null && row.headline !== row.objective ? 'OBJECTIVE PTS' : 'POINTS'}
+              value={String(row.objective)}
+              title={row.quality != null ? `Ledger total. Score badge shows ${row.headline}, blended with chair quality ${row.quality}/100.` : 'Ledger total.'}
+            />
+          </div>
+        </>
+      )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
         {/* Points breakdown */}
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
@@ -178,6 +225,7 @@ export function DelegateDetail({ row }: { row: ScoreboardDelegateRow }) {
           )}
         </div>
       </div>
+      {extra}
     </div>
   );
 }
@@ -195,6 +243,9 @@ export function ScoreboardTable({
   expanded,
   onExpand,
   emptyText = 'No delegations match this filter.',
+  locale = LOCALE,
+  detailSummary = false,
+  detailExtra,
 }: {
   rows: ScoreboardDelegateRow[];
   sortKey: SortKey;
@@ -202,6 +253,13 @@ export function ScoreboardTable({
   expanded: string | null;
   onExpand: (key: string | null) => void;
   emptyText?: string;
+  /** Locale for delegation names. Conferences surfaces are English-only and omit it. */
+  locale?: string;
+  /** Show the activity strip at the top of an expanded row. */
+  detailSummary?: boolean;
+  /** Extra content under an expanded row's breakdown — the chair's manual
+   *  award / deduct control. Omitted on the read-only organiser surfaces. */
+  detailExtra?: (row: ScoreboardDelegateRow) => React.ReactNode;
 }) {
   return (
     <div
@@ -269,7 +327,7 @@ export function ScoreboardTable({
                   <span className="md:hidden" style={{ color: SOFT, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                     {sortKey === 'name' ? '' : `${i + 1}. `}
                   </span>
-                  {displayCountry(r.country)}
+                  {displayCountry(r.country, locale)}
                 </span>
                 {(r.status === 'absent' || r.isObserver) && (
                   <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
@@ -363,7 +421,7 @@ export function ScoreboardTable({
                 />
               </span>
             </button>
-            {open && <DelegateDetail row={r} />}
+            {open && <DelegateDetail row={r} summary={detailSummary} extra={detailExtra?.(r)} />}
           </div>
         );
       })}
@@ -389,13 +447,16 @@ export function ScoreboardTable({
 // with the same functions the chair's ScoreboardPanel uses, and this filters
 // that result to one committee.
 
-function Stat({ label, value }: { label: string; value: string }) {
+/** One figure tile. `title` rides on the text nodes rather than on a wrapper so
+ *  that adding it changed nothing structural about the four tiles the organiser
+ *  scoreboard already renders — with no `title` the attribute is simply absent. */
+export function Stat({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
     <NeuInset className="text-center" style={{ padding: '10px 14px', borderRadius: 12, flex: '1 1 96px', minWidth: 0 }}>
-      <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 20, color: NEU.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+      <p title={title} style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 20, color: NEU.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
         {value}
       </p>
-      <p style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.11em', color: SOFT, marginBlockStart: 5 }}>
+      <p title={title} style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.11em', color: SOFT, marginBlockStart: 5 }}>
         {label}
       </p>
     </NeuInset>
