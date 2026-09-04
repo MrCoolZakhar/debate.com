@@ -1355,9 +1355,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // Bumped by every realtime `feedback` event. Passed to the comment dock and the
   // scoreboard as a refetch key so both stay live while open.
   const [feedbackVersion, setFeedbackVersion] = useState(0);
-  // The Moderator's opt-in view of the comment dock. A Commenter always has it; the
-  // Moderator is running the room, so it must not permanently eat the GSL's height.
-  const [showNotes, setShowNotes] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Resume-from-suspend UI state. `resumeBusy` also double-taps the button, so one chair
@@ -3244,19 +3241,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0 gv-lift">
           {copied ? '✓' : committee.code}
         </button>
-        {/* Notes dock. A Commenter gets it unconditionally (it IS their role); the
-            Moderator opts in, because until now the chair actually running the committee
-            had no way to leave a note at all — which is the likeliest reason no comment
-            has ever been written in this product. */}
-        {!isViewOnly && (
-          <button onClick={() => setShowNotes((v) => !v)} title={showNotes ? t('chair_notes_close') : t('chair_notes_open')}
-            className="transition-colors shrink-0"
-            style={{ lineHeight: 0, color: showNotes ? '#1B3828' : '#9A8A78' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-          </button>
-        )}
         <button onClick={() => setShowScoreboard(true)} title={t('chair_hdr_scoreboard')}
           className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
           style={{ lineHeight: 0 }}>
@@ -3897,29 +3881,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )}
                 </>
               )}
-              {/* Live comment dock — docked under the timer, beside (never over) the roll-call sidebar.
-                  Always on for a Commenter; opt-in for the Moderator via the header toggle. */}
+              {/* Commenter live comment dock — docked under the timer, beside (never over) the
+                  roll-call sidebar. Commenters ONLY: the Moderator is running the room and does
+                  not comment. Do not add a Moderator affordance for this without being asked. */}
               {/* currentCountry uses liveCaucus, NOT committee.caucus: a leftover caucus JSONB
                   (suspend/end-debate never nulls it, and the two writes that end a caucus land as
                   separate realtime rows) would otherwise name the old caucus speaker as the one
                   holding the floor while the committee is already back on the GSL. */}
-              {(isViewOnly || showNotes) && (
-                // The dock's own root is `flex-1 min-h-0`, which is right for a Commenter:
-                // their <main> holds nothing else that needs the height. The Moderator's
-                // does — timer, speaker controls, add-speaker — so their copy is capped
-                // rather than allowed to take half the column. Without this the toggle
-                // would squash the controls the Moderator is actually there to use.
-                <div
-                  className="flex flex-col min-h-0"
-                  style={isViewOnly ? { flex: '1 1 0' } : { flex: '0 1 auto', maxHeight: '38%' }}
-                >
-                  <FeedbackLogPanel
-                    committee={committee}
-                    chairName={myChairName || committee.chairNames[0] || 'Chair'}
-                    currentCountry={liveCaucus(committee)?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
-                    feedbackVersion={feedbackVersion}
-                  />
-                </div>
+              {isViewOnly && (
+                <FeedbackLogPanel
+                  committee={committee}
+                  chairName={myChairName || committee.chairNames[0] || 'Chair'}
+                  currentCountry={liveCaucus(committee)?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
+                  feedbackVersion={feedbackVersion}
+                />
               )}
             </main>
           </>
