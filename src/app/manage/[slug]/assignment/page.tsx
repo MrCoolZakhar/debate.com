@@ -1144,8 +1144,12 @@ async function insertAllocation(
       // old (committee, user_id) one for registered delegates, and the partial
       // (committee, application_id) one that also covers imported delegates,
       // whose null user_id the first index cannot dedupe.
+      // Reads as an accusation ("this delegate already has…") for what is
+      // almost always the organiser's own click landing twice: the row it
+      // collides with is usually one they created a second earlier. Say what
+      // actually happened and what to do about it.
       return insertErr.message.includes('user_id') || insertErr.message.includes('_application_key')
-        ? 'This delegate already has an allocation in this committee.'
+        ? 'They are already seated in this committee — if you just placed them, that assignment went through.'
         : insertErr.message.includes('country_code')
         ? 'That seat is already taken.'
         : 'This allocation already exists.';
@@ -1519,6 +1523,18 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
   const { session } = useAuth();
   const { conference } = useManage();
   const [busySlotId, setBusySlotId] = useState<string | null>(null);
+  /* A SYNCHRONOUS lock, alongside the state one.
+     `disabled={busySlotId !== null}` correctly greys every button once an
+     allocation starts — but that is state, so it only takes effect on the next
+     render. Two clicks inside a single frame (a real double-click, a trackpad
+     double-tap) both get past it and both call insertAllocation. The first
+     succeeds; the second hits the (committee, user_id) unique index and the
+     organiser is shown "This delegate already has an allocation in this
+     committee" for an action that in fact just worked.
+     Observed in production at TIRTAMUN: an allocation landed at 02:18:04 and
+     the block was reported at 02:18:06, with no delegate holding two seats. A
+     ref updates immediately, so the second call never leaves the browser. */
+  const allocatingRef = useRef(false);
   const [error, setError] = useState('');
 
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
@@ -1544,10 +1560,13 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
   async function handleAllocate(slot: SlotRow) {
     if (!session) return;
     if (!conference) { setError('Conference not loaded. Please refresh.'); return; }
+    if (allocatingRef.current) return;
+    allocatingRef.current = true;
     const seat = lowestOpenSeat(slot, byCountry);
     const sibling = siblingSeatAllocation(slot, byCountry);
     const siblingSoc = sibling ? allocationSocietyId(sibling) : null;
     if (sibling && siblingSoc !== (app.society_id ?? null)) {
+      allocatingRef.current = false;
       onConflict({ app, slot, seat, sibling });
       return;
     }
@@ -1559,6 +1578,7 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
       conference.allocation_email_auto, pushDraftNotice,
     );
     setBusySlotId(null);
+    allocatingRef.current = false;
     if (err) { setError(err); return; }
     onAssigned(slot, seat, `${app.profiles?.display_name ?? app.invited_name} allocated to ${slot.country_name} in ${committee.abbreviation ?? committee.name}.`);
     onClose();
@@ -1645,6 +1665,18 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
   const { session } = useAuth();
   const { conference } = useManage();
   const [busySlotId, setBusySlotId] = useState<string | null>(null);
+  /* A SYNCHRONOUS lock, alongside the state one.
+     `disabled={busySlotId !== null}` correctly greys every button once an
+     allocation starts — but that is state, so it only takes effect on the next
+     render. Two clicks inside a single frame (a real double-click, a trackpad
+     double-tap) both get past it and both call insertAllocation. The first
+     succeeds; the second hits the (committee, user_id) unique index and the
+     organiser is shown "This delegate already has an allocation in this
+     committee" for an action that in fact just worked.
+     Observed in production at TIRTAMUN: an allocation landed at 02:18:04 and
+     the block was reported at 02:18:06, with no delegate holding two seats. A
+     ref updates immediately, so the second call never leaves the browser. */
+  const allocatingRef = useRef(false);
   const [error, setError] = useState('');
 
   const byCountry = groupAllocationsByCountry(committee.conference_allocations);
@@ -1657,11 +1689,14 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
   async function handleAllocate(slot: SlotRow) {
     if (!session) return;
     if (!conference) { setError('Conference not loaded. Please refresh.'); return; }
+    if (allocatingRef.current) return;
+    allocatingRef.current = true;
     setBusySlotId(slot.id);
     setError('');
     const supabase = getAuthedClient(session.access_token);
     const err = await insertSocietyBlockAllocation(supabase, conference.id, committee, society, slot, session.user.id);
     setBusySlotId(null);
+    allocatingRef.current = false;
     if (err) { setError(err); return; }
     onAssigned(slot, `${slot.country_name} allocated to ${society.name} in ${committee.abbreviation ?? committee.name}.`);
     onClose();
