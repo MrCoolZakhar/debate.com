@@ -14,7 +14,7 @@ import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 import FitToScreen from '@/components/FitToScreen';
 import { supabase, supabase as anonSupabase } from '@/lib/supabase';
-import { PRESET_LOGOS } from '@/lib/presetNames';
+import { PRESET_LOGOS, deriveCommitteeAcronym, committeeDisplayName } from '@/lib/presetNames';
 
 type JoinMode = 'delegate' | 'chair' | 'advisor';
 
@@ -51,8 +51,10 @@ function JoinPageInner() {
   // Chair name selection — after committee found in chair mode
   const [chairName, setChairName] = useState('');
   const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
-  // Head chair (gavel) vs co-chair (view-only). Defaults to co-chair so joining never
-  // steals the gavel by accident; unset head falls back to the creator (chairNames[0]).
+  // Moderator (holds the gavel) vs Commenter (view-only, writes feedback). Defaults to
+  // Commenter so joining never steals the gavel by accident; unset head falls back to the
+  // creator (chairNames[0]). The stored values stay 'head' | 'co' — settings.headChair is
+  // a persisted key and must not be renamed.
   const [chairRole, setChairRole] = useState<'head' | 'co'>('co');
   const [newChairName, setNewChairName] = useState('');
   const [chairPassword, setChairPassword] = useState('');
@@ -250,7 +252,7 @@ function JoinPageInner() {
         const chairDisplayName = (profile?.display_name ?? user.email ?? 'Chair').trim();
         addChairName(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined);
         const goChair = () => router.push(`/chair/${foundCommittee!.code}?chairName=${encodeURIComponent(chairDisplayName)}`);
-        // Claim-at-will head chair works for conference sessions too; no password required —
+        // Claim-at-will Moderator works for conference sessions too; no password required —
         // access was already verified against the conference chair/organizer records.
         if (chairRole === 'head') {
           updateCommitteeHeadChairInDB(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined).finally(goChair);
@@ -280,12 +282,12 @@ function JoinPageInner() {
       if (!name) { setError(t('join_select_name')); return; }
       const expectedPassword = foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix;
       if (expectedPassword && chairPassword !== expectedPassword) {
-        setPasswordError('Incorrect password. Ask your head chair.');
+        setPasswordError('Incorrect password. Ask your Moderator.');
         return;
       }
       addChairName(foundCommittee.id, name, foundCommittee.code, foundCommittee.dbChairJoinSuffix ?? undefined);
       const go = () => router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
-      // Claim-at-will: joining as head chair takes the gavel; co-chair joins view-only.
+      // Claim-at-will: joining as Moderator takes the gavel; a Commenter joins view-only.
       if (chairRole === 'head') {
         updateCommitteeHeadChairInDB(foundCommittee.id, name, foundCommittee.code, foundCommittee.dbChairJoinSuffix ?? undefined).finally(go);
       } else {
@@ -337,7 +339,13 @@ function JoinPageInner() {
         </Link>
       </nav>
 
-      <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-4">
+      {/* TOP-ANCHORED, not vertically centred.
+          `items-center` on a column whose height changes at every step meant
+          the whole card slid up and down and appeared to resize as the flow
+          progressed: enter a code and it jumps, pick a role and it jumps
+          again. Anchoring to the top keeps the code field and the committee
+          card still, and lets everything below simply grow downward. */}
+      <div className="relative z-10 flex-1 flex justify-center px-6 pt-6 pb-10 sm:pt-10">
         <div className="w-full max-w-lg">
 
           {/* Title */}
@@ -372,21 +380,48 @@ function JoinPageInner() {
             )}
           </div>
 
-          {/* Committee found card */}
-          {foundCommittee && (
-            <div className="mb-5 rounded-xl px-4 py-2.5 flex items-center gap-3" style={{ backgroundColor: 'rgba(27,56,40,0.08)', border: '1.5px solid rgba(27,56,40,0.25)' }}>
-              {PRESET_LOGOS[foundCommittee.name]
-                ? <img src={PRESET_LOGOS[foundCommittee.name]} alt="" className="w-8 h-8 object-contain shrink-0" />
-                : <span className="text-xs font-mono font-black shrink-0" style={{ color: '#1B3828' }}>✓</span>
-              }
-              <div className="min-w-0">
-                <p className="font-black text-sm truncate" style={{ color: '#1C1410' }}>{foundCommittee.name}{foundCommittee.topic ? <span className="font-normal text-xs ms-1.5" style={{ color: '#9A8A78' }}>· {foundCommittee.topic}</span> : ''}</p>
-                <p className="text-xs" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} {t('join_delegates_registered')}</p>
-                {foundCommittee.endedAt && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_session_ended')}</p>}
-                {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_adjourned')}</p>}
+          {/* Committee found card.
+              Built like the committee cards on the conference page and the
+              organiser's committees tab, rather than the thin inline strip
+              this used to be: a logo DISC, the acronym as the primary label
+              and the spelled-out name small beneath it (the house rule in
+              AGENTS.md), then the topic and the roll count. It is the one
+              thing on this page that confirms you typed the right code, so it
+              should look like the committee, not like a validation tick. */}
+          {foundCommittee && (() => {
+            const emblem = PRESET_LOGOS[foundCommittee.name];
+            const acronym = deriveCommitteeAcronym(foundCommittee.name) || foundCommittee.name;
+            const spelled = committeeDisplayName(foundCommittee.name, acronym);
+            const showSpelled = spelled.toLowerCase() !== acronym.toLowerCase();
+            return (
+              <div
+                className="mb-5 rounded-2xl px-4 py-3.5 flex items-center gap-3.5"
+                style={{ backgroundColor: '#FAF8F3', boxShadow: '0 1px 2px rgba(27,56,40,0.05), 0 8px 20px rgba(27,56,40,0.07)', border: '1px solid rgba(27,56,40,0.10)' }}
+              >
+                <span
+                  className="flex items-center justify-center shrink-0"
+                  style={{ width: 46, height: 46, borderRadius: 999, backgroundColor: '#FFFFFF', boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.10)' }}
+                >
+                  {emblem
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={emblem} alt="" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+                    : <span className="font-black text-xs" style={{ color: '#1B3828', letterSpacing: '0.04em' }}>{acronym.slice(0, 4).toUpperCase()}</span>}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-base truncate" style={{ color: '#1C1410', letterSpacing: '-0.01em' }}>{acronym}</p>
+                  {showSpelled && (
+                    <p className="text-xs truncate" style={{ color: '#6E6456' }}>{spelled}</p>
+                  )}
+                  {foundCommittee.topic && (
+                    <p className="text-xs truncate mt-0.5" style={{ color: '#9A8A78' }}>{foundCommittee.topic}</p>
+                  )}
+                  <p className="text-xs mt-1" style={{ color: '#9A8A78' }}>{foundCommittee.delegates.length} {t('join_delegates_registered')}</p>
+                  {foundCommittee.endedAt && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_session_ended')}</p>}
+                  {!foundCommittee.endedAt && foundCommittee.suspendedAt && mode === 'delegate' && <p className="text-xs font-semibold mt-0.5" style={{ color: '#B8844A' }}>{t('join_adjourned')}</p>}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Conference session block */}
           {foundCommittee && isConferenceSession && (
@@ -468,23 +503,41 @@ function JoinPageInner() {
                     </button>
                   </div>
                 )}
-                {allocationError === '__not_associated__' && (
+                {/* BOTH of these dead ends now offer a way out.
+                    They were a statement and nothing else — "not linked to your
+                    account", full stop — and by far the likeliest cause is the
+                    most fixable one: the person is signed into a different
+                    account from the one their chair or delegate seat was given
+                    to. Naming the account they are currently in is what makes
+                    that click; a chair who reads "signed in as
+                    personal@gmail.com" immediately knows why their school
+                    address is not recognised. */}
+                {(allocationError === '__not_associated__' || allocationError === '__wrong_role__') && (
                   <div style={{ border: '1px solid rgba(139,32,32,0.2)', borderRadius: 12, padding: 16, backgroundColor: 'rgba(139,32,32,0.04)', marginTop: 12 }}>
                     <p style={{ fontSize: 13, fontWeight: 700, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>
-                      Session not associated with your account
+                      {allocationError === '__wrong_role__' ? 'Allocation mismatch' : 'This code is not linked to your account'}
                     </p>
-                    <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                      This session code is not linked to your account. Please check your allocation or contact your conference organisers.
+                    <p style={{ fontSize: 12, color: '#544B3E', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                      {allocationError === '__wrong_role__'
+                        ? 'This session is not allocated to your account for this role. If you have more than one Gavelling account, you may be signed into the wrong one.'
+                        : 'Most often this means you are signed in with a different account from the one your seat was given to.'}
                     </p>
-                  </div>
-                )}
-                {allocationError === '__wrong_role__' && (
-                  <div style={{ border: '1px solid rgba(139,32,32,0.2)', borderRadius: 12, padding: 16, backgroundColor: 'rgba(139,32,32,0.04)', marginTop: 12 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>
-                      Allocation mismatch
-                    </p>
-                    <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                      This session allocation is not associated with your account for this role. Please try again with the correct mode or contact your conference organisers.
+                    {user?.email && (
+                      <p style={{ fontSize: 12, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", marginTop: 8 }}>
+                        Signed in as <span style={{ fontWeight: 700, color: '#544B3E' }}>{user.email}</span>
+                      </p>
+                    )}
+                    <button
+                      onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code + '&mode=' + mode))}
+                      className="w-full focus:outline-none gv-lift"
+                      style={{ marginTop: 12, padding: '10px 0', borderRadius: 10, border: 'none', backgroundColor: '#1B3828', fontSize: 13, fontWeight: 700, color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', cursor: 'pointer' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                    >
+                      {user ? 'SIGN IN WITH A DIFFERENT ACCOUNT' : 'SIGN IN'}
+                    </button>
+                    <p style={{ fontSize: 11.5, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", marginTop: 9, textAlign: 'center', lineHeight: 1.55 }}>
+                      Still stuck? Your conference organisers can check which address your seat is under.
                     </p>
                   </div>
                 )}
@@ -647,7 +700,7 @@ function JoinPageInner() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
-              This name is already in an active session. Select a different name to join as a view-only co-chair.
+              This name is already in an active session. Select a different name to join as a Commenter.
             </div>
           )}
 

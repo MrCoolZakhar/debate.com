@@ -63,14 +63,35 @@ export function parseLedgerEvents(committee: Committee): LedgerEvent[] {
   return parseLogEvents(committee);
 }
 
+// Parsed speech/motion/RTR/manual events, memoised on the messages ARRAY IDENTITY.
+//
+// Every per-delegate fold (computeLedger, computeObjectiveScore, buildActivityRow) starts
+// by parsing the whole log, so a scoreboard over D delegates ran D full passes and D x M
+// JSON.parse calls over M messages — and buildActivityRow calls computeObjectiveScore,
+// which parses again. A committee's log grows all session, so this is the one thing here
+// that gets worse the longer a committee runs.
+//
+// A WeakMap keyed on `committee.messages` is safe because the array is REPLACED, never
+// mutated: catchUpMessages goes through mergeMessagesById, which returns a new array. The
+// length is stored alongside as a cheap guard so an in-place push cannot serve a stale
+// parse, and the WeakMap lets the entry be collected with the committee object.
+const logEventCache = new WeakMap<object, { len: number; events: LedgerEvent[] }>();
+
 function parseLogEvents(committee: Committee): LedgerEvent[] {
-  return (committee.messages ?? [])
+  const msgs = committee.messages ?? [];
+  const hit = logEventCache.get(msgs);
+  if (hit && hit.len === msgs.length) return hit.events;
+
+  const events = msgs
     .filter((m) => m.sender === '__system__' && m.recipient === '__log__' && m.content.startsWith('__log__:'))
     .map((m) => {
       try { return JSON.parse(m.content.slice('__log__:'.length)) as LedgerEvent; }
       catch { return null; }
     })
     .filter(Boolean) as LedgerEvent[];
+
+  logEventCache.set(msgs, { len: msgs.length, events });
+  return events;
 }
 
 // Itemized list: every speech / motion / RTR / document / manual adjustment as its own row.

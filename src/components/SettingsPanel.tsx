@@ -10,6 +10,7 @@ import { updateCommitteeChairSuffixInDB, saveCommitteeSettings, updateCommitteeS
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryByName, getCountryDisplayName, getFlagUrl } from '@/lib/countries';
 import { localizedMotionDefaults } from '@/lib/committeeFlags';
+import { factorName, sourceName } from '@/lib/scoringNames';
 
 type SettingsTab = 'voting' | 'motions' | 'access' | 'points';
 
@@ -665,7 +666,7 @@ function NumberField({ value, onCommit, min, max, allowEmpty = false, placeholde
   );
 }
 
-// Wraps a region that a view-only co-chair may look at but not touch. The write
+// Wraps a region that a Commenter (view-only chair) may look at but not touch. The write
 // helpers are already no-ops for them; this is the matching visual/interaction
 // affordance so nothing looks live when it is not.
 function ReadOnlyRegion({ on, children }: { on: boolean; children: React.ReactNode }) {
@@ -683,7 +684,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   myChairName?: string;
   // UI GATE ONLY. RLS authenticates the SESSION (anyone holding the chair suffix
   // can write anything to it), never the chair's role, so this hides and disables
-  // the write affordances for a view-only co-chair. It is NOT enforcement, and
+  // the write affordances for a Commenter (view-only chair). It is NOT enforcement, and
   // must never be treated as a security boundary. See AGENTS.md rule 15.
   isViewOnly?: boolean;
 }) {
@@ -775,7 +776,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   // AND the code every chair typed on the join page, so minting a new one for a
   // live committee locks every one of them out with no error surfaced anywhere.
   // localStorage is a per-device mirror, not authority: on a fresh browser,
-  // incognito, a cleared cache, or a co-chair arriving by link it is simply empty,
+  // incognito, a cleared cache, or a Commenter arriving by link it is simply empty,
   // and the voting page never hydrates it at all. So a new suffix may be minted
   // ONLY when the DB genuinely has none. When the DB has one we adopt it locally
   // and write nothing back.
@@ -884,7 +885,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
 
-          {/* View-only co-chair notice. Matches the chair page's view-only pill.
+          {/* Commenter (view-only) notice. Matches the chair page's view-only pill.
               This is a UI gate, not enforcement — see the isViewOnly prop note. */}
           {isViewOnly && (
             <div
@@ -1074,7 +1075,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
               {/* Read-only "who is chairing?" answer. Switching chairs lives in exactly one
                   place — the gavel chip on the session header — so this deliberately has no
                   button; duplicating it here hid the action where nobody looked. Stays
-                  OUTSIDE the view-only gate below so a co-chair can still read it. */}
+                  OUTSIDE the view-only gate below so a Commenter can still read it. */}
               {(() => {
                 const headChair = committee.dbHeadChair || committee.chairNames?.[0] || '';
                 const isHead = !myChairName || headChair === myChairName;
@@ -1082,7 +1083,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                   <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
                     <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>{t('settings_head_chair_label')}</div>
                     <div className="text-sm font-semibold" style={{ color: '#1C1410' }}>
-                      {headChair || '—'}{isHead && myChairName ? ' (you)' : ''}
+                      {headChair || '—'}{isHead && myChairName ? ` ${t('gavel_you')}` : ''}
                     </div>
                     <div className="text-[11px] mt-1.5" style={{ color: '#9A8A78' }}>
                       {t('settings_head_chair_note')}
@@ -1091,7 +1092,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                 );
               })()}
               {/* Everything below writes committee state, so it is gated for a
-                  view-only co-chair. The session/chair codes and the head-chair
+                  Commenter. The session/chair codes and the Moderator
                   row above stay live on purpose. */}
               <ReadOnlyRegion on={isViewOnly}>
               <Toggle
@@ -1141,15 +1142,15 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
           {tab === 'points' && (
             <ReadOnlyRegion on={isViewOnly}><div style={{ fontFamily: "'Poppins', 'Outfit', sans-serif" }}>
               {/* Score sources */}
-              <SectionLabel>Score sources</SectionLabel>
+              <SectionLabel>{t('settings_points_sources_heading')}</SectionLabel>
               <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
-                Points awarded automatically as delegates act. Toggle off any you don&apos;t use, or add your own.
+                {t('settings_points_sources_desc')}
               </p>
               <div className="space-y-1.5 mb-3">
                 {scoring.sources.map((src) => (
                   <div key={src.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
                     {src.builtin ? (
-                      <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{src.name}</span>
+                      <span className="flex-1 text-sm font-semibold truncate" style={{ color: '#1C1410' }}>{sourceName(src, language)}</span>
                     ) : (
                       <input value={src.name} onChange={(e) => setSource(src.id, { name: e.target.value })}
                         className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-b border-[#DDD4C0] focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
@@ -1157,7 +1158,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                     <div className="flex items-center gap-1 shrink-0">
                       <input type="number" value={src.value} onChange={(e) => setSource(src.id, { value: parseInt(e.target.value) || 0 })}
                         className="w-14 text-sm text-center bg-white border border-[#DDD4C0] rounded-lg px-1.5 py-1 focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
-                      <span className="text-[10px]" style={{ color: '#9A8A78' }}>pts</span>
+                      <span className="text-[10px]" style={{ color: '#9A8A78' }}>{t('settings_points_pts_suffix')}</span>
                     </div>
                     <button onClick={() => setSource(src.id, { enabled: !src.enabled })}
                       className="relative shrink-0 w-8 h-[18px] rounded-full transition-colors focus:outline-none"
@@ -1170,18 +1171,27 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                   </div>
                 ))}
               </div>
-              <button onClick={addSource} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors gv-lift" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add source</button>
+              <button onClick={addSource} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors gv-lift" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>{t('settings_points_add_source')}</button>
 
               {/* Ranking factors */}
               <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
-                <SectionLabel>Quality factors</SectionLabel>
+                <SectionLabel>{t('settings_points_factors_heading')}</SectionLabel>
+                <div className="mb-3">
+                  <Toggle
+                    label={t('settings_points_rate_label')}
+                    note={t('settings_points_rate_note')}
+                    value={scoring.factorRatingsEnabled}
+                    onChange={(v) => updScoring({ ...scoring, factorRatingsEnabled: v })}
+                  />
+                </div>
+                {scoring.factorRatingsEnabled && (<>
                 <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
-                  Subjective factors chairs rate per speech (0–{scoring.factorScaleMax}).
+                  {t('settings_points_factors_desc', { max: scoring.factorScaleMax })}
                 </p>
                 <div className="space-y-1.5 mb-3">
                   {scoring.factors.map((f) => (
                     <div key={f.id} className="flex items-center gap-2 px-2 py-2 rounded-xl" style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3' }}>
-                      <input value={f.name} onChange={(e) => setFactor(f.id, { name: e.target.value })}
+                      <input value={factorName(f, language)} onChange={(e) => setFactor(f.id, { name: e.target.value })}
                         className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-b border-[#DDD4C0] focus:border-[#1B3828] outline-none" style={{ color: '#1C1410' }} />
                       <button onClick={() => setFactor(f.id, { enabled: !f.enabled })}
                         className="relative shrink-0 w-8 h-[18px] rounded-full transition-colors focus:outline-none"
@@ -1192,34 +1202,38 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                     </div>
                   ))}
                 </div>
-                <button onClick={addFactor} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors gv-lift" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>+ Add factor</button>
+                <button onClick={addFactor} className="text-xs font-bold px-3 py-2 rounded-lg transition-colors gv-lift" style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: '#FAF8F3' }}>{t('settings_points_add_factor')}</button>
                 <div className="mt-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs" style={{ color: '#6A5A4A' }}>Rating scale max</span>
+                    <span className="text-xs" style={{ color: '#6A5A4A' }}>{t('settings_points_scale_max')}</span>
                     <span className="text-xs font-bold" style={{ color: '#1B3828' }}>{scoring.factorScaleMax}</span>
                   </div>
-                  <input type="range" min={0} max={100} step={1} value={scoring.factorScaleMax}
+                  {/* Floor of 2: a one-point scale is not a rating. The default is now 10,
+                      which is what chairs actually mark on — the old 100 produced ratings
+                      like 1 and 2 that read as noise against the scale they sat on. */}
+                  <input type="range" min={2} max={100} step={1} value={scoring.factorScaleMax}
                     onChange={(e) => updScoring({ ...scoring, factorScaleMax: parseInt(e.target.value) })}
                     className="w-full" style={{ accentColor: '#1B3828' }} />
                   <div className="flex items-center justify-between text-[10px] font-mono mt-0.5" style={{ color: '#9A8A78' }}>
-                    <span>0</span><span>100</span>
+                    <span>2</span><span>100</span>
                   </div>
                 </div>
+                </>)}
               </div>
 
               {/* Blend + hide */}
               <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
-                <SectionLabel>Ranking blend</SectionLabel>
+                <SectionLabel>{t('settings_points_blend_heading')}</SectionLabel>
                 <div className="flex items-center justify-between text-[10px] font-mono mb-1" style={{ color: '#9A8A78' }}>
-                  <span>Objective</span><span>{scoring.scoreBlend}%</span><span>Quality</span>
+                  <span>{t('settings_points_blend_objective')}</span><span>{scoring.scoreBlend}%</span><span>{t('settings_points_blend_quality')}</span>
                 </div>
                 <input type="range" min={0} max={100} value={scoring.scoreBlend}
                   onChange={(e) => updScoring({ ...scoring, scoreBlend: parseInt(e.target.value) })}
                   className="w-full accent-[#1B3828]" />
                 <div className="mt-4">
                   <Toggle
-                    label="Hide scores from delegates"
-                    note="Delegates keep their speaking recap but won't see point totals or the leaderboard."
+                    label={t('settings_points_hide_label')}
+                    note={t('settings_points_hide_note')}
                     value={scoring.hideScoresFromDelegates}
                     onChange={(v) => updScoring({ ...scoring, hideScoresFromDelegates: v })}
                   />

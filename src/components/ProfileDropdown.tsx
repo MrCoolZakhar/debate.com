@@ -30,6 +30,7 @@ import { compareStartDate } from '@/lib/conferenceDates';
 import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
 interface NavConference {
@@ -499,7 +500,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                           className="flex-1 truncate font-semibold"
                           style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "'Outfit', sans-serif" }}
                         >
-                          {conf.acronym} {new Date(conf.start_date + 'T00:00:00').getFullYear()}
+                          {conferenceAcronymLabel({ acronym: conf.acronym, start_date: conf.start_date })}
                         </span>
                         <span
                           className="font-bold uppercase shrink-0"

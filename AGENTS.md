@@ -61,6 +61,17 @@
 - **TIMER TICKS MUST NEVER SET localUpdateTime** — or delegate views lose visibility
 - **NEVER set structural=true on timer tick operations**
 - caucus queue mutations DO use structural=true (to prevent realtime flickering)
+- **`feedback` is handled BEFORE the debounce check and returns early**, beside
+  `session_broadcasts` and `messages`. Chair notes and factor ratings are not optimistic
+  speaker/timer/caucus state, so RULE 4 does not apply to them — and this device routinely
+  receives the echo of its OWN write while a chair is still typing, so swallowing it would
+  only make the other chair's note invisible. The handler bumps a `feedbackVersion` counter
+  rather than refetching: the two readers (the comment dock and the scoreboard) each own
+  their own query and neither is always mounted.
+- `subscribeToCommittee` now subscribes NINE tables: committees, delegates, speakers_list,
+  current_speaker, motions, documents, messages, **feedback**, session_broadcasts. No
+  migration was needed for feedback — it was already in the `supabase_realtime` publication
+  and its SELECT policy is `true`; writes remain gated on the chair suffix.
 
 ### RULE 5: Optimistic Updates Pattern
 - ALL chair actions use `updateLocal(setCommittee, updater)` for immediate UI response
@@ -391,13 +402,36 @@ There is **no** custom-session-ID control, **no** multi-chair toggle and **no** 
 Persisted into `settings.scoring`; read everywhere via `getScoringConfig(committee)` — never via localStorage.
 - `sources` — `ScoreSource[]` (id, name, value, enabled, builtin). Nine built-ins (attendance, gslSpeech, caucusSpeech, speakingTimePer10s, motionRaised, rightOfReply, wpSponsor, drSponsor, drPassed); chairs can edit values, disable any, and add custom ones. Disabled → the ledger row is omitted entirely.
 - `factors` — `RankingFactor[]`, the subjective per-speech qualities chairs rate (Diplomacy, Public Speaking, Collaboration, Content & Research by default).
-- `factorScaleMax` — upper bound of the factor rating scale (default 100).
-- `scoreBlend` — 0 = pure objective points … 100 = pure subjective quality. Consumed by `computeHeadline` (`ScoreboardPanel.tsx:63`).
-- `hideScoresFromDelegates` — default false; when true the delegate Stats tab hides scores (`delegate/[code]/page.tsx:424`).
+- **`level` is ALWAYS `'speech'`.** `FeedbackLogPanel` is the only writer of `feedback` and it hardcodes that level; nothing anywhere writes `'session'` or `'conference'`. The delegate's own recap filtered on exactly those two levels, so it was permanently blank — a delegate could be rated all session and see nothing. It now falls back to the mean of the per-speech ratings, the same fallback `computeQualityScore` already used, and says so on screen. If you ever add a real end-of-session recap, write one of the other two levels and both surfaces pick it up automatically.
+- **`parseLogEvents` is memoised on `committee.messages` array identity** (`scoring.ts`). Every per-delegate fold parses the whole log, so a scoreboard over D delegates ran D full passes and D x M `JSON.parse` calls — and it got worse the longer a committee ran. Safe because the array is replaced, never mutated: `mergeMessagesById` returns `prev` only when nothing changed, and a new array otherwise. NEVER start mutating `committee.messages` in place.
+- **Built-in factor and source names are localized through `src/lib/scoringNames.ts`** (`factorName` / `sourceName`), on exactly the `motionNames()` contract: a stored name that is empty or still the canonical English default means "never renamed", so the localized default wins; anything else is a genuine rename and shows verbatim in every locale. `DEFAULT_FACTOR_NAMES` / `DEFAULT_SOURCE_NAMES` must stay BYTE-IDENTICAL to `DEFAULT_SCORING` in settingsStore.ts — if they drift, rename detection silently breaks and every committee looks renamed. Applied on the session surfaces only (`buildSessionScoreboardRows` takes a `language`); the organiser board is English by design.
+- `factorRatingsEnabled` — **default false**. Gates the per-speech rating sliders in the feedback dock. It gates the INPUT ONLY: ratings already recorded always render on the scoreboard, so turning it off can never hide data. Off by default because in the entire history of the product only a couple of ratings were ever set deliberately, and `scoreBlend` defaults to 0 so they moved no score anyway.
+- `factorScaleMax` — upper bound of the factor rating scale (**default 10**; was 100). Committees that already held a real rating had `factorScaleMax: 100` pinned into their settings by a backfill, so the default change cannot reinterpret existing data. The Settings slider floor is 2 — a one-point scale is not a rating.
+- `scoreBlend` — 0 = pure objective points … 100 = pure subjective quality. Consumed by `computeHeadline`.
+- **The session scoreboard and the organiser scoreboard are ONE component**: `src/components/ScoreboardTable.tsx` (moved out of `manage/[slug]/live/`, which now re-exports its palette from `src/components/scoreboardTokens.ts` so all conferences-side importers resolve unchanged). `ScoreboardPanel` feeds it via `buildSessionScoreboardRows` (`src/lib/sessionScoreboard.ts`), a pure adapter from a live `Committee` to `ScoreboardDelegateRow[]` that reuses `scoring.ts` — no scoring maths is duplicated. Every session-specific capability is a defaulted-off prop (`locale`, `detailSummary`, `detailExtra`, `Stat.title`); NO organiser call site passes any of them, and it must stay that way unless you intend to change the organiser view too.
+- The row badge is the BLENDED headline; the ledger below it sums to the OBJECTIVE total. These legitimately differ whenever `scoreBlend > 0` — label them, never print one number in both places.
+- `hideScoresFromDelegates` — default false. **This claim used to be false**: it said the setting was enforced at `delegate/[code]/page.tsx:424`, which is the document-type picker. The setting was enforced NOWHERE — it appeared only in the type, the default, the toggle itself and `delegateTips.ts:98`. Points, the ledger, the by-time rank and the leaderboard were removed from the delegate view outright (see the `StatisticsTab` block comment), so it also promised to hide things that no longer existed. It now gates the one number a delegate can still see: the chair's factor ratings in the Stats-tab recap.
 
 ---
 
-## FEATURE: CHAIR ROLES & THE GAVEL (head chair vs view-only co-chair)
+## FEATURE: CHAIR ROLES & THE GAVEL (Moderator vs Commenter)
+
+### VOCABULARY — user-facing names changed, NOTHING PERSISTED DID
+- The chair holding the gavel is the **Moderator** (always exactly one). Every other
+  chair on the dais is a **Commenter**. These replaced "head chair" and "co-chair" in
+  all user-facing copy across en/es/fr/ar.
+- **The identifiers did NOT change and must not.** `headChair` (the settings JSONB key),
+  `chair_names`, `resuming_chair`, the `'Chairs'` chat recipient value, the `'chair'`
+  localStorage role segment, `/chair/[code]`, `isViewOnly` and `chairRole`'s `'head' | 'co'`
+  values are all exactly as they were. Renaming any of them orphans live sessions,
+  breaks existing dais threads, or resets every user's saved chat read counts.
+- A person still JOINS as a "chair" and then holds one of the two roles — Moderator and
+  Commenter are states inside a session, not credentials, and both use the same chair
+  code. That is why the join tab, the chair password and the chat CHAIRS label all still
+  say "chair" on purpose.
+- The conferences layer is unaffected: there "chair" is a real conference role with its
+  own invites, applications and CV entries. Never let a session rename reach `manage/`,
+  `conferences/`, `invites/`, `account/`, `cv/` or `blog/`.
 
 ### Chair identity
 - A chair's identity is **only** the `?chairName=` URL query param: `const myChairName = searchParams.get('chairName') ?? ''` (`chair/[code]/page.tsx:1160`).
@@ -438,7 +472,10 @@ setIsViewOnly(!!myChairName && !!head && head !== myChairName);
 - GSL: no timer/progress bar — the speaker card shows "is speaking" text instead (`:2644`); no Start/Next/restart/time controls (`:2666, 2727, 2736, 2770`); no add-speaker input; reorder and remove handlers passed as `undefined` (`:2627-2628, 2716-2717`); Extra Time and Right of Reply popovers suppressed (`:2828, 2883`).
 - Caucus: no add-speaker, next-speaker, extend or end-caucus controls (`:976, 1055, 1112, 1118`); unmoderated/CoW controls hidden (`:658, 683`).
 - `RollCallPanel`, `MotionsModal` and `DocumentsModal` all receive `isViewOnly` and hide their write affordances (`RollCallPanel.tsx:507, 598, 613`; `MotionsModal.tsx:692, 821, 925, 999`; `DocumentsModal.tsx:1067`). MotionsModal also opens on the `vote` view instead of `raise`.
-- **`FeedbackLogPanel` is rendered ONLY when `isViewOnly` is true** (`chair/[code]/page.tsx:2780-2786`) — the live feedback dock is a co-chair-exclusive surface. Do not "restore" it for the head chair without being asked.
+- **The comment dock is unconditional for a Commenter and opt-in for the Moderator** (`isViewOnly || showNotes`, toggled from the header). It used to render ONLY under `isViewOnly`, which meant the chair actually running the committee could not leave a note at all — the likeliest reason not one comment exists in the entire production database. The Moderator's copy is opt-in rather than always-on so it cannot permanently eat the GSL's height.
+- **Feedback rows are owned by their author.** The dock claims a stored row only when `chair_name` matches this chair; other chairs' rows are read-only and render beside yours, separated by " / " and prefixed with the author (prefix appears only when more than one chair has written). NEVER go back to matching a row to a speech by country+context+seconds alone — that took the first hit regardless of author, so a second chair adopted the first chair's row id and the next keystroke overwrote their note while leaving the original name on it.
+- A row written while the delegate still holds the floor has `speech_seconds` NULL and is matched to the live/next card until the reconcile effect back-patches it. Without that, every reload mid-speech creates ANOTHER row — production still carries duplicates from before this existed.
+- `persist` refuses to INSERT when there is no text and no rating > 0, so blurring an untouched note box no longer creates an empty row.
 - Realtime behaviour differs and must stay that way:
   - a view-only co-chair DOES process `current_speaker` events (patched via `getCurrentSpeakerRow`), the head chair returns early — it owns that row (`:1318-1320`)
   - a view-only co-chair NEVER debounces (`withinDebounce = !isViewOnlyRef.current && …`, `:1360`) — it writes nothing, so debouncing would make it miss the head chair's phase/caucus changes

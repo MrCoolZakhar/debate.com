@@ -7,13 +7,14 @@
 // backdrop) and mintConferenceSession (session minting for conference committees).
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Globe, Users, Landmark, Scale, Zap, UserPlus, Mail, User } from 'lucide-react';
+import { X, Globe, Users, Landmark, Scale, Zap, UserPlus, Mail, User, Send } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, type NeuGradient } from '@/components/neu';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
 import { getCountryByName } from '@/lib/countries';
 import {
   ConferenceRosterPicker,
+  ConferenceRosterSelected,
   ConferenceCommitteeNameInput,
   entry,
   type RosterEntry,
@@ -24,7 +25,14 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import Portal from '@/components/Portal';
 import Loader from '@/components/Loader';
-import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
+import {
+  sendChairInvite,
+  findChairInviteRoleConflict,
+  resendChairInvite,
+  revokeChairInvite,
+  pendingInviteName,
+  type PendingChairInvite,
+} from '@/lib/chairInvites';
 import { queueEventEmail } from '@/lib/emailEvents';
 
 // ── Design constants ──────────────────────────────────────────────────────────
@@ -204,6 +212,11 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
   const { session } = useAuth();
   const [chairs, setChairs] = useState<DisplayChair[] | null>(null);
   const [chairIds, setChairIds] = useState<string[]>([]);
+  // Invited, not yet accepted. A separate table from the seated dais on
+  // purpose — see the note on PendingChairInvite in @/lib/chairInvites. This is
+  // an organiser surface, so it shows them; the public page never does.
+  const [invites, setInvites] = useState<PendingChairInvite[]>([]);
+  const [inviteBusyId, setInviteBusyId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [applicants, setApplicants] = useState<ChairApplicant[] | null>(null);
   const [email, setEmail] = useState('');
@@ -218,14 +231,54 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
   const load = useCallback(async () => {
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
-      .from('conference_committees')
-      .select('display_chairs, chair_user_ids')
-      .eq('id', committeeId)
-      .single();
+    const [{ data }, { data: inviteRows }] = await Promise.all([
+      supabase
+        .from('conference_committees')
+        .select('display_chairs, chair_user_ids')
+        .eq('id', committeeId)
+        .single(),
+      // Scoped to this committee rather than going through
+      // fetchPendingChairInvites (conference-wide): the dock only ever renders
+      // one dais, and it does not receive the conference's committee list.
+      supabase
+        .from('conference_chair_invites')
+        .select('id, committee_id, email, invited_name, profiles (display_name, avatar_url)')
+        .eq('committee_id', committeeId)
+        .eq('status', 'pending'),
+    ]);
     setChairs(((data?.display_chairs as DisplayChair[] | null) ?? []));
     setChairIds(((data?.chair_user_ids as string[] | null) ?? []));
+    setInvites((inviteRows ?? []) as unknown as PendingChairInvite[]);
   }, [session, committeeId]);
+
+  // Resend / withdraw, the same two actions the committees grid offers on a
+  // pending face. Resend reuses the existing invite row and its token.
+  async function handleResend(invite: PendingChairInvite) {
+    if (!session || inviteBusyId) return;
+    setInviteBusyId(invite.id); setErr(''); setNote('');
+    const supabase = getAuthedClient(session.access_token);
+    const res = await resendChairInvite(supabase, { conferenceId, committeeId, committeeName, email: invite.email });
+    setInviteBusyId(null);
+    if (!res.ok) { setErr(res.error ?? 'Could not resend that invite.'); return; }
+    setNote(`Invite resent to ${pendingInviteName(invite)}.`);
+  }
+
+  async function handleRevoke(invite: PendingChairInvite) {
+    if (!session || inviteBusyId) return;
+    const label = pendingInviteName(invite);
+    setInviteBusyId(invite.id); setErr(''); setNote('');
+    // Optimistic: the pending row goes at once and returns if the write fails.
+    setInvites(prev => prev.filter(i => i.id !== invite.id));
+    const supabase = getAuthedClient(session.access_token);
+    const ok = await revokeChairInvite(supabase, invite.id);
+    setInviteBusyId(null);
+    if (!ok) {
+      setInvites(prev => (prev.some(i => i.id === invite.id) ? prev : [...prev, invite]));
+      setErr(`Could not remove the invite to ${label}.`);
+      return;
+    }
+    setNote(`Invite to ${label} removed.`);
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -305,7 +358,9 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
   return (
     <div
       className="rounded-2xl flex flex-col"
-      style={{ width: 236, flexShrink: 0, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 12px 32px rgba(27,56,40,0.16)' }}
+      /* Fills the docked rail rather than setting its own width — the rail is
+         shared with the roster panel below and sizes both together. */
+      style={{ width: '100%', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '40vh', overflowY: 'auto', flexShrink: 0, boxShadow: '0 12px 32px rgba(27,56,40,0.16)' }}
     >
       <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #EDE7D8' }}>
         <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: '#B6871F' }}>THE DAIS</p>
@@ -328,6 +383,56 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
               <span className="text-[12.5px] truncate" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{c.name}</span>
             </div>
           ))
+        )}
+
+        {/* Pending invites — visibly not-yet-seated, with the two actions an
+            organiser has left: send the email again, or take it back. */}
+        {invites.length > 0 && (
+          <div className="flex flex-col gap-2 pt-2 mt-1" style={{ borderTop: '1px solid #EDE7D8' }}>
+            <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: '#7A5A10' }}>INVITED</p>
+            {invites.map((inv) => {
+              const label = pendingInviteName(inv);
+              const busy = inviteBusyId === inv.id;
+              return (
+                <div key={inv.id} className="flex items-center gap-2">
+                  <span className="relative flex-shrink-0" style={{ lineHeight: 0 }}>
+                    {inv.profiles?.avatar_url ? (
+                      <img src={inv.profiles.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: '9999px', objectFit: 'cover', backgroundColor: '#EDE7D8', opacity: 0.62 }} />
+                    ) : (
+                      <span className="flex items-center justify-center" style={{ width: 28, height: 28, borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.10)', color: '#7A5A10', fontSize: 11, fontWeight: 700, fontFamily: OUTFIT }}>{label.charAt(0).toUpperCase()}</span>
+                    )}
+                    <span aria-hidden className="absolute inset-0 pointer-events-none" style={{ borderRadius: 9999, border: '1.5px dashed #B6871F' }} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-[12px] truncate" style={{ display: 'block', color: '#1C1410', fontFamily: OUTFIT, fontWeight: 600 }} title={inv.email}>{label}</span>
+                    <span style={{ display: 'block', fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em', color: '#7A5A10' }}>PENDING</span>
+                  </span>
+                  <button
+                    onClick={() => handleResend(inv)}
+                    disabled={busy}
+                    title={`Resend the invite to ${label}`}
+                    aria-label={`Resend the invite to ${label}`}
+                    className="focus:outline-none flex-shrink-0"
+                    style={{ color: busy ? '#C4B9A6' : '#1B3828', background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer', lineHeight: 0 }}
+                  >
+                    <Send size={13} />
+                  </button>
+                  <button
+                    onClick={() => handleRevoke(inv)}
+                    disabled={busy}
+                    title={`Remove the invite to ${label}`}
+                    aria-label={`Remove the invite to ${label}`}
+                    className="focus:outline-none flex-shrink-0"
+                    style={{ color: busy ? '#C4B9A6' : '#9A8A78', background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer', lineHeight: 0 }}
+                    onMouseEnter={e => { if (!busy) (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
+                    onMouseLeave={e => { if (!busy) (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                  >
+                    <X size={13} strokeWidth={2.4} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -780,13 +885,50 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
   return (
     <>
     <ModalOverlay onClose={onClose}>
-      <div className="flex items-start gap-3">
-      <div className="rounded-2xl p-6" style={{ width: 'min(920px, calc(100vw - 32px))', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', maxHeight: '85vh', overflowY: 'auto' }}>
+      {/* TWO COLUMNS, ONE BUDGET.
+          The editor is a main panel plus a docked rail (chairs, then the
+          selected roster). The pair is sized as a single `min()` box and the
+          rail takes a clamped share of it, so the columns NEVER wrap: a
+          wrapped rail would push the whole dialog past the viewport, and
+          ModalOverlay centres its child without scrolling — the overflow would
+          simply be unreachable at both ends.
+
+          Widths at the three sizes this was checked at:
+            1440 → box 980, rail 303, main 665
+            1280 → box 980, rail 303, main 665
+             900 → box 876, rail 271, main 593
+          The main panel is deliberately narrower than the 920 it used to be:
+          the room went to the roster list in the rail, which needs it far more
+          than a column of single-line text fields did.
+
+          BELOW 760px THERE IS NO ROOM FOR TWO COLUMNS. The rail's floor is
+          250px and it does not shrink, so on a phone (390 → box 358) the main
+          panel was being squeezed to ~96px of content: labels overlapped, the
+          form scrolled sideways inside itself, and the editor was unusable.
+          Under the breakpoint the pair therefore stacks — main first, rail
+          beneath, both full width — and the SCROLL MOVES UP to this row, since
+          a stack is taller than the viewport and ModalOverlay does not scroll.
+          The per-panel caps have to live in the same media query rather than
+          inline, or their inline specificity would win and re-cap the stack. */}
+      <style>{`
+        .gv-ced-row { flex-direction: column; max-height: 88vh; overflow-y: auto; }
+        .gv-ced-main { max-height: none; overflow-y: visible; }
+        .gv-ced-rail { flex: 0 0 auto; max-height: none; }
+        @media (min-width: 760px) {
+          .gv-ced-row { flex-direction: row; max-height: none; overflow-y: visible; }
+          .gv-ced-main { max-height: 88vh; overflow-y: auto; }
+          .gv-ced-rail { flex: 0 0 clamp(250px, 31%, 320px); max-height: 88vh; }
+        }
+      `}</style>
+      {/* 32px, not 24: ModalOverlay's backdrop is `px-4`, so a wider box
+          overflows its flex line by the difference. */}
+      <div className="gv-ced-row flex items-stretch gap-3" style={{ width: 'min(980px, calc(100vw - 32px))' }}>
+      <div className="gv-ced-main rounded-2xl p-4" style={{ flex: '1 1 auto', minWidth: 0, backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
         <div className="flex items-center justify-between mb-3">
           <p className="text-[15px] font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT }}>{isEdit ? 'Edit committee' : 'New committee'}</p>
           <button onClick={onClose} className="focus:outline-none" style={{ color: '#9A8A78' }}><X size={18} /></button>
         </div>
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
           {/* Top row — name + difficulty on the left, live emblem preview on the right. */}
           <div className="flex gap-5 items-start">
             <div className="flex-1 min-w-0 flex flex-col gap-4">
@@ -828,7 +970,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                         key={lvl}
                         type="button"
                         onClick={() => setDifficulty(lvl)}
-                        className="flex-1 flex flex-col items-center gap-1.5 rounded-xl py-2.5 focus:outline-none"
+                        className="flex-1 flex flex-col items-center gap-1 rounded-xl py-2 focus:outline-none"
                         style={{
                           border: active ? `1.5px solid ${accent}` : '1px solid #DDD4C0',
                           backgroundColor: active ? `${accent}14` : '#FAF8F3',
@@ -837,9 +979,9 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                       >
                         <span
                           className="flex items-center justify-center"
-                          style={{ width: 30, height: 30, borderRadius: '9999px', background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
+                          style={{ width: 26, height: 26, borderRadius: '9999px', background: `linear-gradient(150deg, ${accent}22, ${accent}12)`, border: `1px solid ${accent}55` }}
                         >
-                          <LevelInsignia level={lvl} size={18} />
+                          <LevelInsignia level={lvl} size={16} />
                         </span>
                         <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: active ? accent : '#6E5F4E', letterSpacing: '0.01em' }}>{lbl}</span>
                       </button>
@@ -850,11 +992,14 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
             </div>
             {/* Emblem — auto-derived from the committee NAME (matchPresetEmblem), with
                 an upload override. No manual preset swatches. */}
-            <div className="flex flex-col items-center gap-2.5" style={{ width: 148, flexShrink: 0 }}>
+            {/* 96px → 76px. The preview only has to confirm WHICH emblem is
+                attached; at 96 it was the tallest thing in this row and set the
+                whole editor's height. */}
+            <div className="flex flex-col items-center gap-1.5" style={{ width: 132, flexShrink: 0 }}>
               <label style={{ ...labelStyle, alignSelf: 'flex-start' }}>Emblem</label>
               {logoUploading ? (
-                <div className="flex items-center justify-center" style={{ width: 96, height: 96 }}>
-                  <Loader size={48} />
+                <div className="flex items-center justify-center" style={{ width: 76, height: 76 }}>
+                  <Loader size={40} />
                 </div>
               ) : logoUrl ? (
                 /* `bare`: the emblem floats transparently, matching both the
@@ -862,9 +1007,9 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                    (assignment page, CommitteeIdentityBadge). Without it this
                    preview paints a near-white disc the emblem never actually
                    ships on. */
-                <LogoDisc bare src={logoUrl} alt="Committee emblem" size={96} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
+                <LogoDisc bare src={logoUrl} alt="Committee emblem" size={76} fallbackText={(abbreviation || name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3)} />
               ) : (
-                <MonogramMedallion text={abbreviation || name} isCrisis={isCrisis} size={96} />
+                <MonogramMedallion text={abbreviation || name} isCrisis={isCrisis} size={76} />
               )}
               <div className="flex flex-col gap-1.5 w-full">
                 <button
@@ -889,9 +1034,11 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
                   </button>
                 )}
               </div>
-              <p className="text-[10.5px] text-center" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.4 }}>
-                Auto-set from the name. Square transparent PNG works best, max 5MB.
-              </p>
+              {/* The three-line "Auto-set from the name. Square transparent PNG
+                  works best, max 5MB." caption used to sit here. Removed: it
+                  cost ~34px of the editor's height to restate what the RESET TO
+                  AUTO button already says and to pre-empt an error the upload
+                  handler raises anyway ("Emblem must be under 5MB"). */}
               <input
                 id="committee-emblem-upload"
                 type="file"
@@ -943,73 +1090,98 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
             )}
           </div>
         </div>
-        <div className="mt-5 pt-5" style={{ borderTop: '1px solid #EDE7D8' }}>
-          <div className="flex items-center mb-3">
+        <div className="mt-4 pt-4" style={{ borderTop: '1px solid #EDE7D8' }}>
+          {/* DELEGATION SIZE, AS A PILL BESIDE THE HEADING.
+              It used to be its own labelled block of two 66px-tall cards with
+              icon discs and a sentence of description each — about 100px of the
+              editor's height, and a visual weight suggesting a bigger decision
+              than "does a seat hold one delegate or two".
+
+              It is now a two-option segmented pill on the roster heading's own
+              line, which is also where it belongs semantically: it describes
+              the list about to be built. The labels say the answer outright
+              ("1 per country" / "2 per country") so the descriptions they
+              replaced are not missed. Same `doubleDelegation` boolean, and
+              turning it off when second seats are filled is still gated by the
+              destructive confirm in doEdit. */}
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <p className="flex items-center gap-1.5 text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               {isCharacterRoster ? <Users size={15} style={{ color: '#B6871F' }} /> : <Globe size={15} style={{ color: '#B6871F' }} />}
               {isCharacterRoster ? 'Committee Characters' : 'Committee Countries'}
             </p>
-          </div>
-          {/* Delegation size — chosen BEFORE picking the roster so the organiser
-              knows whether each seat holds one or two delegates. Two person-glyph
-              cards (single User vs paired Users) drive the same doubleDelegation
-              boolean the save flow reads; turning it off when second seats are
-              filled is still gated by the destructive confirm in doEdit. */}
-          <div className="mb-4">
-            <label style={labelStyle}>Delegation size</label>
-            <div className="flex gap-2.5">
+            <div
+              role="group"
+              aria-label="Delegation size"
+              className="inline-flex items-center gap-0.5 flex-shrink-0"
+              style={{ padding: 3, borderRadius: 9999, backgroundColor: '#EFE9DB', border: '1px solid #E1D9C6' }}
+            >
               {([
-                { val: false, Icon: User, title: 'Single delegate', desc: `One delegate per ${isCharacterRoster ? 'character' : 'country'}.` },
-                { val: true, Icon: Users, title: 'Double delegation', desc: `Two delegates share each ${isCharacterRoster ? 'character' : 'country'}.` },
-              ] as const).map(({ val, Icon, title, desc }) => {
+                { val: false, Icon: User, label: `1 per ${isCharacterRoster ? 'character' : 'country'}`, hint: `Single delegation — one delegate per ${isCharacterRoster ? 'character' : 'country'}.` },
+                { val: true, Icon: Users, label: `2 per ${isCharacterRoster ? 'character' : 'country'}`, hint: `Double delegation — two delegates share each ${isCharacterRoster ? 'character' : 'country'}.` },
+              ] as const).map(({ val, Icon, label, hint }) => {
                 const active = doubleDelegation === val;
-                const accent = '#1B3828';
                 return (
                   <button
-                    key={title}
+                    key={label}
                     type="button"
                     onClick={() => setDoubleDelegation(val)}
                     aria-pressed={active}
-                    className="flex-1 flex items-center gap-3 rounded-xl px-3.5 py-3 text-left focus:outline-none"
+                    title={hint}
+                    className="inline-flex items-center gap-1.5 focus:outline-none"
                     style={{
-                      border: active ? `1.5px solid ${accent}` : '1px solid #DDD4C0',
-                      backgroundColor: active ? 'rgba(27,56,40,0.06)' : '#FAF8F3',
-                      cursor: 'pointer', transition: `all 180ms ${EASE}`,
+                      padding: '5px 11px', borderRadius: 9999, border: 'none',
+                      fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.02em',
+                      color: active ? '#EED98A' : '#6E5F4E',
+                      backgroundColor: active ? '#1B3828' : 'transparent',
+                      boxShadow: active ? '0 1px 3px rgba(27,56,40,0.22)' : undefined,
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                      transition: `background-color 180ms ${EASE}, color 180ms ${EASE}`,
                     }}
                   >
-                    <span
-                      className="flex items-center justify-center flex-shrink-0"
-                      style={{
-                        width: 42, height: 42, borderRadius: 13,
-                        background: active ? 'linear-gradient(135deg, #16301F, #2A5A3C)' : '#EFE9DB',
-                        border: active ? '1px solid rgba(27,56,40,0.3)' : '1px solid #E1D9C6',
-                        boxShadow: active ? '0 4px 10px rgba(27,56,40,0.22)' : undefined,
-                      }}
-                    >
-                      <Icon size={20} strokeWidth={2} style={{ color: active ? '#EED98A' : '#9A8A78' }} />
-                    </span>
-                    <span className="flex flex-col min-w-0">
-                      <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: active ? accent : '#1C1410', letterSpacing: '0.01em' }}>{title}</span>
-                      <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 500, color: '#9A8A78', lineHeight: 1.35, marginTop: 2 }}>{desc}</span>
-                    </span>
+                    <Icon size={13} strokeWidth={2.2} />
+                    {label}
                   </button>
                 );
               })}
             </div>
           </div>
-          <ConferenceRosterPicker mode={isCharacterRoster ? 'character' : 'country'} value={roster} onChange={setRoster} />
+          {/* Add controls only — the selected list is docked in the rail. */}
+          <ConferenceRosterPicker mode={isCharacterRoster ? 'character' : 'country'} value={roster} onChange={setRoster} showSelected={false} />
         </div>
         {error && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{error}</p>}
-        <div className="flex gap-3 mt-6">
+        <div className="flex gap-3 mt-4">
           <button onClick={onClose} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
           <button onClick={() => handleSave(false)} disabled={saving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: saving ? '#DDD4C0' : '#1B3828', color: saving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif" }}>{saving ? 'SAVING...' : (isEdit ? 'SAVE CHANGES' : 'ADD COMMITTEE')}</button>
         </div>
       </div>
-      {/* Chairs — a distinct side element docked outside the main modal. Only in
-          edit mode (a real committee id is needed to seat/invite chairs). */}
-      {isEdit && existing && (
-        <ChairsDock conferenceId={conferenceId} committeeId={existing.id} committeeName={name.trim() || existing.name} />
-      )}
+      {/* THE DOCKED RAIL — bookmarks tabbed onto the panel, floating free of
+          its bubble. Chairs on top (edit mode only: a real committee id is
+          needed to seat or invite anyone), the selected roster beneath, which
+          is where the extra width taken off the main panel went.
+
+          The rail owns the 85vh budget for the pair: the chairs card is capped
+          and does not shrink, the roster panel takes the rest and scrolls
+          inside itself, so a 190-country roster can never push the dialog past
+          the fold. */}
+      <div
+        className="gv-ced-rail flex flex-col gap-3"
+        style={{ minHeight: 0 }}
+      >
+        {isEdit && existing && (
+          <ChairsDock conferenceId={conferenceId} committeeId={existing.id} committeeName={name.trim() || existing.name} />
+        )}
+        <ConferenceRosterSelected
+          mode={isCharacterRoster ? 'character' : 'country'}
+          value={roster}
+          onChange={setRoster}
+          className="rounded-2xl"
+          style={{
+            flex: '1 1 auto', minHeight: 220, padding: '14px 14px 12px',
+            backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0',
+            boxShadow: '0 12px 32px rgba(27,56,40,0.16)',
+          }}
+        />
+      </div>
       </div>
     </ModalOverlay>
     {pendingRemovalCount !== null && (

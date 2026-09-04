@@ -562,7 +562,7 @@ export async function clearCurrentSpeakerIfUnchanged(
   await wrapped;
 }
 
-// Lightweight single-row fetch of just the current speaker — used by co-chair views
+// Lightweight single-row fetch of just the current speaker — used by Commenter views
 // to react to current_speaker realtime events without a full committee refetch.
 export async function getCurrentSpeakerRow(committeeId: string): Promise<{
   currentSpeaker: SpeakerEntry | null; speakerTimeRemaining: number; speakerStartedAt: string | null;
@@ -1177,7 +1177,7 @@ export async function updateCommitteeHeadChairInDB(committeeId: string, headChai
 }
 
 // Persist the scoring config into the committee settings jsonb so it reaches
-// delegates / FAs / co-chairs on other devices (localStorage never syncs across devices).
+// delegates / FAs / Commenters on other devices (localStorage never syncs across devices).
 export async function updateCommitteeScoringInDB(committeeId: string, scoring: unknown, code: string, chairSuffix?: string): Promise<void> {
   const { data: existing } = await supabase
     .from('committees')
@@ -1309,6 +1309,11 @@ export function subscribeToCommittee(
     .on('postgres_changes', { event: '*', schema: 'public', table: 'motions', filter: `committee_id=eq.${committeeId}` }, () => onChange('motions'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'documents', filter: `committee_id=eq.${committeeId}` }, () => onChange('documents'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `committee_id=eq.${committeeId}` }, () => onChange('messages'))
+    // Chair notes and factor ratings. These are NOT optimistic speaker/timer/caucus
+    // state, so RULE 4's debounce does not apply to them — and they are the one input
+    // to the scoreboard that was previously mount-only, which is why two chairs
+    // writing at once never saw each other and the scoreboard went stale while open.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback', filter: `committee_id=eq.${committeeId}` }, () => onChange('feedback'))
     // Organiser broadcasts are fanned out one row per committee, so the same committee_id
     // filter every other table uses is all that is needed — no conference lookup.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'session_broadcasts', filter: `committee_id=eq.${committeeId}` }, () => onChange('session_broadcasts'))

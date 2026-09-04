@@ -19,7 +19,7 @@ import { NEU, OUTFIT } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
 import { type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
 import { type LiveCommittee, ModalShell } from './LiveModals';
-import { CommitteeScoreboardBody } from './ScoreboardTable';
+import { CommitteeScoreboardBody } from '@/components/ScoreboardTable';
 import { committeeIdentity } from './cardModel';
 import { SOFT } from './tokens';
 

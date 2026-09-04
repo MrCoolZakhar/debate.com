@@ -280,8 +280,15 @@ export async function performSwap(
     if (allocRow) {
       // Not an insert, but it re-points an existing seat at a different
       // person — that IS an allocation decision, so the actor is refreshed.
+      // allocation_sent goes back to false with it: the flag records whether
+      // THIS delegate has been told their committee and country, and the
+      // incoming delegate has not been. Leaving it set would hide them from
+      // the assignment page's "not yet emailed" wave forever.
       const { error } = await supabase.from('conference_allocations')
-        .update({ user_id: source.user_id, application_id: source.id, assigned_by: actorId })
+        .update({
+          user_id: source.user_id, application_id: source.id, assigned_by: actorId,
+          allocation_sent: false, allocation_sent_at: null,
+        })
         .eq('id', (allocRow as { id: string }).id);
       note(error);
     }

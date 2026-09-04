@@ -38,6 +38,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CustomAnswers } from '@/lib/customQuestions';
+import type { ExperienceEntry } from '@/components/CVEntryModal';
 
 /** Mirrors the apply flow's own `Preference` (structurally identical). */
 export interface DraftPreference {
@@ -71,6 +72,9 @@ export interface ApplyDraftAnswers {
   willPledgeAdvisors: boolean | null;
   advisorsPledged: number | '';
   preferences: DraftPreference[];
+  /** Chair/secretariat MUN-experience step's list — a snapshot owned by the
+   *  application itself, not a live view of mun_cv_entries. */
+  experienceEntries: ExperienceEntry[];
   experienceLevel: string;
   customAnswers: CustomAnswers;
   /** Which section page of the Questions step they were on. */
@@ -228,6 +232,7 @@ export function normalizeAnswers(raw: Partial<ApplyDraftAnswers>): ApplyDraftAns
     willPledgeAdvisors: raw.willPledgeAdvisors ?? null,
     advisorsPledged: raw.advisorsPledged ?? '',
     preferences: Array.isArray(raw.preferences) ? raw.preferences : [],
+    experienceEntries: Array.isArray(raw.experienceEntries) ? raw.experienceEntries : [],
     experienceLevel: raw.experienceLevel ?? '',
     customAnswers: (raw.customAnswers ?? {}) as CustomAnswers,
     questionPage: typeof raw.questionPage === 'number' ? raw.questionPage : 0,

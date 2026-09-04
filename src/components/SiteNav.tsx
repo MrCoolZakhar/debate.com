@@ -19,6 +19,12 @@ const NAV_LINKS_CONFIG = [
 
 interface SiteNavProps {
   logoOverride?: { src: string; alt: string };
+  /** Which wordmark to show, stated rather than inferred. `usePathname()` is
+   *  not reliable during a static prerender — the homepage is ISR-rendered and
+   *  has been shipping the SESSIONS mark in its prerendered HTML despite the
+   *  path being '/', which no local build reproduces. A page that knows its own
+   *  brand should say so instead of leaving it to a heuristic. */
+  brand?: 'conferences' | 'sessions';
   /**
    * Overlay mode: the header floats transparently over the page's hero media
    * instead of occupying a 72px ivory strip that cuts the hero off at the top.
@@ -32,7 +38,7 @@ interface SiteNavProps {
   hideLanguage?: boolean;
 }
 
-export default function SiteNav({ logoOverride, overlay = false, hideLanguage = false }: SiteNavProps = {}) {
+export default function SiteNav({ logoOverride, overlay = false, hideLanguage = false, brand }: SiteNavProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
@@ -77,8 +83,13 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
   // first-time visitor to gavelling.com saw the wrong brand until hydration
   // swapped it. Gavelling is conferences-first, so an unknown path must fall
   // back to conferences rather than to sessions.
+  // An explicit `brand` always wins; the pathname heuristic is only the
+  // fallback for pages that have not said which side of the product they are.
   const inConferencesArea =
-    !logoOverride && (!pathname || pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname.startsWith(p)));
+    !logoOverride && (
+      brand ? brand === 'conferences'
+        : (!pathname || pathname === '/' || CONFERENCES_PREFIXES.some(p => pathname.startsWith(p)))
+    );
   // Transparent WEBP: the original .png has NO alpha and carried a solid
   // #F2F2F2 plate, which showed as a pale block behind the mark on the
   // site's ivory. The .png remains as the onError fallback.

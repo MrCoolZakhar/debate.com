@@ -113,7 +113,7 @@ async function loadIndex(): Promise<VanityIndex> {
 
   const { data, error } = await supabase
     .from('conferences')
-    .select('slug, acronym')
+    .select('slug, acronym, start_date, end_date')
     .eq('is_public', true)
     .not('acronym', 'is', null);
 
@@ -122,21 +122,45 @@ async function loadIndex(): Promise<VanityIndex> {
     return cached?.index ?? new Map();
   }
 
-  const rows = data as { slug: string; acronym: string | null }[];
+  const rows = data as { slug: string; acronym: string | null; start_date: string | null; end_date: string | null }[];
   const index = new Map<string, string>();
   const ambiguous = new Set<string>();
   const publicSlugs = new Set<string>();
 
+  // Same collision rule for every candidate key, whether it's a bare acronym
+  // or a derived year alias below: first claim wins, a second claim on the
+  // same key marks it ambiguous and both registrations are dropped.
+  const registerKey = (key: string, slug: string) => {
+    if (!key || RESERVED.has(key)) return;
+    if (index.has(key)) {
+      ambiguous.add(key);
+      return;
+    }
+    index.set(key, slug);
+  };
+
   for (const row of rows) {
     publicSlugs.add(row.slug);
-    const key = normalizeVanity(row.acronym ?? '');
-    if (!key || RESERVED.has(key)) continue;
-    if (index.has(key)) {
-      // Two public conferences share this acronym — refuse to guess.
-      ambiguous.add(key);
-      continue;
+    const base = normalizeVanity(row.acronym ?? '');
+    if (!base) continue;
+    registerKey(base, row.slug);
+
+    // Organisers used to bake the edition year into their acronym
+    // (SISMUN26); dropping it to SISMUN is exactly what made /sismun start
+    // resolving, but it broke every /sismun26 link already printed on
+    // banners and shared on socials — and there is no history of the old
+    // acronym to recover it from. Reconstruct that old alias instead: for an
+    // acronym that no longer ends in digits, also register
+    // <acronym><2-digit start-year>, e.g. SISMUN + 2026-09-25 → "sismun26".
+    // Acronyms that still end in digits are mid-migration and left alone —
+    // appending a second year would double-suffix them.
+    if (!/\d$/.test(base)) {
+      const editionDate = row.start_date || row.end_date;
+      const year = editionDate ? new Date(editionDate).getFullYear() : NaN;
+      if (Number.isFinite(year)) {
+        registerKey(`${base}${String(year % 100).padStart(2, '0')}`, row.slug);
+      }
     }
-    index.set(key, row.slug);
   }
   for (const key of ambiguous) index.delete(key);
 

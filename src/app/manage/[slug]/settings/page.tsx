@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
-  Settings2, Globe, EyeOff, ArrowUp, ArrowDown, Trash2,
+  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -21,6 +21,7 @@ import { NEU, OUTFIT, EASE, Emoji3D } from '@/components/neu';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { LogoDisc } from '@/components/LogoDisc';
 import { LogoCropModal } from '@/components/LogoCropModal';
+import { safeStorageKey } from '@/lib/storageKey';
 import { DatePicker } from '@/components/DatePicker';
 import { sendOrganizerInvite, listPendingOrganizerInvites, revokeOrganizerInvite, type OrganizerInviteRow } from '@/lib/organizerInvites';
 import {
@@ -59,6 +60,8 @@ interface RoleConfig {
   custom_questions: unknown[];
   fee_phases: FeePhase[] | null;
   allow_resubmission: boolean;
+  preference_mode: string;
+  collect_mun_experience: boolean;
 }
 
 interface Organizer {
@@ -99,12 +102,34 @@ interface PartnerConf {
   start_date: string | null;
 }
 
+/** A partner row is one of exactly two shapes, enforced by the
+ *  `conference_partners_one_shape` check constraint:
+ *
+ *    • a linked Gavelling conference — `partner_conference_id` set, every
+ *      `company_*` column null, `approved` owned by the other team;
+ *    • a free-form company the organiser typed in themselves —
+ *      `partner_conference_id` null, `company_name` non-blank. There is no
+ *      counterparty to ask, so the DB trigger marks these approved on insert.
+ *
+ *  `partner_conference_id === null` is therefore the discriminator; there is
+ *  deliberately no separate `kind` column to fall out of sync with it. */
 interface PartnerLink {
   id: string;
   sort_order: number;
   approved: boolean;
-  partner_conference_id: string;
+  partner_conference_id: string | null;
+  company_name: string | null;
+  company_logo_url: string | null;
+  company_description: string | null;
   conf: PartnerConf | null;
+}
+
+/** Name shown for either shape, so callers never branch on the discriminator
+ *  just to render a label. */
+function partnerLabel(link: PartnerLink): string {
+  return link.partner_conference_id === null
+    ? (link.company_name ?? 'Partner')
+    : (link.conf?.acronym ?? 'Unknown conference');
 }
 
 interface IncomingPartnerClaim {
@@ -128,15 +153,31 @@ const PAYMENT_TIMING_OPTIONS: { value: RoleConfig['payment_timing']; label: stri
   { value: 'anytime', label: 'PAY AT ANY TIME', desc: 'Applicants can view everything and pay whenever.' },
 ];
 
-// What a delegate may express as preferences on the apply form. Persisted on
-// conferences.delegate_preference_mode; read by the apply flow to decide which
-// pickers (committees / countries / neither) to show.
+// What a role may express as preferences on the apply form. Persisted per role
+// on application_role_configs.preference_mode; read by the apply flow to
+// decide which pickers (committees / countries / neither) to show. Delegate
+// and head-delegate may use any of the four; chair may only use
+// committees_only or none (see CHAIR_PREF_MODE_OPTIONS below); every other
+// role is always 'none' and never shows the preference card at all.
 const PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: 'committees_and_countries', label: 'COMMITTEES + COUNTRIES', desc: 'Delegates rank committee-and-country pairings, the fullest picture for allocation.' },
   { value: 'committees_only', label: 'COMMITTEES', desc: 'Delegates rank committees only; you assign the countries.' },
   { value: 'countries_only', label: 'COUNTRIES', desc: 'Delegates rank countries only; committees follow from the country.' },
   { value: 'none', label: 'NONE', desc: 'No preference step. You allocate everyone manually.' },
 ];
+
+// Chair's cut-down version: a chair picks which committee they would like to
+// chair, never a country, so the country pairing options do not apply.
+const CHAIR_PREF_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: 'committees_only', label: 'CHOOSE A COMMITTEE', desc: 'Chairs rank which committee they would like to chair; you assign from their ranking.' },
+  { value: 'none', label: 'NONE', desc: 'No preference step. You assign every chair to a committee yourself.' },
+];
+
+/** Roles whose preference_mode can be anything other than 'none'. Mirrors the
+ *  database's second CHECK constraint on application_role_configs. */
+function roleCanHavePreference(role: string): boolean {
+  return role === 'delegate' || role === 'head-delegate' || role === 'chair';
+}
 
 const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: 'off', label: 'OFF', desc: 'Only organizers manage allocations.' },
@@ -241,6 +282,14 @@ const STEPS = [
     hint: 'The questions this role fills in when they apply: short answers, long answers, choices, uploads. Each role has its own form, because an advisor and a delegate have almost nothing in common to say. Reordering and rewording is safe at any time; answers already submitted are kept exactly as they were given.',
   },
 ] as const;
+
+/** Fees (step 2) doesn't apply to secretariat or staff: nobody charges their
+ *  own volunteers or their own secretariat, and the database already seeds
+ *  fee_amount 0 for both. Used both by the render (which card to show) and by
+ *  auto-advance (which step to land on next), so the two never disagree. */
+function stepsForRole(role: string): typeof STEPS[number][] {
+  return role === 'secretariat' || role === 'staff' ? STEPS.filter(s => s.n !== 2) : [...STEPS];
+}
 
 /** True when any two dated fee phases have intersecting [start, end] windows. */
 function feePhasesOverlap(phases: FeePhase[]): boolean {
@@ -481,11 +530,24 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { conference, refreshConferenceQuiet } = useManage();
   const { user, session, profile } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so a loader that depends on
+   *  `session` refetches on each of those — and here that means the seven
+   *  loaders the mount effect below fires together. The token is a string and
+   *  only changes when it really changes, including the first time it arrives:
+   *  the transition an auth-guarded loader must catch or it never runs at all.
+   *  The action handlers below keep using `session`; they run on a click, not
+   *  off a dependency array. */
+  const accessToken = session?.access_token;
   // Deep-links from the dashboard checklist pass ?tab= to land on the right
   // sub-tab (e.g. "Set up your conference page" → conference). Falls back to
-  // applications for any missing/unknown value.
+  // applications for any missing/unknown value. 'team' is the alias the
+  // secretariat accept redirect uses (?tab=team&highlight=<organizer id>) —
+  // same tab as 'organizers', named the way a person reading the URL would
+  // expect rather than the internal section key.
   const initialTab = ((): 'applications' | 'conference' | 'organizers' | 'privacy' => {
     const t = searchParams.get('tab') ?? searchParams.get('section');
+    if (t === 'team') return 'organizers';
     return t === 'conference' || t === 'organizers' || t === 'privacy' ? t : 'applications';
   })();
   const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>(initialTab);
@@ -566,9 +628,9 @@ export default function SettingsPage() {
   const [swapMode, setSwapMode] = useState('request');
   const [swapModeError, setSwapModeError] = useState('');
 
-  // Delegate preference mode (Applications tab). Not part of the layout's
-  // conference column allowlist, so it's loaded + saved directly here.
-  const [prefMode, setPrefMode] = useState('committees_and_countries');
+  // Preference mode is per-role, on application_role_configs.preference_mode
+  // (roleConfigs, already loaded). prefMode itself is derived below from the
+  // selected role's config row, not held as its own state.
   const [prefModeSaving, setPrefModeSaving] = useState(false);
   const [prefModeError, setPrefModeError] = useState('');
 
@@ -585,6 +647,23 @@ export default function SettingsPage() {
   const [rolesWithApplications, setRolesWithApplications] = useState<Set<string>>(new Set());
   const { confirm, modal: confirmModal } = useConfirmModal();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
+  // ── Team highlight, from the secretariat-accept redirect ─────────────────
+  // ?highlight=<organizer id> scrolls that member's card into view and gives
+  // its existing accent ring a brief, brighter pulse, so the person who was
+  // just accepted is obviously the one who landed on this page.
+  const highlightOrgId = searchParams.get('highlight');
+  const [highlightPulse, setHighlightPulse] = useState(false);
+  const highlightedRef = useRef(false);
+  useEffect(() => {
+    if (!highlightOrgId || activeTab !== 'organizers' || highlightedRef.current) return;
+    const el = document.getElementById(`organizer-${highlightOrgId}`);
+    if (!el) return;
+    highlightedRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightPulse(true);
+    const t = setTimeout(() => setHighlightPulse(false), 2600);
+    return () => clearTimeout(t);
+  }, [highlightOrgId, activeTab, organizers]);
   // The form builder edits whichever role the tab is on.
   const selectedRole = activeRole;
   const [inviteEmail, setInviteEmail] = useState('');
@@ -698,18 +777,28 @@ export default function SettingsPage() {
   const [lineageBusy, setLineageBusy] = useState<string | null>(null);
   const [lineageError, setLineageError] = useState('');
 
-  // Partner conferences
+  // Partners: linked Gavelling conferences and free-form companies
   const [partners, setPartners] = useState<PartnerLink[]>([]);
   const [incomingPartnerClaims, setIncomingPartnerClaims] = useState<IncomingPartnerClaim[]>([]);
   const [partnerQuery, setPartnerQuery] = useState('');
   const [partnerResults, setPartnerResults] = useState<PartnerConf[]>([]);
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
   const [partnerError, setPartnerError] = useState('');
+  // Which kind of partner is being added. null = neither picked yet, so the
+  // card shows the two-way chooser instead of either form. The conference
+  // flow is unchanged behind 'conference'.
+  const [partnerKind, setPartnerKind] = useState<null | 'conference' | 'company'>(null);
+  const [companyName, setCompanyName] = useState('');
+  const [companyDescription, setCompanyDescription] = useState('');
+  // Uploaded ahead of the row: the logo lands in storage first and the row is
+  // inserted with its public URL, so a half-filled form never writes a row.
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const [companyLogoUploading, setCompanyLogoUploading] = useState(false);
+  const [companySaving, setCompanySaving] = useState(false);
 
   // Organizers + privacy inline error surfaces
   const [organizersError, setOrganizersError] = useState('');
   const [privacyError, setPrivacyError] = useState('');
-  const [archiving, setArchiving] = useState(false);
 
   // Per-save "saving" flags, every conference-row save below is: click →
   // disabled/spinner → awaited + verified write → refreshConferenceQuiet()
@@ -758,9 +847,9 @@ export default function SettingsPage() {
 
   const loadRoleConfigs = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++roleSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('application_role_configs')
       .select('*')
@@ -770,16 +859,20 @@ export default function SettingsPage() {
       setRoleConfigs(data as RoleConfig[]);
       setConfigVersion(v => v + 1);
     }
-  }, [conference]);
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback was built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returned
+    // early with nothing left to re-trigger the effect.
+  }, [conference, accessToken]);
 
   // Count query on applications for (conference_id, role): any role with a
   // submitted-or-further application surfaces a quiet caution in the question
   // builder when its existing questions get reworded.
   const loadRolesWithApplications = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++rolesWithApplicationsSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const results = await Promise.all(ROLES.map(async (role) => {
       const { count } = await supabase
         .from('applications')
@@ -791,13 +884,13 @@ export default function SettingsPage() {
     }));
     if (seq !== rolesWithApplicationsSeq.current) return;
     setRolesWithApplications(new Set(results.filter(r => r.hasApplications).map(r => r.role)));
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const loadOrganizers = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++orgSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conference_organizers')
       .select('id, role, user_id, permissions, public_title, show_on_public, sort_order, profiles(display_name, email, avatar_url)')
@@ -806,21 +899,21 @@ export default function SettingsPage() {
       .order('created_at', { ascending: true });
     if (seq !== orgSeq.current) return;
     if (data) applyOrganizers(() => data as unknown as Organizer[]);
-  }, [conference, applyOrganizers]);
+  }, [conference, accessToken, applyOrganizers]);
 
   const loadPendingInvites = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++invitesSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const rows = await listPendingOrganizerInvites(supabase, conference.id);
     if (seq !== invitesSeq.current) return;
     setPendingInvites(rows);
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const loadLineage = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++lineageSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
 
     // Incoming claims: other conferences claiming this one as their previous edition.
     // Goes through a SECURITY DEFINER RPC because the successor may be private.
@@ -842,47 +935,50 @@ export default function SettingsPage() {
     } else {
       setPredecessorInfo(null);
     }
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const loadPartners = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++partnersSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data: links } = await supabase
       .from('conference_partners')
-      .select('id, sort_order, approved, partner_conference_id')
+      .select('id, sort_order, approved, partner_conference_id, company_name, company_logo_url, company_description')
       .eq('conference_id', conference.id)
       .order('sort_order', { ascending: true });
     if (seq !== partnersSeq.current) return;
     const rows = (links as Omit<PartnerLink, 'conf'>[] | null) ?? [];
 
+    // Company rows have no conference to hydrate — passing their null id into
+    // the `.in()` would query for "id is null" and return nothing useful.
+    const confIds = rows.map(r => r.partner_conference_id).filter((id): id is string => id !== null);
     const details: Record<string, PartnerConf> = {};
-    if (rows.length > 0) {
+    if (confIds.length > 0) {
       const { data: confs } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
-        .in('id', rows.map(r => r.partner_conference_id));
+        .in('id', confIds);
       if (seq !== partnersSeq.current) return;
       for (const c of (confs as PartnerConf[] | null) ?? []) details[c.id] = c;
     }
-    setPartners(rows.map(r => ({ ...r, conf: details[r.partner_conference_id] ?? null })));
-  }, [conference, session]);
+    setPartners(rows.map(r => ({ ...r, conf: r.partner_conference_id ? details[r.partner_conference_id] ?? null : null })));
+  }, [conference, accessToken]);
 
   const loadIncomingPartnerClaims = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++incomingSeq.current;
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase.rpc('list_incoming_partner_claims');
     if (seq !== incomingSeq.current) return;
     setIncomingPartnerClaims(
       ((data as IncomingPartnerClaim[] | null) ?? []).filter(c => c.my_conference_id === conference.id)
     );
-  }, [conference, session]);
+  }, [conference, accessToken]);
 
   const ensureRoleConfigs = useCallback(async () => {
     if (!conference) return;
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data: existing } = await supabase
       .from('application_role_configs')
       .select('id')
@@ -905,7 +1001,11 @@ export default function SettingsPage() {
     }));
     await supabase.from('application_role_configs').insert(defaults);
     await loadRoleConfigs();
-  }, [conference, loadRoleConfigs]);
+    // accessToken belongs here even though this WRITES: without it a page that
+    // mounts before auth lands seeds nothing and never retries. Re-running it
+    // is harmless — the calling effect only fires while roleConfigs is still
+    // empty, and the select above bails the moment any row already exists.
+  }, [conference, accessToken, loadRoleConfigs]);
 
   useEffect(() => {
     if (!conference) return;
@@ -965,11 +1065,11 @@ export default function SettingsPage() {
   // Partner typeahead: debounced authed search over public conferences,
   // excluding this conference and anything already linked.
   useEffect(() => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const q = partnerQuery.trim();
     if (q.length < 2) { setPartnerResults([]); return; }
     const timer = setTimeout(async () => {
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(accessToken);
       const { data } = await supabase
         .from('conferences')
         .select('id, slug, full_name, acronym, logo_url, city, country, start_date')
@@ -977,11 +1077,13 @@ export default function SettingsPage() {
         .neq('id', conference.id)
         .or(`acronym.ilike.%${q}%,full_name.ilike.%${q}%`)
         .limit(8);
-      const linkedIds = new Set(partners.map(p => p.partner_conference_id));
+      const linkedIds = new Set(partners.map(p => p.partner_conference_id).filter(Boolean));
       setPartnerResults(((data as PartnerConf[] | null) ?? []).filter(c => !linkedIds.has(c.id)));
     }, 300);
     return () => clearTimeout(timer);
-  }, [partnerQuery, conference?.id, session, partners]);
+    // accessToken, not session: a token refresh would otherwise restart this
+    // debounced search mid-typing for no reason.
+  }, [partnerQuery, conference?.id, accessToken, partners]);
 
   useEffect(() => {
     if (!conference || roleConfigs.length > 0) return;
@@ -1192,27 +1294,11 @@ export default function SettingsPage() {
     setSwapModeSaving(false);
   }
 
-  // delegate_preference_mode isn't in the layout's conference column allowlist,
-  // so read it straight from the row when the conference loads.
-  useEffect(() => {
-    if (!conference || !session) return;
-    let cancelled = false;
-    (async () => {
-      const supabase = getAuthedClient(session.access_token);
-      const { data } = await supabase
-        .from('conferences')
-        .select('delegate_preference_mode')
-        .eq('id', conference.id)
-        .maybeSingle();
-      if (cancelled) return;
-      const mode = (data as { delegate_preference_mode: string } | null)?.delegate_preference_mode;
-      if (mode) setPrefMode(mode);
-    })();
-    return () => { cancelled = true; };
-  }, [conference?.id, session]);
-
   // Same verified-write pattern as saveSwapMode: control-busy, exact rollback
-  // (local prefMode only flips after the DB write is confirmed).
+  // (roleConfigs only picks up the new value after the DB write is confirmed,
+  // never before — prefMode is derived from roleConfigs, so this is what
+  // makes it visibly flip). Writes application_role_configs, not conferences:
+  // preference_mode is per role now, not a single conference-wide column.
   async function savePrefMode(mode: string) {
     if (!conference || prefModeSaving) return;
     setPrefModeSaving(true);
@@ -1226,9 +1312,10 @@ export default function SettingsPage() {
     }
 
     const { data, error } = await supabase
-      .from('conferences')
-      .update({ delegate_preference_mode: mode })
-      .eq('id', conference.id)
+      .from('application_role_configs')
+      .update({ preference_mode: mode })
+      .eq('conference_id', conference.id)
+      .eq('role', selectedRole)
       .select('id');
 
     if (error || !data || data.length !== 1) {
@@ -1236,7 +1323,7 @@ export default function SettingsPage() {
       setPrefModeError(saveFailMessage(error));
       return;
     }
-    setPrefMode(mode);
+    setRoleConfigs(prev => prev.map(rc => (rc.role === selectedRole ? { ...rc, preference_mode: mode } : rc)));
     setPrefModeSaving(false);
   }
 
@@ -1606,38 +1693,6 @@ export default function SettingsPage() {
     })();
   }
 
-  async function handleArchive() {
-    if (!conference || archiving) return;
-    const { confirmed } = await confirm({
-      title: 'Archive this conference?',
-      body: 'It will be hidden from all listings.',
-      confirmLabel: 'Archive',
-      danger: true,
-    });
-    if (!confirmed) return;
-    // The write stays awaited: navigating away must depend on it succeeding,
-    // and on a verified row match, a silent zero-row update must not send
-    // the user off to /my-conferences believing this archived.
-    setArchiving(true);
-    setPrivacyError('');
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setArchiving(false);
-      setPrivacyError('Your session has expired, please refresh and sign in again.');
-      return;
-    }
-    const { data, error } = await supabase.from('conferences').update({
-      status: 'archived',
-      is_public: false,
-    }).eq('id', conference.id).select('id');
-    if (error || !data || data.length !== 1) {
-      setPrivacyError(saveFailMessage(error));
-      setArchiving(false);
-      return;
-    }
-    router.push('/my-conferences');
-  }
-
   // ── Lineage actions ─────────────────────────────────────────────────────
 
   const isOwner = organizers.some(o => o.user_id === user?.id && o.role === 'owner');
@@ -1719,7 +1774,7 @@ export default function SettingsPage() {
     setWithdrawingClaim(false);
   }
 
-  // ── Partner conference actions ──────────────────────────────────────────
+  // ── Partner actions ─────────────────────────────────────────────────────
 
   function handleAddPartner(conf: PartnerConf) {
     if (!conference || !session) return;
@@ -1733,6 +1788,9 @@ export default function SettingsPage() {
       sort_order: sortOrder,
       approved: false,
       partner_conference_id: conf.id,
+      company_name: null,
+      company_logo_url: null,
+      company_description: null,
       conf,
     }]);
     setPartnerQuery('');
@@ -1757,6 +1815,92 @@ export default function SettingsPage() {
         setPartners(prev => prev.map(p => p.id === tempId ? { ...p, id: (data as { id: string }).id } : p));
       }
     })();
+  }
+
+  /** Company logo, uploaded before the partner row exists so the insert can
+   *  carry a final URL. The object key goes through safeStorageKey because a
+   *  raw filename is not a legal Storage key: macOS screenshots carry a
+   *  U+202F narrow no-break space and any non-ASCII name (Ödeme, reçu) is
+   *  refused outright — see src/lib/storageKey.ts. */
+  async function handleCompanyLogoUpload(file: File) {
+    if (!session || !conference || companyLogoUploading) return;
+    if (file.size > 5 * 1024 * 1024) { setPartnerError('Logo must be under 5MB.'); return; }
+    setCompanyLogoUploading(true);
+    setPartnerError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setCompanyLogoUploading(false);
+      setPartnerError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const path = safeStorageKey(`partner-logos/${conference.id}`, crypto.randomUUID(), file.name);
+    const { error } = await supabase.storage
+      .from('conference-assets')
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (error) {
+      setCompanyLogoUploading(false);
+      setPartnerError("Couldn't upload the logo: " + error.message);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from('conference-assets').getPublicUrl(path);
+    setCompanyLogoUrl(urlData.publicUrl);
+    setCompanyLogoUploading(false);
+  }
+
+  function resetCompanyDraft() {
+    setCompanyName('');
+    setCompanyDescription('');
+    setCompanyLogoUrl(null);
+  }
+
+  /** Adds a free-form company partner. Unlike the conference flow this awaits
+   *  and verifies the insert rather than painting optimistically: the row is
+   *  built from text the organiser just typed, and silently losing it to a
+   *  rolled-back optimistic row is worse than a half-second of "Adding…". */
+  async function handleAddCompanyPartner() {
+    if (!conference || !session || companySaving) return;
+    const name = companyName.trim();
+    if (!name) { setPartnerError('Give the company a name.'); return; }
+    setCompanySaving(true);
+    setPartnerError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setCompanySaving(false);
+      setPartnerError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const sortOrder = partners.length;
+    const { data, error } = await supabase.from('conference_partners').insert({
+      conference_id: conference.id,
+      // Null partner_conference_id is what makes this a company row; the DB
+      // check constraint refuses a row that carries both shapes.
+      partner_conference_id: null,
+      company_name: name,
+      company_logo_url: companyLogoUrl,
+      company_description: companyDescription.trim() || null,
+      sort_order: sortOrder,
+    }).select('id, approved').single();
+    if (error || !data) {
+      setCompanySaving(false);
+      setPartnerError(error?.message ?? "Couldn't add this partner. Please try again.");
+      return;
+    }
+    const row = data as { id: string; approved: boolean };
+    setPartners(prev => [...prev, {
+      id: row.id,
+      sort_order: sortOrder,
+      // The guard trigger approves company rows on insert (nobody to ask);
+      // trust what came back rather than assuming.
+      approved: row.approved,
+      partner_conference_id: null,
+      company_name: name,
+      company_logo_url: companyLogoUrl,
+      company_description: companyDescription.trim() || null,
+      conf: null,
+    }]);
+    resetCompanyDraft();
+    setPartnerKind(null);
+    setCompanySaving(false);
   }
 
   function handleMovePartner(idx: number, dir: -1 | 1) {
@@ -1794,7 +1938,9 @@ export default function SettingsPage() {
   async function handleRemovePartner(link: PartnerLink) {
     if (!session) return;
     if (link.id.startsWith('temp-')) return; // still being created
-    const label = link.conf?.acronym ?? 'this conference';
+    const label = link.partner_conference_id === null
+      ? (link.company_name ?? 'this partner')
+      : (link.conf?.acronym ?? 'this conference');
     const { confirmed } = await confirm({
       title: `Remove the partner link with ${label}?`,
       confirmLabel: 'Remove',
@@ -1866,6 +2012,11 @@ export default function SettingsPage() {
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
   const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
   const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
+  // Derived, not held in state: whichever role's bookmark is selected, this
+  // always reflects that role's own row, and needs no effect to keep in sync.
+  const prefMode: string = selectedConfig?.preference_mode ?? 'none';
+  const prefModeOptions = selectedRole === 'chair' ? CHAIR_PREF_MODE_OPTIONS : PREF_MODE_OPTIONS;
+  const showPrefCard = roleCanHavePreference(selectedRole);
   const otherRoles = ROLES.filter(r => r !== selectedRole);
   const [copyNotice, setCopyNotice] = useState('');
 
@@ -1920,7 +2071,8 @@ export default function SettingsPage() {
     // advances to nothing, which is the end of the flow.
     // Past the last step there is nowhere to go, and 0 (all collapsed) is now
     // a legal resting place rather than a step stuck open behind you.
-    const next = STEPS[STEPS.findIndex(st => st.n === openStep) + 1];
+    const roleSteps = stepsForRole(activeRole);
+    const next = roleSteps[roleSteps.findIndex(st => st.n === openStep) + 1];
     setOpenStep(next ? next.n : 0);
   }, [activeRole, openStep, stepComplete]);
 
@@ -2518,8 +2670,17 @@ export default function SettingsPage() {
         const enabled = config?.is_enabled ?? false;
         const status = roleStatus(config, Date.now());
         const chip = STATUS_STYLE[status];
+        // Nobody charges their own volunteers or their own secretariat: the
+        // Fees step doesn't apply to either, so it isn't shown at all.
+        const showFeesStep = role !== 'secretariat' && role !== 'staff';
         return (
-          <>
+          /* `position: relative` so the payment gate below can cover THIS panel
+             and nothing else. It used to be a full-screen portal, which also
+             covered the section rail — an organiser who had not finished
+             financial onboarding could not reach Conference, Organizers or
+             Privacy either, on a page where none of those have anything to do
+             with taking money. */
+          <div style={{ position: 'relative' }}>
             {/* The gate blurs the real screen rather than replacing it: this is
                 a step not yet done, not an error, and seeing what is waiting
                 behind it is the point. */}
@@ -2582,6 +2743,25 @@ export default function SettingsPage() {
                       {linkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
                       {linkCopied ? 'COPIED' : 'COPY APPLICATION LINK'}
                     </button>
+                    <a
+                      href={`/conferences/${conference.slug}/apply?role=${role}&preview=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
+                      style={{
+                        padding: '7px 12px',
+                        fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                        letterSpacing: '0.06em',
+                        color: '#1B3828', backgroundColor: 'transparent',
+                        border: '1.5px solid #DDD4C0', cursor: 'pointer',
+                        textDecoration: 'none',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      <Eye size={13} strokeWidth={2.4} />
+                      PREVIEW APPLICATION
+                    </a>
                     <PillToggle
                       value={enabled}
                       onChange={(v) => saveRoleConfig(role, { is_enabled: v })}
@@ -2783,10 +2963,36 @@ export default function SettingsPage() {
                             size="md"
                           />
                         </div>
+                        {/* MUN experience — chair and secretariat only. The
+                            database CHECK refuses true for every other role,
+                            so a control for them could never work and must
+                            not exist, not even disabled. */}
+                        {(role === 'chair' || role === 'secretariat') && (
+                          <div className="mt-4 flex items-center justify-between gap-3">
+                            <div>
+                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                Ask for MUN experience
+                                <InfoHint
+                                  label="About MUN experience"
+                                  text="Delegates and head delegates are not affected by this setting, on or off: their experience level feeds committee allocation directly, so it is never collected this way for them."
+                                />
+                              </label>
+                              <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                Applicants list the conferences they have chaired or staffed, and can import them from their Gavelling MUN CV.
+                              </p>
+                            </div>
+                            <PillToggle
+                              value={config.collect_mun_experience ?? false}
+                              onChange={(v) => saveRoleConfig(role, { collect_mun_experience: v })}
+                              size="md"
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
 
+                  {showFeesStep && (
                   <div style={cardStyle}>
                     <StepHeader
                       n={STEPS[1].n} label={STEPS[1].label} sub={STEPS[1].sub} hint={STEPS[1].hint}
@@ -2989,6 +3195,7 @@ export default function SettingsPage() {
                       </div>
                     )}
                   </div>
+                  )}
 
                   <div style={cardStyle}>
                     <StepHeader
@@ -3026,19 +3233,21 @@ export default function SettingsPage() {
               busy={copyPhasesBusy}
               title="Set this up for another role too?"
               sub={`${roleLabel(role)} fee phases are saved. Most conferences run the same windows for every role, so tick the ones that should get an identical ladder and the same fee.`}
-              roles={ROLES.filter(r => r !== role)}
+              roles={ROLES.filter(r => r !== role && r !== 'secretariat' && r !== 'staff')}
             />
 
             {/* Not dismissible by design: no close, no backdrop click, no Escape.
-                It goes away when financial onboarding is done, and not before. */}
+                It goes away when financial onboarding is done, and not before.
+                Scoped to this panel, NOT the viewport: applications are the only
+                thing that depends on being able to take money, so they are the
+                only thing that should be locked. */}
             {applicationsGated && (
-              <Portal>
-                <div
-                  role="dialog"
-                  aria-modal="true"
-                  className="fixed inset-0 z-[80] flex items-center justify-center px-4"
-                  style={{ backgroundColor: 'rgba(27,56,40,0.28)' }}
-                >
+              <div
+                role="region"
+                aria-label="Applications locked until financial setup is finished"
+                className="absolute inset-0 z-20 flex items-start justify-center px-4 pt-10"
+                style={{ backgroundColor: 'rgba(27,56,40,0.18)', borderRadius: 16 }}
+              >
                   <div
                     className="flex flex-col items-center text-center"
                     style={{ ...cardStyle, marginBottom: 0, padding: '48px 32px', maxWidth: '520px', boxShadow: '0 24px 70px rgba(27,56,40,0.28)' }}
@@ -3070,9 +3279,8 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </div>
-              </Portal>
             )}
-          </>
+          </div>
         );
       })()}
 
@@ -3458,64 +3666,74 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* ── What delegates rank ── */}
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              <Emoji3D name="Globe showing europe-africa" size={20} fallback={Globe} fallbackColor="#1B3828" />
-              Delegate preferences
-              <InfoHint
-                label="About delegate preferences"
-                text="What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."
-              />
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
-              {PREF_MODE_OPTIONS.map(opt => {
-                const active = prefMode === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => savePrefMode(opt.value)}
-                    disabled={prefModeSaving}
-                    className="flex items-center rounded-xl focus:outline-none"
-                    style={{
-                      gap: 10, padding: '11px 13px', textAlign: 'left',
-                      backgroundColor: active ? '#1B3828' : 'transparent',
-                      color: active ? '#EED98A' : '#1C1410',
-                      border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                      boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-                      fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-                      opacity: prefModeSaving ? 0.6 : 1,
-                      cursor: prefModeSaving ? 'wait' : 'pointer',
-                    }}
-                  >
-                    {/* The two things being ranked, drawn rather than described:
-                        a committee emblem and a flag. */}
-                    <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
-                      {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                      {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                      {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                    </span>
-                    <span className="min-w-0">{opt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-2 mt-2.5">
-              {prefModeSaving && (
-                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-              )}
-              <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                {PREF_MODE_OPTIONS.find(o => o.value === prefMode)?.desc}
+          {/* ── What the selected role ranks. Only roles that can hold a
+              preference get this card at all — faculty-advisor, observer,
+              secretariat and staff render nothing here, not a disabled
+              version of it. ── */}
+          {showPrefCard && (
+            <div style={cardStyle}>
+              <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                <Emoji3D name="Globe showing europe-africa" size={20} fallback={Globe} fallbackColor="#1B3828" />
+                {selectedRole === 'chair' ? 'Chair preferences' : 'Delegate preferences'}
+                <InfoHint
+                  label={selectedRole === 'chair' ? 'About chair preferences' : 'About delegate preferences'}
+                  text={selectedRole === 'chair'
+                    ? "Whether a chair applicant is asked to rank which committee they would like to chair. Choose a committee gives you their ranking to work from; None skips the step and leaves every committee assignment to you."
+                    : "What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."}
+                />
               </p>
+              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                {selectedRole === 'chair'
+                  ? 'Choose whether chairs rank which committee they want, or whether you assign committees yourself.'
+                  : 'Choose what delegates rank when they apply. The application form shows only the pickers you enable here.'}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
+                {prefModeOptions.map(opt => {
+                  const active = prefMode === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => savePrefMode(opt.value)}
+                      disabled={prefModeSaving}
+                      className="flex items-center rounded-xl focus:outline-none"
+                      style={{
+                        gap: 10, padding: '11px 13px', textAlign: 'left',
+                        backgroundColor: active ? '#1B3828' : 'transparent',
+                        color: active ? '#EED98A' : '#1C1410',
+                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                        boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
+                        fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                        opacity: prefModeSaving ? 0.6 : 1,
+                        cursor: prefModeSaving ? 'wait' : 'pointer',
+                      }}
+                    >
+                      {/* The thing(s) being ranked, drawn rather than described:
+                          a committee emblem and, for roles that pair it with a
+                          country, a flag. */}
+                      <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
+                        {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                        {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                        {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                      </span>
+                      <span className="min-w-0">{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2 mt-2.5">
+                {prefModeSaving && (
+                  <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                )}
+                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  {prefModeOptions.find(o => o.value === prefMode)?.desc}
+                </p>
+              </div>
+              {prefModeError && (
+                <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
+              )}
             </div>
-            {prefModeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
-            )}
-          </div>
+          )}
 
           {/* ── Swaps ── */}
           <div style={cardStyle}>
@@ -3825,10 +4043,16 @@ export default function SettingsPage() {
           // and dimmed — and wears a struck-through eye. No pill needed; the
           // picture itself says it, and the switch is in the sheet.
           const hidden = !org.show_on_public;
+          // The just-accepted secretariat member (?highlight=<organizer id>).
+          // A brief, brighter widening of the SAME accent ring every card
+          // already wears — not a new highlight style, the existing one
+          // turned up for a moment.
+          const isHighlighted = highlightPulse && org.id === highlightOrgId;
 
           return (
             <div
               key={org.id}
+              id={`organizer-${org.id}`}
               className="relative flex flex-col items-center text-center"
               style={{ ...cardWidth(t), padding: t.pad, borderRadius: t.radius }}
             >
@@ -3841,7 +4065,10 @@ export default function SettingsPage() {
               <div
                 style={{
                   position: 'relative', width: t.avatar, height: t.avatar, borderRadius: 999,
-                  boxShadow: `0 0 0 5px ${NEU.base}, 0 0 0 8px ${accent}, 0 0 0 9px ${accent}33, 0 12px 30px rgba(27,56,40,0.18)`,
+                  boxShadow: isHighlighted
+                    ? `0 0 0 5px ${NEU.base}, 0 0 0 11px ${NEU.gold}, 0 0 0 15px ${NEU.gold}55, 0 14px 34px rgba(182,135,31,0.5)`
+                    : `0 0 0 5px ${NEU.base}, 0 0 0 8px ${accent}, 0 0 0 9px ${accent}33, 0 12px 30px rgba(27,56,40,0.18)`,
+                  transition: 'box-shadow 900ms ease',
                 }}
               >
                 <ProfileLink userId={org.user_id} name={name} className="flex-shrink-0">
@@ -4229,18 +4456,8 @@ export default function SettingsPage() {
             Danger Zone
           </p>
           <button
-            onClick={handleArchive}
-            className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
-            style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            ARCHIVE CONFERENCE
-          </button>
-
-          <button
             onClick={() => { if (!isOwner) { setDeleteError('Only the conference owner can delete this view.'); return; } setDeleteError(''); setConfirmingDelete(true); }}
-            className="w-full rounded-xl py-2.5 mt-3 font-semibold text-sm focus:outline-none transition-colors"
+            className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
             style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -4413,16 +4630,157 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* ── Partner conferences card ── */}
+      {/* ── Partners card ── */}
       <div style={cardStyle}>
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Partner conferences
+          Partners
         </p>
-        <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Showcase partner conferences on your public page. Links only appear once the partner conference&apos;s team approves them.
+        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Showcase partner conferences and sponsoring companies on your public page. A conference link only appears
+          once that conference&apos;s team approves it; a company you add yourself appears straight away.
         </p>
 
+        {/* Kind chooser. Asked first because the two flows share nothing: one
+            searches Gavelling for a conference to link, the other takes a name,
+            a logo and a description typed here. */}
+        <div className="flex flex-wrap gap-2 mb-5">
+          {([
+            { key: 'conference' as const, label: 'CONFERENCE', icon: Building2, hint: 'Link another Gavelling conference' },
+            { key: 'company' as const, label: 'COMPANY', icon: Briefcase, hint: 'Add a sponsor or partner organisation' },
+          ]).map(({ key, label, icon: KindIcon, hint }) => {
+            const active = partnerKind === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                title={hint}
+                onClick={() => {
+                  // Re-clicking the open kind closes it, so the card can go
+                  // back to being just the list of partners.
+                  setPartnerKind(active ? null : key);
+                  setPartnerError('');
+                  setPartnerQuery('');
+                  setPartnerResults([]);
+                }}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-bold focus:outline-none transition-colors"
+                style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  backgroundColor: active ? '#1B3828' : 'transparent',
+                  color: active ? '#EED98A' : '#6E5F4E',
+                  border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                  cursor: 'pointer',
+                }}
+              >
+                <KindIcon size={13} strokeWidth={2.4} style={{ color: active ? '#EED98A' : '#B6871F' }} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Company form */}
+        {partnerKind === 'company' && (
+          <div
+            className="mb-6 rounded-xl p-4"
+            style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <PartnerDisc logoUrl={companyLogoUrl} acronym={companyName || '?'} size={44} />
+              <div className="flex-1 min-w-0">
+                <label
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold"
+                  style={{
+                    fontFamily: "'Outfit', sans-serif",
+                    letterSpacing: '0.06em',
+                    color: '#1B3828',
+                    border: '1.5px solid #DDD4C0',
+                    backgroundColor: '#FFFDF9',
+                    cursor: companyLogoUploading ? 'default' : 'pointer',
+                    opacity: companyLogoUploading ? 0.6 : 1,
+                  }}
+                >
+                  {companyLogoUploading ? 'UPLOADING…' : companyLogoUrl ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={companyLogoUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      // Clear the input so picking the same file twice still
+                      // fires a change event (a retry after a failed upload).
+                      e.target.value = '';
+                      if (file) void handleCompanyLogoUpload(file);
+                    }}
+                  />
+                </label>
+                <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  PNG or JPG, under 5MB. Optional.
+                </p>
+              </div>
+            </div>
+
+            <input
+              type="text"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Company name"
+              maxLength={120}
+              style={{ ...inputStyle, marginBottom: '10px' }}
+              onFocus={fgInput}
+              onBlur={bgInput}
+            />
+            <textarea
+              value={companyDescription}
+              onChange={(e) => setCompanyDescription(e.target.value)}
+              placeholder="What do they do, and how are they involved? Shown when a visitor opens this partner."
+              rows={3}
+              maxLength={600}
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            />
+
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => void handleAddCompanyPartner()}
+                disabled={companySaving || companyLogoUploading || !companyName.trim()}
+                className="rounded-lg py-2 px-4 font-bold text-[11px] focus:outline-none transition-colors"
+                style={{
+                  backgroundColor: companySaving || !companyName.trim() ? '#DDD4C0' : '#1B3828',
+                  color: companySaving || !companyName.trim() ? '#9A8A78' : '#EED98A',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  border: 'none',
+                  cursor: companySaving || !companyName.trim() ? 'default' : 'pointer',
+                }}
+              >
+                {companySaving ? 'ADDING…' : 'ADD PARTNER'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { resetCompanyDraft(); setPartnerKind(null); setPartnerError(''); }}
+                disabled={companySaving}
+                className="rounded-lg py-2 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: '#9A8A78',
+                  border: 'none',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  cursor: companySaving ? 'default' : 'pointer',
+                }}
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Typeahead add */}
+        {partnerKind === 'conference' && (
         <div className="relative mb-6">
           <input
             type="text"
@@ -4467,6 +4825,7 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Linked partners */}
         <p
@@ -4477,47 +4836,60 @@ export default function SettingsPage() {
         </p>
         {partners.length === 0 ? (
           <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            No partner conferences linked yet.
+            No partners added yet.
           </p>
         ) : (
           <div className="flex flex-col">
             {partners.map((link, idx) => {
               const isLast = idx === partners.length - 1;
               const conf = link.conf;
+              const isCompany = link.partner_conference_id === null;
               const year = conf?.start_date ? new Date(conf.start_date + 'T00:00:00').getFullYear() : null;
-              const cityLine = conf ? [conf.city, conf.country].filter(Boolean).join(', ') : '';
+              // Second line: where the conference is, or what the company
+              // does. Companies have no city and conferences no description,
+              // so the two never compete for the row.
+              const subLine = isCompany
+                ? (link.company_description ?? '')
+                : (conf ? [conf.city, conf.country].filter(Boolean).join(', ') : '');
               return (
                 <div
                   key={link.id}
                   className="flex items-center gap-3 py-3"
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
                 >
-                  <PartnerDisc logoUrl={conf?.logo_url ?? null} acronym={conf?.acronym ?? '?'} />
+                  <PartnerDisc
+                    logoUrl={isCompany ? link.company_logo_url : (conf?.logo_url ?? null)}
+                    acronym={partnerLabel(link)}
+                  />
                   <div className="flex-1 min-w-0">
                     <p
                       className="truncate"
                       style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
                     >
-                      {conf?.acronym ?? 'Unknown conference'}{year ? ` ${year}` : ''}
+                      {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
                     </p>
-                    {cityLine && (
+                    {subLine && (
                       <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        {cityLine}
+                        {subLine}
                       </p>
                     )}
                   </div>
 
+                  {/* A company has no counterparty team, so "pending approval"
+                      would be a lie — it is live the moment it is added. */}
                   <span
                     className="flex-shrink-0 rounded-full px-2.5 py-1 font-bold"
                     style={{
                       fontSize: '10px',
                       letterSpacing: '0.08em',
                       fontFamily: "'Outfit', sans-serif",
-                      backgroundColor: link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
-                      color: link.approved ? '#2A5A3C' : '#8A6614',
+                      backgroundColor: isCompany
+                        ? 'rgba(182,135,31,0.14)'
+                        : link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
+                      color: isCompany ? '#8A6614' : link.approved ? '#2A5A3C' : '#8A6614',
                     }}
                   >
-                    {link.approved ? 'APPROVED' : 'PENDING APPROVAL'}
+                    {isCompany ? 'COMPANY' : link.approved ? 'APPROVED' : 'PENDING APPROVAL'}
                   </span>
 
                   <div className="flex items-center flex-shrink-0">
@@ -4548,7 +4920,7 @@ export default function SettingsPage() {
                   <button
                     onClick={() => handleRemovePartner(link)}
                     disabled={partnerBusy === link.id}
-                    aria-label={`Remove ${conf?.acronym ?? 'partner'}`}
+                    aria-label={`Remove ${partnerLabel(link)}`}
                     className="text-sm font-semibold focus:outline-none flex-shrink-0 px-1 transition-colors"
                     style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: 'pointer', opacity: partnerBusy === link.id ? 0.4 : 1 }}
                   >

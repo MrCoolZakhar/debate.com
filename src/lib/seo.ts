@@ -33,9 +33,16 @@ import type { Metadata } from 'next';
 
 export const SITE_URL = 'https://gavelling.com';
 
-/** Absolute URL for a route path. `''` and `'/'` both mean the homepage. */
+/**
+ * Absolute URL for a route path. `''` and `'/'` both mean the homepage.
+ * Idempotent: a value that's already absolute (an uploaded asset on Supabase
+ * Storage, say) is returned as-is rather than getting SITE_URL prepended —
+ * without this guard a caller passing a full `https://...` URL would get
+ * `https://gavelling.com/https://...` back.
+ */
 export function absoluteUrl(path = ''): string {
   if (!path || path === '/') return SITE_URL;
+  if (/^([a-z][a-z0-9+.-]*:)?\/\//i.test(path)) return path;
   return `${SITE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
@@ -123,8 +130,15 @@ const EXT_MIME: Record<string, string> = {
  * conference banner, say). Emits og:image:type and og:image:secure_url when it
  * can work them out; omits width/height for images whose size we don't know,
  * since lying about dimensions makes scrapers discard the image.
+ *
+ * `size` is the escape hatch for the case where we DO know: an image we render
+ * ourselves at a fixed size (`/api/og/*` is always exactly 1200x630). Declaring
+ * it lets a scraper commit to the large-card layout without fetching and
+ * measuring the file first — which is the difference between a preview that
+ * appears instantly in a chat and one that pops in a second later, or not at
+ * all on a slow connection. Never pass a guess.
  */
-export function ogImage(url?: string | null, alt?: string) {
+export function ogImage(url?: string | null, alt?: string, size?: { width: number; height: number }) {
   if (!url || url === OG_IMAGE_URL) return OG_IMAGE;
   const ext = url.split('?')[0].split('.').pop()?.toLowerCase() ?? '';
   const type = EXT_MIME[ext];
@@ -132,6 +146,7 @@ export function ogImage(url?: string | null, alt?: string) {
     url,
     ...(url.startsWith('https://') ? { secureUrl: url } : {}),
     ...(type ? { type } : {}),
+    ...(size ? { width: size.width, height: size.height } : {}),
     alt: alt || OG_IMAGE_ALT,
   };
 }
@@ -153,6 +168,8 @@ export interface PageMetadataInput {
   /** Absolute image URL. Defaults to the site share card. */
   image?: string | null;
   imageAlt?: string;
+  /** Only for an image we render at a known fixed size — see `ogImage`. */
+  imageSize?: { width: number; height: number };
   /** og:type. `'article'` for blog posts. */
   type?: 'website' | 'article';
   /** hreflang alternates, if the page has them. */
@@ -180,6 +197,7 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
     ogDescription,
     image,
     imageAlt,
+    imageSize,
     type = 'website',
     languages,
     robots,
@@ -190,7 +208,7 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
   const plainTitle = typeof title === 'string' ? title : title.absolute;
   const socialTitle = ogTitle ?? plainTitle;
   const socialDescription = ogDescription ?? description;
-  const img = ogImage(image, imageAlt ?? socialTitle);
+  const img = ogImage(image, imageAlt ?? socialTitle, imageSize);
 
   return {
     title,

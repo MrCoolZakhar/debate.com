@@ -1589,6 +1589,20 @@ function StatWell({
 function CommunicationsPageInner() {
   const { conference, refreshConferenceQuiet } = useManage();
   const { user, session, profile } = useAuth();
+  /** The two stable primitives the loaders below key on.
+   *
+   *  `accessToken`: AuthProvider replaces the session OBJECT on every auth
+   *  event (token refresh, tab focus), so a loader depending on `session`
+   *  refetches on each of those. The token is a string and only changes when
+   *  it really changes — including the first time it arrives, which is the
+   *  transition these loaders must catch (without it, a loader built while
+   *  auth was still pending returns early forever).
+   *
+   *  `conferenceId`: `conference` is an object a background refresh swaps for
+   *  an equal-but-new one; keying on the id keeps that from restarting the
+   *  page's ten-query load. */
+  const accessToken = session?.access_token;
+  const conferenceId = conference?.id;
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -1751,21 +1765,21 @@ function CommunicationsPageInner() {
   }, []);
 
   const loadTemplates = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('templates');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('email_templates')
       .select('id, conference_id, event_key, name, subject, body, body_blocks, enabled, delivery, updated_at, audience')
-      .eq('conference_id', conference.id);
+      .eq('conference_id', conferenceId);
     if (!fresh()) return;
     setTemplates((data ?? []) as EmailTemplate[]);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   const loadApplications = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('applications');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('applications')
       .select(`
@@ -1777,119 +1791,119 @@ function CommunicationsPageInner() {
         profiles (display_name, email, notify_email_marketing, avatar_url),
         invited_email, invited_name, aid_status
       `)
-      .eq('conference_id', conference.id);
+      .eq('conference_id', conferenceId);
     if (!fresh()) return;
     setApplications((data ?? []) as unknown as AppRow[]);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   const loadCommittees = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('committees');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conference_committees')
       .select('id, name, abbreviation, study_guides_publish_at, study_guides_notified_at')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .order('name', { ascending: true });
     if (!fresh()) return;
     setCommittees((data ?? []) as Committee[]);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   const loadSocieties = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('societies');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('societies')
       .select('id, name')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .order('name', { ascending: true });
     if (!fresh()) return;
     setSocieties((data ?? []) as Society[]);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   const loadRoleConfigs = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('roleConfigs');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('application_role_configs')
       .select('role, fee_amount, fee_currency, fee_phases')
-      .eq('conference_id', conference.id);
+      .eq('conference_id', conferenceId);
     if (!fresh()) return;
     setRoleConfigs((data ?? []) as unknown as RoleFeeConfig[]);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   const loadEmailSends = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('emailSends');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('email_sends')
       .select('id, subject, recipient_filter, recipient_count, scheduled_at, sent_at, status, created_at, body_html')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .order('created_at', { ascending: false });
     if (!fresh()) return;
     setEmailSends((data ?? []) as unknown as EmailSend[]);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   const loadOutboxPending = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('outboxPending');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { count } = await supabase
       .from('email_outbox')
       .select('id', { count: 'exact', head: true })
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .eq('status', 'pending');
     if (!fresh()) return;
     setOutboxPending(count ?? 0);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   // The whole outbox, summary columns only (no bodies) — feeds the Sent band's
   // automatic-send groups, the delivered/failed splits and the fire counts on
   // the Automatic emails registry. READ ONLY: this page stays a writer of
   // pending rows + the delivery kicker; the cron jobs own everything else.
   const loadOutboxFeed = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('outboxFeed');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('email_outbox')
       .select('id, template_id, email_send_id, recipient_application_id, recipient_email, subject, status, error, sent_at, created_at, send_after')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .order('created_at', { ascending: false })
       .limit(4000);
     if (!fresh()) return;
     setOutboxFeed((data ?? []) as OutboxFeedRow[]);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   // In-progress application drafts, via the security-barrier status view (the
   // raw table is not organiser-readable). Failure here just leaves the
   // "reminders due" rail card off — nothing else depends on it.
   const loadDraftStatus = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('draftStatus');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('application_draft_status')
       .select('id, updated_at, reminders_sent, reminder_opt_out')
-      .eq('conference_id', conference.id);
+      .eq('conference_id', conferenceId);
     if (!fresh()) return;
     setDraftStatusRows((data ?? []) as DraftStatusRow[]);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   // All requests + all their messages in two queries, modest for a single
   // conference's Q&R volume, and lets the list snippet / unread rule compute
   // "last message from participant" client-side without an N+1.
   const loadInbox = useCallback(async () => {
-    if (!conference || !session) return;
+    if (!conferenceId || !accessToken) return;
     const fresh = beginLoad('inbox');
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data: reqData } = await supabase
       .from('conference_requests')
       .select('id, user_id, application_id, subject, status, kind, metadata, seen_by_organizer, organizer_seen_at, created_at, last_message_at')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .order('created_at', { ascending: false });
     if (!fresh()) return;
     const requests = (reqData ?? []) as InboxRequest[];
@@ -1911,7 +1925,7 @@ function CommunicationsPageInner() {
         .in('request_id', requestIds)
         .order('created_at', { ascending: true }),
       supabase.from('profiles').select('id, display_name, avatar_url').in('id', userIds),
-      supabase.from('applications').select('user_id, role').eq('conference_id', conference.id).in('user_id', userIds),
+      supabase.from('applications').select('user_id, role').eq('conference_id', conferenceId).in('user_id', userIds),
     ]);
     if (!fresh()) return;
     setInboxMessages((msgRes.data ?? []) as InboxMessage[]);
@@ -1921,18 +1935,18 @@ function CommunicationsPageInner() {
       if (!roleMap.has(a.user_id)) roleMap.set(a.user_id, a.role);
     }
     setInboxRoles(roleMap);
-  }, [conference?.id, session?.access_token, beginLoad]);
+  }, [conferenceId, accessToken, beginLoad]);
 
   useEffect(() => {
-    if (!conference) return;
+    if (!conferenceId) return;
     setLoading(true);
     Promise.all([loadTemplates(), loadApplications(), loadCommittees(), loadSocieties(), loadRoleConfigs(), loadEmailSends(), loadOutboxPending(), loadOutboxFeed(), loadDraftStatus(), loadInbox()])
       .finally(() => setLoading(false));
-    // conference?.id, not conference: every load callback above is itself
-    // keyed on conference?.id, so this only re-fires when the id genuinely
-    // changes, a background refresh (quiet or otherwise) that swaps in a new
-    // conference object with the same id must never restart the page load.
-  }, [conference?.id, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadRoleConfigs, loadEmailSends, loadOutboxPending, loadOutboxFeed, loadDraftStatus, loadInbox]);
+    // conferenceId, not conference: every load callback above is itself keyed
+    // on conferenceId, so this only re-fires when the id genuinely changes, a
+    // background refresh (quiet or otherwise) that swaps in a new conference
+    // object with the same id must never restart the page load.
+  }, [conferenceId, loadTemplates, loadApplications, loadCommittees, loadSocieties, loadRoleConfigs, loadEmailSends, loadOutboxPending, loadOutboxFeed, loadDraftStatus, loadInbox]);
 
   // Load the rail-card 24h snoozes for this conference (client-local).
   useEffect(() => {
@@ -1973,14 +1987,14 @@ function CommunicationsPageInner() {
   // that hit the edge function's per-invocation batch cap, etc).
   const sweptRef = useRef(false);
   useEffect(() => {
-    if (sweptRef.current || !conference || !session) return;
+    if (sweptRef.current || !conferenceId || !accessToken) return;
     sweptRef.current = true;
-    triggerEmailDelivery(getAuthedClient(session.access_token)).then(() => {
+    triggerEmailDelivery(getAuthedClient(accessToken)).then(() => {
       loadOutboxPending();
       loadEmailSends();
       loadOutboxFeed();
     });
-  }, [conference?.id, session?.access_token, loadOutboxPending, loadEmailSends, loadOutboxFeed]);
+  }, [conferenceId, accessToken, loadOutboxPending, loadEmailSends, loadOutboxFeed]);
 
   // ── Inbox derived data ───────────────────────────────────────────────────
 

@@ -40,6 +40,10 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'Gavelling', url: 'https://gavelling.com' }],
   creator: 'Gavelling',
+  /* No `verification` key on purpose. gavelling.com is already a verified
+     Search Console property via the file method — public/google0ba54760c43d1bc3.html,
+     live and serving 200. A second meta-tag verification would be redundant,
+     and the placeholder token that briefly sat here verified nothing at all. */
   robots: {
     index: true,
     follow: true,

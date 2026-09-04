@@ -21,7 +21,7 @@
 //
 // It computes NOTHING itself — src/lib/conferenceScoreboard.ts loads the rows
 // and hands them to the same scoring functions the chair panel uses, and the
-// table itself is `live/ScoreboardTable.tsx`, shared with the modal.
+// table itself is `@/components/ScoreboardTable`, shared with the modal.
 //
 // Read-only by design. Organisers observe; only chairs award points.
 // Manage surfaces render hardcoded English (no t()).
@@ -45,7 +45,7 @@ import {
 } from '@/lib/conferenceScoreboard';
 import {
   ScoreboardTable, SORTS, sortScoreboardRows, displayCountry, type SortKey,
-} from '@/app/manage/[slug]/live/ScoreboardTable';
+} from '@/components/ScoreboardTable';
 // This page used to hardcode `#FAF8F3`, `#D8CDB6` and `#9A8A78`. The last of
 // those measures 2.71:1 on this background and was carrying every column
 // header, every secondary fact and the whole "not yet scored" footer. The
@@ -76,7 +76,7 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
 }
 
 // `FactorBar` and `DelegateDetail` are gone from this file — they now live in
-// `live/ScoreboardTable.tsx` alongside the table itself, so the per-committee
+// `@/components/ScoreboardTable` alongside the table itself, so the per-committee
 // modal and this page render byte-identical drill-ins instead of two copies
 // drifting apart.
 

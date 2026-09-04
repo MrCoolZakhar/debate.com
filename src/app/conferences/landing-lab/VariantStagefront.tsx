@@ -347,7 +347,7 @@ export default function VariantStagefront({
             />
           </div>
 
-          <SiteNav overlay />
+          <SiteNav overlay brand="conferences" />
 
           <div className="relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-14 px-6 md:px-14 pb-8 md:pb-9 pt-20 md:pt-24">
             <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: 'clamp(760px, 54vw, 940px)' }}>
@@ -410,7 +410,14 @@ export default function VariantStagefront({
                 height. */}
             {upcomingTrio.length > 0 && (
               <aside className="sf-hero-aside flex-shrink-0 flex flex-col justify-center lg:justify-start lg:self-start lg:pt-3 lg:mr-[calc(5vw-56px)]">
-                <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
+                {/* pt-3/-mt-3 is not spacing, it is clearance. Below lg this rail
+                    is a horizontal scroller, and `overflow-x: auto` clips the
+                    cross axis too — which sliced the top off the gold gavel disc
+                    that deliberately straddles each card's corner at -11px. The
+                    negative margin cancels the visual offset, so only the disc
+                    gains room. Above lg the rail is overflow-visible and needs
+                    neither. */}
+                <div className="sf-hero-rail flex flex-row lg:flex-col gap-3 lg:gap-2.5 overflow-x-auto lg:overflow-visible -mx-6 px-6 lg:mx-0 lg:px-0 pt-3 -mt-3 pb-2 lg:pt-0 lg:mt-0 lg:pb-0">
                   {upcomingTrio.map(c => (
                     <div
                       key={c.id}

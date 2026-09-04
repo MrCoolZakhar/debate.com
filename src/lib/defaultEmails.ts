@@ -83,7 +83,12 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Payment is now open for {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your fee is ready to pay' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nPayment for your {{role}} registration at {{conference_name}} is now open. The fee is **{{fee}}**.\n\nYou can pay any time before the conference — open your conference view for the payment details the organizing team has set." },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nPayment for your registration at {{conference_name}} is now open.' },
+      { type: 'facts', items: [
+        { label: 'Amount due', value: '{{fee}}' },
+        { label: 'Registered as', value: '{{role}}' },
+      ] },
+      { type: 'paragraph', content: 'You can pay any time before the conference — open your conference view for the payment details the organizing team has set.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -91,7 +96,15 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Payment received — {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Payment received' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nWe've recorded your payment of **{{fee}}** for {{conference_name}}. Your registration is fully settled — thank you.\n\nKeep this email as your confirmation." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour registration for {{conference_name}} is fully settled — thank you." },
+      // A receipt should read like one. These are the fields someone forwards
+      // to a parent or a school finance office.
+      { type: 'facts', items: [
+        { label: 'Amount paid', value: '{{fee}}' },
+        { label: 'Registered as', value: '{{role}}' },
+        { label: 'Conference', value: '{{conference_name}}' },
+      ] },
+      { type: 'paragraph', variant: 'small', content: 'Keep this email as your confirmation.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -123,7 +136,17 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Your committee allocation for {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your allocation is ready' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been placed in **{{committee}}**, representing **{{country}}**, at {{conference_name}}.\n\nThat's your brief for the whole conference, so it's worth starting early. Study guides and position paper details appear in your conference view as your chairs publish them." },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYou have your seat for {{conference_name}}.' },
+      // The committee and the country as FACTS, not buried mid-sentence. This
+      // is the line a delegate comes back to this email for, weeks later.
+      // The emblem and the flag, not just the words. This is the email a
+      // delegate screenshots and sends to their friends; it should look like
+      // their seat, not like a database row.
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
+      ] },
+      { type: 'paragraph', content: "That's your brief for the whole conference, so it's worth starting early. Study guides and position paper details appear in your conference view as your chairs publish them." },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -131,7 +154,11 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Your committee allocation has changed — {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your allocation has changed' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour allocation for {{conference_name}} has been updated. You're now in **{{committee}}**, representing **{{country}}**." },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour allocation for {{conference_name}} has been updated. You are now in:' },
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
+      ] },
       VIEW_CONFERENCE_BUTTON,
       { type: 'paragraph', variant: 'small', content: 'If you had already started a position paper, check it against the new committee and country before you go any further.' },
     ],

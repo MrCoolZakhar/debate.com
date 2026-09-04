@@ -80,7 +80,7 @@ function ConfirmInner() {
     <AuthLayout
       eyebrow="Model UN, run properly"
       headline="Confirm your email."
-      sub="Enter your address and we'll send you a fresh confirmation email."
+      sub="Enter your address and we'll send you a fresh confirmation code."
     >
       {phase === 'verified' ? (
         <VerifiedScreen onContinue={handleContinue} busy={continuing} />
@@ -88,7 +88,7 @@ function ConfirmInner() {
         <CodeVerifyScreen
           email={email}
           startCooldown
-          intro="If an account is waiting to be confirmed for this address, we sent a confirmation email to"
+          intro="If an account is waiting to be confirmed for this address, we sent a 6-digit code to"
           onVerify={async (token) => {
             const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
             if (error) return 'That code is not right, or it has expired. Request a new one below.';

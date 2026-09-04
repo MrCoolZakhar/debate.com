@@ -20,7 +20,7 @@ import {
 // so GREEN_INK carries the words and `NEU.green` survives on dots and fills
 // only, where the 3:1 non-text bar applies. See ./tokens for the full sweep.
 import { type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
-import { CommitteeScoreboardBody } from './ScoreboardTable';
+import { CommitteeScoreboardBody } from '@/components/ScoreboardTable';
 import { SOFT, GREEN_INK } from './tokens';
 import { committeeIdentity } from './identity';
 
@@ -685,7 +685,7 @@ function FeedbackEmpty({ committeeLabel }: { committeeLabel: string }) {
           Nothing written on {committeeLabel} yet
         </p>
         <p className="text-xs mt-1" style={{ color: SOFT, fontFamily: OUTFIT, lineHeight: 1.5 }}>
-          Co-chairs rate each speech and leave private notes from the feedback dock in their console.
+          Commenters rate each speech and leave private notes from the feedback dock in their console.
           Ratings and notes land here the moment they are saved — no action needed from you.
         </p>
       </div>

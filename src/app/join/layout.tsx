@@ -1,21 +1,32 @@
 import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/seo';
 
-// page.tsx is a Client Component and cannot export `metadata`; this server
-// layout supplies it. See src/app/conferences/new/layout.tsx for the rationale.
-// This is the single most-shared link in the product — a chair pastes it into a
-// group chat with the session code — so it must never fall back to the generic
-// site card.
+// page.tsx in this segment is 'use client' (code entry, chair password, role
+// picker), so metadata cannot live there — Next reads it only from a Server
+// Component. Same reasoning as ../create/layout.tsx: this route had none of
+// its own and was inheriting the homepage's title, description and absent
+// canonical, so the page people are sent to by every "join my committee"
+// message could not describe itself in a search result or a link preview.
+//
+// The bare path is indexable. IMPORTANT: the parameterised form is not, and
+// must not become so — `/join?code=ABC123` is a real URL this page reads, so an
+// indexed query string would publish a live session code. robots.ts blocks
+// `/join?` for that reason, and the canonical below points every variant back
+// at the bare path so Google consolidates rather than indexing codes.
 export const metadata: Metadata = pageMetadata({
-  title: 'Join a Committee Session',
+  title: 'Join a MUN Session',
   description:
-    'Enter your six-character session code to join a live Model UN committee on Gavelling as a delegate, chair or faculty advisor. No download, no account needed.',
+    'Enter your session code to join your Model UN committee as a delegate, chair or faculty advisor. See the speakers list, raise motions and vote from your own device.',
   path: '/join',
-  ogTitle: 'Join a live MUN committee session',
-  ogDescription:
-    'Enter your session code to join as a delegate, chair or faculty advisor. Works on any device, no download needed.',
+  keywords: [
+    'join MUN committee',
+    'MUN session code',
+    'Model UN delegate app',
+    'join Model UN session',
+    'MUN speakers list',
+  ],
 });
 
 export default function JoinLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return children;
 }

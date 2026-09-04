@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  ArrowRight, BadgeCheck, Ban, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
+  ArrowRight, BadgeCheck, Ban, Briefcase, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, Info, Landmark, LogOut, MapPin,
   Mail, MessageSquareText, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X,
@@ -37,6 +37,13 @@ import {
 import { LevelInsignia, LEVEL_ACCENT, AwardArtwork, monogramFor } from '@/app/account/accountUi';
 import { type CustomQuestion, type CustomAnswers, normalizeBlocks, questionsOf, displayAnswer } from '@/lib/customQuestions';
 import { useScrollLock } from '@/hooks/useScrollLock';
+// Same vocabulary the team invite wizard in Settings uses — never a parallel
+// list. Only the library, not the wizard component itself.
+import { ORGANIZER_SECTIONS, bundlePermissions } from '@/lib/organizerPermissions';
+// Same role-label vocabulary the MUN CV timeline uses (Delegate/Chair/Faculty
+// Advisor/Secretariat/Other), so a chair/secretariat application's listed
+// conferences read consistently with how the applicant's own CV describes them.
+import { ENTRY_TYPE_MAP, type EntryType } from '@/components/CVEntryModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -108,6 +115,20 @@ interface Application {
   // the INVITED badge and, when this role has no configured fee at all, the
   // standalone WAIVED chip that stands in for the payment menu.
   fee_waiver_source: string | null;
+  // Chair/secretariat only: the conferences the applicant listed on this
+  // application (a snapshot taken at application time — never re-derived
+  // from their MUN CV after the fact). Every other role's array is empty.
+  experience_entries: {
+    id: string;
+    source_cv_entry_id: string | null;
+    entry_type: string;
+    conference_name: string;
+    committee: string;
+    allocation: string;
+    event_date: string | null;
+    awards: string[];
+    description: string | null;
+  }[];
 }
 
 // The applicant's financial_aid_requests row, fetched on demand when the
@@ -481,7 +502,8 @@ const REVIEW_CSS = `
 .appRevMain { grid-column: 2; min-width: 0; }
 .appRevRail { grid-column: 1; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 /* Nothing to put in the rail (an invited row has no profile, and a faculty
-   advisor has no preferences) — don't reserve a column for a void. */
+   advisor or a chair with preferences off has none of the things this rail
+   shows). Don't reserve a column for a void. */
 .appRevGrid.appRevNoRail { grid-template-columns: minmax(0, 1fr); }
 .appRevGrid.appRevNoRail .appRevMain { grid-column: 1; }
 @media (max-width: 900px) {
@@ -1696,6 +1718,13 @@ function CommitteeFilter({
 export default function ApplicationsPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so any loader that depends on
+   *  `session` refetches on each of those; the token is a string and only
+   *  changes when it really changes. Use this in loader guards and deps, and
+   *  keep using `session` for anything that needs the rest of it. */
+  const accessToken = session?.access_token;
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlStatus = searchParams.get('status');
   const urlPayment = searchParams.get('payment');
@@ -1776,6 +1805,11 @@ export default function ApplicationsPage() {
   // so the submitted list stays the page's subject.
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  /** Drafts as a VIEW, driven by the stat tile, rather than only as a
+   *  collapsed panel at the bottom of the page. Mutually exclusive with the
+   *  application list: switching to it hides the list entirely, the same way
+   *  the Allocated tile narrows it. */
+  const [draftsView, setDraftsView] = useState(false);
   // No draft drawer, by ruling: there is nothing inside a draft an organiser
   // may open. A row is the whole surface. (There used to be a read-only
   // drawer rendering the partial answers, preferences and pledges — removed.)
@@ -1797,6 +1831,18 @@ export default function ApplicationsPage() {
   const [composeBody, setComposeBody] = useState('');
   const [composeError, setComposeError] = useState('');
   useScrollLock(composeOpen);
+
+  // ── Secretariat accept modal. Accepting a secretariat application makes the
+  // applicant an organizer immediately (accept_secretariat_application RPC),
+  // so the permissions decision happens up front, here, rather than being
+  // silently defaulted. Sections start unchecked — a mis-click must never
+  // hand someone the financials.
+  const [secretariatModal, setSecretariatModal] = useState<{ appId: string; prevRow: Application } | null>(null);
+  const [secretariatSections, setSecretariatSections] = useState<Set<string>>(new Set());
+  const [secretariatPublicTitle, setSecretariatPublicTitle] = useState('');
+  const [secretariatBusy, setSecretariatBusy] = useState(false);
+  const [secretariatError, setSecretariatError] = useState('');
+  useScrollLock(!!secretariatModal);
 
   function markBusy(id: string, busy: boolean) {
     setBusyIds(prev => {
@@ -1825,10 +1871,10 @@ export default function ApplicationsPage() {
 
   const loadApplications = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
-    if (!session) return;
+    if (!accessToken) return;
     const seq = ++loadSeq.current;
     if (!opts?.silent) setLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     // Materialize this conference's invoices first, so the gating query right
     // below is guaranteed to see any app-fee invoice a submitted application
     // now owes (same sync-before-read pattern as financials/invoices and
@@ -1839,6 +1885,7 @@ export default function ApplicationsPage() {
         .from('applications')
         .select(`
           id, user_id, invited_email, invited_name, role, status, is_head_delegate, experience_level,
+          experience_entries,
           payment_status, submitted_at, checked_in_at, organizer_note, resubmitted_at, custom_answers,
           assigned_committee_id, assigned_country_code, assigned_country_name,
           self_paid, attending, pledge_type, spots_pledged, pledge_confirmed_at, society_id,
@@ -1903,7 +1950,13 @@ export default function ApplicationsPage() {
     } else {
       setCvCounts({});
     }
-  }, [conference, session?.access_token]);
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback is built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returns
+    // early with nothing left to re-trigger the effect. `session` itself is
+    // the wrong dep — its identity changes on every auth event — so the string
+    // token is what belongs here.
+  }, [conference, accessToken]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
@@ -1922,8 +1975,8 @@ export default function ApplicationsPage() {
   //
   // If this query fails the drafts section simply stays empty.
   const loadDrafts = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conference || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('application_draft_status')
       .select('id, user_id, role, updated_at, reminders_sent, last_reminder_at, reminder_opt_out, display_name, email, avatar_url, nationality')
@@ -1931,7 +1984,7 @@ export default function ApplicationsPage() {
       .order('updated_at', { ascending: false });
 
     setDrafts((data ?? []) as unknown as DraftRow[]);
-  }, [conference, session?.access_token]);
+  }, [conference, accessToken]);
 
   useEffect(() => { loadDrafts(); }, [loadDrafts]);
 
@@ -2044,12 +2097,12 @@ export default function ApplicationsPage() {
   useEffect(() => {
     const app = applications.find(a => a.id === reviewId);
     const uid = app?.user_id;
-    if (!reviewId || !uid || !session) { setPreviewCv(null); return; }
+    if (!reviewId || !uid || !accessToken) { setPreviewCv(null); return; }
     let cancelled = false;
     setPreviewCv(null);
     setPreviewCvLoading(true);
     (async () => {
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(accessToken);
       const { data } = await supabase
         .from('mun_cv_entries')
         .select('id, entry_type, conference_name, committee, allocation, awards, award, logo_url, event_date, description')
@@ -2064,18 +2117,21 @@ export default function ApplicationsPage() {
       setPreviewCvLoading(false);
     })();
     return () => { cancelled = true; };
+    // `applications` is deliberately not a dep — this only needs the user_id
+    // behind the currently reviewed row, and re-running on every list refetch
+    // would re-fire the CV query for no reason.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewId, session?.access_token]);
+  }, [reviewId, accessToken]);
 
   // Fetch the applicant's financial_aid_requests row on demand — surfaces aid
   // in the review modal so an organiser doesn't have to switch to the
   // Financial Aid tab. Read-only here; approve/deny still lives there.
   useEffect(() => {
-    if (!reviewId || !session) { setPreviewAid(null); return; }
+    if (!reviewId || !accessToken) { setPreviewAid(null); return; }
     let cancelled = false;
     setPreviewAid(null);
     (async () => {
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(accessToken);
       const { data } = await supabase
         .from('financial_aid_requests')
         .select('id, statement, requested_amount, status, granted_amount, created_at')
@@ -2087,17 +2143,17 @@ export default function ApplicationsPage() {
       setPreviewAid((data as PreviewAidRequest | null) ?? null);
     })();
     return () => { cancelled = true; };
-  }, [reviewId, session?.access_token]);
+  }, [reviewId, accessToken]);
 
   // ── Quick-allocate committee load (#7) ──────────────────────────────────────
   // Lazy, once: fetched the first time an organiser opens a Plus popover. Pulls
   // each committee's country seats plus the country_codes already allocated, so
   // the picker only ever offers genuinely open seats.
   const loadAllocCommittees = useCallback(async () => {
-    if (!conference || !session || allocLoadedRef.current) return;
+    if (!conference || !accessToken || allocLoadedRef.current) return;
     allocLoadedRef.current = true;
     setAllocLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conference_committees')
       .select(`
@@ -2122,7 +2178,7 @@ export default function ApplicationsPage() {
     }));
     setAllocCommittees(mapped);
     setAllocLoading(false);
-  }, [conference, session?.access_token]);
+  }, [conference, accessToken]);
 
   // Optimistic inline allocation: flip the row to 'assigned' with the chosen
   // committee/country immediately, mark that seat taken locally so a second
@@ -2194,10 +2250,26 @@ export default function ApplicationsPage() {
     setApplications(cur => cur.map(a => (a.id === row.id ? row : a)));
   }
 
+  // Secretariat is not a plain status flip: accepting one makes the applicant
+  // an organizer immediately, so the permissions decision has to happen up
+  // front rather than being defaulted to nothing (or, worse, to everything).
+  // Shared by both accept paths (fresh accept and reinstate-from-withdrawn).
+  function openSecretariatAcceptModal(appId: string, prevRow: Application) {
+    setSecretariatModal({ appId, prevRow });
+    setSecretariatSections(new Set());
+    setSecretariatPublicTitle('');
+    setSecretariatError('');
+  }
+
   function handleAccept(appId: string) {
     if (!session || !conference || busyIds.has(appId)) return;
     const prevRow = applications.find(a => a.id === appId);
     if (!prevRow) return;
+
+    if (prevRow.role === 'secretariat') {
+      openSecretariatAcceptModal(appId, prevRow);
+      return;
+    }
 
     setActionError('');
     markBusy(appId, true);
@@ -2245,6 +2317,83 @@ export default function ApplicationsPage() {
         setActionError('Could not accept the application. The change was reverted. Please try again.');
       })
       .finally(() => markBusy(appId, false));
+  }
+
+  // Confirm handler for the secretariat accept modal. Goes through the
+  // accept_secretariat_application RPC — NEVER a direct conference_organizers
+  // write, which RLS would silently accept and insert zero rows for an
+  // organizer without team rights. A verified write: an error, or data that
+  // comes back null, is treated as a failure and rolls back the optimistic
+  // row, surfacing the RPC's own exception message rather than a generic one
+  // — that message is already written for a person to read.
+  function handleAcceptSecretariat() {
+    if (!secretariatModal || !conference || secretariatBusy) return;
+    const { appId, prevRow } = secretariatModal;
+    const permissions = bundlePermissions(
+      'custom',
+      Object.fromEntries([...secretariatSections].map(key => [key, true])),
+    );
+    const publicTitle = secretariatPublicTitle.trim() || null;
+
+    setSecretariatBusy(true);
+    setSecretariatError('');
+    setActionError('');
+    markBusy(appId, true);
+    // Optimistic: the card flips to ACCEPTED immediately, same as any other
+    // accept.
+    applyRow(appId, { status: 'accepted' });
+
+    (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) throw new Error('Your session has expired, please refresh and sign in again.');
+      const { data, error } = await supabase.rpc('accept_secretariat_application', {
+        p_application_id: appId,
+        p_permissions: permissions,
+        p_public_title: publicTitle,
+      });
+      // Verified write: an error, or null data, is a failure. The RPC's own
+      // exception is already written for a person to read — surfaced as-is,
+      // never swallowed or replaced with something generic.
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error('Could not accept the application. Please try again.');
+      const organizerId = data as string;
+
+      // Secondary effects, exactly what a plain accept does — a failure here
+      // must NOT roll back the accept or block the redirect. A secretariat
+      // application is an ordinary application in every other respect.
+      try {
+        const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
+        notifyIfNeeded(result, pushDraftNotice);
+        const acceptedIds = new Set(result.queuedApplicationIds ?? []);
+
+        const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
+        if (roleConfig?.payment_timing === 'after_acceptance') {
+          const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId], undefined, { suppressIds: acceptedIds });
+          notifyIfNeeded(payResult, pushDraftNotice);
+        }
+
+        const pool = poolForRole(prevRow.role);
+        if (prevRow.society_id && pool) {
+          await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
+        }
+      } catch {
+        setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
+      }
+
+      return organizerId;
+    })()
+      .then((organizerId) => {
+        setSecretariatModal(null);
+        if (conference) router.push(`/manage/${conference.slug}/settings?tab=team&highlight=${organizerId}`);
+      })
+      .catch((e: unknown) => {
+        restoreRow(prevRow);
+        setSecretariatError(e instanceof Error ? e.message : 'Could not accept the application. The change was reverted.');
+      })
+      .finally(() => {
+        markBusy(appId, false);
+        setSecretariatBusy(false);
+      });
   }
 
   function handleReject(appId: string) {
@@ -2664,6 +2813,11 @@ export default function ApplicationsPage() {
     if (!session || busyIds.has(appId)) return;
     const prevRow = applications.find(a => a.id === appId);
     if (!prevRow) return;
+
+    if (prevRow.role === 'secretariat') {
+      openSecretariatAcceptModal(appId, prevRow);
+      return;
+    }
 
     setActionError('');
     markBusy(appId, true);
@@ -3381,7 +3535,10 @@ export default function ApplicationsPage() {
   const isAcceptBlockedByFee = (a: Application) =>
     gatingAppIds.has(a.id) || (!!a.society_id && gatingSocietyIds.has(a.society_id));
   const ACCEPT_BLOCKED_MESSAGE = "A required fee is unpaid. They can be accepted once it's paid.";
-  const bulkAcceptable = bulkEligibleApps.filter(a => a.status === 'submitted' && !isAcceptBlockedByFee(a));
+  // Secretariat is excluded from bulk accept, never accepted silently: each
+  // one needs its own permissions decision in the modal, which bulk cannot
+  // offer. accept_secretariat_application is still the only path for them.
+  const bulkAcceptable = bulkEligibleApps.filter(a => a.status === 'submitted' && a.role !== 'secretariat' && !isAcceptBlockedByFee(a));
   const bulkRejectable = bulkEligibleApps.filter(a => a.status === 'submitted' || a.status === 'accepted');
   const bulkCheckInable = bulkEligibleApps.filter(a => a.status === 'accepted' || a.status === 'assigned');
   const bulkPayable = bulkEligibleApps.filter(payEligible);
@@ -3468,14 +3625,18 @@ export default function ApplicationsPage() {
   const toggleStatusGroupTile = (group: string[]) => setFilters(f => ({ ...f, payment: new Set(), status: sameSet(f.status, group) ? new Set() : new Set(group) }));
   const togglePaymentTile = (v: string) => setFilters(f => ({ ...f, status: new Set(), payment: (f.payment.size === 1 && f.payment.has(v)) ? new Set() : new Set([v]) }));
 
-  // Order (#10): Total, Accepted, Allocated, Paid, Unpaid, Checked in — Checked
-  // in rightmost. Every tile applies its matching filter on click. Allocated is
-  // shown as a fraction of Accepted ("29 / 32") so it can never read as larger
-  // than the pool it is drawn from.
+  // Order: Total, Accepted, Allocated, Paid, Unpaid, Checked in, then Drafts.
+  // Every tile applies its matching filter on click.
+  //
+  // Allocated is a PLAIN COUNT. It used to read "29 / 32" — a fraction of
+  // Accepted — which was defensive (it could never look larger than the pool
+  // it comes from) but made the one tile in the row that answers "how many are
+  // seated?" the only one you had to do arithmetic on. Every other tile is a
+  // number; this one is now too.
   const statItems: { label: string; value: number | string; emoji: string; icon: typeof Inbox; gradient: [string, string]; active: boolean; onClick: () => void }[] = [
     { label: 'Total',      value: stats.total,     emoji: 'Card index',          icon: Users,          gradient: NEU_GRADIENTS.forest, active: totalTileActive,           onClick: clearToDefault },
     { label: 'Accepted',   value: stats.accepted,  emoji: 'Check mark button',   icon: Check,          gradient: NEU_GRADIENTS.green,  active: statusGroupTileActive(ACCEPTED_GROUP),  onClick: () => toggleStatusGroupTile(ACCEPTED_GROUP) },
-    { label: 'Allocated',  value: `${stats.assigned} / ${stats.accepted}`, emoji: 'Round pushpin', icon: BadgeCheck, gradient: NEU_GRADIENTS.gold, active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
+    { label: 'Allocated',  value: stats.assigned,  emoji: 'Round pushpin',       icon: BadgeCheck,     gradient: NEU_GRADIENTS.gold,   active: statusGroupTileActive(ALLOCATED_GROUP), onClick: () => toggleStatusGroupTile(ALLOCATED_GROUP) },
     { label: 'Paid',       value: stats.paid,      emoji: 'Money bag',           icon: CircleCheck,    gradient: NEU_GRADIENTS.green,  active: paymentTileActive('paid'),      onClick: () => togglePaymentTile('paid') },
     { label: 'Unpaid',     value: stats.unpaid,    emoji: 'Hourglass not done',  icon: Clock,          gradient: NEU_GRADIENTS.amber,  active: paymentTileActive('unpaid'),    onClick: () => togglePaymentTile('unpaid') },
     { label: 'Checked in', value: stats.checkedIn, emoji: 'Busts in silhouette', icon: UserRoundCheck, gradient: NEU_GRADIENTS.sage,   active: statusTileActive('checked-in'), onClick: () => toggleStatusTile('checked-in') },
@@ -3556,18 +3717,40 @@ export default function ApplicationsPage() {
         }}
       />
 
-      {/* Stat tiles — compact, six clickable filters (#10). */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      {/* Stat tiles, plus Drafts.
+          Drafts used to live in a collapsed panel further down the page, which
+          is the wrong place for the only group of people here who have not
+          finished applying — they are the most recoverable and the easiest to
+          forget. It now sits in the same row and switches the list the same
+          way the other tiles do.
+          A 20-column grid rather than 7 equal ones: the six counts take three
+          columns each and Drafts takes two, so it reads as a smaller, separate
+          thing without the other tiles having to shrink much to make room. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[repeat(20,minmax(0,1fr))] gap-3 mb-6">
         {statItems.map(s => (
-          <NeuStatTile key={s.label} emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
+          <div key={s.label} className="lg:col-span-3">
+            <NeuStatTile emoji={s.emoji} icon={s.icon} gradient={s.gradient} value={s.value} label={s.label} compact onClick={s.onClick} active={s.active} />
+          </div>
         ))}
+        <div className="lg:col-span-2">
+          <NeuStatTile
+            emoji="Memo"
+            icon={PencilLine}
+            gradient={NEU_GRADIENTS.amber}
+            value={drafts.length}
+            label="Drafts"
+            compact
+            onClick={() => setDraftsView(v => !v)}
+            active={draftsView}
+          />
+        </div>
       </div>
 
       {/* Visible reminder that a filter is narrowing the list — a role/status/
           payment/date filter can never silently hide rows again. Withdrawn/
           removed applicants are excluded from the default view on purpose
           (not a user-applied filter), so they're left out of this count too. */}
-      {!loading && filtered.length < defaultScopeCount && (
+      {!draftsView && !loading && filtered.length < defaultScopeCount && (
         <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.muted }}>
           Showing {filtered.length} of {defaultScopeCount} — filters active
         </p>
@@ -3581,7 +3764,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Empty state */}
-      {!loading && filtered.length === 0 && (
+      {!draftsView && !loading && filtered.length === 0 && (
         <NeuCard style={{ padding: '48px 24px' }}>
           <div className="flex flex-col items-center text-center">
             <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Inbox} emoji="Inbox tray" size={48} />
@@ -3596,7 +3779,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Select-all bar */}
-      {!loading && filtered.length > 0 && (
+      {!draftsView && !loading && filtered.length > 0 && (
         <div className="flex items-center gap-2.5 mb-3 px-1">
           <SelectBox
             checked={allVisibleSelected}
@@ -3616,7 +3799,7 @@ export default function ApplicationsPage() {
       )}
 
       {/* Application list */}
-      {!loading && filtered.length > 0 && (
+      {!draftsView && !loading && filtered.length > 0 && (
         <div className="flex flex-col gap-3" style={{ paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
           {/* The whole card is the preview affordance (#1) — the separate
               PREVIEW button is gone, so it can never be clipped by the card's
@@ -3631,6 +3814,9 @@ export default function ApplicationsPage() {
             const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
             const email = app.profiles?.email ?? app.invited_email ?? '';
             const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
+            // A chair may rank committees (preference_mode 'committees_only'),
+            // never a country — allocation stays isDelegate-only below.
+            const showsPreferences = isDelegate || app.role === 'chair';
             const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
 
             // No recorded level → treat as the lowest tier "beginner" (#11).
@@ -3872,7 +4058,7 @@ export default function ApplicationsPage() {
                         </div>
                       </div>
                       );
-                    })() : isDelegate && prefs.length > 0 ? (
+                    })() : showsPreferences && prefs.length > 0 ? (
                       // Preferences and the allocate control now sit SIDE BY
                       // SIDE, not stacked: the emblem + the three ranked
                       // preferences take the pane, and ALLOCATE is the rail
@@ -3880,7 +4066,9 @@ export default function ApplicationsPage() {
                       // of making it are read together. Below `sm` (a 375px
                       // phone) there is no room for a rail, so it wraps
                       // underneath at full width. All existing allocation
-                      // logic/handlers unchanged.
+                      // logic/handlers unchanged. canAllocate is isDelegate-only,
+                      // so a chair here never gets an ALLOCATE control, only a
+                      // read-only look at their ranked committees.
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3" style={{ minHeight: MID_BLOCK_H }}>
                         <div className="flex items-center gap-4 min-w-0 flex-1">
                           <LogoDisc
@@ -3891,19 +4079,19 @@ export default function ApplicationsPage() {
                           />
                           <div className="min-w-0 flex-1">
                             <p style={{ fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase', marginBottom: 4 }}>
-                              Preferences
+                              {app.role === 'chair' ? 'Committee preferences' : 'Preferences'}
                             </p>
                             <div className="flex flex-col gap-1">
                               {prefs.slice(0, 3).map(p => (
                                 <span
                                   key={p.preference_order}
                                   className="inline-flex items-center gap-1.5 w-fit max-w-full"
-                                  title={`${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}
+                                  title={app.role === 'chair' ? (p.conference_committees?.name ?? 'Unknown') : `${p.conference_committees?.name ?? 'Unknown'} · ${p.country_name}`}
                                   style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, backgroundColor: NEU.base, boxShadow: NEU.inSm, borderRadius: 999, padding: '4px 10px', fontVariantNumeric: 'tabular-nums' }}
                                 >
                                   <span style={{ color: NEU.deepGold, fontWeight: 900 }}>{p.preference_order}.</span>
                                   <span className="truncate">{committeeAbbr(p.conference_committees)}</span>
-                                  <CountryFlag name={p.country_name} code={p.country_code} size={15} />
+                                  {app.role !== 'chair' && <CountryFlag name={p.country_name} code={p.country_code} size={15} />}
                                 </span>
                               ))}
                             </div>
@@ -4128,7 +4316,7 @@ export default function ApplicationsPage() {
           the DraftRow comment block.
 
           Counts: this section reads `drafts`. Nothing above it does. */}
-      {!loading && drafts.length > 0 && (
+      {!loading && (draftsView || drafts.length > 0) && (
         <div style={{ marginTop: 26, paddingBottom: selectedApps.length > 0 ? BULK_BAR_CLEARANCE : 0 }}>
           <div
             style={{
@@ -4183,7 +4371,7 @@ export default function ApplicationsPage() {
               </span>
             </button>
 
-            {draftsOpen && (
+            {(draftsOpen || draftsView) && (
               <div className="flex flex-col gap-2.5" style={{ padding: '0 11px' }}>
                 {drafts.map(d => {
                   const name = d.display_name ?? 'Unknown applicant';
@@ -4366,40 +4554,53 @@ export default function ApplicationsPage() {
               // Attendance-filtered too (bulkEligibleApps), so blockedCount
               // below reflects fee-blocked exclusions only — a not-attending
               // submitted row is accounted for by the skipped-selection note,
-              // not miscounted here as "unpaid".
+              // not miscounted here as "unpaid". Secretariat is its own
+              // category, called out separately rather than folded into
+              // "unpaid": each one needs its own permissions decision, which
+              // bulk cannot offer.
               const submittedSelected = bulkEligibleApps.filter(a => a.status === 'submitted');
-              const blockedCount = submittedSelected.length - bulkAcceptable.length;
               if (submittedSelected.length === 0) return null;
-              return bulkAcceptable.length > 0 ? (
-                <button
-                  onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
-                  title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded. ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
-                  className="inline-flex items-center gap-1.5 focus:outline-none"
-                  style={{
-                    padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
-                    background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
-                    boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
-                    animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
-                  }}
-                >
-                  <Check size={14} strokeWidth={2.8} />
-                  Accept {bulkAcceptable.length}
-                  {blockedCount > 0 && ` (${blockedCount} unpaid)`}
-                </button>
-              ) : (
-                <span
-                  title={ACCEPT_BLOCKED_MESSAGE}
-                  className="inline-flex items-center gap-1.5"
-                  style={{
-                    padding: '8px 15px', borderRadius: 999, border: '1px solid rgba(184,132,74,0.4)', cursor: 'not-allowed',
-                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#9A6B2F',
-                    backgroundColor: 'rgba(184,132,74,0.1)',
-                  }}
-                >
-                  <Check size={14} strokeWidth={2.8} />
-                  Accept fee unpaid
-                </span>
+              const secretariatSkipped = submittedSelected.filter(a => a.role === 'secretariat').length;
+              const blockedCount = submittedSelected.length - secretariatSkipped - bulkAcceptable.length;
+              return (
+                <>
+                  {bulkAcceptable.length > 0 ? (
+                    <button
+                      onClick={() => runBulk(bulkAcceptable, { title: `Accept ${bulkAcceptable.length} application${bulkAcceptable.length === 1 ? '' : 's'}?`, body: 'Each will be accepted and any acceptance emails / auto-cover will run per applicant.', confirmLabel: 'Accept all' }, a => handleAccept(a.id))}
+                      title={blockedCount > 0 ? `${blockedCount} selected application${blockedCount === 1 ? '' : 's'} excluded. ${ACCEPT_BLOCKED_MESSAGE}` : undefined}
+                      className="inline-flex items-center gap-1.5 focus:outline-none"
+                      style={{
+                        padding: '8px 15px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#FFFFFF',
+                        background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                        boxShadow: `0 3px 8px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+                        animation: suggestion === 'accept' ? 'bulkPulse 1.5s ease-in-out infinite' : undefined,
+                      }}
+                    >
+                      <Check size={14} strokeWidth={2.8} />
+                      Accept {bulkAcceptable.length}
+                      {blockedCount > 0 && ` (${blockedCount} unpaid)`}
+                    </button>
+                  ) : blockedCount > 0 ? (
+                    <span
+                      title={ACCEPT_BLOCKED_MESSAGE}
+                      className="inline-flex items-center gap-1.5"
+                      style={{
+                        padding: '8px 15px', borderRadius: 999, border: '1px solid rgba(184,132,74,0.4)', cursor: 'not-allowed',
+                        fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.03em', color: '#9A6B2F',
+                        backgroundColor: 'rgba(184,132,74,0.1)',
+                      }}
+                    >
+                      <Check size={14} strokeWidth={2.8} />
+                      Accept fee unpaid
+                    </span>
+                  ) : null}
+                  {secretariatSkipped > 0 && (
+                    <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: '#9A6B2F', fontStyle: 'italic' }}>
+                      {secretariatSkipped} secretariat application{secretariatSkipped === 1 ? '' : 's'} left out, each needs its own permissions decision.
+                    </span>
+                  )}
+                </>
               );
             })()}
             {bulkCheckInable.length > 0 && (
@@ -4513,9 +4714,24 @@ export default function ApplicationsPage() {
         const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
         const email = app.profiles?.email ?? app.invited_email ?? '';
         const isDelegate = app.role === 'delegate' || app.role === 'head-delegate';
+        // A chair may rank committees (preference_mode 'committees_only'),
+        // never a country — allocation elsewhere in this pane stays
+        // isDelegate-only.
+        const showsPreferences = isDelegate || app.role === 'chair';
         const prefs = [...(app.application_preferences ?? [])].sort((a, b) => a.preference_order - b.preference_order);
         // No recorded level → treat as "beginner" (#11).
         const expLabel = app.profiles?.mun_experience_level ?? app.experience_level ?? 'beginner';
+        // Chair/secretariat only: the conferences they listed on THIS
+        // application (a snapshot, never re-derived from a live MUN CV).
+        // Newest first, stable so entries with the same/no date keep the
+        // order they were added in.
+        const isMunExperienceRole = app.role === 'chair' || app.role === 'secretariat';
+        const munExperience = [...(app.experience_entries ?? [])].sort((a, b) => {
+          if (!a.event_date && !b.event_date) return 0;
+          if (!a.event_date) return 1;
+          if (!b.event_date) return -1;
+          return b.event_date.localeCompare(a.event_date);
+        });
         const confCount = app.user_id ? cvCounts[app.user_id] : undefined;
         const roleConfig = roleConfigs.find(rc => rc.role === app.role);
         // Includes archived questions so a deleted question's answer stays
@@ -4689,9 +4905,12 @@ export default function ApplicationsPage() {
         };
 
         const hasContextRail = !!app.profiles?.nationality
-          || (isDelegate && prefs.length > 0)
+          || (showsPreferences && prefs.length > 0)
           || ((app.status === 'assigned' || app.status === 'checked-in') && !!app.assigned_country_name)
-          || (app.status === 'checked-in' && !!app.checked_in_at);
+          || (app.status === 'checked-in' && !!app.checked_in_at)
+          // Always shown for chair/secretariat, even with zero entries: the
+          // row says "No MUN experience listed" rather than not existing.
+          || isMunExperienceRole;
 
         // Invited/claim-path rows carry no profile at all — no nationality, no
         // age, no MUN CV — and a faculty advisor has no country preferences
@@ -4838,19 +5057,78 @@ export default function ApplicationsPage() {
                               {app.profiles.nationality}
                             </span>
                           ))}
-                          {isDelegate && prefs.length > 0 && railRow(MapPin, 'Preferences', (
+                          {isMunExperienceRole && railRow(GraduationCap, `MUN experience (${munExperience.length})`, (
+                            munExperience.length === 0 ? (
+                              <span style={{ color: NEU.inkSoft, fontStyle: 'italic', fontWeight: 500 }}>
+                                No MUN experience listed
+                              </span>
+                            ) : (
+                              <div className="flex flex-col gap-2.5">
+                                {munExperience.map((entry) => {
+                                  const type = ENTRY_TYPE_MAP[entry.entry_type as EntryType] ?? ENTRY_TYPE_MAP.other;
+                                  const detail = [entry.allocation, entry.committee].filter(Boolean).join(' · ');
+                                  return (
+                                    <div key={entry.id} className="flex flex-col gap-1">
+                                      <span className="inline-flex items-center gap-1.5 flex-wrap" style={{ fontWeight: 800 }}>
+                                        {entry.conference_name}
+                                        <span
+                                          style={{
+                                            fontSize: 9.5, fontWeight: 800, letterSpacing: '0.05em',
+                                            textTransform: 'uppercase', color: type.chipInk,
+                                            padding: '1px 7px', borderRadius: 999,
+                                            background: `linear-gradient(150deg, ${type.accent}1C, ${type.accent}0C), ${NEU.surface}`,
+                                            border: `1px solid ${type.accent}33`,
+                                          }}
+                                        >
+                                          {type.label}
+                                        </span>
+                                      </span>
+                                      {(detail || entry.event_date) && (
+                                        <span style={{ color: NEU.inkSoft, fontSize: 12.5, fontWeight: 500, lineHeight: 1.5 }}>
+                                          {[detail, entry.event_date ? formatDate(entry.event_date) : null].filter(Boolean).join('  ·  ')}
+                                        </span>
+                                      )}
+                                      {entry.awards.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-0.5">
+                                          {entry.awards.map((award) => (
+                                            <span
+                                              key={award}
+                                              className="inline-flex items-center"
+                                              style={{
+                                                fontSize: 10.5, fontFamily: OUTFIT, fontWeight: 700,
+                                                padding: '1px 7px', borderRadius: 999,
+                                                backgroundColor: 'rgba(182,135,31,0.14)', color: REVIEW_AID_INK,
+                                                border: '1px solid rgba(182,135,31,0.35)',
+                                              }}
+                                            >
+                                              {award}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )
+                          ))}
+                          {showsPreferences && prefs.length > 0 && railRow(MapPin, app.role === 'chair' ? 'Committee preferences' : 'Preferences', (
                             <div className="flex flex-col gap-1.5">
                               {prefs.map(p => (
                                 <span
                                   key={p.preference_order}
                                   className="inline-flex items-center gap-2"
-                                  title={`${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
+                                  title={app.role === 'chair' ? (p.conference_committees?.name ?? 'Unknown') : `${p.conference_committees?.name ?? 'Unknown'}, ${p.country_name}`}
                                   style={{ fontVariantNumeric: 'tabular-nums' }}
                                 >
                                   <span style={{ color: NEU.inkSoft, fontWeight: 800, minWidth: 14 }}>{p.preference_order}.</span>
                                   <span style={{ fontWeight: 700 }}>{committeeAbbr(p.conference_committees)}</span>
-                                  <CountryFlag name={p.country_name} code={p.country_code} size={14} />
-                                  <span style={{ color: NEU.inkSoft, fontWeight: 500 }}>{p.country_name}</span>
+                                  {app.role !== 'chair' && (
+                                    <>
+                                      <CountryFlag name={p.country_name} code={p.country_code} size={14} />
+                                      <span style={{ color: NEU.inkSoft, fontWeight: 500 }}>{p.country_name}</span>
+                                    </>
+                                  )}
                                 </span>
                               ))}
                             </div>
@@ -5376,6 +5654,156 @@ export default function ApplicationsPage() {
                     Need buttons or a saved template? Communications
                   </Link>
                 )}
+              </div>
+            </div>
+          </div></Portal>
+        );
+      })()}
+
+      {/* Secretariat accept modal (Part One/Two). Accepting a secretariat
+          application makes the applicant an organizer immediately, so the
+          permissions decision happens here, up front, instead of defaulting
+          to something. Every section starts unchecked on purpose — a
+          mis-click here must never hand someone the financials, and most of
+          these sections are navigation only with no database enforcement
+          behind them. */}
+      {secretariatModal && (() => {
+        const name = secretariatModal.prevRow.profiles?.display_name ?? secretariatModal.prevRow.invited_name ?? 'this applicant';
+        const close = () => { if (!secretariatBusy) { setSecretariatModal(null); setSecretariatError(''); } };
+        const fieldStyle: React.CSSProperties = {
+          width: '100%', padding: '10px 13px', borderRadius: 12,
+          border: '1.5px solid #DDD4C0', backgroundColor: NEU.base,
+          fontFamily: OUTFIT, fontSize: 13.5, color: NEU.ink, outline: 'none',
+        };
+        const labelStyle: React.CSSProperties = { fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: NEU.inkSoft, textTransform: 'uppercase' };
+        return (
+          <Portal><div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-10"
+            style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+            onClick={close}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Accept ${name} and add to the team`}
+              className="w-full max-w-lg rounded-2xl overflow-y-auto"
+              style={{ maxHeight: '86vh', backgroundColor: NEU.surface, boxShadow: NEU.out, padding: 26 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Briefcase} size={46} />
+                  <div className="min-w-0">
+                    <p style={{ fontFamily: OUTFIT, fontSize: 18, fontWeight: 900, color: NEU.ink, letterSpacing: '-0.01em', lineHeight: 1.25 }}>
+                      Add {name} to your team?
+                    </p>
+                    <p className="mt-1.5" style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 600, color: NEU.inkSoft, lineHeight: 1.55 }}>
+                      Accepting makes them an organizer immediately, and you can change what they see anytime in Settings, Organizing Team.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={close}
+                  disabled={secretariatBusy}
+                  aria-label="Close"
+                  className="inline-flex items-center justify-center flex-shrink-0 focus:outline-none"
+                  style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, border: 'none', cursor: secretariatBusy ? 'default' : 'pointer', color: NEU.inkSoft, opacity: secretariatBusy ? 0.5 : 1 }}
+                >
+                  <X size={16} strokeWidth={2.6} />
+                </button>
+              </div>
+
+              <p className="mb-2" style={labelStyle}>What can they open?</p>
+              <div className="flex flex-col gap-2 mb-5">
+                {ORGANIZER_SECTIONS.map(s => {
+                  const on = secretariatSections.has(s.key);
+                  const Icon = s.icon;
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      disabled={secretariatBusy}
+                      aria-pressed={on}
+                      onClick={() => setSecretariatSections(prev => {
+                        const next = new Set(prev);
+                        if (next.has(s.key)) next.delete(s.key); else next.add(s.key);
+                        return next;
+                      })}
+                      className="w-full flex items-start gap-3 text-left focus:outline-none"
+                      style={{
+                        padding: '11px 13px', borderRadius: 14,
+                        backgroundColor: on ? 'rgba(27,56,40,0.07)' : 'transparent',
+                        border: on ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                        cursor: secretariatBusy ? 'default' : 'pointer',
+                        opacity: secretariatBusy ? 0.6 : 1,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="flex items-center justify-center flex-shrink-0"
+                        style={{ width: 20, height: 20, marginTop: 1, borderRadius: 6, backgroundColor: on ? '#1B3828' : 'transparent', border: on ? 'none' : '1.5px solid #CFC6B4' }}
+                      >
+                        {on && <Check size={13} strokeWidth={3.2} style={{ color: '#EED98A' }} />}
+                      </span>
+                      <Icon size={16} strokeWidth={2.2} style={{ marginTop: 2, flexShrink: 0, color: on ? '#1B3828' : NEU.inkSoft }} />
+                      <span className="min-w-0">
+                        <span className="block" style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 800, color: NEU.ink }}>{s.label}</span>
+                        <span className="block mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft, lineHeight: 1.4 }}>{s.blurb}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mb-2">
+                <label className="block mb-2" style={labelStyle} htmlFor="secretariatPublicTitle">
+                  Public title (optional)
+                </label>
+                <input
+                  id="secretariatPublicTitle"
+                  value={secretariatPublicTitle}
+                  onChange={e => setSecretariatPublicTitle(e.target.value)}
+                  disabled={secretariatBusy}
+                  placeholder="e.g. Secretary-General"
+                  style={fieldStyle}
+                />
+              </div>
+
+              {secretariatError && (
+                <p className="mt-3" style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: REVIEW_DANGER, lineHeight: 1.5 }}>
+                  {secretariatError}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 mt-5">
+                <button
+                  onClick={handleAcceptSecretariat}
+                  disabled={secretariatBusy}
+                  className="inline-flex items-center justify-center gap-2 focus:outline-none"
+                  style={{
+                    minHeight: 44, padding: '0 22px', borderRadius: 999, border: 'none',
+                    fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, letterSpacing: '0.05em',
+                    color: '#FFFFFF', background: `linear-gradient(135deg, ${NEU_GRADIENTS.green[0]}, ${NEU_GRADIENTS.green[1]})`,
+                    boxShadow: `0 4px 12px ${NEU_GRADIENTS.green[0]}55, ${NEU.outSm}`,
+                    cursor: secretariatBusy ? 'default' : 'pointer', opacity: secretariatBusy ? 0.75 : 1,
+                  }}
+                >
+                  <Check size={15} strokeWidth={2.7} />
+                  {secretariatBusy ? 'ADDING…' : 'ACCEPT AND ADD TO TEAM'}
+                </button>
+                <button
+                  onClick={close}
+                  disabled={secretariatBusy}
+                  className="inline-flex items-center focus:outline-none"
+                  style={{
+                    minHeight: 44, padding: '0 18px', borderRadius: 999, border: 'none',
+                    fontFamily: OUTFIT, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                    color: NEU.inkSoft, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+                    cursor: secretariatBusy ? 'default' : 'pointer', opacity: secretariatBusy ? 0.6 : 1,
+                  }}
+                >
+                  CANCEL
+                </button>
               </div>
             </div>
           </div></Portal>

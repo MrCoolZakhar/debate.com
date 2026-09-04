@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlagImg } from '@/components/FlagImg';
 import { CaucusState, Committee } from '@/lib/types';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { getScoringConfig } from '@/lib/scoring';
+import { factorName } from '@/lib/scoringNames';
 import { addFeedback, updateFeedback, getFeedbackForCommittee } from '@/lib/committeeService';
 
 type ItemKind = 'past' | 'live' | 'next';
@@ -18,6 +19,8 @@ interface FeedItem {
   timestamp?: string;
 }
 interface RowState { id?: string; content: string; scores: Record<string, number>; country: string; reconciled?: boolean; }
+/** Another chair's note on the same speech. Read-only here — each chair edits only their own row. */
+interface OtherNote { chairName: string; content: string; scores: Record<string, number>; }
 
 interface PastSpeech { country: string; context: string; seconds: number; timestamp: string; }
 function pastSpeeches(committee: Committee): PastSpeech[] {
@@ -46,12 +49,17 @@ function liveContext(committee: Committee): string {
   return caucus.type === 'unmoderated' ? 'unmoderated-caucus' : 'moderated-caucus';
 }
 
-export default function FeedbackLogPanel({ committee, chairName, currentCountry }: {
+export default function FeedbackLogPanel({ committee, chairName, currentCountry, feedbackVersion = 0 }: {
   committee: Committee; chairName: string; currentCountry: string | null;
+  /** Bumped by the chair page on every realtime `feedback` event — the refetch key. */
+  feedbackVersion?: number;
 }) {
   const { language } = useLanguage();
+  const t = useT();
   const cfg = getScoringConfig(committee);
-  const factors = cfg.factors.filter((f) => f.enabled);
+  // Ratings are opt-in (Settings -> Points). When off there are no factors, so the
+  // rating column collapses and the note gets the full width of the dock.
+  const factors = cfg.factorRatingsEnabled ? cfg.factors.filter((f) => f.enabled) : [];
   const caucus = liveCaucus(committee);
   const ctx = liveContext(committee);
 
@@ -61,10 +69,12 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   const upcoming = queue.filter((s) => s.country !== currentCountry);
 
   const [state, setState] = useState<Record<string, RowState>>({});
+  // Other chairs' notes on the same speeches, keyed by the same item key. Never edited
+  // here: a row belongs to the chair whose name is on it.
+  const [others, setOthers] = useState<Record<string, OtherNote[]>>({});
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
   const creatingRef = useRef<Set<string>>(new Set());
-  const loadedRef = useRef(false);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const turnStartRef = useRef<number>(Date.now());
 
@@ -85,27 +95,85 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [past, currentCountry, liveKey, JSON.stringify(upcoming.map((u) => u.delegateId)), ctx]);
 
-  // Prefill from existing 'speech' feedback, greedy match to past speeches by country+context+seconds.
+  // Load every chair's speech feedback, and re-load whenever a realtime `feedback`
+  // event lands (`feedbackVersion`). This used to run exactly once per mount behind a
+  // `loadedRef` latch, which broke the moment a second chair joined: neither could see
+  // the other's notes, and — worse — the greedy match below took the FIRST row for a
+  // speech regardless of who wrote it, so chair B would adopt chair A's row id and the
+  // next keystroke would UPDATE it, silently overwriting A's note. Rows are now split
+  // by author: you edit yours, you read theirs.
   useEffect(() => {
-    if (loadedRef.current) return;
-    loadedRef.current = true;
+    let cancelled = false;
     (async () => {
       const all = await getFeedbackForCommittee(committee.id);
+      if (cancelled) return;
       const fb = all.filter((f) => f.level === 'speech');
+
+      const mineNext: Record<string, RowState> = {};
+      const theirsNext: Record<string, OtherNote[]> = {};
       const used = new Set<string>();
-      const next: Record<string, RowState> = {};
+
+      const claim = (key: string, f: typeof fb[number], reconciled: boolean) => {
+        if (used.has(f.id)) return;
+        if (f.chairName === chairName) {
+          if (mineNext[key]) return;            // one row per speech per chair
+          used.add(f.id);
+          mineNext[key] = { id: f.id, content: f.content, scores: f.factorScores ?? {}, country: f.country, reconciled };
+        } else {
+          used.add(f.id);
+          // One entry per chair per speech. Duplicate rows for the same chair DO exist in
+          // production — before this effect matched unreconciled rows, a reload mid-speech
+          // made a second row rather than adopting the first — so collapse them here
+          // instead of listing the same name twice. The row with prose wins; failing that
+          // the newest, since getFeedbackForCommittee returns them created_at ascending.
+          const bucket = (theirsNext[key] ??= []);
+          const at = bucket.findIndex((o) => o.chairName === f.chairName);
+          const entry = { chairName: f.chairName, content: f.content, scores: f.factorScores ?? {} };
+          if (at < 0) bucket.push(entry);
+          else if (!bucket[at].content.trim()) bucket[at] = entry;
+        }
+      };
+
+      // A LOGGED speech is identified by country + context + seconds.
       for (const p of past) {
-        const match = fb.find((f) => !used.has(f.id) && f.country === p.country &&
-          (f.speechContext ?? '') === p.context && (f.speechSeconds ?? 0) === p.seconds);
-        if (match) {
-          used.add(match.id);
-          next[`past|${p.country}|${p.timestamp}`] = { id: match.id, content: match.content, scores: match.factorScores ?? {}, country: p.country, reconciled: true };
+        const key = `past|${p.country}|${p.timestamp}`;
+        for (const f of fb) {
+          if (f.country !== p.country) continue;
+          if ((f.speechContext ?? '') !== p.context || (f.speechSeconds ?? 0) !== p.seconds) continue;
+          claim(key, f, true);
         }
       }
-      if (Object.keys(next).length) setState((prev) => ({ ...next, ...prev }));
+      // A row written while the delegate still holds the floor has no seconds yet, so it
+      // belongs to the live/next card for that country until the reconcile effect below
+      // back-patches it. Self-cleaning: once reconciled it matches a past key instead.
+      for (const item of items) {
+        if (item.kind === 'past') continue;
+        for (const f of fb) {
+          if (f.country !== item.country || f.speechSeconds != null) continue;
+          claim(item.key, f, false);
+        }
+      }
+
+      if (cancelled) return;
+      setOthers(theirsNext);
+      setState((prev) => {
+        const merged = { ...prev };
+        for (const [key, row] of Object.entries(mineNext)) {
+          const cur = merged[key];
+          // A refetch must NEVER overwrite what this chair is typing — our own write
+          // echoes back through realtime, so this runs mid-edit routinely. Adopt the
+          // row only to learn its id (so the next keystroke UPDATEs rather than
+          // inserting a duplicate); local text and scores always win.
+          merged[key] = cur
+            ? { ...cur, id: cur.id ?? row.id, reconciled: cur.reconciled || row.reconciled }
+            : row;
+        }
+        return merged;
+      });
     })();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committee.id, past.length]);
+  }, [committee.id, past.length, feedbackVersion, chairName, currentCountry]);
 
   // On speaker change: new turn, focus returns to the live pill (it rolls into the slot).
   useEffect(() => {
@@ -137,6 +205,11 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   const persist = (item: FeedItem, content: string, scores: Record<string, number>) => {
     const cur = stateRef.current[item.key];
     if (cur?.id) { updateFeedback(cur.id, { content, factorScores: scores }, committee.code, committee.dbChairJoinSuffix ?? undefined); return; }
+    // Nothing worth a row yet. Blurring an untouched note box used to INSERT an empty
+    // one — production carries several, each a chair who clicked into the box and
+    // clicked straight back out. They render as a delegate having been "commented on"
+    // when nobody wrote anything.
+    if (!content.trim() && !Object.values(scores).some((v) => (v ?? 0) > 0)) return;
     if (creatingRef.current.has(item.key)) return;
     creatingRef.current.add(item.key);
     addFeedback(committee.id, item.country, chairName, content, committee.code, committee.dbChairJoinSuffix ?? undefined, {
@@ -178,17 +251,31 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   }, [effectiveFocus]);
 
   const PILL_TRANSITION = 'transform 260ms cubic-bezier(.2,.8,.2,1), filter 260ms ease, opacity 260ms ease, box-shadow 260ms ease, background-color 260ms ease';
-  const GRID_COL = 280;       // reserved so pills/grids stay aligned across rows
+  // Reserved so pills/grids stay aligned across rows. Collapses to 0 when ratings are
+  // switched off, handing the full width of the dock back to the note.
+  const GRID_COL = factors.length ? 280 : 0;
   // The tag belongs to the ROW, not to the room: a past speech keeps the context it was
   // actually given under. Only rows sitting on the live context borrow the running caucus's
   // own label — otherwise a finished caucus speech would be re-tagged by whatever is on the
   // floor now (or, once the caucus ends, re-tag the GSL rows as a caucus).
   const tagFor = (item: FeedItem) => {
-    if (item.context === 'speakers-list') return 'GSL';
+    if (item.context === 'speakers-list') return t('fb_tag_gsl');
     if (item.context === ctx && caucus?.motionLabel) return caucus.motionLabel;
-    return item.context === 'unmoderated-caucus' ? 'UNMOD' : 'CAUCUS';
+    return item.context === 'unmoderated-caucus' ? t('fb_tag_unmod') : t('fb_tag_caucus');
   };
   const maxScale = Math.max(1, cfg.factorScaleMax);
+
+  // Every chair's note on one speech, mine first. The author prefix appears ONLY when
+  // more than one chair has written — a single chair (the overwhelmingly common case)
+  // reads exactly as it always did, with no name eating the width.
+  const notesFor = (key: string, mine: RowState): { chairName: string; content: string; isMine: boolean }[] => {
+    const out: { chairName: string; content: string; isMine: boolean }[] = [];
+    if (mine.content.trim()) out.push({ chairName, content: mine.content.trim(), isMine: true });
+    for (const o of others[key] ?? []) {
+      if (o.content.trim()) out.push({ chairName: o.chairName || t('fb_chair'), content: o.content.trim(), isMine: false });
+    }
+    return out;
+  };
 
   // Distance-based recede (index 0 = focused). Gentle on scale so pills stay wide.
   const scaleByDist = [1, 0.98, 0.96, 0.94];
@@ -201,12 +288,16 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
   // read-only values on the nearest neighbour). The slider track itself reads low→high.
   const metricStack = (item: FeedItem, rs: RowState, interactive: boolean) => (
     <div className="grid gap-x-4 gap-y-1.5" style={{ width: GRID_COL, gridTemplateColumns: '1fr 1fr' }}>
-      {factors.slice(0, 4).map((f) => {
+      {/* Every ENABLED factor, not the first four. The old cap meant a chair could add
+          a fifth factor in Settings, never be offered a slider for it here, and then see
+          a permanently empty row for it on the scoreboard — which renders whatever is
+          enabled. The grid simply grows another row. */}
+      {factors.map((f) => {
         const v = rs.scores[f.id] ?? 0;
         if (!interactive) {
           return (
             <div key={f.id} className="flex items-center gap-1.5">
-              <span className="text-[9px] uppercase tracking-wide truncate flex-1" style={{ color: '#B8AE9C' }}>{f.name}</span>
+              <span className="text-[9px] uppercase tracking-wide truncate flex-1" style={{ color: '#B8AE9C' }}>{factorName(f, language)}</span>
               <span className="text-[11px] font-bold shrink-0" style={{ color: '#9A8A78' }}>{v}</span>
             </div>
           );
@@ -214,7 +305,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
         return (
           <div key={f.id}>
             <div className="flex items-baseline justify-between gap-1">
-              <span className="text-[9px] font-bold uppercase tracking-wide truncate" style={{ color: '#6A5A4A' }}>{f.name}</span>
+              <span className="text-[9px] font-bold uppercase tracking-wide truncate" style={{ color: '#6A5A4A' }}>{factorName(f, language)}</span>
               <span className="text-xs font-black shrink-0" style={{ color: '#1B3828' }}>{v}</span>
             </div>
             <input
@@ -234,7 +325,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
       <style>{`.fb-dock-scroll::-webkit-scrollbar{display:none}`}</style>
       {items.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-xs px-4" style={{ color: '#9A8A78' }}>Comments appear here as delegates take the floor.</p>
+          <p className="text-xs px-4" style={{ color: '#9A8A78' }}>{t('fb_empty')}</p>
         </div>
       ) : (
         <div className="fb-dock-scroll flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
@@ -245,6 +336,8 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
               const isFocused = item.key === effectiveFocus;
               const isHover = hoverKey === item.key && !isFocused;
               const scored = Object.values(rs.scores).some((x) => (x ?? 0) > 0);
+              const notes = notesFor(item.key, rs);
+              const theirs = notes.filter((n) => !n.isMine);
               const dist = focusIdx >= 0 ? Math.min(Math.abs(idx - focusIdx), 3) : 0;
 
               let scale = scaleByDist[dist], opacity = opacityByDist[dist], blur = blurByDist[dist];
@@ -286,10 +379,24 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
                         value={rs.content}
                         onChange={(e) => setNote(item, e.target.value)}
                         onBlur={() => persist(item, rs.content, rs.scores)}
-                        placeholder="Private note…"
+                        placeholder={t('fb_private_note')}
                         className="w-full mt-2 text-sm rounded-lg px-3 py-2 outline-none resize-none"
                         style={{ color: '#1C1410', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8' }}
                       />
+                      {/* What the other chairs wrote on this same speech — read-only, in the
+                          same box, so the dais reads as one record rather than N private ones.
+                          Each chair edits only the row carrying their own name. */}
+                      {theirs.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs leading-snug px-1">
+                          {theirs.map((n, ni) => (
+                            <span key={ni} className="inline-flex items-baseline gap-1">
+                              {ni > 0 && <span style={{ color: '#B8AE9C' }}>/</span>}
+                              <span style={{ fontWeight: 700, color: '#1B3828' }}>{n.chairName}</span>
+                              <span style={{ color: '#6A5A4A' }}>{n.content}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     /* Collapsed capsule, shows the note written for this delegate */
@@ -308,9 +415,21 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry 
                     >
                       <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={22} className="shrink-0" />
                       <span className="font-semibold shrink-0" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
-                      {rs.content && rs.content.trim()
-                        ? <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#6A5A4A' }}>— {rs.content}</span>
-                        : <span className="flex-1" />}
+                      {notes.length > 0 ? (
+                        <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#6A5A4A' }}>
+                          {/* Drop the author ONLY when the single note is your own — that is the
+                              common case and it should read exactly as it always did. A lone note
+                              written by SOMEONE ELSE must still carry their name, or you cannot tell
+                              your own note from a colleague's. */}
+                          {notes.length === 1 && notes[0].isMine ? `— ${notes[0].content}` : notes.map((n, ni) => (
+                            <span key={ni}>
+                              {ni > 0 && <span style={{ color: '#B8AE9C' }}> / </span>}
+                              <span style={{ fontWeight: 700, color: '#1B3828' }}>{n.chairName}: </span>
+                              {n.content}
+                            </span>
+                          ))}
+                        </span>
+                      ) : <span className="flex-1" />}
                       {scored && <span className="shrink-0 text-sm font-black" style={{ color: '#1B3828' }}>✓</span>}
                     </div>
                   )}

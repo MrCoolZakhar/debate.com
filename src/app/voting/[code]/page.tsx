@@ -468,7 +468,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         // It is the only write credential (x-chair-suffix → is_session_chair) and
         // the code every chair typed on the join page. Leaving it out means the
         // store reads '' on any device that has no localStorage entry for this
-        // committee (co-chair who arrived by link, fresh browser, incognito,
+        // committee (Commenter who arrived by link, fresh browser, incognito,
         // cleared cache); SettingsPanel's mount effect then MINTS A NEW RANDOM
         // SUFFIX and writes it to the DB, and `applyRule` writes '' back over the
         // real one — either way every chair holding the printed code is locked out.
@@ -563,7 +563,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // Accept the full printed chair code ("UNSC26-4821") as well as the bare suffix.
       const bare = entered.includes('-') ? (entered.split('-').pop() ?? '').trim() : entered;
       if (!expectedSuffix || bare !== expectedSuffix) {
-        setChairCodeError('Incorrect chair code. Ask your head chair.');
+        setChairCodeError('Incorrect chair code. Ask your Moderator.');
         return;
       }
       setChairCodeError('');

@@ -203,10 +203,10 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['tab-settings'], spotlightRadius: 6,
       bubbleText: pick(language, {
-        ar: <>{G('الإعدادات')} أربع تبويبات: {GR('الوصول')} (رمز الرئاسة والموافقة ورئيس الجلسة)، و{GR('الاقتراحات')} (تفعيل الاقتراحات وترتيبها وإعادة تسميتها، واعتماد المستندات وأسماؤها)، و{GR('التصويت')} (النِّصاب والأغلبيات وحق النقض)، و{GR('النقاط')}.</>,
-        fr: <>{G('Paramètres')}, quatre onglets : {GR('Accès')} (code président, approbation, chef de séance), {GR('Motions')} (activer, réordonner et renommer les motions, approbation et noms des documents), {GR('Vote')} (quorum, majorités, veto) et {GR('Points')}.</>,
-        es: <>{G('Configuración')}, cuatro pestañas: {GR('Acceso')} (código de presidencia, aprobación, presidente principal), {GR('Mociones')} (activar, reordenar y renombrar mociones, aprobación y nombres de documentos), {GR('Votación')} (cuórum, mayorías, veto) y {GR('Puntos')}.</>,
-        en: <>{G('Settings')} has four tabs: {GR('Access')} (chair code, delegate approval, head chair), {GR('Motions')} (enable, reorder and rename motions, document approval and names), {GR('Voting')} (quorum, majorities, veto), and {GR('Points')}.</>,
+        ar: <>{G('الإعدادات')} أربع تبويبات: {GR('الوصول')} (رمز الرئاسة والموافقة والمشرف)، و{GR('الاقتراحات')} (تفعيل الاقتراحات وترتيبها وإعادة تسميتها، واعتماد المستندات وأسماؤها)، و{GR('التصويت')} (النِّصاب والأغلبيات وحق النقض)، و{GR('النقاط')}.</>,
+        fr: <>{G('Paramètres')}, quatre onglets : {GR('Accès')} (code président, approbation, modérateur), {GR('Motions')} (activer, réordonner et renommer les motions, approbation et noms des documents), {GR('Vote')} (quorum, majorités, veto) et {GR('Points')}.</>,
+        es: <>{G('Configuración')}, cuatro pestañas: {GR('Acceso')} (código de presidencia, aprobación, moderador), {GR('Mociones')} (activar, reordenar y renombrar mociones, aprobación y nombres de documentos), {GR('Votación')} (cuórum, mayorías, veto) y {GR('Puntos')}.</>,
+        en: <>{G('Settings')} has four tabs: {GR('Access')} (chair code, delegate approval, Moderator), {GR('Motions')} (enable, reorder and rename motions, document approval and names), {GR('Voting')} (quorum, majorities, veto), and {GR('Points')}.</>,
       }),
     },
     {
@@ -219,10 +219,10 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['join-code'], spotlightRadius: 8,
       bubbleText: pick(language, {
-        ar: <>هذا <strong>رمز جلستك</strong>. يُدخله المندوبون في {G('gavelling.com')} للانضمام في الوقت الفعلي. {GR('انقر للنسخ')}. أمّا الرؤساء المشاركون فيحتاجون رمز الرئاسة الكامل من {GR('الإعدادات ← الوصول')}.</>,
-        fr: <>Votre <strong>code de session</strong>. Les délégués l&apos;entrent sur {G('gavelling.com')} pour rejoindre en temps réel. {GR('Cliquez pour copier')}. Les co-présidents, eux, ont besoin du code président complet, dans {GR('Paramètres → Accès')}.</>,
-        es: <>Tu <strong>código de sesión</strong>. Los delegados lo ingresan en {G('gavelling.com')} para unirse en tiempo real. {GR('Haz clic para copiar')}. Los co-presidentes necesitan el código de presidencia completo, en {GR('Configuración → Acceso')}.</>,
-        en: <>Your <strong>session code</strong>. Delegates enter this at {G('gavelling.com')} to join in real time. {GR('Click to copy')}. Co-chairs need the longer chair code instead, found in {GR('Settings → Access')}.</>,
+        ar: <>هذا <strong>رمز جلستك</strong>. يُدخله المندوبون في {G('gavelling.com')} للانضمام في الوقت الفعلي. {GR('انقر للنسخ')}. أمّا الرؤساء الذين ينضمون إلى المنصة فيحتاجون رمز الرئاسة الكامل من {GR('الإعدادات ← الوصول')}.</>,
+        fr: <>Votre <strong>code de session</strong>. Les délégués l&apos;entrent sur {G('gavelling.com')} pour rejoindre en temps réel. {GR('Cliquez pour copier')}. Les présidents qui rejoignent le présidium ont besoin du code président complet, dans {GR('Paramètres → Accès')}.</>,
+        es: <>Tu <strong>código de sesión</strong>. Los delegados lo ingresan en {G('gavelling.com')} para unirse en tiempo real. {GR('Haz clic para copiar')}. Las presidencias que se unen a la mesa necesitan el código de presidencia completo, en {GR('Configuración → Acceso')}.</>,
+        en: <>Your <strong>session code</strong>. Delegates enter this at {G('gavelling.com')} to join in real time. {GR('Click to copy')}. Chairs joining the dais need the longer chair code instead, found in {GR('Settings → Access')}.</>,
       }),
     },
     {
@@ -423,7 +423,7 @@ export default function TutorialOverlay({ committee, onEnd, onStepId }: Props) {
   // Survive a phase change mid-tutorial. The tab row only exists outside
   // pre-session, and the timer / +time / RTR controls only exist while someone
   // holds the floor on the GSL — so a suspend, an accepted caucus motion, or a
-  // co-chair losing the gavel can strip a step's target out from under it. Rather
+  // Commenter losing the gavel can strip a step's target out from under it. Rather
   // than dimming the screen and pointing at nothing, walk past any step whose
   // targets have all vanished, continuing in the direction of travel.
   useEffect(() => {
@@ -749,7 +749,7 @@ function EndTutorialBtn({ onEnd }: { onEnd: () => void }) {
 // Back / counter / Next. Sits top-centre, opposite End Tutorial, clear of every
 // spotlight target (bottom bar, sidebar, centre column, tab row).
 // On an action step Next reads "Skip" — the chair must always be able to leave a
-// step they cannot complete (view-only co-chair, below quorum, too few delegates).
+// step they cannot complete (Commenter, below quorum, too few delegates).
 function TutorialNav({
   idx, total, onBack, onNext, isAction, isLast, language,
 }: {
@@ -896,17 +896,17 @@ const SB_COPY = {
     tuneHead: 'Make the numbers yours',
     tuneWhere: 'Settings → Points',
     tune1: 'Change any point value, switch a source off, or add sources of your own.',
-    tune2: 'Rename, add or remove the quality factors chairs rate, and set the rating scale.',
+    tune2: 'Rename, add or remove the quality factors Commenters rate, and set the rating scale.',
     tune3: 'Ranking blend decides how much those quality ratings move the headline number.',
     tune4: 'Hide scores from delegates keeps their speaking recap but removes the leaderboard.',
-    blendInfo: 'The headline score is the objective point total blended with the 0–100 quality score from chair ratings. At 0% the ranking is pure points; at 100% it is pure quality.',
+    blendInfo: 'The headline score is the objective point total blended with the 0–100 quality score from Commenter ratings. At 0% the ranking is pure points; at 100% it is pure quality.',
     blendNow: (n: number) => n === 0
       ? 'Currently 0% — quality ratings are recorded but do not move the ranking.'
       : `Currently ${n}% — quality ratings carry ${n}% of the headline score.`,
-    coHead: 'Co-chairs write the feedback',
-    coBody: 'One chair holds the gavel (the committee creator by default; any chair can claim it in Settings → Access). Every other chair on the same chair code runs view-only, and their centre column becomes the feedback dock below.',
+    coHead: 'Commenters write the feedback',
+    coBody: 'One chair is the Moderator and holds the gavel (the committee creator by default; any chair can take it from the gavel chip at the top-right of the session). Every other chair on the same chair code is a Commenter, and their centre column becomes the feedback dock below.',
     coBody2: 'They type a private note on whoever holds the floor and rate them on your quality factors. Notes surface under that speech in the scoreboard drill-in and in the CSV export; the ratings feed the quality score.',
-    mockCap: 'What a co-chair sees',
+    mockCap: 'What a Commenter sees',
     mockLive: 'Now speaking',
     mockNote: 'Strong framing, cited the 2019 protocol directly.',
     mockNext: 'Held the bloc together through the unmod.',
@@ -923,17 +923,17 @@ const SB_COPY = {
     tuneHead: 'Ajusta los números a tu comité',
     tuneWhere: 'Configuración → Puntos',
     tune1: 'Cambia cualquier valor, desactiva una fuente o añade las tuyas.',
-    tune2: 'Renombra, añade o quita los factores de calidad que califican las presidencias, y fija la escala.',
+    tune2: 'Renombra, añade o quita los factores de calidad que valoran los comentaristas, y fija la escala.',
     tune3: 'La mezcla de clasificación decide cuánto pesan esas calificaciones en el número final.',
     tune4: 'Ocultar puntajes a delegados mantiene su resumen pero quita la tabla de posiciones.',
-    blendInfo: 'El puntaje final mezcla el total objetivo de puntos con el puntaje de calidad de 0 a 100 que dan las presidencias. En 0% la clasificación es puro punto; en 100% es pura calidad.',
+    blendInfo: 'El puntaje final mezcla el total objetivo de puntos con el puntaje de calidad de 0 a 100 que dan los comentaristas. En 0% la clasificación es puro punto; en 100% es pura calidad.',
     blendNow: (n: number) => n === 0
       ? 'Ahora en 0%: las calificaciones se guardan pero no mueven la clasificación.'
       : `Ahora en ${n}%: las calificaciones pesan ${n}% del puntaje final.`,
-    coHead: 'Los co-presidentes escriben la retroalimentación',
-    coBody: 'Una presidencia tiene el mazo (quien creó el comité por defecto; cualquier presidencia puede reclamarlo en Configuración → Acceso). El resto de presidencias con el mismo código entra en modo de solo lectura, y su columna central se convierte en el panel de retroalimentación de abajo.',
+    coHead: 'Los comentaristas escriben la retroalimentación',
+    coBody: 'Una presidencia es el moderador y tiene el mazo (quien creó el comité por defecto; cualquier presidencia puede tomarlo desde la insignia del mazo, arriba a la derecha de la sesión). El resto de presidencias con el mismo código son comentaristas, y su columna central se convierte en el panel de retroalimentación de abajo.',
     coBody2: 'Escriben una nota privada sobre quien tiene la palabra y lo califican en tus factores de calidad. Las notas aparecen bajo ese discurso en el marcador y en el CSV; las calificaciones alimentan el puntaje de calidad.',
-    mockCap: 'Lo que ve un co-presidente',
+    mockCap: 'Lo que ve un comentarista',
     mockLive: 'Hablando ahora',
     mockNote: 'Buen encuadre, citó el protocolo de 2019 directamente.',
     mockNext: 'Mantuvo unido al bloque durante el cáucus.',
@@ -950,17 +950,17 @@ const SB_COPY = {
     tuneHead: 'Des chiffres à votre main',
     tuneWhere: 'Paramètres → Points',
     tune1: 'Changez n’importe quelle valeur, désactivez une source ou ajoutez les vôtres.',
-    tune2: 'Renommez, ajoutez ou retirez les facteurs de qualité notés par la présidence, et réglez l’échelle.',
+    tune2: 'Renommez, ajoutez ou retirez les facteurs de qualité notés par les commentateurs, et réglez l’échelle.',
     tune3: 'Le mélange du classement décide du poids de ces notes dans le chiffre final.',
     tune4: 'Masquer les scores aux délégués garde leur récapitulatif mais retire le classement.',
-    blendInfo: 'Le score final mélange le total objectif de points et le score de qualité de 0 à 100 issu des notes de la présidence. À 0 %, le classement est purement chiffré ; à 100 %, purement qualitatif.',
+    blendInfo: 'Le score final mélange le total objectif de points et le score de qualité de 0 à 100 issu des évaluations des commentateurs. À 0 %, le classement est purement chiffré ; à 100 %, purement qualitatif.',
     blendNow: (n: number) => n === 0
       ? 'Actuellement 0 % : les notes de qualité sont enregistrées mais ne bougent pas le classement.'
       : `Actuellement ${n} % : les notes de qualité pèsent ${n} % du score final.`,
-    coHead: 'Les co-présidents écrivent les retours',
-    coBody: 'Une présidence tient le maillet (celle qui a créé le comité par défaut ; n’importe quelle présidence peut le réclamer dans Paramètres → Accès). Toutes les autres présidences sur le même code passent en lecture seule, et leur colonne centrale devient le dock de retours ci-dessous.',
+    coHead: 'Les commentateurs écrivent les retours',
+    coBody: 'Une présidence est le modérateur et tient le maillet (celle qui a créé le comité par défaut ; n’importe quelle présidence peut le prendre depuis la pastille du maillet, en haut à droite de la session). Toutes les autres présidences sur le même code sont commentatrices, et leur colonne centrale devient le dock de retours ci-dessous.',
     coBody2: 'Elles écrivent une note privée sur qui a la parole et la notent sur vos facteurs de qualité. Les notes apparaissent sous ce discours dans le tableau des scores et dans l’export CSV ; les notes alimentent le score de qualité.',
-    mockCap: 'Ce que voit un co-président',
+    mockCap: 'Ce que voit un commentateur',
     mockLive: 'Parle en ce moment',
     mockNote: 'Cadrage solide, a cité le protocole de 2019 directement.',
     mockNext: 'A tenu le bloc pendant tout le caucus.',
@@ -977,17 +977,17 @@ const SB_COPY = {
     tuneHead: 'اضبط الأرقام كما تشاء',
     tuneWhere: 'الإعدادات ← النقاط',
     tune1: 'غيّر أي قيمة، أو عطّل مصدراً، أو أضف مصادر خاصة بك.',
-    tune2: 'أعد تسمية عوامل الجودة التي تقيّمها الرئاسة أو أضفها أو احذفها، واضبط سلّم التقييم.',
+    tune2: 'أعد تسمية عوامل الجودة التي يقيّمها المعلّقون أو أضفها أو احذفها، واضبط سلّم التقييم.',
     tune3: 'مزج الترتيب يحدّد مقدار تأثير تلك التقييمات في الرقم النهائي.',
     tune4: 'إخفاء النقاط عن المندوبين يُبقي ملخّصهم ويزيل لوحة الصدارة.',
-    blendInfo: 'الرقم النهائي هو مزيج من مجموع النقاط الموضوعي ودرجة الجودة من 0 إلى 100 المستمدة من تقييمات الرئاسة. عند 0% يكون الترتيب بالنقاط فقط، وعند 100% بالجودة فقط.',
+    blendInfo: 'الرقم النهائي هو مزيج من مجموع النقاط الموضوعي ودرجة الجودة من 0 إلى 100 المستمدة من تقييمات المعلّقين. عند 0% يكون الترتيب بالنقاط فقط، وعند 100% بالجودة فقط.',
     blendNow: (n: number) => n === 0
       ? 'القيمة الحالية 0% — تُسجَّل تقييمات الجودة لكنها لا تؤثر في الترتيب.'
       : `القيمة الحالية ${n}% — تشكّل تقييمات الجودة ${n}% من الرقم النهائي.`,
-    coHead: 'الرؤساء المشاركون يكتبون الملاحظات',
-    coBody: 'رئيس واحد يمسك المطرقة (منشئ اللجنة افتراضياً، ويمكن لأي رئيس المطالبة بها من الإعدادات ← الوصول). أما بقية الرؤساء على رمز الرئاسة نفسه فيعملون بوضع العرض فقط، ويتحوّل عمودهم الأوسط إلى لوحة الملاحظات أدناه.',
+    coHead: 'المعلّقون يكتبون الملاحظات',
+    coBody: 'رئيس واحد هو المشرف ويمسك المطرقة (منشئ اللجنة افتراضياً، ويمكن لأي رئيس أخذها من شارة المطرقة في أعلى يمين الجلسة). أما بقية الرؤساء على رمز الرئاسة نفسه فهم معلّقون، ويتحوّل عمودهم الأوسط إلى لوحة الملاحظات أدناه.',
     coBody2: 'يكتبون ملاحظة خاصة عن صاحب الكلمة ويقيّمونه وفق عوامل الجودة لديك. تظهر الملاحظات تحت ذلك الخطاب في لوحة النقاط وفي ملف CSV، وتغذّي التقييمات درجة الجودة.',
-    mockCap: 'ما يراه الرئيس المشارك',
+    mockCap: 'ما يراه المعلّق',
     mockLive: 'يتحدث الآن',
     mockNote: 'طرح قوي، واستشهد ببروتوكول 2019 مباشرة.',
     mockNext: 'حافظ على تماسك الكتلة طوال الحوار الحر.',
@@ -1097,7 +1097,7 @@ function ScoreboardTutorialCard({ committee, language, box }: {
           )}
         </div>
 
-        {/* ── Co-chair feedback + sneak peek ── */}
+        {/* ── Commenter feedback + sneak peek ── */}
         <div className="mt-5 pt-4" style={{ borderTop: '1px solid #DDD4C0' }}>
           <div style={H}>{c.coHead}</div>
           <p style={{ ...P, marginTop: 6 }}>{c.coBody}</p>
@@ -1123,7 +1123,7 @@ function ScoreboardTutorialCard({ committee, language, box }: {
 // A miniature, non-interactive replica of FeedbackLogPanel: the focused white
 // writing bubble (radius 22, amber focus ring, private-note textarea) with its 2×2
 // factor grid, above a collapsed capsule (height 54 → 38, radius 9999, #EDE7D8)
-// carrying the note the co-chair already wrote and the ✓ scored marker. Same tokens,
+// carrying the note the Commenter already wrote and the ✓ scored marker. Same tokens,
 // reduced scale — so it stays true if the real panel is restyled around these values.
 function FeedbackDockMock({
   caption, liveLabel, placeholder, note, nextNote,

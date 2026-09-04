@@ -270,8 +270,13 @@ export function buildActivityRow(committee: Committee, country: string) {
   };
 }
 
-/** Mean of each ENABLED factor across every rating a delegation actually received. */
-function foldFactors(
+/** Mean of each ENABLED factor across every rating a delegation actually received.
+ *
+ *  Exported so the chair's own scoreboard (`src/lib/sessionScoreboard.ts`) folds
+ *  factors the identical way rather than growing a second copy of this loop.
+ *  NOTE: it deliberately ignores `ScoringConfig.factorRatingsEnabled` — that flag
+ *  gates the chair's rating INPUT, never the display of ratings already given. */
+export function foldFactors(
   feedback: FeedbackEntry[],
   country: string,
   factors: RankingFactor[],

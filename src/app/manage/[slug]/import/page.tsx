@@ -161,6 +161,16 @@ type Tab = 'import' | 'imported';
 export default function ImportPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  /** The two stable primitives the loaders below key on. AuthProvider replaces
+   *  the session OBJECT on every auth event (token refresh, tab focus), so a
+   *  loader depending on `session` refetches on each of those; the token is a
+   *  string and only changes when it really changes — including the first time
+   *  it arrives, which is the transition an auth-guarded loader has to catch.
+   *  `conference` is likewise an object a background refresh can swap for an
+   *  equal-but-new one, so the id is what belongs in a dep array. The action
+   *  handlers below keep using `session`/`conference`; they run on a click. */
+  const accessToken = session?.access_token;
+  const conferenceId = conference?.id;
   const { confirm, modal: confirmModal } = useConfirmModal();
   const searchParams = useSearchParams();
 
@@ -174,6 +184,7 @@ export default function ImportPage() {
   const fixApplicationId = searchParams.get('fix');
 
   const [phase, setPhase] = useState<Phase>('upload');
+  const [acceptMode, setAcceptMode] = useState<'accepted' | 'submitted'>('accepted');
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -192,16 +203,16 @@ export default function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadUnclaimedCount = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conferenceId || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { count } = await supabase
       .from('applications')
       .select('id', { count: 'exact', head: true })
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .is('user_id', null)
       .not('invited_email', 'is', null);
     setUnclaimedCount(count ?? 0);
-  }, [conference?.id, session?.access_token]);
+  }, [conferenceId, accessToken]);
 
   useEffect(() => { loadUnclaimedCount(); }, [loadUnclaimedCount]);
 
@@ -209,12 +220,12 @@ export default function ImportPage() {
   // conference_allocations row, the state pre-amendment imports could leave
   // behind. Re-checked after every repair run so the banner clears itself.
   const loadOrphanAllocations = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conferenceId || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data: candidates } = await supabase
       .from('applications')
       .select('id, assigned_committee_id, assigned_country_code, assigned_country_name')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .is('user_id', null)
       .not('assigned_committee_id', 'is', null);
     const rows = (candidates ?? []) as OrphanAllocationRow[];
@@ -222,11 +233,11 @@ export default function ImportPage() {
     const { data: allocs } = await supabase
       .from('conference_allocations')
       .select('application_id')
-      .eq('conference_id', conference.id)
+      .eq('conference_id', conferenceId)
       .in('application_id', rows.map(r => r.id));
     const covered = new Set(((allocs ?? []) as { application_id: string | null }[]).map(a => a.application_id));
     setOrphanRows(rows.filter(r => !covered.has(r.id)));
-  }, [conference?.id, session?.access_token]);
+  }, [conferenceId, accessToken]);
 
   useEffect(() => { loadOrphanAllocations(); }, [loadOrphanAllocations]);
 
@@ -365,6 +376,8 @@ export default function ImportPage() {
     // 2. Insert applications. Re-imported people are UPDATES, not inserts —
     // they already have a row, so they are patched further down instead.
     const toCreate = importable.filter(r => r.mode === 'create');
+    // Re-imported people already have a row (patched further down) — the
+    // accept-gate choice only ever applies to genuinely new applications.
     const toUpdate = importable.filter(r => r.mode === 'update');
     const insertRows = toCreate.map(r => ({
       conference_id: conference.id,
@@ -376,10 +389,13 @@ export default function ImportPage() {
       // source of truth, never read is_independent for logic.
       is_independent: !r.resolved.societyName,
       is_head_delegate: r.resolved.role === 'head-delegate',
-      status: 'accepted',
-      // Imported rows land pre-accepted: the organiser running the import is
-      // the one who made that call.
-      decided_by: session.user.id, decided_at: new Date().toISOString(),
+      // Imported rows land pre-accepted by default: the organiser running the
+      // import is the one who made that call. "Normal flow" mode instead
+      // leaves them submitted, with no decided_by/decided_at, exactly like a
+      // fresh application awaiting review.
+      ...(acceptMode === 'submitted'
+        ? { status: 'submitted' }
+        : { status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }),
       payment_status: r.resolved.paymentStatus,
       self_paid: r.resolved.paymentStatus === 'paid',
       submitted_at: new Date().toISOString(),
@@ -467,6 +483,13 @@ export default function ImportPage() {
         results.push({ row: r, outcome: 'unchanged', note: r.reasons.join(' ') || null });
         continue;
       }
+      // "Normal flow" mode means a brand-new row must come out of the import
+      // still submitted, no matter what the spreadsheet named — allocating a
+      // committee/country is itself a decision, so it's skipped entirely here.
+      if (acceptMode === 'submitted' && r.mode === 'create') {
+        results.push({ row: r, outcome: 'imported', note: null });
+        continue;
+      }
       const appId = appIdByKey.get(`${r.resolved.email}|${r.resolved.role}`);
       if (!appId) {
         results.push({ row: r, outcome: 'skipped', note: 'Could not locate the created application.' });
@@ -539,7 +562,9 @@ export default function ImportPage() {
     if (importableCount === 0) return;
     const { confirmed } = await confirm({
       title: `Import ${importableCount} row${importableCount === 1 ? '' : 's'}?`,
-      body: 'This creates applications immediately (status: accepted). Rows marked ERROR will be skipped.',
+      body: acceptMode === 'submitted'
+        ? 'This creates applications immediately (status: submitted, for the organizer to accept in Applications). Rows marked ERROR will be skipped.'
+        : 'This creates applications immediately (status: accepted, or assigned when allocated). Rows marked ERROR will be skipped.',
       confirmLabel: 'Import',
     });
     if (!confirmed) return;
@@ -674,6 +699,12 @@ export default function ImportPage() {
         <p className="text-xs mb-4" style={{ color: '#2A5A3C', fontFamily: OUTFIT }}>
           Queued {lastInviteQueued} invite{lastInviteQueued === 1 ? '' : 's'}.
         </p>
+      )}
+
+      {/* Accept-gate choice, visible for as long as it still matters — up to
+          and including the preview, never once the import has actually run. */}
+      {(isLanding || phase === 'preview') && (
+        <AcceptModeChooser mode={acceptMode} onChange={setAcceptMode} count={phase === 'preview' ? importableCount : null} />
       )}
 
       {/* ── UPLOAD / PARSING ─────────────────────────────────────────────── */}
@@ -934,6 +965,58 @@ function ImportTabSwitcher({ active, onChange }: { active: Tab; onChange: (t: Ta
   );
 }
 
+// ── Accept-gate chooser ──────────────────────────────────────────────────────
+// Only newly created rows (toCreate) are governed by this choice — a
+// re-imported row (toUpdate) already has a status and this never touches it.
+
+function AcceptModeChooser({ mode, onChange, count }: {
+  mode: 'accepted' | 'submitted';
+  onChange: (m: 'accepted' | 'submitted') => void;
+  count: number | null;
+}) {
+  const options: { value: 'accepted' | 'submitted'; label: string; help: string }[] = [
+    { value: 'accepted', label: 'These people are already accepted', help: 'Imports new rows as accepted, or assigned when the spreadsheet gives them an allocation.' },
+    { value: 'submitted', label: 'Put them through the normal flow', help: 'Imports new rows as submitted, so the organizer accepts them in Applications like anyone else.' },
+  ];
+  const statusLine = mode === 'accepted'
+    ? (count === null
+        ? 'New rows will be imported as accepted, or assigned when the spreadsheet gives them an allocation.'
+        : `${count} ${count === 1 ? 'person' : 'people'} will be imported as accepted.`)
+    : (count === null
+        ? 'New rows will be imported as submitted, so you can accept them in Applications.'
+        : `${count} ${count === 1 ? 'person' : 'people'} will be imported as submitted, so you can accept them in Applications.`);
+  return (
+    <div className="mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {options.map(o => {
+          const selected = mode === o.value;
+          return (
+            <div
+              key={o.value}
+              onClick={() => onChange(o.value)}
+              role="radio"
+              aria-checked={selected}
+              tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(o.value); } }}
+              className="cursor-pointer rounded-xl px-4 py-3"
+              style={{
+                border: selected ? '1.5px solid #1B3828' : '1px solid #DDD4C0',
+                backgroundColor: selected ? 'rgba(27,56,40,0.06)' : NEU.base,
+                boxShadow: selected ? 'none' : NEU.inSm,
+                transition: 'border-color 200ms, background-color 200ms',
+              }}
+            >
+              <p className="text-sm font-bold" style={{ color: selected ? '#1B3828' : NEU.ink, fontFamily: OUTFIT }}>{o.label}</p>
+              <p className="text-xs mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.45 }}>{o.help}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs mt-2.5" style={{ color: '#6B5F52', fontFamily: OUTFIT }}>{statusLine}</p>
+    </div>
+  );
+}
+
 // ── Small pieces ─────────────────────────────────────────────────────────────
 
 function SummaryStat({ label, value, tone }: { label: string; value: number; tone: 'valid' | 'warning' | 'error' }) {
@@ -1074,7 +1157,7 @@ interface ImportedDelegateRow {
 
 const STATUS_LABEL: Record<string, string> = {
   accepted: 'Accepted', assigned: 'Assigned', rejected: 'Rejected',
-  'not-attending': 'Not attending', waitlisted: 'Waitlisted',
+  'not-attending': 'Not attending', waitlisted: 'Waitlisted', submitted: 'Submitted',
 };
 
 // Same rule as applicantImport.ts's EMAIL_PATTERN and Postgres
@@ -1097,9 +1180,14 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const autoFixedRef = useRef(false);
 
+  // accessToken, not the session object: the token is a string, so this only
+  // re-runs when auth first arrives or genuinely rotates, not on the churn
+  // AuthProvider produces on every auth event.
+  const accessToken = session?.access_token;
+
   const load = useCallback(async () => {
-    if (!session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('applications')
       .select('id, invited_name, invited_email, role, status, user_id')
@@ -1108,7 +1196,7 @@ function ImportedDelegatesTab({ conference, session, confirm, fixApplicationId }
       .order('user_id', { ascending: true, nullsFirst: true })
       .order('invited_name', { ascending: true });
     setRows((data ?? []) as ImportedDelegateRow[]);
-  }, [conference.id, session?.access_token]);
+  }, [conference.id, accessToken]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -187,6 +187,12 @@ interface IndependentsViewProps {
 
 export default function IndependentsView({ conference, showFlash }: IndependentsViewProps) {
   const { session } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus); the token is a string and
+   *  only changes when it really changes, so it is what loader deps key on.
+   *  The action handlers below keep using `session` — they need `session.user`
+   *  and they run on a click, not off a dependency array. */
+  const accessToken = session?.access_token;
   const [independents, setIndependents] = useState<PoolMember[]>([]);
   const [searchPool, setSearchPool] = useState<SearchApp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -198,12 +204,12 @@ export default function IndependentsView({ conference, showFlash }: Independents
   const loadSeqRef = useRef(0);
 
   const loadData = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++loadSeqRef.current;
     // silent: background refresh, keeps the card grid mounted (no spinner
     // wipe, scroll and open modals survive).
     if (!opts?.silent) setLoading(true);
-    const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(accessToken);
 
     const [indepRes, search] = await Promise.all([
       supabase
@@ -223,7 +229,13 @@ export default function IndependentsView({ conference, showFlash }: Independents
     setIndependents(list);
     setSearchPool(search);
     setLoading(false);
-  }, [conference, session?.access_token]);
+    // Keyed on the TOKEN, not the session object: with `[conference]` alone
+    // this callback is built once against whatever session existed when the
+    // conference resolved, and if auth had not landed the guard above returns
+    // early with nothing left to re-trigger the effect. The session object is
+    // the wrong dep — its identity changes on every auth event, which would
+    // refetch the whole pool on each token refresh.
+  }, [conference, accessToken]);
 
   useEffect(() => { loadData(); }, [loadData]);
 

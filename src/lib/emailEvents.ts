@@ -268,8 +268,9 @@ interface RecipientRow {
   society_id: string | null;
   payment_status: string | null;
   societies: { name: string } | null;
-  assigned_committee: { abbreviation: string | null; name: string } | null;
+  assigned_committee: { abbreviation: string | null; name: string; logo_url: string | null } | null;
   assigned_country_name: string | null;
+  assigned_country_code: string | null;
   profiles: {
     display_name: string; email: string | null;
     notify_email_applications: boolean | null; notify_email_payments: boolean | null; notify_email_documents: boolean | null;
@@ -291,6 +292,12 @@ interface ConferenceRow {
   logo_url: string | null;
   contact_email: string;
   email_theme: EmailTheme | null;
+  // Selected purely for the email footer's social row.
+  instagram_url: string | null;
+  facebook_url: string | null;
+  tiktok_url: string | null;
+  whatsapp_url: string | null;
+  website_url: string | null;
 }
 
 interface RoleFeeConfigRow {
@@ -358,7 +365,7 @@ export async function queueEventEmail(
   const [{ data: confData }, { data: recipientsData }, { data: roleConfigsData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme')
+      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -366,8 +373,9 @@ export async function queueEventEmail(
       .select(`
         id, role, society_id, payment_status,
         societies (name),
-        assigned_committee:conference_committees!assigned_committee_id (abbreviation, name),
+        assigned_committee:conference_committees!assigned_committee_id (abbreviation, name, logo_url),
         assigned_country_name,
+        assigned_country_code,
         profiles (display_name, email, notify_email_applications, notify_email_payments, notify_email_documents, notify_email_marketing),
         invited_email, invited_name
       `)
@@ -394,6 +402,12 @@ export async function queueEventEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
+    instagram_url: conference?.instagram_url ?? null,
+    facebook_url: conference?.facebook_url ?? null,
+    tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
+    website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
   const blocks = useDraft ? normalizeBlocks(template.body_blocks, template.body) : (fallback?.blocks ?? []);
@@ -420,7 +434,15 @@ export async function queueEventEmail(
       recipient_email: app.profiles?.email ?? app.invited_email ?? null,
       subject: resolveTokens(subjectSource, ctx),
       body: resolveTokens(flatBody, ctx),
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
+      body_html: renderEmailHtml({
+        blocks, conference: renderConf, ctx, variant: 'transactional',
+        // Per-recipient, so a `facts` row asking for 'country' or 'committee'
+        // draws THIS delegate's flag and THIS committee's emblem.
+        media: {
+          countryCode: app.assigned_country_code ?? null,
+          committeeEmblem: app.assigned_committee?.logo_url ?? null,
+        },
+      }),
       status: 'pending' as const,
       ...(opts?.sendAfter ? { send_after: opts.sendAfter } : {}),
     };
@@ -512,7 +534,7 @@ export async function queueChairInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -532,6 +554,12 @@ export async function queueChairInviteEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
+    instagram_url: conference?.instagram_url ?? null,
+    facebook_url: conference?.facebook_url ?? null,
+    tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
+    website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
 
@@ -554,7 +582,7 @@ export async function queueChairInviteEmail(
     recipient_email: invitedEmail,
     subject: resolveTokens(subjectSource, ctx),
     body: resolveTokens(flatBody, ctx),
-    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, chairInviteToken: token }),
+    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, chairInviteToken: token, variant: 'transactional' }),
     status: 'pending',
   });
   if (error) return;
@@ -594,7 +622,7 @@ export async function queueOrganizerInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -614,6 +642,12 @@ export async function queueOrganizerInviteEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
+    instagram_url: conference?.instagram_url ?? null,
+    facebook_url: conference?.facebook_url ?? null,
+    tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
+    website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
 
@@ -651,7 +685,7 @@ export async function queueOrganizerInviteEmail(
     recipient_email: invitedEmail,
     subject: resolveTokens(subjectSource, ctx),
     body: resolveTokens(flatBody, ctx),
-    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, organizerInviteToken: token }),
+    body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, organizerInviteToken: token, variant: 'transactional' }),
     status: 'pending',
   });
   if (error) return;
@@ -682,7 +716,7 @@ export async function queueImportJoinInviteEmails(
   const [{ data: confData }, { data: templateData }, { data: claimData }, { data: allocData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -715,6 +749,12 @@ export async function queueImportJoinInviteEmails(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
+    instagram_url: conference?.instagram_url ?? null,
+    facebook_url: conference?.facebook_url ?? null,
+    tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
+    website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
 
@@ -769,7 +809,7 @@ export async function queueImportJoinInviteEmails(
       recipient_email: r.invitedEmail,
       subject: resolveTokens(subjectSource, ctx),
       body: resolveTokens(flattenBlocksToPlainText(blocks, renderConf, { importClaimToken: token }), ctx),
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, importClaimToken: token }),
+      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, importClaimToken: token, variant: 'transactional' }),
       status: 'pending' as const,
     }];
   });
@@ -841,7 +881,7 @@ export async function queueRequestReceivedEmail(
   const [{ data: confData }, { data: templateData }, { data: organizerData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme')
+      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -867,6 +907,12 @@ export async function queueRequestReceivedEmail(
     banner_url: conference?.banner_url ?? null,
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
+    start_date: conference?.start_date ?? null,
+    instagram_url: conference?.instagram_url ?? null,
+    facebook_url: conference?.facebook_url ?? null,
+    tiktok_url: conference?.tiktok_url ?? null,
+    whatsapp_url: conference?.whatsapp_url ?? null,
+    website_url: conference?.website_url ?? null,
     email_theme: conference?.email_theme ?? null,
   };
 
@@ -904,7 +950,7 @@ export async function queueRequestReceivedEmail(
       recipient_email: email,
       subject: resolveTokens(subjectSource, ctx),
       body: resolveTokens(flatBody, ctx),
-      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx }),
+      body_html: renderEmailHtml({ blocks, conference: renderConf, ctx, variant: 'transactional' }),
       status: 'pending' as const,
     }));
 
@@ -976,6 +1022,43 @@ export async function queueParticipantEventEmail(
     return await res.json() as QueueEventEmailResult;
   } catch (err) {
     console.error(`[queueParticipantEventEmail] "${eventKey}" request threw:`, err);
+    return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
+  }
+}
+
+/**
+ * The allocation announcement, raised by a DELEGATION LEADER who has just
+ * seated one of their own block members.
+ *
+ * Separate from queueParticipantEventEmail because it names a SEAT, not
+ * recipients: the server reads the occupant out of the allocation row itself,
+ * so a leader can only ever email whoever is actually sitting in a seat their
+ * delegation owns. See authorizeAllocationAssigned in the route.
+ *
+ * Safe to fire without awaiting — every failure path returns rather than
+ * throws, so a seat assignment is never blocked by the email.
+ */
+export async function queueLeaderAllocationEmail(
+  accessToken: string,
+  conferenceId: string,
+  allocationId: string
+): Promise<QueueEventEmailResult> {
+  const eventKey = 'allocation_assigned';
+  const eventLabel = getEventLabel(eventKey);
+  try {
+    const res = await fetch('/api/emails/queue-participant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ conferenceId, eventKey, allocationId }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      console.error(`[queueLeaderAllocationEmail] rejected (${res.status}):`, body?.error);
+      return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
+    }
+    return await res.json() as QueueEventEmailResult;
+  } catch (err) {
+    console.error('[queueLeaderAllocationEmail] request threw:', err);
     return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
   }
 }

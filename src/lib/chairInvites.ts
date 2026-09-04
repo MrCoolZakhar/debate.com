@@ -89,3 +89,88 @@ export async function sendChairInvite(
 
   return { ok: true, invitedName: result.invited_name };
 }
+
+// ── Pending invites, the organiser-side view ─────────────────────────────────
+//
+// A chair who has been invited but has not yet accepted exists only as a
+// `conference_chair_invites` row with status 'pending' — they are NOT in
+// `conference_committees.chair_user_ids` and NOT in the `display_chairs`
+// the DB trigger derives from it. That is deliberate: `display_chairs` is what
+// the PUBLIC conference page prints, and an invitation is not a public fact.
+// Every ORGANISER surface that shows a dais should show these alongside the
+// seated chairs, marked pending; no public surface ever should.
+
+export interface PendingChairInvite {
+  id: string;
+  committee_id: string;
+  email: string;
+  invited_name: string | null;
+  /** Joined profile, present only when the invitee already has an account. */
+  profiles: { display_name: string; avatar_url: string | null } | null;
+}
+
+/** The name to show for a pending invitee: their account name if they have
+ *  one, else the name the organiser typed, else the email. */
+export function pendingInviteName(invite: PendingChairInvite): string {
+  return invite.profiles?.display_name ?? invite.invited_name ?? invite.email;
+}
+
+/** Every still-pending chair invite across one conference, for grouping by
+ *  committee_id at the call site. */
+export async function fetchPendingChairInvites(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string
+): Promise<PendingChairInvite[]> {
+  const { data } = await supabase
+    .from('conference_chair_invites')
+    .select('id, committee_id, email, invited_name, profiles (display_name, avatar_url)')
+    .eq('conference_id', conferenceId)
+    .eq('status', 'pending');
+  return (data ?? []) as unknown as PendingChairInvite[];
+}
+
+/**
+ * Resend a pending invite. This is deliberately the SAME call as the first
+ * send: `create_chair_invite` reuses an existing pending row for the same
+ * person on the same committee and hands back its original token, so the
+ * invitee's accept link never changes underneath them — only a fresh
+ * email_outbox row is queued. No new invite row, no second link to confuse
+ * them, and no role-conflict prompt (that decision was made when the invite
+ * was first sent).
+ */
+export async function resendChairInvite(
+  supabase: ReturnType<typeof getAuthedClient>,
+  args: { conferenceId: string; committeeId: string; committeeName: string; email: string }
+): Promise<SendChairInviteResult> {
+  return sendChairInvite(supabase, args);
+}
+
+/**
+ * Withdraw a pending invite. 'revoked', never a delete — the row is the
+ * audit trail of who was asked, and the accept link must stop working.
+ *
+ * `.select('id')` is load-bearing, NOT decoration. PostgREST reports an UPDATE
+ * that matched ZERO rows as a success with no error — so without asking for the
+ * updated row back, an RLS-rejected write (organizer access pulled, a stale
+ * token) returns true, both call sites keep their optimistic removal, and the
+ * invite silently reappears on the next load. Same rule the resume latch is
+ * held to; see AGENTS.md → SUSPEND DEBATE on `startResumeRollCall`.
+ *
+ * The `status = 'pending'` guard closes the other end of that race: if the
+ * invitee ACCEPTED between the organiser's page load and their click, they are
+ * a seated chair now, not a pending invite. Without the guard this would stamp
+ * 'revoked' over an accepted row; with it, no row matches, the caller rolls its
+ * optimistic removal back and says so.
+ */
+export async function revokeChairInvite(
+  supabase: ReturnType<typeof getAuthedClient>,
+  inviteId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('conference_chair_invites')
+    .update({ status: 'revoked' })
+    .eq('id', inviteId)
+    .eq('status', 'pending')
+    .select('id');
+  return !error && (data ?? []).length > 0;
+}

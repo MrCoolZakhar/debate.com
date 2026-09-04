@@ -6,11 +6,11 @@
 // this only edits the conference-level config columns. Review of submitted
 // requests lives alongside this in AidRequestsSection, same tab.
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { PillToggle } from '@/app/account/accountUi';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
@@ -57,6 +57,14 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
   // whether or not aid is currently switched on.
   const [expanded, setExpanded] = useState(false);
 
+  // Debounced, serialized write path for `blocks` — see handleBlocksChange /
+  // persistBlocks below. Mirrors the pattern in settings.tsx's block editor,
+  // minus the per-role Map since this editor only ever edits one form.
+  const blocksPendingRef = useRef<FormBlock[] | null>(null);
+  const blocksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blocksChainRef = useRef<Promise<void>>(Promise.resolve());
+  const flushBlocksRef = useRef<() => void>(() => {});
+
   async function saveAidConfig(updates: Partial<{ financial_aid_enabled: boolean; aid_intro: string | null; aid_questions: FormBlock[] }>): Promise<boolean> {
     if (!session) {
       setError('Your session has expired, please refresh and sign in again.');
@@ -98,11 +106,82 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
     }
   }
 
+  /** Patch local state at once so typing stays responsive, then debounce the
+   *  write. Two async writes landing out of order would silently overwrite a
+   *  later edit with older data, so writes are serialized in persistBlocks
+   *  rather than fired independently here. */
   function handleBlocksChange(next: FormBlock[]) {
-    const previous = blocks;
     setBlocks(next);
-    void saveAidConfig({ aid_questions: next }).then(ok => { if (!ok) setBlocks(previous); });
+    blocksPendingRef.current = next;
+    if (blocksTimerRef.current) clearTimeout(blocksTimerRef.current);
+    blocksTimerRef.current = setTimeout(() => {
+      blocksTimerRef.current = null;
+      persistBlocks();
+    }, 400);
   }
+
+  /** Writes the pending blocks, appended to the serial chain so two writes
+   *  can never be in flight at once. On failure we reload rather than roll
+   *  back: local state has moved on by several keystrokes since the failed
+   *  write was queued, so any snapshot we could restore is already stale. */
+  function persistBlocks() {
+    const pending = blocksPendingRef.current;
+    if (!pending) return;
+    blocksPendingRef.current = null;
+    blocksChainRef.current = blocksChainRef.current.then(async () => {
+      if (!session) {
+        setError('Your session has expired, please refresh and sign in again.');
+        return;
+      }
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) {
+        setError('Your session has expired, please refresh and sign in again.');
+        return;
+      }
+      const { data, error: writeError } = await supabase
+        .from('conferences')
+        .update({ aid_questions: pending })
+        .eq('id', conferenceId)
+        .select('id');
+      if (writeError || !data || data.length !== 1) {
+        setError(saveFailMessage(writeError));
+        void (async () => {
+          const fresh = await getFreshAuthedClient();
+          if (!fresh) return;
+          const { data: row } = await fresh
+            .from('conferences')
+            .select('aid_questions')
+            .eq('id', conferenceId)
+            .maybeSingle();
+          if (row) setBlocks(normalizeBlocks((row as { aid_questions: unknown }).aid_questions ?? []));
+        })();
+        return;
+      }
+      setError('');
+      await refreshConferenceQuiet();
+    });
+  }
+
+  /** Cancel the debounce and write now. Called before anything can read
+   *  stale data: collapsing the editor, unmounting. */
+  function flushBlocks() {
+    if (blocksTimerRef.current) {
+      clearTimeout(blocksTimerRef.current);
+      blocksTimerRef.current = null;
+    }
+    persistBlocks();
+  }
+
+  flushBlocksRef.current = flushBlocks;
+
+  useEffect(() => {
+    return () => { flushBlocksRef.current(); };
+  }, []);
+
+  // Leaving the editor. Its panel is about to collapse, so write now.
+  useEffect(() => {
+    if (!expanded) flushBlocksRef.current();
+  }, [expanded]);
 
   return (
     <NeuCard style={{ padding: 24, marginBottom: 20 }}>

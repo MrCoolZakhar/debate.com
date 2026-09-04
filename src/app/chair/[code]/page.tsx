@@ -691,7 +691,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
     return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; } };
   }, [unmodAnchor, unmodBase]);
 
-  // Keep the button in step with the persisted anchor, so a co-chair pressing play/pause (or
+  // Keep the button in step with the persisted anchor, so a Commenter pressing play/pause (or
   // this chair reloading) is reflected here rather than leaving a PAUSE label over a stopped
   // clock.
   useEffect(() => { setRunning(!isViewOnly && !!unmodAnchor); }, [unmodAnchor, isViewOnly]);
@@ -783,7 +783,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
       <div className="w-full max-w-sm h-2 bg-[#DDD4C0] rounded-full overflow-hidden mb-8">
         <div className="h-full bg-[#B6871F] rounded-full transition-all" style={{ width: `${caucus.totalTime > 0 ? (liveTotal / caucus.totalTime) * 100 : 0}%` }} />
       </div>
-      {/* Consultation of the Whole — live open-floor delegation board (tap to set speaker; co-chairs too) */}
+      {/* Consultation of the Whole — live open-floor delegation board (tap to set speaker; Commenters too) */}
       {caucus.isConsultation && (
         <div className="w-full max-w-xl mb-6">
           <CowDelegationBoard committee={committee} onTap={handleCowTap} />
@@ -1137,7 +1137,7 @@ function ModeratedCaucusMain({
               />
             )}
             <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
-            {/* A view-only co-chair cannot call a speaker, so neither the instruction nor the
+            {/* A Commenter cannot call a speaker, so neither the instruction nor the
                 (previously disabled-looking but still rendered) button belong on their screen. */}
             {!isViewOnly && <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>}
             {!sessionEnded && !isViewOnly && (
@@ -1352,6 +1352,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [speakerTimeLimitInput, setSpeakerTimeLimitInput] = useState<string>('90');
   const [showSettings, setShowSettings] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
+  // Bumped by every realtime `feedback` event. Passed to the comment dock and the
+  // scoreboard as a refetch key so both stay live while open.
+  const [feedbackVersion, setFeedbackVersion] = useState(0);
+  // The Moderator's opt-in view of the comment dock. A Commenter always has it; the
+  // Moderator is running the room, so it must not permanently eat the GSL's height.
+  const [showNotes, setShowNotes] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Resume-from-suspend UI state. `resumeBusy` also double-taps the button, so one chair
@@ -1587,13 +1593,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             return;
           }
 
-          // The head chair owns current_speaker (writes it on start/pause/next) — it must
+          // Chair notes + factor ratings, also outside the debounce. This device may well
+          // have written the row, but `feedback` is not optimistic speaker/timer/caucus
+          // state, so RULE 4 does not apply and swallowing the echo would only make a
+          // second chair's note invisible until a remount. We bump a counter rather than
+          // refetch here: the two readers (the comment dock and the scoreboard) each own
+          // their own query and neither is always mounted, so a fetch here would usually
+          // be thrown away.
+          if (table === 'feedback') {
+            setFeedbackVersion((v) => v + 1);
+            return;
+          }
+
+          // The Moderator owns current_speaker (writes it on start/pause/next) — it must
           // ignore its own echoes. But co-chairs (view-only) don't own it, so they DO need
           // these events to show the current speaker promptly. Patch with a lightweight
           // single-row fetch instead of the full committee refetch.
           if (table === 'current_speaker') {
             if (!isViewOnlyRef.current) return;
-            // Two rapid Next clicks by the head chair race two of these fetches on this
+            // Two rapid Next clicks by the Moderator race two of these fetches on this
             // device; ticket them so an older row can never land last (same seq as the
             // committee refetches — any newer fetch supersedes this one).
             const seq = ++fetchSeq.current;
@@ -1640,15 +1658,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           }
 
           // The debounce protects the ACTING chair's optimistic state from its own realtime
-          // echo. A view-only co-chair owns no session state and writes none, so it must never
+          // echo. A Commenter owns no session state and writes none, so it must never
           // debounce: doing so silently drops phase/caucus changes it can only learn remotely
-          // (e.g. the head chair ending a caucus), leaving the co-chair — and the feedback dock
+          // (e.g. the Moderator ending a caucus), leaving the Commenter — and the feedback dock
           // it renders — stuck on a caucus the committee has already left.
           const withinDebounce = !isViewOnlyRef.current && Date.now() - localUpdateTime.current < 3000;
 
           // Within debounce: speakers_list is skipped outright — the chair just wrote it and
           // its optimistic state is truth (RULE 4). `delegates` is NOT skipped: delegates and
-          // co-chairs write that table too (roster membership and status), and it feeds the
+          // Commenters write that table too (roster membership and status), and it feeds the
           // present count, the quorum gate and the majority pie — dropping those events leaves
           // this device with a silently wrong count and no way back from its own traffic.
           // Instead the refetch is ticketed (an older snapshot resolving last is discarded) and
@@ -1676,7 +1694,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               // The gavel arrives as exactly ONE `committees` event and is never re-delivered.
               // Dropping it inside the debounce meant that if the acting chair had made any
               // structural write in the preceding 3s, the handover was silently discarded and
-              // this device kept acting as head chair forever. Neither field is optimistic
+              // this device kept acting as Moderator forever. Neither field is optimistic
               // speaker/timer/caucus state, so merging them does not weaken RULE 4.
               let next = {
                 ...prev,
@@ -1700,7 +1718,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             return;
           }
 
-          // Outside debounce: full update — another actor (delegate, co-chair) changed something.
+          // Outside debounce: full update — another actor (delegate, Commenter) changed something.
           const seq = ++fetchSeq.current;
           const updated = await getCommitteeByCode(code);
           if (!updated || seq !== fetchSeq.current) return;   // a newer refetch already applied
@@ -1712,9 +1730,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             setSessionEnded(false);
             setSessionSuspended(false);
           }
-          // A foreign event (delegate GSL request, co-chair write) must never disturb the
+          // A foreign event (delegate GSL request, Commenter write) must never disturb the
           // live speaker/timer/caucus state owned by the running chair. Merge non-timer fields
-          // and preserve the live ones while the timer is running. A view-only co-chair owns
+          // and preserve the live ones while the timer is running. A Commenter owns
           // none of this — pinning phase/caucus there would freeze it on a stale caucus — so
           // it always takes the fresh row.
           if (timerRunningRef.current && !isViewOnlyRef.current) {
@@ -1791,14 +1809,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => clearInterval(id);
   }, [headChairName, myChairName, onlineChairs]);
 
-  // Head chair (the gavel) is a persisted, claim-at-will setting — derive view-only status
+  // Moderator (the gavel) is a persisted, claim-at-will setting — derive view-only status
   // from it, never from presence join-order. Unset → the committee creator (chairNames[0])
   // holds it. Any chair can claim it (Settings or at join), flipping the previous head to
   // view-only via the realtime committees refetch.
   // The role flip is detected HERE, synchronously, in the same pass that computes it —
   // not by diffing the isViewOnly state in a later effect. isViewOnly starts false and only
   // settles once the committee loads, so a state-diff would read that initial settle as a
-  // handover and make every already-view-only co-chair refetch on mount. roleRef records the
+  // handover and make every already-Commenter refetch on mount. roleRef records the
   // baseline the first time a loaded committee is available; only real changes after that
   // raise a flip.
   const roleRef = useRef<boolean | null>(null);
@@ -1820,7 +1838,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // holding on to as the acting chair. Without this the demoted chair's chrome went
   // view-only while its session state froze: the local timer kept ticking, the debounce
   // stayed armed, and the subscription's timerRunning pin kept re-applying the stale
-  // phase/caucus/currentSpeaker — the co-chair watched a session that had moved on.
+  // phase/caucus/currentSpeaker — the Commenter watched a session that had moved on.
   // Symmetrically, the promoted chair must pick up the RUNNING timer, not a dead one.
   useEffect(() => {
     if (!roleFlip) return;
@@ -1840,7 +1858,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const newHead = committee?.dbHeadChair || committee?.chairNames?.[0] || '';
     setGavelToast({
       tone: lost ? 'lost' : 'gained',
-      text: lost ? `${newHead || 'Another chair'} took the gavel. You're now co-chairing.` : 'You have the gavel.',
+      // Routed through translations: this fires at the exact moment control changes
+      // hands, so it is the worst possible place to fall back to English.
+      text: lost
+        ? t('gavel_toast_lost', { name: newHead || t('gavel_another_chair') })
+        : t('gavel_toast_gained'),
     });
 
     // ONE clean resync, then recompute the timer from current_speaker.started_at exactly
@@ -1987,7 +2009,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // was asleep past the deadline ends the caucus on wake instead of sitting on a clock
   // that stopped — and it fires exactly once (expiredRef), not once per tick.
   //
-  // Only the acting (head) chair runs this. A view-only co-chair must not: it would write
+  // Only the acting (head) chair runs this. A Commenter must not: it would write
   // the caucus/phase it does not own, and arming the debounce would blind it to the head
   // chair's caucus-end broadcast.
   const caucusExpiredRef = useRef(false);
@@ -2394,7 +2416,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }
 
     // Anything that left the pending list was approved or denied elsewhere — in
-    // MotionsModal on this device, in the banner, or by a co-chair over realtime.
+    // MotionsModal on this device, in the banner, or by a Commenter over realtime.
     // Pull its card immediately so the stack cannot offer a dead action.
     for (const key of Array.from(raisedGslKeysRef.current)) {
       if (liveKeys.has(key)) continue;
@@ -2466,7 +2488,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const runBroadcastEffect = (b: SessionBroadcast) => {
     if (b.kind !== 'actionable' || !b.action) return;
     if (firedBroadcastsRef.current.has(b.id)) return;     // this device, already done
-    if (isViewOnlyRef.current) return;                    // a co-chair only watches
+    if (isViewOnlyRef.current) return;                    // a Commenter only watches
     if (!committee) return;
     // Expired between arming and firing — the organiser's window has closed.
     if (b.expiresAt && new Date(b.expiresAt).getTime() <= Date.now()) return;
@@ -3081,7 +3103,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const delegate = committee.delegates.find((d) => d.id === delegateId);
     if (!delegate) return;
     /* Never seat the same delegation twice. Approve was an unconditional append,
-       so a double-click, two co-chairs acting on the same card, or an approve
+       so a double-click, two Commenters acting on the same card, or an approve
        racing a chair who had already added them by hand put one delegation on
        the GSL more than once — and RULE 2 (currentSpeaker is popped OFF the
        list) assumes each delegateId appears at most once, so the duplicate
@@ -3222,7 +3244,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           className="text-xs font-mono bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] px-2.5 py-1 rounded-lg transition-colors shrink-0 gv-lift">
           {copied ? '✓' : committee.code}
         </button>
-        <button onClick={() => setShowScoreboard(true)} title="Scoreboard"
+        {/* Notes dock. A Commenter gets it unconditionally (it IS their role); the
+            Moderator opts in, because until now the chair actually running the committee
+            had no way to leave a note at all — which is the likeliest reason no comment
+            has ever been written in this product. */}
+        {!isViewOnly && (
+          <button onClick={() => setShowNotes((v) => !v)} title={showNotes ? t('chair_notes_close') : t('chair_notes_open')}
+            className="transition-colors shrink-0"
+            style={{ lineHeight: 0, color: showNotes ? '#1B3828' : '#9A8A78' }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </button>
+        )}
+        <button onClick={() => setShowScoreboard(true)} title={t('chair_hdr_scoreboard')}
           className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
           style={{ lineHeight: 0 }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3232,7 +3267,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
           </svg>
         </button>
-        <button data-tutorial="tab-settings" onClick={() => setShowSettings(true)}
+        <button data-tutorial="tab-settings" onClick={() => setShowSettings(true)} title={t('chair_hdr_settings')}
           className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
           style={{ lineHeight: 0 }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3862,17 +3897,29 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )}
                 </>
               )}
-              {/* Co-chair live feedback feed — docked under the timer, beside (never over) the roll-call sidebar */}
+              {/* Live comment dock — docked under the timer, beside (never over) the roll-call sidebar.
+                  Always on for a Commenter; opt-in for the Moderator via the header toggle. */}
               {/* currentCountry uses liveCaucus, NOT committee.caucus: a leftover caucus JSONB
                   (suspend/end-debate never nulls it, and the two writes that end a caucus land as
                   separate realtime rows) would otherwise name the old caucus speaker as the one
                   holding the floor while the committee is already back on the GSL. */}
-              {isViewOnly && (
-                <FeedbackLogPanel
-                  committee={committee}
-                  chairName={myChairName || committee.chairNames[0] || 'Chair'}
-                  currentCountry={liveCaucus(committee)?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
-                />
+              {(isViewOnly || showNotes) && (
+                // The dock's own root is `flex-1 min-h-0`, which is right for a Commenter:
+                // their <main> holds nothing else that needs the height. The Moderator's
+                // does — timer, speaker controls, add-speaker — so their copy is capped
+                // rather than allowed to take half the column. Without this the toggle
+                // would squash the controls the Moderator is actually there to use.
+                <div
+                  className="flex flex-col min-h-0"
+                  style={isViewOnly ? { flex: '1 1 0' } : { flex: '0 1 auto', maxHeight: '38%' }}
+                >
+                  <FeedbackLogPanel
+                    committee={committee}
+                    chairName={myChairName || committee.chairNames[0] || 'Chair'}
+                    currentCountry={liveCaucus(committee)?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
+                    feedbackVersion={feedbackVersion}
+                  />
+                </div>
               )}
             </main>
           </>
@@ -3911,6 +3958,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <ScoreboardPanel
           committee={committee}
           onClose={() => setShowScoreboard(false)}
+          feedbackVersion={feedbackVersion}
+          isViewOnly={isViewOnly}
         />
       )}
       {/* EXTRA TIME OVERLAY — fixed position, same anchor as RTR overlay */}

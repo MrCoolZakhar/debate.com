@@ -1,11 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, X, Copy, Check, Building2, CalendarClock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings } from 'lucide-react';
+import { Plus, X, Copy, Check, Building2, CalendarClock, Clock, Trash2, ArrowDown, ArrowUp, ArrowUpDown, Send, LayoutGrid, LayoutList, Settings, UserRound } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useAuth } from '@/components/AuthProvider';
-import { sendChairInvite, findChairInviteRoleConflict } from '@/lib/chairInvites';
+import {
+  sendChairInvite,
+  findChairInviteRoleConflict,
+  fetchPendingChairInvites,
+  resendChairInvite,
+  revokeChairInvite,
+  pendingInviteName,
+  type PendingChairInvite,
+} from '@/lib/chairInvites';
 import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/emailEvents';
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
@@ -372,65 +380,169 @@ function CompactSendButton({ releasedAt, busy, onSend }: {
   );
 }
 
-// ── The dais, as a stack ─────────────────────────────────────────────────────
+// ── The dais, as a row of faces ──────────────────────────────────────────────
 //
-// WHAT MOVED BEHIND A CLICK, AND WHY.
+// WHAT THIS REPLACED, AND WHY.
 //
-// The card used to print the dais in full: a "DAIS" eyebrow, then every chair
-// as a 44px avatar with their name under it, wrapping, plus a dashed ADD CHAIR
-// tile of the same size — about 90px of card for a fact most readers only need
-// to recognise ("is this one staffed, and is it the pair I think it is?").
-// Removing a chair was a hover-only X on the avatar, which does not exist on a
-// touch device at all.
+// The dais used to collapse to an overlapping stack of faces plus a count
+// ("2 CHAIRS"), with every name, the remove control and Add chair hidden
+// behind a click. That made the card shorter, but it also made the one fact an
+// organiser scans a committee grid FOR — who is chairing this, and is anyone
+// still only invited — the one fact the card would not say.
 //
-// It is now an overlapping stack of 28px faces plus a count. The stack is one
-// button; opening it gives the full list — full names, a real Remove control
-// per chair, and Add chair — so nothing was dropped and the one affordance
-// that was mouse-only became reachable.
+// It is now the faces side by side, each with its name beneath, pending
+// invitees among them, and a "+" circle to add another. Per-face actions
+// (remove a chair; resend or withdraw an invite) live in a small popover the
+// face opens, which is also how the old hover-only X became reachable on a
+// touch device.
 //
-// The panel is portaled at fixed viewport coordinates and flips upward near the
-// bottom edge, per the house rule on popovers never being clipped.
-function DaisStack({ chairs, chairIds, linkable, onAdd, onRemove }: {
-  chairs: { name: string; avatar_url: string | null }[];
-  chairIds: string[];
-  /** display_chairs[i] ↔ chair_user_ids[i] only when the lengths agree — the
-   *  same guard the rest of this file and ConferenceDetailClient apply. */
-  linkable: boolean;
+// The popover is portaled at fixed viewport coordinates and flips upward near
+// the bottom edge, per the house rule on popovers never being clipped.
+
+// A dais entry as the row renders it: a seated chair, or an invitation nobody
+// has accepted yet. Pending entries are ORGANISER-ONLY — they exist as
+// conference_chair_invites rows and never reach display_chairs, which is what
+// the public conference page prints.
+type DaisMember =
+  | { kind: 'chair'; key: string; name: string; avatarUrl: string | null; userId: string | null; index: number }
+  | { kind: 'invite'; key: string; name: string; avatarUrl: string | null; invite: PendingChairInvite };
+
+/** Merges the seated dais and this committee's pending invites into one
+ *  ordered row. `linkable` is the usual index-alignment guard: display_chairs
+ *  and chair_user_ids are separate arrays correlated only by position. */
+function buildDaisMembers(
+  chairs: DisplayChair[],
+  chairIds: string[],
+  linkable: boolean,
+  invites: PendingChairInvite[],
+): DaisMember[] {
+  const seated: DaisMember[] = chairs.map((ch, i) => ({
+    kind: 'chair',
+    key: `chair-${i}-${ch.name}`,
+    name: ch.name,
+    avatarUrl: ch.avatar_url,
+    userId: linkable ? (chairIds[i] ?? null) : null,
+    index: i,
+  }));
+  const pending: DaisMember[] = invites.map(inv => ({
+    kind: 'invite',
+    key: `invite-${inv.id}`,
+    name: pendingInviteName(inv),
+    avatarUrl: inv.profiles?.avatar_url ?? null,
+    invite: inv,
+  }));
+  return [...seated, ...pending];
+}
+
+// One face. A pending invitee wears a dashed gold ring, a clock badge and a
+// gold name, so "invited but not here yet" is readable without opening
+// anything.
+function DaisAvatar({ member, size }: { member: DaisMember; size: number }) {
+  const pending = member.kind === 'invite';
+  const inner = member.avatarUrl ? (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={member.avatarUrl}
+      alt=""
+      style={{
+        width: size, height: size, borderRadius: 9999, objectFit: 'cover',
+        backgroundColor: '#EDE7D8', display: 'block',
+        // Pure black at 10%, never a tinted neutral — a tinted outline picks
+        // up the ivory behind it and reads as dirt on the avatar's edge.
+        outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1,
+        opacity: pending ? 0.62 : 1,
+      }}
+    />
+  ) : (
+    <span
+      className="flex items-center justify-center"
+      style={{
+        width: size, height: size, borderRadius: 9999,
+        backgroundColor: pending ? 'rgba(27,56,40,0.10)' : '#1B3828',
+        color: pending ? '#7A5A10' : '#EED98A',
+        fontSize: size * 0.38, fontWeight: 700, fontFamily: OUTFIT,
+      }}
+    >
+      {member.name.charAt(0).toUpperCase()}
+    </span>
+  );
+  return (
+    <span className="relative inline-block" style={{ lineHeight: 0 }}>
+      {inner}
+      {pending && (
+        <>
+          <span
+            aria-hidden
+            className="absolute inset-0 pointer-events-none"
+            style={{ borderRadius: 9999, border: '1.5px dashed #B6871F' }}
+          />
+          <span
+            aria-hidden
+            className="absolute flex items-center justify-center"
+            style={{
+              right: -3, bottom: -3, width: 13, height: 13, borderRadius: 9999,
+              backgroundColor: '#7A5A10', color: '#FAF8F3',
+              boxShadow: '0 0 0 1.5px #F0EBDD',
+            }}
+          >
+            <Clock size={8} strokeWidth={3} />
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
+interface DaisRowProps {
+  members: DaisMember[];
+  /** Face diameter. 34 on the card (names beneath), 30 in the list row. */
+  size: number;
+  showNames: boolean;
   onAdd: () => void;
-  onRemove: (index: number, name: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement | null>(null);
+  onRemoveChair: (index: number, name: string) => void;
+  onResendInvite: (invite: PendingChairInvite) => void;
+  onRevokeInvite: (invite: PendingChairInvite) => void;
+}
+
+function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvite, onRevokeInvite }: DaisRowProps) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const popRef = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  // The measured position carries the key it was measured for, so a stale
+  // position from the previously open face can never paint under the new one
+  // for a frame (and so closing needs no setState of its own inside an effect).
+  const [pos, setPos] = useState<{ key: string; top: number; left: number } | null>(null);
+
+  const open = members.find(m => m.key === openKey) ?? null;
+  const placed = pos && pos.key === openKey ? pos : null;
 
   const place = useCallback(() => {
-    const b = btnRef.current;
+    if (!openKey) return;
+    const b = btnRefs.current[openKey];
     if (!b) return;
     const r = b.getBoundingClientRect();
-    const W = 250;
-    const wanted = Math.min(340, 84 + chairs.length * 46);
-    const below = window.innerHeight - r.bottom - 12;
-    const above = r.top - 12;
-    const up = below < wanted && above > below;
-    const maxHeight = Math.max(120, Math.min(wanted, up ? above : below));
+    const W = 216;
+    // Height of the tallest popover we render (header + two action rows).
+    const H = 152;
+    const below = window.innerHeight - r.bottom - 10;
+    const up = below < H && r.top - 10 > below;
     setPos({
-      top: up ? Math.max(8, r.top - 8 - maxHeight) : r.bottom + 8,
+      key: openKey,
+      top: up ? Math.max(8, r.top - 8 - H) : r.bottom + 8,
       left: Math.max(8, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 8)),
-      maxHeight,
     });
-  }, [chairs.length]);
+  }, [openKey]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!openKey) return;
     place();
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
-      setOpen(false);
+      if (btnRefs.current[openKey]?.contains(t) || popRef.current?.contains(t)) return;
+      setOpenKey(null);
     };
-    const onScroll = () => setOpen(false);
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onScroll = () => setOpenKey(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenKey(null); };
     document.addEventListener('mousedown', onDoc);
     window.addEventListener('resize', place);
     window.addEventListener('scroll', onScroll, true);
@@ -441,147 +553,196 @@ function DaisStack({ chairs, chairIds, linkable, onAdd, onRemove }: {
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [open, place]);
+  }, [openKey, place]);
 
-  const face = (ch: { name: string; avatar_url: string | null }, size: number) =>
-    ch.avatar_url ? (
-      /* eslint-disable-next-line @next/next/no-img-element */
-      <img
-        src={ch.avatar_url}
-        alt=""
-        style={{
-          width: size, height: size, borderRadius: 9999, objectFit: 'cover',
-          backgroundColor: '#EDE7D8', display: 'block',
-          // Pure black at 10%, never a tinted neutral — a tinted outline picks
-          // up the ivory behind it and reads as dirt on the avatar's edge.
-          outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1,
-        }}
-      />
-    ) : (
-      <span
-        className="flex items-center justify-center"
-        style={{
-          width: size, height: size, borderRadius: 9999,
-          backgroundColor: '#1B3828', color: '#EED98A',
-          fontSize: size * 0.38, fontWeight: 700, fontFamily: OUTFIT,
-        }}
-      >
-        {ch.name.charAt(0)}
-      </span>
-    );
+  // SLOT WIDTH IS LOAD-BEARING. The narrowest card this grid produces is 242px
+  // (five across at 1440), so 214px of content. Three chairs plus the "+" must
+  // fit on ONE line there — measured, they need 3×48 + 40 + 3×4 of gap = 196 —
+  // because a wrapped second row costs the card another ~68px and the grid is
+  // items-stretch, so one wrapping card drags its whole row taller. Four or
+  // more chairs do wrap, which is correct: that is a genuinely bigger dais.
+  //
+  // At 48px a name has to clamp to two lines and break mid-word rather than be
+  // cut to four useless characters; the full name is on the button's
+  // title/aria and in the popover header. The "+" needs no name slot, so it
+  // gets a narrower one.
+  const slot = showNames ? Math.max(size + 14, 48) : size;
+  const addSlot = showNames ? size + 6 : size;
 
-  const summary = chairs.length === 0
-    ? 'No chairs on this dais yet — add one'
-    : `${chairs.map(c => c.name).join(', ')} — open the dais`;
+  const actionStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+    padding: '7px 9px', borderRadius: 10, border: 'none', backgroundColor: 'transparent',
+    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, letterSpacing: '0.02em',
+    cursor: 'pointer', textAlign: 'left',
+  };
 
   return (
     <>
-      <button
-        ref={btnRef}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={summary}
-        aria-label={summary}
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 rounded-xl focus:outline-none active:scale-[0.96]"
-        style={{
-          padding: '6px 8px', minHeight: 44, border: 'none',
-          backgroundColor: open ? NEU.base : 'transparent',
-          boxShadow: open ? NEU.inSm : 'none',
-          cursor: 'pointer', fontFamily: OUTFIT,
-          transitionProperty: 'box-shadow, background-color, scale',
-          transitionDuration: '200ms', transitionTimingFunction: EASE,
-        }}
-      >
-        <span className="flex items-center flex-shrink-0">
-          {chairs.slice(0, 4).map((ch, i) => (
-            <span key={`${ch.name}-${i}`} style={{ marginInlineStart: i === 0 ? 0 : -9, position: 'relative', zIndex: 4 - i, lineHeight: 0, borderRadius: 9999, boxShadow: '0 0 0 2px #FAF8F3' }}>
-              {face(ch, 28)}
-            </span>
-          ))}
-          {chairs.length === 0 && (
-            <span
-              className="flex items-center justify-center"
-              style={{ width: 28, height: 28, borderRadius: 9999, border: '1.5px dashed rgba(27,56,40,0.4)', color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.04)' }}
+      <div className={`flex flex-wrap items-start ${showNames ? 'justify-center gap-x-1 gap-y-2' : 'gap-1.5'}`}>
+        {members.map(m => {
+          const label = m.kind === 'invite'
+            ? `${m.name} — invite pending. Open to resend or remove.`
+            : `${m.name} — open to view or remove.`;
+          return (
+            <button
+              key={m.key}
+              ref={el => { btnRefs.current[m.key] = el; }}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={openKey === m.key}
+              title={label}
+              aria-label={label}
+              onClick={() => setOpenKey(k => (k === m.key ? null : m.key))}
+              className="flex flex-col items-center focus:outline-none active:scale-[0.94]"
+              style={{
+                width: showNames ? slot : undefined,
+                padding: 0, border: 'none', background: 'none', cursor: 'pointer',
+                transitionProperty: 'scale', transitionDuration: '200ms', transitionTimingFunction: EASE,
+              }}
             >
-              <Plus size={14} strokeWidth={2.2} />
+              <DaisAvatar member={m} size={size} />
+              {showNames && (
+                <span
+                  style={{
+                    marginTop: 4, fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700,
+                    lineHeight: '11px', minHeight: 22, width: '100%', textAlign: 'center',
+                    color: m.kind === 'invite' ? '#7A5A10' : '#4A3F33',
+                    overflow: 'hidden', display: '-webkit-box',
+                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                    overflowWrap: 'anywhere',
+                  }}
+                >
+                  {m.name}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        {/* Add another chair — the "+" in a circle that closes the row. */}
+        <button
+          type="button"
+          onClick={onAdd}
+          title="Add a chair to this dais"
+          aria-label="Add a chair to this dais"
+          className="flex flex-col items-center focus:outline-none active:scale-[0.94]"
+          style={{
+            width: showNames ? addSlot : undefined,
+            padding: 0, border: 'none', background: 'none', cursor: 'pointer',
+            transitionProperty: 'scale', transitionDuration: '200ms', transitionTimingFunction: EASE,
+          }}
+        >
+          <span
+            className="flex items-center justify-center"
+            style={{
+              width: size, height: size, borderRadius: 9999,
+              border: '1.5px dashed rgba(27,56,40,0.4)',
+              color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.04)',
+              transitionProperty: 'background-color, color', transitionDuration: '200ms', transitionTimingFunction: EASE,
+            }}
+            onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
+            onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; }}
+          >
+            <Plus size={Math.round(size * 0.46)} strokeWidth={2.2} />
+          </span>
+          {showNames && (
+            <span
+              style={{
+                marginTop: 4, fontFamily: OUTFIT, fontSize: 9, fontWeight: 800,
+                letterSpacing: '0.08em', lineHeight: '11px', minHeight: 22,
+                width: '100%', textAlign: 'center', color: '#6B5F52',
+              }}
+            >
+              ADD
             </span>
           )}
-        </span>
-        <span
-          className="min-w-0 text-left flex-1"
-          style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: '#6B5F52', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-        >
-          {chairs.length === 0
-            ? 'ADD CHAIR'
-            : chairs.length === 1 ? chairs[0].name : `${chairs.length} CHAIRS`}
-        </span>
-      </button>
+        </button>
+      </div>
 
-      {open && pos && (
+      {open && placed && (
         <Portal>
           <div
             ref={popRef}
             role="dialog"
-            aria-label="Dais"
+            aria-label={open.name}
             style={{
-              position: 'fixed', top: pos.top, left: pos.left, width: 250,
-              zIndex: 60, maxHeight: pos.maxHeight, overflowY: 'auto',
+              position: 'fixed', top: placed.top, left: placed.left, width: 216, zIndex: 60,
               backgroundColor: '#FAF8F3', borderRadius: 16,
               border: '1px solid rgba(221,212,192,0.95)',
               boxShadow: '0 14px 34px rgba(27,56,40,0.20)',
-              padding: '10px 11px', fontFamily: OUTFIT,
+              padding: '10px 10px 8px', fontFamily: OUTFIT,
             }}
           >
-            <p style={{ margin: '0 0 8px 0', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: '#7A5A10' }}>
-              DAIS
-            </p>
-            {chairs.length === 0 && (
-              <p style={{ fontSize: 12, color: '#6B5F52', margin: '0 0 8px 0' }}>No chairs assigned yet.</p>
-            )}
-            {chairs.map((ch, i) => (
-              <div key={`${ch.name}-${i}`} className="flex items-center gap-2.5" style={{ padding: '4px 0' }}>
-                <ProfileLink userId={linkable ? chairIds[i] : null} name={ch.name} className="block flex-shrink-0">
-                  {face(ch, 32)}
-                </ProfileLink>
-                <ProfileLink userId={linkable ? chairIds[i] : null} name={ch.name} className="min-w-0 flex-1">
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1C1410', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {ch.name}
-                  </span>
-                </ProfileLink>
-                <button
-                  onClick={() => { setOpen(false); onRemove(i, ch.name); }}
-                  title={`Remove ${ch.name} from the dais`}
-                  aria-label={`Remove ${ch.name} from the dais`}
-                  className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none active:scale-[0.96]"
-                  style={{
-                    width: 28, height: 28, border: '1px solid rgba(139,32,32,0.35)',
-                    backgroundColor: 'transparent', color: '#8B2020', cursor: 'pointer',
-                    transitionProperty: 'background-color, color', transitionDuration: '200ms', transitionTimingFunction: EASE,
-                  }}
-                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#8B2020'; el.style.color = '#FFFFFF'; }}
-                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#8B2020'; }}
-                >
-                  <X size={12} strokeWidth={2.6} />
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => { setOpen(false); onAdd(); }}
-              className="w-full flex items-center justify-center gap-2 rounded-xl mt-2 focus:outline-none active:scale-[0.96]"
-              style={{
-                minHeight: 40, border: '1.5px dashed rgba(27,56,40,0.4)',
-                backgroundColor: 'rgba(27,56,40,0.04)', color: '#1B3828',
-                fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', cursor: 'pointer',
-                transitionProperty: 'background-color, color, scale', transitionDuration: '250ms', transitionTimingFunction: EASE,
-              }}
-              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
-              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; el.style.color = '#1B3828'; }}
-            >
-              <Plus size={15} strokeWidth={2.2} />
-              ADD CHAIR
-            </button>
+            <div className="flex items-center gap-2.5" style={{ padding: '0 2px 8px' }}>
+              <DaisAvatar member={open} size={30} />
+              <span className="min-w-0 flex-1">
+                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#1C1410', overflowWrap: 'anywhere' }}>
+                  {open.name}
+                </span>
+                <span style={{ display: 'block', fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: open.kind === 'invite' ? '#7A5A10' : '#6B5F52', marginTop: 1 }}>
+                  {open.kind === 'invite' ? 'INVITE PENDING' : 'ON THE DAIS'}
+                </span>
+              </span>
+            </div>
+
+            <div style={{ borderTop: '1px solid #EDE7D8', paddingTop: 6 }}>
+              {open.kind === 'invite' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setOpenKey(null); onResendInvite(open.invite); }}
+                    style={{ ...actionStyle, color: '#1B3828' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <Send size={13} strokeWidth={2.2} />
+                    Resend invite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setOpenKey(null); onRevokeInvite(open.invite); }}
+                    style={{ ...actionStyle, color: '#8B2020' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <X size={13} strokeWidth={2.6} />
+                    Remove
+                  </button>
+                  <p style={{ margin: '2px 4px 0', fontSize: 10, color: '#9A8A78', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+                    {open.invite.email}
+                  </p>
+                </>
+              ) : (
+                <>
+                  {open.userId ? (
+                    <ProfileLink userId={open.userId} name={open.name} className="block">
+                      <span
+                        style={{ ...actionStyle, color: '#1B3828' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        <UserRound size={13} strokeWidth={2.2} />
+                        View MUN CV
+                      </span>
+                    </ProfileLink>
+                  ) : (
+                    <p style={{ margin: '2px 4px 6px', fontSize: 10, color: '#9A8A78', lineHeight: 1.4 }}>
+                      Not linked to a Gavelling account.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setOpenKey(null); onRemoveChair(open.index, open.name); }}
+                    style={{ ...actionStyle, color: '#8B2020' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.08)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  >
+                    <X size={13} strokeWidth={2.6} />
+                    Remove from dais
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </Portal>
       )}
@@ -608,12 +769,16 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState('');
+  // Its own component, its own useAuth() — so its own stable token. See the
+  // note on loadCommittees: depending on the session OBJECT re-runs this on
+  // every token refresh and around tab focus.
+  const accessToken = session?.access_token;
 
   useEffect(() => {
-    if (!session) return;
+    if (!accessToken) return;
     let cancelled = false;
     (async () => {
-      const supabase = getAuthedClient(session.access_token);
+      const supabase = getAuthedClient(accessToken);
       const { data } = await supabase
         .from('applications')
         .select('id, user_id, status, assigned_committee_id, profiles (id, display_name, email, avatar_url)')
@@ -623,7 +788,7 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
       if (!cancelled) setApplicants((data ?? []) as unknown as ChairApplicant[]);
     })();
     return () => { cancelled = true; };
-  }, [session, conferenceId]);
+  }, [accessToken, conferenceId]);
 
   const currentIds = new Set(committee.chair_user_ids ?? []);
   const visible = (applicants ?? [])
@@ -814,7 +979,19 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
 export default function CommitteesPage() {
   const { conference } = useManage();
   const { session } = useAuth();
+  /** The stable half of `session`. AuthProvider replaces the session OBJECT on
+   *  every auth event (token refresh, tab focus), so any loader that depends on
+   *  `session` refetches on each of those; the token is a string and only
+   *  changes when it really changes. Use this in loader deps, and keep using
+   *  `session` for anything that needs the rest of it. */
+  const accessToken = session?.access_token;
   const [committees, setCommittees] = useState<Committee[]>([]);
+  // Chairs who have been invited but have not accepted. Kept in its own piece
+  // of state rather than folded into `committees`, because it comes from a
+  // different table (conference_chair_invites) that the DB trigger behind
+  // display_chairs knows nothing about — and must, deliberately, keep knowing
+  // nothing about: display_chairs is what the PUBLIC page prints.
+  const [chairInvites, setChairInvites] = useState<PendingChairInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<Committee | null>(null);
@@ -878,18 +1055,25 @@ export default function CommitteesPage() {
   // `silent` skips the page-level loading flag so background refetches never
   // unmount the grid; the seq guard drops stale responses.
   const loadCommittees = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!conference || !session) return;
+    if (!conference || !accessToken) return;
     const seq = ++loadSeq.current;
     if (!opts?.silent) setLoading(true);
-    const supabase = getAuthedClient(session.access_token);
-    const { data } = await supabase
-      .from('conference_committees')
-      .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at, released_to_delegates_at')
-      .eq('conference_id', conference.id)
-      .order('name', { ascending: true });
+    const supabase = getAuthedClient(accessToken);
+    // The dais is two queries, not one: seated chairs ride along on the
+    // committee row (display_chairs), pending invitations live in their own
+    // table. Fetched together so a card never renders half a dais.
+    const [{ data }, invites] = await Promise.all([
+      supabase
+        .from('conference_committees')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, session_code, session_id, position_paper_deadline, notification_email, pp_submissions_enabled, logo_url, chair_user_ids, display_chairs, released_to_chairs_at, released_to_delegates_at')
+        .eq('conference_id', conference.id)
+        .order('name', { ascending: true }),
+      fetchPendingChairInvites(supabase, conference.id),
+    ]);
     if (seq !== loadSeq.current) return; // stale, a newer load superseded this one
 
     const rows = (data ?? []) as CommitteeRow[];
+    setChairInvites(invites);
 
     const slotCounts = await Promise.all(
       rows.map(async c => {
@@ -904,13 +1088,29 @@ export default function CommitteesPage() {
 
     setCommittees(rows.map((c, i) => ({ ...c, slotCount: slotCounts[i] })));
     setLoading(false);
-  }, [conference]);
+    // Depends on the TOKEN, not on the session object.
+    //
+    // The bug being fixed: with `[conference]` alone, this callback was built
+    // once against whatever session existed when `conference` resolved. If
+    // auth had not landed yet the guard above returned early, and nothing ever
+    // re-triggered the effect — the grid sat empty until something else forced
+    // a re-render.
+    //
+    // But `session` is the wrong dependency. AuthProvider calls setSession on
+    // EVERY onAuthStateChange event with a fresh object out of the SDK, so its
+    // identity changes on each token refresh (roughly hourly) and on the
+    // events fired around tab focus — each one would refetch every committee
+    // and its slot counts for no reason. `access_token` is a string, so it
+    // compares by value: identical across those events, different only when
+    // the token genuinely changes or when it arrives for the first time, which
+    // is exactly the transition this needs to catch.
+  }, [conference, accessToken]);
 
   useEffect(() => { loadCommittees(); }, [loadCommittees]);
 
   const loadReleaseSettings = useCallback(async () => {
-    if (!conference || !session) return;
-    const supabase = getAuthedClient(session.access_token);
+    if (!conference || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
     const { data } = await supabase
       .from('conferences')
       .select('session_release_same_time, session_release_all_at_once, session_release_advisors_at')
@@ -921,7 +1121,11 @@ export default function CommitteesPage() {
     setReleaseAllAtOnce(row?.session_release_all_at_once ?? true);
     setReleaseAdvisorsAt(row?.session_release_advisors_at ?? null);
     setReleaseSettingsLoaded(true);
-  }, [conference, session]);
+    // Was `[conference, session]`, which was CORRECT — it loaded properly — but
+    // re-ran on every auth event, refetching these three columns on each token
+    // refresh. Same reasoning as loadCommittees above: the token is the part
+    // that actually matters and the part that is stable.
+  }, [conference, accessToken]);
 
   useEffect(() => { loadReleaseSettings(); }, [loadReleaseSettings]);
 
@@ -1259,6 +1463,81 @@ export default function CommitteesPage() {
     })().finally(() => markBusy(c.id, false));
   }
 
+  // ── Pending chair invites: the two actions a pending face offers ───────────
+
+  // Resend. Not optimistic and not fire-and-forget: the whole point of the
+  // action is "did another email actually go out", so the organiser waits the
+  // moment it takes and is told either way. The invite row and its accept
+  // token are untouched — see resendChairInvite.
+  async function handleResendInvite(c: Committee, invite: PendingChairInvite) {
+    if (!session || !conference) return;
+    const label = pendingInviteName(invite);
+    const busyKey = `invite-${invite.id}`;
+    if (busyIds.has(busyKey)) return;
+    const { confirmed } = await confirm({
+      title: 'Resend this invite?',
+      body: `${label} will get another email inviting them to chair ${c.abbreviation || c.name}. Their existing link keeps working.`,
+      confirmLabel: 'Resend',
+    });
+    if (!confirmed) return;
+    markBusy(busyKey, true);
+    setActionError('');
+    const supabase = getAuthedClient(session.access_token);
+    const result = await resendChairInvite(supabase, {
+      conferenceId: conference.id,
+      committeeId: c.id,
+      committeeName: c.name,
+      email: invite.email,
+    });
+    markBusy(busyKey, false);
+    if (!result.ok) { setActionError(result.error ?? `Couldn't resend the invite to ${label}.`); return; }
+    showFlash(`Invite resent to ${label}.`);
+  }
+
+  // Withdraw. Optimistic (AGENTS.md Rule 5) — the pending face disappears at
+  // once and comes back if the write fails. Same 'revoked' semantics as the
+  // assignment page's handleRevokeInvite, so the two surfaces agree.
+  async function handleRevokeInvite(c: Committee, invite: PendingChairInvite) {
+    if (!session) return;
+    const label = pendingInviteName(invite);
+    const busyKey = `invite-${invite.id}`;
+    if (busyIds.has(busyKey)) return;
+    const { confirmed } = await confirm({
+      title: 'Remove this invite?',
+      body: `Withdraw the chair invite to ${label} for ${c.abbreviation || c.name}? Their invite link stops working.`,
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!confirmed) return;
+    markBusy(busyKey, true);
+    setActionError('');
+    // Remember where it sat, so a failed revoke can put it back exactly there.
+    let atIndex = 0;
+    setChairInvites(prev => {
+      const i = prev.findIndex(x => x.id === invite.id);
+      if (i >= 0) atIndex = i;
+      return prev.filter(x => x.id !== invite.id);
+    });
+    const supabase = getAuthedClient(session.access_token);
+    const ok = await revokeChairInvite(supabase, invite.id);
+    markBusy(busyKey, false);
+    if (!ok) {
+      // Restore at its ORIGINAL index, not on the end. Appending moved a face
+      // to the back of the dais row on a failed revoke, so the row silently
+      // reordered itself as the price of an error — which reads as a second
+      // bug on top of the one that just happened.
+      setChairInvites(prev => {
+        if (prev.some(i => i.id === invite.id)) return prev;
+        const next = [...prev];
+        next.splice(Math.min(atIndex, next.length), 0, invite);
+        return next;
+      });
+      setActionError(`Couldn't remove the invite to ${label}.`);
+      return;
+    }
+    showFlash(`Invite to ${label} removed.`);
+  }
+
   // Optimistic assign (mirrors assignment/page.tsx handleAssignChair semantics):
   // dedup-append to chair_user_ids, patch the card at once, persist in the
   // background; the DB trigger recomputes display_chairs and the silent
@@ -1348,6 +1627,14 @@ export default function CommitteesPage() {
   }
 
   if (!conference) return null;
+
+  // Pending invites, bucketed per committee for the dais rows below.
+  const invitesByCommittee = new Map<string, PendingChairInvite[]>();
+  for (const inv of chairInvites) {
+    const list = invitesByCommittee.get(inv.committee_id) ?? [];
+    list.push(inv);
+    invitesByCommittee.set(inv.committee_id, list);
+  }
 
   let sortedCommittees = committees;
   if (sortKey) {
@@ -1672,41 +1959,19 @@ export default function CommitteesPage() {
                       </div>
                     </div>
 
-                    {/* Dais cluster */}
-                    <div className="flex items-center flex-shrink-0" style={{ paddingLeft: 6 }}>
-                      {dais.map((ch, chIdx) => (
-                        <div key={`${ch.name}-${chIdx}`} className="group relative" style={{ marginLeft: chIdx === 0 ? 0 : -8 }} title={ch.name}>
-                          {/* Only the avatar is the CV link — the hover X stays a sibling
-                              so removing a chair is unaffected. */}
-                          <ProfileLink userId={daisLinkable ? daisIds[chIdx] : null} name={ch.name} className="block">
-                            {ch.avatar_url ? (
-                              <img src={ch.avatar_url} alt={ch.name} style={{ width: 30, height: 30, borderRadius: 9999, objectFit: 'cover', border: '2px solid #F0EBDD', backgroundColor: '#EDE7D8' }} />
-                            ) : (
-                              <span className="flex items-center justify-center" style={{ width: 30, height: 30, borderRadius: 9999, border: '2px solid #F0EBDD', backgroundColor: NEU.forest, color: NEU.gold, fontSize: 12, fontWeight: 700, fontFamily: OUTFIT }}>
-                                {ch.name.charAt(0)}
-                              </span>
-                            )}
-                          </ProfileLink>
-                          <button
-                            onClick={() => handleRemoveChair(c, chIdx, ch.name)}
-                            title={`Remove ${ch.name} from the dais`}
-                            className="absolute opacity-0 group-hover:opacity-100 flex items-center justify-center focus:outline-none"
-                            style={{ top: -4, right: -4, width: 16, height: 16, borderRadius: 9999, backgroundColor: '#FAF8F3', border: '1px solid rgba(139,32,32,0.45)', color: '#8B2020', cursor: 'pointer', boxShadow: '0 2px 5px rgba(27,56,40,0.18)', transition: `opacity 200ms ${EASE}` }}
-                          >
-                            <X size={9} strokeWidth={2.6} />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={() => setAddChairTarget(c)}
-                        title="Add chair"
-                        className="flex items-center justify-center focus:outline-none"
-                        style={{ width: 30, height: 30, marginLeft: dais.length ? -8 : 0, borderRadius: 9999, border: '1.5px dashed rgba(27,56,40,0.4)', color: NEU.forest, backgroundColor: '#F0EBDD', cursor: 'pointer', transition: `background-color 220ms ${EASE}, color 220ms ${EASE}` }}
-                        onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = NEU.forest; el.style.color = NEU.gold; el.style.borderStyle = 'solid'; }}
-                        onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#F0EBDD'; el.style.color = NEU.forest; el.style.borderStyle = 'dashed'; }}
-                      >
-                        <Plus size={15} strokeWidth={2.3} />
-                      </button>
+                    {/* Dais cluster — same faces (and the same per-face actions)
+                        the card renders, names off because the row has no room
+                        for them. Pending invitees appear here too. */}
+                    <div className="flex-shrink-0" style={{ paddingLeft: 6 }}>
+                      <DaisRow
+                        members={buildDaisMembers(dais, daisIds, daisLinkable, invitesByCommittee.get(c.id) ?? [])}
+                        size={30}
+                        showNames={false}
+                        onAdd={() => setAddChairTarget(c)}
+                        onRemoveChair={(idx, name) => handleRemoveChair(c, idx, name)}
+                        onResendInvite={inv => handleResendInvite(c, inv)}
+                        onRevokeInvite={inv => handleRevokeInvite(c, inv)}
+                      />
                     </div>
 
                     {/* Session code */}
@@ -1823,7 +2088,26 @@ export default function CommitteesPage() {
                   onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = NEU.outHover; }}
                   onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(0)'; el.style.boxShadow = NEU.out; }}
                 >
-                  <div className="flex flex-col items-center px-3.5 pt-4 flex-1">
+                  <div className="flex flex-col items-center px-3.5 pt-2 flex-1">
+                    {/* DIFFICULTY, TOP-RIGHT. It used to sit in the meta row
+                        under the name, competing with the seat count for the
+                        eye; up here it is the card's corner stamp and the meta
+                        row is left to say one thing.
+
+                        A right-aligned strip rather than an absolutely
+                        positioned corner on purpose: at the five-across size
+                        the card is 242px, its content box 214px, and the 60px
+                        emblem is centred — which leaves 77px each side, while
+                        the tile with the word "Intermediate" on it needs ~105.
+                        Overlaying it would clip the label at exactly the width
+                        this grid is tuned for. The strip's height is paid for
+                        by dropping the card's top padding (pt-4 → pt-2) and by
+                        the meta row losing its tallest element, so the card
+                        does not grow. */}
+                    <div className="w-full flex justify-end" style={{ minHeight: 23 }}>
+                      <DifficultyTile level={c.difficulty} size="sm" />
+                    </div>
+
                     {/* Emblem — 84px → 60px. The public card's emblem is the
                         largest thing on it because that card is a poster; this
                         one is a control panel, so the emblem identifies and
@@ -1868,9 +2152,8 @@ export default function CommitteesPage() {
                       {c.name}
                     </h3>
 
-                    {/* Meta row — canonical rank insignia + seats */}
-                    <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1.5">
-                      <DifficultyTile level={c.difficulty} size="sm" />
+                    {/* Meta row — seats (the rank insignia moved to the corner) */}
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
                       <span className="text-[11px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                         {!isCrisis && c.delegation_size === 2
                           ? `${seats} × 2 seats`
@@ -1908,16 +2191,19 @@ export default function CommitteesPage() {
 
                     {/* Dais + session well, pinned to the card bottom */}
                     <div className="w-full mt-auto">
-                      {/* THE DAIS, AS A STACK. Full names, per-chair removal and
-                          Add chair all live in the panel it opens — see
-                          `DaisStack` for what moved and why. */}
-                      <div className="w-full mt-3 pt-2" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
-                        <DaisStack
-                          chairs={dais}
-                          chairIds={daisIds}
-                          linkable={daisLinkable}
+                      {/* THE DAIS, AS A ROW OF FACES. Chairs side by side with
+                          their names beneath, pending invitees among them, and
+                          a "+" to add another — see `DaisRow` for what this
+                          replaced and why. */}
+                      <div className="w-full mt-2 pt-2" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                        <DaisRow
+                          members={buildDaisMembers(dais, daisIds, daisLinkable, invitesByCommittee.get(c.id) ?? [])}
+                          size={34}
+                          showNames
                           onAdd={() => setAddChairTarget(c)}
-                          onRemove={(idx, name) => handleRemoveChair(c, idx, name)}
+                          onRemoveChair={(idx, name) => handleRemoveChair(c, idx, name)}
+                          onResendInvite={inv => handleResendInvite(c, inv)}
+                          onRevokeInvite={inv => handleRevokeInvite(c, inv)}
                         />
                       </div>
 
@@ -1932,7 +2218,7 @@ export default function CommitteesPage() {
                           `CompactSendButton` already reads as a state chip.
                           Nothing was removed: the same three-state control is
                           still here, just side by side. */}
-                      <div className="w-full mt-2.5">
+                      <div className="w-full mt-2">
                         <NeuInset small style={{ padding: 9 }}>
                           {/* Session code */}
                           {c.session_code ? (
@@ -1999,15 +2285,13 @@ export default function CommitteesPage() {
                             </div>
                           </div>
 
-                          {/* Position-paper deadline */}
-                          {c.position_paper_deadline && (
-                            <div className="flex items-center gap-1.5 mt-2 pt-2" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>
-                              <CalendarClock size={11} style={{ color: NEU.deepGold, flexShrink: 0 }} />
-                              <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: '#6B5F52', fontVariantNumeric: 'tabular-nums' }}>
-                                Papers due {new Date(c.position_paper_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                              </span>
-                            </div>
-                          )}
+                          {/* The position-paper deadline used to print a third
+                              band here ("Papers due 4 Mar"). Removed: it is a
+                              date the organiser sets in the editor and reads on
+                              the Documents page, never something they act on
+                              from this grid, and it was costing the card the
+                              room the dais now uses. Still on the list row,
+                              where it is free. */}
                         </NeuInset>
                       </div>
                     </div>
