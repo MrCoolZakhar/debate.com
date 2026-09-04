@@ -563,7 +563,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       // Accept the full printed chair code ("UNSC26-4821") as well as the bare suffix.
       const bare = entered.includes('-') ? (entered.split('-').pop() ?? '').trim() : entered;
       if (!expectedSuffix || bare !== expectedSuffix) {
-        setChairCodeError('Incorrect chair code. Ask your head chair.');
+        setChairCodeError('Incorrect chair code. Ask your Moderator.');
         return;
       }
       setChairCodeError('');

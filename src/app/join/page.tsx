@@ -51,8 +51,10 @@ function JoinPageInner() {
   // Chair name selection — after committee found in chair mode
   const [chairName, setChairName] = useState('');
   const [chairNameMode, setChairNameMode] = useState<'select' | 'new'>('select');
-  // Head chair (gavel) vs co-chair (view-only). Defaults to co-chair so joining never
-  // steals the gavel by accident; unset head falls back to the creator (chairNames[0]).
+  // Moderator (holds the gavel) vs Commenter (view-only, writes feedback). Defaults to
+  // Commenter so joining never steals the gavel by accident; unset head falls back to the
+  // creator (chairNames[0]). The stored values stay 'head' | 'co' — settings.headChair is
+  // a persisted key and must not be renamed.
   const [chairRole, setChairRole] = useState<'head' | 'co'>('co');
   const [newChairName, setNewChairName] = useState('');
   const [chairPassword, setChairPassword] = useState('');
@@ -250,7 +252,7 @@ function JoinPageInner() {
         const chairDisplayName = (profile?.display_name ?? user.email ?? 'Chair').trim();
         addChairName(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined);
         const goChair = () => router.push(`/chair/${foundCommittee!.code}?chairName=${encodeURIComponent(chairDisplayName)}`);
-        // Claim-at-will head chair works for conference sessions too; no password required —
+        // Claim-at-will Moderator works for conference sessions too; no password required —
         // access was already verified against the conference chair/organizer records.
         if (chairRole === 'head') {
           updateCommitteeHeadChairInDB(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined).finally(goChair);
@@ -280,12 +282,12 @@ function JoinPageInner() {
       if (!name) { setError(t('join_select_name')); return; }
       const expectedPassword = foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix;
       if (expectedPassword && chairPassword !== expectedPassword) {
-        setPasswordError('Incorrect password. Ask your head chair.');
+        setPasswordError('Incorrect password. Ask your Moderator.');
         return;
       }
       addChairName(foundCommittee.id, name, foundCommittee.code, foundCommittee.dbChairJoinSuffix ?? undefined);
       const go = () => router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
-      // Claim-at-will: joining as head chair takes the gavel; co-chair joins view-only.
+      // Claim-at-will: joining as Moderator takes the gavel; a Commenter joins view-only.
       if (chairRole === 'head') {
         updateCommitteeHeadChairInDB(foundCommittee.id, name, foundCommittee.code, foundCommittee.dbChairJoinSuffix ?? undefined).finally(go);
       } else {
@@ -698,7 +700,7 @@ function JoinPageInner() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
-              This name is already in an active session. Select a different name to join as a view-only co-chair.
+              This name is already in an active session. Select a different name to join as a Commenter.
             </div>
           )}
 

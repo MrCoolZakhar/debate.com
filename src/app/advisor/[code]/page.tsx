@@ -148,7 +148,7 @@ function ExpandedDelegateCard({
         </div>
       </div>
 
-      {/* Nudges are chat messages under the hood. When the chairs disable chat the
+      {/* Nudges are chat messages under the hood. When the Moderator disables chat the
           delegate can still receive them but has no way to answer, so the whole
           affordance is replaced by a short explanation. */}
       {chatDisabled ? (
@@ -157,7 +157,7 @@ function ExpandedDelegateCard({
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h9" />
             <line x1="2" y1="2" x2="22" y2="22" />
           </svg>
-          <p className="text-xs" style={{ color: '#9A8A78' }}>Nudges are off — the chairs have disabled chat for this committee.</p>
+          <p className="text-xs" style={{ color: '#9A8A78' }}>Nudges are off — the Moderator has disabled chat for this committee.</p>
         </div>
       ) : (
       <div className="flex flex-col items-center">
