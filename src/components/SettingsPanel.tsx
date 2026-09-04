@@ -665,7 +665,7 @@ function NumberField({ value, onCommit, min, max, allowEmpty = false, placeholde
   );
 }
 
-// Wraps a region that a view-only co-chair may look at but not touch. The write
+// Wraps a region that a Commenter (view-only chair) may look at but not touch. The write
 // helpers are already no-ops for them; this is the matching visual/interaction
 // affordance so nothing looks live when it is not.
 function ReadOnlyRegion({ on, children }: { on: boolean; children: React.ReactNode }) {
@@ -683,7 +683,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   myChairName?: string;
   // UI GATE ONLY. RLS authenticates the SESSION (anyone holding the chair suffix
   // can write anything to it), never the chair's role, so this hides and disables
-  // the write affordances for a view-only co-chair. It is NOT enforcement, and
+  // the write affordances for a Commenter (view-only chair). It is NOT enforcement, and
   // must never be treated as a security boundary. See AGENTS.md rule 15.
   isViewOnly?: boolean;
 }) {
@@ -775,7 +775,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   // AND the code every chair typed on the join page, so minting a new one for a
   // live committee locks every one of them out with no error surfaced anywhere.
   // localStorage is a per-device mirror, not authority: on a fresh browser,
-  // incognito, a cleared cache, or a co-chair arriving by link it is simply empty,
+  // incognito, a cleared cache, or a Commenter arriving by link it is simply empty,
   // and the voting page never hydrates it at all. So a new suffix may be minted
   // ONLY when the DB genuinely has none. When the DB has one we adopt it locally
   // and write nothing back.
@@ -884,7 +884,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
 
-          {/* View-only co-chair notice. Matches the chair page's view-only pill.
+          {/* Commenter (view-only) notice. Matches the chair page's view-only pill.
               This is a UI gate, not enforcement — see the isViewOnly prop note. */}
           {isViewOnly && (
             <div
@@ -1074,7 +1074,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
               {/* Read-only "who is chairing?" answer. Switching chairs lives in exactly one
                   place — the gavel chip on the session header — so this deliberately has no
                   button; duplicating it here hid the action where nobody looked. Stays
-                  OUTSIDE the view-only gate below so a co-chair can still read it. */}
+                  OUTSIDE the view-only gate below so a Commenter can still read it. */}
               {(() => {
                 const headChair = committee.dbHeadChair || committee.chairNames?.[0] || '';
                 const isHead = !myChairName || headChair === myChairName;
@@ -1091,7 +1091,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                 );
               })()}
               {/* Everything below writes committee state, so it is gated for a
-                  view-only co-chair. The session/chair codes and the head-chair
+                  Commenter. The session/chair codes and the Moderator
                   row above stay live on purpose. */}
               <ReadOnlyRegion on={isViewOnly}>
               <Toggle
@@ -1175,6 +1175,15 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
               {/* Ranking factors */}
               <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
                 <SectionLabel>Quality factors</SectionLabel>
+                <div className="mb-3">
+                  <Toggle
+                    label="Rate delegates on quality factors"
+                    note="Adds rating sliders beside each speech in the comment dock. Off by default — most chairs only write notes. Ratings already recorded stay on the scoreboard either way."
+                    value={scoring.factorRatingsEnabled}
+                    onChange={(v) => updScoring({ ...scoring, factorRatingsEnabled: v })}
+                  />
+                </div>
+                {scoring.factorRatingsEnabled && (<>
                 <p className="text-xs mb-3 leading-snug" style={{ color: '#9A8A78' }}>
                   Subjective factors chairs rate per speech (0–{scoring.factorScaleMax}).
                 </p>
@@ -1198,13 +1207,17 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                     <span className="text-xs" style={{ color: '#6A5A4A' }}>Rating scale max</span>
                     <span className="text-xs font-bold" style={{ color: '#1B3828' }}>{scoring.factorScaleMax}</span>
                   </div>
-                  <input type="range" min={0} max={100} step={1} value={scoring.factorScaleMax}
+                  {/* Floor of 2: a one-point scale is not a rating. The default is now 10,
+                      which is what chairs actually mark on — the old 100 produced ratings
+                      like 1 and 2 that read as noise against the scale they sat on. */}
+                  <input type="range" min={2} max={100} step={1} value={scoring.factorScaleMax}
                     onChange={(e) => updScoring({ ...scoring, factorScaleMax: parseInt(e.target.value) })}
                     className="w-full" style={{ accentColor: '#1B3828' }} />
                   <div className="flex items-center justify-between text-[10px] font-mono mt-0.5" style={{ color: '#9A8A78' }}>
-                    <span>0</span><span>100</span>
+                    <span>2</span><span>100</span>
                   </div>
                 </div>
+                </>)}
               </div>
 
               {/* Blend + hide */}

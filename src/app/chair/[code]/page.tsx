@@ -1352,6 +1352,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [speakerTimeLimitInput, setSpeakerTimeLimitInput] = useState<string>('90');
   const [showSettings, setShowSettings] = useState(false);
   const [showScoreboard, setShowScoreboard] = useState(false);
+  // Bumped by every realtime `feedback` event. Passed to the comment dock and the
+  // scoreboard as a refetch key so both stay live while open.
+  const [feedbackVersion, setFeedbackVersion] = useState(0);
   const [showChat, setShowChat] = useState(false);
   const [chatReadCounts, setChatReadCounts] = useState<Record<string, number>>({});
   // Resume-from-suspend UI state. `resumeBusy` also double-taps the button, so one chair
@@ -1584,6 +1587,18 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // would drop the message that pauses the committee.
           if (table === 'session_broadcasts') {
             setBroadcasts(await getActiveBroadcasts(found.id));
+            return;
+          }
+
+          // Chair notes + factor ratings, also outside the debounce. This device may well
+          // have written the row, but `feedback` is not optimistic speaker/timer/caucus
+          // state, so RULE 4 does not apply and swallowing the echo would only make a
+          // second chair's note invisible until a remount. We bump a counter rather than
+          // refetch here: the two readers (the comment dock and the scoreboard) each own
+          // their own query and neither is always mounted, so a fetch here would usually
+          // be thrown away.
+          if (table === 'feedback') {
+            setFeedbackVersion((v) => v + 1);
             return;
           }
 
@@ -1840,7 +1855,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const newHead = committee?.dbHeadChair || committee?.chairNames?.[0] || '';
     setGavelToast({
       tone: lost ? 'lost' : 'gained',
-      text: lost ? `${newHead || 'Another chair'} took the gavel. You're now co-chairing.` : 'You have the gavel.',
+      // Routed through translations: this fires at the exact moment control changes
+      // hands, so it is the worst possible place to fall back to English.
+      text: lost
+        ? t('gavel_toast_lost', { name: newHead || t('gavel_another_chair') })
+        : t('gavel_toast_gained'),
     });
 
     // ONE clean resync, then recompute the timer from current_speaker.started_at exactly
@@ -3872,6 +3891,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                   committee={committee}
                   chairName={myChairName || committee.chairNames[0] || 'Chair'}
                   currentCountry={liveCaucus(committee)?.currentSpeaker ?? committee.currentSpeaker?.country ?? null}
+                  feedbackVersion={feedbackVersion}
                 />
               )}
             </main>
@@ -3911,6 +3931,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         <ScoreboardPanel
           committee={committee}
           onClose={() => setShowScoreboard(false)}
+          feedbackVersion={feedbackVersion}
+          isViewOnly={isViewOnly}
         />
       )}
       {/* EXTRA TIME OVERLAY — fixed position, same anchor as RTR overlay */}

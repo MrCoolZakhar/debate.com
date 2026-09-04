@@ -28,7 +28,19 @@ export interface RankingFactor { id: string; name: string; enabled: boolean; }
 export interface ScoringConfig {
   sources: ScoreSource[];            // built-ins below + chair-added custom ones
   factors: RankingFactor[];
-  factorScaleMax: number;            // default 100
+  // Whether chairs get the per-speech rating sliders at all. Default OFF.
+  //
+  // These shipped on by default and were, in practice, never used: across the whole
+  // history of the product only a couple of ratings were ever recorded with a real
+  // spread of values, and every other stored rating is a 0 or a 1 — the fingerprint of
+  // a slider brushed by accident rather than set deliberately. `scoreBlend` also
+  // defaults to 0, so even a deliberate rating moved no score. So the sliders occupied
+  // half the comment dock and changed nothing. They are now opt-in, and a committee
+  // that turns them on gets a 1–10 scale, which is what chairs actually mark on.
+  // Ratings ALREADY recorded stay visible on the scoreboard regardless of this flag —
+  // it gates the input, never the display, so turning it off can never hide data.
+  factorRatingsEnabled: boolean;     // default false
+  factorScaleMax: number;            // default 10
   scoreBlend: number;                // 0 = pure objective … 100 = pure quality (default 0)
   hideScoresFromDelegates: boolean;  // default false
 }
@@ -50,7 +62,7 @@ export const DEFAULT_SCORING: ScoringConfig = {
     { id: 'collaboration', name: 'Collaboration', enabled: true },
     { id: 'content', name: 'Content & Research', enabled: true },
   ],
-  factorScaleMax: 100, scoreBlend: 0, hideScoresFromDelegates: false,
+  factorRatingsEnabled: false, factorScaleMax: 10, scoreBlend: 0, hideScoresFromDelegates: false,
 };
 
 export interface CommitteeSettings {
