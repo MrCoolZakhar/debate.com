@@ -46,6 +46,81 @@ import { SOFT, RED, CARD_BORDER_COLOR } from './scoreboardTokens';
 const LOCALE = 'en';
 export const displayCountry = (c: string, locale: string = LOCALE) => getCountryDisplayName(c, locale);
 
+// ── Labels ───────────────────────────────────────────────────────────────────
+//
+// WHY A PROP AND NOT `useT()`. This file has two kinds of caller and they do not
+// agree about language. The organiser dashboard (`src/app/manage/**`) is
+// English-only ON PURPOSE — not one of its files imports the translation
+// context — so calling `useT()` in here would drop Spanish column headers into
+// an otherwise English page. The session console IS translated, so it builds
+// this object from `useT()` and passes it down; every conferences-side caller
+// omits it and gets the literals that were hardcoded here before, verbatim.
+// Same shape of escape hatch as `locale` / `detailSummary` / `detailExtra`.
+//
+// Values with `{placeholders}` are filled by `fmt` below; each placeholder is
+// used once, exactly as `t()` in LanguageContext does it.
+export interface ScoreboardLabels {
+  colRank: string; colDelegation: string; colCommittee: string;
+  colSpeeches: string; colTime: string; colNotes: string; colScore: string;
+  sectionThisSession: string; sectionPointsBreakdown: string;
+  sectionChairRatings: string; sectionChairComments: string;
+  statSpeeches: string; statSpeakingTime: string; statMotions: string;
+  statRightsOfReply: string; statWpDr: string; statChairNotes: string;
+  statPoints: string; statObjectivePts: string;
+  titleSpeechesSplit: string; titleMotions: string; titleWpDr: string;
+  titleLedgerBlended: string; titleLedger: string;
+  titleRowSpeeches: string; titleScoreBlended: string; titleScore: string;
+  titleFactorAvgOne: string; titleFactorAvgMany: string;
+  emptyNoScored: string; emptyNoRatings: string; emptyNoComments: string;
+  observer: string; absent: string;
+  speechOne: string; speechMany: string; commentSpeechSeconds: string;
+}
+
+/** The exact literals this file carried before the prop existed. Any caller that
+ *  passes nothing renders byte-identically to the pre-prop component. */
+export const DEFAULT_SCOREBOARD_LABELS: ScoreboardLabels = {
+  colRank: '#',
+  colDelegation: 'DELEGATION',
+  colCommittee: 'COMMITTEE',
+  colSpeeches: 'SPEECHES',
+  colTime: 'TIME',
+  colNotes: 'NOTES',
+  colScore: 'SCORE',
+  sectionThisSession: 'THIS SESSION',
+  sectionPointsBreakdown: 'POINTS BREAKDOWN',
+  sectionChairRatings: 'CHAIR RATINGS',
+  sectionChairComments: 'CHAIR COMMENTS',
+  statSpeeches: 'SPEECHES',
+  statSpeakingTime: 'SPEAKING TIME',
+  statMotions: 'MOTIONS',
+  statRightsOfReply: 'RIGHTS OF REPLY',
+  statWpDr: 'WP / DR',
+  statChairNotes: 'CHAIR NOTES',
+  statPoints: 'POINTS',
+  statObjectivePts: 'OBJECTIVE PTS',
+  titleSpeechesSplit: "{gsl} on the speakers' list · {caucus} in caucus",
+  titleMotions: 'Motions this delegation raised',
+  titleWpDr: 'Sponsored {wp} working paper(s) and {dr} draft resolution(s)',
+  titleLedgerBlended: 'Ledger total. Score badge shows {headline}, blended with chair quality {quality}/100.',
+  titleLedger: 'Ledger total.',
+  titleRowSpeeches: '{gsl} GSL · {caucus} caucus',
+  titleScoreBlended: '{objective} objective points · quality {quality}/100',
+  titleScore: '{objective} objective points',
+  titleFactorAvgOne: 'Average of {n} rating',
+  titleFactorAvgMany: 'Average of {n} ratings',
+  emptyNoScored: 'No scored activity yet.',
+  emptyNoRatings: 'No factor ratings recorded by the chairs.',
+  emptyNoComments: 'No written comments yet.',
+  observer: 'Observer',
+  absent: 'Absent',
+  speechOne: 'speech',
+  speechMany: 'speeches',
+  commentSpeechSeconds: '{n}s speech',
+};
+
+const fmt = (tpl: string, vars: Record<string, string | number>): string =>
+  tpl.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+
 export type SortKey = 'score' | 'speeches' | 'time' | 'comments' | 'name';
 
 export const SORTS: { key: SortKey; label: string }[] = [
@@ -75,7 +150,7 @@ export function sortScoreboardRows(
 
 // ── Factor bar ───────────────────────────────────────────────────────────────
 
-function FactorBar({ name, average, scaleMax, ratings }: { name: string; average: number; scaleMax: number; ratings: number }) {
+function FactorBar({ name, average, scaleMax, ratings, labels }: { name: string; average: number; scaleMax: number; ratings: number; labels: ScoreboardLabels }) {
   const pct = Math.max(0, Math.min(100, (average / Math.max(1, scaleMax)) * 100));
   return (
     <div style={{ marginBlockEnd: 8 }}>
@@ -83,7 +158,7 @@ function FactorBar({ name, average, scaleMax, ratings }: { name: string; average
         <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 600, color: NEU.ink }}>{name}</span>
         <span
           style={{ fontFamily: OUTFIT, fontSize: 11, color: SOFT, marginInlineStart: 'auto', fontVariantNumeric: 'tabular-nums' }}
-          title={`Average of ${ratings} rating${ratings === 1 ? '' : 's'}`}
+          title={fmt(ratings === 1 ? labels.titleFactorAvgOne : labels.titleFactorAvgMany, { n: ratings })}
         >
           {average} / {scaleMax}
         </span>
@@ -104,8 +179,12 @@ const SECTION_LABEL: React.CSSProperties = {
   color: NEU.forest, marginBlockEnd: 8,
 };
 
-export function DelegateDetail({ row, summary = false, extra }: {
+export function DelegateDetail({ row, summary = false, extra, labels = DEFAULT_SCOREBOARD_LABELS, locale = LOCALE }: {
   row: ScoreboardDelegateRow;
+  /** Formats the timestamps below. Defaults to the organiser's English. */
+  locale?: string;
+  /** Translated strings. Omitted by every organiser caller → English literals. */
+  labels?: ScoreboardLabels;
   /** Opt-in activity strip above the breakdown — everything this delegation has
    *  actually DONE this session, not only what it scored for. Off by default so
    *  the organiser drill-in is unchanged; the chair's scoreboard turns it on. */
@@ -128,28 +207,33 @@ export function DelegateDetail({ row, summary = false, extra }: {
   const comments = row.comments.filter((c) => c.content.trim());
 
   const speeches = row.gslSpeeches + row.caucusSpeeches;
+  // Dates were hardcoded 'en-GB' and ignored the locale entirely, so an Arabic session
+  // still read "4 Sept 2026". Mapping the organiser's 'en' back to 'en-GB' keeps that
+  // surface byte-identical — it is English-only by design — while a translated session
+  // finally formats in its own locale.
+  const dateLocale = locale === 'en' ? 'en-GB' : locale;
 
   return (
     <div style={{ backgroundColor: 'rgba(27,56,40,0.035)', borderBlockStart: `1px solid ${CARD_BORDER_COLOR}`, padding: '16px 18px' }}>
       {summary && (
         <>
-          <p style={SECTION_LABEL}>THIS SESSION</p>
+          <p style={SECTION_LABEL}>{labels.sectionThisSession}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBlockEnd: 18 }}>
-            <Stat label="SPEECHES" value={String(speeches)} title={`${row.gslSpeeches} on the speakers' list · ${row.caucusSpeeches} in caucus`} />
-            <Stat label="SPEAKING TIME" value={formatSpeakingTime(row.speakingSeconds)} />
-            <Stat label="MOTIONS" value={String(row.motions)} title="Motions this delegation raised" />
-            <Stat label="RIGHTS OF REPLY" value={String(row.rightsOfReply)} />
-            <Stat label="WP / DR" value={`${row.workingPapers} / ${row.draftResolutions}`} title={`Sponsored ${row.workingPapers} working paper(s) and ${row.draftResolutions} draft resolution(s)`} />
-            <Stat label="CHAIR NOTES" value={String(comments.length)} />
+            <Stat label={labels.statSpeeches} value={String(speeches)} title={fmt(labels.titleSpeechesSplit, { gsl: row.gslSpeeches, caucus: row.caucusSpeeches })} />
+            <Stat label={labels.statSpeakingTime} value={formatSpeakingTime(row.speakingSeconds)} />
+            <Stat label={labels.statMotions} value={String(row.motions)} title={labels.titleMotions} />
+            <Stat label={labels.statRightsOfReply} value={String(row.rightsOfReply)} />
+            <Stat label={labels.statWpDr} value={`${row.workingPapers} / ${row.draftResolutions}`} title={fmt(labels.titleWpDr, { wp: row.workingPapers, dr: row.draftResolutions })} />
+            <Stat label={labels.statChairNotes} value={String(comments.length)} />
             {/* OBJECTIVE, NOT THE BADGE. The score badge on the row is the
                 HEADLINE — objective points blended with chair quality per
                 `scoreBlend`. The ledger below sums to the objective total, so
                 whenever a blend is set the two legitimately differ, and the
                 fix is to label them, not to print one number twice. */}
             <Stat
-              label={row.quality != null && row.headline !== row.objective ? 'OBJECTIVE PTS' : 'POINTS'}
+              label={row.quality != null && row.headline !== row.objective ? labels.statObjectivePts : labels.statPoints}
               value={String(row.objective)}
-              title={row.quality != null ? `Ledger total. Score badge shows ${row.headline}, blended with chair quality ${row.quality}/100.` : 'Ledger total.'}
+              title={row.quality != null ? fmt(labels.titleLedgerBlended, { headline: row.headline, quality: row.quality }) : labels.titleLedger}
             />
           </div>
         </>
@@ -157,9 +241,9 @@ export function DelegateDetail({ row, summary = false, extra }: {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
         {/* Points breakdown */}
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <p style={SECTION_LABEL}>POINTS BREAKDOWN</p>
+          <p style={SECTION_LABEL}>{labels.sectionPointsBreakdown}</p>
           {grouped.length === 0 && (
-            <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}>No scored activity yet.</p>
+            <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}>{labels.emptyNoScored}</p>
           )}
           {grouped.map((g) => (
             <div key={g.sourceId} style={{ marginBlockEnd: 10 }}>
@@ -175,7 +259,7 @@ export function DelegateDetail({ row, summary = false, extra }: {
                 <div key={i} style={{ display: 'flex', gap: 8, padding: '2px 0' }}>
                   <span style={{ fontFamily: OUTFIT, fontSize: 11.5, color: SOFT, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.detail || r.label}
-                    {r.timestamp ? ` · ${new Date(r.timestamp).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+                    {r.timestamp ? ` · ${new Date(r.timestamp).toLocaleString(dateLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
                   </span>
                   <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontVariantNumeric: 'tabular-nums', color: r.pts < 0 ? RED : NEU.ink, flexShrink: 0 }}>
                     {r.pts < 0 ? '' : '+'}{r.pts}
@@ -188,22 +272,22 @@ export function DelegateDetail({ row, summary = false, extra }: {
 
         {/* Chair ratings + comments */}
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <p style={SECTION_LABEL}>CHAIR RATINGS</p>
+          <p style={SECTION_LABEL}>{labels.sectionChairRatings}</p>
           {row.factors.length === 0 ? (
             <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT, marginBlockEnd: 14 }}>
-              No factor ratings recorded by the chairs.
+              {labels.emptyNoRatings}
             </p>
           ) : (
             <div style={{ marginBlockEnd: 14 }}>
               {row.factors.map((f) => (
-                <FactorBar key={f.id} name={f.name} average={f.average} scaleMax={f.scaleMax} ratings={f.ratings} />
+                <FactorBar key={f.id} name={f.name} average={f.average} scaleMax={f.scaleMax} ratings={f.ratings} labels={labels} />
               ))}
             </div>
           )}
 
-          <p style={SECTION_LABEL}>CHAIR COMMENTS</p>
+          <p style={SECTION_LABEL}>{labels.sectionChairComments}</p>
           {comments.length === 0 ? (
-            <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}>No written comments yet.</p>
+            <p style={{ fontFamily: OUTFIT, fontSize: 12, color: SOFT }}>{labels.emptyNoComments}</p>
           ) : (
             comments.map((c) => (
               <div
@@ -217,8 +301,8 @@ export function DelegateDetail({ row, summary = false, extra }: {
                 <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, marginBlockStart: 5 }}>
                   {COMMENT_LEVEL_LABEL[c.level]}
                   {c.chairName ? ` · ${c.chairName}` : ''}
-                  {c.speechSeconds ? ` · ${c.speechSeconds}s speech` : ''}
-                  {c.createdAt ? ` · ${new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                  {c.speechSeconds ? ` · ${fmt(labels.commentSpeechSeconds, { n: c.speechSeconds })}` : ''}
+                  {c.createdAt ? ` · ${new Date(c.createdAt).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
                 </p>
               </div>
             ))
@@ -246,8 +330,11 @@ export function ScoreboardTable({
   locale = LOCALE,
   detailSummary = false,
   detailExtra,
+  labels = DEFAULT_SCOREBOARD_LABELS,
 }: {
   rows: ScoreboardDelegateRow[];
+  /** Translated strings. Omitted by every organiser caller → English literals. */
+  labels?: ScoreboardLabels;
   sortKey: SortKey;
   showCommitteeColumn: boolean;
   expanded: string | null;
@@ -279,14 +366,14 @@ export function ScoreboardTable({
           borderBlockEnd: `1px solid ${CARD_BORDER_COLOR}`, backgroundColor: 'rgba(27,56,40,0.04)',
         }}
       >
-        <span style={{ ...HEADER_CELL, width: 28, textAlign: 'end' }}>#</span>
+        <span style={{ ...HEADER_CELL, width: 28, textAlign: 'end' }}>{labels.colRank}</span>
         <span style={{ width: 22 }} />
-        <span style={{ ...HEADER_CELL, flex: 1, minWidth: 0 }}>DELEGATION</span>
-        {showCommitteeColumn && <span style={{ ...HEADER_CELL, width: 120 }}>COMMITTEE</span>}
-        <span style={{ ...HEADER_CELL, width: 70, textAlign: 'end' }}>SPEECHES</span>
-        <span style={{ ...HEADER_CELL, width: 78, textAlign: 'end' }}>TIME</span>
-        <span style={{ ...HEADER_CELL, width: 62, textAlign: 'end' }}>NOTES</span>
-        <span style={{ ...HEADER_CELL, width: 62, textAlign: 'end' }}>SCORE</span>
+        <span style={{ ...HEADER_CELL, flex: 1, minWidth: 0 }}>{labels.colDelegation}</span>
+        {showCommitteeColumn && <span style={{ ...HEADER_CELL, width: 120 }}>{labels.colCommittee}</span>}
+        <span style={{ ...HEADER_CELL, width: 70, textAlign: 'end' }}>{labels.colSpeeches}</span>
+        <span style={{ ...HEADER_CELL, width: 78, textAlign: 'end' }}>{labels.colTime}</span>
+        <span style={{ ...HEADER_CELL, width: 62, textAlign: 'end' }}>{labels.colNotes}</span>
+        <span style={{ ...HEADER_CELL, width: 62, textAlign: 'end' }}>{labels.colScore}</span>
         <span style={{ width: 16 }} />
       </div>
 
@@ -331,7 +418,7 @@ export function ScoreboardTable({
                 </span>
                 {(r.status === 'absent' || r.isObserver) && (
                   <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT }}>
-                    {r.isObserver ? 'Observer' : 'Absent'}
+                    {r.isObserver ? labels.observer : labels.absent}
                   </span>
                 )}
                 {/* The COMMITTEE column below is `hidden md:inline-block`, so on
@@ -371,7 +458,7 @@ export function ScoreboardTable({
                     overflow: 'hidden', textOverflow: 'ellipsis',
                   }}
                 >
-                  {r.gslSpeeches + r.caucusSpeeches} {r.gslSpeeches + r.caucusSpeeches === 1 ? 'speech' : 'speeches'}
+                  {r.gslSpeeches + r.caucusSpeeches} {r.gslSpeeches + r.caucusSpeeches === 1 ? labels.speechOne : labels.speechMany}
                   <span aria-hidden style={{ opacity: 0.5 }}>·</span>
                   {formatSpeakingTime(r.speakingSeconds)}
                   <span aria-hidden style={{ opacity: 0.5 }}>·</span>
@@ -391,7 +478,7 @@ export function ScoreboardTable({
               <span
                 className="hidden md:inline-block"
                 style={{ width: 70, flexShrink: 0, fontFamily: OUTFIT, fontSize: 12.5, color: SOFT, fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}
-                title={`${r.gslSpeeches} GSL · ${r.caucusSpeeches} caucus`}
+                title={fmt(labels.titleRowSpeeches, { gsl: r.gslSpeeches, caucus: r.caucusSpeeches })}
               >
                 {r.gslSpeeches + r.caucusSpeeches}
               </span>
@@ -409,7 +496,9 @@ export function ScoreboardTable({
                     backgroundColor: NEU.forest, color: NEU.gold, borderRadius: 999,
                     paddingInline: 9, paddingBlock: 2, display: 'inline-block',
                   }}
-                  title={r.quality != null ? `${r.objective} objective points · quality ${r.quality}/100` : `${r.objective} objective points`}
+                  title={r.quality != null
+                    ? fmt(labels.titleScoreBlended, { objective: r.objective, quality: r.quality })
+                    : fmt(labels.titleScore, { objective: r.objective })}
                 >
                   {r.headline}
                 </span>
@@ -421,7 +510,7 @@ export function ScoreboardTable({
                 />
               </span>
             </button>
-            {open && <DelegateDetail row={r} summary={detailSummary} extra={detailExtra?.(r)} />}
+            {open && <DelegateDetail row={r} summary={detailSummary} extra={detailExtra?.(r)} locale={locale} labels={labels} />}
           </div>
         );
       })}

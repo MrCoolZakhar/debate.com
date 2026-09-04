@@ -38,11 +38,12 @@ import { FlagImg } from '@/components/FlagImg';
 import { NEU, NeuPill, OUTFIT } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import {
-  ScoreboardTable, Stat, SORTS, sortScoreboardRows, type SortKey,
+  ScoreboardTable, Stat, SORTS, sortScoreboardRows,
+  type SortKey, type ScoreboardLabels,
 } from '@/components/ScoreboardTable';
 import { Committee } from '@/lib/types';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows } from '@/lib/sessionScoreboard';
 import {
   formatSpeakingTime, type ScoreboardDelegateRow,
@@ -61,6 +62,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   isViewOnly?: boolean;
 }) {
   const { language } = useLanguage();
+  const t = useT();
   const [tab, setTab] = useState<'ranking' | 'matrix'>('ranking');
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -85,9 +87,62 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     setAwardAmt(''); setAwardNote(''); setDeduct(false);
   };
 
+  // The shared table deliberately does NOT call `useT()` — its other callers are
+  // the English-only organiser dashboard, which would otherwise start rendering
+  // Spanish column headers. The translated session hands it its strings instead.
+  const labels: ScoreboardLabels = useMemo(() => ({
+    colRank: t('sb_col_rank'),
+    colDelegation: t('sb_col_delegation'),
+    colCommittee: t('sb_col_committee'),
+    colSpeeches: t('sb_col_speeches'),
+    colTime: t('sb_col_time'),
+    colNotes: t('sb_col_notes'),
+    colScore: t('sb_col_score'),
+    sectionThisSession: t('sb_section_this_session'),
+    sectionPointsBreakdown: t('sb_section_points_breakdown'),
+    sectionChairRatings: t('sb_section_chair_ratings'),
+    sectionChairComments: t('sb_section_chair_comments'),
+    statSpeeches: t('sb_stat_speeches'),
+    statSpeakingTime: t('sb_stat_speaking_time'),
+    statMotions: t('sb_stat_motions'),
+    statRightsOfReply: t('sb_stat_rights_of_reply'),
+    statWpDr: t('sb_stat_wp_dr'),
+    statChairNotes: t('sb_stat_chair_notes'),
+    statPoints: t('sb_stat_points'),
+    statObjectivePts: t('sb_stat_objective_pts'),
+    titleSpeechesSplit: t('sb_title_speeches_split'),
+    titleMotions: t('sb_title_motions'),
+    titleWpDr: t('sb_title_wp_dr'),
+    titleLedgerBlended: t('sb_title_ledger_blended'),
+    titleLedger: t('sb_title_ledger'),
+    titleRowSpeeches: t('sb_title_row_speeches'),
+    titleScoreBlended: t('sb_title_score_blended'),
+    titleScore: t('sb_title_score'),
+    titleFactorAvgOne: t('sb_title_factor_avg_one'),
+    titleFactorAvgMany: t('sb_title_factor_avg_many'),
+    emptyNoScored: t('sb_empty_no_scored'),
+    emptyNoRatings: t('sb_empty_no_ratings'),
+    emptyNoComments: t('sb_empty_no_comments'),
+    observer: t('sb_observer'),
+    absent: t('sb_absent'),
+    speechOne: t('sb_speech_one'),
+    speechMany: t('sb_speech_many'),
+    commentSpeechSeconds: t('sb_comment_speech_seconds'),
+  }), [t]);
+
+  // `SORTS` is exported with English labels because the organiser scoreboard
+  // renders it verbatim. Same reasoning as `labels`: translate at this caller.
+  const sortLabel: Record<SortKey, string> = {
+    score: t('sb_col_score'),
+    speeches: t('sb_col_speeches'),
+    time: t('sb_stat_speaking_time'),
+    comments: t('sb_sort_comments'),
+    name: t('sb_col_delegation'),
+  };
+
   const allRows = useMemo(
-    () => buildSessionScoreboardRows(committee, feedback),
-    [committee, feedback],
+    () => buildSessionScoreboardRows(committee, feedback, language),
+    [committee, feedback, language],
   );
   const rows = useMemo(
     () => sortScoreboardRows(allRows, sortKey, language),
@@ -188,23 +243,23 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
       style={{ borderTop: `1px solid ${CARD_BORDER_COLOR}`, backgroundColor: NEU.base }}
     >
       <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: NEU.forest, marginBlockEnd: 8 }}>
-        MANUAL ADJUSTMENT
+        {t('sb_manual_adjustment')}
       </p>
       <div className="flex items-center gap-2 mb-2">
         <button onClick={() => setDeduct(false)} className="text-xs font-bold px-2.5 py-1 rounded-lg"
-          style={{ fontFamily: OUTFIT, backgroundColor: !deduct ? NEU.forest : 'transparent', color: !deduct ? NEU.gold : SOFT, border: `1px solid ${CARD_BORDER_COLOR}` }}>+ Award</button>
+          style={{ fontFamily: OUTFIT, backgroundColor: !deduct ? NEU.forest : 'transparent', color: !deduct ? NEU.gold : SOFT, border: `1px solid ${CARD_BORDER_COLOR}` }}>{t('sb_award')}</button>
         <button onClick={() => setDeduct(true)} className="text-xs font-bold px-2.5 py-1 rounded-lg"
-          style={{ fontFamily: OUTFIT, backgroundColor: deduct ? RED : 'transparent', color: deduct ? '#FFFFFF' : SOFT, border: `1px solid ${CARD_BORDER_COLOR}` }}>− Deduct</button>
-        <input type="number" min={1} value={awardAmt} onChange={(e) => setAwardAmt(e.target.value)} placeholder="pts"
+          style={{ fontFamily: OUTFIT, backgroundColor: deduct ? RED : 'transparent', color: deduct ? '#FFFFFF' : SOFT, border: `1px solid ${CARD_BORDER_COLOR}` }}>{t('sb_deduct')}</button>
+        <input type="number" min={1} value={awardAmt} onChange={(e) => setAwardAmt(e.target.value)} placeholder={t('sb_pts')}
           className="w-16 text-sm text-center rounded-lg px-1.5 py-1 outline-none"
           style={{ fontFamily: OUTFIT, backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, color: NEU.ink }} />
       </div>
-      <input value={awardNote} onChange={(e) => setAwardNote(e.target.value)} placeholder="Reason (required)"
+      <input value={awardNote} onChange={(e) => setAwardNote(e.target.value)} placeholder={t('sb_reason_required')}
         className="w-full text-sm rounded-lg px-2.5 py-1.5 mb-2 outline-none"
         style={{ fontFamily: OUTFIT, backgroundColor: NEU.surface, border: `1px solid ${CARD_BORDER_COLOR}`, color: NEU.ink }} />
       <button onClick={() => submitManual(row.country)} disabled={!awardAmt || !awardNote.trim()}
         className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-40 gv-lift"
-        style={{ fontFamily: OUTFIT, backgroundColor: NEU.forest, color: NEU.gold }}>Apply</button>
+        style={{ fontFamily: OUTFIT, backgroundColor: NEU.forest, color: NEU.gold }}>{t('sb_apply')}</button>
     </div>
   );
 
@@ -232,10 +287,10 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
           {/* Header */}
           <div className="px-5 py-3 flex items-center gap-3 shrink-0 sticky top-0 z-10" style={{ backgroundColor: NEU.forest }}>
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: NEU.gold }} />
-            <span className="text-sm font-black tracking-wide" style={{ color: NEU.gold }}>Scoreboard</span>
+            <span className="text-sm font-black tracking-wide" style={{ color: NEU.gold }}>{t('sb_title')}</span>
             <div className="ms-auto flex items-center gap-2">
-              <button onClick={exportCsv} className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift" style={{ backgroundColor: NEU.gold, color: NEU.forest }}>Export CSV</button>
-              <button onClick={onClose} className="text-[#EDE7D8] hover:text-white text-lg leading-none" aria-label="Close">✕</button>
+              <button onClick={exportCsv} className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift" style={{ backgroundColor: NEU.gold, color: NEU.forest }}>{t('sb_export_csv')}</button>
+              <button onClick={onClose} className="text-[#EDE7D8] hover:text-white text-lg leading-none" aria-label={t('sb_close')}>✕</button>
             </div>
           </div>
 
@@ -245,7 +300,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
               <button key={id} onClick={() => { setTab(id); setExpanded(null); }}
                 className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
                 style={{ backgroundColor: tab === id ? NEU.forest : 'transparent', color: tab === id ? NEU.gold : SOFT, border: tab === id ? 'none' : `1px solid ${CARD_BORDER_COLOR}` }}>
-                {id === 'ranking' ? 'Ranking' : 'Matrix'}
+                {id === 'ranking' ? t('sb_tab_ranking') : t('sb_tab_matrix')}
               </button>
             ))}
           </div>
@@ -254,17 +309,17 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
             {tab === 'ranking' && (
               <div style={{ animation: 'sbFade 160ms ease-out' }}>
                 <div className="flex gap-2.5 flex-wrap mb-4">
-                  <Stat label="DELEGATIONS" value={String(totals.delegations)} />
-                  <Stat label="SPEECHES" value={String(totals.speeches)} />
-                  <Stat label="SPEAKING TIME" value={formatSpeakingTime(totals.seconds)} />
-                  <Stat label="CHAIR NOTES" value={String(totals.comments)} />
+                  <Stat label={t('sb_stat_delegations')} value={String(totals.delegations)} />
+                  <Stat label={t('sb_stat_speeches')} value={String(totals.speeches)} />
+                  <Stat label={t('sb_stat_speaking_time')} value={formatSpeakingTime(totals.seconds)} />
+                  <Stat label={t('sb_stat_chair_notes')} value={String(totals.comments)} />
                 </div>
 
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>SORT BY</span>
+                  <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.12em', color: SOFT }}>{t('sb_sort_by')}</span>
                   {SORTS.map((s) => (
                     <NeuPill key={s.key} active={sortKey === s.key} onClick={() => setSortKey(s.key)}>
-                      {s.label}
+                      {sortLabel[s.key]}
                     </NeuPill>
                   ))}
                 </div>
@@ -278,7 +333,8 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                   locale={language}
                   detailSummary
                   detailExtra={isViewOnly ? undefined : manualAdjustment}
-                  emptyText="No delegations on the roll yet."
+                  labels={labels}
+                  emptyText={t('sb_empty_no_delegations')}
                 />
               </div>
             )}
@@ -289,23 +345,23 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                 <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
-                      <th style={{ ...TH, textAlign: 'start' }}>DELEGATION</th>
-                      <th style={{ ...TH, textAlign: 'end' }} title="Speeches on the General Speakers' List">GSL</th>
-                      <th style={{ ...TH, textAlign: 'end' }} title="Speeches in caucus">CAUC</th>
-                      <th style={{ ...TH, textAlign: 'end' }} title="Total speaking time">TIME</th>
-                      <th style={{ ...TH, textAlign: 'end' }} title="Motions raised">MOT</th>
-                      <th style={{ ...TH, textAlign: 'end' }} title="Rights of reply">RTR</th>
-                      <th style={{ ...TH, textAlign: 'end' }} title="Working papers sponsored">WP</th>
-                      <th style={{ ...TH, textAlign: 'end' }} title="Draft resolutions sponsored">DR</th>
-                      <th style={{ ...TH, textAlign: 'end' }} title="Manual awards and deductions">±</th>
+                      <th style={{ ...TH, textAlign: 'start' }}>{t('sb_col_delegation')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_gsl_title')}>{t('sb_matrix_gsl')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_cauc_title')}>{t('sb_matrix_cauc')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_time_title')}>{t('sb_col_time')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_mot_title')}>{t('sb_matrix_mot')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_rtr_title')}>{t('sb_matrix_rtr')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_wp_title')}>{t('sb_matrix_wp')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_dr_title')}>{t('sb_matrix_dr')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_manual_title')}>±</th>
                       {/* WAS "TOTAL", AND IT WAS NOT THE TOTAL ANYONE ELSE MEANT.
                           This column is `computeObjectiveScore` — the ledger sum
                           — while the Ranking tab's badge is the blended
                           headline. Under any `scoreBlend > 0` they differ, and
                           the column was labelled as though they could not. Both
                           are shown now, each under its own name. */}
-                      <th style={{ ...TH, textAlign: 'end' }} title="Objective ledger total, before any quality blend">POINTS</th>
-                      <th style={{ ...TH, textAlign: 'end', color: NEU.forest }} title="What the Ranking tab shows: objective points blended with chair quality ratings">SCORE</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_points_title')}>{t('sb_stat_points')}</th>
+                      <th style={{ ...TH, textAlign: 'end', color: NEU.forest }} title={t('sb_matrix_score_title')}>{t('sb_col_score')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -335,7 +391,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                 </table>
                 {allRows.length === 0 && (
                   <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, textAlign: 'center', padding: '32px 0' }}>
-                    No delegations on the roll yet.
+                    {t('sb_empty_no_delegations')}
                   </p>
                 )}
               </div>

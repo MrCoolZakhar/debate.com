@@ -22,6 +22,7 @@
 // ============================================================
 
 import type { Committee } from './types';
+import { factorName, sourceName } from './scoringNames';
 import {
   buildActivityRow,
   foldFactors,
@@ -53,8 +54,18 @@ import type { FeedbackEntry } from './committeeService';
 export function buildSessionScoreboardRows(
   committee: Committee,
   feedback: FeedbackEntry[],
+  // Session-only. The organiser board builds its rows through
+  // `loadConferenceScoreboard` and stays English, which is correct for that surface.
+  language: string = 'en',
 ): ScoreboardDelegateRow[] {
   const cfg = getScoringConfig(committee);
+
+  // Built-in factor and source names are English strings seeded into the committee's
+  // settings, so without this a Spanish committee read "Diplomacy" and "GSL speech"
+  // amid otherwise-Spanish UI. A chair's genuine rename still wins in every locale.
+  const localizedFactors = cfg.factors.map((f) => ({ ...f, name: factorName(f, language) }));
+  const sourceLabel = (id: string, fallback: string) =>
+    sourceName({ id, name: cfg.sources.find((x) => x.id === id)?.name ?? fallback }, language);
 
   return committee.delegates.map((d) => {
     const activity = buildActivityRow(committee, d.country);
@@ -100,13 +111,13 @@ export function buildSessionScoreboardRows(
       draftResolutions: activity.dr,
       manual: activity.manual,
 
-      ledger: computeLedger(committee, d.country),
+      ledger: computeLedger(committee, d.country).map((r) => ({ ...r, label: sourceLabel(r.sourceId, r.label) })),
       comments,
       // Ratings already recorded ALWAYS display. `ScoringConfig.factorRatingsEnabled`
       // gates the chair's rating input in the feedback bar; it must never hide
       // a rating a chair has already given, or turning the setting off would
       // silently erase the record from the board.
-      factors: foldFactors(feedback, d.country, cfg.factors, cfg.factorScaleMax),
+      factors: foldFactors(feedback, d.country, localizedFactors, cfg.factorScaleMax),
     };
   });
 }

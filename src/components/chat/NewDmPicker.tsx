@@ -38,7 +38,7 @@ export default function NewDmPicker({
   onPick: (key: string) => void;
   /** Country names of selectable delegates. */
   delegates: string[];
-  /** Chair names of selectable co-chairs. */
+  /** Chair names of the other chairs on the dais (Moderator and Commenters alike). */
   coChairs: string[];
   language: string;
   t: TFn;

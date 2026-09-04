@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlagImg } from '@/components/FlagImg';
 import { CaucusState, Committee } from '@/lib/types';
 import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { getScoringConfig } from '@/lib/scoring';
+import { factorName } from '@/lib/scoringNames';
 import { addFeedback, updateFeedback, getFeedbackForCommittee } from '@/lib/committeeService';
 
 type ItemKind = 'past' | 'live' | 'next';
@@ -54,6 +55,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   feedbackVersion?: number;
 }) {
   const { language } = useLanguage();
+  const t = useT();
   const cfg = getScoringConfig(committee);
   // Ratings are opt-in (Settings -> Points). When off there are no factors, so the
   // rating column collapses and the note gets the full width of the dock.
@@ -257,9 +259,9 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   // own label — otherwise a finished caucus speech would be re-tagged by whatever is on the
   // floor now (or, once the caucus ends, re-tag the GSL rows as a caucus).
   const tagFor = (item: FeedItem) => {
-    if (item.context === 'speakers-list') return 'GSL';
+    if (item.context === 'speakers-list') return t('fb_tag_gsl');
     if (item.context === ctx && caucus?.motionLabel) return caucus.motionLabel;
-    return item.context === 'unmoderated-caucus' ? 'UNMOD' : 'CAUCUS';
+    return item.context === 'unmoderated-caucus' ? t('fb_tag_unmod') : t('fb_tag_caucus');
   };
   const maxScale = Math.max(1, cfg.factorScaleMax);
 
@@ -270,7 +272,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
     const out: { chairName: string; content: string; isMine: boolean }[] = [];
     if (mine.content.trim()) out.push({ chairName, content: mine.content.trim(), isMine: true });
     for (const o of others[key] ?? []) {
-      if (o.content.trim()) out.push({ chairName: o.chairName || 'Chair', content: o.content.trim(), isMine: false });
+      if (o.content.trim()) out.push({ chairName: o.chairName || t('fb_chair'), content: o.content.trim(), isMine: false });
     }
     return out;
   };
@@ -295,7 +297,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
         if (!interactive) {
           return (
             <div key={f.id} className="flex items-center gap-1.5">
-              <span className="text-[9px] uppercase tracking-wide truncate flex-1" style={{ color: '#B8AE9C' }}>{f.name}</span>
+              <span className="text-[9px] uppercase tracking-wide truncate flex-1" style={{ color: '#B8AE9C' }}>{factorName(f, language)}</span>
               <span className="text-[11px] font-bold shrink-0" style={{ color: '#9A8A78' }}>{v}</span>
             </div>
           );
@@ -303,7 +305,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
         return (
           <div key={f.id}>
             <div className="flex items-baseline justify-between gap-1">
-              <span className="text-[9px] font-bold uppercase tracking-wide truncate" style={{ color: '#6A5A4A' }}>{f.name}</span>
+              <span className="text-[9px] font-bold uppercase tracking-wide truncate" style={{ color: '#6A5A4A' }}>{factorName(f, language)}</span>
               <span className="text-xs font-black shrink-0" style={{ color: '#1B3828' }}>{v}</span>
             </div>
             <input
@@ -323,7 +325,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
       <style>{`.fb-dock-scroll::-webkit-scrollbar{display:none}`}</style>
       {items.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-xs px-4" style={{ color: '#9A8A78' }}>Comments appear here as delegates take the floor.</p>
+          <p className="text-xs px-4" style={{ color: '#9A8A78' }}>{t('fb_empty')}</p>
         </div>
       ) : (
         <div className="fb-dock-scroll flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
@@ -377,7 +379,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
                         value={rs.content}
                         onChange={(e) => setNote(item, e.target.value)}
                         onBlur={() => persist(item, rs.content, rs.scores)}
-                        placeholder="Private note…"
+                        placeholder={t('fb_private_note')}
                         className="w-full mt-2 text-sm rounded-lg px-3 py-2 outline-none resize-none"
                         style={{ color: '#1C1410', backgroundColor: '#FAF8F3', border: '1px solid #EDE7D8' }}
                       />
@@ -415,7 +417,11 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
                       <span className="font-semibold shrink-0" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
                       {notes.length > 0 ? (
                         <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#6A5A4A' }}>
-                          {notes.length === 1 ? `— ${notes[0].content}` : notes.map((n, ni) => (
+                          {/* Drop the author ONLY when the single note is your own — that is the
+                              common case and it should read exactly as it always did. A lone note
+                              written by SOMEONE ELSE must still carry their name, or you cannot tell
+                              your own note from a colleague's. */}
+                          {notes.length === 1 && notes[0].isMine ? `— ${notes[0].content}` : notes.map((n, ni) => (
                             <span key={ni}>
                               {ni > 0 && <span style={{ color: '#B8AE9C' }}> / </span>}
                               <span style={{ fontWeight: 700, color: '#1B3828' }}>{n.chairName}: </span>

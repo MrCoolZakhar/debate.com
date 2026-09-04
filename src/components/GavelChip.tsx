@@ -4,7 +4,7 @@
 // GavelChip — the ONE place a chair sees, and changes, who is chairing.
 //
 // Replaces the old crimson "View only · X is chairing" pill. That pill was
-// (a) only rendered for the co-chair, so the head chair had no idea a handover
+// (a) only rendered for the Commenter, so the Moderator had no idea a handover
 // was even possible, and (b) coloured like an error, which made switching feel
 // like something had gone wrong. The whole point of this redesign is the
 // opposite message: switching is cheap, instant, and reversible.

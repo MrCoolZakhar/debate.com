@@ -562,7 +562,7 @@ export async function clearCurrentSpeakerIfUnchanged(
   await wrapped;
 }
 
-// Lightweight single-row fetch of just the current speaker — used by co-chair views
+// Lightweight single-row fetch of just the current speaker — used by Commenter views
 // to react to current_speaker realtime events without a full committee refetch.
 export async function getCurrentSpeakerRow(committeeId: string): Promise<{
   currentSpeaker: SpeakerEntry | null; speakerTimeRemaining: number; speakerStartedAt: string | null;
@@ -1177,7 +1177,7 @@ export async function updateCommitteeHeadChairInDB(committeeId: string, headChai
 }
 
 // Persist the scoring config into the committee settings jsonb so it reaches
-// delegates / FAs / co-chairs on other devices (localStorage never syncs across devices).
+// delegates / FAs / Commenters on other devices (localStorage never syncs across devices).
 export async function updateCommitteeScoringInDB(committeeId: string, scoring: unknown, code: string, chairSuffix?: string): Promise<void> {
   const { data: existing } = await supabase
     .from('committees')
