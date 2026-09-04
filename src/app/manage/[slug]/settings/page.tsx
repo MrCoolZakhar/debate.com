@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
-  Settings2, Globe, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
+  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -799,7 +799,6 @@ export default function SettingsPage() {
   // Organizers + privacy inline error surfaces
   const [organizersError, setOrganizersError] = useState('');
   const [privacyError, setPrivacyError] = useState('');
-  const [archiving, setArchiving] = useState(false);
 
   // Per-save "saving" flags, every conference-row save below is: click →
   // disabled/spinner → awaited + verified write → refreshConferenceQuiet()
@@ -1692,38 +1691,6 @@ export default function SettingsPage() {
       await refreshConferenceQuiet();
       setPublicToggleSaving(false);
     })();
-  }
-
-  async function handleArchive() {
-    if (!conference || archiving) return;
-    const { confirmed } = await confirm({
-      title: 'Archive this conference?',
-      body: 'It will be hidden from all listings.',
-      confirmLabel: 'Archive',
-      danger: true,
-    });
-    if (!confirmed) return;
-    // The write stays awaited: navigating away must depend on it succeeding,
-    // and on a verified row match, a silent zero-row update must not send
-    // the user off to /my-conferences believing this archived.
-    setArchiving(true);
-    setPrivacyError('');
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setArchiving(false);
-      setPrivacyError('Your session has expired, please refresh and sign in again.');
-      return;
-    }
-    const { data, error } = await supabase.from('conferences').update({
-      status: 'archived',
-      is_public: false,
-    }).eq('id', conference.id).select('id');
-    if (error || !data || data.length !== 1) {
-      setPrivacyError(saveFailMessage(error));
-      setArchiving(false);
-      return;
-    }
-    router.push('/my-conferences');
   }
 
   // ── Lineage actions ─────────────────────────────────────────────────────
@@ -2776,6 +2743,25 @@ export default function SettingsPage() {
                       {linkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
                       {linkCopied ? 'COPIED' : 'COPY APPLICATION LINK'}
                     </button>
+                    <a
+                      href={`/conferences/${conference.slug}/apply?role=${role}&preview=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
+                      style={{
+                        padding: '7px 12px',
+                        fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                        letterSpacing: '0.06em',
+                        color: '#1B3828', backgroundColor: 'transparent',
+                        border: '1.5px solid #DDD4C0', cursor: 'pointer',
+                        textDecoration: 'none',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      <Eye size={13} strokeWidth={2.4} />
+                      PREVIEW APPLICATION
+                    </a>
                     <PillToggle
                       value={enabled}
                       onChange={(v) => saveRoleConfig(role, { is_enabled: v })}
@@ -4470,18 +4456,8 @@ export default function SettingsPage() {
             Danger Zone
           </p>
           <button
-            onClick={handleArchive}
-            className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
-            style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-          >
-            ARCHIVE CONFERENCE
-          </button>
-
-          <button
             onClick={() => { if (!isOwner) { setDeleteError('Only the conference owner can delete this view.'); return; } setDeleteError(''); setConfirmingDelete(true); }}
-            className="w-full rounded-xl py-2.5 mt-3 font-semibold text-sm focus:outline-none transition-colors"
+            className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
             style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}

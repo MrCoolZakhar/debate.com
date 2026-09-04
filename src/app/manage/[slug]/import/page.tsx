@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   Download, Upload as UploadIcon, ArrowLeft, Check,
   AlertTriangle, Mail, Loader2, CircleCheck, CircleX,
-  FileSpreadsheet, Users, Link2, UserCheck, ArrowRight, Pencil, X, Archive,
+  FileSpreadsheet, Users, Link2, UserCheck, ArrowRight, Pencil, X,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
@@ -628,8 +628,6 @@ export default function ImportPage() {
 
       {activeTab === 'imported' ? (
         <ImportedDelegatesTab conference={conference} session={session} confirm={confirm} fixApplicationId={fixApplicationId} />
-      ) : conference.status === 'archived' ? (
-        <ArchivedImportNotice />
       ) : (
       <>
       {/* Header (non-landing only; the landing header lives in the left column) */}
@@ -964,24 +962,6 @@ function ImportTabSwitcher({ active, onChange }: { active: Tab; onChange: (t: Ta
         );
       })}
     </div>
-  );
-}
-
-// ── Archived guard ───────────────────────────────────────────────────────────
-
-function ArchivedImportNotice() {
-  return (
-    <NeuCard style={{ padding: '48px 24px' }}>
-      <div className="text-center">
-        <div className="flex justify-center mb-3">
-          <NeuIconDisc gradient={NEU_GRADIENTS.amber} icon={Archive} size={48} />
-        </div>
-        <p className="font-black text-base mb-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>Import unavailable</p>
-        <p className="text-sm" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
-          This conference is archived, so it cannot take new applications. If that was not intended, contact us and we can reopen it.
-        </p>
-      </div>
-    </NeuCard>
   );
 }
 

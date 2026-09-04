@@ -187,7 +187,6 @@ function formatConfDateRange(start: string, end: string): string {
 const STATUS_STYLES: Record<string, { bg: string; color: string; border: string; dot: string }> = {
   private:  { bg: 'rgba(184,132,74,0.14)', color: '#9A6B2F', border: 'rgba(184,132,74,0.4)',  dot: '#B8844A' },
   public:   { bg: 'rgba(61,122,82,0.16)',  color: '#2A5A3C', border: 'rgba(61,122,82,0.42)',  dot: '#3D7A52' },
-  archived: { bg: 'rgba(28,20,16,0.08)',   color: '#6A5A4A', border: 'rgba(28,20,16,0.22)',   dot: '#9A8A78' },
 };
 
 // ── Desktop floating rail ──────────────────────────────────────────────────
