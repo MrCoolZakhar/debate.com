@@ -1268,8 +1268,13 @@ function ConferenceApplyInner() {
       return;
     }
     fetchAll();
+  // `session?.access_token`, not `session`: AuthProvider swaps the session
+  // OBJECT on every auth event (token refresh, tab focus), and depending on it
+  // would refetch the whole apply flow each time. The token is a string, so it
+  // only changes when it really changes — or when it first arrives, which is
+  // the case fetchAll's guard above was silently swallowing.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, slug, role]);
+  }, [authLoading, user?.id, slug, role, session?.access_token]);
 
   // ══ DRAFT AUTOSAVE & RESUME ═══════════════════════════════════════════
   // The apply flow saves itself to `application_drafts` as it is filled in,
@@ -1606,8 +1611,15 @@ function ConferenceApplyInner() {
   }, [previewSocietyId, session]);
 
   async function fetchAll() {
-    setLoading(true);
+    // GUARD BEFORE setLoading(true), not after. The other order flipped the
+    // page into its loading state and then bailed, and nothing resets it — so
+    // a run that arrives before the session leaves the apply page on its
+    // spinner permanently. The driving effect below had no session dependency
+    // either, so nothing re-ran it once auth landed: the page simply never
+    // loaded. Bailing before touching `loading` means the worst case is a
+    // no-op, and the effect now re-fires when the token arrives.
     if (!session) return;
+    setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
     const { data: confData } = await supabase
@@ -4505,7 +4517,15 @@ function ConferenceApplyInner() {
     );
   }
 
-  if ((!roleConfig || (!roleConfig.is_enabled && !previewing)) && !canEdit) {
+  // `previewing` now short-circuits the WHOLE gate, not just the is_enabled
+  // half. A role with no application_role_configs row at all left `roleConfig`
+  // null, and `!roleConfig` was not guarded by preview — so previewing a role
+  // that had never been configured showed "Applications are not open", which is
+  // precisely the case the preview exists for ("see what an applicant sees
+  // BEFORE turning it on"). Four live conferences are missing their
+  // secretariat/staff rows today, those roles being the most recently added.
+  // Safe with a null roleConfig: every other read of it is optional-chained.
+  if (!previewing && (!roleConfig || !roleConfig.is_enabled) && !canEdit) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
