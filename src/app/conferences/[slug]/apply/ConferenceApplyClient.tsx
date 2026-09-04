@@ -911,6 +911,11 @@ function ConferenceApplyInner() {
   // an editable status (rejected or submitted), see `canEdit` below — never
   // trust the query param alone.
   const isEditMode = searchParams.get('edit') === '1';
+  // Organizer preview (?preview=1): lets an organizer see exactly what an
+  // applicant sees for a role before turning it on, without writing anything.
+  // Mutually exclusive with edit mode — every isEditMode branch below treats
+  // preview as if edit were off.
+  const isPreview = searchParams.get('preview') === '1';
   const router = useRouter();
   const reducedMotion = useReducedMotion();
   const { user, session, loading: authLoading } = useAuth();
@@ -924,6 +929,15 @@ function ConferenceApplyInner() {
   const [otherRoleApp, setOtherRoleApp] = useState<OtherActiveApp | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  // Whether the signed-in user may preview this conference at all — set once
+  // fetchAll loads the conference, via the is_conference_organizer RPC.
+  // ?preview=1 alone is never enough: a stranger who appends it must see the
+  // walls exactly as today.
+  const [canPreview, setCanPreview] = useState(false);
+  // The ONLY flag every preview branch below reads. ?preview=1 from a
+  // stranger, with canPreview still false, leaves this false and the page
+  // behaves exactly as it does today, walls and all.
+  const previewing = isPreview && canPreview;
 
   // ── Age gate (conference.min_age), DOB comes from the user's profile
   const [myDob, setMyDob] = useState<string | null>(null);
@@ -1320,7 +1334,7 @@ function ConferenceApplyInner() {
 
   const draftEnabled =
     !isEditMode && !authLoading && !loading && !draftConflict &&
-    !!session && !!conference && !!user && !existingApp;
+    !!session && !!conference && !!user && !existingApp && !previewing;
 
   // Live mirrors for the saver, which is called from event listeners and from
   // async continuations and must never read a stale closure. Declared BEFORE
@@ -1330,7 +1344,9 @@ function ConferenceApplyInner() {
   const draftCtxRef = useRef<{ token: string; conferenceId: string; userId: string; role: string } | null>(null);
   useEffect(() => {
     draftStateRef.current = { answers: draftAnswers, step };
-    draftEnabledRef.current = draftEnabled;
+    // Belt-and-braces: draftEnabled already folds in !previewing, but the
+    // draft system must never write in preview under any circumstance.
+    draftEnabledRef.current = draftEnabled && !previewing;
     draftCtxRef.current = session && conference && user
       ? { token: session.access_token, conferenceId: conference.id, userId: user.id, role }
       : null;
@@ -1437,6 +1453,8 @@ function ConferenceApplyInner() {
     // An applicant who already has an application for this role sees the
     // "already applied" screen; there is nothing to resume into.
     if (existingApp) return;
+    // Preview always starts on a clean step 1 — never resumes a real draft.
+    if (previewing) return;
     if (draftLoadStartedRef.current) return; // also guards StrictMode's double effect
     draftLoadStartedRef.current = true;
 
@@ -1605,6 +1623,13 @@ function ConferenceApplyInner() {
     }
 
     setConference(confData as Conference);
+
+    // Organizer preview eligibility. Read-only, and deliberately not gated on
+    // isPreview — knowing this costs nothing and keeps the check in one place.
+    if (isPreview) {
+      const { data: isOrganizer } = await supabase.rpc('is_conference_organizer', { conf_id: confData.id });
+      setCanPreview(!!isOrganizer);
+    }
 
     const [roleRes, committeesRes, societiesRes, appRes, otherAppRes, profileRes, subRes, cvCountRes] = await Promise.all([
       supabase
@@ -1874,6 +1899,9 @@ function ConferenceApplyInner() {
   }
 
   async function handleSaveDob() {
+    // Unreachable in preview today (the needsDob wall it's called from is
+    // skipped when previewing), but never writes even if that changes.
+    if (previewing) return;
     if (!session || !user) return;
     setDobError('');
     const age = ageAt(dobInput);
@@ -1934,6 +1962,8 @@ function ConferenceApplyInner() {
   // Delete handler wired into the shared CVEntryModal (only reachable when
   // editing an existing entry — the inline "add" flow never triggers it).
   async function handleDeleteCvEntry(id: string) {
+    // Never delete a real MUN CV row from a preview session.
+    if (previewing) return;
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
     await supabase.from('mun_cv_entries').delete().eq('id', id);
@@ -2067,6 +2097,12 @@ function ConferenceApplyInner() {
   }
 
   async function handleSubmit() {
+    // Preview never writes. Nothing below this line may run when previewing —
+    // this is the exit, not a step toward submitting.
+    if (previewing) {
+      router.push(`/manage/${slug}/settings?tab=applications&role=${role}`);
+      return;
+    }
     const blocks = normalizeBlocks(roleConfig?.custom_questions ?? []);
     const questionCheck = validateAnswers(questionsOf(blocks), customAnswers);
     if (!questionCheck.valid) {
@@ -2414,6 +2450,9 @@ function ConferenceApplyInner() {
   // refunds any Gavelling credit that was held. On success we leave the apply
   // flow for the applicant's conferences list.
   async function handleWithdraw() {
+    // The UI trigger is already hidden in preview (isEditMode && !previewing
+    // guards it), but never withdraw a real application from here regardless.
+    if (previewing) return;
     if (!session || !existingApp) { setWithdrawError('Your session expired. Please sign in again.'); return; }
     if (existingApp.status !== 'submitted') {
       setWithdrawError('This application can no longer be withdrawn.');
@@ -2983,7 +3022,7 @@ function ConferenceApplyInner() {
 
         <WizardFooter
           onNext={handleContinue}
-          nextLabel={step >= totalSteps ? (submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')) : 'Continue'}
+          nextLabel={step >= totalSteps ? (previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')) : 'Continue'}
           primary
           disabled={submitting}
         />
@@ -3620,6 +3659,8 @@ function ConferenceApplyInner() {
       setExperienceEntries(prev => [...prev, ...imported]);
     }
     async function handleSaveToMunCv() {
+      // Preview never writes, not even to the organizer's own real MUN CV.
+      if (previewing) return;
       if (!session || !user || savingToCv || newEntries.length === 0) return;
       setSavingToCv(true);
       setCvSaveError('');
@@ -3995,7 +4036,7 @@ function ConferenceApplyInner() {
     // Edit mode resubmits the existing application via resubmit_application —
     // it never runs the credit-consuming create path in handleSubmit, so the
     // gate/cost card only applies to fresh submissions.
-    const gated = !isEditMode && !canApply;
+    const gated = !isEditMode && !previewing && !canApply;
 
     return (
       <WizardShell
@@ -4307,14 +4348,14 @@ function ConferenceApplyInner() {
 
         <WizardFooter
           onNext={handleSubmit}
-          nextLabel={submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')}
+          nextLabel={previewing ? 'Return to settings' : submitting ? 'Submitting…' : (isEditMode ? 'Resubmit application' : 'Submit application')}
           primary
           disabled={submitting || gated}
         />
 
         {/* ── Withdraw application — secondary, destructive; only while the
             application is still pending ('submitted'). Two-step confirm. ── */}
-        {isEditMode && existingApp?.status === 'submitted' && (
+        {isEditMode && !previewing && existingApp?.status === 'submitted' && (
           <div className="mt-8 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.12)' }}>
             {!withdrawConfirm ? (
               <div className="text-center">
@@ -4412,7 +4453,7 @@ function ConferenceApplyInner() {
   // "already applied". Checked BEFORE the same-role wall (and skipped
   // entirely by canEdit) so editing/resubmitting one's own rejected or
   // submitted application is never blocked by a second, unrelated role.
-  if (!canEdit && otherRoleApp) {
+  if (!canEdit && !previewing && otherRoleApp) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -4438,7 +4479,7 @@ function ConferenceApplyInner() {
     );
   }
 
-  if (existingApp && !canEdit) {
+  if (existingApp && !canEdit && !previewing) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -4464,7 +4505,7 @@ function ConferenceApplyInner() {
     );
   }
 
-  if ((!roleConfig || !roleConfig.is_enabled) && !canEdit) {
+  if ((!roleConfig || (!roleConfig.is_enabled && !previewing)) && !canEdit) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -4492,7 +4533,7 @@ function ConferenceApplyInner() {
 
   // ── Age gate screens ──────────────────────────────────────────────────────
 
-  if (underAge || overAge) {
+  if ((underAge || overAge) && !previewing) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -4533,7 +4574,7 @@ function ConferenceApplyInner() {
     );
   }
 
-  if (needsDob) {
+  if (needsDob && !previewing) {
     return (
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -4602,6 +4643,21 @@ function ConferenceApplyInner() {
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+      {/* Unmistakable, and present on every step since this wraps the whole
+          wizard dispatch below. Rendered in normal flow (not fixed) so the
+          rest of the page simply sits below it, no padding offset needed. */}
+      {previewing && (
+        <div
+          className="relative w-full text-center"
+          style={{
+            backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT,
+            fontSize: 12, fontWeight: 800, letterSpacing: '0.08em',
+            padding: '9px 16px', zIndex: 2,
+          }}
+        >
+          PREVIEW MODE. Nothing you type here is saved and no application is created.
+        </div>
+      )}
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       <SiteNav />
 
