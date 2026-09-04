@@ -576,15 +576,20 @@ function ManualPayAction({
   return (
     <>
       {externalPaymentUrl && (
-        <a
-          href={externalPaymentUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mb-3 font-bold text-sm focus:outline-none"
-          style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
-        >
-          VIEW PAYMENT INSTRUCTIONS
-        </a>
+        <>
+          <p className="mb-2" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, lineHeight: 1.6 }}>
+            Pay through the conference's own payment page, then come back and upload your proof.
+          </p>
+          <a
+            href={externalPaymentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mb-3 font-bold text-sm focus:outline-none"
+            style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+          >
+            GO TO PAYMENT PAGE
+          </a>
+        </>
       )}
       {externalPaymentNote && (
         <p className="mb-3" style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.muted, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
