@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
-  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
+  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase, Trophy,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -38,12 +38,16 @@ import {
   CopyToRolesModal, SetupIntro, Segmented, STATUS_STYLE,
   type RoleStatus as RoleStatusKind,
 } from './applicationsUi';
+import { AwardsSettings } from './awardsUi';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import ProfileLink from '@/components/ProfileLink';
 
 // ── Types ──────────────────────────────────────────────────────────────────
+
+/** The settings sub-tabs; also the accepted values of the ?tab= deep link. */
+type SettingsTab = 'applications' | 'conference' | 'organizers' | 'privacy' | 'awards';
 
 interface RoleConfig {
   id: string;
@@ -545,12 +549,12 @@ export default function SettingsPage() {
   // secretariat accept redirect uses (?tab=team&highlight=<organizer id>) —
   // same tab as 'organizers', named the way a person reading the URL would
   // expect rather than the internal section key.
-  const initialTab = ((): 'applications' | 'conference' | 'organizers' | 'privacy' => {
+  const initialTab = ((): SettingsTab => {
     const t = searchParams.get('tab') ?? searchParams.get('section');
     if (t === 'team') return 'organizers';
-    return t === 'conference' || t === 'organizers' || t === 'privacy' ? t : 'applications';
+    return t === 'conference' || t === 'organizers' || t === 'privacy' || t === 'awards' ? t : 'applications';
   })();
-  const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>(initialTab);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   // Which role's configuration the Applications section is showing. Derived
   // from ?role= rather than held in state, so a deep link lands on the right
   // role and the back button walks back through them.
@@ -2497,7 +2501,7 @@ export default function SettingsPage() {
   // forest active state. Drives the same `activeTab` state the content blocks
   // already switch on, no logic change, purely the switcher's new skin.
   const SECTIONS: {
-    key: 'applications' | 'conference' | 'organizers' | 'privacy';
+    key: SettingsTab;
     label: string;
     hint: string;
     icon: typeof SlidersHorizontal;
@@ -2506,6 +2510,7 @@ export default function SettingsPage() {
     { key: 'conference',   label: 'Conference',   hint: 'Identity, media & fee',      icon: Building2 },
     { key: 'organizers',   label: 'Organizers',   hint: 'Team & permissions',         icon: Users2 },
     { key: 'privacy',      label: 'Privacy',       hint: 'Publishing & lineage',       icon: ShieldCheck },
+    { key: 'awards',       label: 'Awards',        hint: 'Categories, quotas & ratification', icon: Trophy },
   ];
   const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
 
@@ -5750,6 +5755,11 @@ export default function SettingsPage() {
           </Portal>
         );
       })()}
+
+      {/* Awards lives in its own module (settings/awardsUi.tsx): categories,
+          quotas, points, ratification and the chair deadline, all autosaved
+          into conferences.awards_config. */}
+      {activeTab === 'awards' && <AwardsSettings conference={conference} />}
 
       {confirmModal}
     </div>

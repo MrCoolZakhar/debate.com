@@ -22,6 +22,8 @@ export const EMAIL_TOKEN_KEYS = [
   // thing that knows a given draft's token.
   'draft_link',
   'draft_stop_link',
+  // Awards only (award_received). The award's label, e.g. "Best Delegate".
+  'award',
 ] as const;
 
 export type EmailTokenKey = (typeof EMAIL_TOKEN_KEYS)[number];
@@ -41,6 +43,7 @@ export const EMAIL_TOKEN_LABELS: Record<EmailTokenKey, string> = {
   session_code: 'Session Code',
   draft_link: 'Draft Link',
   draft_stop_link: 'Stop Reminders Link',
+  award: 'Award',
 };
 
 export type EmailTokenContext = Partial<Record<EmailTokenKey, string | null>>;

@@ -312,6 +312,31 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       { type: 'button', label: 'View my invitation', destination: 'import_claim' },
     ],
   },
+  // Chair-facing. Queued per committee by queueAwardsOpenEmails so
+  // {{committee}} is the chair's own room.
+  awards_open: {
+    subject: 'Award nominations are open for {{committee}} at {{conference_name}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Time to name your awards' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe secretariat of {{conference_name}} has opened award nominations for **{{committee}}**. Please agree the slate with your co-chairs and submit it from your committee page, where the session scoreboard sits beside each slot as evidence.\n\nOnce submitted, the secretariat checks it against the quotas and announces every committee together at the closing ceremony.' },
+      { type: 'button', label: 'Nominate from my committee page', destination: 'documents' },
+      { type: 'paragraph', variant: 'small', content: 'If your slate is returned with a note, you can edit and resubmit it until the deadline.' },
+    ],
+  },
+  // Delegate-facing. Queued per award by queueAwardReceivedEmails, which
+  // supplies {{award}}, {{committee}} and {{country}} for that one honour.
+  award_received: {
+    subject: 'Congratulations: {{award}} at {{conference_name}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'You have won an award' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe dais of **{{committee}}** and the secretariat of {{conference_name}} have named you **{{award}}** for your work representing **{{country}}**.\n\nIt is now on your MUN CV as a verified Gavelling entry, so you can share it with any conference you apply to next.' },
+      // 'conference_page' rather than a custom URL: button URLs are not token
+      // resolved, so the slug cannot be interpolated. The honour roll lives at
+      // /conferences/<slug>/awards, one tap from the conference page.
+      { type: 'button', label: 'See the honour roll', destination: 'conference_page' },
+      { type: 'button', label: 'Open my MUN CV', destination: 'custom', url: '/account/cv' },
+    ],
+  },
 };
 
 /** Looks up eventKey's default subject + blocks. null if the key isn't recognized. */

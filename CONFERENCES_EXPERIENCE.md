@@ -158,7 +158,7 @@ Rated by launch-criticality for **test launch July 12** and **official launch Ju
 | Payments (Stripe Connect) | Finding 4 — fees configured, cannot be collected; the whole "transparent 5% + Stripe" model is vapor | **T15 (must if any paid conf)** |
 | Transactional email + triggers | Finding 4 — allocations, acceptances, study-guide, reminders all silent | **T15 (must)** |
 | Publish that actually works from the primary CTA | Finding 3 | **T12** |
-| Awards / MUN CV write-back | PRD Parts 7 & 12 — no award-assignment UI seen; `conference_awards` table exists but unexercised | Post |
+| Awards / MUN CV write-back | PRD Parts 7 & 12 — **built September 2026**: Settings → Awards, chair Awards card, `/manage/[slug]/awards`, `publish_conference_awards()` writes `gavelling_verified` CV entries and points | Done |
 | Gavelling Points earning/spending | PRD Part 15 — `points_balance` column only | Post |
 | Gavelling Unlimited (surcharge waiver) | PRD 1.4 — `unlimited_status` column only; no billing | Post (needed before charging) |
 | Conference calendar + overlap warning | PRD Part 13 — not observed | Post |
@@ -204,7 +204,7 @@ Rated by launch-criticality for **test launch July 12** and **official launch Ju
 | Private conferences reachable via direct link (Part 2.3) | **Upheld** — detail page loads while private. |
 | Acronym must include "MUN", inline error not hard block (rule 10) | **Upheld** — live uppercase + on-blur validation. |
 | Session–conference integration: committee mints a joinable, account-locked session (Part 6) | Session **minting works** (`session_origin='conference'`, delegates seeded on create); account-lock enforcement on join not tested this pass. |
-| Awards / MUN CV / Points / Unlimited / Calendar (Parts 7, 12, 13, 15) | Schema columns/tables exist; **no exercised UI**. |
+| Awards / MUN CV / Points / Unlimited / Calendar (Parts 7, 12, 13, 15) | Awards (Part 7) and the verified-CV write-back (Part 12) are built as of September 2026; award points (Part 15) mint at paid conferences. Calendar and Unlimited-specific perks remain as before. |
 | **"Conference ratings and award badges are not in scope. Do not build or reference these."** (rule 11) | **Violated by the pass-2 merge:** the role-aware detail page now ships a 1–5 **star review system** (`StarRow`, `ReviewCard`, reviews state). Either the rule or the feature needs a decision before launch. |
 | (not in PRD) | **Previous-editions lineage** with organiser-approved predecessor links (`predecessor_conference_id`, `guard_predecessor_fields` trigger, `approve_predecessor_link()`) — a new, well-guarded feature the PRD should absorb. |
 

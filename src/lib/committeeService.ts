@@ -137,6 +137,7 @@ function rowToCommittee(
     dbSeparateChairCode: ((row.settings as Record<string, unknown>)?.separateChairCode as boolean) ?? false,
     dbSettings: (row.settings as Record<string, unknown>) ?? null,
     dbScoring: ((row.settings as Record<string, unknown>)?.scoring as Committee['dbScoring']) ?? null,
+    sessionOrigin: row.session_origin === 'conference' ? 'conference' : 'standalone',
   };
 }
 

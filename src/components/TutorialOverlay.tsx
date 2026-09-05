@@ -892,6 +892,7 @@ const SB_COPY = {
     lead: 'Every delegation, ranked live. Open it any time from the trophy icon, drill into a delegation to see exactly where each point came from, or hit Export CSV for the whole ledger.',
     earnHead: 'Points land on their own',
     earnFoot: 'Speaking time is counted per full 10 seconds on top of the speech itself. You can also award or deduct points by hand from a delegation drill-in; a written reason is required and it stays in the ledger.',
+    awardsFoot: 'At a conference this record is your evidence for awards: the slate itself is decided on your conference page.',
     earnEmpty: 'Every point source is switched off in this committee, so the ranking is quality only.',
     tuneHead: 'Make the numbers yours',
     tuneWhere: 'Settings → Points',
@@ -919,6 +920,7 @@ const SB_COPY = {
     lead: 'Todas las delegaciones, clasificadas en vivo. Ábrelo cuando quieras desde el trofeo, entra en una delegación para ver de dónde salió cada punto, o usa Export CSV para llevarte todo el registro.',
     earnHead: 'Los puntos se otorgan solos',
     earnFoot: 'El tiempo de palabra suma por cada 10 segundos completos, además del discurso en sí. También puedes otorgar o descontar puntos a mano desde la ficha de una delegación; el motivo es obligatorio y queda en el registro.',
+    awardsFoot: 'En una conferencia, este registro es tu evidencia para los premios: la lista de premiados se decide en tu página de la conferencia.',
     earnEmpty: 'Todas las fuentes de puntos están desactivadas en este comité, así que la clasificación es solo cualitativa.',
     tuneHead: 'Ajusta los números a tu comité',
     tuneWhere: 'Configuración → Puntos',
@@ -946,6 +948,7 @@ const SB_COPY = {
     lead: 'Toutes les délégations, classées en direct. Ouvrez-le à tout moment depuis le trophée, entrez dans une délégation pour voir d’où vient chaque point, ou faites Export CSV pour récupérer tout le registre.',
     earnHead: 'Les points tombent tout seuls',
     earnFoot: 'Le temps de parole compte par tranche de 10 secondes pleines, en plus du discours lui-même. Vous pouvez aussi attribuer ou retirer des points à la main depuis la fiche d’une délégation ; un motif écrit est obligatoire et reste au registre.',
+    awardsFoot: 'Lors d’une conférence, ce registre est votre référence pour les prix : la liste des lauréats se décide sur votre page de conférence.',
     earnEmpty: 'Toutes les sources de points sont désactivées dans ce comité : le classement est purement qualitatif.',
     tuneHead: 'Des chiffres à votre main',
     tuneWhere: 'Paramètres → Points',
@@ -973,6 +976,7 @@ const SB_COPY = {
     lead: 'كل الوفود مرتّبة لحظياً. افتحها متى شئت من أيقونة الكأس، وادخل على أي وفد لترى مصدر كل نقطة، أو اضغط Export CSV لتصدير السجل كاملاً.',
     earnHead: 'النقاط تُحتسب تلقائياً',
     earnFoot: 'يُحتسب وقت الكلام عن كل 10 ثوانٍ كاملة إضافةً إلى الخطاب نفسه. ويمكنك أيضاً منح أو خصم النقاط يدوياً من صفحة الوفد، مع سبب مكتوب إلزامي يبقى في السجل.',
+    awardsFoot: 'في المؤتمر يكون هذا السجل دليلك عند منح الجوائز: أما قائمة الفائزين فتُحدَّد في صفحة مؤتمرك.',
     earnEmpty: 'كل مصادر النقاط معطّلة في هذه اللجنة، لذا يعتمد الترتيب على التقييم النوعي فقط.',
     tuneHead: 'اضبط الأرقام كما تشاء',
     tuneWhere: 'الإعدادات ← النقاط',
@@ -1058,6 +1062,9 @@ function ScoreboardTutorialCard({ committee, language, box }: {
           <p style={{ ...P, marginTop: 6 }}>{c.earnEmpty}</p>
         )}
         <p style={{ ...P, marginTop: 8 }}>{c.earnFoot}</p>
+        {/* Generic on purpose: the tutorial does not know the session origin, and this only
+            says where awards are decided — it hosts no award UI. */}
+        <p style={{ ...P, marginTop: 6 }}>{c.awardsFoot}</p>
 
         {/* ── Customisation ── */}
         <div className="mt-5 pt-4" style={{ borderTop: '1px solid #DDD4C0' }}>

@@ -8,6 +8,7 @@ import StudyGuideCard from './StudyGuideCard';
 import PositionPaperCard from './PositionPaperCard';
 import DelegationPlacard from './DelegationPlacard';
 import DelegationPanel from './DelegationPanel';
+import MyAwardsCard from './MyAwardsCard';
 import type { ParticipantApplication, ParticipantAllocation, ParticipantCommittee } from './types';
 
 export default function DelegateParticipant({ conferenceId, conferenceSlug, conferenceStartDate, application, myAllocation, committees, allocationSwapMode }: {
@@ -23,6 +24,10 @@ export default function DelegateParticipant({ conferenceId, conferenceSlug, conf
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Only ever renders once the secretariat has published and this
+          delegate's allocation holds an honour; otherwise nothing. */}
+      <MyAwardsCard conferenceId={conferenceId} conferenceSlug={conferenceSlug} myAllocation={myAllocation} />
+
       <AllocationCard
         committee={committee}
         myAllocation={myAllocation}

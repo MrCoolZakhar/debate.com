@@ -7,7 +7,7 @@ import Link from 'next/link';
 import {
   Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
   Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
-  Activity, UserRoundCheck, MapPin, RotateCcw,
+  Activity, UserRoundCheck, MapPin, RotateCcw, Trophy,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -26,6 +26,7 @@ import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/
 import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
+import { getAwardsConfig, chairDeadline } from '@/lib/awards';
 import { useScrollLock } from '@/hooks/useScrollLock';
 
 const RED = '#A8442F';
@@ -1144,10 +1145,13 @@ export default function DashboardPage() {
     { key: 'paid', label: 'Paid', value: paidApps, href: `/manage/${slug}/applications?payment=paid` },
   ];
 
-  // ── Set-up priorities: 8 detection checks, in journey order ──────────────
+  // ── Set-up priorities: 9 detection checks, in journey order ──────────────
   // Base order = the natural build journey (page → committees → chairs → email →
-  // secretariat → financials → delegate → launch). Pending-first sort runs on top
-  // of this and breaks ties by this order (see sortedChecklist).
+  // secretariat → financials → delegate → awards → launch). Pending-first sort
+  // runs on top of this and breaks ties by this order (see sortedChecklist).
+  const awardsCfg = getAwardsConfig(conference.awards_config);
+  const awardsDeadline = chairDeadline(awardsCfg, conference.end_date ?? null);
+  const awardsCategoryCount = awardsCfg.types.filter(t => t.enabled).length;
   const checklist = [
     {
       key: 'page',
@@ -1272,6 +1276,32 @@ export default function DashboardPage() {
       onClick: delegateApps > 0
         ? () => router.push(`/manage/${slug}/applications`)
         : () => setShowShareModal(true),
+    },
+    {
+      // Awards are configured in advance and decided at the end, so this row
+      // is a nudge, never a publish gate (handlePublishClick does not read it).
+      // The platform default (Best / Outstanding / Honourable Mention / Best
+      // Position Paper, secretariat ratifies) already works untouched, so the
+      // row also clears once the organiser has saved the setup once, or has
+      // switched awards off on purpose.
+      key: 'awards',
+      icon: Trophy,
+      emoji: 'Trophy',
+      gradient: NEU_GRADIENTS.gold,
+      title: 'Set up awards',
+      sub: !awardsCfg.enabled
+        ? 'Awards are off for this conference.'
+        : awardsCfg.configuredAt
+          ? [
+              `${awardsCategoryCount} categor${awardsCategoryCount === 1 ? 'y' : 'ies'}`,
+              awardsCfg.requireApproval ? 'secretariat approves' : 'no ratification',
+              awardsDeadline
+                ? `deadline ${awardsDeadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+                : 'no deadline yet',
+            ].join(' · ')
+          : 'Best Delegate, Outstanding, Honourable Mentions and Best Position Paper are on by default. Adjust categories and quotas.',
+      done: !awardsCfg.enabled || !!awardsCfg.configuredAt,
+      onClick: () => router.push(`/manage/${slug}/settings?tab=awards`),
     },
     {
       // Compact publish CTA lives here as the checklist's launch row, the

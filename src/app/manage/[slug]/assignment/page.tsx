@@ -3345,7 +3345,8 @@ export default function AssignmentPage() {
     if (userIds.length > 0) {
       const [cvRes, awRes] = await Promise.all([
         supabase.from('mun_cv_entries').select('user_id, award').in('user_id', userIds),
-        supabase.from('conference_awards').select('user_id, award_label').in('user_id', userIds),
+        // Published only: nominations are not history until the ceremony.
+        supabase.from('conference_awards').select('user_id, award_label').eq('status', 'published').in('user_id', userIds),
       ]);
       if (seq !== loadSeq.current) return; // stale response
       const map: Record<string, UserHistory> = {};

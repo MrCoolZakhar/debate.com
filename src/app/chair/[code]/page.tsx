@@ -22,6 +22,7 @@ import CowDelegationBoard from '@/components/CowDelegationBoard';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
@@ -1220,9 +1221,38 @@ function ModeratedCaucusMain({
 }
 
 // ── Session Ended Content ─────────────────────────────────────────────────────
+// ── Awards signpost (conference-linked sessions ONLY) ─────────────────────────
+// Awards are a CONFERENCE feature: the slate is decided on the chair's conference page
+// and announced by the secretariat. The session never hosts award UI — it only points
+// there, and only when `committee.sessionOrigin === 'conference'`. An anonymous
+// standalone session must render NOTHING award-related (PRD hard gate), so every
+// caller of this CTA checks the origin first. Both the Moderator and a Commenter may
+// open it — it is deliberately NOT gated on isViewOnly.
+//
+// Rendered as a real anchor with a prefetched href (not a click-then-resolve
+// `window.open`) so opening in a new tab never trips a popup blocker; until the
+// lookup lands, or when the conference is private to anon, it points at the chair's
+// conference hub, which lists every committee they chair.
+function ChairAwardsCta({ code, label, className, style }: {
+  code: string; label: string; className?: string; style?: React.CSSProperties;
+}) {
+  const [href, setHref] = useState('/my-conferences');
+  useEffect(() => {
+    let cancelled = false;
+    resolveChairAwardsHref(code).then((h) => { if (!cancelled) setHref(h); });
+    return () => { cancelled = true; };
+  }, [code]);
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={className} style={style}>
+      {label}
+    </a>
+  );
+}
+
 function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
   const { language } = useLanguage();
   const t = useT();
+  const isConferenceSession = committee.sessionOrigin === 'conference';
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
       <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>{t('session_ended_title')}</h1>
@@ -1230,6 +1260,28 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
       <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
       {hoursRemaining !== null && (
         <p className="text-base" style={{ color: '#9A8A78' }}>{t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</p>
+      )}
+      {/* Conference-linked sessions only — see ChairAwardsCta. Standalone sessions get nothing here. */}
+      {isConferenceSession && (
+        <div className="mt-8 w-full max-w-md rounded-2xl px-6 py-5 text-start"
+          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 6px 18px rgba(28,20,16,0.06)' }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B6871F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+              <path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+              <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+              <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+            </svg>
+            <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('chair_ended_awards_title')}</span>
+          </div>
+          <p className="text-sm leading-relaxed mb-4" style={{ color: '#6A5A4A' }}>{t('chair_ended_awards_body')}</p>
+          <ChairAwardsCta
+            code={committee.code}
+            label={t('chair_ended_awards_cta')}
+            className="inline-flex items-center px-5 py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none gv-lift-dark"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}
+          />
+        </div>
       )}
       <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
     </div>
@@ -3276,6 +3328,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
           </svg>
         </button>
+        {/* Once the gavel has fallen, a conference chair's next job is the award slate — a
+            subtle second affordance beside the scoreboard trophy. Conference sessions ONLY;
+            never rendered for a standalone session. */}
+        {sessionEnded && committee.sessionOrigin === 'conference' && (
+          <ChairAwardsCta
+            code={committee.code}
+            label={t('chair_ended_awards_cta')}
+            className="text-[11px] font-bold px-2.5 py-1 rounded-lg shrink-0 gv-lift transition-colors"
+            style={{ backgroundColor: 'rgba(182,135,31,0.12)', color: '#8B5A20', border: '1px solid rgba(182,135,31,0.35)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em' }}
+          />
+        )}
         <button data-tutorial="tab-settings" onClick={() => setShowSettings(true)} title={t('chair_hdr_settings')}
           className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
           style={{ lineHeight: 0 }}>

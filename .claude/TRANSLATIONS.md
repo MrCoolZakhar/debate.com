@@ -1,7 +1,8 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
-**Last updated after:** delegate rail micro-labels — 2026-08-13 (EN/ES/FR/AR; ar = RTL; **875 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 5 `delegate_*` micro-label keys for the narrow rail beside the flag: the roll-call and queue captions plus the two-line variants of the three stat labels. See "Recent changes" at the bottom.  
+**Last updated after:** conference awards signposts — 2026-09-05 (EN/ES/FR/AR; ar = RTL; **990 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 4 keys for the award signposts on the chair session (`sb_awards_link`, `chair_ended_awards_title`, `chair_ended_awards_body`, `chair_ended_awards_cta`), all rendered ONLY when `committee.sessionOrigin === 'conference'`. Note: the file already held 986 keys before this change; the 875 figure below was stale. See "Recent changes" at the bottom.  
+**Previously:** delegate rail micro-labels — 2026-08-13 (EN/ES/FR/AR; ar = RTL; **875 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 5 `delegate_*` micro-label keys for the narrow rail beside the flag: the roll-call and queue captions plus the two-line variants of the three stat labels. See "Recent changes" at the bottom.  
 **Previously:** redesigned delegate view — 2026-08-13 (870 keys). Added 17 `delegate_*` keys for the rebuilt delegate Session view: queue-position header, speakers-ahead / ETA lines, the 3-tile stat strip, the YOU / SPEAKING chips, and the two bottom-sheet titles.  
 **Previously:** delegate score-gap tips — 2026-08-07 (853 keys). The 44-key `delegate_tip_*` corpus was rebuilt around the committee's real scoring sources: 13 keys deleted, 17 rewritten to interpolate chair-renameable document/motion names, 2 added, and **all 33 survivors are now reachable** — no orphans left.  
 **Previously:** resume-failure copy — 2026-08-07 (864 keys). Added 5 `session_resume_*` keys for the resume-deadlock failure paths plus `session_suspended_banner`.  
@@ -30,7 +31,7 @@
 
 | File | Purpose |
 |------|---------|
-| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (875 keys per locale). New language block goes here. `Language` type is also here. |
+| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (990 keys per locale). New language block goes here. `Language` type is also here. |
 | `src/lib/delegateTips.ts` | `selectDelegateTips()` — picks which `delegate_tip_*` keys a delegate sees, and fills their `{wp}` / `{dr}` / `{mod}` / `{unmod}` / `{tour}` / `{end}` / `{source}` vars. The ONLY consumer of that corpus. |
 | `src/contexts/LanguageContext.tsx` | `LanguageProvider`, `useLanguage()`, `useT()` hooks, localStorage persistence. |
 | `src/app/layout.tsx` | Wrapped in `LanguageProvider`. |
@@ -397,6 +398,19 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 ---
 
 ## RECENT CHANGES
+
+### 2026-09-05 — conference awards signposts (`feature/conferences-auth`) — 986 → 990 keys
+
+**Added, 4 keys × 4 locales.** `sb_awards_link` sits directly after `sb_export_csv` in the scoreboard cluster; `chair_ended_awards_title` / `chair_ended_awards_body` / `chair_ended_awards_cta` sit directly after `session_hours_until_delete` in the session cluster.
+
+- **Hard gate: every render of these four keys is behind `committee.sessionOrigin === 'conference'`** (`Committee.sessionOrigin`, mapped from `committees.session_origin` in `rowToCommittee`). Awards are a conference feature decided on `/conferences/{slug}/role/chair#awards`; the session only signposts that page and an anonymous standalone session must never show anything award-related. Do not reuse these keys on a surface that is not gated the same way.
+- Call sites: `ScoreboardPanel.tsx` header (Awards button, `sb_awards_link`, tooltip `chair_ended_awards_title`); `chair/[code]/page.tsx` `SessionEndedContent` card (title/body/cta) and the small header button beside the scoreboard trophy once the session has ended (`chair_ended_awards_cta`). The href is resolved by `src/lib/sessionAwardsLink.ts`.
+- Terminology: awards = ES *premios*, FR *prix*, AR *الجوائز*; the slate/list of winners = ES *lista de premiados*, FR *liste des lauréats*, AR *قائمة الفائزين*; secretariat = ES *secretaría*, FR *secrétariat*, AR *الأمانة العامة*; scoreboard reuses `sb_title` / `chair_hdr_scoreboard` vocabulary (ES *marcador*, FR *tableau des scores*, AR *لوحة النتائج*).
+- No placeholders, no `{s}` suffix, no em dashes. The AR strings carry no directional marks.
+- `TutorialOverlay.tsx` `SB_COPY` gained an `awardsFoot` sentence in all four locales (inline copy, not a `translations.ts` key, per rule 8). It is deliberately generic because the tutorial does not know the session origin.
+- The doc's running count had drifted: the dictionary held 986 keys before this change, not 875. Re-verified with the section A script.
+
+**Verified:** 990 keys in all four locales, 0 missing / 0 extra, `npx tsc --noEmit` clean for the touched files.
 
 ### 2026-08-13 — delegate rail micro-labels (`feature/conferences-auth`) — 870 → 875 keys
 

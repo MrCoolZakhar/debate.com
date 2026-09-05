@@ -15,6 +15,7 @@ import { getSiteUrl } from '@/lib/emailBlocks';
 import PositionPaperRoster, { type RosterAllocation, type RosterPaper } from '@/components/PositionPaperRoster';
 import { fetchMessageStubsForPapers, type PaperMessageStub } from '@/lib/positionPapers';
 import StudyGuideCard from './StudyGuideCard';
+import AwardsCard, { type AwardsCardConference } from './AwardsCard';
 import Loader from '@/components/Loader';
 import { SectionCard, OUTFIT, capitalize, effectiveReleaseTime } from './shared';
 
@@ -37,10 +38,24 @@ interface ChairCommittee {
   session_code: string | null;
   released_to_chairs_at: string | null;
   position_paper_deadline: string | null;
+  session_id: string | null;
+  awards_submitted_at: string | null;
+  awards_approved_at: string | null;
+  awards_return_note: string | null;
+}
+
+/** The conference fields the chair's blocks need beyond the id: the session
+ *  release fallback (start_date) and the awards lifecycle (end_date is the
+ *  default chair deadline, awards_config the categories and quotas,
+ *  awards_published_at the ceremony moment). */
+interface ChairConference extends AwardsCardConference {
+  start_date: string | null;
 }
 
 interface RosterAllocationRow {
+  id: string;
   country_code: string;
+  country_name: string;
   user_id: string | null;
   profiles: { display_name: string } | null;
   applications: { invited_name: string | null } | null;
@@ -182,12 +197,14 @@ function SessionCard({ committee, chairDisplayName, conferenceStartDate }: {
 
 // ── One committee's full block ──────────────────────────────────────────────
 
-function ChairCommitteeBlock({ conferenceSlug, committee, chairDisplayName, conferenceStartDate }: {
+function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDisplayName, conference }: {
+  conferenceId: string;
   conferenceSlug: string;
   committee: ChairCommittee;
   chairDisplayName: string;
-  conferenceStartDate: string | null;
+  conference: ChairConference;
 }) {
+  const conferenceStartDate = conference.start_date;
   const { user, session } = useAuth();
   const [allocations, setAllocations] = useState<RosterAllocationRow[]>([]);
   const [papers, setPapers] = useState<RosterPaper[]>([]);
@@ -203,7 +220,7 @@ function ChairCommitteeBlock({ conferenceSlug, committee, chairDisplayName, conf
     const [{ data: allocData }, { data: paperData }] = await Promise.all([
       supabase
         .from('conference_allocations')
-        .select('country_code, user_id, profiles (display_name), applications:application_id (invited_name)')
+        .select('id, country_code, country_name, user_id, profiles (display_name), applications:application_id (invited_name)')
         .eq('conference_committee_id', committee.id),
       supabase
         .from('position_papers')
@@ -256,6 +273,24 @@ function ChairCommitteeBlock({ conferenceSlug, committee, chairDisplayName, conf
       <CommitteeHeaderCard committee={committee} />
       <SessionCard committee={committee} chairDisplayName={chairDisplayName} conferenceStartDate={conferenceStartDate} />
 
+      {/* Awards slate: renders nothing while awards are off for the conference.
+          Fed the roster and papers this block already loaded, so the card
+          never refetches them. Waits for `loading` so the delegation picker
+          is never briefly empty. */}
+      {!loading && (
+        <AwardsCard
+          conferenceId={conferenceId}
+          conferenceSlug={conferenceSlug}
+          committee={committee}
+          conference={conference}
+          allocations={allocations.map(a => ({
+            id: a.id, country_code: a.country_code, country_name: a.country_name, user_id: a.user_id,
+            display_name: a.profiles?.display_name ?? null, invited_name: a.applications?.invited_name ?? null,
+          }))}
+          papers={papers.map(p => ({ country_code: p.country_code, status: p.status }))}
+        />
+      )}
+
       <SectionCard>
         <p className="mb-4" style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 16px 0' }}>
           DELEGATE ROSTER
@@ -292,7 +327,7 @@ function ChairCommitteeBlock({ conferenceSlug, committee, chairDisplayName, conf
 export default function ChairParticipant({ conferenceId, conferenceSlug }: { conferenceId: string; conferenceSlug: string }) {
   const { user, session, profile } = useAuth();
   const [committees, setCommittees] = useState<ChairCommittee[]>([]);
-  const [conferenceStartDate, setConferenceStartDate] = useState<string | null>(null);
+  const [conference, setConference] = useState<ChairConference>({ start_date: null, end_date: null, awards_config: null, awards_published_at: null });
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -302,18 +337,24 @@ export default function ChairParticipant({ conferenceId, conferenceSlug }: { con
     const [{ data }, { data: confData }] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, released_to_chairs_at, position_paper_deadline')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, logo_url, session_code, released_to_chairs_at, position_paper_deadline, session_id, awards_submitted_at, awards_approved_at, awards_return_note')
         .eq('conference_id', conferenceId)
         .contains('chair_user_ids', [user.id])
         .order('name', { ascending: true }),
       supabase
         .from('conferences')
-        .select('start_date')
+        .select('start_date, end_date, awards_config, awards_published_at')
         .eq('id', conferenceId)
         .maybeSingle(),
     ]);
     setCommittees((data ?? []) as ChairCommittee[]);
-    setConferenceStartDate((confData as { start_date?: string | null } | null)?.start_date ?? null);
+    const conf = (confData ?? null) as Partial<ChairConference> | null;
+    setConference({
+      start_date: conf?.start_date ?? null,
+      end_date: conf?.end_date ?? null,
+      awards_config: conf?.awards_config ?? null,
+      awards_published_at: conf?.awards_published_at ?? null,
+    });
     setLoading(false);
   }, [user, session, conferenceId]);
 
@@ -342,7 +383,7 @@ export default function ChairParticipant({ conferenceId, conferenceSlug }: { con
   return (
     <div className="flex flex-col gap-10">
       {committees.map(c => (
-        <ChairCommitteeBlock key={c.id} conferenceSlug={conferenceSlug} committee={c} chairDisplayName={profile?.display_name ?? 'Chair'} conferenceStartDate={conferenceStartDate} />
+        <ChairCommitteeBlock key={c.id} conferenceId={conferenceId} conferenceSlug={conferenceSlug} committee={c} chairDisplayName={profile?.display_name ?? 'Chair'} conference={conference} />
       ))}
     </div>
   );

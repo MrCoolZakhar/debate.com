@@ -14,9 +14,10 @@ import {
 import { getScoringConfig } from '@/lib/scoring';
 import type { ScoringConfig } from '@/lib/settingsStore';
 import { loadConferenceScoreboard, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
+import { getAwardsConfig } from '@/lib/awards';
 import {
   type LiveCommittee, type ChairPerson, type CaucusJson,
-  presence, RecapModal, AwardsModal, RosterModal, type DocFilter,
+  presence, RecapModal, RosterModal, type DocFilter,
 } from './LiveModals';
 import {
   BroadcastComposer, RecentBroadcasts, broadcastTargets, groupBroadcasts,
@@ -62,7 +63,6 @@ export default function LiveStatusPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
   const [recapFor, setRecapFor] = useState<string | null>(null);
-  const [awardsFor, setAwardsFor] = useState<string | null>(null);
   const [rosterFor, setRosterFor] = useState<string | null>(null);
   // Which documents section the recap should open on. Set by the WP / DR chips
   // on a card, reset to 'all' whenever the recap is opened from the card body,
@@ -549,7 +549,6 @@ export default function LiveStatusPage() {
 
   // ── Derived ──
   const recapData = recapFor ? rows?.find((r) => r.conf.id === recapFor) ?? null : null;
-  const awardsData = awardsFor ? rows?.find((r) => r.conf.id === awardsFor) ?? null : null;
   const rosterData = rosterFor ? rows?.find((r) => r.conf.id === rosterFor) ?? null : null;
   const scoreboardData = scoreboardFor ? rows?.find((r) => r.conf.id === scoreboardFor) ?? null : null;
   const delegateData = delegateFor ? rows?.find((r) => r.conf.id === delegateFor.confId) ?? null : null;
@@ -868,6 +867,11 @@ export default function LiveStatusPage() {
           data={recapData}
           initialDocFilter={recapDocFilter}
           conferenceSlug={conference.slug}
+          // The Awards tab names the slate's state from the conference's config
+          // and ceremony stamp; it loads the committee's own rows on open.
+          awardsConfig={getAwardsConfig(conference.awards_config)}
+          awardsPublishedAt={conference.awards_published_at}
+          conferenceEndDate={conference.end_date}
           // The recap's Scoreboard tab renders the SAME body the standalone
           // Points modal does, off the same lazily-loaded conference payload.
           scoreboard={scoreboard}
@@ -887,7 +891,6 @@ export default function LiveStatusPage() {
             : null}
         />
       )}
-      {awardsData && <AwardsModal data={awardsData} onClose={() => setAwardsFor(null)} />}
       {rosterData && <RosterModal data={rosterData} onClose={() => setRosterFor(null)} />}
       {scoreboardData && conference && (
         <CommitteeScoreboardModal

@@ -588,6 +588,8 @@ const EVENT_STAGE: Record<EventKey, Stage> = {
   documents_published: 'Session',
   session_chair_invite: 'Session',
   session_join_invite: 'Session',
+  awards_open: 'Session',
+  award_received: 'Session',
   chair_assigned: 'Team & questions',
   committee_chair_invite: 'Team & questions',
   organizer_invite: 'Team & questions',

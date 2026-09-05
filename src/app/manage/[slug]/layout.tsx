@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Trophy,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -72,6 +72,11 @@ export interface Conference {
   financial_aid_enabled: boolean;
   aid_questions: unknown[];
   aid_intro: string | null;
+  /** Raw `conferences.awards_config` JSONB. Always read it through
+   *  `getAwardsConfig()` in `src/lib/awards.ts`; never trust the shape here. */
+  awards_config: unknown;
+  /** The ceremony moment: set once by `publish_conference_awards()`. */
+  awards_published_at: string | null;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -112,6 +117,7 @@ const CONFERENCE_COLUMNS = [
   'predecessor_conference_id', 'predecessor_approved', 'min_age', 'max_age',
   'allocation_swap_mode', 'allocation_email_auto', 'email_theme',
   'financial_aid_enabled', 'aid_questions', 'aid_intro',
+  'awards_config', 'awards_published_at',
 ].join(', ');
 
 // ── Nav definition ─────────────────────────────────────────────────────────
@@ -150,6 +156,12 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
     items: [
       { icon: CreditCard,     label: 'Financials',    href: `/manage/${slug}/financials`,    external: false, badge: 0 },
       { icon: HeartHandshake, label: 'Financial Aid', href: `/manage/${slug}/financial-aid`, external: false, badge: 0 },
+    ],
+  },
+  {
+    header: 'POST CONFERENCE',
+    items: [
+      { icon: Trophy, label: 'Awards', href: `/manage/${slug}/awards`, external: false, badge: 0 },
     ],
   },
   {
@@ -810,6 +822,9 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     // which is the opposite of removing a tab. It reuses the Committees key
     // because it is that section's live-session performance data.
     scoreboard: 'committees',
+    // Awards are the closing act of the committees' work (chair slates,
+    // scoreboard evidence), so they sit under the same permission key.
+    awards: 'committees',
     communications: 'email_builder', financials: 'financials',
     'financial-aid': 'financials',
     settings: 'settings', jobs: 'job_board',

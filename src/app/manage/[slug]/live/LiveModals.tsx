@@ -1,7 +1,15 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2, Megaphone, FileCheck, Radio } from 'lucide-react';
+import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2, Megaphone, FileCheck, Radio, Medal } from 'lucide-react';
+import Link from 'next/link';
+import { useAuth } from '@/components/AuthProvider';
+import { getAuthedClient } from '@/lib/supabase-auth';
+import {
+  slateState, SLATE_STATE_LABEL, slateCompleteness, chairDeadline,
+  type AwardsConfig, type AwardTier, type ConferenceAwardRow, type SlateState,
+} from '@/lib/awards';
+import { loadCommitteeAwards } from '@/lib/awardsService';
 import { FlagImg } from '@/components/FlagImg';
 import { LogoDisc } from '@/components/LogoDisc';
 import { getCountryByName } from '@/lib/countries';
@@ -21,7 +29,7 @@ import {
 // only, where the 3:1 non-text bar applies. See ./tokens for the full sweep.
 import { type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
 import { CommitteeScoreboardBody } from '@/components/ScoreboardTable';
-import { SOFT, GREEN_INK } from './tokens';
+import { SOFT, GREEN_INK, AMBER_INK, RED } from './tokens';
 import { committeeIdentity } from './identity';
 
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
@@ -1048,7 +1056,7 @@ function DocumentsRecap({
 
 // ── Recap modal ─────────────────────────────────────────────────────────────
 
-export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'feedback' | 'attendance';
+export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'feedback' | 'attendance' | 'awards';
 
 /** THE RECAP IS NO LONGER ONE LONG SCROLL.
  *
@@ -1085,7 +1093,7 @@ export type RecapTab = 'overview' | 'documents' | 'scoreboard' | 'feedback' | 'a
 export function RecapModal({
   data, onClose, onOpenScoreboard, onBroadcast, floorDetail = null, initialDocFilter = 'all',
   scoreboard = null, scoreboardLoading = false, scoreboardError = '', onWantScoreboard,
-  conferenceSlug,
+  conferenceSlug, awardsConfig, awardsPublishedAt, conferenceEndDate = null,
 }: {
   data: LiveCommittee;
   onClose: () => void;
@@ -1116,6 +1124,12 @@ export function RecapModal({
   scoreboardError?: string;
   onWantScoreboard?: () => void;
   conferenceSlug: string;
+  /** `getAwardsConfig(conference.awards_config)` and `conference.awards_published_at`,
+   *  passed in from the page so the Awards tab can name the slate's state
+   *  without a second conference fetch. */
+  awardsConfig: AwardsConfig;
+  awardsPublishedAt: string | null;
+  conferenceEndDate?: string | null;
 }) {
   const session = data.session;
   // `phase` is left at whatever the room was last doing when it was gavelled out
@@ -1204,6 +1218,11 @@ export function RecapModal({
         side={side} icon={Users} label="Attendance" count={votingTotal}
         active={tab === 'attendance'} onClick={() => setTab('attendance')}
         title="The roll — present, present & voting, absent, and each delegation's speaking time"
+      />
+      <RailTab
+        side={side} icon={Medal} label="Awards" active={tab === 'awards'}
+        onClick={() => setTab('awards')}
+        title="This committee's award slate: what the chairs nominated and where it is in ratification"
       />
       {onBroadcast && (
         <RailTab
@@ -1363,6 +1382,16 @@ export function RecapModal({
       {tab === 'feedback' && <FeedbackRecap data={data} />}
 
       {tab === 'attendance' && <RosterBody data={data} />}
+
+      {tab === 'awards' && (
+        <AwardsRecap
+          committeeId={data.conf.id}
+          conferenceSlug={conferenceSlug}
+          config={awardsConfig}
+          publishedAt={awardsPublishedAt}
+          conferenceEndDate={conferenceEndDate}
+        />
+      )}
 
       {/* The standalone Points modal stays reachable for a reader who wants the
           table at its own wider width; the card footer opens it directly. */}
@@ -1626,48 +1655,168 @@ export function RosterBody({ data }: { data: LiveCommittee }) {
   );
 }
 
-// ── Awards board modal (placeholder) ────────────────────────────────────────
+// ── Awards tab (inside the recap) ───────────────────────────────────────────
+//
+// Replaces the placeholder `AwardsModal` that used to sit here, unreachable
+// (`awardsFor` was never set). The chairs nominate from their conference page,
+// the secretariat ratifies and publishes from /manage/[slug]/awards; this tab
+// is the read-only window on ONE committee's slate from Live Status. It loads
+// its own two rows on open (the committee's awards_* stamps and its
+// conference_awards rows) rather than widening the page's polled select, so
+// the polling loop is untouched.
 
-export function AwardsModal({ data, onClose }: { data: LiveCommittee; onClose: () => void }) {
-  const ident = committeeIdentity(data.conf);
-  // TODO(merge): wire to chair award allocation from production branch
-  const rows: { label: string; emoji: string }[] = [
-    { label: 'Best Delegate', emoji: '1st place medal' },
-    { label: 'Outstanding Delegate', emoji: '2nd place medal' },
-    { label: 'Honourable Mention', emoji: '3rd place medal' },
-  ];
+const TIER_COLOR: Record<AwardTier, string> = {
+  gold: NEU.deepGold, silver: '#8C8C94', bronze: '#9C6B3C', special: NEU.forest,
+};
+
+const SLATE_STYLE: Record<SlateState, { bg: string; fg: string }> = {
+  off: { bg: 'rgba(27,56,40,0.08)', fg: SOFT },
+  open: { bg: 'rgba(27,56,40,0.08)', fg: SOFT },
+  submitted: { bg: 'rgba(184,132,74,0.15)', fg: AMBER_INK },
+  returned: { bg: 'rgba(139,32,32,0.08)', fg: RED },
+  approved: { bg: 'rgba(61,122,82,0.12)', fg: GREEN_INK },
+  published: { bg: NEU.forest, fg: NEU.gold },
+};
+
+interface SlateStampRow {
+  awards_submitted_at: string | null;
+  awards_approved_at: string | null;
+  awards_return_note: string | null;
+}
+
+function AwardsRecap({ committeeId, conferenceSlug, config, publishedAt, conferenceEndDate }: {
+  committeeId: string;
+  conferenceSlug: string;
+  config: AwardsConfig;
+  publishedAt: string | null;
+  conferenceEndDate: string | null;
+}) {
+  const { session } = useAuth();
+  const accessToken = session?.access_token;
+  const [stamps, setStamps] = useState<SlateStampRow | null>(null);
+  const [rows, setRows] = useState<ConferenceAwardRow[] | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    const supabase = getAuthedClient(accessToken);
+    void (async () => {
+      const [stampRes, awardRows] = await Promise.all([
+        supabase
+          .from('conference_committees')
+          .select('awards_submitted_at, awards_approved_at, awards_return_note')
+          .eq('id', committeeId)
+          .maybeSingle(),
+        loadCommitteeAwards(supabase, committeeId),
+      ]);
+      if (cancelled) return;
+      if (stampRes.error) { setError("Couldn't load this committee's slate."); return; }
+      setStamps((stampRes.data as SlateStampRow | null) ?? { awards_submitted_at: null, awards_approved_at: null, awards_return_note: null });
+      setRows(awardRows);
+    })();
+    return () => { cancelled = true; };
+  }, [accessToken, committeeId]);
+
+  const deadline = chairDeadline(config, conferenceEndDate);
+  const state: SlateState | null = stamps ? slateState(stamps, publishedAt, config) : null;
+  const order = new Map(config.types.map((t, i) => [t.key, i]));
+  const sorted = [...(rows ?? [])].sort((a, b) =>
+    (order.get(a.award_type) ?? 99) - (order.get(b.award_type) ?? 99) || a.position - b.position);
+  const completeness = rows ? slateCompleteness(rows, config) : null;
+
+  const deskLink = (
+    <Link
+      href={`/manage/${conferenceSlug}/awards`}
+      className="inline-flex items-center gap-2 text-xs font-bold focus:outline-none"
+      style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
+    >
+      <ExternalLink size={12} />
+      Open the awards desk
+    </Link>
+  );
+
+  if (error) return <p className="text-sm" style={{ color: RED, fontFamily: OUTFIT }}>{error}</p>;
+  if (!rows || !state) {
+    return (
+      <div className="flex justify-center py-10">
+        <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: NEU.forest, borderTopColor: 'transparent' }} />
+      </div>
+    );
+  }
+  if (state === 'off') {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>Awards are off for this conference.</p>
+        {deskLink}
+      </div>
+    );
+  }
+
+  const pill = SLATE_STYLE[state];
   return (
-    <ModalShell onClose={onClose}>
-      <div className="flex items-center gap-3.5 mb-1">
-        <LogoDisc src={data.conf.logoUrl} size={48} fallbackText={ident.mono} alt={ident.title} />
-        <div className="min-w-0">
-          <Eyebrow>Awards board</Eyebrow>
-          <h2 className="font-black mt-0.5" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 24, lineHeight: 1.1 }}>
-            {ident.title}
-          </h2>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <Eyebrow>Award slate</Eyebrow>
+        <span
+          className="text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase"
+          style={{ backgroundColor: pill.bg, color: pill.fg, fontFamily: OUTFIT, letterSpacing: '0.08em' }}
+        >
+          {SLATE_STATE_LABEL[state]}
+        </span>
+        {completeness && (
+          <span className="text-[11px] font-bold" style={{ color: completeness.over.length ? RED : SOFT, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
+            {completeness.filled} of {completeness.total} slots
+            {completeness.over.length > 0 && ` · over quota: ${completeness.over.join(', ')}`}
+          </span>
+        )}
+        {deadline && state !== 'published' && state !== 'approved' && (
+          <span className="text-[11px]" style={{ color: SOFT, fontFamily: OUTFIT, marginInlineStart: 'auto' }}>
+            Chairs&apos; deadline {deadline.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
       </div>
-      <p className="text-sm mb-6" style={{ color: SOFT, fontFamily: OUTFIT }}>
-        Award allocation arrives with the production merge.
-      </p>
 
-      <div className="flex flex-col gap-2.5 mb-5">
-        {rows.map((r) => (
-          <NeuInset
-            key={r.label}
-            className="flex items-center gap-3 px-4 py-3.5"
-            style={{ borderRadius: 14 }}
-          >
-            <NeuIconDisc gradient={NEU_GRADIENTS.gold} emoji={r.emoji} icon={Trophy} size={36} />
-            <span className="text-sm font-bold flex-1" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{r.label}</span>
-            <span className="text-sm font-bold" style={{ color: SOFT, fontFamily: OUTFIT }}>—</span>
-          </NeuInset>
-        ))}
-      </div>
+      {stamps?.awards_return_note && state === 'returned' && (
+        <p className="text-xs rounded-lg px-3 py-2" style={{ color: RED, backgroundColor: 'rgba(139,32,32,0.06)', fontFamily: OUTFIT }}>
+          Return note: {stamps.awards_return_note}
+        </p>
+      )}
+
+      {sorted.length === 0 ? (
+        <p className="text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>
+          Nothing nominated yet. The chairs nominate from their conference page; the slate appears here as they fill it.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {sorted.map((r) => {
+            const type = config.types.find((t) => t.key === r.award_type);
+            const code = r.country_code || flagCodeFor(r.country_name ?? '');
+            return (
+              <NeuInset key={r.id} className="flex items-start gap-3 px-4 py-3" style={{ borderRadius: 14 }}>
+                <span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, backgroundColor: TIER_COLOR[type?.tier ?? 'special'], flexShrink: 0, marginTop: 6 }} />
+                <FlagImg code={code} size={20} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
+                    <span className="font-bold">{r.award_label}</span>
+                    <span style={{ color: SOFT }}> · {r.country_name ?? r.recipient_name ?? 'Seat'}</span>
+                    {r.recipient_name && r.country_name && <span style={{ color: SOFT }}> · {r.recipient_name}</span>}
+                    {r.status === 'published' && <span className="font-bold" style={{ color: GREEN_INK }}> · published</span>}
+                  </p>
+                  {r.rationale && (
+                    <p className="text-xs italic mt-0.5" style={{ color: SOFT, fontFamily: OUTFIT }}>{r.rationale}</p>
+                  )}
+                </div>
+              </NeuInset>
+            );
+          })}
+        </div>
+      )}
 
       <p className="text-[11px]" style={{ color: SOFT, fontFamily: OUTFIT }}>
-        Chairs will allocate awards from their console once the award feature ships; allocations will appear here automatically.
+        Approve, return or edit this slate, tally delegation awards and publish from the awards desk.
       </p>
-    </ModalShell>
+      {deskLink}
+    </div>
   );
 }

@@ -181,4 +181,7 @@ export interface Committee {
   dbSeparateChairCode?: boolean;
   dbSettings?: Record<string, unknown> | null;
   dbScoring?: ScoringConfig | null;
+  /** committees.session_origin — 'conference' when the session was created from a conference
+   *  committee. Gates the award signposts: an anonymous standalone session must never show them. */
+  sessionOrigin?: 'conference' | 'standalone';
 }

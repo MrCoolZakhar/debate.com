@@ -211,20 +211,36 @@ export default function ScoreboardPage() {
         <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 24, color: NEU.ink }}>
           {scopedCommittee ? committeeDisplayName(scopedCommittee.name, scopedCommittee.abbreviation) : 'Scoreboard'}
         </h1>
-        {!loading && allRows.length > 0 && (
-          <button
-            onClick={exportCsv}
+        <div style={{ display: 'flex', gap: 8, marginInlineStart: 'auto', flexWrap: 'wrap' }}>
+          {/* The awards desk is where this evidence ends up: the secretariat
+              ratifies each committee's slate against these numbers. */}
+          <Link
+            href={`/manage/${conference.slug}/awards`}
             className="focus:outline-none"
             style={{
-              fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.gold, backgroundColor: NEU.forest,
-              border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 7, marginInlineStart: 'auto',
+              fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.forest, backgroundColor: NEU.surface,
+              border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: NEU.outSm, borderRadius: 10, padding: '8px 14px',
+              display: 'inline-flex', alignItems: 'center', gap: 7, textDecoration: 'none',
             }}
           >
-            <Download size={13} strokeWidth={2.5} />
-            EXPORT CSV
-          </button>
-        )}
+            <Trophy size={13} strokeWidth={2.5} />
+            AWARDS
+          </Link>
+          {!loading && allRows.length > 0 && (
+            <button
+              onClick={exportCsv}
+              className="focus:outline-none"
+              style={{
+                fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.gold, backgroundColor: NEU.forest,
+                border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+              }}
+            >
+              <Download size={13} strokeWidth={2.5} />
+              EXPORT CSV
+            </button>
+          )}
+        </div>
       </div>
       <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, marginBlockEnd: 12, maxWidth: 660 }}>
         Every delegation across your committees, as scored by the chairs in their live sessions —
