@@ -143,9 +143,33 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
           claim(key, f, true);
         }
       }
-      // A row written while the delegate still holds the floor has no seconds yet, so it
-      // belongs to the live/next card for that country until the reconcile effect below
-      // back-patches it. Self-cleaning: once reconciled it matches a past key instead.
+      // PASS 2 — ORPHAN REPAIR. A row saved in the last moments of a speech is INSERTed
+      // asynchronously, so `speech_seconds` is still null when the speech gets logged, and
+      // the reconcile effect below skips it (it requires an id that has not arrived yet).
+      // The row is then orphaned: it matches no past key, and pass 3 would hand it to the
+      // NEXT card for the same country — whose first keystroke would UPDATE it, destroying
+      // the earlier speech's note. Countries speak repeatedly in a moderated caucus, so
+      // this fires constantly.
+      //
+      // So: adopt each orphan onto the earliest logged speech it can belong to (same
+      // country and author, created before that speech was logged), and patch the DB so it
+      // is exact from then on. This repairs rows already orphaned in production, and it
+      // consumes them BEFORE pass 3 can steal them, which is what stops the overwrite.
+      for (const p of past) {
+        const key = `past|${p.country}|${p.timestamp}`;
+        if (mineNext[key]) continue;
+        const orphan = fb.find((f) =>
+          !used.has(f.id) && f.country === p.country && f.chairName === chairName &&
+          f.speechSeconds == null &&
+          (!p.timestamp || !f.createdAt || f.createdAt <= p.timestamp));
+        if (!orphan) continue;
+        claim(key, orphan, true);
+        updateFeedback(orphan.id, { speechContext: p.context, speechSeconds: p.seconds },
+          committee.code, committee.dbChairJoinSuffix ?? undefined);
+      }
+
+      // PASS 3 — a row written while the delegate still HOLDS the floor genuinely has no
+      // seconds yet, so whatever survives pass 2 belongs to the live/next card.
       for (const item of items) {
         if (item.kind === 'past') continue;
         for (const f of fb) {
@@ -175,7 +199,20 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee.id, past.length, feedbackVersion, chairName, currentCountry]);
 
-  // On speaker change: new turn, focus returns to the live pill (it rolls into the slot).
+  // On speaker change: FLUSH FIRST, then start the new turn.
+  //
+  // The order matters. Once `turnStartRef` moves, the outgoing speaker's live card has a
+  // key nothing renders any more, so anything still unsaved is unreachable. `flushAll`
+  // reads stateRef and the recorded item metadata, both of which still describe the
+  // OUTGOING turn at this point, so the note lands on the right speech.
+  //
+  // `flushRef` keeps this effect off `flushAll`'s identity — it is redefined every
+  // render, and depending on it would re-run this on every keystroke and reset the
+  // chair's focus mid-sentence.
+  const flushRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    return () => { flushRef.current(); };   // outgoing turn, and unmount
+  }, [currentCountry]);
   useEffect(() => {
     turnStartRef.current = Date.now();
     setFocusKey(null);
@@ -227,16 +264,62 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
     });
   };
 
-  const setNote = (item: FeedItem, content: string) =>
+  // ── Saving a note must NEVER depend on the textarea losing focus ───────────
+  //
+  // It used to: `persist` ran on `onBlur` only. The chair who writes notes is the
+  // COMMENTER, and the chair who advances the speaker is the MODERATOR — a different
+  // person on a different device. So the ordinary case is: the Commenter is mid-sentence,
+  // the Moderator clicks Next, `currentCountry` changes, `turnStartRef` resets, the live
+  // card's key changes, the card unmounts, and the text that was never blurred is gone.
+  // It never reached the database at all. That is the note loss chairs reported, and it
+  // gets worse the faster the committee moves.
+  //
+  // Two belts: a debounced autosave while typing, and a hard flush of everything dirty
+  // the moment the speaker changes (and on unmount).
+  const dirtyRef = useRef<Set<string>>(new Set());
+  const itemMetaRef = useRef<Record<string, FeedItem>>({});
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Typed text captured SYNCHRONOUSLY on every keystroke. `stateRef` is updated in an
+  // effect, and React runs every cleanup before any effect — so if a keystroke and the
+  // speaker change land in the same commit, the flush below would read the value from
+  // before that keystroke and drop the last thing the chair typed. This ref cannot be
+  // stale: it is written in the event handler itself.
+  const typedRef = useRef<Record<string, string>>({});
+
+  const flushKey = (key: string) => {
+    const meta = itemMetaRef.current[key];
+    const row = stateRef.current[key];
+    const content = typedRef.current[key] ?? row?.content ?? '';
+    if (!meta) return;
+    dirtyRef.current.delete(key);
+    persist(meta, content, row?.scores ?? {});
+  };
+  const flushAll = () => {
+    for (const key of Array.from(dirtyRef.current)) flushKey(key);
+  };
+  // Kept current so the speaker-change cleanup above always calls today's closure
+  // without taking a dependency on it.
+  flushRef.current = flushAll;
+
+  const setNote = (item: FeedItem, content: string) => {
+    itemMetaRef.current[item.key] = item;
+    dirtyRef.current.add(item.key);
+    typedRef.current[item.key] = content;
     setState((prev) => ({ ...prev, [item.key]: { ...(prev[item.key] ?? { scores: {}, country: item.country }), content, country: item.country } }));
-  const setScore = (item: FeedItem, factorId: string, v: number) =>
-    setState((prev) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushAll, 700);
+  };
+  const setScore = (item: FeedItem, factorId: string, v: number) => {
+    itemMetaRef.current[item.key] = item;
+    return setState((prev) => {
       const cur = prev[item.key] ?? { content: '', scores: {}, country: item.country };
       const scores = { ...cur.scores, [factorId]: v };
       const nextRow = { ...cur, scores, country: item.country };
+      dirtyRef.current.delete(item.key);
       persist(item, nextRow.content, scores);
       return { ...prev, [item.key]: nextRow };
     });
+  };
 
   const effectiveFocus = focusKey ?? liveKey;
   const focusIdx = items.findIndex((i) => i.key === effectiveFocus);

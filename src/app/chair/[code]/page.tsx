@@ -2015,10 +2015,31 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (caucusSeconds > 0) caucusExpiredRef.current = false;
   }, [caucusSeconds]);
   useEffect(() => {
-    if (isViewOnly || caucusExpiredRef.current) return;
+    // READ THE CLOCK, DO NOT TRUST THE STATE.
+    //
+    // `caucusSeconds` starts at useState(0) and is only raised by the derived-clock effect
+    // ABOVE — which schedules its setState inside the same passive-effect flush this one
+    // runs in. So on the first commit where `committee` is non-null, this closure still
+    // sees 0 and every guard below passes: a chair page that MOUNTS during a running
+    // moderated caucus ended that caucus instantly, for the whole committee, with nobody
+    // touching anything. A reload, a tab restore, a second device opening the chair link,
+    // or a deploy-driven refresh was enough. There is no undo — the caucus JSONB is
+    // overwritten with null and the queue is dropped — so a committee lost its caucus and
+    // its speaker queue and had to re-raise the motion from scratch.
+    //
+    // Deriving the remaining time from the caucus object itself is immune: it is a pure
+    // function of the persisted anchor and the wall clock, correct on the very first render.
+    // Derive the role here too, for the same reason. `isViewOnly` is useState(false) set by
+    // an effect, and `isViewOnlyRef` is assigned during RENDER from that same state — so on
+    // the first loaded commit BOTH still say "I am the Moderator" even on a Commenter's
+    // device. This is the documented derivation (AGENTS.md, Role derivation), evaluated
+    // against the row we are holding right now.
+    const headNow = committee?.dbHeadChair || committee?.chairNames?.[0] || myChairName || null;
+    const amCommenter = !!myChairName && !!headNow && headNow !== myChairName;
+    if (amCommenter || caucusExpiredRef.current) return;
     if (committee?.phase !== 'moderated-caucus' || !committee.caucus) return;
     if (!committee.caucus.totalStartedAt) return;   // paused — a paused clock never expires
-    if (caucusSeconds > 0) return;
+    if (caucusRemainingNow(committee.caucus) > 0) return;
     caucusExpiredRef.current = true;
     setTimerRunning(false);
     // This IS a structural write (unlike the tick that used to live here), so it arms the
@@ -2849,7 +2870,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // The LIVE total, derived from the anchor — `caucus.remainingTime` is only the value at
     // the anchor instant, so re-anchoring off it here would silently refund the whole
     // speech to the caucus.
-    const newRemaining = caucusSecondsRef.current;
+    // Derived, not read off `caucusSecondsRef`. That ref mirrors `caucusSeconds`, which is
+    // useState(0) raised by an effect — so for the window between mount and the first clock
+    // flush it reads 0, and the `newRemaining <= 0` branch below would END THE CAUCUS
+    // instead of advancing the speaker. Same root cause as the expiry effect above.
+    const newRemaining = caucusRemainingNow(committee.caucus);
     const newSpoken = prevCountry && !(committee.caucus.spokenCountries ?? []).includes(prevCountry)
       ? [...(committee.caucus.spokenCountries ?? []), prevCountry]
       : (committee.caucus.spokenCountries ?? []);
