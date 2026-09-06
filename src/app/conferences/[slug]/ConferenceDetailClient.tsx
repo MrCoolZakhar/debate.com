@@ -379,7 +379,7 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none"
+      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none gv-lift"
       style={{
         backgroundColor: active ? 'var(--gv-main)' : 'rgba(237,231,216,0.5)',
         color: active ? 'var(--gv-on-main)' : '#6B5F52',
@@ -408,7 +408,7 @@ function TypeFilterButton({ mode, onClick }: { mode: 'ga' | 'crisis' | null; onC
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none"
+      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none gv-lift"
       style={{
         backgroundColor: active ? 'var(--gv-main)' : 'rgba(237,231,216,0.5)',
         color: active ? 'var(--gv-on-main)' : '#6B5F52',
@@ -1555,7 +1555,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
                   {conferenceFullNameLabel(conference)}
                   {/* Inline after the last word, so it rides the final line of a wrapped title instead of dropping beneath it. */}
-                  <VerifiedCheck verified={!!conference.is_verified} size={28} title="Verified conference" style={{ marginLeft: '0.3em', verticalAlign: '-0.08em', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }} />
+                  <VerifiedCheck verified={!!conference.is_verified} size={32} title="Verified conference" style={{ marginLeft: '0.3em', verticalAlign: '-0.08em', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }} />
                 </h1>
                 <div className="flex items-center flex-wrap gap-x-4 gap-y-1.5">
                   <span className="flex items-center gap-2">
@@ -1706,7 +1706,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   </div>
                   <button
                     onClick={() => showTab('reviews')}
-                    className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors"
+                    className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
                     style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
@@ -2158,7 +2158,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       <button
                         onClick={handleSubmitReview}
                         disabled={reviewRating < 1 || reviewSubmitting}
-                        className="mt-4 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
+                        className="mt-4 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors gv-lift"
                         style={{
                           backgroundColor: reviewRating < 1 || reviewSubmitting ? 'var(--gv-border)' : 'var(--gv-main)',
                           color: reviewRating < 1 || reviewSubmitting ? 'var(--gv-muted)' : 'var(--gv-on-main)',
@@ -2978,7 +2978,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 <div className="px-5 pb-5 pt-4">
                                   <button
                                     onClick={() => setExpandedRoster(c.id)}
-                                    className="w-full rounded-xl py-2.5 text-[11px] font-bold transition-colors focus:outline-none"
+                                    className="w-full rounded-xl py-2.5 text-[11px] font-bold transition-colors focus:outline-none gv-lift"
                                     style={{
                                       backgroundColor: 'transparent',
                                       color: 'var(--gv-main)',
@@ -3350,8 +3350,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               />
               {editError && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '8px 0 0 0' }}>{editError}</p>}
               <div className="flex gap-3 mt-5">
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
-                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
               </div>
             </div>
           </ModalOverlay>
@@ -3389,8 +3389,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               </div>
               {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
               <div className="flex gap-3 mt-5">
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
-                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none gv-lift" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
               </div>
             </div>
           </ModalOverlay>

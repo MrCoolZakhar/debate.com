@@ -2,7 +2,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
+import { getFlagUrl, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery, compareCountryNames } from '@/lib/countries';
+import { SeatFlag, useSeatArt } from '@/components/SeatFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   setPhase as setPhaseInDB,
@@ -14,7 +15,9 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
 export function FlagCircle({ country, size = 'md' }: { country: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' }) {
-  const found = getCountryByName(country);
+  // A seat's own crest wins over the national flag; both keep this circle's
+  // exact frame and 85% inset. Falls back to the flag outside a SeatArtProvider.
+  const art = useSeatArt(country);
   const dim: Record<string, string> = {
     xs:   'w-7 h-7',
     sm:   'w-9 h-9',
@@ -26,8 +29,8 @@ export function FlagCircle({ country, size = 'md' }: { country: string; size?: '
   const box = dim[size];
   return (
     <div className={`relative ${box} rounded-full overflow-hidden shrink-0 flex items-center justify-center`} style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-      {found
-        ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-[85%] h-[85%] object-contain" style={{ border: '1.5px solid rgba(28,20,16,0.10)', borderRadius: 'inherit' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+      {art.kind !== 'none'
+        ? <SeatFlag country={country} className="w-[85%] h-[85%] object-contain" style={{ width: '85%', height: '85%', border: '1.5px solid rgba(28,20,16,0.10)', borderRadius: 'inherit' }} />
         : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>}
     </div>
   );

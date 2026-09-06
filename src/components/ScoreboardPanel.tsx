@@ -34,7 +34,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Portal from '@/components/Portal';
-import { FlagImg } from '@/components/FlagImg';
+import { SeatFlag } from '@/components/SeatFlag';
 import { NEU, NeuPill, OUTFIT } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import {
@@ -42,7 +42,7 @@ import {
   type SortKey, type ScoreboardLabels,
 } from '@/components/ScoreboardTable';
 import { Committee } from '@/lib/types';
-import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getCountryDisplayName } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows } from '@/lib/sessionScoreboard';
 import {
@@ -399,7 +399,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                             widening the table (which would force the whole row to scroll). */}
                         <td style={{ ...TD, textAlign: 'start', maxWidth: 220 }}>
                           <span className="flex items-center gap-1.5 min-w-0">
-                            <span className="shrink-0 flex"><FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} className="shrink-0" /></span>
+                            <span className="shrink-0 flex"><SeatFlag country={r.country} size={20} className="shrink-0" /></span>
                             <span className="truncate" style={{ color: NEU.ink }} title={getCountryDisplayName(r.country, language)}>{getCountryDisplayName(r.country, language)}</span>
                           </span>
                         </td>

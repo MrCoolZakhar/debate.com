@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { X, ArrowRight, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { NEU, OUTFIT } from '@/components/neu';
+import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import Portal from '@/components/Portal';
 import VerifiedCheck from '@/components/VerifiedCheck';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -147,6 +147,8 @@ function SetupReminderModal({
   const conf = conferences[0];
   const others = conferences.length - 1;
   const manageHref = `/manage/${conf.slug}`;
+  const [ctaHover, setCtaHover] = useState(false);
+  const [ctaPress, setCtaPress] = useState(false);
 
   useScrollLock(true);
   useModalEscape(onClose, true);
@@ -197,14 +199,14 @@ function SetupReminderModal({
               className="inline-flex items-center justify-center"
               style={{ width: 48, height: 48, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm }}
             >
-              <VerifiedCheck verified={false} showUnverified size={28} title="Not verified yet" />
+              <VerifiedCheck verified={false} showUnverified size={32} title="Not verified yet" />
             </span>
             <ArrowRight size={16} strokeWidth={2.4} style={{ color: NEU.deepGold }} aria-hidden />
             <span
               className="inline-flex items-center justify-center"
               style={{ width: 48, height: 48, borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
             >
-              <VerifiedCheck verified size={28} title="Verified" />
+              <VerifiedCheck verified size={32} title="Verified" />
             </span>
           </div>
 
@@ -264,11 +266,33 @@ function SetupReminderModal({
           )}
 
           <div className="flex flex-col sm:flex-row sm:items-center" style={{ gap: 10 }}>
+            {/* The house primary (NeuButton): gold gradient, forest ink, a glow that
+                lifts on hover and depresses on press. A flat dark slab read as
+                generic here, and this is the one control the modal exists for. */}
             <Link
               href={manageHref}
               onClick={onClose}
+              onMouseEnter={() => setCtaHover(true)}
+              onMouseLeave={() => { setCtaHover(false); setCtaPress(false); }}
+              onPointerDown={() => setCtaPress(true)}
+              onPointerUp={() => setCtaPress(false)}
               className="inline-flex items-center justify-center gap-2 w-full sm:flex-1 focus:outline-none"
-              style={{ borderRadius: 14, padding: '13px 18px', backgroundColor: NEU.forest, color: NEU.gold, fontWeight: 800, fontSize: 14, letterSpacing: '0.04em', textTransform: 'uppercase', textDecoration: 'none', boxShadow: NEU.outSm }}
+              style={{
+                borderRadius: 999,
+                padding: '13px 22px',
+                background: `linear-gradient(135deg, ${NEU_GRADIENTS.gold[0]}, ${NEU_GRADIENTS.gold[1]})`,
+                color: NEU.forest,
+                fontWeight: 800,
+                fontSize: 14,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                textDecoration: 'none',
+                boxShadow: ctaHover
+                  ? `0 6px 16px ${NEU_GRADIENTS.gold[0]}66, ${NEU.outSmHover}`
+                  : `0 4px 10px ${NEU_GRADIENTS.gold[0]}4D, ${NEU.outSm}`,
+                transform: ctaPress ? 'scale(0.96)' : ctaHover ? 'translateY(-2px)' : 'translateY(0)',
+                transition: `box-shadow 260ms ${EASE}, transform 160ms ${EASE}`,
+              }}
             >
               Finish set-up <ArrowRight size={16} strokeWidth={2.4} />
             </Link>

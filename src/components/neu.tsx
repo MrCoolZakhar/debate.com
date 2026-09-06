@@ -561,6 +561,11 @@ export function NeuButton({
   icon: Icon,
   disabled = false,
   style,
+  /** Accessible name. REQUIRED when the button's only child is a glyph, since
+   *  an icon carries no text for a screen reader to announce. */
+  ariaLabel,
+  /** Native hover tooltip. Pair it with `ariaLabel` on an icon-only button. */
+  title,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -569,6 +574,8 @@ export function NeuButton({
   icon?: LucideIcon;
   disabled?: boolean;
   style?: React.CSSProperties;
+  ariaLabel?: string;
+  title?: string;
 }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
@@ -577,6 +584,8 @@ export function NeuButton({
     <button
       onClick={onClick}
       disabled={disabled}
+      aria-label={ariaLabel}
+      title={title}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setPressed(false); }}
       onPointerDown={() => setPressed(true)}

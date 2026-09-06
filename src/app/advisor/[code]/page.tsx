@@ -22,7 +22,8 @@ import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenc
 import { getCommitteeFlags, motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
-import { getFlagUrl, getCountryByName, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
@@ -78,10 +79,7 @@ function ExpandedDelegateCard({
     delegate.status === 'present-voting' ? '#1B3828' :
     '#9A8A78';
 
-  const found = getCountryByName(delegate.country);
-  const flagEl = found
-    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '96px', height: '68px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.10)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-    : null;
+  const flagEl = <SeatFlag seat={delegate} style={{ width: '96px', height: '68px', objectFit: 'cover', borderRadius: '10px', border: '1.5px solid rgba(28,20,16,0.10)' }} fallback={null} />;
 
   const handleNudge = (nudgeKey: string) => {
     if (chatDisabled) return;   // belt-and-braces: the buttons are not rendered either
@@ -193,10 +191,7 @@ function CollapsedDelegateCard({
   onSelect: () => void;
 }) {
   const { language } = useLanguage();
-  const found = getCountryByName(delegate.country);
-  const flagEl = found
-    ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '36px', height: '26px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-    : null;
+  const flagEl = <SeatFlag seat={delegate} style={{ width: '36px', height: '26px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }} fallback={null} />;
 
   return (
     <button
@@ -218,8 +213,6 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
   const t = useT();
   const queueIndex = committee.speakersList.findIndex((s) => s.delegateId === delegate.id);
   const isCurrentSpeaker = committee.currentSpeaker?.delegateId === delegate.id;
-  const found = getCountryByName(delegate.country);
-
   const statusLabel =
     delegate.status === 'present' ? 'P' :
     delegate.status === 'present-voting' ? 'P+V' : 'A';
@@ -241,10 +234,11 @@ function NormalDelegateCard({ delegate, committee, onSelect }: { delegate: Commi
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
     >
       <div className="flex items-center gap-3 px-3 py-3">
-        {found
-          ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.15)', flexShrink: 0 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-          : <div style={{ width: '32px', height: '22px', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
-        }
+        <SeatFlag
+          seat={delegate}
+          style={{ width: '32px', height: '22px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(28,20,16,0.15)', flexShrink: 0 }}
+          fallback={<div style={{ width: '32px', height: '22px', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />}
+        />
         <span className="flex-1 text-sm font-bold truncate" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(delegate.country, language)}</span>
         {isCurrentSpeaker && (
           <span className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#EED98A', color: '#1B3828' }}>{t('advisor_speaking_badge')}</span>
@@ -503,6 +497,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
 
   return (
     <FitToScreen>
+    <SeatArtProvider delegates={committee.delegates}>
     <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* Header */}
@@ -549,7 +544,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           {isModeratedCaucus && (
             caucus?.currentSpeaker ? (
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-                {(() => { const c = getCountryByName(caucus.currentSpeaker); return c ? <img src={getFlagUrl(c.code)} alt={caucus.currentSpeaker} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
+                <SeatFlag country={caucus.currentSpeaker} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} fallback={null} />
                 <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{caucus.currentSpeaker}</h2>
                 <div className="text-lg font-bold mt-1" style={{ color: 'rgba(238,217,138,0.7)' }}>
                   {t('view_is_speaking')}
@@ -596,7 +591,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
           {!isCaucus && (
             committee.currentSpeaker ? (
               <div className="flex flex-col items-center px-4 py-5 shrink-0" style={{ borderBottom: '1px solid rgba(61,122,82,0.4)' }}>
-                {(() => { const c = getCountryByName(committee.currentSpeaker.country); return c ? <img src={getFlagUrl(c.code)} alt={committee.currentSpeaker.country} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} /> : null; })()}
+                <SeatFlag country={committee.currentSpeaker.country} style={{ width: '80px', height: '58px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid rgba(238,217,138,0.2)' }} fallback={null} />
                 <h2 className="text-2xl font-black mt-3 mb-1 text-center" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h2>
                 <div className="text-lg font-bold mt-1" style={{ color: 'rgba(238,217,138,0.7)' }}>
                   {t('view_is_speaking')}
@@ -620,11 +615,10 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
               <div className="px-4 py-4 text-xs" style={{ color: 'rgba(237,231,216,0.4)' }}>{t('advisor_no_speakers_queued')}</div>
             ) : (
               displayQueue.map((s, i) => {
-                const c = getCountryByName(s.country);
                 return (
                   <div key={s.delegateId} className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: '1px solid rgba(61,122,82,0.2)' }}>
                     <span className="text-xs font-mono w-5 shrink-0" style={{ color: 'rgba(238,217,138,0.5)' }}>{i + 1}</span>
-                    {c ? <img src={getFlagUrl(c.code)} alt={s.country} style={{ width: '24px', height: '17px', objectFit: 'cover', borderRadius: '3px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }} /> : null}
+                    <SeatFlag country={s.country} style={{ width: '24px', height: '17px', objectFit: 'cover', borderRadius: '3px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }} fallback={null} />
                     <span className="text-sm flex-1 truncate font-semibold" style={{ color: '#EDE7D8' }}>{getCountryDisplayName(s.country, language)}</span>
                   </div>
                 );
@@ -683,6 +677,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
         </main>
       </div>
     </div>
+    </SeatArtProvider>
     </FitToScreen>
   );
 }

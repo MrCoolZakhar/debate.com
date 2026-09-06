@@ -260,8 +260,15 @@ export function FlagDisc({
   name,
   size = 96,
   ring = DG.gold,
-}: { code: string; name?: string; size?: number; ring?: string }) {
+  logoUrl,
+}: { code: string; name?: string; size?: number; ring?: string;
+     /** A seat's own crest (`delegates.logo_url`). When set it replaces the
+      *  national flag. It keeps this disc's ring and lift but is drawn
+      *  `contain` on the ivory ground rather than cropped to the circle —
+      *  cover would cut the emblem off a square badge. */
+     logoUrl?: string | null }) {
   const [failed, setFailed] = useState(false);
+  const src = logoUrl || (code ? getFlagUrl(code) : '');
   return (
     <span
       style={{
@@ -277,14 +284,15 @@ export function FlagDisc({
         boxShadow: `0 0 0 3px ${DG.ivory}, 0 0 0 6px ${ring}, ${LIFT.sm}`,
       }}
     >
-      {!failed && code ? (
+      {!failed && src ? (
         <img
-          src={getFlagUrl(code)}
-          alt={name ? `Flag of ${name}` : ''}
+          src={src}
+          alt={name ? (logoUrl ? name : `Flag of ${name}`) : ''}
           onError={() => setFailed(true)}
           style={{
             width: '100%', height: '100%', borderRadius: '50%',
-            objectFit: 'cover', display: 'block',
+            objectFit: logoUrl ? 'contain' : 'cover', display: 'block',
+            background: logoUrl ? DG.ivory : undefined,
             /* Pure-black hairline: a tinted one picks up the surface
                underneath and reads as dirt on the image edge. */
             outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: -1,
@@ -323,6 +331,7 @@ export function FlagOrdinalDisc({
   primary,
   caption,
   live,
+  logoUrl,
 }: {
   code: string;
   name?: string;
@@ -330,8 +339,14 @@ export function FlagOrdinalDisc({
   primary: string;   // "17th" | "NEXT" | "FLOOR"
   caption: string;   // "IN THE QUEUE"
   live?: boolean;    // gold ring + no scrim dimming when they hold the floor
+  /** A seat's own crest (`delegates.logo_url`), drawn instead of the flag. It
+   *  gets the SAME blurred-backdrop treatment described below: a crest is even
+   *  more letterboxed inside a circle than a 3:2 flag is, so the trick that
+   *  makes the disc read full-bleed matters more, not less. */
+  logoUrl?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
+  const src = logoUrl || (code ? getFlagUrl(code) : '');
   return (
     <span
       style={{
@@ -351,7 +366,7 @@ export function FlagOrdinalDisc({
         overflow: 'hidden',
       }}
     >
-      {!failed && code && (
+      {!failed && src && (
         <>
           {/* Blurred cover copy fills the letterbox. `contain` keeps the whole
               flag readable — a 3:2 flag cropped to a circle loses its left and
@@ -361,7 +376,7 @@ export function FlagOrdinalDisc({
               them is the video-player trick: the disc reads as full-bleed while
               the flag stays uncropped. Purely decorative, so aria-hidden. */}
           <img
-            src={getFlagUrl(code)}
+            src={src}
             alt=""
             aria-hidden="true"
             onError={() => setFailed(true)}
@@ -372,8 +387,8 @@ export function FlagOrdinalDisc({
             }}
           />
           <img
-            src={getFlagUrl(code)}
-            alt={name ? `Flag of ${name}` : ''}
+            src={src}
+            alt={name ? (logoUrl ? name : `Flag of ${name}`) : ''}
             onError={() => setFailed(true)}
             style={{ position: 'relative', width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
           />

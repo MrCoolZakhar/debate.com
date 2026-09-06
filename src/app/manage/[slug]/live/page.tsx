@@ -26,6 +26,8 @@ import {
 } from './BroadcastComposer';
 import { CommitteeCard, GridFootnote } from './CommitteeCard';
 import { FloorDetail, useNowTick } from './PhaseVariants';
+import { SeatArtProvider } from '@/components/SeatFlag';
+import { mergedSeatRoster } from './CommitteeCard';
 import { CommitteeScoreboardModal } from './CommitteeScoreboardModal';
 import { DelegateCardModal } from './DelegateCardModal';
 import { loadAllocationIndex, type AllocationIndex } from './allocations';
@@ -182,7 +184,11 @@ export default function LiveStatusPage() {
             .select('committee_id, country, time_remaining, started_at')
             .in('committee_id', sessionIds),
           anonSupabase.from('delegates')
-            .select('committee_id, country, status, is_observer')
+            // logo_url is the seat's own crest, flattened from the conference
+            // side at seed time — see `src/lib/sessionFlags.ts`. It lets a card
+            // draw a delegation's real mark without the slot index having to
+            // resolve it by name.
+            .select('committee_id, country, status, is_observer, logo_url')
             .in('committee_id', sessionIds),
           anonSupabase.from('speakers_list')
             .select('committee_id, country, position, list_type')
@@ -412,6 +418,7 @@ export default function LiveStatusPage() {
                 country: d.country as string,
                 status: d.status as string,
                 isObserver: (d.is_observer as boolean | null) ?? false,
+                logoUrl: (d.logo_url as string | null) ?? null,
               }))
             : [],
           gslQueue: sid ? bySession(queues, sid).filter((q) => q.list_type === 'gsl').map((q) => q.country as string) : [],
@@ -899,30 +906,38 @@ export default function LiveStatusPage() {
         />
       )}
       {rosterData && <RosterModal data={rosterData} onClose={() => setRosterFor(null)} />}
+      {/* Both modals are siblings of the card grid, so they sit outside the
+          provider each card mounts. Without their own they would resolve a
+          seat's art differently from the room it is reporting on, which
+          sessionFlags.ts forbids. Same roster, same merge, one answer. */}
       {scoreboardData && conference && (
-        <CommitteeScoreboardModal
-          data={scoreboardData}
-          scoreboard={scoreboard}
-          loading={scoreboardLoading}
-          error={scoreboardError}
-          conferenceSlug={conference.slug}
-          onClose={() => setScoreboardFor(null)}
-        />
+        <SeatArtProvider delegates={mergedSeatRoster(scoreboardData.delegates, seatArt, scoreboardData.conf.id)}>
+          <CommitteeScoreboardModal
+            data={scoreboardData}
+            scoreboard={scoreboard}
+            loading={scoreboardLoading}
+            error={scoreboardError}
+            conferenceSlug={conference.slug}
+            onClose={() => setScoreboardFor(null)}
+          />
+        </SeatArtProvider>
       )}
       {/* ONE delegation, opened from a flag in a card's queue strip. Shares the
           scoreboard payload the committee Points view uses, plus the allocation
           index that resolves the delegation to the person (or, under double
           delegation, the two people) actually representing it. */}
       {delegateData && (
-        <DelegateCardModal
-          data={delegateData}
-          country={delegateFor!.country}
-          scoreboard={scoreboard}
-          allocations={allocations}
-          loading={scoreboardLoading}
-          error={scoreboardError}
-          onClose={() => setDelegateFor(null)}
-        />
+        <SeatArtProvider delegates={mergedSeatRoster(delegateData.delegates, seatArt, delegateData.conf.id)}>
+          <DelegateCardModal
+            data={delegateData}
+            country={delegateFor!.country}
+            scoreboard={scoreboard}
+            allocations={allocations}
+            loading={scoreboardLoading}
+            error={scoreboardError}
+            onClose={() => setDelegateFor(null)}
+          />
+        </SeatArtProvider>
       )}
       {/* SCOPED broadcast — the same composer, handed a one-committee target
           list. `session_broadcasts` has zero production rows, so this path was

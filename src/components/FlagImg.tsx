@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { getFlagUrl } from '@/lib/countries';
 import { Emoji } from '@/components/Emoji';
 
@@ -12,14 +13,20 @@ interface FlagImgProps {
   logoUrl?: string | null;
   /** Accessible name for the logo (the seat or group name). */
   label?: string;
+  /** Applied to the OUTER box in both branches — the <img> for a flag, the
+   *  disc for a crest — and merged AFTER the defaults, so a call site keeps
+   *  its own width/height/radius/ring while only the image source changes.
+   *  A crest's inner <img> always stays `object-fit: contain`: cropping a
+   *  crest to a flag's 3:2 box would cut the emblem. */
+  style?: CSSProperties;
 }
 
-export function FlagImg({ code, size = 24, className = '', logoUrl, label }: FlagImgProps) {
+export function FlagImg({ code, size = 24, className = '', logoUrl, label, style }: FlagImgProps) {
   if (logoUrl) {
     return (
       <span
         className={`inline-flex items-center justify-center flex-shrink-0 ${className}`}
-        style={{ width: size, height: size, borderRadius: 5, backgroundColor: 'rgba(250,248,243,0.85)', overflow: 'hidden' }}
+        style={{ width: size, height: size, borderRadius: 5, backgroundColor: 'rgba(250,248,243,0.85)', overflow: 'hidden', ...style }}
         title={label}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -38,7 +45,7 @@ export function FlagImg({ code, size = 24, className = '', logoUrl, label }: Fla
     <img
       src={getFlagUrl(code)}
       alt={code}
-      style={{ width: size, height: size, objectFit: 'contain', display: 'inline-block' }}
+      style={{ width: size, height: size, objectFit: 'contain', display: 'inline-block', ...style }}
       className={className}
       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
     />

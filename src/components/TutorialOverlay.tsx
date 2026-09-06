@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Portal from '@/components/Portal';
-import { FlagImg } from '@/components/FlagImg';
+import { SeatFlag } from '@/components/SeatFlag';
 import type { Committee } from '@/lib/types';
-import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getCountryDisplayName } from '@/lib/countries';
 import { getScoringConfig } from '@/lib/scoring';
 import { docName } from '@/lib/docNames';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -1016,7 +1016,6 @@ function ScoreboardTutorialCard({ committee, language, box }: {
   const live = sample[0]?.country ?? '';
   const next = sample[1]?.country ?? '';
   const nameOf = (country: string) => (country ? getCountryDisplayName(country, language) : '—');
-  const codeOf = (country: string) => getCountryByName(country)?.code ?? '';
 
   const H: React.CSSProperties = {
     fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#1B3828',
@@ -1116,8 +1115,8 @@ function ScoreboardTutorialCard({ committee, language, box }: {
             placeholder={c.mockPlaceholder}
             note={c.mockNote}
             nextNote={c.mockNext}
-            liveName={nameOf(live)} liveCode={codeOf(live)}
-            nextName={nameOf(next)} nextCode={codeOf(next)}
+            liveName={nameOf(live)} liveCountry={live}
+            nextName={nameOf(next)} nextCountry={next}
             factors={factors.map((f) => f.name)}
             scaleMax={Math.max(1, cfg.factorScaleMax)}
           />
@@ -1134,10 +1133,10 @@ function ScoreboardTutorialCard({ committee, language, box }: {
 // reduced scale — so it stays true if the real panel is restyled around these values.
 function FeedbackDockMock({
   caption, liveLabel, placeholder, note, nextNote,
-  liveName, liveCode, nextName, nextCode, factors, scaleMax,
+  liveName, liveCountry, nextName, nextCountry, factors, scaleMax,
 }: {
   caption: string; liveLabel: string; placeholder: string; note: string; nextNote: string;
-  liveName: string; liveCode: string; nextName: string; nextCode: string;
+  liveName: string; liveCountry: string; nextName: string; nextCountry: string;
   factors: string[]; scaleMax: number;
 }) {
   // Illustrative ratings, shown as proportions of the committee's own scale.
@@ -1196,7 +1195,7 @@ function FeedbackDockMock({
           >
             <div className="flex items-center gap-2">
               <span className="shrink-0 font-black" style={{ fontSize: 8.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#1B3828' }}>GSL</span>
-              <FlagImg code={liveCode} size={18} className="shrink-0" />
+              <SeatFlag country={liveCountry} size={18} className="shrink-0" />
               <span className="flex-1 min-w-0 truncate font-bold" style={{ fontSize: 12, color: '#1C1410' }}>{liveName}</span>
               <span className="shrink-0 font-bold" style={{ fontSize: 8.5, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#B8844A' }}>{liveLabel}</span>
             </div>
@@ -1222,7 +1221,7 @@ function FeedbackDockMock({
               padding: '0 14px', opacity: 0.72,
             }}
           >
-            <FlagImg code={nextCode} size={15} className="shrink-0" />
+            <SeatFlag country={nextCountry} size={15} className="shrink-0" />
             <span className="shrink-0 font-semibold" style={{ fontSize: 11, color: '#1C1410' }}>{nextName}</span>
             <span className="flex-1 min-w-0 truncate" style={{ fontSize: 10.5, color: '#6A5A4A' }}>— {nextNote}</span>
             <span className="shrink-0 font-black" style={{ fontSize: 11, color: '#1B3828' }}>✓</span>

@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlagImg } from '@/components/FlagImg';
+import { SeatFlag } from '@/components/SeatFlag';
 import { CaucusState, Committee } from '@/lib/types';
-import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getCountryDisplayName } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { getScoringConfig } from '@/lib/scoring';
 import { factorName } from '@/lib/scoringNames';
@@ -453,7 +453,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
                     >
                       <div className="flex items-center gap-2.5">
                         <span className="text-[11px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
-                        <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={26} className="shrink-0" />
+                        <SeatFlag country={item.country} size={26} className="shrink-0" />
                         <span className="flex-1 min-w-0 truncate text-base font-bold" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
                         {!isLive && <button onClick={(e) => { e.stopPropagation(); setFocusKey(null); }} className="shrink-0 text-sm" style={{ color: '#9A8A78' }}>✕</button>}
                       </div>
@@ -496,7 +496,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
                         cursor: 'pointer', padding: '0 20px',
                       }}
                     >
-                      <FlagImg code={getCountryByName(item.country)?.code ?? ''} size={22} className="shrink-0" />
+                      <SeatFlag country={item.country} size={22} className="shrink-0" />
                       <span className="font-semibold shrink-0" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
                       {notes.length > 0 ? (
                         <span className="flex-1 min-w-0 truncate text-sm" style={{ color: '#6A5A4A' }}>

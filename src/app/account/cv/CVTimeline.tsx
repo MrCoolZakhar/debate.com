@@ -289,7 +289,7 @@ export function TimelineEntry({
                   <VerifiedCheck
                     verified={verifiedEntry}
                     showUnverified
-                    size={16}
+                    size={18}
                     title={verifiedEntry ? 'Verified by Gavelling' : 'Self-reported'}
                   />
                 </h3>

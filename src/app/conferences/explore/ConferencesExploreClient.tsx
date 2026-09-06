@@ -14,7 +14,7 @@ import { Emoji3D } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase } from '@/lib/supabase';
-import { getCountryByName, UN_COUNTRIES } from '@/lib/countries';
+import { getCountryByName, UN_COUNTRIES, fold, countryIdentity, countryMatchRank } from '@/lib/countries';
 import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { fetchDelegateFees, applyDelegateFee } from '@/lib/publicFees';
@@ -282,7 +282,7 @@ function ConferenceListRow({
           }}
         >
           <span className="truncate">{conf.acronym || conf.full_name}</span>
-          <VerifiedCheck verified={!!conf.is_verified} size={16} title="Verified conference" />
+          <VerifiedCheck verified={!!conf.is_verified} size={18} title="Verified conference" />
         </div>
         <div
           className="flex items-center gap-2 truncate"
@@ -731,8 +731,11 @@ export default function ConferencesExploreClient() {
   useEffect(() => {
     if (geoDefaultApplied.current || regionTouched || loading || !userCountry) return;
     geoDefaultApplied.current = true;
+    // Identity, not raw strings: a visitor geolocated to "Turkey" must still
+    // match conferences stored as "Türkiye". Same rule as the filter below.
+    const localId = countryIdentity(userCountry);
     const localCount = conferences.filter(
-      c => c.country.toLowerCase() === userCountry.toLowerCase()
+      c => countryIdentity(c.country) === localId
     ).length;
     if (localCount >= 4) {
       setRegion('country');
@@ -800,6 +803,15 @@ export default function ConferencesExploreClient() {
   const upcomingCount = useMemo(() => conferences.filter(c => !hasConcluded(c)).length, [conferences]);
   const headlineCount = totalConferences ?? (loading ? null : upcomingCount);
 
+  // CONTINENT_COUNTRIES resolved to ISO identities once, not per row per render.
+  const continentIdentities = useMemo(() => {
+    const out: Record<string, Set<string>> = {};
+    for (const [key, names] of Object.entries(CONTINENT_COUNTRIES)) {
+      out[key] = new Set(names.map(countryIdentity));
+    }
+    return out;
+  }, []);
+
   const filtered = useMemo(() => conferences.filter(c => {
     // Finished conferences are dropped from the directory — nobody browsing for
     // one to attend wants last year's. Their pages stay live, linkable and in
@@ -808,24 +820,38 @@ export default function ConferencesExploreClient() {
     // ("dates TBD") conferences are never treated as finished.
     if (hasConcluded(c)) return false;
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+      // Accent-FOLDED on both sides — see THE FOLDING RULE in countries.ts.
+      // A raw `.includes()` meant a conference in Türkiye never surfaced for
+      // "Tu" (the second character is `ü`), and the same for São Paulo,
+      // Bogotá or Zürich in the city field.
+      const q = fold(searchQuery);
+      const countryHit = countryMatchRank(c.country, searchQuery, 'en') !== null;
       if (
-        !c.full_name.toLowerCase().includes(q) &&
-        !c.acronym.toLowerCase().includes(q) &&
-        !c.city.toLowerCase().includes(q) &&
-        !c.country.toLowerCase().includes(q)
+        !fold(c.full_name).includes(q) &&
+        !fold(c.acronym).includes(q) &&
+        !fold(c.city).includes(q) &&
+        !fold(c.country).includes(q) &&
+        // also lets an alias find it: "Turkey" or "UK" surfaces the row even
+        // though the country is stored as "Türkiye" / "United Kingdom".
+        !countryHit
       ) return false;
     }
     if (formatFilter && c.format !== formatFilter) return false;
     if (levelFilter && c.student_level !== levelFilter) return false;
     if (countryMode) {
-      if (c.country.toLowerCase() !== userCountry!.toLowerCase()) return false;
+      // Compared by ISO identity, not by string: a row saved under an older
+      // spelling ("Turkey", "Czechia", "Holland") must still count as local.
+      if (countryIdentity(c.country) !== countryIdentity(userCountry!)) return false;
     } else if (region && region !== 'country') {
-      const countries = CONTINENT_COUNTRIES[region];
-      if (!countries || !countries.includes(c.country)) return false;
+      // CONTINENT_COUNTRIES is hand-written and uses several non-canonical
+      // names ("Ivory Coast", "Cape Verde", "East Timor", "Democratic Republic
+      // of the Congo"), so a raw `.includes(c.country)` dropped those rows out
+      // of their own continent. Both sides go through countryIdentity.
+      const codes = continentIdentities[region];
+      if (!codes || !codes.has(countryIdentity(c.country))) return false;
     }
     return true;
-  }), [conferences, searchQuery, formatFilter, levelFilter, region, countryMode, userCountry]);
+  }), [conferences, searchQuery, formatFilter, levelFilter, region, countryMode, userCountry, continentIdentities]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];

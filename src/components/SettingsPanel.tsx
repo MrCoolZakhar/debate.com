@@ -8,7 +8,8 @@ import { useSettingsStore, CommitteeSettings, MotionNames, DEFAULT_SCORING, DEFA
 import { Committee } from '@/lib/types';
 import { updateCommitteeChairSuffixInDB, saveCommitteeSettings, updateCommitteeScoringInDB } from '@/lib/committeeService';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { getCountryByName, getCountryDisplayName, getFlagUrl } from '@/lib/countries';
+import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { SeatFlag } from '@/components/SeatFlag';
 import { localizedMotionDefaults } from '@/lib/committeeFlags';
 import { factorName, sourceName } from '@/lib/scoringNames';
 
@@ -978,11 +979,10 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                     </div>
                     <div className="flex flex-col gap-0.5">
                       {p5.map((name) => {
-                        const found = getCountryByName(name);
                         const seated = seatedIds.has(identity(name));
                         return (
                           <div key={name} className="flex items-center gap-2.5 py-0.5" style={{ opacity: seated ? 1 : 0.45 }}>
-                            {found && <img src={getFlagUrl(found.code)} alt={found.code} width={18} height={18} loading="eager" className="w-[18px] h-[18px] object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />}
+                            <SeatFlag country={name} size={18} className="object-contain shrink-0" fallback={null} />
                             <span className="text-sm truncate" style={{ color: '#1C1410' }}>{getCountryDisplayName(name, language)}</span>
                             {!seated && <span className="text-[10px] ms-auto shrink-0" style={{ color: '#9A8A78' }}>not in this committee</span>}
                           </div>
@@ -1021,7 +1021,6 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                       .sort((a, b) => getCountryDisplayName(a.country, language).localeCompare(getCountryDisplayName(b.country, language), language, { sensitivity: 'base' }))
                       .map((d) => {
                         const checked = (s.vetoCountries ?? []).includes(d.country);
-                        const found = getCountryByName(d.country);
                         return (
                           <label key={d.id} className="flex items-center gap-2.5 cursor-pointer py-1" onClick={() => {
                             const cur = s.vetoCountries ?? [];
@@ -1031,7 +1030,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                               style={{ borderColor: checked ? '#1B3828' : '#DDD4C0', backgroundColor: checked ? '#1B3828' : 'transparent' }}>
                               {checked && <span className="text-white text-[10px] leading-none">✓</span>}
                             </div>
-                            {found && <img src={getFlagUrl(found.code)} alt={found.code} width={18} height={18} loading="eager" className="w-[18px] h-[18px] object-contain shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />}
+                            <SeatFlag seat={d} size={18} className="object-contain shrink-0" fallback={null} />
                             <span className="text-sm" style={{ color: '#1C1410' }}>{getCountryDisplayName(d.country, language)}</span>
                           </label>
                         );

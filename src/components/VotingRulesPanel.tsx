@@ -17,7 +17,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Portal from '@/components/Portal';
 import { useT } from '@/contexts/LanguageContext';
 import type { CommitteeSettings } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName, COUNTRY_NAME_ALIASES } from '@/lib/countries';
 
 // ── Veto matching by country identity ───────────────────────────────────────
 // A veto list holds free text ("Russia"), and so does a delegation name — which
@@ -68,9 +68,26 @@ const DELEGATION_ALIASES: Record<string, string> = {
   'united republic of tanzania': 'TZ', 'viet nam': 'VN', 'laos pdr': 'LA',
 };
 
+/** Every spelling this panel understands, normalized → ISO code.
+ *
+ *  Three layers, lowest precedence first:
+ *   1. the canonical UN_COUNTRIES names
+ *   2. the app-wide COUNTRY_NAME_ALIASES from countries.ts — the single home
+ *      for "Turkey", "Czechia", "DRC", "UK", "Viet Nam" and friends, so a
+ *      spelling taught to the search boxes is understood by the veto check too
+ *   3. this file's DELEGATION_ALIASES, which stay because they carry forms the
+ *      shared table deliberately does not (alpha-3 codes, "U.S.A." with dots —
+ *      normalizeDelegation strips punctuation, `fold` does not)
+ *  Later layers overwrite earlier ones, so a local entry always wins. */
 const DELEGATION_IDENTITY = (() => {
   const map = new Map<string, string>();
+  const codeOf = (name: string) => UN_COUNTRIES.find((c) => c.name === name)?.code;
   for (const c of UN_COUNTRIES) map.set(normalizeDelegation(c.name), c.code);
+  for (const [alias, canonical] of Object.entries(COUNTRY_NAME_ALIASES)) {
+    const key = normalizeDelegation(alias);
+    const code = codeOf(canonical);
+    if (key && code) map.set(key, code);
+  }
   for (const [alias, code] of Object.entries(DELEGATION_ALIASES)) {
     const key = normalizeDelegation(alias);
     if (key) map.set(key, code);
@@ -85,7 +102,9 @@ const DELEGATION_IDENTITY = (() => {
 export function delegationIdentity(value: string | null | undefined): string | null {
   const raw = (value ?? '').trim();
   if (!raw) return null;
-  const exact = getCountryByName(raw);           // canonical name, case-insensitive
+  // Shared resolver first: canonical name or app-wide alias, folded so accents
+  // and case never matter ("türkiye", "Turkey", "TURKIYE" are one seat).
+  const exact = getCountryByName(raw);
   if (exact) return exact.code;
   const key = normalizeDelegation(raw);
   if (!key) return null;

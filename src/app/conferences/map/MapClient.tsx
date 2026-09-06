@@ -815,7 +815,7 @@ export default function MapClient() {
                           }}
                         >
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail.highlighted.full_name}</span>
-                          <VerifiedCheck verified={detail.highlighted.is_verified} size={14} title="Verified conference" />
+                          <VerifiedCheck verified={detail.highlighted.is_verified} size={16} title="Verified conference" />
                         </span>
                         {formatMonthYear(detail.highlighted.start_date) && (
                           <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 10, color: '#9A8A78', marginTop: 1 }}>

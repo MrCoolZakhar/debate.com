@@ -314,7 +314,7 @@ function SideRail({
           >
             <span className="flex items-center gap-1.5 text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
               {conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}
-              {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={14} title={sealTitle} />}
+              {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />}
             </span>
             {conference && (
               <span
@@ -521,7 +521,7 @@ function SidebarContent({
         <div className="min-w-0">
           <span className="flex items-center gap-1.5 min-w-0 text-sm font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
             <span className="truncate">{conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}</span>
-            {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={14} title={sealTitle} />}
+            {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />}
           </span>
           {conference && (
             <span
@@ -990,7 +990,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
           >
             {conference ? conferenceAcronymLabel(conference) : '...'}
-            {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={14} title={sealTitle} />}
+            {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />}
           </Link>
         </div>
 

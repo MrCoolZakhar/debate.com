@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import {
   ArrowRight, BadgeCheck, Ban, Briefcase, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, CircleCheck, Clock,
   Download, Eye, Filter, Gavel, Globe, GraduationCap, HandCoins, HeartHandshake, Inbox, Info, Landmark, LogOut, MapPin,
-  Mail, MessageSquareText, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
+  Loader2, Mail, MessageSquareText, MoreHorizontal, PencilLine, Plus, RotateCcw, Search, Send, SlidersHorizontal, Trash2, Trophy, Undo2, User, UserRoundCheck,
   UserX, Users, Wallet, X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -1713,6 +1713,124 @@ function CommitteeFilter({
   );
 }
 
+// ── Optimistic-patch ledger types + pure helpers ──────────────────────────────
+// See the `pendingPatches` comment inside ApplicationsPage for why this exists.
+// Kept at module scope so the reconcile is a pure function of its arguments and
+// nothing here is rebuilt on every render.
+
+/** One row's local truth. `patch: null` means the row was deleted locally. */
+type PendingPatch = { seq: number; at: number; patch: Partial<Application> | null };
+
+/** A patch older than this is dropped even if the server never confirmed it,
+ *  so the ledger can never diverge from the database permanently. It can only
+ *  do that if some load actually runs once the patch is that old, which is
+ *  what the retry pass below exists to guarantee — see RECONCILE_MAX_RETRIES. */
+const PATCH_MAX_AGE_MS = 30_000;
+
+/** How long a reconcile waits for more actions before it runs. Long enough to
+ *  collapse a burst of clicks (and a whole bulk loop) into ONE load. */
+const RECONCILE_DELAY_MS = 700;
+
+/** Follow-up reconciles allowed after a load that left the ledger non-empty.
+ *
+ *  Nothing else ever revisits a held patch: this page has no polling, no
+ *  visibilitychange listener, and a load never schedules another load, so the
+ *  last load of a burst used to be a patch's final chance to retire. A write
+ *  that silently no-opped (an RLS-rejected 0-row update) therefore pinned its
+ *  row to a value the database does not have, with no indicator, because the
+ *  SAVING state had already cleared, and PATCH_MAX_AGE_MS could never fire.
+ *
+ *  So a load that leaves the ledger non-empty arms another one, backing off
+ *  RECONCILE_DELAY_MS * 2^n. Six retries put the LAST pass at 63x the delay
+ *  (~44s) after the burst, which is past PATCH_MAX_AGE_MS — so if the server
+ *  still disagrees by then, that pass expires the entry through the ordinary
+ *  age check in reconcileLoaded and the server value finally shows. Six is
+ *  the smallest bound that clears the max age; more would just be idle polls. */
+const RECONCILE_MAX_RETRIES = 6;
+
+/** How many bulk rows write at once. The old code fanned out every row in
+ *  parallel, so fifty accepts meant fifty sync RPCs plus fifty five-query
+ *  loads. Four at a time keeps the UI responsive without flooding PostgREST. */
+const BULK_CHUNK_SIZE = 4;
+
+/** Structural equality, key-order independent, for comparing a patched field
+ *  against what the server returned. Joined objects (assigned_committee) and
+ *  arrays both need this; `===` alone would never match them. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a as object);
+  const kb = Object.keys(b as object);
+  if (ka.length !== kb.length) return false;
+  return ka.every(k => sameValue((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
+
+/** Fields the client only approximates. checked_in_at is set to a local clock
+ *  reading for the instant "Checked in ..." line while the database computes
+ *  its own; comparing it would mean the check-in patch NEVER matched and every
+ *  check-in sat pinned to local truth until it timed out. The value is still
+ *  displayed and still re-applied, it just does not get a vote on whether the
+ *  write landed. */
+const UNCONFIRMABLE_PATCH_KEYS = new Set<string>(['checked_in_at']);
+
+/** True when the server row already carries every field the patch set. */
+function patchLanded(row: Application, patch: Partial<Application>): boolean {
+  return (Object.keys(patch) as (keyof Application)[])
+    .filter(k => !UNCONFIRMABLE_PATCH_KEYS.has(k as string))
+    .every(k => sameValue(patch[k], row[k]));
+}
+
+/**
+ * Merge a freshly loaded list with local optimistic truth.
+ *
+ * `startStamp` is the patch counter as it stood when the load STARTED. A patch
+ * newer than that cannot possibly be in this snapshot, so it is re-applied. A
+ * patch older than it should be in the snapshot: confirmed patches are dropped,
+ * unconfirmed ones are held (the write is still settling) until they age out.
+ *
+ * Mutates the ledger, which is the point: this is where patches retire.
+ */
+function reconcileLoaded(
+  rows: Application[],
+  ledger: Map<string, PendingPatch>,
+  startStamp: number,
+  now: number,
+): Application[] {
+  if (ledger.size === 0) return rows;
+  const loadedIds = new Set(rows.map(r => r.id));
+  const out: Application[] = [];
+
+  for (const row of rows) {
+    const entry = ledger.get(row.id);
+    if (!entry) { out.push(row); continue; }
+    const stale = entry.seq <= startStamp;
+    const expired = stale && now - entry.at > PATCH_MAX_AGE_MS;
+    if (expired) { ledger.delete(row.id); out.push(row); continue; }
+    if (entry.patch === null) {
+      // Deleted locally. The delete has not shown up in this snapshot yet, so
+      // keep the row hidden rather than resurrecting it under the cursor.
+      continue;
+    }
+    if (stale && patchLanded(row, entry.patch)) {
+      // The server agrees. Local truth has served its purpose.
+      ledger.delete(row.id);
+      out.push(row);
+      continue;
+    }
+    out.push({ ...row, ...entry.patch });
+  }
+
+  // A row the server no longer returns is genuinely gone (deleted here, or by
+  // a co-organizer). Retire its ledger entry rather than leaking it.
+  for (const [id, entry] of ledger) {
+    if (!loadedIds.has(id) && (entry.seq <= startStamp || now - entry.at > PATCH_MAX_AGE_MS)) {
+      ledger.delete(id);
+    }
+  }
+  return out;
+}
+
 // ── ApplicationsPage ──────────────────────────────────────────────────────────
 
 export default function ApplicationsPage() {
@@ -1776,10 +1894,45 @@ export default function ApplicationsPage() {
   // Multi-select for bulk actions. Ids are pruned to what's visible whenever
   // the filtered list changes, so a hidden row is never silently acted on.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Bulk progress. The loop is chunked now, so it takes visible time and has
+  // to say where it is instead of just freezing the bar's buttons.
+  const [bulkRunning, setBulkRunning] = useState<{ done: number; total: number } | null>(null);
   const { draftNotices, pushDraftNotice, dismissDraftNotice } = useDraftNotices();
   const { confirm, modal: confirmModal } = useConfirmModal();
   // Stale-response guard for background refetches.
   const loadSeq = useRef(0);
+  /* ── The optimistic-patch ledger ────────────────────────────────────────
+     `loadSeq` guards load against load. It does NOT guard a local write
+     against a load that was already in flight when that write happened, and
+     that is the race an organiser hits when they decide two applicants in
+     quick succession.
+
+     loadApplications opens with an AWAITED sync_conference_invoices RPC and
+     then four more queries, so a "silent" reconcile takes a while. Accept row
+     A (fires a reconcile), then reject row B a second later: the reconcile's
+     snapshot was taken before B's write landed, it comes back with B still
+     'submitted', and `setApplications(apps)` used to overwrite B's optimistic
+     'rejected' wholesale. Nothing was scheduled to correct that, so B sat
+     there wrong until the organiser reloaded the page.
+
+     So every optimistic patch is recorded here with a monotonic stamp. A load
+     records the stamp it STARTED at; on return it re-applies any patch newer
+     than that stamp. A patch older than the start stamp should already be in
+     the snapshot: if it is, the patch is dropped (the server agrees, local
+     truth is no longer needed); if it is not, the write is still settling and
+     the patch is held for one more round.
+
+     `patch: null` means the row was deleted locally, so a stale snapshot must
+     not resurrect it.
+
+     PATCH_MAX_AGE_MS is the escape hatch. A patch the server never confirms
+     (a trigger rewrote the value, a write silently no-opped) would otherwise
+     pin the row to a wrong value forever. After the timeout it is dropped and
+     the server wins, which is the correct end state for a disagreement — but
+     only a load can drop it, so a load that leaves the ledger non-empty arms
+     another one (RECONCILE_MAX_RETRIES) until the escape hatch can fire. */
+  const patchSeq = useRef(0);
+  const pendingPatches = useRef<Map<string, PendingPatch>>(new Map());
   // Committees for the inline quick-allocate picker (#7), loaded lazily the
   // first time a Plus popover opens. null = not yet fetched.
   const [allocCommittees, setAllocCommittees] = useState<QuickCommittee[] | null>(null);
@@ -1873,6 +2026,9 @@ export default function ApplicationsPage() {
     if (!conference) return;
     if (!accessToken) return;
     const seq = ++loadSeq.current;
+    // The ledger stamp as it stands right now. Anything patched after this
+    // line cannot be in the snapshot below, so the merge re-applies it.
+    const startStamp = patchSeq.current;
     if (!opts?.silent) setLoading(true);
     const supabase = getAuthedClient(accessToken);
     // Materialize this conference's invoices first, so the gating query right
@@ -1920,7 +2076,12 @@ export default function ApplicationsPage() {
 
     if (seq !== loadSeq.current) return; // stale response, a newer load superseded this one
 
-    const apps = (appRes.data ?? []) as unknown as Application[];
+    const raw = (appRes.data ?? []) as unknown as Application[];
+    // NEVER `setApplications(raw)`. A snapshot taken before a local write must
+    // not be allowed to revert that write on screen — see the pendingPatches
+    // comment. The merge re-applies newer local truth and retires patches the
+    // server has now confirmed.
+    const apps = reconcileLoaded(raw, pendingPatches.current, startStamp, Date.now());
     setApplications(apps);
     // Seed once per mount. `opts.silent` reloads (post-accept, post-reject)
     // must not re-seed, or the row just acted on would jump away.
@@ -1959,6 +2120,73 @@ export default function ApplicationsPage() {
   }, [conference, accessToken]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
+
+  /* ── The single, coalesced reconcile ──────────────────────────────────────
+     Every mutating handler ends here instead of running its own full load.
+     Accept and mark-paid used to `await loadApplications({ silent: true })`
+     each, and nothing else reconciled at all — so a reject or a check-in left
+     no scheduled correction behind it, which is exactly why a stale accept
+     load could revert a reject permanently.
+
+     Trailing debounce, deliberately. Deciding five applicants in five seconds
+     produces ONE load after the last of them, not five overlapping ones; a
+     bulk loop produces one after the whole loop. The optimistic ledger above
+     is what keeps the screen correct in the meantime, so there is no reason
+     to rush the network.
+
+     One extra rule on top of the debounce: a load that comes back still
+     holding patches arms another load, up to RECONCILE_MAX_RETRIES with an
+     exponential back-off. Without it the last load of a burst was the last
+     load, full stop, and a patch the server never confirmed had no later pass
+     to be dropped by. */
+  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Follow-up passes already spent on the current disagreement. Reset by any
+   *  new action, so a fresh patch always gets the full budget. */
+  const reconcileRetries = useRef(0);
+  /** Cleared on unmount, so a load that resolves after the page is gone cannot
+   *  arm a timer nothing is left to clear. Set (not just cleared) by the effect
+   *  below, because StrictMode's mount/unmount/mount would otherwise leave this
+   *  ref stuck false for the real mount. */
+  const reconcileAlive = useRef(true);
+  useEffect(() => {
+    reconcileAlive.current = true;
+    return () => {
+      reconcileAlive.current = false;
+      if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+      reconcileTimer.current = null;
+    };
+  }, []);
+
+  /** Arm one silent load `delay` ms from now, replacing any pending one. */
+  const armReconcile = useCallback((delay: number) => {
+    if (!reconcileAlive.current) return;
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+    reconcileTimer.current = setTimeout(() => {
+      reconcileTimer.current = null;
+      void loadApplications({ silent: true }).then(() => {
+        // Unmounted while the load was in flight: arming here would leak a
+        // timer past the cleanup above.
+        if (!reconcileAlive.current) return;
+        // Everything retired, or the budget is spent and reconcileLoaded has
+        // aged the survivors out. Either way the screen matches the server.
+        if (pendingPatches.current.size === 0 || reconcileRetries.current >= RECONCILE_MAX_RETRIES) {
+          reconcileRetries.current = 0;
+          return;
+        }
+        const attempt = reconcileRetries.current++;
+        armReconcileRef.current(RECONCILE_DELAY_MS * 2 ** attempt);
+      });
+    }, delay);
+  }, [loadApplications]);
+  // Indirection so the timer callback can re-arm without armReconcile having to
+  // close over itself.
+  const armReconcileRef = useRef(armReconcile);
+  useEffect(() => { armReconcileRef.current = armReconcile; }, [armReconcile]);
+
+  const scheduleReconcile = useCallback(() => {
+    reconcileRetries.current = 0;
+    armReconcile(RECONCILE_DELAY_MS);
+  }, [armReconcile]);
 
   // ── Drafts loader ─────────────────────────────────────────────────────────
   // A SEPARATE query into a SEPARATE state atom. It deliberately shares nothing
@@ -2185,7 +2413,8 @@ export default function ApplicationsPage() {
   // allocation this session can't reuse it, then write to
   // conference_allocations + applications. Exact rollback on any failure.
   function handleQuickAllocate(app: Application, committee: QuickCommittee, slot: { country_code: string; country_name: string }) {
-    if (!session || !conference || busyIds.has(app.id)) return;
+    if (!session || !conference) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
     const prevRow = applications.find(a => a.id === app.id) ?? app;
     if (!app.user_id) {
       setActionError('This applicant has not registered yet. Allocate them from the assignment board once they sign up.');
@@ -2236,18 +2465,53 @@ export default function ApplicationsPage() {
           : prev);
         setActionError('Could not allocate this delegate. The change was reverted. Please try again.');
       })
-      .finally(() => markBusy(app.id, false));
+      .finally(() => { markBusy(app.id, false); scheduleReconcile(); });
   }
 
   // ── Optimistic row helpers ──────────────────────────────────────────────────
   // Patch one application in place (the UI updates instantly), and restore the
   // exact prior row on rollback, never the whole list, so concurrent actions
   // on other rows are untouched.
+  //
+  // Both also write the ledger, so a refetch whose snapshot predates the
+  // change cannot undo it on screen. Anything that mutates a row optimistically
+  // MUST go through these two (or recordPatch below) — a bare setApplications
+  // call is invisible to the guard and gets clobbered.
+  function recordPatch(appId: string, patch: Partial<Application> | null) {
+    const prev = pendingPatches.current.get(appId);
+    pendingPatches.current.set(appId, {
+      seq: ++patchSeq.current,
+      at: Date.now(),
+      // Merge onto whatever is still pending for this row, so a second field
+      // set by a later action does not drop the first one's field.
+      patch: patch === null || prev?.patch == null ? patch : { ...prev.patch, ...patch },
+    });
+  }
   function applyRow(appId: string, patch: Partial<Application>) {
+    recordPatch(appId, patch);
     setApplications(cur => cur.map(a => (a.id === appId ? { ...a, ...patch } : a)));
   }
   function restoreRow(row: Application) {
     setApplications(cur => cur.map(a => (a.id === row.id ? row : a)));
+    // A rollback is local truth too. Re-stamp the ledger with the REVERTED
+    // values for exactly the fields the failed write touched, otherwise a load
+    // that started before the rollback would re-apply the values we just undid.
+    const entry = pendingPatches.current.get(row.id);
+    if (entry?.patch) {
+      const reverted: Record<string, unknown> = {};
+      for (const k of Object.keys(entry.patch)) reverted[k] = (row as unknown as Record<string, unknown>)[k];
+      pendingPatches.current.set(row.id, { seq: ++patchSeq.current, at: Date.now(), patch: reverted as Partial<Application> });
+    }
+  }
+
+  /* A click on a row that already has a write in flight. It is genuinely
+     dropped, so the row says so rather than doing nothing: the SAVING pill is
+     already up next to the status badge, and this adds a line naming what is
+     happening. Silence here was the other half of the reported bug — the row
+     showed a reverted status AND swallowed the retry. */
+  function noteBusyClick() {
+    setFlashMsg('');
+    setActionError('That row is still saving. Give it a moment, then try again.');
   }
 
   // Secretariat is not a plain status flip: accepting one makes the applicant
@@ -2261,14 +2525,16 @@ export default function ApplicationsPage() {
     setSecretariatError('');
   }
 
-  function handleAccept(appId: string) {
-    if (!session || !conference || busyIds.has(appId)) return;
+  // Returns the settled promise so runBulk can chunk instead of fanning out.
+  function handleAccept(appId: string): Promise<void> {
+    if (!session || !conference) return Promise.resolve();
+    if (busyIds.has(appId)) { noteBusyClick(); return Promise.resolve(); }
     const prevRow = applications.find(a => a.id === appId);
-    if (!prevRow) return;
+    if (!prevRow) return Promise.resolve();
 
     if (prevRow.role === 'secretariat') {
       openSecretariatAcceptModal(appId, prevRow);
-      return;
+      return Promise.resolve();
     }
 
     setActionError('');
@@ -2276,47 +2542,55 @@ export default function ApplicationsPage() {
     // Optimistic: the card flips to ACCEPTED immediately.
     applyRow(appId, { status: 'accepted' });
 
-    (async () => {
-      const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(session.access_token);
+    // The PRIMARY write, and only that. The row unlocks the moment this
+    // commits — emails and auto-cover are consequences of the accept, not part
+    // of it, and holding the button disabled through a couple of round trips of
+    // email queueing is what made rapid decisions feel broken.
+    const primary = (async () => {
       const { error } = await supabase.from('applications').update({ status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
+    })();
 
-      // Secondary effects, a failure here must NOT roll back the accept.
-      try {
-        const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
-        notifyIfNeeded(result, pushDraftNotice);
-        // Consolidation: application_accepted wins over payment_available.
-        // payment_available only sends alone for this person when acceptance
-        // actually resolved to nothing (off/unconfigured) for them.
-        const acceptedIds = new Set(result.queuedApplicationIds ?? []);
+    primary.catch(() => {}).then(() => markBusy(appId, false));
 
-        const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
-        if (roleConfig?.payment_timing === 'after_acceptance') {
-          const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId], undefined, { suppressIds: acceptedIds });
-          notifyIfNeeded(payResult, pushDraftNotice);
+    return primary
+      .then(async () => {
+        // Secondary effects, a failure here must NOT roll back the accept.
+        try {
+          const result = await queueEventEmail(supabase, conference.id, 'application_accepted', [appId]);
+          notifyIfNeeded(result, pushDraftNotice);
+          // Consolidation: application_accepted wins over payment_available.
+          // payment_available only sends alone for this person when acceptance
+          // actually resolved to nothing (off/unconfigured) for them.
+          const acceptedIds = new Set(result.queuedApplicationIds ?? []);
+
+          const roleConfig = roleConfigs.find(rc => rc.role === prevRow.role);
+          if (roleConfig?.payment_timing === 'after_acceptance') {
+            const payResult = await queueEventEmail(supabase, conference.id, 'payment_available', [appId], undefined, { suppressIds: acceptedIds });
+            notifyIfNeeded(payResult, pushDraftNotice);
+          }
+
+          // F13: acceptance is when auto-cover runs, newly accepted pool members
+          // absorb any free delegation-purchased spots, oldest-first. The fill
+          // helper emails spot_received for whoever it covers, suppressing the
+          // just-accepted person's own id so they don't get that on top of
+          // application_accepted (rule one wins) if the same action covers them.
+          const pool = poolForRole(prevRow.role);
+          if (prevRow.society_id && pool) {
+            await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
+          }
+        } catch {
+          setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
         }
 
-        // F13: acceptance is when auto-cover runs, newly accepted pool members
-        // absorb any free delegation-purchased spots, oldest-first. The fill
-        // helper emails spot_received for whoever it covers, suppressing the
-        // just-accepted person's own id so they don't get that on top of
-        // application_accepted (rule one wins) if the same action covers them.
-        const pool = poolForRole(prevRow.role);
-        if (prevRow.society_id && pool) {
-          await fillFreeSpots(supabase, conference.id, prevRow.society_id, pool, { suppressIds: acceptedIds });
-        }
-      } catch {
-        setActionError('Accepted, but a follow-up step (email / auto-cover) failed. Refresh to verify.');
-      }
-
-      // Auto-cover may have promoted OTHER members to paid, reconcile silently.
-      await loadApplications({ silent: true });
-    })()
+        // Auto-cover may have promoted OTHER members to paid, reconcile.
+        scheduleReconcile();
+      })
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not accept the application. The change was reverted. Please try again.');
-      })
-      .finally(() => markBusy(appId, false));
+      });
   }
 
   // Confirm handler for the secretariat accept modal. Goes through the
@@ -2384,6 +2658,7 @@ export default function ApplicationsPage() {
     })()
       .then((organizerId) => {
         setSecretariatModal(null);
+        scheduleReconcile();
         if (conference) router.push(`/manage/${conference.slug}/settings?tab=team&highlight=${organizerId}`);
       })
       .catch((e: unknown) => {
@@ -2396,10 +2671,12 @@ export default function ApplicationsPage() {
       });
   }
 
-  function handleReject(appId: string) {
-    if (!session || !conference || busyIds.has(appId)) return;
+  // Returns the settled promise so runBulk can chunk instead of fanning out.
+  function handleReject(appId: string): Promise<void> {
+    if (!session || !conference) return Promise.resolve();
+    if (busyIds.has(appId)) { noteBusyClick(); return Promise.resolve(); }
     const prevRow = applications.find(a => a.id === appId);
-    if (!prevRow) return;
+    if (!prevRow) return Promise.resolve();
     const pool = poolForRole(prevRow.role);
     // F13: rejecting a pool-covered (not self-paid) paid member releases
     // their spot back to the delegation, it stays purchased, just open again.
@@ -2418,37 +2695,47 @@ export default function ApplicationsPage() {
     setRejectingId(null);
     setRejectNote('');
 
-    (async () => {
-      const supabase = getAuthedClient(session.access_token);
-      // decided_by is DB-only (never part of the optimistic row patch): the
-      // Application type carries no actor field, the feed reads it from the DB.
+    const supabase = getAuthedClient(session.access_token);
+    // The PRIMARY write, and only that. decided_by is DB-only (never part of
+    // the optimistic row patch): the Application type carries no actor field,
+    // the feed reads it from the DB.
+    const primary = (async () => {
       const { error } = await supabase.from('applications').update({ ...updates, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
+    })();
 
-      try {
-        const result = await queueEventEmail(supabase, conference.id, 'application_rejected', [appId]);
-        notifyIfNeeded(result, pushDraftNotice);
-      } catch {
-        setActionError('Rejected, but the rejection email could not be queued.');
-      }
+    // The row is live again as soon as the status lands. The rejection email
+    // and the credit refund both run afterwards, and the refund in particular
+    // opens a FRESH authed client first — a token round trip the organiser
+    // should never have had to wait through with the button greyed out.
+    primary.catch(() => {}).then(() => markBusy(appId, false));
 
-      // Refund whatever credit the applicant spent, if any — a benign
-      // {refunded:false} just means there was nothing to refund (e.g. they
-      // still have another live application holding the credit).
-      try {
-        const freshSupabase = await getFreshAuthedClient();
-        if (freshSupabase) {
-          await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+    return primary
+      .then(async () => {
+        try {
+          const result = await queueEventEmail(supabase, conference.id, 'application_rejected', [appId]);
+          notifyIfNeeded(result, pushDraftNotice);
+        } catch {
+          setActionError('Rejected, but the rejection email could not be queued.');
         }
-      } catch {
-        setActionError('Rejected, but the credit refund could not be confirmed. Refresh to verify.');
-      }
-    })()
+
+        // Refund whatever credit the applicant spent, if any — a benign
+        // {refunded:false} just means there was nothing to refund (e.g. they
+        // still have another live application holding the credit).
+        try {
+          const freshSupabase = await getFreshAuthedClient();
+          if (freshSupabase) {
+            await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+          }
+        } catch {
+          setActionError('Rejected, but the credit refund could not be confirmed. Refresh to verify.');
+        }
+        scheduleReconcile();
+      })
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not reject the application. The change was reverted. Please try again.');
-      })
-      .finally(() => markBusy(appId, false));
+      });
   }
 
   // Single reject control, used everywhere a REJECT action appears (the
@@ -2536,7 +2823,7 @@ export default function ApplicationsPage() {
     const cancelBtn = (
       <button
         onClick={() => { setRejectingId(null); setRejectNote(''); }}
-        className={`rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
+        className={`gv-lift rounded-lg py-1.5 px-3 text-xs font-bold focus:outline-none${big ? ' flex-1' : ''}`}
         style={{ border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
       >
         CANCEL
@@ -2675,7 +2962,8 @@ export default function ApplicationsPage() {
   }
 
   function handleReinstate(appId: string) {
-    if (!session || busyIds.has(appId)) return;
+    if (!session) return;
+    if (busyIds.has(appId)) { noteBusyClick(); return; }
     const prevRow = applications.find(a => a.id === appId);
     if (!prevRow) return;
 
@@ -2688,6 +2976,7 @@ export default function ApplicationsPage() {
       const { error } = await supabase.from('applications').update({ status: 'submitted', organizer_note: null, decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
     })()
+      .then(scheduleReconcile)
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not reinstate the application. The change was reverted. Please try again.');
@@ -2739,10 +3028,11 @@ export default function ApplicationsPage() {
     handleWithdraw(app.id);
   }
 
-  function handleWithdraw(appId: string) {
-    if (!session || !conference || busyIds.has(appId)) return;
+  function handleWithdraw(appId: string): Promise<void> {
+    if (!session || !conference) return Promise.resolve();
+    if (busyIds.has(appId)) { noteBusyClick(); return Promise.resolve(); }
     const prevRow = applications.find(a => a.id === appId);
-    if (!prevRow) return;
+    if (!prevRow) return Promise.resolve();
 
     setActionError('');
     markBusy(appId, true);
@@ -2755,8 +3045,11 @@ export default function ApplicationsPage() {
       society_id: null,
     });
 
-    (async () => {
-      const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(session.access_token);
+    // PRIMARY: release the pool spot, then flip the status. Everything after
+    // it (allocation delete, dais removal, credit refund) is cleanup and runs
+    // with the row already unlocked.
+    const primary = (async () => {
       const { dropToUnpaid, error: releaseError } = await releasePoolSpot(supabase, prevRow);
       if (releaseError) throw new Error(releaseError);
 
@@ -2772,45 +3065,51 @@ export default function ApplicationsPage() {
 
       const { error } = await supabase.from('applications').update(updates).eq('id', appId);
       if (error) throw error;
+    })();
 
-      if (prevRow.assigned_committee_id) {
-        await supabase.from('conference_allocations').delete().eq('application_id', appId);
-      }
+    primary.catch(() => {}).then(() => markBusy(appId, false));
 
-      // If they chair any committee, drop them from its dais: mirrors
-      // committees/page.tsx & assignment/page.tsx's handleRemoveChair.
-      if (prevRow.role === 'chair' && prevRow.user_id) {
-        const { data: chaired } = await supabase
-          .from('conference_committees')
-          .select('id, chair_user_ids')
-          .eq('conference_id', conference.id)
-          .contains('chair_user_ids', [prevRow.user_id]);
-        for (const c of (chaired ?? []) as { id: string; chair_user_ids: string[] | null }[]) {
-          const nextIds = (c.chair_user_ids ?? []).filter(id => id !== prevRow.user_id);
-          await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
+    return primary
+      .then(async () => {
+        if (prevRow.assigned_committee_id) {
+          await supabase.from('conference_allocations').delete().eq('application_id', appId);
         }
-      }
 
-      // Refund whatever credit the applicant spent, if any — same benign
-      // {refunded:false} handling as reject.
-      try {
-        const freshSupabase = await getFreshAuthedClient();
-        if (freshSupabase) {
-          await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+        // If they chair any committee, drop them from its dais: mirrors
+        // committees/page.tsx & assignment/page.tsx's handleRemoveChair.
+        if (prevRow.role === 'chair' && prevRow.user_id) {
+          const { data: chaired } = await supabase
+            .from('conference_committees')
+            .select('id, chair_user_ids')
+            .eq('conference_id', conference.id)
+            .contains('chair_user_ids', [prevRow.user_id]);
+          for (const c of (chaired ?? []) as { id: string; chair_user_ids: string[] | null }[]) {
+            const nextIds = (c.chair_user_ids ?? []).filter(id => id !== prevRow.user_id);
+            await supabase.from('conference_committees').update({ chair_user_ids: nextIds }).eq('id', c.id);
+          }
         }
-      } catch {
-        setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
-      }
-    })()
+
+        // Refund whatever credit the applicant spent, if any — same benign
+        // {refunded:false} handling as reject.
+        try {
+          const freshSupabase = await getFreshAuthedClient();
+          if (freshSupabase) {
+            await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+          }
+        } catch {
+          setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
+        }
+        scheduleReconcile();
+      })
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not withdraw the application. The change was reverted. Please try again.');
-      })
-      .finally(() => markBusy(appId, false));
+      });
   }
 
   function handleReinstateFromWithdrawn(appId: string) {
-    if (!session || busyIds.has(appId)) return;
+    if (!session) return;
+    if (busyIds.has(appId)) { noteBusyClick(); return; }
     const prevRow = applications.find(a => a.id === appId);
     if (!prevRow) return;
 
@@ -2830,6 +3129,7 @@ export default function ApplicationsPage() {
       const { error } = await supabase.from('applications').update({ status: 'accepted', decided_by: session.user.id, decided_at: new Date().toISOString() }).eq('id', appId);
       if (error) throw error;
     })()
+      .then(scheduleReconcile)
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not reinstate the application. The change was reverted. Please try again.');
@@ -2858,7 +3158,8 @@ export default function ApplicationsPage() {
   }
 
   function handleNotAttending(app: Application) {
-    if (!session || !conference || busyIds.has(app.id)) return;
+    if (!session || !conference) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
     const prevRow = applications.find(a => a.id === app.id) ?? app;
     const name = prevRow.profiles?.display_name ?? prevRow.invited_name ?? 'this applicant';
 
@@ -2880,6 +3181,7 @@ export default function ApplicationsPage() {
       if (result.error) throw new Error(result.error);
       notifyIfNeeded(result.result, pushDraftNotice);
     })()
+      .then(scheduleReconcile)
       .catch(() => {
         restoreRow(prevRow);
         setActionError(`Could not mark ${name} as not attending. Please try again.`);
@@ -2888,7 +3190,8 @@ export default function ApplicationsPage() {
   }
 
   function handleMarkAttending(app: Application) {
-    if (!session || !conference || busyIds.has(app.id)) return;
+    if (!session || !conference) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
     const prevRow = applications.find(a => a.id === app.id) ?? app;
 
     setActionError('');
@@ -2902,6 +3205,7 @@ export default function ApplicationsPage() {
       if (result.error) throw new Error(result.error);
       notifyIfNeeded(result.result, pushDraftNotice);
     })()
+      .then(scheduleReconcile)
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not restore attendance. Please try again.');
@@ -2925,14 +3229,18 @@ export default function ApplicationsPage() {
   }
 
   function handleDeleteRow(appId: string) {
-    if (!session || busyIds.has(appId)) return;
+    if (!session) return;
+    if (busyIds.has(appId)) { noteBusyClick(); return; }
     const prevIndex = applications.findIndex(a => a.id === appId);
     const prevRow = applications[prevIndex];
     if (!prevRow) return;
 
     setActionError('');
     markBusy(appId, true);
-    // Optimistic: the row disappears immediately.
+    // Optimistic: the row disappears immediately. `null` in the ledger is
+    // "deleted locally", so a snapshot taken before the delete cannot put the
+    // row back on screen.
+    recordPatch(appId, null);
     setApplications(cur => cur.filter(a => a.id !== appId));
     setReviewId(cur => (cur === appId ? null : cur));
 
@@ -2942,7 +3250,10 @@ export default function ApplicationsPage() {
       const { error } = await supabase.from('applications').delete().eq('id', appId);
       if (error) throw error;
     })()
+      .then(scheduleReconcile)
       .catch(() => {
+        // The row is back, so the ledger must stop claiming it is deleted.
+        pendingPatches.current.delete(appId);
         setApplications(cur => {
           if (cur.some(a => a.id === appId)) return cur;
           const next = [...cur];
@@ -2954,8 +3265,10 @@ export default function ApplicationsPage() {
       .finally(() => markBusy(appId, false));
   }
 
-  function handleMarkPaid(app: Application) {
-    if (!session || !conference || busyIds.has(app.id) || paymentsLive) return;
+  // Returns the settled promise so runBulk can chunk instead of fanning out.
+  function handleMarkPaid(app: Application): Promise<void> {
+    if (!session || !conference || paymentsLive) return Promise.resolve();
+    if (busyIds.has(app.id)) { noteBusyClick(); return Promise.resolve(); }
     const prevRow = applications.find(a => a.id === app.id) ?? app;
 
     setActionError('');
@@ -2963,64 +3276,71 @@ export default function ApplicationsPage() {
     // Optimistic: the PAID badge appears immediately.
     applyRow(app.id, { payment_status: 'paid', self_paid: true });
 
-    (async () => {
-      const supabase = getAuthedClient(session.access_token);
+    const supabase = getAuthedClient(session.access_token);
+    // PRIMARY: the payment mark itself. Invoice settlement, spot accounting
+    // and the receipt email all follow with the row already unlocked.
+    const primary = (async () => {
       const { error } = await supabase.from('applications').update({ payment_status: 'paid', self_paid: true }).eq('id', app.id);
       if (error) throw error;
+    })();
 
-      // Settle their invoices too. This is NOT optional bookkeeping: the accept
-      // gate reads INVOICES (gates_acceptance, unsettled), never
-      // applications.payment_status, so marking someone paid without settling
-      // left them permanently un-acceptable — the organiser saw a green PAID
-      // badge next to "A required fee is unpaid", with ACCEPT greyed out and no
-      // way forward. It also left the ledger claiming nothing was collected.
-      //
-      // mark_invoice_paid is the same RPC the financials page uses: it writes
-      // the payment + batch rows, settles the invoice and runs
-      // settle_invoice_effects, so manual payments land identically wherever
-      // they are recorded.
-      try {
-        const { data: openInvoices } = await supabase
-          .from('invoices')
-          .select('id')
-          .eq('application_id', app.id)
-          .not('status', 'in', '(settled,waived,void)');
-        for (const inv of (openInvoices ?? []) as { id: string }[]) {
-          await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
-        }
-      } catch {
-        setActionError('Marked paid, but their invoice could not be settled — they may still be blocked from acceptance. Settle it in Financials → Invoices.');
-      }
+    primary.catch(() => {}).then(() => markBusy(app.id, false));
 
-      // Secondary effects, a failure here must NOT roll back the payment mark.
-      try {
-        const pool = poolForRole(app.role);
-        if (app.society_id && pool) {
-          const spotsColumn = POOL_SPOTS_COLUMN[pool];
-          const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
-          const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
-          await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
-          await fillFreeSpots(supabase, conference.id, app.society_id, pool);
+    return primary
+      .then(async () => {
+        // Settle their invoices too. This is NOT optional bookkeeping: the accept
+        // gate reads INVOICES (gates_acceptance, unsettled), never
+        // applications.payment_status, so marking someone paid without settling
+        // left them permanently un-acceptable — the organiser saw a green PAID
+        // badge next to "A required fee is unpaid", with ACCEPT greyed out and no
+        // way forward. It also left the ledger claiming nothing was collected.
+        //
+        // mark_invoice_paid is the same RPC the financials page uses: it writes
+        // the payment + batch rows, settles the invoice and runs
+        // settle_invoice_effects, so manual payments land identically wherever
+        // they are recorded.
+        try {
+          const { data: openInvoices } = await supabase
+            .from('invoices')
+            .select('id')
+            .eq('application_id', app.id)
+            .not('status', 'in', '(settled,waived,void)');
+          for (const inv of (openInvoices ?? []) as { id: string }[]) {
+            await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
+          }
+        } catch {
+          setActionError('Marked paid, but their invoice could not be settled — they may still be blocked from acceptance. Settle it in Financials → Invoices.');
         }
 
-        const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
-        notifyIfNeeded(result, pushDraftNotice);
-      } catch {
-        setActionError('Marked paid, but a follow-up step (spot update / email) failed. Refresh to verify.');
-      }
+        // Secondary effects, a failure here must NOT roll back the payment mark.
+        try {
+          const pool = poolForRole(app.role);
+          if (app.society_id && pool) {
+            const spotsColumn = POOL_SPOTS_COLUMN[pool];
+            const { data: soc } = await supabase.from('societies').select(spotsColumn).eq('id', app.society_id).single();
+            const current = (soc as Record<string, number> | null)?.[spotsColumn] ?? 0;
+            await supabase.from('societies').update({ [spotsColumn]: current + 1 }).eq('id', app.society_id);
+            await fillFreeSpots(supabase, conference.id, app.society_id, pool);
+          }
 
-      // fillFreeSpots may have promoted OTHER members to paid, reconcile silently.
-      await loadApplications({ silent: true });
-    })()
+          const result = await queueEventEmail(supabase, conference.id, 'payment_received', [app.id]);
+          notifyIfNeeded(result, pushDraftNotice);
+        } catch {
+          setActionError('Marked paid, but a follow-up step (spot update / email) failed. Refresh to verify.');
+        }
+
+        // fillFreeSpots may have promoted OTHER members to paid, reconcile.
+        scheduleReconcile();
+      })
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not mark the application paid. The change was reverted. Please try again.');
-      })
-      .finally(() => markBusy(app.id, false));
+      });
   }
 
   async function handleMarkUnpaid(app: Application) {
-    if (!session || busyIds.has(app.id) || paymentsLive) return;
+    if (!session || paymentsLive) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
     const { confirmed } = await confirm({
       title: 'Mark this application unpaid?',
       body: 'If their payment opened a delegation spot, one spot will be removed.',
@@ -3068,6 +3388,7 @@ export default function ApplicationsPage() {
         setActionError('Marked unpaid, but the delegation spot count could not be updated. Refresh to verify.');
       }
     })()
+      .then(scheduleReconcile)
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not mark the application unpaid. The change was reverted. Please try again.');
@@ -3079,7 +3400,8 @@ export default function ApplicationsPage() {
   // "you can pay now" email, so re-queuing it reads to the applicant as a
   // reminder. Optimistic feedback via the green flash; no row state changes.
   function handleRemindPay(app: Application) {
-    if (!session || !conference || busyIds.has(app.id)) return;
+    if (!session || !conference) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
     const name = app.profiles?.display_name ?? app.invited_name ?? 'the applicant';
     setActionError('');
     markBusy(app.id, true);
@@ -3098,7 +3420,8 @@ export default function ApplicationsPage() {
   }
 
   async function handleUndoWaive(app: Application) {
-    if (!session || busyIds.has(app.id)) return;
+    if (!session) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
     const { confirmed } = await confirm({
       title: 'Remove this fee waiver?',
       body: 'They will owe payment again.',
@@ -3117,6 +3440,7 @@ export default function ApplicationsPage() {
       const { error } = await supabase.from('applications').update({ payment_status: 'unpaid' }).eq('id', app.id);
       if (error) throw error;
     })()
+      .then(scheduleReconcile)
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not remove the waiver. The change was reverted. Please try again.');
@@ -3129,19 +3453,22 @@ export default function ApplicationsPage() {
   // write via the shared checkIn helper, exact rollback on error. checked_in_at
   // is set to a client timestamp for the instant "Checked in …" line; the
   // helper computes its own server-side value, close enough for display.
-  function handleCheckIn(app: Application) {
-    if (!session || busyIds.has(app.id)) return;
+  // Returns the settled promise so runBulk can chunk instead of fanning out.
+  function handleCheckIn(app: Application): Promise<void> {
+    if (!session) return Promise.resolve();
+    if (busyIds.has(app.id)) { noteBusyClick(); return Promise.resolve(); }
     const prevRow = applications.find(a => a.id === app.id) ?? app;
 
     setActionError('');
     markBusy(app.id, true);
     applyRow(app.id, { status: 'checked-in', checked_in_at: new Date().toISOString() });
 
-    (async () => {
+    return (async () => {
       const supabase = getAuthedClient(session.access_token);
       const { error } = await checkInApplication(supabase, app.id, session.user.id);
       if (error) throw new Error(error);
     })()
+      .then(scheduleReconcile)
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not check in that attendee. The change was reverted. Please try again.');
@@ -3150,7 +3477,8 @@ export default function ApplicationsPage() {
   }
 
   function handleUndoCheckIn(app: Application) {
-    if (!session || busyIds.has(app.id)) return;
+    if (!session) return;
+    if (busyIds.has(app.id)) { noteBusyClick(); return; }
     const prevRow = applications.find(a => a.id === app.id) ?? app;
     // Restore whichever state they were in before arriving: assigned when they
     // hold a committee allocation, otherwise accepted.
@@ -3165,6 +3493,7 @@ export default function ApplicationsPage() {
       const { error } = await undoCheckIn(supabase, app.id, revertTo, session.user.id);
       if (error) throw new Error(error);
     })()
+      .then(scheduleReconcile)
       .catch(() => {
         restoreRow(prevRow);
         setActionError('Could not undo that check-in. The change was reverted. Please try again.');
@@ -3184,17 +3513,35 @@ export default function ApplicationsPage() {
 
   // Bulk actions loop the single-row optimistic handlers, so every row keeps
   // its own optimistic patch + rollback + busy guard. We confirm once up front
-  // (count spelled out) then fan out over the eligible rows only.
+  // (count spelled out) then run the eligible rows only.
+  //
+  // CHUNKED, not fanned out. `apps.forEach(run)` started every row's write at
+  // once, and because accept and mark-paid each ended in their own full reload,
+  // fifty selected rows meant fifty sync_conference_invoices RPCs and fifty
+  // five-query loads racing each other — the exact conditions under which a
+  // stale snapshot lands on top of a newer decision. Now BULK_CHUNK_SIZE rows
+  // write at a time, each row keeping its own optimistic patch, rollback and
+  // busy guard, and the whole loop ends in ONE coalesced reconcile.
   async function runBulk(
     apps: Application[],
     opts: { title: string; body: string; confirmLabel: string; danger?: boolean },
-    run: (app: Application) => void,
+    run: (app: Application) => void | Promise<unknown>,
   ) {
     if (apps.length === 0) return;
     const { confirmed } = await confirm(opts);
     if (!confirmed) return;
-    apps.forEach(run);
     clearSelection();
+    setBulkRunning({ done: 0, total: apps.length });
+    try {
+      for (let i = 0; i < apps.length; i += BULK_CHUNK_SIZE) {
+        const chunk = apps.slice(i, i + BULK_CHUNK_SIZE);
+        await Promise.all(chunk.map(a => Promise.resolve(run(a)).catch(() => {})));
+        setBulkRunning({ done: Math.min(i + chunk.length, apps.length), total: apps.length });
+      }
+    } finally {
+      setBulkRunning(null);
+      scheduleReconcile();
+    }
   }
 
   // ── Bulk: remind to pay ───────────────────────────────────────────────────
@@ -3809,6 +4156,8 @@ export default function ApplicationsPage() {
             .appRowOpen { cursor: pointer; outline: none; transition: background-color 180ms ${EASE_LOCAL}; }
             .appRowOpen:hover { background-color: rgba(27,56,40,0.022); }
             .appRowOpen:focus-visible { box-shadow: inset 0 0 0 2.5px ${NEU.forest}; background-color: rgba(27,56,40,0.03); }
+            @keyframes gvSpin { to { transform: rotate(360deg); } }
+            @media (prefers-reduced-motion: reduce) { @keyframes gvSpin { to { transform: none; } } }
           `}</style>
           {filtered.map(app => {
             const name = app.profiles?.display_name ?? app.invited_name ?? 'Unknown';
@@ -4151,6 +4500,18 @@ export default function ApplicationsPage() {
                         status={app.status}
                         awaitingResubmission={app.status === 'rejected' && (roleConfigs.find(rc => rc.role === app.role)?.allow_resubmission ?? false)}
                       />
+                      {/* The row's controls are hard-locked while a write is in
+                          flight, and a lock with no explanation reads as a
+                          disabled row rather than a busy one. This says which
+                          it is, so a click that lands on nothing is accounted
+                          for. It sits OUTSIDE notAttendingFade's dimming on
+                          purpose, next to the status it is about to change. */}
+                      {rowBusy && (
+                        <span className="inline-flex items-center gap-1" style={chip('rgba(27,56,40,0.10)', NEU.forest, 'rgba(27,56,40,0.22)')}>
+                          <Loader2 size={10} strokeWidth={3} style={{ animation: 'gvSpin 900ms linear infinite' }} />
+                          SAVING
+                        </span>
+                      )}
                       {app.resubmitted_at && (
                         <span
                           className="inline-flex items-center gap-1"
@@ -4188,7 +4549,7 @@ export default function ApplicationsPage() {
                         <button
                           onClick={() => openReinstateConfirm(app)}
                           disabled={rowBusy || !app.attending}
-                          className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+                          className="gv-lift inline-flex items-center gap-1.5 focus:outline-none transition-colors"
                           style={{
                             padding: '7px 14px', borderRadius: 999,
                             fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.04em',
@@ -4529,8 +4890,27 @@ export default function ApplicationsPage() {
         </div>
       )}
 
+      {/* Bulk progress. runBulk clears the selection the moment it starts, so
+          the action bar below is already gone: without this the page would go
+          quiet for the length of a chunked loop. Same sticky position, same
+          pill, so it reads as the bar continuing rather than a new thing. */}
+      {bulkRunning && (
+        <div className="fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: 20, pointerEvents: 'none' }}>
+          <div
+            className="inline-flex items-center gap-2.5"
+            style={{ pointerEvents: 'auto', padding: '10px 18px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.out }}
+          >
+            <style>{`@keyframes gvSpin { to { transform: rotate(360deg); } } @media (prefers-reduced-motion: reduce) { @keyframes gvSpin { to { transform: none; } } }`}</style>
+            <Loader2 size={15} strokeWidth={2.6} style={{ color: NEU.forest, animation: 'gvSpin 900ms linear infinite' }} />
+            <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>
+              Saving {bulkRunning.done} of {bulkRunning.total}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Sticky bulk-action bar */}
-      {!loading && selectedApps.length > 0 && (
+      {!loading && !bulkRunning && selectedApps.length > 0 && (
         <div className="fixed inset-x-0 z-40 flex justify-center px-4" style={{ bottom: 20, pointerEvents: 'none' }}>
           <style>{`@keyframes bulkPulse { 0%,100% { transform: scale(1); box-shadow: 0 4px 10px rgba(27,56,40,0.35); } 50% { transform: scale(1.06); box-shadow: 0 8px 20px rgba(27,56,40,0.5); } }`}</style>
           <div
@@ -5441,7 +5821,7 @@ export default function ApplicationsPage() {
                 <button
                   onClick={close}
                   aria-label="Close delegation"
-                  className="flex-shrink-0 flex items-center justify-center rounded-lg focus:outline-none transition-colors"
+                  className="gv-lift flex-shrink-0 flex items-center justify-center rounded-lg focus:outline-none transition-colors"
                   style={{ width: 30, height: 30, border: '1px solid #DDD4C0', color: NEU.muted, backgroundColor: 'transparent' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}

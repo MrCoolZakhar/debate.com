@@ -90,7 +90,7 @@ export default function HonourRoll({ conference, committees, awards }: {
             </p>
             <h1 className="font-black leading-tight flex items-center gap-2 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 26, color: '#1C1410', margin: '4px 0 0 0' }}>
               <span>{conference.full_name}</span>
-              <VerifiedCheck verified={!!conference.is_verified} size={20} title="Verified conference" />
+              <VerifiedCheck verified={!!conference.is_verified} size={23} title="Verified conference" />
             </h1>
             {dates && (
               <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#9A8A78', margin: '4px 0 0 0' }}>{dates}</p>

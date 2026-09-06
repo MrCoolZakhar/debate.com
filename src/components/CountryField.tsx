@@ -12,7 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Globe2 } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -41,6 +42,7 @@ export function CountryField({
   describedBy,
 }: CountryFieldProps) {
   const listId = `${id ?? 'country'}-listbox`;
+  const { language } = useLanguage();
   const [open, setOpen] = useState(false);
   // Which row the keyboard is on. -1 = none highlighted yet.
   const [active, setActive] = useState(-1);
@@ -81,10 +83,19 @@ export function CountryField({
     };
   }, [open, place]);
 
+  // Ranked, accent-folded, alias-aware — see THE FOLDING RULE in countries.ts.
+  // A raw `.includes()` here missed "Türkiye" for "Tu" (and Côte d'Ivoire,
+  // São Tomé, Perú…); the rank also floats the best matches to the top.
   const shown = useMemo(() => {
-    const q = value.trim().toLowerCase();
-    return (q ? UN_COUNTRIES.filter(c => c.name.toLowerCase().includes(q)) : UN_COUNTRIES).slice(0, 40);
-  }, [value]);
+    const q = value.trim();
+    if (!q) return UN_COUNTRIES.slice(0, 40);
+    return UN_COUNTRIES
+      .map((c) => ({ c, rank: countryMatchRank(c.name, q, language) }))
+      .filter((x): x is { c: typeof UN_COUNTRIES[number]; rank: number } => x.rank !== null)
+      .sort((a, b) => a.rank - b.rank || a.c.name.localeCompare(b.c.name))
+      .slice(0, 40)
+      .map((x) => x.c);
+  }, [value, language]);
 
   function choose(name: string) {
     onChange(name);

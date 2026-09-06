@@ -22,7 +22,7 @@ import { Emoji3D, NEU } from '@/components/neu';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonClient } from '@/lib/supabase';
-import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
 import { CONFERENCE_COMMITTEE_PRESETS } from '@/components/ConferenceRosterPicker';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
@@ -250,10 +250,18 @@ function AllocationAutocomplete({
   const anchorRef = useRef<HTMLInputElement>(null);
   const allocCountry = getCountryByName(value);
   const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
+  // Accent-folded + alias-aware ranking — see THE FOLDING RULE in countries.ts.
+  // A raw `.includes()` could not find "Türkiye" from "Tu"; with only 8 rows
+  // shown, the rank is what keeps the intended country inside the cut.
   const matches = useMemo(() => {
-    const q = value.trim().toLowerCase();
+    const q = value.trim();
     if (!q) return [];
-    return UN_COUNTRIES.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 8);
+    return UN_COUNTRIES
+      .map((c) => ({ c, rank: countryMatchRank(c.name, q, 'en') }))
+      .filter((x): x is { c: typeof UN_COUNTRIES[number]; rank: number } => x.rank !== null)
+      .sort((a, b) => a.rank - b.rank || a.c.name.localeCompare(b.c.name))
+      .slice(0, 8)
+      .map((x) => x.c);
   }, [value]);
   const menuOpen = open && matches.length > 0;
   const pos = useAnchoredDropdown(menuOpen, anchorRef, 240);

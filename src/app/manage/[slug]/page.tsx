@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { notifyOk } from '@/lib/appNotify';
+import { notify } from '@/lib/sessionNotifications';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -97,7 +98,7 @@ function PublishModal({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+            className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
             style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
@@ -107,7 +108,7 @@ function PublishModal({
           <button
             onClick={handlePublish}
             disabled={publishing}
-            className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none"
+            className="flex-1 rounded-xl py-2.5 font-bold text-sm tracking-widest transition-colors focus:outline-none gv-lift"
             style={{
               backgroundColor: publishing ? '#DDD4C0' : '#1B3828',
               color: publishing ? NEU.muted : NEU.gold,
@@ -194,7 +195,7 @@ function ShareModal({
           </NeuInset>
           <button
             onClick={() => copy(publicUrl, setCopiedLink)}
-            className="flex-shrink-0 rounded-xl py-2.5 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none"
+            className="flex-shrink-0 rounded-xl py-2.5 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
             style={{
               backgroundColor: copiedLink ? '#3D7A52' : '#1B3828',
               color: NEU.gold, fontFamily: OUTFIT, letterSpacing: '0.06em',
@@ -853,14 +854,14 @@ function VerificationStrip({ doneCount, fallbackMinutes }: { doneCount: number; 
             boxShadow: `inset 0 0 0 1px rgba(182,135,31,0.35)`,
           }}
         >
-          <VerifiedCheck verified size={16} title="Verified conference" style={{ marginTop: 1 }} />
+          <VerifiedCheck verified size={18} title="Verified conference" style={{ marginTop: 1 }} />
           <p style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.forest, lineHeight: 1.35, margin: 0 }}>
             Your conference is verified. The blue checkmark now shows on the directory and your page.
           </p>
         </div>
       )}
       <div className="flex items-center gap-1.5 min-w-0">
-        <VerifiedCheck verified={verified} showUnverified size={14} title={verified ? 'Verified conference' : headline} />
+        <VerifiedCheck verified={verified} showUnverified size={16} title={verified ? 'Verified conference' : headline} />
         <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: verified ? NEU.forest : NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
           {headline}
         </span>
@@ -872,6 +873,120 @@ function VerificationStrip({ doneCount, fallbackMinutes }: { doneCount: number; 
       )}
     </div>
   );
+}
+
+// ── Announcing a finished set-up priority ─────────────────────────────────
+// A ticked row is REMOVED from the checklist rather than sunk to the bottom,
+// so the tick itself is no longer the feedback: the row simply vanishes. The
+// notification is what replaces it, and it has to say both what was finished
+// and what that unlocked, because the organiser can no longer read the answer
+// off a struck-through line.
+//
+// One sentence each, no second guessing: these fire at most nine times in the
+// life of a conference.
+
+/** Long enough to read two lines, short enough to leave on its own. */
+const SETUP_NOTICE_TTL_MS = 8_000;
+
+const SETUP_DONE_NOTICE: Record<string, { title: string; body: string }> = {
+  page: {
+    title: 'Your conference page is ready',
+    body: 'Delegates opening your public page now see the banner and the description.',
+  },
+  committees: {
+    title: 'Committees are ready',
+    body: 'You have enough seats for the head count you are expecting.',
+  },
+  chairs: {
+    title: 'Your dais has a chair',
+    body: 'Chairs can run their committee sessions from their own dashboard.',
+  },
+  email: {
+    title: 'Emails explored',
+    body: 'You have seen what goes out to applicants automatically.',
+  },
+  secretariat: {
+    title: 'Your secretariat is on board',
+    body: 'Co-organizers can now help you run the conference.',
+  },
+  financials: {
+    title: 'Financial information is set',
+    body: 'Delegates finally have somewhere to pay their fee, so publishing is unblocked.',
+  },
+  delegate: {
+    title: 'Your first delegate applied',
+    body: 'Review applications and start accepting people into committees.',
+  },
+  awards: {
+    title: 'Awards are set up',
+    body: 'Chairs can nominate delegates once the conference runs.',
+  },
+  publish: {
+    title: 'Registrations are live',
+    body: 'Your conference is on gavelling.com and open to applications.',
+  },
+};
+
+/**
+ * Renders nothing. Watches the checklist and raises one notification per row
+ * that flips from pending to done DURING this visit.
+ *
+ * Notifications go through `sessionNotifications.notify()` because
+ * `manage/[slug]/layout` already mounts the one `<NotificationStack/>` for
+ * every organiser page; there is no second toast system to reach for and
+ * nothing to mount from here. `appNotify`'s `notifyOk` is the usual organiser
+ * front door but it is deliberately title-only and keyed per surface, which
+ * would collapse two rows finished in the same breath into one card. These
+ * need a body line and a per-item key, so they call the store directly.
+ *
+ * Key is `setup:<row>:<conferenceId>` — it names the THING (rule 1), not the
+ * instant it happened, so a re-render, a refetch or a second tab cannot stack
+ * duplicates. TTL is finite: nothing here is actionable, the work is already
+ * done, and a sticky card would sit on the dashboard until dismissed by hand.
+ *
+ * FIRST LOAD IS SILENT. The previous done-set lives in a ref that starts null;
+ * the first pass after mount only records the baseline. An organiser arriving
+ * at a conference with six rows already ticked gets nothing, which is the
+ * whole point — only genuine transitions are news. The ref is re-baselined on
+ * a conference change too, so switching conferences is equally quiet.
+ */
+function SetupCompletionNotices({
+  conferenceId,
+  items,
+}: {
+  conferenceId: string;
+  items: { key: string; done: boolean }[];
+}) {
+  const prevDone = useRef<Set<string> | null>(null);
+  const prevConference = useRef<string | null>(null);
+  // Compared by value, so the effect ignores the fresh array identity every
+  // render produces and only wakes when a row actually flips.
+  const doneSignature = items.filter(i => i.done).map(i => i.key).sort().join(',');
+
+  useEffect(() => {
+    const doneNow = new Set(doneSignature ? doneSignature.split(',') : []);
+    const baseline = prevDone.current;
+    const sameConference = prevConference.current === conferenceId;
+    prevDone.current = doneNow;
+    prevConference.current = conferenceId;
+    // First pass for this conference: record where we started, say nothing.
+    if (!baseline || !sameConference) return;
+    for (const key of doneNow) {
+      if (baseline.has(key)) continue;
+      const copy = SETUP_DONE_NOTICE[key];
+      if (!copy) continue;
+      notify({
+        key: `setup:${key}:${conferenceId}`,
+        kind: 'info',
+        level: 'ok',
+        title: copy.title,
+        body: copy.body,
+        ttlMs: SETUP_NOTICE_TTL_MS,
+      });
+    }
+  }, [doneSignature, conferenceId]);
+
+  return null;
 }
 
 // ── Dashboard home, single-viewport neumorphic grid, no scroll ────────────
@@ -1222,8 +1337,9 @@ export default function DashboardPage() {
 
   // ── Set-up priorities: 9 detection checks, in journey order ──────────────
   // Base order = the natural build journey (page → committees → chairs → email →
-  // secretariat → financials → delegate → awards → launch). Pending-first sort
-  // runs on top of this and breaks ties by this order (see sortedChecklist).
+  // secretariat → financials → delegate → awards → launch), and it is the order
+  // the pending rows render in — done rows are filtered out entirely rather
+  // than sorted to the bottom (see pendingChecklist).
   const awardsCfg = getAwardsConfig(conference.awards_config);
   const awardsDeadline = chairDeadline(awardsCfg, conference.end_date ?? null);
   const awardsCategoryCount = awardsCfg.types.filter(t => t.enabled).length;
@@ -1398,8 +1514,18 @@ export default function DashboardPage() {
   const sealTitle = conference.is_verified
     ? 'Verified conference'
     : verification ? minutesToCheckmarkLabel(verification.minutesLeft) : 'Not verified yet';
-  // Pending items first; done items sink to the bottom (stable sort keeps journey order within each group).
-  const sortedChecklist = [...checklist].sort((a, b) => Number(a.done) - Number(b.done));
+  // Done rows LEAVE the list. They used to sink to the bottom, which meant a
+  // well-run conference spent the whole season looking at a card that was
+  // mostly finished work; the priorities card is a to-do list, and a to-do
+  // list that never shrinks stops reading as one. The completion itself is
+  // reported by SetupCompletionNotices as the row disappears, so nothing is
+  // lost by removing it.
+  //
+  // `doneCount` above is deliberately still counted over the FULL checklist —
+  // the heading, the ring and the progress bar all report total progress, and
+  // they would be meaningless read against a list that only holds what is
+  // left. Only the rendered rows are filtered.
+  const pendingChecklist = checklist.filter(c => !c.done);
 
   function handlePublishClick() {
     if (committeeCount === 0) {
@@ -1456,7 +1582,7 @@ export default function DashboardPage() {
             </p>
             <h1 className="font-black flex items-center gap-1.5 min-w-0" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15, marginTop: 1 }}>
               <span className="truncate">{conference.full_name}</span>
-              <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />
+              <VerifiedCheck verified={conference.is_verified} showUnverified size={18} title={sealTitle} />
             </h1>
           </div>
         </div>
@@ -1509,28 +1635,58 @@ export default function DashboardPage() {
             </NeuRing>
           </div>
 
+          {/* Headless. Raises a card as each row leaves the list. */}
+          <SetupCompletionNotices
+            conferenceId={conference.id}
+            items={checklist.map(c => ({ key: c.key, done: c.done }))}
+          />
+
           <VerificationStrip doneCount={doneCount} fallbackMinutes={fallbackMinutes} />
 
           <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={9} style={{ marginBottom: 10, flexShrink: 0 }} />
 
           {/* Natural-height snug stack, the card ends exactly at the last row,
-              no leftover void below (rows sink done items to the bottom). */}
-          <div className="flex flex-col" style={{ gap: 5 }}>
-            {sortedChecklist.map(item => (
-              <NeuChecklistRow
-                key={item.key}
-                done={item.done}
-                icon={item.icon}
-                emoji={item.emoji}
-                gradient={item.gradient}
-                title={item.title}
-                sub={item.sub}
-                action={'action' in item ? item.action : undefined}
-                onClick={item.onClick}
-                dense
-              />
-            ))}
-          </div>
+              no leftover void below (finished rows are gone, not greyed). */}
+          {pendingChecklist.length === 0 ? (
+            /* Genuinely finished, not an empty list with nothing in it. The
+               verification strip above already carries the checkmark and the
+               "verified since" line, so this only has to close the card. */
+            <div
+              className="flex items-center gap-2.5 flex-shrink-0"
+              style={{
+                padding: '11px 12px', borderRadius: 14,
+                background: 'linear-gradient(135deg, rgba(61,122,82,0.18) 0%, rgba(61,122,82,0.06) 100%)',
+                boxShadow: 'inset 0 0 0 1px rgba(61,122,82,0.30)',
+              }}
+            >
+              <Emoji3D name="Party popper" size={26} fallback={CheckCircle2} fallbackColor={NEU.forest} />
+              <div className="min-w-0">
+                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.forest, margin: 0, lineHeight: 1.3 }}>
+                  Every priority is done
+                </p>
+                <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, margin: '2px 0 0 0', lineHeight: 1.35 }}>
+                  Your conference is set up end to end. Run it from the pages in the sidebar.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col" style={{ gap: 5 }}>
+              {pendingChecklist.map(item => (
+                <NeuChecklistRow
+                  key={item.key}
+                  done={item.done}
+                  icon={item.icon}
+                  emoji={item.emoji}
+                  gradient={item.gradient}
+                  title={item.title}
+                  sub={item.sub}
+                  action={'action' in item ? item.action : undefined}
+                  onClick={item.onClick}
+                  dense
+                />
+              ))}
+            </div>
+          )}
           {publishBlockMsg && (
             <p className="flex-shrink-0" style={{ fontSize: 11, marginTop: 7, color: NEU.amber, fontFamily: OUTFIT, fontWeight: 700 }}>{publishBlockMsg}</p>
           )}

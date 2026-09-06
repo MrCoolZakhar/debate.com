@@ -136,7 +136,9 @@ export interface LiveCommittee {
    *  are NOT part of the voting body, so every present/total count on this page
    *  excludes them — the same rule the chair console applies
    *  (`chair/[code]/page.tsx:2620, 2627-2628`). */
-  delegates: { country: string; status: string; isObserver: boolean }[];
+  /** `logoUrl` is the seat's own crest (`delegates.logo_url`), flattened from
+   *  the conference side at seed time. Null on a standalone session. */
+  delegates: { country: string; status: string; isObserver: boolean; logoUrl?: string | null }[];
   gslQueue: string[];
   caucusQueue: string[];
   // The `motions` table is DELIBERATELY not read by this page. The cards report

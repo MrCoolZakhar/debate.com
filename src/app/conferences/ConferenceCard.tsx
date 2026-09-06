@@ -248,7 +248,7 @@ export function ConferenceCard({
           }}
         >
           <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{headingLabel}</span>
-          <VerifiedCheck verified={!!conf.is_verified} size={18} title="Verified conference" />
+          <VerifiedCheck verified={!!conf.is_verified} size={21} title="Verified conference" />
         </h3>
         <div className="flex items-end justify-between gap-3" style={{ marginTop: '7px' }}>
           {/* Facts row: location+flag · fee · attendees (dates live top-right on the photo) */}
@@ -439,7 +439,7 @@ export function ConferenceCard({
           }}
         >
           <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{headingLabel}</span>
-          <VerifiedCheck verified={!!conf.is_verified} size={dense ? 15 : 18} title="Verified conference" />
+          <VerifiedCheck verified={!!conf.is_verified} size={dense ? 17 : 21} title="Verified conference" />
         </h3>
 
         {/* Location */}

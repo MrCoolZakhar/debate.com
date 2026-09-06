@@ -224,6 +224,7 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
   const delegates: Delegate[] = (delegateRows ?? []).map((d: DbRow) => ({
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
     isObserver: (d.is_observer as boolean) ?? false,
+    logoUrl: (d.logo_url as string | null) ?? null,
   }));
 
   // GSL only — caucus list is never loaded into speakersList
@@ -593,12 +594,13 @@ export async function getCurrentSpeakerRow(committeeId: string): Promise<{
 
 export async function getDelegatesList(committeeId: string): Promise<Delegate[]> {
   const { data, error } = await supabase.from('delegates')
-    .select('id, country, status, is_observer')
+    .select('id, country, status, is_observer, logo_url')
     .eq('committee_id', committeeId).order('country', { ascending: true });
   if (error) { console.error('Error fetching delegates:', error); return []; }
   return (data ?? []).map((d: DbRow) => ({
     id: d.id as string, country: d.country as string, status: d.status as DelegateStatus,
     isObserver: (d.is_observer as boolean) ?? false,
+    logoUrl: (d.logo_url as string | null) ?? null,
   }));
 }
 

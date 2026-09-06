@@ -240,7 +240,7 @@ export function PersonalConferenceCard({
               style={{ color: hovered ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: '17px', letterSpacing: '-0.01em' }}
             >
               {primary}
-              <VerifiedCheck verified={!!conference.is_verified} size={15} title="Verified conference" className="ml-1.5 mb-0.5" />
+              <VerifiedCheck verified={!!conference.is_verified} size={17} title="Verified conference" className="ml-1.5 mb-0.5" />
               <ArrowUpRight
                 size={14}
                 strokeWidth={2.6}

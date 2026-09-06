@@ -5,6 +5,7 @@
 
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { fold, getCountryByName, getCountryByCode } from '@/lib/countries';
 
 // ── Canonical columns ────────────────────────────────────────────────────────
 
@@ -234,14 +235,31 @@ function matchCommittee(committees: CommitteeLite[], value: string): CommitteeLi
   ) ?? null;
 }
 
-/** Matches a raw assignment value against ONE committee's roster,
- *  case-insensitive on country_name — never against the global country list,
- *  so a committee's actual matrix (which may omit countries, or list crisis
- *  characters instead) is the sole authority. */
+/** Matches a raw assignment value against ONE committee's roster — never
+ *  against the global country list, so a committee's actual matrix (which may
+ *  omit countries, or list crisis characters instead) remains the sole
+ *  authority on what is assignable.
+ *
+ *  Matching is accent-FOLDED and alias-aware (see THE FOLDING RULE in
+ *  countries.ts): a spreadsheet that still says "Turkey" has to land on a slot
+ *  stored as "Türkiye", and one saying "Cote d'Ivoire" on "Côte d'Ivoire".
+ *  Folding alone is not enough for the first case — "turkey" and "turkiye" are
+ *  different strings — so a country-identity pass runs last, comparing ISO
+ *  codes. Crisis characters never resolve to a country, so that pass can only
+ *  ever match real countries and cannot cross-match two characters. */
 function matchRosterSlot(slots: RosterSlot[], value: string): RosterSlot | null {
-  const v = value.trim().toLowerCase();
+  const v = fold(value);
   if (!v) return null;
-  return slots.find(s => s.country_name.trim().toLowerCase() === v) ?? null;
+  // 1. the slot's own name, accent- and case-insensitive
+  const byName = slots.find(s => fold(s.country_name) === v);
+  if (byName) return byName;
+  // 2. the slot's code, for sheets exported as ISO codes ("TR")
+  const byCode = slots.find(s => fold(s.country_code) === v);
+  if (byCode) return byCode;
+  // 3. same country under a different spelling ("Turkey" → "Türkiye")
+  const code = getCountryByName(value)?.code;
+  if (!code) return null;
+  return slots.find(s => (getCountryByName(s.country_name)?.code ?? getCountryByCode(s.country_code)?.code) === code) ?? null;
 }
 
 function mapPayment(raw: string): { status: 'paid' | 'unpaid' | 'waived'; unknown: boolean } {

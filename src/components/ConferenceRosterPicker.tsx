@@ -14,7 +14,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X, ImagePlus, Replace, FolderInput, Plus, Check, GripVertical } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible, countryMatchRank } from '@/lib/countries';
 import {
   UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS,
   ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES,
@@ -44,7 +44,7 @@ const TIER_META: Record<ImportanceTier, { label: string; color: string; bg: stri
 // importance tier and observer flag. Characters always carry the neutral
 // 'standard' tier. Observers apply to both countries and characters, mirroring
 // the standalone session flow (src/app/create/page.tsx).
-// `logoUrl` is the seat's own crest (committee_country_slots.logo_url) and
+// `logoUrl` is the seat's own flag image (committee_country_slots.logo_url) and
 // `groupId` the seat group it sits in (committee_country_slots.group_id), see
 // src/lib/slotGroups.ts. Both are null for the ordinary flag-and-country seat.
 export interface RosterEntry {
@@ -257,19 +257,11 @@ const BUNDLES: Record<string, { label: string; logoPath?: string; members: strin
   ArabLeague: { label: 'Arab League', logoPath: '/logos/arab-league.png',  members: ['Algeria', 'Bahrain', 'Comoros', 'Djibouti', 'Egypt', 'Iraq', 'Jordan', 'Kuwait', 'Lebanon', 'Libya', 'Mauritania', 'Morocco', 'Oman', 'Palestine', 'Qatar', 'Saudi Arabia', 'Somalia', 'Sudan', 'Syria', 'Tunisia', 'United Arab Emirates', 'Yemen'] },
 };
 
-// Common shorthands the paste matcher understands before falling through to
-// the shared accent/locale-aware findCountryFlexible.
-const COUNTRY_ACRONYMS: Record<string, string> = {
-  uk: 'United Kingdom', us: 'United States', usa: 'United States',
-  uae: 'United Arab Emirates', drc: 'DR Congo', roc: 'Taiwan',
-  rok: 'South Korea', dprk: 'North Korea', car: 'Central African Republic',
-  png: 'Papua New Guinea',
-};
-
+// The acronym table that used to live here (uk, usa, uae, drc, roc, rok,
+// dprk, car, png) moved into COUNTRY_NAME_ALIASES in src/lib/countries.ts,
+// where findCountryFlexible consults it before its loose fallback. Three
+// copies of that table had drifted apart; there is now one.
 function fuzzyMatchCountry(raw: string): string | null {
-  const n = raw.trim().toLowerCase();
-  if (!n) return null;
-  if (COUNTRY_ACRONYMS[n]) return COUNTRY_ACRONYMS[n];
   return findCountryFlexible(raw);
 }
 
@@ -406,16 +398,21 @@ interface ReviewRow { name: string; isCountry: boolean }
 // onto two lines in the docked rail, which is the complaint this fixes.
 //
 // Two optional layers sit on top of the plain list:
-//   - seat crests (any committee type): a per-row image upload. Once a crest
-//     lands, an inline "apply to others" strip offers to copy it to the same
-//     group, every seat, or a hand-picked set.
+//   - seat flags: a per-row image upload, offered only where it is useful.
+//     Custom (parliamentary) committees always get it. Every other type gets
+//     it only on a seat with no national flag to draw (a character or a
+//     free-text entity), or on a seat that already carries an image, so it can
+//     be replaced or cleared. A recognised country keeps its real flag and has
+//     no image control at all. Once an image lands, an inline "apply to
+//     others" strip offers to copy it to the same group, every eligible seat,
+//     or a hand-picked set.
 //   - groups (custom committees only): political groups / parties / benches.
 //     The list becomes one section per group plus "Ungrouped"; rows drag
 //     between sections, or move through the row's "Move to" select.
 
 type UploadTarget = { kind: 'seat'; idx: number } | { kind: 'group'; id: string };
 
-// Fixed-position anchor for the small floating panels below (crest chooser,
+// Fixed-position anchor for the small floating panels below (flag chooser,
 // group menu). Left-aligned to the anchor, clamped to the viewport, flipped
 // above when there is no room beneath. Repositions on scroll and resize, and
 // whenever `anchorKey` changes (the group menu hops from pill to pill while
@@ -506,8 +503,9 @@ export function ConferenceRosterSelected({
   /** Seat groups (parties, benches). Only rendered for `committeeType === 'custom'`. */
   groups?: SlotGroup[];
   onGroupsChange?: (groups: SlotGroup[]) => void;
-  /** Uploads a crest and resolves to its public URL (null on failure). Enables
-   *  the per-row crest control for every committee type. */
+  /** Uploads a seat or group image and resolves to its public URL (null on
+   *  failure). Enables the per-row flag control, on the seats that can use one
+   *  (see `canSeatArt` below). */
   onUploadLogo?: (file: File, kind: 'seat' | 'group') => Promise<string | null>;
   committeeType?: string;
 }) {
@@ -521,12 +519,15 @@ export function ConferenceRosterSelected({
   const [editDraft, setEditDraft] = useState('');
   // Display-only ordering of the selected list. 'entered' keeps insertion order;
   // 'az' sorts alphabetically; 'importance' ranks by tier (high → standard).
-  // This never mutates `value` — handlers below always resolve the ORIGINAL
-  // index — so parent state/observer/tier semantics are untouched. With groups
+  // This never mutates `value` (handlers below always resolve the ORIGINAL
+  // index) so parent state/observer/tier semantics are untouched. With groups
   // present the order applies inside each section.
-  const [orderMode, setOrderMode] = useState<'entered' | 'az' | 'importance'>('entered');
+  // A to Z is the default: a roster is read by looking a seat up by name, and
+  // added order is only useful right after a paste. Clicking the lit option
+  // restores added order.
+  const [orderMode, setOrderMode] = useState<'entered' | 'az' | 'importance'>('az');
 
-  // Crest upload plumbing: one hidden file input, the target remembered in a
+  // Flag upload plumbing: one hidden file input, the target remembered in a
   // ref between click and change.
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<UploadTarget | null>(null);
@@ -537,7 +538,33 @@ export function ConferenceRosterSelected({
   useEffect(() => { valueRef.current = value; }, [value]);
   useEffect(() => { groupsRef.current = groups; }, [groups]);
 
-  // "Apply to others" strip: which row just received a crest, and the URL.
+  // Every group mutation goes through here. Two reasons:
+  //   1. It reads `groupsRef.current` and writes it back synchronously, so two
+  //      changes fired before React re-renders (two preset picks in a row) both
+  //      land. Reading the `groups` PROP instead made the second change compute
+  //      from the pre-first-change array, which dropped the first one.
+  //   2. A group id is generated ONCE and never regenerated. Seats reference a
+  //      group by id (committee_country_slots.group_id), so a new id for an
+  //      existing group orphans every seat in it: the section lookup misses and
+  //      the seats fall into Ungrouped. Rename and recolour keep the id.
+  const mutateGroups = useCallback((updater: (prev: SlotGroup[]) => SlotGroup[]) => {
+    if (!onGroupsChange) return;
+    const next = updater(groupsRef.current);
+    groupsRef.current = next;
+    onGroupsChange(next);
+  }, [onGroupsChange]);
+
+  // Can this seat show an image of its own? A custom committee always can:
+  // every seat there is a party or a bench, and nothing else draws it. Anywhere
+  // else the image is only offered where there is no national flag to override
+  // (a character or a free-text entity), or where an image is already set, so
+  // it can be replaced or removed. Nobody redraws the flag of France.
+  const canSeatArt = useCallback(
+    (r: RosterEntry) => canLogo && (isCustom || isCharacter || !!r.logoUrl || !getCountryByName(r.name)),
+    [canLogo, isCustom, isCharacter],
+  );
+
+  // "Apply to others" strip: which row just received an image, and the URL.
   const [applyFor, setApplyFor] = useState<{ idx: number; url: string } | null>(null);
   // The "Choose…" checklist: the set of ORIGINAL indices ticked so far.
   const [chooser, setChooser] = useState<Set<number> | null>(null);
@@ -552,14 +579,11 @@ export function ConferenceRosterSelected({
   const [groupRename, setGroupRename] = useState('');
   const groupMenuAnchorRef = useRef<HTMLElement | null>(null);
   const groupMenuPanelRef = useRef<HTMLDivElement>(null);
-  const groupMenuClose = useRef<ReturnType<typeof setTimeout> | null>(null);
   const groupMenuPos = useFloatingPos(!!groupMenuId, groupMenuId, groupMenuAnchorRef, 220, 200);
 
   // Drag and drop between sections.
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
-
-  useEffect(() => () => { if (groupMenuClose.current) clearTimeout(groupMenuClose.current); }, []);
 
   // Outside click closes the two floating panels.
   useEffect(() => {
@@ -609,7 +633,7 @@ export function ConferenceRosterSelected({
     if (applyFor?.idx === idx) { setApplyFor(null); setChooser(null); }
   };
 
-  // ── Crest upload ──
+  // ── Flag upload ──
   const pickFile = (t: UploadTarget) => {
     if (!onUploadLogo) return;
     uploadTarget.current = t;
@@ -633,74 +657,87 @@ export function ConferenceRosterSelected({
       setChooser(null);
       setApplyFor(valueRef.current.length > 1 ? { idx: t.idx, url } : null);
     } else {
-      onGroupsChange?.(groupsRef.current.map((g) => (g.id === t.id ? { ...g, logo_url: url } : g)));
+      mutateGroups((prev) => prev.map((g) => (g.id === t.id ? { ...g, logo_url: url } : g)));
     }
   };
 
-  const applyCrest = (pick: (i: number, r: RosterEntry) => boolean) => {
+  const applyFlag = (pick: (i: number, r: RosterEntry) => boolean) => {
     if (!applyFor) return;
     const { idx, url } = applyFor;
-    onChange(valueRef.current.map((r, i) => (i === idx || pick(i, r) ? { ...r, logoUrl: url } : r)));
+    // The source row always takes it. Every other row has to be a seat that can
+    // show an image at all, so "All seats" can never paint over a real flag.
+    onChange(valueRef.current.map((r, i) => (i === idx || (pick(i, r) && canSeatArt(r)) ? { ...r, logoUrl: url } : r)));
     setApplyFor(null);
     setChooser(null);
   };
 
   // ── Groups ──
-  const nextColor = (offset = 0) => GROUP_COLORS[(groups.length + offset) % GROUP_COLORS.length];
+  const nextColor = (list: SlotGroup[], offset = 0) => GROUP_COLORS[(list.length + offset) % GROUP_COLORS.length];
 
   const commitNewGroup = () => {
     const name = groupDraft.trim();
     setAddingGroup(false);
     setGroupDraft('');
-    if (!name || !onGroupsChange) return;
-    if (groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return;
-    onGroupsChange([...groups, { id: newGroupId(), name, logo_url: null, color: nextColor() }]);
+    if (!name) return;
+    mutateGroups((prev) => (
+      prev.some((g) => g.name.toLowerCase() === name.toLowerCase())
+        ? prev
+        : [...prev, { id: newGroupId(), name, logo_url: null, color: nextColor(prev) }]
+    ));
   };
 
+  // Presets APPEND. Names already on the bar are skipped, existing groups keep
+  // their id and their seats, and nothing is ever cleared. Picking two presets
+  // in a row leaves both sets on the bar.
   const applyPreset = (key: string) => {
     const preset = PARLIAMENT_PRESETS.find((p) => p.key === key);
-    if (!preset || !onGroupsChange) return;
-    const have = new Set(groups.map((g) => g.name.toLowerCase()));
-    const additions: SlotGroup[] = [];
-    for (const n of preset.groups) {
-      if (have.has(n.toLowerCase())) continue;
-      have.add(n.toLowerCase());
-      additions.push({ id: newGroupId(), name: n, logo_url: null, color: nextColor(additions.length) });
-    }
-    if (additions.length > 0) onGroupsChange([...groups, ...additions]);
+    if (!preset) return;
+    mutateGroups((prev) => {
+      const have = new Set(prev.map((g) => g.name.toLowerCase()));
+      const additions: SlotGroup[] = [];
+      for (const n of preset.groups) {
+        if (have.has(n.toLowerCase())) continue;
+        have.add(n.toLowerCase());
+        additions.push({ id: newGroupId(), name: n, logo_url: null, color: nextColor(prev, additions.length) });
+      }
+      return additions.length > 0 ? [...prev, ...additions] : prev;
+    });
   };
 
+  // Opens on click or keyboard activation, never on hover: this is a menu with
+  // a destructive item, and it is portaled straight over the rest of the groups
+  // bar. Opening it by passing the pointer across a pill put "Remove group"
+  // under a click aimed at the preset select below it.
   const openGroupMenu = (id: string, el: HTMLElement) => {
-    if (groupMenuClose.current) clearTimeout(groupMenuClose.current);
     groupMenuAnchorRef.current = el;
-    const g = groups.find((x) => x.id === id);
+    const g = groupsRef.current.find((x) => x.id === id);
     setGroupRename(g?.name ?? '');
     setGroupMenuId(id);
   };
-  const scheduleGroupMenuClose = () => {
-    if (groupMenuClose.current) clearTimeout(groupMenuClose.current);
-    groupMenuClose.current = setTimeout(() => setGroupMenuId(null), 180);
-  };
-  const keepGroupMenu = () => { if (groupMenuClose.current) clearTimeout(groupMenuClose.current); };
 
   const commitGroupRename = (id: string) => {
     const name = groupRename.trim();
-    if (!name || !onGroupsChange) return;
-    if (groups.some((g) => g.id !== id && g.name.toLowerCase() === name.toLowerCase())) return;
-    onGroupsChange(groups.map((g) => (g.id === id ? { ...g, name } : g)));
+    if (!name) return;
+    // Rename in place. The id is deliberately untouched: it is what the seats
+    // point at.
+    mutateGroups((prev) => (
+      prev.some((g) => g.id !== id && g.name.toLowerCase() === name.toLowerCase())
+        ? prev
+        : prev.map((g) => (g.id === id ? { ...g, name } : g))
+    ));
   };
 
   const removeGroup = (id: string) => {
     if (!onGroupsChange) return;
     setGroupMenuId(null);
-    onGroupsChange(groups.filter((g) => g.id !== id));
+    mutateGroups((prev) => prev.filter((g) => g.id !== id));
     // Seats in the removed group go back to Ungrouped; the editor writes the
     // null through to committee_country_slots.group_id on save.
     if (value.some((r) => r.groupId === id)) onChange(value.map((r) => (r.groupId === id ? { ...r, groupId: null } : r)));
   };
 
   const clearGroupLogo = (id: string) => {
-    onGroupsChange?.(groups.map((g) => (g.id === id ? { ...g, logo_url: null } : g)));
+    mutateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, logo_url: null } : g)));
   };
 
   // Rows to render, paired with their original index so every handler mutates
@@ -732,7 +769,13 @@ export function ConferenceRosterSelected({
 
   const applyRow = applyFor ? value[applyFor.idx] : null;
   const applyGroupName = applyRow?.groupId ? groups.find((g) => g.id === applyRow.groupId)?.name ?? null : null;
-  const sameGroupCount = applyRow?.groupId ? (groupCounts.get(applyRow.groupId) ?? 1) - 1 : 0;
+  // Only seats that can show an image are offered a copy of one. On a country
+  // committee that is usually nobody, so the strip stays hidden.
+  const applyTargets = useMemo(() => {
+    if (!applyFor) return [] as { r: RosterEntry; i: number }[];
+    return value.map((r, i) => ({ r, i })).filter(({ r, i }) => i !== applyFor.idx && canSeatArt(r));
+  }, [applyFor, value, canSeatArt]);
+  const sameGroupCount = applyRow?.groupId ? applyTargets.filter(({ r }) => r.groupId === applyRow.groupId).length : 0;
 
   const noun = isCustom ? 'seats' : isCharacter ? 'characters' : 'countries';
   const menuGroup = groupMenuId ? groups.find((g) => g.id === groupMenuId) ?? null : null;
@@ -796,7 +839,7 @@ export function ConferenceRosterSelected({
               <div className="mt-2.5 flex gap-2.5">
                 <span className="shrink-0 mt-0.5"><ImagePlus size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} /></span>
                 <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
-                  <b style={{ color: '#1C1410' }}>Crest</b> gives a seat its own emblem in place of a flag. After you set one, you can copy it to other seats.
+                  <b style={{ color: '#1C1410' }}>Flag</b> gives a seat its own picture. {isCustom ? 'Every seat here can take one.' : 'It is offered on seats with no national flag of their own.'} After you set one, you can copy it to other seats.
                 </p>
               </div>
             )}
@@ -845,12 +888,9 @@ export function ConferenceRosterSelected({
                 key={g.id}
                 type="button"
                 className="gv-rs-pill"
-                title={`${g.name}: rename, set a crest, or remove`}
-                onMouseEnter={(e) => openGroupMenu(g.id, e.currentTarget)}
-                onMouseLeave={scheduleGroupMenuClose}
-                onFocus={(e) => openGroupMenu(g.id, e.currentTarget)}
-                onBlur={(e) => { if (groupMenuPanelRef.current?.contains(e.relatedTarget as Node | null)) return; scheduleGroupMenuClose(); }}
-                onClick={(e) => openGroupMenu(g.id, e.currentTarget)}
+                title={`${g.name}: rename, set a flag, or remove`}
+                aria-expanded={groupMenuId === g.id}
+                onClick={(e) => { if (groupMenuId === g.id) setGroupMenuId(null); else openGroupMenu(g.id, e.currentTarget); }}
                 style={{ borderColor: groupMenuId === g.id ? '#1B3828' : undefined }}
               >
                 {g.logo_url
@@ -977,6 +1017,9 @@ export function ConferenceRosterSelected({
                   const isObserver = !!row.isObserver;
                   const art = effectiveSlotArt({ country_code: found?.code ?? row.name, logo_url: row.logoUrl ?? null, group_id: row.groupId ?? null }, groups);
                   const ownLogo = !!row.logoUrl;
+                  // A recognised country on a country committee keeps its real
+                  // flag and gets no image control at all.
+                  const rowCanArt = canSeatArt(row);
                   const isUploading = uploading === `seat:${idx}`;
                   const isDragging = dragIdx === idx;
                   return (
@@ -989,7 +1032,7 @@ export function ConferenceRosterSelected({
                         style={dragEnabled ? { cursor: 'grab' } : undefined}
                       >
                         {dragEnabled && <GripVertical size={12} style={{ color: '#D5CBB6', flexShrink: 0, marginRight: -3 }} aria-hidden />}
-                        {/* Art: own crest, group crest, flag, or the mode glyph. */}
+                        {/* Art: the seat's own image, its group's, the national flag, or the mode glyph. */}
                         <span className="gv-rs-art">
                           {art.kind === 'logo' ? (
                             <span style={{ width: 22, height: 22, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1003,7 +1046,7 @@ export function ConferenceRosterSelected({
                             <Globe size={17} strokeWidth={1.5} style={{ color: '#9A8A78' }} />
                           )}
                           {ownLogo && !isEditing && (
-                            <button type="button" className="gv-rs-art-x" onClick={() => clearRowLogo(idx)} title="Remove crest" aria-label={`Remove crest from ${row.name}`}>
+                            <button type="button" className="gv-rs-art-x" onClick={() => clearRowLogo(idx)} title="Remove flag" aria-label={`Remove flag from ${row.name}`}>
                               <X size={9} strokeWidth={3} />
                             </button>
                           )}
@@ -1039,14 +1082,14 @@ export function ConferenceRosterSelected({
                             >
                               <Megaphone size={13} strokeWidth={1.75} />
                             </button>
-                            {/* Crest upload / replace */}
-                            {canLogo && (
+                            {/* Flag upload / replace */}
+                            {rowCanArt && (
                               <button
                                 type="button"
                                 onClick={() => pickFile({ kind: 'seat', idx })}
                                 disabled={isUploading}
-                                title={ownLogo ? 'Replace crest' : 'Set a crest'}
-                                aria-label={`${ownLogo ? 'Replace' : 'Set'} crest for ${row.name}`}
+                                title={ownLogo ? 'Replace flag' : 'Set a flag'}
+                                aria-label={`${ownLogo ? 'Replace' : 'Set'} flag for ${row.name}`}
                                 className={`gv-rs-ctl${ownLogo ? ' gv-rs-lit' : ''}`}
                                 style={isUploading ? { opacity: 0.5, cursor: 'wait' } : undefined}
                               >
@@ -1084,16 +1127,17 @@ export function ConferenceRosterSelected({
                         )}
                       </div>
 
-                      {/* "Apply to others" strip, inline under the row that just got a crest. */}
-                      {applyFor?.idx === idx && (
+                      {/* "Apply to others" strip, inline under the row that just got a flag.
+                          Hidden when no other seat can take one. */}
+                      {applyFor?.idx === idx && applyTargets.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap" style={{ margin: '4px 0 6px', padding: '7px 9px', borderRadius: 10, backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}>
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600, color: '#1C1410', marginRight: 2 }}>Use this crest for other seats too?</span>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600, color: '#1C1410', marginRight: 2 }}>Use this flag for other seats too?</span>
                           {applyGroupName && sameGroupCount > 0 && (
-                            <button type="button" style={chipStyle} onClick={() => applyCrest((_, r) => r.groupId === applyRow?.groupId)} title={`Every seat in ${applyGroupName}`}>
+                            <button type="button" style={chipStyle} onClick={() => applyFlag((_, r) => r.groupId === applyRow?.groupId)} title={`Every seat in ${applyGroupName}`}>
                               Same group ({sameGroupCount})
                             </button>
                           )}
-                          <button type="button" style={chipStyle} onClick={() => applyCrest(() => true)}>All seats</button>
+                          <button type="button" style={chipStyle} onClick={() => applyFlag(() => true)}>All seats ({applyTargets.length})</button>
                           <button
                             ref={chooserAnchorRef}
                             type="button"
@@ -1122,10 +1166,9 @@ export function ConferenceRosterSelected({
             ref={chooserPanelRef}
             style={{ ...floatingPanelStyle, top: chooserPos.top, left: chooserPos.left, width: 240, transform: chooserPos.up ? 'translateY(-100%)' : undefined, display: 'flex', flexDirection: 'column', maxHeight: 300 }}
           >
-            <p style={{ margin: 0, padding: '9px 12px 6px', fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#B6871F' }}>Copy crest to</p>
+            <p style={{ margin: 0, padding: '9px 12px 6px', fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#B6871F' }}>Copy flag to</p>
             <div style={{ overflowY: 'auto', padding: '0 6px', flex: 1, minHeight: 0 }}>
-              {value.map((r, i) => {
-                if (i === applyFor.idx) return null;
+              {applyTargets.map(({ r, i }) => {
                 const on = chooser.has(i);
                 return (
                   <label key={`${r.name}-${i}`} className="flex items-center gap-2" style={{ padding: '5px 6px', borderRadius: 7, cursor: 'pointer', fontSize: 12, color: '#1C1410', fontWeight: 600 }}>
@@ -1145,7 +1188,7 @@ export function ConferenceRosterSelected({
               <button
                 type="button"
                 disabled={chooser.size === 0}
-                onClick={() => applyCrest((i) => chooser.has(i))}
+                onClick={() => applyFlag((i) => chooser.has(i))}
                 style={{ ...chipStyle, marginLeft: 'auto', backgroundColor: chooser.size === 0 ? '#DDD4C0' : '#1B3828', color: chooser.size === 0 ? '#9A8A78' : '#EED98A', borderColor: 'transparent', cursor: chooser.size === 0 ? 'default' : 'pointer' }}
               >
                 <span className="inline-flex items-center gap-1"><Check size={11} strokeWidth={3} /> Apply to {chooser.size}</span>
@@ -1155,14 +1198,16 @@ export function ConferenceRosterSelected({
         </Portal>
       )}
 
-      {/* Group pill menu: rename, crest, remove. Opens on hover or focus and
-          stays while the pointer travels into it. */}
+      {/* Group pill menu: rename, flag, remove. A menu with actions, so it opens
+          on click and closes on Escape or an outside click. It used to open on
+          hover, and because it is portaled over the rest of the groups bar a
+          click aimed at the preset select underneath landed on "Remove group",
+          which deleted the group and dropped its seats into Ungrouped. */}
       {menuGroup && groupMenuPos && (
         <Portal>
           <div
             ref={groupMenuPanelRef}
-            onMouseEnter={keepGroupMenu}
-            onMouseLeave={scheduleGroupMenuClose}
+            onKeyDown={(e) => { if (e.key === 'Escape') setGroupMenuId(null); }}
             style={{ ...floatingPanelStyle, top: groupMenuPos.top, left: groupMenuPos.left, width: 220, transform: groupMenuPos.up ? 'translateY(-100%)' : undefined, padding: 6 }}
           >
             <div className="flex items-center gap-2" style={{ padding: '4px 6px 6px' }}>
@@ -1180,17 +1225,17 @@ export function ConferenceRosterSelected({
               {menuGroup.logo_url
                 ? <img src={menuGroup.logo_url} alt="" draggable={false} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 4 }} />
                 : <ImagePlus size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} />}
-              {uploading === `group:${menuGroup.id}` ? 'Uploading…' : menuGroup.logo_url ? 'Replace crest' : 'Set crest'}
+              {uploading === `group:${menuGroup.id}` ? 'Uploading…' : menuGroup.logo_url ? 'Replace flag' : 'Set flag'}
             </button>
             {menuGroup.logo_url && (
               <button type="button" className="gv-rs-menu-btn" onClick={() => clearGroupLogo(menuGroup.id)}>
                 <X size={14} strokeWidth={2} style={{ color: '#9A8A78' }} />
-                Remove crest
+                Remove flag
               </button>
             )}
             <button type="button" className="gv-rs-menu-btn gv-rs-danger" onClick={() => removeGroup(menuGroup.id)}>
               <X size={14} strokeWidth={2} />
-              Remove group
+              {(() => { const n = groupCounts.get(menuGroup.id) ?? 0; return n > 0 ? `Remove group (${n} seat${n === 1 ? '' : 's'})` : 'Remove group'; })()}
             </button>
           </div>
         </Portal>
@@ -1219,9 +1264,19 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
   const names = value.map((r) => r.name);
   const nameSet = new Set(names.map((n) => n.toLowerCase()));
 
+  // Ranked through the shared matcher so diacritics, aliases and locale names
+  // all resolve: typing "tu" finds Türkiye, "uk" finds the United Kingdom.
+  // Never hand-roll .toLowerCase().includes() here again, that is what broke
+  // every renamed country. Exact and alias hits first, then prefix, then
+  // substring; ties fall back to the list's own order.
   const available = isCharacter
     ? []
-    : UN_COUNTRIES.filter((c) => !nameSet.has(c.name.toLowerCase()) && c.name.toLowerCase().includes(search.toLowerCase()));
+    : UN_COUNTRIES
+        .filter((c) => !nameSet.has(c.name.toLowerCase()))
+        .map((c) => ({ c, rank: countryMatchRank(c.name, search, 'en') }))
+        .filter((x): x is { c: typeof UN_COUNTRIES[number]; rank: number } => x.rank !== null)
+        .sort((a, b) => a.rank - b.rank || a.c.name.localeCompare(b.c.name))
+        .map((x) => x.c);
 
   const searchAnchorRef = useRef<HTMLDivElement>(null);
   const searchMenuOpen = !!(search.trim() && (available.length > 0 || !nameSet.has(search.trim().toLowerCase())));
@@ -1470,8 +1525,8 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
               })}
             </div>
             <div className="flex items-center gap-3 px-6 py-4 shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
-              <button onClick={() => setReview(null)} className="px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors focus:outline-none" style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}>Cancel</button>
-              <button onClick={commitReview} disabled={review.length === 0} className="flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+              <button onClick={() => setReview(null)} className="gv-lift px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors focus:outline-none" style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}>Cancel</button>
+              <button onClick={commitReview} disabled={review.length === 0} className="gv-lift flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
                 Add {review.length}
               </button>
             </div>

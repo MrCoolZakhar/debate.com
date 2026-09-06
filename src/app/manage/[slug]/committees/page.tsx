@@ -87,7 +87,7 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-all focus:outline-none"
+      className="gv-lift flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold focus:outline-none"
       style={{
         backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
         color: active ? '#EED98A' : '#6B5F52',
@@ -110,26 +110,28 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   );
 }
 
-// The canonical rank insignia (same glyph the CV + profile use), seated on a
-// small neu tile tinted with the tier accent — replaces the old flat difficulty
-// pill so the level reads as a real rank marker, not a coloured chip.
+// The canonical rank insignia (same glyph the CV + profile use), in a plain
+// accent-tinted circle with the level named underneath.
+//
+// It used to sit inside a neu tile (surface fill + NEU.outSm) laid out
+// horizontally, which made a 20px glyph the small half of a wide pill. The
+// bubble is gone: the insignia IS the marker, so it gets the size (20 → 30 at
+// `sm`, 23 → 34 at `md`, glyph 14 → 21 and 16 → 24, holding the ~0.7
+// glyph-to-disc ratio) and the label drops beneath it at the same font size it
+// always had. Stacking also makes the tile NARROWER — "Intermediate" used to
+// need ~105px on one line, the column needs ~75 — which is why the card can
+// afford the extra height. See the card call site for that height budget.
 function DifficultyTile({ level, size = 'md' }: { level: string; size?: 'sm' | 'md' }) {
   const key = (level ?? '').toLowerCase();
   const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : '';
   if (!label) return null;
   const accent = LEVEL_ACCENT[key] ?? NEU.muted;
-  const disc = size === 'sm' ? 20 : 23;
-  const glyph = size === 'sm' ? 14 : 16;
+  const disc = size === 'sm' ? 30 : 34;
+  const glyph = size === 'sm' ? 21 : 24;
   return (
     <span
-      className="inline-flex items-center flex-shrink-0"
-      style={{
-        gap: size === 'sm' ? 6 : 7,
-        padding: size === 'sm' ? '3px 10px 3px 3px' : '3px 11px 3px 3px',
-        borderRadius: 9,
-        backgroundColor: NEU.surface,
-        boxShadow: NEU.outSm,
-      }}
+      className="inline-flex flex-col items-center flex-shrink-0"
+      style={{ gap: 4 }}
     >
       <span
         className="inline-flex items-center justify-center flex-shrink-0"
@@ -141,7 +143,7 @@ function DifficultyTile({ level, size = 'md' }: { level: string; size?: 'sm' | '
       >
         <LevelInsignia level={key} size={glyph} />
       </span>
-      <span style={{ fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 700, color: NEU.ink, letterSpacing: '0.01em' }}>
+      <span style={{ fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 700, color: NEU.ink, letterSpacing: '0.01em', lineHeight: '13px' }}>
         {label}
       </span>
     </span>
@@ -498,7 +500,7 @@ function DaisAvatar({ member, size }: { member: DaisMember; size: number }) {
 
 interface DaisRowProps {
   members: DaisMember[];
-  /** Face diameter. 34 on the card (names beneath), 30 in the list row. */
+  /** Face diameter. 36 on the card (names beneath), 33 in the list row. */
   size: number;
   showNames: boolean;
   onAdd: () => void;
@@ -560,13 +562,16 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
 
   // SLOT WIDTH IS LOAD-BEARING. The narrowest card this grid produces is 242px
   // (five across at 1440), so 214px of content. Three chairs plus the "+" must
-  // fit on ONE line there — measured, they need 3×48 + 40 + 3×4 of gap = 196 —
-  // because a wrapped second row costs the card another ~68px and the grid is
-  // items-stretch, so one wrapping card drags its whole row taller. Four or
-  // more chairs do wrap, which is correct: that is a genuinely bigger dais.
+  // fit on ONE line there — at size 36 they need 3×50 + 42 + 3×4 of gap = 204,
+  // which leaves 10px of slack in the 214 (it was 196 at size 34, so 36 is the
+  // last step this budget affords: 38 would want 3×52 + 44 + 12 = 212 and any
+  // more overflows). A wrapped second row costs the card another ~72px and the
+  // grid is items-stretch, so one wrapping card drags its whole row taller.
+  // Four or more chairs do wrap, which is correct: that is a genuinely bigger
+  // dais.
   //
-  // At 48px a name has to clamp to two lines and break mid-word rather than be
-  // cut to four useless characters; the full name is on the button's
+  // At 50px a name still has to clamp to two lines and break mid-word rather
+  // than be cut to a few useless characters; the full name is on the button's
   // title/aria and in the popover header. The "+" needs no name slot, so it
   // gets a narrower one.
   const slot = showNames ? Math.max(size + 14, 48) : size;
@@ -607,8 +612,8 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
               {showNames && (
                 <span
                   style={{
-                    marginTop: 4, fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700,
-                    lineHeight: '11px', minHeight: 22, width: '100%', textAlign: 'center',
+                    marginTop: 4, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700,
+                    lineHeight: '12px', minHeight: 24, width: '100%', textAlign: 'center',
                     color: m.kind === 'invite' ? '#7A5A10' : '#4A3F33',
                     overflow: 'hidden', display: '-webkit-box',
                     WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
@@ -652,7 +657,7 @@ function DaisRow({ members, size, showNames, onAdd, onRemoveChair, onResendInvit
             <span
               style={{
                 marginTop: 4, fontFamily: OUTFIT, fontSize: 9, fontWeight: 800,
-                letterSpacing: '0.08em', lineHeight: '11px', minHeight: 22,
+                letterSpacing: '0.08em', lineHeight: '12px', minHeight: 24,
                 width: '100%', textAlign: 'center', color: '#6B5F52',
               }}
             >
@@ -916,12 +921,11 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
                   )}
                   <button
                     onClick={() => onAssign(app)}
-                    className="rounded-lg py-1.5 px-3 font-bold text-[10.5px] focus:outline-none flex-shrink-0"
+                    className="gv-lift rounded-lg py-1.5 px-3 font-bold text-[10.5px] focus:outline-none flex-shrink-0"
                     style={{
                       backgroundColor: '#1B3828',
                       color: '#EED98A',
                       fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
-                      transition: `background-color 250ms ${EASE}`,
                     }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -955,12 +959,12 @@ function AddChairModal({ conferenceId, committee, committees, onClose, onDone, o
             <button
               onClick={handleInvite}
               disabled={inviting || !email.trim()}
-              className="rounded-lg px-4 font-bold text-[11px] focus:outline-none"
+              className="gv-lift rounded-lg px-4 font-bold text-[11px] focus:outline-none"
               style={{
                 backgroundColor: inviting || !email.trim() ? '#DDD4C0' : '#1B3828',
                 color: inviting || !email.trim() ? '#9A8A78' : '#EED98A',
                 fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', cursor: 'pointer',
-                transition: `background-color 250ms ${EASE}`, whiteSpace: 'nowrap',
+                whiteSpace: 'nowrap',
               }}
             >
               {inviting ? 'INVITING…' : 'INVITE'}
@@ -1675,8 +1679,21 @@ export default function CommitteesPage() {
             Committees
           </h1>
         </div>
-        <NeuButton icon={Plus} onClick={() => setShowAdd(true)}>
-          ADD COMMITTEE
+        {/* Add a committee — the header only ever holds this one action, and
+            the "+" says it on its own, so the label came off and the pill
+            became a 52px disc (the text pill sat at 40px tall). `style` is
+            spread last inside NeuButton, so padding/width/height here beat its
+            own '11px 22px'. The glyph is a child rather than the `icon` prop
+            because that prop hardcodes size 15, which would leave a small "+"
+            floating in a big circle. The glyph carries no text, so the name and
+            the tooltip come from NeuButton's ariaLabel/title props. */}
+        <NeuButton
+          onClick={() => setShowAdd(true)}
+          ariaLabel="Add committee"
+          title="Add committee"
+          style={{ padding: 0, width: 52, height: 52 }}
+        >
+          <Plus size={22} strokeWidth={2.6} />
         </NeuButton>
       </div>
 
@@ -1721,7 +1738,7 @@ export default function CommitteesPage() {
           </p>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none transition-colors"
+            className="gv-lift flex items-center gap-2 rounded-xl py-2.5 px-5 font-bold text-sm focus:outline-none"
             style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -1947,7 +1964,12 @@ export default function CommitteesPage() {
                       <h3 className="truncate font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 14.5, lineHeight: 1.25, margin: '1px 0 0 0' }}>
                         {c.name}
                       </h3>
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      {/* items-start, not items-center: the difficulty tile is
+                          now a 47px stacked column and everything beside it is
+                          a 15px line of text. Centring hung that text off the
+                          middle of the tile, level with the gap under the
+                          disc; top-aligning puts it beside the disc itself. */}
+                      <div className="flex items-start gap-2 mt-1.5 flex-wrap">
                         <DifficultyTile level={c.difficulty} size="sm" />
                         <span className="text-[11.5px] font-semibold" style={{ color: NEU.muted, fontFamily: OUTFIT, fontVariantNumeric: 'tabular-nums' }}>
                           {seatLabel}
@@ -1972,7 +1994,7 @@ export default function CommitteesPage() {
                     <div className="flex-shrink-0" style={{ paddingLeft: 6 }}>
                       <DaisRow
                         members={buildDaisMembers(dais, daisIds, daisLinkable, invitesByCommittee.get(c.id) ?? [])}
-                        size={30}
+                        size={33}
                         showNames={false}
                         onAdd={() => setAddChairTarget(c)}
                         onRemoveChair={(idx, name) => handleRemoveChair(c, idx, name)}
@@ -2005,7 +2027,7 @@ export default function CommitteesPage() {
                       <button
                         onClick={() => generateSessionCode(c)}
                         disabled={minting}
-                        className="inline-flex items-center flex-shrink-0 focus:outline-none"
+                        className="gv-lift inline-flex items-center flex-shrink-0 focus:outline-none"
                         style={{ padding: '6px 13px', borderRadius: 9999, border: '1.5px dashed rgba(27,56,40,0.35)', color: minting ? NEU.muted : NEU.forest, backgroundColor: 'transparent', fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', cursor: minting ? 'default' : 'pointer' }}
                       >
                         {minting ? 'GENERATING…' : 'GENERATE CODE'}
@@ -2106,13 +2128,27 @@ export default function CommitteesPage() {
                         positioned corner on purpose: at the five-across size
                         the card is 242px, its content box 214px, and the 60px
                         emblem is centred — which leaves 77px each side, while
-                        the tile with the word "Intermediate" on it needs ~105.
-                        Overlaying it would clip the label at exactly the width
-                        this grid is tuned for. The strip's height is paid for
-                        by dropping the card's top padding (pt-4 → pt-2) and by
-                        the meta row losing its tallest element, so the card
-                        does not grow. */}
-                    <div className="w-full flex justify-end" style={{ minHeight: 23 }}>
+                        the stacked tile needs ~75 for its widest label
+                        ("Intermediate", under a 30px disc). That now very
+                        nearly fits beside the emblem, but overlaying it would
+                        still put a rank marker on top of the artwork at
+                        exactly the width this grid is tuned for, so it keeps
+                        its own strip.
+
+                        HEIGHT BUDGET, HONESTLY: the old horizontal tile was
+                        26px tall and its strip was paid for by dropping the
+                        card's top padding (pt-4 → pt-2) and by the meta row
+                        losing its tallest element, so the card did not grow.
+                        The stacked tile is 47px (30 disc + 4 gap + 13 label),
+                        so the strip is 21px taller and NOTHING pays for it —
+                        the card is 21px taller than it was, deliberately. That
+                        is safe: every card in a row grows by the same 21px and
+                        the grid is items-stretch, so nothing misaligns, and
+                        the column count is set by the grid classes (five at
+                        ≥1400px), not by card height, so no card wraps to a new
+                        row. If this ever has to be clawed back, the topics
+                        block and the session well are where the room is. */}
+                    <div className="w-full flex justify-end" style={{ minHeight: 47 }}>
                       <DifficultyTile level={c.difficulty} size="sm" />
                     </div>
 
@@ -2214,7 +2250,7 @@ export default function CommitteesPage() {
                       <div className="w-full mt-2 pt-2" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
                         <DaisRow
                           members={buildDaisMembers(dais, daisIds, daisLinkable, invitesByCommittee.get(c.id) ?? [])}
-                          size={34}
+                          size={36}
                           showNames
                           onAdd={() => setAddChairTarget(c)}
                           onRemoveChair={(idx, name) => handleRemoveChair(c, idx, name)}
@@ -2272,7 +2308,7 @@ export default function CommitteesPage() {
                             <button
                               onClick={() => generateSessionCode(c)}
                               disabled={busyIds.has(`mint-${c.id}`)}
-                              className="w-full rounded-[10px] text-[10px] font-bold focus:outline-none active:scale-[0.96]"
+                              className="gv-lift w-full rounded-[10px] text-[10px] font-bold focus:outline-none"
                               style={{
                                 minHeight: 34,
                                 border: '1.5px dashed rgba(27,56,40,0.35)',
@@ -2280,7 +2316,6 @@ export default function CommitteesPage() {
                                 backgroundColor: 'transparent',
                                 fontFamily: OUTFIT, letterSpacing: '0.09em',
                                 cursor: busyIds.has(`mint-${c.id}`) ? 'default' : 'pointer',
-                                transitionProperty: 'scale', transitionDuration: '200ms', transitionTimingFunction: EASE,
                               }}
                             >
                               {busyIds.has(`mint-${c.id}`) ? 'GENERATING…' : 'GENERATE CODE'}
@@ -2317,14 +2352,12 @@ export default function CommitteesPage() {
                   <div className="px-3.5 pb-3.5 pt-3 flex gap-2">
                     <button
                       onClick={() => setEditTarget(c)}
-                      className="flex-1 rounded-xl text-[10.5px] font-bold focus:outline-none active:scale-[0.96]"
+                      className="gv-lift flex-1 rounded-xl text-[10.5px] font-bold focus:outline-none"
                       style={{
                         minHeight: 40,
                         backgroundColor: 'transparent', color: '#1B3828',
                         border: '1.5px solid rgba(27,56,40,0.35)',
                         fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em', cursor: 'pointer',
-                        transitionProperty: 'background-color, color, scale',
-                        transitionDuration: '300ms', transitionTimingFunction: EASE,
                       }}
                       onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
                       onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
@@ -2335,13 +2368,11 @@ export default function CommitteesPage() {
                       onClick={() => setDeleteTarget(c)}
                       title={`Delete ${c.name}`}
                       aria-label={`Delete ${c.name}`}
-                      className="flex items-center justify-center rounded-xl focus:outline-none active:scale-[0.96]"
+                      className="gv-lift flex items-center justify-center rounded-xl focus:outline-none"
                       style={{
                         minWidth: 44, minHeight: 40,
                         border: '1.5px solid rgba(139,32,32,0.32)', color: '#8B2020', backgroundColor: 'transparent',
                         cursor: 'pointer',
-                        transitionProperty: 'background-color, color, scale',
-                        transitionDuration: '300ms', transitionTimingFunction: EASE,
                       }}
                       onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#8B2020'; el.style.color = '#FFFFFF'; }}
                       onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#8B2020'; }}
@@ -2394,8 +2425,8 @@ export default function CommitteesPage() {
               This permanently removes the committee and its live session, including all delegates, documents, messages, country slots, and allocations. Applicants are kept but returned to unassigned. This cannot be undone.
             </p>
             <div className="flex gap-3 mt-1">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
-              <button onClick={() => handleDeleteCommittee(deleteTarget)} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>DELETE</button>
+              <button onClick={() => setDeleteTarget(null)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}>CANCEL</button>
+              <button onClick={() => handleDeleteCommittee(deleteTarget)} className="gv-lift flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FFFFFF', fontFamily: "'Outfit', sans-serif" }}>DELETE</button>
             </div>
           </div>
         </ModalOverlay>
