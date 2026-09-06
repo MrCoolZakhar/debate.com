@@ -47,6 +47,35 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Gavelling conference theme variables (src/lib/theme.ts). These are the
+   Gavelling DEFAULTS — a themed conference overrides them on a wrapper
+   element via themeCssVars(), which resolves an organizer's five picked
+   colours into these same fourteen custom properties, scoped to that
+   wrapper. Placed after the imports and the @theme block above so neither
+   can ever override them.
+
+   The four --gv-on-* values are the same names themeCssVars() computes with
+   pickTextColor(), but written here BY HAND rather than derived, on purpose:
+   these are Gavelling's own colours, and they must never move just because a
+   contrast-picking or derivation formula elsewhere gets retuned for an
+   organizer's theme. See theme.ts's file header for the fuller reasoning. */
+:root {
+  --gv-bg: #EDE7D8;
+  --gv-surface: #FAF8F3;
+  --gv-border: #DDD4C0;
+  --gv-main: #1B3828;
+  --gv-main-mid: #2A5A3C;
+  --gv-main-light: #3D7A52;
+  --gv-accent: #B6871F;
+  --gv-text-light: #EED98A;
+  --gv-text-dark: #1C1410;
+  --gv-muted: #9A8A78;
+  --gv-on-bg: #1C1410;
+  --gv-on-surface: #1C1410;
+  --gv-on-main: #EED98A;
+  --gv-on-accent: #1C1410;
+}
+
 body {
   font-family: 'Outfit', system-ui, sans-serif;
 }
