@@ -40,6 +40,7 @@ export function WizardShell({
   labels,
   subStep,
   minBodyHeight,
+  extraChrome = 0,
   children,
 }: {
   /** 1-based current step. */
@@ -69,6 +70,10 @@ export function WizardShell({
    * siblings, no wrapper, no flex, no min-height.
    */
   minBodyHeight?: number;
+  /** Extra fixed chrome above the shell, in px, that the viewport cap must
+   *  also subtract. The preview banner in the apply flow is the only caller
+   *  today. Defaults to 0 so every existing call site is unchanged. */
+  extraChrome?: number;
   /**
    * OPT-IN. Names for each step, same length and order as `total`. Supplying
    * them swaps the anonymous dots for the named segmented rail. Omit (the
@@ -126,7 +131,7 @@ export function WizardShell({
       {/* Back arrow + title block. When `minBodyHeight` is set this and the
           body share one min-height flex column, so a caller footer with
           `margin-top: auto` lands at the same y on every step. */}
-      <PinWrap pinned={pinned} minHeight={minBodyHeight}>
+      <PinWrap pinned={pinned} minHeight={minBodyHeight} extraChrome={extraChrome}>
       <div className="w-full relative" style={{ marginBottom: 26 }}>
         {onBack && (
           <button
@@ -198,10 +203,11 @@ export function WizardShell({
  * the markup they had.
  */
 function PinWrap({
-  pinned, minHeight, children,
+  pinned, minHeight, extraChrome = 0, children,
 }: {
   pinned: boolean;
   minHeight?: number;
+  extraChrome?: number;
   children: React.ReactNode;
 }) {
   if (!pinned) return <>{children}</>;
@@ -210,7 +216,7 @@ function PinWrap({
       className="w-full flex flex-col"
       // Capped at the viewport so a short screen never gains a scrollbar that
       // the natural content did not already need.
-      style={{ minHeight: `min(${minHeight}px, calc(100dvh - 200px))` }}
+      style={{ minHeight: `min(${minHeight}px, calc(100dvh - ${200 + extraChrome}px))` }}
     >
       {children}
     </div>

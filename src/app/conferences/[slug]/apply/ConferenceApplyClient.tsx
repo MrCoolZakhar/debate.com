@@ -351,6 +351,10 @@ type StepKindName = 'society' | 'invoicing' | 'preferences' | 'experience' | 'mu
  */
 const STEP_MIN_BODY = 700;
 
+/** Height of the preview banner, in px. WizardShell subtracts this from its
+ *  viewport cap so the Continue pill sits where it does in the real flow. */
+const PREVIEW_BANNER_H = 35;
+
 /** Human names for the wizard stages, shown on the WizardShell progress rail. */
 const STEP_LABEL: Record<StepKindName, string> = {
   society: 'Society',
@@ -938,6 +942,9 @@ function ConferenceApplyInner() {
   // stranger, with canPreview still false, leaves this false and the page
   // behaves exactly as it does today, walls and all.
   const previewing = isPreview && canPreview;
+  // WizardShell's viewport cap needs to know about the banner's chrome too,
+  // or a short window pushes the Continue pill below the fold in preview.
+  const wizardExtraChrome = previewing ? PREVIEW_BANNER_H : 0;
 
   // ── Age gate (conference.min_age), DOB comes from the user's profile
   const [myDob, setMyDob] = useState<string | null>(null);
@@ -2727,6 +2734,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title={!showSociety ? 'A little background' : isInvoicingRole ? 'Your delegation' : 'How are you applying?'}
         sub={
@@ -2912,6 +2920,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={() => setStep(s => s - 1)}
         title="Paying for delegation spots?"
         sub="Separate from your own registration fee — this only covers spots for your delegates."
@@ -3148,6 +3157,7 @@ function ConferenceApplyInner() {
           total={totalSteps}
           labels={stepLabels}
           minBodyHeight={STEP_MIN_BODY}
+          extraChrome={wizardExtraChrome}
           onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
           title="Your preferences"
           sub={subtitle}
@@ -3165,6 +3175,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="Your preferences"
         sub={subtitle}
@@ -3357,6 +3368,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="About you"
         sub="Set your MUN experience level, or import it from your MUN CV. The organiser sees it with your application and uses it for allocations."
@@ -3727,6 +3739,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="MUN experience"
         sub="List the conferences you have chaired or staffed. Import them from your MUN CV, or add them one at a time."
@@ -3959,6 +3972,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         subStep={pages.length > 1 ? { index: questionPage, total: pages.length } : undefined}
         onBack={canGoBack ? handleBackQuestions : undefined}
         title={heading}
@@ -4058,6 +4072,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={() => {
           // Landing back on Experience (skipped entirely for advisors) always
           // re-opens the Questions step's first section page.
@@ -4665,23 +4680,27 @@ function ConferenceApplyInner() {
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+      <SiteNav />
+
       {/* Unmistakable, and present on every step since this wraps the whole
           wizard dispatch below. Rendered in normal flow (not fixed) so the
-          rest of the page simply sits below it, no padding offset needed. */}
+          rest of the page simply sits below it, no padding offset needed.
+          After SiteNav, not before: SiteNav's floating pill otherwise sits on
+          top of the banner text. zIndex clears both the grain layer (1) and
+          the nav itself. */}
       {previewing && (
         <div
           className="relative w-full text-center"
           style={{
             backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT,
             fontSize: 12, fontWeight: 800, letterSpacing: '0.08em',
-            padding: '9px 16px', zIndex: 2,
+            padding: '9px 16px', zIndex: 20,
           }}
         >
           PREVIEW MODE. Nothing you type here is saved and no application is created.
         </div>
       )}
-      <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-      <SiteNav />
 
       <div className="relative z-10 flex-1 px-6 py-10" style={{ maxWidth: 760, margin: '0 auto', width: '100%' }}>
         {/* Breadcrumb */}
