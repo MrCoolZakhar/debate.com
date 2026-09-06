@@ -302,6 +302,7 @@ function ChairCommitteeBlock({ conferenceId, conferenceSlug, committee, chairDis
         ) : (
           <PositionPaperRoster
             conferenceSlug={conferenceSlug}
+            conferenceCommitteeId={committee.id}
             currentUserId={user?.id ?? ''}
             deadline={committee.position_paper_deadline}
             allocations={rosterAllocations}

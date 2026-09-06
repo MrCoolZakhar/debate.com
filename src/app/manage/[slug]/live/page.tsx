@@ -29,6 +29,7 @@ import { FloorDetail, useNowTick } from './PhaseVariants';
 import { CommitteeScoreboardModal } from './CommitteeScoreboardModal';
 import { DelegateCardModal } from './DelegateCardModal';
 import { loadAllocationIndex, type AllocationIndex } from './allocations';
+import { loadSlotArtIndex, type SlotArtIndex } from '@/lib/slotGroups';
 import {
   type RoomStatus, roomStatus, sortByUrgency, cardWarnings,
   committeeIdentities,
@@ -94,6 +95,10 @@ export default function LiveStatusPage() {
   const [broadcastBusyKey, setBroadcastBusyKey] = useState<string | null>(null);
   const [broadcastError, setBroadcastError] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Custom seat / group crests for every committee, keyed by committee + seat
+  // (`src/lib/slotGroups.ts`). Loaded beside the committee list on each pass
+  // and handed to every card; a failed read keeps the last index.
+  const [seatArt, setSeatArt] = useState<SlotArtIndex>(() => new Map());
   const loadingRef = useRef(false);
   const loadStartedRef = useRef(0);
 
@@ -131,6 +136,7 @@ export default function LiveStatusPage() {
       }
 
       const confRows = confCommittees ?? [];
+      void loadSlotArtIndex(authed, confRows.map((c) => c.id)).then(setSeatArt).catch(() => {});
       const sessionIds = confRows.map((c) => c.session_id).filter((id): id is string => !!id);
 
       // Chair profile pictures. `display_chairs` is a trigger-maintained mirror
@@ -849,6 +855,7 @@ export default function LiveStatusPage() {
                 onOpenScoreboard={(d) => setScoreboardFor(d.conf.id)}
                 onOpenDocuments={(d, type) => { setRecapDocFilter(type); setRecapFor(d.conf.id); }}
                 onOpenDelegate={(d, country) => setDelegateFor({ confId: d.conf.id, country })}
+                seatArt={seatArt}
               />
             ))}
           </div>

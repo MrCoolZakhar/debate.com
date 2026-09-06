@@ -18,6 +18,7 @@ import { financialsAreReadOnly } from '@/lib/organizerPermissions';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import NotificationStack from '@/components/notifications/NotificationStack';
+import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
 // ── Conference type ────────────────────────────────────────────────────────
 
@@ -84,6 +85,19 @@ export interface Conference {
   /** The unpublished draft, edited freely; publish_conference_theme() copies
    *  this into `theme`. */
   theme_draft: ConferenceTheme;
+  /** The blue checkmark. COMPUTED by `refresh_conference_verification()` once
+   *  every verification stage is done; a guard trigger rejects direct writes. */
+  is_verified: boolean;
+  verified_at: string | null;
+  /** Stamped once by the communications page on first visit: the server-side
+   *  twin of the localStorage "Explore emails" tick (src/lib/emailsExplored.ts). */
+  emails_explored_at: string | null;
+}
+
+/** What is left before the checkmark, from `conference_setup_status()`. */
+export interface VerificationStatus {
+  minutesLeft: number;
+  pending: string[];
 }
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -100,6 +114,12 @@ interface ManageContextType {
    *  full-screen loading flag `refreshConference` flips (which unmounts the
    *  page). Use this after a settings save to confirm DB truth in place. */
   refreshConferenceQuiet: () => Promise<void>;
+  /** Minutes left and pending stage keys toward the blue checkmark. Null once
+   *  the conference is verified (nothing left to do) and before the first load. */
+  verification: VerificationStatus | null;
+  /** Asks the database to recompute the mark. Cheap and idempotent. When the
+   *  answer differs from the row in context, the row is refetched in place. */
+  refreshVerification: () => Promise<void>;
 }
 
 const ManageContext = createContext<ManageContextType>({
@@ -107,6 +127,8 @@ const ManageContext = createContext<ManageContextType>({
   financialsReadOnly: false,
   refreshConference: async () => {},
   refreshConferenceQuiet: async () => {},
+  verification: null,
+  refreshVerification: async () => {},
 });
 
 export function useManage() {
@@ -126,6 +148,7 @@ const CONFERENCE_COLUMNS = [
   'financial_aid_enabled', 'aid_questions', 'aid_intro',
   'awards_config', 'awards_published_at',
   'theme', 'theme_draft',
+  'is_verified', 'verified_at', 'emails_explored_at',
 ].join(', ');
 
 // ── Nav definition ─────────────────────────────────────────────────────────
@@ -220,11 +243,13 @@ function SideRail({
   conference,
   pathname,
   communicationsBadge = 0,
+  sealTitle,
 }: {
   slug: string;
   conference: Conference | null;
   pathname: string;
   communicationsBadge?: number;
+  sealTitle: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const sections = NAV_SECTIONS(slug, communicationsBadge);
@@ -287,8 +312,9 @@ function SideRail({
               whiteSpace: 'nowrap',
             }}
           >
-            <span className="block text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
+            <span className="flex items-center gap-1.5 text-[15px] font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
               {conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}
+              {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={14} title={sealTitle} />}
             </span>
             {conference && (
               <span
@@ -460,12 +486,14 @@ function SidebarContent({
   pathname,
   onNavClick,
   communicationsBadge = 0,
+  sealTitle,
 }: {
   slug: string;
   conference: Conference | null;
   pathname: string;
   onNavClick?: () => void;
   communicationsBadge?: number;
+  sealTitle: string;
 }) {
   const sections = NAV_SECTIONS(slug, communicationsBadge);
 
@@ -491,8 +519,9 @@ function SidebarContent({
           fallbackText={(conference?.acronym ?? '?').slice(0, 2)}
         />
         <div className="min-w-0">
-          <span className="block text-sm font-extrabold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
-            {conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}
+          <span className="flex items-center gap-1.5 min-w-0 text-sm font-extrabold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.2 }}>
+            <span className="truncate">{conference ? conferenceAcronymLabel({ acronym: conference.acronym, year }) : '…'}</span>
+            {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={14} title={sealTitle} />}
           </span>
           {conference && (
             <span
@@ -756,6 +785,46 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     setConference(conf as Conference);
   }, [user, session, slug]);
 
+  // ── Verification (the blue checkmark) ──────────────────────────────────
+  // What is left is read once per conference from conference_setup_status().
+  // The stored mark itself is only ever recomputed by the database
+  // (refresh_conference_verification), which the dashboard asks for whenever
+  // its checklist moves. `conferenceId` is the one declared beside `conference`.
+  const conferenceVerified = conference?.is_verified ?? false;
+  const [verificationState, setVerificationState] = useState<VerificationStatus | null>(null);
+
+  const loadVerification = useCallback(async (id: string) => {
+    if (!session) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data } = await supabase.rpc('conference_setup_status', { p_conference_id: id });
+    const status = data as { verification_minutes_left?: number | null; verification_pending?: string[] | null } | null;
+    if (!status || typeof status !== 'object') return;
+    setVerificationState({
+      minutesLeft: Math.max(0, Math.round(Number(status.verification_minutes_left ?? 0))),
+      pending: Array.isArray(status.verification_pending) ? status.verification_pending : [],
+    });
+  }, [session]);
+
+  useEffect(() => {
+    if (!conferenceId || conferenceVerified) return;
+    loadVerification(conferenceId);
+  }, [conferenceId, conferenceVerified, loadVerification]);
+
+  const refreshVerification = useCallback(async () => {
+    if (!session || !conferenceId) return;
+    const supabase = getAuthedClient(session.access_token);
+    const { data, error } = await supabase.rpc('refresh_conference_verification', { p_conference: conferenceId });
+    if (error || typeof data !== 'boolean') return;
+    if (data !== conferenceVerified) await refreshConferenceQuiet();
+    if (!data) await loadVerification(conferenceId);
+  }, [session, conferenceId, conferenceVerified, refreshConferenceQuiet, loadVerification]);
+
+  // Verified means nothing is pending: consumers never see stale minutes.
+  const verification = conferenceVerified ? null : verificationState;
+  const sealTitle = conferenceVerified
+    ? 'Verified conference'
+    : verification ? minutesToCheckmarkLabel(verification.minutesLeft) : 'Not verified yet';
+
   // Fetch conference + ownership gate
   useEffect(() => {
     if (authLoading) return;
@@ -779,8 +848,8 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const financialsReadOnly = !isOwner && financialsAreReadOnly(permissions);
 
   const manageContextValue = useMemo(
-    () => ({ conference, financialsReadOnly, refreshConference, refreshConferenceQuiet }),
-    [conference, financialsReadOnly, refreshConference, refreshConferenceQuiet]
+    () => ({ conference, financialsReadOnly, refreshConference, refreshConferenceQuiet, verification, refreshVerification }),
+    [conference, financialsReadOnly, refreshConference, refreshConferenceQuiet, verification, refreshVerification]
   );
 
   // Loading state
@@ -915,12 +984,13 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
           <span style={{ color: 'rgba(238,217,138,0.3)', fontSize: '16px' }}>/</span>
           <Link
             href={`/manage/${slug}`}
-            className="text-sm font-bold transition-opacity focus:outline-none"
+            className="text-sm font-bold transition-opacity focus:outline-none inline-flex items-center gap-1.5"
             style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em', textDecoration: 'none' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.75'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
           >
             {conference ? conferenceAcronymLabel(conference) : '...'}
+            {conference && <VerifiedCheck verified={conference.is_verified} showUnverified size={14} title={sealTitle} />}
           </Link>
         </div>
 
@@ -981,7 +1051,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
       </header>
 
       {/* Desktop floating rail, icons only, expands on hover */}
-      <SideRail slug={slug} conference={conference} pathname={pathname} communicationsBadge={inboxBadge} />
+      <SideRail slug={slug} conference={conference} pathname={pathname} communicationsBadge={inboxBadge} sealTitle={sealTitle} />
 
       {/* Mobile drawer overlay */}
       {mobileMenuOpen && (
@@ -1002,6 +1072,7 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
                 pathname={pathname}
                 onNavClick={() => setMobileMenuOpen(false)}
                 communicationsBadge={inboxBadge}
+                sealTitle={sealTitle}
               />
             </div>
           </div>

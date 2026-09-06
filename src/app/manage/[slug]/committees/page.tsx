@@ -26,6 +26,7 @@ import Portal from '@/components/Portal';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
+  medallionTone,
   ModalOverlay,
   mintConferenceSession,
 } from '@/components/CommitteeEditorModal';
@@ -74,6 +75,8 @@ interface ChairApplicant {
 // ── Design constants ──────────────────────────────────────────────────────────
 
 const DIFF_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, expert: 3 };
+// Type sort: GA, Specialised, Custom (parliamentary), Crisis last.
+const TYPE_RANK: Record<string, number> = { 'general-assembly': 0, specialised: 1, custom: 2, crisis: 3 };
 
 const ROMAN = ['I', 'II', 'III'];
 
@@ -1648,8 +1651,8 @@ export default function CommitteesPage() {
         va = DIFF_ORDER[(a.difficulty ?? '').toLowerCase()] ?? 99;
         vb = DIFF_ORDER[(b.difficulty ?? '').toLowerCase()] ?? 99;
       } else {
-        va = a.committee_type === 'crisis' ? 1 : 0;
-        vb = b.committee_type === 'crisis' ? 1 : 0;
+        va = TYPE_RANK[a.committee_type] ?? 2;
+        vb = TYPE_RANK[b.committee_type] ?? 2;
       }
       return sortDir === 'asc' ? va - vb : vb - va;
     });
@@ -1896,6 +1899,7 @@ export default function CommitteesPage() {
           <div className="flex flex-col gap-2.5">
             {sortedCommittees.map(c => {
               const isCrisis = c.committee_type === 'crisis';
+              const isCustom = c.committee_type === 'custom';
               const topics = c.topics ?? [];
               const seats = c.slotCount || c.total_slots;
               const copied = copiedCode === c.session_code && !!c.session_code;
@@ -1909,8 +1913,8 @@ export default function CommitteesPage() {
               const daisLinkable = daisIds.length === dais.length;
               const minting = busyIds.has(`mint-${c.id}`);
               const seatLabel = !isCrisis && c.delegation_size === 2
-                ? `${seats} countries · ${seats * 2} seats`
-                : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : (seats === 1 ? 'seat' : 'seats')}`;
+                ? `${seats} ${isCustom ? 'members' : 'countries'} · ${seats * 2} seats`
+                : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : isCustom ? (seats === 1 ? 'member' : 'members') : (seats === 1 ? 'seat' : 'seats')}`;
               return (
                 <NeuCard key={c.id} hover style={{ padding: '13px 16px', borderRadius: 18 }}>
                   <div className="flex items-center gap-3.5 flex-wrap">
@@ -1922,7 +1926,7 @@ export default function CommitteesPage() {
                         style={{ width: 46, height: 46, objectFit: 'contain', flexShrink: 0, filter: 'drop-shadow(0 5px 10px rgba(27,56,40,0.24))' }}
                       />
                     ) : (
-                      <MonogramMedallion text={c.abbreviation || c.name} isCrisis={isCrisis} size={46} />
+                      <MonogramMedallion text={c.abbreviation || c.name} tone={medallionTone(c.committee_type)} size={46} />
                     )}
 
                     {/* Name + meta */}
@@ -1935,6 +1939,9 @@ export default function CommitteesPage() {
                         )}
                         {isCrisis && (
                           <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: '#8B2020' }}>CRISIS</span>
+                        )}
+                        {isCustom && (
+                          <span style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: '#7A5416' }}>CUSTOM</span>
                         )}
                       </div>
                       <h3 className="truncate font-bold" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 14.5, lineHeight: 1.25, margin: '1px 0 0 0' }}>
@@ -2064,6 +2071,7 @@ export default function CommitteesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1400px]:grid-cols-5 gap-3.5 items-stretch">
             {sortedCommittees.map(c => {
               const isCrisis = c.committee_type === 'crisis';
+              const isCustom = c.committee_type === 'custom';
               const topics = c.topics ?? [];
               const seats = c.slotCount || c.total_slots;
               const copied = copiedCode === c.session_code && !!c.session_code;
@@ -2123,7 +2131,7 @@ export default function CommitteesPage() {
                         }}
                       />
                     ) : (
-                      <MonogramMedallion text={c.abbreviation || c.name} isCrisis={isCrisis} size={56} />
+                      <MonogramMedallion text={c.abbreviation || c.name} tone={medallionTone(c.committee_type)} size={56} />
                     )}
 
                     {/* Abbreviation eyebrow (when art carries the emblem, the
@@ -2156,14 +2164,22 @@ export default function CommitteesPage() {
                     <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
                       <span className="text-[11px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                         {!isCrisis && c.delegation_size === 2
-                          ? `${seats} × 2 seats`
-                          : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : (seats === 1 ? 'seat' : 'seats')}`}
+                          ? (isCustom ? `${seats} members × 2 seats` : `${seats} × 2 seats`)
+                          : `${seats} ${isCrisis ? (seats === 1 ? 'role' : 'roles') : isCustom ? (seats === 1 ? 'member' : 'members') : (seats === 1 ? 'seat' : 'seats')}`}
                       </span>
                       {isCrisis && (
                         <>
                           <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
                           <span className="text-[9.5px] font-bold" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
                             CRISIS
+                          </span>
+                        </>
+                      )}
+                      {isCustom && (
+                        <>
+                          <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                          <span className="text-[9.5px] font-bold" style={{ color: '#7A5416', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
+                            CUSTOM
                           </span>
                         </>
                       )}

@@ -28,13 +28,14 @@
 // the same codebase (`manage/[slug]/committees/page.tsx:1568, 1587`).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   Users, FileText, ScrollText, Trophy, AlertTriangle, Info,
   Mic, Timer, Pause, Flag, Moon, Copy, Check, Send, UserRound,
 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
+import { artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import Avatar from '@/components/Avatar';
 import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
@@ -192,8 +193,26 @@ function headlineSize(text: string): number {
  *  and the same `UserRound` glyph in its `PersonAvatar` at `:668`): a lucide
  *  `UserRound` head-and-shoulders in a disc. `NEU.forest` on `NEU.surface` is
  *  10.73:1, far past the 3:1 a glyph needs. */
+/** Custom seat art for the committee this card draws (see
+ *  `src/lib/slotGroups.ts`). Provided by `CommitteeCard` from the page's one
+ *  per-conference `loadSlotArtIndex`, read by every `DelegationMark` under it,
+ *  so the queue strip, the queue popover and the now-playing panel all honour
+ *  a seat's own crest or its group's crest without threading a prop through
+ *  each of them. Null when the page has no index yet: flags as before. */
+const SeatArtContext = createContext<{ index: SlotArtIndex; ccId: string } | null>(null);
+
 function DelegationMark({ country, size }: { country: string; size: number }) {
+  const seatArt = useContext(SeatArtContext);
   const code = flagCodeFor(country);
+  if (seatArt) {
+    // The session stores a delegation NAME; the slot index is keyed by the
+    // slot's country_code, which is the ISO code for a country seat and the
+    // name itself for a character or parliamentary seat. Try both.
+    const entry = seatArt.index.get(slotArtKey(seatArt.ccId, code || country))
+      ?? seatArt.index.get(slotArtKey(seatArt.ccId, country));
+    const art = artFromIndex(entry, code || country);
+    if (art.kind === 'logo') return <FlagImg code={code} size={size} logoUrl={art.url} label={art.label} />;
+  }
   if (code) return <FlagImg code={code} size={size} />;
   return (
     <span
@@ -876,8 +895,13 @@ export function CommitteeCard({
   onOpenScoreboard,
   onOpenDocuments,
   onOpenDelegate,
+  seatArt,
 }: {
   data: LiveCommittee;
+  /** Custom seat / group crests for the whole conference, keyed by
+   *  `slotArtKey(conference_committee_id, country_code)`. Optional: without
+   *  it every delegation draws its flag (or the person mark) as before. */
+  seatArt?: SlotArtIndex;
   /** Acronym-over-full-name identity, resolved for the WHOLE conference at once
    *  (uniqueness within the conference is part of the rule — see
    *  `committeeIdentities`), so it is handed in rather than derived per card. */
@@ -934,6 +958,7 @@ export function CommitteeCard({
   const hasSlotContent = status === 'not-started' || !!top;
 
   return (
+    <SeatArtContext.Provider value={seatArt ? { index: seatArt, ccId: data.conf.id } : null}>
     <div
       role="button"
       tabIndex={0}
@@ -1328,6 +1353,7 @@ export function CommitteeCard({
         </button>
       </div>
     </div>
+    </SeatArtContext.Provider>
   );
 }
 

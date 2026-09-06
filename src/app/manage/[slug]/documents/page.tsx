@@ -933,6 +933,7 @@ export default function DocumentsPage() {
                   ) : (
                     <PositionPaperRoster
                       conferenceSlug={conference.slug}
+                      conferenceCommitteeId={selectedCommitteeId ?? null}
                       currentUserId={user?.id ?? ''}
                       deadline={selectedCommittee?.position_paper_deadline ?? null}
                       allocations={rosterAllocations}

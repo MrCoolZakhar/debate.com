@@ -7,10 +7,12 @@
 // co-delegate line on a double-delegation country, and the JOIN SESSION
 // gate once the committee's live session has opened.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Compass, ArrowRight, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
 import { FlagImg } from '@/components/FlagImg';
+import { supabase } from '@/lib/supabase';
+import { effectiveSlotArt, parseGroups, type SlotArtSource } from '@/lib/slotGroups';
 import ProfileLink from '@/components/ProfileLink';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
 import { NEU } from '@/components/neu';
@@ -33,6 +35,31 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
 }) {
   const partner = useAllocationPartner(myAllocation);
   const [copied, setCopied] = useState(false);
+  // The seat's own crest or its group's crest (parliamentary committees),
+  // drawn in place of the flag. One read of this delegate's slot row plus the
+  // committee's groups; see `src/lib/slotGroups.ts`.
+  // Keyed by the seat it was loaded for, so a stale crest never shows on a
+  // different allocation while the next read is in flight.
+  const [seatLogoState, setSeatLogoState] = useState<{ key: string; url: string | null } | null>(null);
+  const seatCcId = myAllocation?.conference_committee_id ?? null;
+  const seatCode = myAllocation?.country_code ?? null;
+  const seatKey = seatCcId && seatCode ? `${seatCcId}|${seatCode}` : null;
+  const seatLogo = seatKey && seatLogoState?.key === seatKey ? seatLogoState.url : null;
+  useEffect(() => {
+    if (!seatCcId || !seatCode) return;
+    const key = `${seatCcId}|${seatCode}`;
+    let cancelled = false;
+    (async () => {
+      const [{ data: slot }, { data: ccRow }] = await Promise.all([
+        supabase.from('committee_country_slots').select('country_code, logo_url, group_id').eq('conference_committee_id', seatCcId).eq('country_code', seatCode).maybeSingle(),
+        supabase.from('conference_committees').select('groups').eq('id', seatCcId).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const art = slot ? effectiveSlotArt(slot as SlotArtSource, parseGroups((ccRow as { groups?: unknown } | null)?.groups)) : null;
+      setSeatLogoState({ key, url: art?.kind === 'logo' ? art.url : null });
+    })().catch(() => { if (!cancelled) setSeatLogoState({ key, url: null }); });
+    return () => { cancelled = true; };
+  }, [seatCcId, seatCode]);
 
   if (!committee || !myAllocation) {
     return (
@@ -120,7 +147,7 @@ export default function AllocationCard({ committee, myAllocation, conferenceStar
           <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.16em', color: '#B6871F', margin: '0 0 12px 0' }}>
             YOUR COUNTRY
           </p>
-          <FlagImg code={myAllocation.country_code} size={56} className="rounded-lg shadow-lg" />
+          <FlagImg code={myAllocation.country_code} size={56} className="rounded-lg shadow-lg" logoUrl={seatLogo} label={myAllocation.country_name} />
           <p className="font-black text-xl mt-3" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
             {myAllocation.country_name}
           </p>

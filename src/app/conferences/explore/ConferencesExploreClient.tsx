@@ -20,6 +20,7 @@ import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { fetchDelegateFees, applyDelegateFee } from '@/lib/publicFees';
 import { compareStartDate, hasConcluded, splitConferenceDates } from '@/lib/conferenceDates';
 import { ConferenceCard } from '../ConferenceCard';
+import VerifiedCheck from '@/components/VerifiedCheck';
 
 // ── Continent maps ─────────────────────────────────────────────────────────────
 
@@ -93,6 +94,7 @@ interface Conference {
   logo_url: string | null;
   banner_url: string | null;
   is_public: boolean;
+  is_verified?: boolean;
   organizer_id: string | null;
 }
 
@@ -272,14 +274,15 @@ function ConferenceListRow({
           the same position on every row (tidy, scannable columns). */}
       <div className="min-w-0" style={{ flex: '1 1 0' }}>
         <div
-          className="truncate"
+          className="flex items-center gap-1.5 min-w-0"
           style={{
             fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '18px',
             letterSpacing: '0.003em', color: hovered ? '#1B3828' : '#1C1410',
             transition: 'color 160ms ease', lineHeight: 1.2,
           }}
         >
-          {conf.acronym || conf.full_name}
+          <span className="truncate">{conf.acronym || conf.full_name}</span>
+          <VerifiedCheck verified={!!conf.is_verified} size={16} title="Verified conference" />
         </div>
         <div
           className="flex items-center gap-2 truncate"
@@ -675,7 +678,7 @@ export default function ConferencesExploreClient() {
       setLoading(true);
       const { data } = await supabase
         .from('conferences')
-        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, organizer_id')
+        .select('id, slug, full_name, acronym, country, city, start_date, end_date, expected_delegates, fee_amount, fee_currency, format, student_level, logo_url, banner_url, is_public, is_verified, organizer_id')
         .eq('is_public', true)
         .order('start_date', { ascending: true });
       const confs = (data as Conference[]) ?? [];

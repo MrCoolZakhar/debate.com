@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock, ScrollText, CreditCard } from 'lucide-react';
@@ -11,6 +11,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { OrganizerPencil } from '@/components/OrganizerPencil';
 import ProfileLink from '@/components/ProfileLink';
 import { LogoDisc } from '@/components/LogoDisc';
@@ -32,6 +33,7 @@ import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant
 import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
 import { SidebarCardSkeleton } from '@/components/Skeleton';
 import Loader from '@/components/Loader';
+import VerifiedCheck from '@/components/VerifiedCheck';
 import {
   CommitteeEditorModal,
   ModalOverlay,
@@ -97,6 +99,7 @@ interface Conference {
   logo_url: string | null;
   banner_url: string | null;
   is_public: boolean;
+  is_verified?: boolean;
   status: string;
   instagram_url: string | null;
   facebook_url: string | null;
@@ -163,6 +166,8 @@ interface Committee {
   topics: string[] | null;
   difficulty: string;
   committee_type: string;
+  /** `conference_committees.groups` jsonb; read through `parseGroups`. */
+  groups?: unknown;
   total_slots: number | null;
   delegation_size: number;
   display_chairs: DisplayChair[] | null;
@@ -174,6 +179,9 @@ interface CommitteeSlot {
   country_code: string;
   country_name: string;
   delegation_size: number;
+  /** Seat crest and group, see `src/lib/slotGroups.ts`. */
+  logo_url?: string | null;
+  group_id?: string | null;
 }
 
 interface RoleConfig {
@@ -835,7 +843,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
         contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
         connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
-        financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft
+        financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified
       `)
       .eq('slug', slug)
       .single();
@@ -853,7 +861,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
             contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
             connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
-            financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft
+            financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified
           `)
           .eq('slug', slug)
           .single();
@@ -889,7 +897,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     const [committeesRes, roleConfigsRes] = await Promise.all([
       supabase
         .from('conference_committees')
-        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, display_chairs, chair_user_ids, logo_url')
+        .select('id, name, abbreviation, topics, difficulty, committee_type, total_slots, delegation_size, display_chairs, chair_user_ids, logo_url, groups')
         .eq('conference_id', conf.id)
         .order('name', { ascending: true }),
       supabase
@@ -1038,14 +1046,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
       const [slotsRes, occRes] = await Promise.all([
         supabase
           .from('committee_country_slots')
-          .select('conference_committee_id, country_code, country_name, delegation_size')
+          .select('conference_committee_id, country_code, country_name, delegation_size, logo_url, group_id')
           .in('conference_committee_id', ccIds)
           .order('country_name', { ascending: true }),
         supabase.rpc('get_committee_occupancy', { p_committee_ids: ccIds }),
       ]);
       const slotsMap: Record<string, CommitteeSlot[]> = {};
       for (const row of ((slotsRes.data ?? []) as (CommitteeSlot & { conference_committee_id: string })[])) {
-        (slotsMap[row.conference_committee_id] ??= []).push({ country_code: row.country_code, country_name: row.country_name, delegation_size: row.delegation_size });
+        (slotsMap[row.conference_committee_id] ??= []).push({ country_code: row.country_code, country_name: row.country_name, delegation_size: row.delegation_size, logo_url: row.logo_url ?? null, group_id: row.group_id ?? null });
       }
       const occMap: Record<string, Record<string, number>> = {};
       for (const row of ((occRes.data ?? []) as { conference_committee_id: string; country_code: string; seats_taken: number }[])) {
@@ -1546,6 +1554,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 </p>
                 <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
                   {conferenceFullNameLabel(conference)}
+                  {/* Inline after the last word, so it rides the final line of a wrapped title instead of dropping beneath it. */}
+                  <VerifiedCheck verified={!!conference.is_verified} size={28} title="Verified conference" style={{ marginLeft: '0.3em', verticalAlign: '-0.08em', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }} />
                 </h1>
                 <div className="flex items-center flex-wrap gap-x-4 gap-y-1.5">
                   <span className="flex items-center gap-2">
@@ -3031,6 +3041,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       const isCrisis = c.committee_type === 'crisis';
                       const { slots, countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles } = committeeStats(c);
                       const occ = committeeOccupied[c.id] ?? {};
+                      // Parliamentary committees list their seats by group under a
+                      // small header; ungrouped seats last. Everything else is flat.
+                      const groups: SlotGroup[] = c.committee_type === 'custom' ? parseGroups(c.groups) : [];
+                      const orderedSlots: { slot: CommitteeSlot; header: { name: string; color: string | null } | null }[] = [];
+                      if (groups.length > 0) {
+                        for (const g of groups) {
+                          slots.filter(s => s.group_id === g.id).forEach((slot, gi) => orderedSlots.push({ slot, header: gi === 0 ? { name: g.name, color: g.color } : null }));
+                        }
+                        slots.filter(s => !s.group_id || !groups.some(g => g.id === s.group_id)).forEach((slot, gi) => orderedSlots.push({ slot, header: gi === 0 ? { name: 'Ungrouped', color: null } : null }));
+                      } else {
+                        for (const slot of slots) orderedSlots.push({ slot, header: null });
+                      }
                       return (
                         <div
                           className="fixed inset-0 z-50 flex items-center justify-center px-6"
@@ -3075,7 +3097,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   The {isCrisis ? 'character' : 'country'} roster will be announced soon.
                                 </p>
                               ) : (
-                                slots.map((s, i) => {
+                                orderedSlots.map(({ slot: s, header }, i) => {
                                   // Crisis roles are always 1 per slot regardless of what
                                   // delegation_size holds, same rule as committeeStats.
                                   const seatSize = isCrisis ? 1 : (s.delegation_size || 1);
@@ -3085,13 +3107,30 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   const openHere = seatSize - seatsTakenHere;
                                   const co = getCountryByName(s.country_name);
                                   const flag = co ? getFlagUrl(co.code) : null;
+                                  const art = effectiveSlotArt(s, groups);
+                                  const logo = art.kind === 'logo' ? art : null;
                                   return (
+                                    <Fragment key={s.country_code}>
+                                    {header && (
+                                      <div className="flex items-center gap-1.5 px-3 pt-3 pb-1">
+                                        <span aria-hidden style={{ width: 7, height: 7, borderRadius: '9999px', backgroundColor: header.color ?? '#9A8A78', flexShrink: 0 }} />
+                                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', textTransform: 'uppercase' }}>{header.name}</span>
+                                      </div>
+                                    )}
                                     <div
-                                      key={s.country_code}
                                       className="flex items-center gap-3 px-3 py-2.5"
-                                      style={{ borderTop: i === 0 ? 'none' : '1px solid color-mix(in srgb, var(--gv-border) 45%, transparent)' }}
+                                      style={{ borderTop: i === 0 || header ? 'none' : '1px solid color-mix(in srgb, var(--gv-border) 45%, transparent)' }}
                                     >
-                                      {flag ? (
+                                      {logo ? (
+                                        <span
+                                          className="flex items-center justify-center flex-shrink-0"
+                                          style={{ width: '22px', height: '22px', borderRadius: '5px', backgroundColor: 'rgba(250,248,243,0.85)', overflow: 'hidden', boxShadow: '0 1px 3px rgba(27,56,40,0.18)' }}
+                                          title={logo.label}
+                                        >
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          <img src={logo.url} alt={logo.label} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                                        </span>
+                                      ) : flag ? (
                                         <img
                                           src={flag}
                                           alt=""
@@ -3133,6 +3172,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         ))}
                                       </div>
                                     </div>
+                                    </Fragment>
                                   );
                                 })
                               )}

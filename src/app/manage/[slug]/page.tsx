@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { notifyOk } from '@/lib/appNotify';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -28,6 +28,7 @@ import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getAwardsConfig, chairDeadline } from '@/lib/awards';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
 const RED = '#A8442F';
 
@@ -799,11 +800,85 @@ function RevenueReadout({
   );
 }
 
+// ── Verification strip: the road to the blue checkmark ───────────────────
+// The seven verification stages are the checklist minus delegate and awards.
+// Minutes come from conference_setup_status() through the manage context;
+// these client estimates only fill the gap before that first answer lands.
+const VERIFICATION_MINUTES: Record<string, number> = {
+  page: 5, committees: 10, chairs: 5, email: 3, secretariat: 3, financials: 5, publish: 1,
+};
+
+function VerificationStrip({ doneCount, fallbackMinutes }: { doneCount: number; fallbackMinutes: number }) {
+  const { conference, verification, refreshVerification } = useManage();
+  const verified = !!conference?.is_verified;
+  const verifiedAt = conference?.verified_at ?? null;
+
+  // Ask the database to recompute the mark on mount and whenever the
+  // checklist moves. Cheap and idempotent: it only refetches the row when the
+  // answer changed.
+  useEffect(() => { void refreshVerification(); }, [doneCount, refreshVerification]);
+
+  // A flip from unverified to verified during this visit earns a short
+  // celebration. A conference that loads already verified gets none.
+  const seenUnverified = useRef(false);
+  const [justVerified, setJustVerified] = useState(false);
+  useEffect(() => {
+    if (!verified) { seenUnverified.current = true; return; }
+    if (!seenUnverified.current) return;
+    seenUnverified.current = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setJustVerified(true);
+    const t = window.setTimeout(() => setJustVerified(false), 14000);
+    return () => window.clearTimeout(t);
+  }, [verified]);
+
+  const minutes = verification ? verification.minutesLeft : fallbackMinutes;
+  const headline = verified
+    ? `Verified since ${verifiedAt ? new Date(verifiedAt).toLocaleDateString('en', { day: 'numeric', month: 'long', year: 'numeric' }) : 'today'}`
+    : minutes <= 0
+      ? 'Your blue checkmark is one refresh away'
+      : minutes === 1
+        ? 'About a minute to your blue checkmark'
+        : `About ${minutes} minutes to your blue checkmark`;
+
+  return (
+    <div className="flex-shrink-0" style={{ marginBottom: 9 }}>
+      {justVerified && (
+        <div
+          role="status"
+          className="flex items-start gap-2"
+          style={{
+            padding: '8px 10px', marginBottom: 8, borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(238,217,138,0.55) 0%, rgba(238,217,138,0.25) 100%)',
+            boxShadow: `inset 0 0 0 1px rgba(182,135,31,0.35)`,
+          }}
+        >
+          <VerifiedCheck verified size={16} title="Verified conference" style={{ marginTop: 1 }} />
+          <p style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: NEU.forest, lineHeight: 1.35, margin: 0 }}>
+            Your conference is verified. The blue checkmark now shows on the directory and your page.
+          </p>
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 min-w-0">
+        <VerifiedCheck verified={verified} showUnverified size={14} title={verified ? 'Verified conference' : headline} />
+        <span className="truncate" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700, color: verified ? NEU.forest : NEU.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+          {headline}
+        </span>
+      </div>
+      {!verified && (
+        <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted, margin: '2px 0 0 0', lineHeight: 1.35 }}>
+          Earned automatically once page, committees, chairs, emails, secretariat, payment method and publishing are done.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Dashboard home, single-viewport neumorphic grid, no scroll ────────────
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { conference, refreshConferenceQuiet } = useManage();
+  const { conference, refreshConferenceQuiet, verification } = useManage();
   const { session } = useAuth();
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -1223,12 +1298,10 @@ export default function DashboardPage() {
       gradient: NEU_GRADIENTS.gold,
       title: 'Explore emails',
       sub: 'See what you can send applicants automatically.',
-      // INTENTIONALLY CLIENT-LOCAL: ticked by visiting the communications page,
-      // recorded in localStorage (src/lib/emailsExplored.ts). This is the only
-      // checklist item the server-side mirror conference_setup_status() cannot
-      // reproduce — a nudge email cannot read a browser's localStorage — so the
-      // SQL keeps this item on `enabled_email_count > 0`. The divergence is
-      // deliberate and documented in both places.
+      // Ticked by visiting the communications page. That page records the
+      // visit twice: in localStorage (src/lib/emailsExplored.ts) for the
+      // instant tick here, and on the server as conferences.emails_explored_at,
+      // which is what conference_setup_status() and the verification mark read.
       done: emailsExplored,
       onClick: () => router.push(`/manage/${slug}/communications`),
     },
@@ -1317,6 +1390,14 @@ export default function DashboardPage() {
     },
   ];
   const doneCount = checklist.filter(c => c.done).length;
+  // Used only while the server's own estimate has not arrived yet: the
+  // verification stages are the checklist minus delegate and awards.
+  const fallbackMinutes = checklist
+    .filter(c => !c.done && c.key in VERIFICATION_MINUTES)
+    .reduce((sum, c) => sum + VERIFICATION_MINUTES[c.key], 0);
+  const sealTitle = conference.is_verified
+    ? 'Verified conference'
+    : verification ? minutesToCheckmarkLabel(verification.minutesLeft) : 'Not verified yet';
   // Pending items first; done items sink to the bottom (stable sort keeps journey order within each group).
   const sortedChecklist = [...checklist].sort((a, b) => Number(a.done) - Number(b.done));
 
@@ -1373,8 +1454,9 @@ export default function DashboardPage() {
             <p style={{ fontFamily: OUTFIT, fontSize: 9, fontWeight: 800, letterSpacing: '0.16em', color: NEU.deepGold }}>
               {conference.acronym}{confYear ? ` · ${confYear}` : ''} · DASHBOARD
             </p>
-            <h1 className="font-black truncate" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15, marginTop: 1 }}>
-              {conference.full_name}
+            <h1 className="font-black flex items-center gap-1.5 min-w-0" style={{ color: NEU.ink, fontFamily: OUTFIT, fontSize: 18, lineHeight: 1.15, marginTop: 1 }}>
+              <span className="truncate">{conference.full_name}</span>
+              <VerifiedCheck verified={conference.is_verified} showUnverified size={16} title={sealTitle} />
             </h1>
           </div>
         </div>
@@ -1426,6 +1508,8 @@ export default function DashboardPage() {
               </span>
             </NeuRing>
           </div>
+
+          <VerificationStrip doneCount={doneCount} fallbackMinutes={fallbackMinutes} />
 
           <NeuProgress value={doneCount} max={checklist.length} gradient={NEU_GRADIENTS.gold} thumb height={9} style={{ marginBottom: 10, flexShrink: 0 }} />
 

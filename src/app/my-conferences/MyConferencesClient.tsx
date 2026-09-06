@@ -910,7 +910,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     setLoading(true);
     const supabase = getAuthedClient(session.access_token);
 
-    const CONF = 'id, slug, full_name, acronym, start_date, end_date, city, country, logo_url, banner_url, is_public, status';
+    const CONF = 'id, slug, full_name, acronym, start_date, end_date, city, country, logo_url, banner_url, is_public, status, is_verified';
 
     const [delegateRes, chairAppRes, chairCommitteeRes, advisorRes, observerRes, organizerRes] = await Promise.all([
       supabase

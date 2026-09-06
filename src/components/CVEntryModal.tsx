@@ -1063,6 +1063,11 @@ export function CVEntryModal({
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; setTimeout(() => setSuggestOpen(false), 150); }}
               />
             </div>
+            {isVerified && (
+              <p className="mt-1.5 text-[12px]" style={{ color: '#7A6E5E', fontFamily: OUTFIT, margin: '6px 0 0 0', lineHeight: 1.4 }}>
+                Written by Gavelling from a conference you attended. It cannot be edited.
+              </p>
+            )}
             {suggestMenuOpen && suggestPos && (
               <Portal>
                 <div

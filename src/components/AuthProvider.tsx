@@ -11,6 +11,7 @@ interface Profile {
   avatar_url: string | null;
   unlimited_status: 'none' | 'monthly' | 'annual';
   points_balance: number;
+  setup_reminder_seen_at: string | null;
 }
 
 interface AuthContextType {
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function fetchProfile(userId: string) {
     const { data } = await supabase
       .from('profiles')
-      .select('id, display_name, email, avatar_url, unlimited_status, points_balance')
+      .select('id, display_name, email, avatar_url, unlimited_status, points_balance, setup_reminder_seen_at')
       .eq('id', userId)
       .single();
     if (data) setProfile(data as Profile);

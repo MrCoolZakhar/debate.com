@@ -16,6 +16,7 @@ import ProfileLink from '@/components/ProfileLink';
 import { AwardArtwork, AwardChip, OUTFIT } from '@/app/account/accountUi';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import { getAwardsConfig, type ConferenceAwardRow } from '@/lib/awards';
+import VerifiedCheck from '@/components/VerifiedCheck';
 
 export interface HonourRollConference {
   slug: string;
@@ -26,6 +27,7 @@ export interface HonourRollConference {
   awards_config: unknown;
   start_date: string | null;
   end_date: string | null;
+  is_verified?: boolean;
 }
 
 export interface HonourRollCommittee {
@@ -86,8 +88,9 @@ export default function HonourRoll({ conference, committees, awards }: {
             <p style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: '9px', letterSpacing: '0.16em', color: '#B6871F', margin: 0 }}>
               HONOUR ROLL
             </p>
-            <h1 className="font-black leading-tight" style={{ fontFamily: OUTFIT, fontSize: 26, color: '#1C1410', margin: '4px 0 0 0' }}>
-              {conference.full_name}
+            <h1 className="font-black leading-tight flex items-center gap-2 min-w-0" style={{ fontFamily: OUTFIT, fontSize: 26, color: '#1C1410', margin: '4px 0 0 0' }}>
+              <span>{conference.full_name}</span>
+              <VerifiedCheck verified={!!conference.is_verified} size={20} title="Verified conference" />
             </h1>
             {dates && (
               <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#9A8A78', margin: '4px 0 0 0' }}>{dates}</p>

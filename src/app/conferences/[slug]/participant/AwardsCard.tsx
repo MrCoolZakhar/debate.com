@@ -14,6 +14,8 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { FlagImg } from '@/components/FlagImg';
 import Loader from '@/components/Loader';
 import { getCountryByName } from '@/lib/countries';
+import { supabase as anonSupabase } from '@/lib/supabase';
+import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import {
   getAwardsConfig, committeeSlots, chairDeadline, slateState, chairCanEdit, slateCompleteness,
   suggestSlate, rankByHeadline,
@@ -146,6 +148,24 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
   const config = useMemo(() => getAwardsConfig(conference.awards_config), [conference.awards_config]);
   const slots = useMemo(() => committeeSlots(config), [config]);
   const delegations = useMemo(() => buildDelegations(allocations), [allocations]);
+
+  // Custom seat / group crests for this committee (`src/lib/slotGroups.ts`),
+  // one read per committee, drawn in place of the flag wherever a seat shows.
+  const [seatArt, setSeatArt] = useState<SlotArtIndex>(() => new Map());
+  const accessToken = session?.access_token ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    const client = accessToken ? getAuthedClient(accessToken) : anonSupabase;
+    loadSlotArtIndex(client, [committee.id])
+      .then(index => { if (!cancelled) setSeatArt(index); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [committee.id, accessToken]);
+  const seatLogoFor = useCallback((code: string | null | undefined): string | null => {
+    if (!code) return null;
+    const art = artFromIndex(seatArt.get(slotArtKey(committee.id, code)), code);
+    return art.kind === 'logo' ? art.url : null;
+  }, [seatArt, committee.id]);
 
   // Slate stamps: the committee row's values, overridden locally after a
   // submit / withdraw so the card flips state without a refetch. The
@@ -557,7 +577,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                               <td style={{ padding: '6px 10px', color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{ranks.get(r.country) ?? ''}</td>
                               <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
                                 <span className="inline-flex items-center gap-2">
-                                  <FlagImg code={code ?? ''} size={16} />
+                                  <FlagImg code={code ?? ''} size={16} logoUrl={seatLogoFor(code)} label={r.country} />
                                   <span style={{ fontWeight: 600, color: '#1C1410' }}>{r.country}</span>
                                   {r.status === 'absent' && <span style={{ fontSize: 10, color: '#8B2020', fontWeight: 700 }}>ABSENT</span>}
                                 </span>
@@ -704,7 +724,7 @@ export default function AwardsCard({ conferenceId, conferenceSlug, committee, co
                       </div>
                     ) : existing ? (
                       <div className="mt-2 flex items-center gap-2.5 flex-wrap">
-                        <FlagImg code={existing.country_code ?? ''} size={18} />
+                        <FlagImg code={existing.country_code ?? ''} size={18} logoUrl={seatLogoFor(existing.country_code)} label={existing.country_name ?? undefined} />
                         <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, color: '#1C1410' }}>{existing.country_name}</span>
                         {existing.recipient_name && (
                           <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#6B5F52' }}>{existing.recipient_name}</span>

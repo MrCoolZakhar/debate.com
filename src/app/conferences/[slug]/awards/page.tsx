@@ -46,6 +46,7 @@ interface ConfRow {
   awards_config: unknown;
   start_date: string | null;
   end_date: string | null;
+  is_verified?: boolean;
 }
 
 export default async function ConferenceAwardsPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -55,7 +56,7 @@ export default async function ConferenceAwardsPage({ params }: { params: Promise
   try {
     const { data } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, logo_url, awards_published_at, awards_config, start_date, end_date')
+      .select('id, slug, full_name, acronym, logo_url, awards_published_at, awards_config, start_date, end_date, is_verified')
       .eq('slug', slug)
       .maybeSingle();
     conf = (data as ConfRow | null) ?? null;
@@ -73,6 +74,7 @@ export default async function ConferenceAwardsPage({ params }: { params: Promise
     awards_config: conf.awards_config,
     start_date: conf.start_date,
     end_date: conf.end_date,
+    is_verified: !!conf.is_verified,
   };
 
   if (!conf.awards_published_at) {

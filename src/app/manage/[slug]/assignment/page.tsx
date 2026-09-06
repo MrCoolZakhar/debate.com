@@ -11,6 +11,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { ageAt } from '@/lib/age';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
@@ -165,6 +166,10 @@ interface SlotRow {
   country_name: string;
   delegation_size: number;
   importance: ImportanceTier;
+  /** A seat's own crest; see `src/lib/slotGroups.ts`. */
+  logo_url?: string | null;
+  /** The seat's group in `CommitteeData.groups` (parliamentary committees). */
+  group_id?: string | null;
 }
 
 interface DisplayChair {
@@ -183,6 +188,22 @@ interface CommitteeData {
   display_chairs: DisplayChair[] | null;
   committee_country_slots: SlotRow[];
   conference_allocations: AllocationRow[];
+  committee_type?: string | null;
+  /** `conference_committees.groups` jsonb, read through `parseGroups`. */
+  groups?: unknown;
+}
+
+// ── Seat art ──────────────────────────────────────────────────────────────────
+// A seat draws its own logo, then its group's logo, then the national flag
+// (`effectiveSlotArt`). These two helpers resolve the logo half so every
+// `CountryFlag` on the board can be handed a `logoUrl` in one line.
+function slotLogoUrl(committee: Pick<CommitteeData, 'groups'>, slot: SlotRow): string | null {
+  const art = effectiveSlotArt(slot, parseGroups(committee.groups));
+  return art.kind === 'logo' ? art.url : null;
+}
+function committeeSeatLogo(committee: Pick<CommitteeData, 'groups' | 'committee_country_slots'>, countryCode: string): string | null {
+  const slot = committee.committee_country_slots.find(s => s.country_code === countryCode);
+  return slot ? slotLogoUrl(committee, slot) : null;
 }
 
 // ── Double-delegation seat helpers ────────────────────────────────────────────
@@ -723,16 +744,43 @@ function isIsoCode(code: string | null | undefined): boolean {
   return /^[A-Za-z]{2}$/.test((code ?? '').trim());
 }
 function CountryFlag({
-  code, w, h, radius = 2, shadow, dim, style, alt, title,
+  code, w, h, radius = 2, shadow, dim, style, alt, title, logoUrl,
 }: {
   code: string | null | undefined;
   w: number; h: number; radius?: number;
   shadow?: string; dim?: number;
   style?: React.CSSProperties; alt?: string; title?: string;
+  /** A seat's own or group crest (`slotLogoUrl`). Wins over the flag: drawn
+   *  as a square that fits the same box, never stretched to flag aspect, on
+   *  a faint ivory disc. */
+  logoUrl?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
   const clean = (code ?? '').trim();
   const label = alt ?? title ?? '';
+  if (logoUrl) {
+    const box = Math.min(w, h);
+    return (
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        aria-label={label || undefined}
+        title={title}
+        style={{
+          width: box, height: box, borderRadius: Math.min(radius, 5),
+          backgroundColor: 'rgba(250,248,243,0.85)', overflow: 'hidden',
+          boxShadow: shadow, opacity: dim, ...style,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={logoUrl}
+          alt={label}
+          draggable={false}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        />
+      </span>
+    );
+  }
   if (!isIsoCode(clean) || failed) {
     return (
       <span
@@ -1619,7 +1667,7 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
               const busy = busySlotId === slot.id;
               return (
                 <NeuInset key={slot.id} small className="flex items-center gap-3 px-3 py-2.5">
-                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} />
+                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
@@ -1736,7 +1784,7 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
               const busy = busySlotId === slot.id;
               return (
                 <NeuInset key={slot.id} small className="flex items-center gap-3 px-3 py-2.5">
-                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} />
+                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
@@ -1975,7 +2023,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
           <p className="mb-2" style={{ color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontSize: 10, fontWeight: 700 }}>COUNTRY</p>
           {preSelectedSlot ? (
             <NeuInset small className="flex items-center gap-3 p-3">
-              <CountryFlag code={preSelectedSlot.country_code} w={24} h={17} radius={3} alt={preSelectedSlot.country_name} />
+              <CountryFlag code={preSelectedSlot.country_code} w={24} h={17} radius={3} alt={preSelectedSlot.country_name} logoUrl={slotLogoUrl(committee, preSelectedSlot)} />
               <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{preSelectedSlot.country_name}</p>
               <div style={{ marginLeft: 'auto' }}><TierBadge tier={preSelectedSlot.importance} /></div>
             </NeuInset>
@@ -1992,7 +2040,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
                     style={{ backgroundColor: selected ? NEU.surface : 'transparent', boxShadow: selected ? NEU.outSm : 'none' }}
                     onClick={() => setSelectedSlot(slot)}
                   >
-                    <CountryFlag code={slot.country_code} w={20} h={14} radius={2} alt={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={20} h={14} radius={2} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
                     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <TierBadge tier={slot.importance} />
@@ -2372,9 +2420,10 @@ function CountrySlotGrid({
   if (slots.length === 0) {
     return <p className="text-xs py-1" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No country slots in this committee.</p>;
   }
-  return (
-    <div className="flex flex-wrap gap-1.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
-      {slots.map(slot => {
+  // A parliamentary ('custom') committee with groups renders its seats in
+  // group order under a thin header (colour dot + name); ungrouped seats last.
+  const groups: SlotGroup[] = committee.committee_type === 'custom' ? parseGroups(committee.groups) : [];
+  const renderSlot = (slot: SlotRow) => {
         const rows = byCountry.get(slot.country_code) ?? [];
         const flag = (
           <CountryFlag
@@ -2386,6 +2435,7 @@ function CountrySlotGrid({
             dim={rows.length > 0 ? undefined : 0.42}
             alt={slot.country_name}
             title={slot.country_name}
+            logoUrl={slotLogoUrl(committee, slot)}
           />
         );
 
@@ -2461,7 +2511,40 @@ function CountrySlotGrid({
           );
         }
         return <span key={slot.id} style={{ lineHeight: 0 }}>{flag}</span>;
-      })}
+  };
+
+  if (groups.length > 0) {
+    const sections = groups
+      .map(group => ({ group, members: slots.filter(s => s.group_id === group.id) }))
+      .filter(x => x.members.length > 0);
+    const ungrouped = slots.filter(s => !s.group_id || !groups.some(g => g.id === s.group_id));
+    const header = (name: string, color: string | null) => (
+      <div className="flex items-center gap-1.5" style={{ marginBottom: 5 }}>
+        <span aria-hidden style={{ width: 7, height: 7, borderRadius: 9999, backgroundColor: color ?? NEU.muted, flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{name}</span>
+      </div>
+    );
+    return (
+      <div className="flex flex-col gap-2.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+        {sections.map(({ group, members }) => (
+          <div key={group.id}>
+            {header(group.name, group.color)}
+            <div className="flex flex-wrap gap-1.5">{members.map(renderSlot)}</div>
+          </div>
+        ))}
+        {ungrouped.length > 0 && (
+          <div>
+            {header('Ungrouped', null)}
+            <div className="flex flex-wrap gap-1.5">{ungrouped.map(renderSlot)}</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+      {slots.map(renderSlot)}
     </div>
   );
 }
@@ -2756,7 +2839,7 @@ function CommitteeOverviewModal({
                     className="w-full flex items-center gap-3 px-3 py-2.5 focus:outline-none text-left"
                     style={{ backgroundColor: NEU.base, borderRadius: 14, boxShadow: NEU.inSm }}
                   >
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <div className="flex-1 min-w-0">
                       <p className="truncate" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
                       <p style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em', marginTop: 1 }}>OPEN SEAT{seatLabel(seatNum)}</p>
@@ -2781,7 +2864,7 @@ function CommitteeOverviewModal({
                     className="flex items-center gap-3 px-3 py-2.5"
                     style={{ backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.outSm }}
                   >
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <DelegationAvatar size={30} />
                     <div className="flex-1 min-w-0">
                       <p className="truncate" style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
@@ -2826,7 +2909,7 @@ function CommitteeOverviewModal({
                     style={{ cursor: 'pointer' }}
                     title="Open application detail"
                   >
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     {/* Seat row is a role="button" <div> (not a real <button>), so the
                         link is legal; nested keeps the expand/collapse toggle intact. */}
                     <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={30} userId={alloc.user_id} nested />
@@ -3277,8 +3360,8 @@ export default function AssignmentPage() {
       supabase
         .from('conference_committees')
         .select(`
-          id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs,
-          committee_country_slots (id, country_code, country_name, delegation_size, importance),
+          id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs, committee_type, groups,
+          committee_country_slots (id, country_code, country_name, delegation_size, importance, logo_url, group_id),
           conference_allocations (
             id, user_id, country_code, country_name, allocation_sent, allocation_sent_at, application_id, society_id, seat,
             profiles (id, display_name, email, nationality, date_of_birth, mun_experience_level, avatar_url),
@@ -4250,7 +4333,7 @@ export default function AssignmentPage() {
                               {sug.app.profiles?.display_name ?? sug.app.invited_name}
                             </p>
                             <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
-                            <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} />
+                            <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
                             <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{sug.slot.country_name}</p>
                           </div>
                           {expanded
@@ -4490,7 +4573,7 @@ export default function AssignmentPage() {
                           {firstPref && (
                             <div className="flex items-center gap-1.5 mt-2">
                               <PrefRankBadge order={1} size={16} />
-                              <CountryFlag code={firstPref.country_code} w={17} h={12} radius={2} alt={firstPref.country_name} />
+                              <CountryFlag code={firstPref.country_code} w={17} h={12} radius={2} alt={firstPref.country_name} logoUrl={(() => { const cc = committees.find(c => c.id === firstPref.conference_committee_id); return cc ? committeeSeatLogo(cc, firstPref.country_code) : null; })()} />
                               <span className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT }}>
                                 {firstPref.conference_committees?.name ?? 'Unknown'} · {firstPref.country_name}
                               </span>

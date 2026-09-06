@@ -87,6 +87,21 @@ Rules:
 
 ---
 
+## 5b. The verified checkmark
+
+One seal, the one social media uses (`src/components/VerifiedCheck.tsx`). Blue means verified, grey means not yet. Two things carry it:
+
+- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. "Get your first delegate" and awards are on the checklist but are not criteria. The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
+- **An MUN CV entry** is blue when `source = 'gavelling_verified'` (written by the awards pipeline), grey when self-reported.
+
+Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes from its checkmark" email per organiser per conference, a follow-up after two weeks, and a congratulations when the mark lands, all through `email_outbox` and paced 48h from the organiser drip. `SetupReminderGate` (root layout) shows the same list once a day when an organiser with an unverified conference enters the site, via `my_incomplete_conferences()`.
+
+## 5c. Custom (parliamentary) committees
+
+`committee_type = 'custom'` is the fourth type: seats are members of groups (political groups, parties, benches) rather than countries. Groups live in `conference_committees.groups` (jsonb), a seat's group in `committee_country_slots.group_id`, and a seat or a group can carry a crest (`logo_url`). `src/lib/slotGroups.ts` is the contract: `effectiveSlotArt` decides what a seat draws (own crest, group crest, national flag, fallback), `loadSlotArtIndex` serves surfaces that render many seats, and `PARLIAMENT_PRESETS` seeds the usual chambers. Every flag renderer that matters goes through `FlagImg` or the assignment board's `CountryFlag`, both of which accept `logoUrl`. Debate, allocation and sessions are unchanged; only the seat's identity and picture differ.
+
+---
+
 ## 6. Where things live
 
 ```
@@ -100,7 +115,7 @@ src/app/
   api/         ambassador, contact, geo, indexnow, emails/queue-participant, og/*
 src/lib/
   sessions     types.ts, committeeService.ts (all session DB I/O + realtime), scoring.ts, sessionScoreboard.ts, settingsStore.ts, committeeFlags.ts, docNames.ts
-  conferences  conferenceAccess.ts, conferenceScoreboard.ts, awards.ts, awardsService.ts, finance.ts, payments.ts, invoices.ts, emailEvents.ts, defaultEmails.ts, organizerPermissions.ts, publicFees.ts, seo.ts, vanity.ts
+  conferences  conferenceAccess.ts, conferenceScoreboard.ts, awards.ts, awardsService.ts, slotGroups.ts, finance.ts, payments.ts, invoices.ts, emailEvents.ts, defaultEmails.ts, organizerPermissions.ts, publicFees.ts, seo.ts, vanity.ts
   shared       translations.ts (4 locales), countries.ts, supabase.ts (anon), supabase-auth.ts (getAuthedClient), sessionClient.ts (chair suffix header)
 src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, ScoreboardTable, ScoreboardPanel, MotionsModal, DocumentsModal, RollCallPanel, ChatPanel, SettingsPanel, FeedbackLogPanel, TutorialOverlay, GuidedWalkthrough
 ```

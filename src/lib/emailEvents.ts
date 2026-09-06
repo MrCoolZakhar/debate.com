@@ -10,6 +10,7 @@ import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
+import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 
 // ── Event registry ────────────────────────────────────────────────────────────
 // Single source of truth for platform email events, shared by this lib
@@ -277,6 +278,7 @@ interface RecipientRow {
   payment_status: string | null;
   societies: { name: string } | null;
   assigned_committee: { abbreviation: string | null; name: string; logo_url: string | null } | null;
+  assigned_committee_id: string | null;
   assigned_country_name: string | null;
   assigned_country_code: string | null;
   profiles: {
@@ -382,6 +384,7 @@ export async function queueEventEmail(
         id, role, society_id, payment_status,
         societies (name),
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name, logo_url),
+        assigned_committee_id,
         assigned_country_name,
         assigned_country_code,
         profiles (display_name, email, notify_email_applications, notify_email_payments, notify_email_documents, notify_email_marketing),
@@ -402,6 +405,19 @@ export async function queueEventEmail(
   // events (see ALWAYS_SEND_EVENTS) pass through untouched.
   const recipients = allRecipients.filter(app => recipientAllowsEvent(eventKey, app.profiles));
   if (recipients.length === 0) return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel };
+
+  // A seat's own crest or its group's crest (parliamentary committees) stands
+  // in for the flag in the facts panel. One batched read for every committee
+  // in this send, never a query per recipient. See `src/lib/slotGroups.ts`.
+  const seatArt: SlotArtIndex = await loadSlotArtIndex(
+    supabase,
+    recipients.map(app => app.assigned_committee_id).filter((id): id is string => !!id),
+  ).catch(() => new Map());
+  const seatLogoFor = (app: RecipientRow): string | null => {
+    if (!app.assigned_committee_id || !app.assigned_country_code) return null;
+    const art = artFromIndex(seatArt.get(slotArtKey(app.assigned_committee_id, app.assigned_country_code)), app.assigned_country_code);
+    return art.kind === 'logo' ? art.url : null;
+  };
 
   const renderConf: EmailRenderConference = {
     slug: conference?.slug ?? '',
@@ -449,6 +465,7 @@ export async function queueEventEmail(
         media: {
           countryCode: app.assigned_country_code ?? null,
           committeeEmblem: app.assigned_committee?.logo_url ?? null,
+          seatLogo: seatLogoFor(app),
         },
       }),
       status: 'pending' as const,
