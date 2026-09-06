@@ -13,6 +13,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import Loader from '@/components/Loader';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import type { EmailTheme } from '@/lib/emailHtml';
+import type { ConferenceTheme } from '@/lib/theme';
 import { financialsAreReadOnly } from '@/lib/organizerPermissions';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -77,6 +78,12 @@ export interface Conference {
   awards_config: unknown;
   /** The ceremony moment: set once by `publish_conference_awards()`. */
   awards_published_at: string | null;
+  /** The PUBLISHED colour theme. Empty object means "use Gavelling's own
+   *  palette" — see src/lib/theme.ts. */
+  theme: ConferenceTheme;
+  /** The unpublished draft, edited freely; publish_conference_theme() copies
+   *  this into `theme`. */
+  theme_draft: ConferenceTheme;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -118,6 +125,7 @@ const CONFERENCE_COLUMNS = [
   'allocation_swap_mode', 'allocation_email_auto', 'email_theme',
   'financial_aid_enabled', 'aid_questions', 'aid_intro',
   'awards_config', 'awards_published_at',
+  'theme', 'theme_draft',
 ].join(', ');
 
 // ── Nav definition ─────────────────────────────────────────────────────────

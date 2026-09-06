@@ -39,6 +39,7 @@ import {
   type RoleStatus as RoleStatusKind,
 } from './applicationsUi';
 import { AwardsSettings } from './awardsUi';
+import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
@@ -3294,6 +3295,14 @@ export default function SettingsPage() {
       {/* ── VISUAL TAB ── */}
       {activeTab === 'conference' && (
         <div>
+          <CustomizationCard
+            conferenceId={conference.id}
+            conferenceSlug={conference.slug}
+            initialDraft={conference.theme_draft ?? {}}
+            initialPublished={conference.theme ?? {}}
+            cardStyle={cardStyle}
+          />
+
           {/* ── Marketing first. The banner and the logo are the two things a
               visitor actually sees, and they were buried under six fields of
               logistics nobody opens twice. ── */}
