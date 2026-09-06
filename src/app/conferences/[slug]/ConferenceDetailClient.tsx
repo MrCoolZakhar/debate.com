@@ -38,6 +38,7 @@ import {
   type EditableCommittee,
 } from '@/components/CommitteeEditorModal';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -55,12 +56,12 @@ const BANNER_PRESETS = [
 // House modal form styles, same recipe as CommitteeEditorModal.
 const modalInputStyle: React.CSSProperties = {
   width: '100%',
-  border: '1px solid #DDD4C0',
+  border: '1px solid var(--gv-border)',
   borderRadius: 8,
   padding: '8px 12px',
   fontSize: 14,
-  color: '#1C1410',
-  backgroundColor: '#FAF8F3',
+  color: 'var(--gv-on-surface)',
+  backgroundColor: 'var(--gv-surface)',
   outline: 'none',
   fontFamily: "'Outfit', sans-serif",
 };
@@ -117,6 +118,8 @@ interface Conference {
   financial_aid_enabled: boolean;
   aid_questions: unknown[];
   aid_intro: string | null;
+  theme: ConferenceTheme | null;
+  theme_draft: ConferenceTheme | null;
 }
 
 interface SecretariatMember {
@@ -222,7 +225,7 @@ function capitalize(s: string): string {
 }
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
-  beginner:     { bg: 'rgba(61,122,82,0.13)',   color: '#2A5A3C' },
+  beginner:     { bg: 'color-mix(in srgb, var(--gv-main-light) 13%, transparent)',   color: 'var(--gv-main-mid)' },
   intermediate: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614' },
   advanced:     { bg: 'rgba(184,132,74,0.16)',  color: '#B8844A' },
   expert:       { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
@@ -270,7 +273,7 @@ function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number 
         padding: '3px 9px',
         backgroundColor: 'rgba(238,217,138,0.14)',
         border: '1px solid rgba(238,217,138,0.4)',
-        color: '#EED98A',
+        color: 'var(--gv-on-main)',
         fontFamily: "'Outfit', sans-serif",
         fontSize: '11px',
         fontWeight: 800,
@@ -287,7 +290,7 @@ function MinAgeChip({ minAge, maxAge }: { minAge: number | null; maxAge: number 
  *  badge); head-delegate = a group; observer = an eye; faculty advisor = a
  *  graduation cap. Purely decorative, in the conference gold. */
 function RoleApplyGlyph({ role, size = 30 }: { role: string; size?: number }) {
-  const GOLD = '#EED98A';
+  const GOLD = 'var(--gv-on-main)';
   if (role === 'chair') {
     return (
       <span className="relative inline-flex flex-shrink-0" style={{ width: size, height: size }} aria-hidden>
@@ -316,8 +319,8 @@ function StarRow({ rating, size = 13 }: { rating: number; size?: number }) {
           size={size}
           strokeWidth={1.8}
           style={{
-            color: i <= rating ? '#B6871F' : 'rgba(154,138,120,0.4)',
-            fill: i <= rating ? '#B6871F' : 'none',
+            color: i <= rating ? 'var(--gv-accent)' : 'rgba(154,138,120,0.4)',
+            fill: i <= rating ? 'var(--gv-accent)' : 'none',
           }}
         />
       ))}
@@ -329,7 +332,7 @@ function ReviewCard({ review }: { review: ConferenceReview }) {
   return (
     <div
       className="rounded-2xl px-5 py-4"
-      style={{ border: '1px solid rgba(221,212,192,0.7)', backgroundColor: 'rgba(237,231,216,0.25)' }}
+      style={{ border: '1px solid color-mix(in srgb, var(--gv-border) 70%, transparent)', backgroundColor: 'rgba(237,231,216,0.25)' }}
     >
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -337,19 +340,19 @@ function ReviewCard({ review }: { review: ConferenceReview }) {
             className="flex items-center justify-center flex-shrink-0"
             style={{
               width: '30px', height: '30px', borderRadius: '9999px',
-              backgroundColor: '#1B3828', color: '#EED98A',
+              backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
               fontSize: '12px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
             }}
           >
             {(review.display_name ?? 'V').charAt(0).toUpperCase()}
           </span>
-          <span className="text-[13.5px] font-semibold truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <span className="text-[13.5px] font-semibold truncate" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
             {review.display_name ?? 'Verified delegate'}
           </span>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <StarRow rating={review.rating} />
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: '#9A8A78', letterSpacing: '0.01em' }}>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: '10px', color: 'var(--gv-muted)', letterSpacing: '0.01em' }}>
             {fmtReviewDate(review.created_at)}
           </span>
         </div>
@@ -370,9 +373,9 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
       onClick={onClick}
       className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none"
       style={{
-        backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
-        color: active ? '#EED98A' : '#6B5F52',
-        border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+        backgroundColor: active ? 'var(--gv-main)' : 'rgba(237,231,216,0.5)',
+        color: active ? 'var(--gv-on-main)' : '#6B5F52',
+        border: active ? '1px solid var(--gv-main)' : '1px solid color-mix(in srgb, var(--gv-border) 90%, transparent)',
         fontFamily: "'Outfit', sans-serif",
         letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
@@ -399,9 +402,9 @@ function TypeFilterButton({ mode, onClick }: { mode: 'ga' | 'crisis' | null; onC
       onClick={onClick}
       className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[10.5px] font-bold transition-colors focus:outline-none"
       style={{
-        backgroundColor: active ? '#1B3828' : 'rgba(237,231,216,0.5)',
-        color: active ? '#EED98A' : '#6B5F52',
-        border: active ? '1px solid #1B3828' : '1px solid rgba(221,212,192,0.9)',
+        backgroundColor: active ? 'var(--gv-main)' : 'rgba(237,231,216,0.5)',
+        color: active ? 'var(--gv-on-main)' : '#6B5F52',
+        border: active ? '1px solid var(--gv-main)' : '1px solid color-mix(in srgb, var(--gv-border) 90%, transparent)',
         fontFamily: "'Outfit', sans-serif",
         letterSpacing: '0.09em',
         whiteSpace: 'nowrap',
@@ -423,9 +426,9 @@ function SectionCard({ children, className = '' }: { children: React.ReactNode; 
     <div
       className={`rounded-[20px] p-6 md:p-7 ${className}`}
       style={{
-        backgroundColor: '#FAF8F3',
-        border: '1px solid #DDD4C0',
-        boxShadow: '0 1px 3px rgba(27,56,40,0.04)',
+        backgroundColor: 'var(--gv-surface)',
+        border: '1px solid var(--gv-border)',
+        boxShadow: '0 1px 3px color-mix(in srgb, var(--gv-main) 4%, transparent)',
       }}
     >
       {children}
@@ -468,6 +471,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const slug = params.slug;
   const router = useRouter();
   const { user, session, profile, loading: authLoading } = useAuth();
+
+  // Organizer theme preview (?preview=1): same shape as the apply flow's own
+  // preview gate. A stranger appending ?preview=1 gets canPreview false and
+  // therefore the published theme, exactly as today. Read via
+  // window.location.search like every other query flag on this page (see the
+  // ?tab=/?role=/?payment= effects below) rather than next/navigation's
+  // useSearchParams(), which would force a Suspense boundary around this
+  // component and opt the page out of the static/ISR rendering the server
+  // component above deliberately seeds for crawlers.
+  const [isPreview, setIsPreview] = useState(false);
+  useEffect(() => {
+    setIsPreview(new URLSearchParams(window.location.search).get('preview') === '1');
+  }, []);
+  const [canPreview, setCanPreview] = useState(false);
+  const previewing = isPreview && canPreview;
 
   const [conference, setConference] = useState<Conference | null>(initialConference);
   const [committees, setCommittees] = useState<Committee[]>(initialCommittees);
@@ -817,7 +835,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
         contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
         connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
-        financial_aid_enabled, aid_questions, aid_intro
+        financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft
       `)
       .eq('slug', slug)
       .single();
@@ -835,7 +853,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
             contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
             connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
-            financial_aid_enabled, aid_questions, aid_intro
+            financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft
           `)
           .eq('slug', slug)
           .single();
@@ -856,6 +874,17 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     const conf = confData as Conference;
 
     setConference(conf);
+
+    // Theme preview eligibility. Read-only, and deliberately not gated on
+    // ?preview=1 alone — see `previewing` above. Needs the authed client: the
+    // RPC reads auth.uid(), and the anon client this function otherwise uses
+    // for a public conference carries no session.
+    if (session) {
+      const authedForPreview = getAuthedClient(session.access_token);
+      authedForPreview.rpc('is_conference_organizer', { conf_id: conf.id }).then(({ data }) => {
+        setCanPreview(!!data);
+      });
+    }
 
     const [committeesRes, roleConfigsRes] = await Promise.all([
       supabase
@@ -1230,6 +1259,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     if (data) setCommitteeEditor({ committee: data as EditableCommittee });
   }
 
+  // Which palette renders. `conference` can still be null here (before the
+  // first fetch resolves for a client-only private conference), so this stays
+  // optional-chained — the loading/404 wrappers below need it before the
+  // conference is guaranteed to exist, and the main return further down
+  // reuses the same value once it is.
+  const activeTheme: ConferenceTheme = previewing ? (conference?.theme_draft ?? {}) : (conference?.theme ?? {});
+  const themeVars = themeCssVars(activeTheme);
+
   // Loading.
   //
   // `authLoading` is true during the server render and on first client paint,
@@ -1240,7 +1277,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // holding the page back.
   if ((authLoading && !conference) || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ ...themeVars, backgroundColor: 'var(--gv-bg)' }}>
         <Loader size={72} label="Loading conference" />
       </div>
     );
@@ -1249,16 +1286,16 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // 404
   if (notFound || !conference) {
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex flex-col" style={{ ...themeVars, backgroundColor: 'var(--gv-bg)' }}>
         <SiteNav />
         <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-          <p className="text-xs font-mono tracking-widest mb-4" style={{ color: '#9A8A78' }}>404</p>
-          <h1 className="font-black text-2xl mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Not Found</h1>
-          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>This conference may be private or doesn&apos;t exist.</p>
+          <p className="text-xs font-mono tracking-widest mb-4" style={{ color: 'var(--gv-muted)' }}>404</p>
+          <h1 className="font-black text-2xl mb-2" style={{ color: 'var(--gv-on-bg)', fontFamily: "'Outfit', sans-serif" }}>Conference Not Found</h1>
+          <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>This conference may be private or doesn&apos;t exist.</p>
           <Link
             href="/conferences/explore"
             className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-            style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+            style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
           >
             EXPLORE CONFERENCES →
           </Link>
@@ -1355,7 +1392,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8', overflowX: 'clip' }}>
+    <div className="min-h-screen flex flex-col relative" style={{ ...themeVars, backgroundColor: 'var(--gv-bg)', overflowX: 'clip' }}>
       {/* Grain */}
       <div
         className="pointer-events-none fixed inset-0 z-0"
@@ -1371,6 +1408,22 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Overlay nav: floats over the hero so the banner reaches the very top */}
         <SiteNav overlay />
+
+        {/* After SiteNav, not before: SiteNav's floating pill otherwise sits on
+            top of the banner text. Same shape as the apply flow's own preview
+            banner. */}
+        {previewing && (
+          <div
+            className="relative w-full text-center"
+            style={{
+              backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif",
+              fontSize: 12, fontWeight: 800, letterSpacing: '0.08em',
+              padding: '9px 16px', zIndex: 20,
+            }}
+          >
+            PREVIEW MODE. These colours are not live yet. Publish them from Settings.
+          </div>
+        )}
 
         {/* ── Hero ───────────────────────────────────────────────────── */}
         <div
@@ -1400,7 +1453,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             </>
           ) : (
             <>
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #16301F 0%, #1B3828 55%, #234A31 100%)' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #16301F 0%, var(--gv-main) 55%, #234A31 100%)' }} />
               <div
                 style={{
                   position: 'absolute', inset: 0,
@@ -1488,7 +1541,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 </button>
               ) : null}
               <div className="min-w-0">
-                <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', color: '#EED98A', letterSpacing: '0.14em', marginBottom: '6px' }}>
+                <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11px', color: 'var(--gv-on-main)', letterSpacing: '0.14em', marginBottom: '6px' }}>
                   {conferenceAcronymLabel(conference)}
                 </p>
                 <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, color: 'white', fontSize: 'clamp(26px, 4vw, 54px)', lineHeight: 1.05, marginBottom: '10px', textShadow: '0 2px 24px rgba(0,0,0,0.3)' }}>
@@ -1521,7 +1574,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   ) : isOrganizerViewer ? (
                     <>
                       <span aria-hidden style={{ color: 'rgba(238,217,138,0.5)', fontSize: '10px' }}>◆</span>
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', letterSpacing: '0.06em', color: '#EED98A', backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px' }}>
+                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontSize: '11px', letterSpacing: '0.06em', color: 'var(--gv-on-main)', backgroundColor: 'rgba(238,217,138,0.14)', border: '1px solid rgba(238,217,138,0.32)', padding: '2px 9px', borderRadius: '9999px' }}>
                         Dates: TBD
                       </span>
                     </>
@@ -1623,30 +1676,30 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     backgroundColor: 'rgba(250,248,243,0.88)',
                     backdropFilter: 'blur(14px)',
                     WebkitBackdropFilter: 'blur(14px)',
-                    border: '1px solid rgba(182,135,31,0.35)',
-                    boxShadow: '0 8px 24px rgba(27,56,40,0.08)',
+                    border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)',
+                    boxShadow: '0 8px 24px color-mix(in srgb, var(--gv-main) 8%, transparent)',
                   }}
                 >
                   <span
                     className="flex items-center justify-center flex-shrink-0"
-                    style={{ width: '38px', height: '38px', borderRadius: '12px', backgroundColor: 'rgba(182,135,31,0.12)' }}
+                    style={{ width: '38px', height: '38px', borderRadius: '12px', backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)' }}
                   >
-                    <Star size={17} strokeWidth={2} style={{ color: '#B6871F', fill: '#B6871F' }} />
+                    <Star size={17} strokeWidth={2} style={{ color: 'var(--gv-accent)', fill: 'var(--gv-accent)' }} />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                    <p className="text-[14px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                       How was {conference.acronym}?
                     </p>
-                    <p className="text-[12px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", margin: '1px 0 0 0' }}>
+                    <p className="text-[12px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", margin: '1px 0 0 0' }}>
                       Leave a review to help future delegates.
                     </p>
                   </div>
                   <button
                     onClick={() => showTab('reviews')}
                     className="flex-shrink-0 rounded-xl py-2 px-4 text-[11px] font-bold focus:outline-none transition-colors"
-                    style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                    style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
                   >
                     LEAVE A REVIEW
                   </button>
@@ -1654,9 +1707,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     onClick={dismissReviewPrompt}
                     aria-label="Dismiss review prompt"
                     className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
-                    style={{ width: '26px', height: '26px', border: 'none', backgroundColor: 'transparent', color: '#9A8A78', cursor: 'pointer' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                    style={{ width: '26px', height: '26px', border: 'none', backgroundColor: 'transparent', color: 'var(--gv-muted)', cursor: 'pointer' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-surface)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
                   >
                     <X size={14} />
                   </button>
@@ -1671,9 +1724,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     backgroundColor: 'rgba(250,248,243,0.72)',
                     backdropFilter: 'blur(18px) saturate(1.5)',
                     WebkitBackdropFilter: 'blur(18px) saturate(1.5)',
-                    border: '1px solid rgba(221,212,192,0.85)',
+                    border: '1px solid color-mix(in srgb, var(--gv-border) 85%, transparent)',
                     borderRadius: '9999px',
-                    boxShadow: '0 8px 28px rgba(27,56,40,0.1)',
+                    boxShadow: '0 8px 28px color-mix(in srgb, var(--gv-main) 10%, transparent)',
                   }}
                 >
                   {/* Real anchors, so the tab a visitor is on is still copyable,
@@ -1699,7 +1752,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       className="relative flex items-center justify-center rounded-full focus:outline-none"
                       style={
                         activeTab === key
-                          ? { width: '72px', height: '46px', backgroundColor: '#1B3828', color: '#EED98A', boxShadow: '0 2px 10px rgba(27,56,40,0.32)', textDecoration: 'none', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
+                          ? { width: '72px', height: '46px', backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', boxShadow: '0 2px 10px color-mix(in srgb, var(--gv-main) 32%, transparent)', textDecoration: 'none', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
                           : { width: '72px', height: '46px', backgroundColor: 'transparent', color: '#8A7D6C', textDecoration: 'none', transition: `width 260ms ${EASE}, background-color 260ms ${EASE}, color 260ms ${EASE}, box-shadow 260ms ${EASE}` }
                       }
                     >
@@ -1745,12 +1798,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       style={{
                         border: '1.5px dashed rgba(154,138,120,0.6)',
                         backgroundColor: 'rgba(237,231,216,0.25)',
-                        color: '#9A8A78',
+                        color: 'var(--gv-muted)',
                         fontFamily: "'Outfit', sans-serif",
                         cursor: 'pointer',
                       }}
-                      onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#1B3828'; el.style.color = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
-                      onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.color = '#9A8A78'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
+                      onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--gv-main)'; el.style.color = 'var(--gv-main)'; el.style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 4%, transparent)'; }}
+                      onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.color = 'var(--gv-muted)'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
                     >
                       Add a description, tell delegates what your conference is about
                     </button>
@@ -1770,7 +1823,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       style={{ position: 'absolute', top: 12, right: 12 }}
                     />
                   )}
-                  <p className="mb-3" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                  <p className="mb-3" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 12px 0' }}>
                     ORGANISED BY
                   </p>
                   <div
@@ -1786,15 +1839,15 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       />
                     )}
                     <div className="min-w-0">
-                      <p className="font-semibold text-[15px]" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{conference.full_name}</p>
-                      <p className="text-[11px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: 0 }}>{conference.acronym}</p>
+                      <p className="font-semibold text-[15px]" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{conference.full_name}</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: 0 }}>{conference.acronym}</p>
                       {conference.contact_email && (
                         <a
                           href={`mailto:${conference.contact_email}`}
                           className="flex items-center gap-1.5 text-xs mt-1 transition-colors"
-                          style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                          style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
                         >
                           <Mail size={12} />
                           {conference.contact_email}
@@ -1803,16 +1856,16 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     </div>
                   </div>
                   {(conference.instagram_url || conference.facebook_url || conference.tiktok_url || conference.whatsapp_url || conference.website_url) && (
-                    <div className="flex gap-2 mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+                    <div className="flex gap-2 mt-4 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 60%, transparent)' }}>
                       {conference.instagram_url && (
                         <a
                           href={normalizeSocialUrl(conference.instagram_url, 'instagram') ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
+                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
@@ -1827,9 +1880,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
+                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <Globe size={15} />
                         </a>
@@ -1840,9 +1893,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
+                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <Music size={15} />
                         </a>
@@ -1853,9 +1906,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
+                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <MessageCircle size={15} />
                         </a>
@@ -1866,9 +1919,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center rounded-full"
-                          style={{ width: '38px', height: '38px', color: '#9A8A78', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1B3828'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
+                          style={{ width: '38px', height: '38px', color: 'var(--gv-muted)', backgroundColor: NEU.surface, boxShadow: NEU.outSm, transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-main)'; el.style.boxShadow = NEU.outSmHover; el.style.transform = 'translateY(-2px)'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.boxShadow = NEU.outSm; el.style.transform = 'translateY(0)'; }}
                         >
                           <Globe size={15} />
                         </a>
@@ -1881,7 +1934,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               {/* The Secretariat, trigger-maintained public roster */}
               {activeTab === 'overview' && (conference.display_secretariat?.length ?? 0) > 0 && (
                 <SectionCard className="mb-6">
-                  <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 18px 0' }}>
+                  <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 18px 0' }}>
                     THE SECRETARIAT
                   </p>
                   <div className="flex flex-wrap justify-center gap-x-7 gap-y-6">
@@ -1893,8 +1946,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             alt={m.name}
                             style={{
                               width: '72px', height: '72px', borderRadius: '9999px', objectFit: 'cover',
-                              boxShadow: '0 6px 16px rgba(27,56,40,0.22)',
-                              backgroundColor: '#EDE7D8',
+                              boxShadow: '0 6px 16px color-mix(in srgb, var(--gv-main) 22%, transparent)',
+                              backgroundColor: 'var(--gv-bg)',
                               outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
                             }}
                           />
@@ -1903,19 +1956,19 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             className="flex items-center justify-center"
                             style={{
                               width: '72px', height: '72px', borderRadius: '9999px',
-                              backgroundColor: '#1B3828', color: '#EED98A',
+                              backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
                               fontSize: '22px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
-                              boxShadow: '0 6px 16px rgba(27,56,40,0.22)',
+                              boxShadow: '0 6px 16px color-mix(in srgb, var(--gv-main) 22%, transparent)',
                             }}
                           >
                             {m.name.charAt(0).toUpperCase()}
                           </span>
                         )}
-                        <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                        <span className="text-[13.5px] font-semibold mt-2.5 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
                           {m.name}
                         </span>
                         {m.title && (
-                          <span className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: '#B6871F', textTransform: 'uppercase' }}>
+                          <span className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-accent)', textTransform: 'uppercase' }}>
                             {m.title}
                           </span>
                         )}
@@ -1935,11 +1988,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           className="flex items-center justify-center flex-shrink-0"
                           style={{
                             width: 38, height: 38, borderRadius: '9999px',
-                            backgroundColor: paymentConfirmed ? 'rgba(61,122,82,0.13)' : 'rgba(184,132,74,0.14)',
+                            backgroundColor: paymentConfirmed ? 'color-mix(in srgb, var(--gv-main-light) 13%, transparent)' : 'rgba(184,132,74,0.14)',
                           }}
                         >
                           {paymentConfirmed ? (
-                            <PartyPopper size={17} style={{ color: '#2A5A3C' }} />
+                            <PartyPopper size={17} style={{ color: 'var(--gv-main-mid)' }} />
                           ) : paymentTimedOut ? (
                             <Clock size={17} style={{ color: '#B8844A' }} />
                           ) : (
@@ -1947,10 +2000,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                          <p className="text-sm font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                             {paymentConfirmed ? 'Payment received!' : paymentTimedOut ? 'Your payment is processing' : 'Payment received — confirming...'}
                           </p>
-                          <p className="text-[12.5px] mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
+                          <p className="text-[12.5px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
                             {paymentConfirmed
                               ? 'Your registration is up to date.'
                               : paymentTimedOut
@@ -1961,7 +2014,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <button
                           onClick={() => setPaymentReturn(null)}
                           className="flex-shrink-0 focus:outline-none"
-                          style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                          style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
                           aria-label="Dismiss"
                         >
                           <X size={16} />
@@ -1978,7 +2031,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <button
                           onClick={() => setPaymentReturn(null)}
                           className="flex-shrink-0 focus:outline-none"
-                          style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                          style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
                           aria-label="Dismiss"
                         >
                           <X size={15} />
@@ -2016,32 +2069,32 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               {activeTab === 'reviews' && (
                 <div className="flex flex-col gap-6">
                   <SectionCard>
-                    <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 14px 0' }}>
+                    <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 14px 0' }}>
                       DELEGATE REVIEWS
                     </p>
                     {reviewCount === 0 ? (
                       <div className="flex flex-col items-center text-center py-8">
                         <div
                           className="flex items-center justify-center mb-4"
-                          style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: 'rgba(182,135,31,0.1)', border: '1px solid rgba(182,135,31,0.25)' }}
+                          style={{ width: '56px', height: '56px', borderRadius: '9999px', backgroundColor: 'color-mix(in srgb, var(--gv-accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 25%, transparent)' }}
                         >
-                          <Star size={22} strokeWidth={1.8} style={{ color: '#B6871F' }} />
+                          <Star size={22} strokeWidth={1.8} style={{ color: 'var(--gv-accent)' }} />
                         </div>
-                        <p className="text-[14px] font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="text-[14px] font-semibold mb-1" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
                           No reviews yet
                         </p>
-                        <p className="text-[13px] max-w-[360px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+                        <p className="text-[13px] max-w-[360px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
                           Reviews appear once delegates attend an edition of this conference.
                         </p>
                       </div>
                     ) : (
                       <div className="flex items-center gap-5">
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '44px', color: '#1C1410', lineHeight: 1 }}>
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '44px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
                           {avgRating.toFixed(1)}
                         </span>
                         <div className="flex flex-col gap-1">
                           <StarRow rating={Math.round(avgRating)} size={16} />
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '10.5px', letterSpacing: '0.1em', color: '#9A8A78' }}>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '10.5px', letterSpacing: '0.1em', color: 'var(--gv-muted)' }}>
                             {reviewCount} {reviewCount === 1 ? 'REVIEW' : 'REVIEWS'}
                           </span>
                         </div>
@@ -2052,7 +2105,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   {/* Write a review, attendees only */}
                   {canReview && (
                     <SectionCard>
-                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#B6871F', margin: '0 0 12px 0' }}>
+                      <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-accent)', margin: '0 0 12px 0' }}>
                         YOUR REVIEW
                       </p>
                       <div className="flex items-center gap-1.5 mb-4" onMouseLeave={() => setReviewHover(0)}>
@@ -2069,8 +2122,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               size={26}
                               strokeWidth={1.6}
                               style={{
-                                color: i <= (reviewHover || reviewRating) ? '#B6871F' : 'rgba(154,138,120,0.45)',
-                                fill: i <= (reviewHover || reviewRating) ? '#B6871F' : 'none',
+                                color: i <= (reviewHover || reviewRating) ? 'var(--gv-accent)' : 'rgba(154,138,120,0.45)',
+                                fill: i <= (reviewHover || reviewRating) ? 'var(--gv-accent)' : 'none',
                                 transition: 'color 120ms ease',
                               }}
                             />
@@ -2083,9 +2136,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         rows={4}
                         placeholder="What should future delegates know about this conference?"
                         className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                        style={{ border: '1px solid #DDD4C0', backgroundColor: 'rgba(237,231,216,0.25)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
-                        onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                        style={{ border: '1px solid var(--gv-border)', backgroundColor: 'rgba(237,231,216,0.25)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gv-main)'; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--gv-border)'; }}
                       />
                       {reviewError && (
                         <p className="text-[12px] mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '8px 0 0 0' }}>
@@ -2097,8 +2150,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         disabled={reviewRating < 1 || reviewSubmitting}
                         className="mt-4 rounded-xl py-2.5 px-6 font-bold text-[13px] focus:outline-none transition-colors"
                         style={{
-                          backgroundColor: reviewRating < 1 || reviewSubmitting ? '#DDD4C0' : '#1B3828',
-                          color: reviewRating < 1 || reviewSubmitting ? '#9A8A78' : '#EED98A',
+                          backgroundColor: reviewRating < 1 || reviewSubmitting ? 'var(--gv-border)' : 'var(--gv-main)',
+                          color: reviewRating < 1 || reviewSubmitting ? 'var(--gv-muted)' : 'var(--gv-on-main)',
                           fontFamily: "'Outfit', sans-serif",
                           letterSpacing: '0.06em',
                           border: 'none',
@@ -2121,11 +2174,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   {predReviews.length > 0 && (
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center gap-3 mt-1">
-                        <span className="flex-1" style={{ height: '1px', backgroundColor: 'rgba(221,212,192,0.9)' }} />
-                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#9A8A78', whiteSpace: 'nowrap' }}>
+                        <span className="flex-1" style={{ height: '1px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 90%, transparent)' }} />
+                        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-muted)', whiteSpace: 'nowrap' }}>
                           FROM PREVIOUS EDITION{predAcronym ? ` · ${predAcronym.toUpperCase()}` : ''}
                         </span>
-                        <span className="flex-1" style={{ height: '1px', backgroundColor: 'rgba(221,212,192,0.9)' }} />
+                        <span className="flex-1" style={{ height: '1px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 90%, transparent)' }} />
                       </div>
                       {predReviews.map(r => <ReviewCard key={r.id} review={r} />)}
                     </div>
@@ -2146,7 +2199,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 {/* Apply CTA, always first */}
                 <div
                   className="relative rounded-[20px] p-6 overflow-hidden"
-                  style={{ backgroundColor: '#1B3828', boxShadow: '0 16px 40px rgba(27,56,40,0.28)' }}
+                  style={{ backgroundColor: 'var(--gv-main)', boxShadow: '0 16px 40px color-mix(in srgb, var(--gv-main) 28%, transparent)' }}
                 >
                   <div
                     className="pointer-events-none absolute inset-0"
@@ -2169,7 +2222,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     ) : isOrganizerViewer ? (
                       /* 1, Organizer/secretariat: manage affordances, never apply buttons */
                       <>
-                        <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 8px 0' }}>
+                        <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
                           {(organizerRole ?? 'owner').toUpperCase()}
                         </p>
                         <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -2186,7 +2239,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             <span className="text-[12px] font-semibold" style={{ color: 'rgba(237,231,216,0.9)', fontFamily: "'Outfit', sans-serif" }}>
                               Also applied as {roleLabel(myApp.role)}
                             </span>
-                            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', color: '#EED98A' }}>
+                            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', color: 'var(--gv-on-main)' }}>
                               {myApp.status.toUpperCase()}
                             </span>
                           </div>
@@ -2194,9 +2247,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <Link
                           href={`/manage/${slug}`}
                           className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-colors focus:outline-none"
-                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                         >
                           <LayoutDashboard size={15} strokeWidth={2.2} />
                           MANAGE CONFERENCE
@@ -2206,10 +2259,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       /* 2, Existing applicant/participant: status card, no apply buttons */
                       (() => {
                         const STATUS_META: Record<string, { label: string; bg: string; color: string; hint: string }> = {
-                          submitted:    { label: 'SUBMITTED',    bg: 'rgba(238,217,138,0.15)', color: '#EED98A',              hint: 'Your application is under review.' },
-                          accepted:     { label: 'ACCEPTED',     bg: 'rgba(61,122,82,0.35)',   color: '#A8D5B8',              hint: 'You are in. Your allocation will follow.' },
-                          assigned:     { label: 'ASSIGNED',     bg: 'rgba(61,122,82,0.35)',   color: '#A8D5B8',              hint: '' },
-                          'checked-in': { label: 'CHECKED IN',   bg: 'rgba(61,122,82,0.35)',   color: '#A8D5B8',              hint: '' },
+                          submitted:    { label: 'SUBMITTED',    bg: 'rgba(238,217,138,0.15)', color: 'var(--gv-on-main)',              hint: 'Your application is under review.' },
+                          accepted:     { label: 'ACCEPTED',     bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: 'You are in. Your allocation will follow.' },
+                          assigned:     { label: 'ASSIGNED',     bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
+                          'checked-in': { label: 'CHECKED IN',   bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
                           waitlisted:   { label: 'WAITLISTED',   bg: 'rgba(237,231,216,0.12)', color: 'rgba(237,231,216,0.8)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
                           rejected:     { label: 'NOT ACCEPTED', bg: 'rgba(139,32,32,0.35)',   color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
                         };
@@ -2224,7 +2277,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           || myApp.status === 'assigned' || myApp.status === 'checked-in';
                         return (
                           <>
-                            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: '#EED98A', margin: '0 0 8px 0' }}>
+                            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
                               YOUR APPLICATION
                             </p>
                             <div className="flex items-center justify-between gap-3 mb-1">
@@ -2247,9 +2300,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               <Link
                                 href={`/conferences/${slug}/pay`}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-colors focus:outline-none"
-                                style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                               >
                                 <CreditCard size={15} strokeWidth={2.2} />
                                 PAY AND REQUEST AID
@@ -2274,7 +2327,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       style={{ width: '18px', height: '12px', borderRadius: '2px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.4)' }}
                                     />
                                   )}
-                                  <span className="text-[12.5px] font-semibold" style={{ color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+                                  <span className="text-[12.5px] font-semibold" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif" }}>
                                     {myAllocation.country_name}
                                   </span>
                                 </div>
@@ -2291,7 +2344,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 showTab('participant', myApp.role);
                               }}
                               className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mt-3 font-bold text-xs transition-colors focus:outline-none"
-                              style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: '#EED98A', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textDecoration: 'none' }}
+                              style={{ backgroundColor: 'rgba(238,217,138,0.08)', color: 'var(--gv-on-main)', border: '1px solid rgba(238,217,138,0.22)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textDecoration: 'none' }}
                               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.16)'; }}
                               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(238,217,138,0.08)'; }}
                             >
@@ -2313,9 +2366,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <button
                           onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
                           className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                           onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
                           onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                           onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
@@ -2344,9 +2397,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           onClick={() => setRolePickerOpen(v => !v)}
                           aria-expanded={rolePickerOpen}
                           className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: '#EED98A', color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#EED98A'; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                           onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
                           onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                           onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
@@ -2400,13 +2453,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       </span>
                                       <span
                                         className="block mt-0.5"
-                                        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? '#EED98A' : 'rgba(237,231,216,0.55)' }}
+                                        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? 'var(--gv-on-main)' : 'rgba(237,231,216,0.55)' }}
                                       >
                                         {open ? fee : reason}
                                       </span>
                                     </span>
                                   </span>
-                                  {open && <ArrowRight size={15} strokeWidth={2.2} style={{ color: '#EED98A', flexShrink: 0 }} />}
+                                  {open && <ArrowRight size={15} strokeWidth={2.2} style={{ color: 'var(--gv-on-main)', flexShrink: 0 }} />}
                                 </button>
                               );
                             })}
@@ -2425,8 +2478,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       style={{
                         width: '150px', height: '150px', borderRadius: '9999px',
                         background: 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.3) 0%, rgba(250,248,243,0) 72%)',
-                        border: '1.5px solid rgba(182,135,31,0.42)',
-                        boxShadow: '0 10px 30px rgba(27,56,40,0.1), 0 0 0 8px rgba(238,217,138,0.12)',
+                        border: '1.5px solid color-mix(in srgb, var(--gv-accent) 42%, transparent)',
+                        boxShadow: '0 10px 30px color-mix(in srgb, var(--gv-main) 10%, transparent), 0 0 0 8px rgba(238,217,138,0.12)',
                       }}
                     >
                       {(() => {
@@ -2437,14 +2490,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         const delegatePhase = activeFeePhase(roleConfigs.find(r => r.role === 'delegate')?.fee_phases);
                         const headlineFee = delegatePhase ? Number(delegatePhase.amount) : heroFeeAmount;
                         return headlineFee === 0 ? (
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: '#1B3828', lineHeight: 1 }}>FREE</span>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontSize: '30px', color: 'var(--gv-main)', lineHeight: 1 }}>FREE</span>
                         ) : (
-                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: '#1C1410', lineHeight: 1 }}>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 900, fontVariantNumeric: 'tabular-nums', fontSize: '38px', color: 'var(--gv-on-surface)', lineHeight: 1 }}>
                             {formatFeeCompact(headlineFee, heroFeeCurrency)}
                           </span>
                         );
                       })()}
-                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: '#9A8A78', marginTop: '7px' }}>
+                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'var(--gv-muted)', marginTop: '7px' }}>
                         PER DELEGATE
                       </span>
                     </div>
@@ -2452,9 +2505,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     <button
                       onClick={() => setPricingOpen(v => !v)}
                       className="mt-4 flex items-center gap-1.5 text-[11px] font-bold focus:outline-none transition-colors"
-                      style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em', background: 'none', border: 'none', cursor: 'pointer' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#B6871F'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                      style={{ color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em', background: 'none', border: 'none', cursor: 'pointer' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-accent)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-main)'; }}
                     >
                       PRICING DETAILS
                       <ChevronDown
@@ -2464,7 +2517,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     </button>
 
                     {pricingOpen && (
-                      <div className="w-full mt-4 pt-3" style={{ borderTop: '1px solid rgba(221,212,192,0.6)' }}>
+                      <div className="w-full mt-4 pt-3" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 60%, transparent)' }}>
                         {enabledRoles.map((r, i) => {
                           const phases = r.fee_phases ?? [];
                           const activePhase = activeFeePhase(phases);
@@ -2472,12 +2525,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           const fmtPhaseDate = (iso: string) =>
                             new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
                           return (
-                            <div key={r.role} style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.4)' }}>
+                            <div key={r.role} style={{ borderTop: i === 0 ? 'none' : '1px solid color-mix(in srgb, var(--gv-border) 40%, transparent)' }}>
                               <div className="flex items-center justify-between py-2">
                                 <span className="text-[13px] font-medium" style={{ color: '#4A4238', fontFamily: "'Outfit', sans-serif" }}>
                                   {capitalize(r.role.replace(/-/g, ' '))}
                                 </span>
-                                <span className="text-[13px] font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
+                                <span className="text-[13px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                                   {(() => {
                                     const resolved = activePhaseFee({ fee_amount: r.fee_amount, fee_phases: phases });
                                     return resolved.amount > 0 ? formatFeeCompact(resolved.amount, currency) : 'Free';
@@ -2495,21 +2548,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         key={pi}
                                         className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5"
                                         style={{
-                                          backgroundColor: isCurrent ? 'rgba(27,56,40,0.08)' : 'transparent',
-                                          border: isCurrent ? '1px solid rgba(27,56,40,0.25)' : '1px solid transparent',
+                                          backgroundColor: isCurrent ? 'color-mix(in srgb, var(--gv-main) 8%, transparent)' : 'transparent',
+                                          border: isCurrent ? '1px solid color-mix(in srgb, var(--gv-main) 25%, transparent)' : '1px solid transparent',
                                         }}
                                       >
                                         <span className="flex items-center gap-1.5 min-w-0">
                                           <span
                                             className="text-[11.5px] font-semibold truncate"
-                                            style={{ color: isCurrent ? '#1B3828' : '#4A4238', fontFamily: "'Outfit', sans-serif" }}
+                                            style={{ color: isCurrent ? 'var(--gv-main)' : '#4A4238', fontFamily: "'Outfit', sans-serif" }}
                                           >
                                             {p.label || 'Phase'}
                                           </span>
                                           {isCurrent && (
                                             <span
                                               className="flex-shrink-0 text-[8.5px] font-bold px-1.5 py-0.5 rounded-full"
-                                              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}
+                                              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.1em' }}
                                             >
                                               CURRENT
                                             </span>
@@ -2517,13 +2570,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         </span>
                                         <span className="flex items-center gap-2 flex-shrink-0">
                                           {p.start_date && p.end_date && (
-                                            <span className="text-[10.5px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                            <span className="text-[10.5px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
                                               {fmtPhaseDate(p.start_date)} – {fmtPhaseDate(p.end_date)}
                                             </span>
                                           )}
                                           <span
                                             className="text-[11.5px] font-bold"
-                                            style={{ color: isCurrent ? '#1B3828' : '#1C1410', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
+                                            style={{ color: isCurrent ? 'var(--gv-main)' : 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}
                                           >
                                             {p.amount > 0 ? formatFeeCompact(p.amount, currency) : 'Free'}
                                           </span>
@@ -2623,8 +2676,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           backgroundColor: 'rgba(250,248,243,0.72)',
                           backdropFilter: 'blur(16px) saturate(1.4)',
                           WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
-                          border: '1px solid rgba(221,212,192,0.85)',
-                          boxShadow: '0 6px 20px rgba(27,56,40,0.07)',
+                          border: '1px solid color-mix(in srgb, var(--gv-border) 85%, transparent)',
+                          boxShadow: '0 6px 20px color-mix(in srgb, var(--gv-main) 7%, transparent)',
                         }}
                       >
                         <SortButton
@@ -2646,13 +2699,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
                     {committees.length === 0 && !isOrganizerViewer ? (
                       <SectionCard>
-                        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="text-sm" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
                           Committees will be announced soon.
                         </p>
                       </SectionCard>
                     ) : sortedCommittees.length === 0 && !isOrganizerViewer ? (
                       <SectionCard>
-                        <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="text-sm" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
                           No {sortDir === 'desc' ? 'crisis' : 'General Assembly'} committees at this conference.
                         </p>
                       </SectionCard>
@@ -2670,9 +2723,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 width: '38px', height: '38px', borderRadius: '9999px',
                                 backgroundColor: 'rgba(250,248,243,0.88)',
                                 backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                                border: '1px solid rgba(221,212,192,0.95)',
-                                boxShadow: '0 6px 18px rgba(27,56,40,0.16)',
-                                color: '#1B3828', cursor: 'pointer',
+                                border: '1px solid color-mix(in srgb, var(--gv-border) 95%, transparent)',
+                                boxShadow: '0 6px 18px color-mix(in srgb, var(--gv-main) 16%, transparent)',
+                                color: 'var(--gv-main)', cursor: 'pointer',
                               }}
                             >
                               <ChevronLeft size={18} />
@@ -2686,9 +2739,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 width: '38px', height: '38px', borderRadius: '9999px',
                                 backgroundColor: 'rgba(250,248,243,0.88)',
                                 backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                                border: '1px solid rgba(221,212,192,0.95)',
-                                boxShadow: '0 6px 18px rgba(27,56,40,0.16)',
-                                color: '#1B3828', cursor: 'pointer',
+                                border: '1px solid color-mix(in srgb, var(--gv-border) 95%, transparent)',
+                                boxShadow: '0 6px 18px color-mix(in srgb, var(--gv-main) 16%, transparent)',
+                                color: 'var(--gv-main)', cursor: 'pointer',
                               }}
                             >
                               <ChevronRight size={18} />
@@ -2736,8 +2789,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   backgroundColor: 'rgba(250,248,243,0.82)',
                                   backdropFilter: 'blur(12px)',
                                   WebkitBackdropFilter: 'blur(12px)',
-                                  border: '1px solid rgba(221,212,192,0.95)',
-                                  boxShadow: '0 10px 30px rgba(27,56,40,0.08)',
+                                  border: '1px solid color-mix(in srgb, var(--gv-border) 95%, transparent)',
+                                  boxShadow: '0 10px 30px color-mix(in srgb, var(--gv-main) 8%, transparent)',
                                 }}
                               >
                                 {isOrganizerViewer && (
@@ -2756,7 +2809,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       alt={c.abbreviation ?? c.name}
                                       style={{
                                         width: '104px', height: '104px', objectFit: 'contain', flexShrink: 0,
-                                        filter: 'drop-shadow(0 10px 18px rgba(27,56,40,0.28))',
+                                        filter: 'drop-shadow(0 10px 18px color-mix(in srgb, var(--gv-main) 28%, transparent))',
                                       }}
                                     />
                                   ) : (
@@ -2766,12 +2819,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         width: '96px', height: '96px', borderRadius: '9999px',
                                         background: isCrisis
                                           ? 'linear-gradient(135deg, #3C1414 0%, #6E1E1E 100%)'
-                                          : 'linear-gradient(135deg, #16301F 0%, #2A5A3C 100%)',
-                                        boxShadow: '0 10px 24px rgba(27,56,40,0.26)',
+                                          : 'linear-gradient(135deg, #16301F 0%, var(--gv-main-mid) 100%)',
+                                        boxShadow: '0 10px 24px color-mix(in srgb, var(--gv-main) 26%, transparent)',
                                       }}
                                     >
                                       <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, backgroundSize: '300px', mixBlendMode: 'overlay', opacity: 0.12 }} />
-                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: '#EED98A', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
+                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: monogram.length > 4 ? '13px' : '16px', fontWeight: 700, color: 'var(--gv-on-main)', letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums' }}>
                                         {monogram}
                                       </span>
                                     </div>
@@ -2780,7 +2833,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   {/* Name */}
                                   <h3
                                     className="text-center font-bold text-[15.5px] leading-snug"
-                                    style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: '18px 0 0 0', minHeight: '2.6em' }}
+                                    style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: '18px 0 0 0', minHeight: '2.6em' }}
                                   >
                                     {c.name}
                                   </h3>
@@ -2795,13 +2848,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                         {capitalize(diff)}
                                       </span>
                                     )}
-                                    <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                                    <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent) 55%, transparent)', fontSize: '7px' }}>◆</span>
                                     <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
                                       {!isCrisis && c.delegation_size >= 2 ? `${countryCapacity} countries · 2 delegates each` : `${countryCapacity} ${isCrisis ? 'roles' : 'seats'}`}
                                     </span>
                                     {isCrisis && (
                                       <>
-                                        <span aria-hidden style={{ color: 'rgba(182,135,31,0.55)', fontSize: '7px' }}>◆</span>
+                                        <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent) 55%, transparent)', fontSize: '7px' }}>◆</span>
                                         <span className="text-[10px] font-bold" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.12em' }}>
                                           CRISIS
                                         </span>
@@ -2811,12 +2864,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
                                   {/* Topics, roman numerals */}
                                   {c.topics && c.topics.length > 0 && (
-                                    <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                                    <div className="w-full mt-5 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 55%, transparent)' }}>
                                       {c.topics.map((topic, ti) => (
                                         <div key={topic} className="flex items-start gap-2.5 py-1">
                                           <span
                                             className="flex-shrink-0 text-right"
-                                            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#B6871F', width: '18px', lineHeight: '19px' }}
+                                            style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: 'var(--gv-accent)', width: '18px', lineHeight: '19px' }}
                                           >
                                             {ROMAN[ti] ?? String(ti + 1)}.
                                           </span>
@@ -2831,7 +2884,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   {/* Dais, pinned to the card bottom — shown only when chairs are assigned */}
                                   <div className="w-full mt-auto">
                                   {chairs.length > 0 && (
-                                  <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}>
+                                  <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 55%, transparent)' }}>
                                     <div className="flex items-start justify-center gap-6">
                                       {chairs.map((ch, ci) => {
                                         const uid = chairsLinkable ? chairIds[ci] : null;
@@ -2844,8 +2897,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                                 alt={ch.name}
                                                 style={{
                                                   width: '52px', height: '52px', borderRadius: '9999px', objectFit: 'cover',
-                                                  boxShadow: '0 4px 12px rgba(27,56,40,0.22)',
-                                                  backgroundColor: '#EDE7D8',
+                                                  boxShadow: '0 4px 12px color-mix(in srgb, var(--gv-main) 22%, transparent)',
+                                                  backgroundColor: 'var(--gv-bg)',
                                                   outline: '1px solid rgba(0,0,0,0.1)', outlineOffset: '-1px',
                                                 }}
                                               />
@@ -2854,14 +2907,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                                 className="flex items-center justify-center"
                                                 style={{
                                                   width: '52px', height: '52px', borderRadius: '9999px',
-                                                  backgroundColor: '#1B3828', color: '#EED98A',
+                                                  backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)',
                                                   fontSize: '17px', fontWeight: 700, fontFamily: "'Outfit', sans-serif",
                                                 }}
                                               >
                                                 {ch.name.charAt(0)}
                                               </span>
                                             )}
-                                            <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                            <span className="text-[11.5px] font-semibold mt-2 leading-tight" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
                                               {ch.name}
                                             </span>
                                           </>
@@ -2894,15 +2947,15 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           ? `${countriesTaken}/${countryCapacity} · ${seatsTaken}/${seatCapacity} seats`
                                           : `${countriesTaken}/${countryCapacity} FILLED`}
                                       </span>
-                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', color: '#9A8A78' }}>
+                                      <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', color: 'var(--gv-muted)' }}>
                                         {pct}%
                                       </span>
                                     </div>
-                                    <div className="rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
+                                    <div className="rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 65%, transparent)' }}>
                                       <div
                                         style={{
                                           width: `${pct}%`, height: '100%', borderRadius: '9999px',
-                                          background: 'linear-gradient(to right, #2A5A3C, #3D7A52)',
+                                          background: 'linear-gradient(to right, var(--gv-main-mid), var(--gv-main-light))',
                                           transition: 'width 500ms cubic-bezier(0.22,1,0.36,1)',
                                         }}
                                       />
@@ -2918,14 +2971,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     className="w-full rounded-xl py-2.5 text-[11px] font-bold transition-colors focus:outline-none"
                                     style={{
                                       backgroundColor: 'transparent',
-                                      color: '#1B3828',
-                                      border: '1.5px solid rgba(27,56,40,0.35)',
+                                      color: 'var(--gv-main)',
+                                      border: '1.5px solid color-mix(in srgb, var(--gv-main) 35%, transparent)',
                                       fontFamily: "'Outfit', sans-serif",
                                       letterSpacing: '0.1em',
                                       cursor: 'pointer',
                                     }}
-                                    onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = '#1B3828'; el.style.color = '#EED98A'; }}
-                                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = '#1B3828'; }}
+                                    onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'var(--gv-main)'; el.style.color = 'var(--gv-on-main)'; }}
+                                    onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'transparent'; el.style.color = 'var(--gv-main)'; }}
                                   >
                                     VIEW {isCrisis ? 'ROLES' : 'MEMBERS'}
                                   </button>
@@ -2944,21 +2997,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 width: '298px',
                                 minHeight: '320px',
                                 scrollSnapAlign: 'start',
-                                border: '1.5px dashed rgba(27,56,40,0.4)',
-                                backgroundColor: 'rgba(27,56,40,0.03)',
-                                color: '#1B3828',
+                                border: '1.5px dashed color-mix(in srgb, var(--gv-main) 40%, transparent)',
+                                backgroundColor: 'color-mix(in srgb, var(--gv-main) 3%, transparent)',
+                                color: 'var(--gv-main)',
                                 cursor: 'pointer',
                                 transition: `background-color 250ms ${EASE}, border-color 250ms ${EASE}`,
                               }}
-                              onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.07)'; el.style.borderColor = 'rgba(27,56,40,0.6)'; }}
-                              onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'rgba(27,56,40,0.03)'; el.style.borderColor = 'rgba(27,56,40,0.4)'; }}
+                              onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 7%, transparent)'; el.style.borderColor = 'color-mix(in srgb, var(--gv-main) 60%, transparent)'; }}
+                              onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 3%, transparent)'; el.style.borderColor = 'color-mix(in srgb, var(--gv-main) 40%, transparent)'; }}
                             >
                               <span
                                 className="flex items-center justify-center"
                                 style={{
                                   width: '52px', height: '52px', borderRadius: '9999px',
-                                  border: '1.5px dashed rgba(27,56,40,0.4)',
-                                  backgroundColor: 'rgba(27,56,40,0.04)',
+                                  border: '1.5px dashed color-mix(in srgb, var(--gv-main) 40%, transparent)',
+                                  backgroundColor: 'color-mix(in srgb, var(--gv-main) 4%, transparent)',
                                 }}
                               >
                                 <Plus size={20} strokeWidth={2.2} />
@@ -2981,21 +3034,21 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       return (
                         <div
                           className="fixed inset-0 z-50 flex items-center justify-center px-6"
-                          style={{ backgroundColor: 'rgba(28,20,16,0.45)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                          style={{ backgroundColor: 'color-mix(in srgb, var(--gv-on-bg) 45%, transparent)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
                           onClick={() => setExpandedRoster(null)}
                         >
                           <div
                             onClick={(e) => e.stopPropagation()}
                             className="w-full max-w-md rounded-[24px] overflow-hidden"
-                            style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 28px 72px rgba(16,28,21,0.35)' }}
+                            style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', boxShadow: '0 28px 72px rgba(16,28,21,0.35)' }}
                           >
                             <div className="px-6 pt-6 pb-4">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="min-w-0">
-                                  <p className="font-bold text-[16px] leading-snug" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                  <p className="font-bold text-[16px] leading-snug" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                                     {c.name}
                                   </p>
-                                  <p className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: '#9A8A78', margin: '4px 0 0 0' }}>
+                                  <p className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-muted)', margin: '4px 0 0 0' }}>
                                     {hasDoubles
                                       ? `${seatsTaken}/${seatCapacity} SEATS FILLED`
                                       : `${countriesTaken}/${countryCapacity} ${isCrisis ? 'ROLES' : 'SEATS'} FILLED`}
@@ -3005,20 +3058,20 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   onClick={() => setExpandedRoster(null)}
                                   aria-label="Close"
                                   className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
-                                  style={{ width: '32px', height: '32px', border: '1px solid #DDD4C0', color: '#9A8A78', backgroundColor: 'transparent', cursor: 'pointer' }}
-                                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#1C1410'; el.style.borderColor = '#9A8A78'; }}
-                                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#9A8A78'; el.style.borderColor = '#DDD4C0'; }}
+                                  style={{ width: '32px', height: '32px', border: '1px solid var(--gv-border)', color: 'var(--gv-muted)', backgroundColor: 'transparent', cursor: 'pointer' }}
+                                  onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-on-surface)'; el.style.borderColor = 'var(--gv-muted)'; }}
+                                  onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--gv-muted)'; el.style.borderColor = 'var(--gv-border)'; }}
                                 >
                                   <X size={15} />
                                 </button>
                               </div>
-                              <div className="mt-3 rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'rgba(221,212,192,0.65)' }}>
-                                <div style={{ width: `${pct}%`, height: '100%', borderRadius: '9999px', background: 'linear-gradient(to right, #2A5A3C, #3D7A52)' }} />
+                              <div className="mt-3 rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 65%, transparent)' }}>
+                                <div style={{ width: `${pct}%`, height: '100%', borderRadius: '9999px', background: 'linear-gradient(to right, var(--gv-main-mid), var(--gv-main-light))' }} />
                               </div>
                             </div>
                             <div className="px-3 pb-4 overflow-y-auto" style={{ maxHeight: '54vh' }}>
                               {slots.length === 0 ? (
-                                <p className="text-sm px-3 py-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                <p className="text-sm px-3 py-4" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
                                   The {isCrisis ? 'character' : 'country'} roster will be announced soon.
                                 </p>
                               ) : (
@@ -3036,25 +3089,25 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     <div
                                       key={s.country_code}
                                       className="flex items-center gap-3 px-3 py-2.5"
-                                      style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(221,212,192,0.45)' }}
+                                      style={{ borderTop: i === 0 ? 'none' : '1px solid color-mix(in srgb, var(--gv-border) 45%, transparent)' }}
                                     >
                                       {flag ? (
                                         <img
                                           src={flag}
                                           alt=""
-                                          style={{ width: '22px', height: '15px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px rgba(27,56,40,0.25)' }}
+                                          style={{ width: '22px', height: '15px', borderRadius: '3px', objectFit: 'cover', flexShrink: 0, boxShadow: '0 1px 3px color-mix(in srgb, var(--gv-main) 25%, transparent)' }}
                                         />
                                       ) : (
                                         <span
                                           className="flex items-center justify-center flex-shrink-0"
-                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'rgba(27,56,40,0.08)', fontFamily: "'Outfit', sans-serif", fontSize: '8px', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums', color: '#1B3828' }}
+                                          style={{ width: '22px', height: '22px', borderRadius: '9999px', backgroundColor: 'color-mix(in srgb, var(--gv-main) 8%, transparent)', fontFamily: "'Outfit', sans-serif", fontSize: '8px', fontWeight: 700, letterSpacing: '0.06em', fontVariantNumeric: 'tabular-nums', color: 'var(--gv-main)' }}
                                         >
                                           {s.country_code.slice(0, 2)}
                                         </span>
                                       )}
                                       <span
                                         className="flex-1 text-[13px] font-medium truncate"
-                                        style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
+                                        style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}
                                       >
                                         {s.country_name}
                                       </span>
@@ -3063,7 +3116,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           <span
                                             key={`taken-${ti}`}
                                             className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full"
-                                            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+                                            style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
                                           >
                                             <Check size={10} strokeWidth={2.6} />
                                             TAKEN
@@ -3073,7 +3126,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           <span
                                             key={`open-${oi}`}
                                             className="text-[9px] font-bold px-2 py-0.5 rounded-full"
-                                            style={{ backgroundColor: 'rgba(61,122,82,0.1)', color: '#2A5A3C', border: '1px solid rgba(61,122,82,0.25)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+                                            style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main-light) 10%, transparent)', color: 'var(--gv-main-mid)', border: '1px solid color-mix(in srgb, var(--gv-main-light) 25%, transparent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
                                           >
                                             OPEN
                                           </span>
@@ -3105,10 +3158,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         {/* ── Organizer edit modals ──────────────────────────────────── */}
         {isOrganizerViewer && editModal === 'banner' && (
           <ModalOverlay onClose={() => { if (!assetUploading && !editSaving) setEditModal(null); }}>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 'min(520px, 92vw)', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(520px, 92vw)', maxHeight: '85vh', overflowY: 'auto' }}>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Banner</p>
-                <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
+                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Banner</p>
+                <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
               </div>
               <div
                 onClick={() => { if (!assetUploading && !editSaving) document.getElementById('public-banner-upload')?.click(); }}
@@ -3118,7 +3171,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   cursor: assetUploading || editSaving ? 'wait' : 'pointer', backgroundColor: 'rgba(237,231,216,0.25)',
                   transition: `border-color 200ms ${EASE}, background-color 200ms ${EASE}`,
                 }}
-                onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = '#1B3828'; el.style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+                onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'var(--gv-main)'; el.style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 4%, transparent)'; }}
                 onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.borderColor = 'rgba(154,138,120,0.6)'; el.style.backgroundColor = 'rgba(237,231,216,0.25)'; }}
               >
                 {assetUploading ? (
@@ -3127,8 +3180,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   </div>
                 ) : (
                   <>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to upload a banner</p>
-                    <p style={{ fontSize: 11, color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>Recommended 1200x630px · max 5MB</p>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Click to upload a banner</p>
+                    <p style={{ fontSize: 11, color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>Recommended 1200x630px · max 5MB</p>
                   </>
                 )}
               </div>
@@ -3155,11 +3208,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       style={{
                         width: 84, height: 48, padding: 0, borderRadius: 10, overflow: 'hidden',
                         cursor: assetUploading || editSaving ? 'wait' : 'pointer',
-                        border: selected ? '2px solid #B6871F' : '1.5px solid #DDD4C0',
+                        border: selected ? '2px solid var(--gv-accent)' : '1.5px solid var(--gv-border)',
                         boxShadow: selected ? '0 0 0 3px rgba(238,217,138,0.55)' : 'none',
                         opacity: (assetUploading || editSaving) && !selected ? 0.6 : 1,
                         transition: 'border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease',
-                        backgroundColor: '#EDE7D8',
+                        backgroundColor: 'var(--gv-bg)',
                       }}
                       onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
@@ -3176,10 +3229,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         {isOrganizerViewer && editModal === 'logo' && (
           <ModalOverlay onClose={() => { if (!assetUploading && !editSaving) setEditModal(null); }}>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 'min(420px, 92vw)' }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(420px, 92vw)' }}>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Logo</p>
-                <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
+                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Conference Logo</p>
+                <button onClick={() => { if (!assetUploading && !editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
               </div>
               <div className="flex items-center gap-4">
                 <div
@@ -3187,22 +3240,22 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   className="flex items-center justify-center flex-shrink-0"
                   style={{
                     width: 96, height: 96, borderRadius: 20,
-                    border: '1.5px dashed #DDD4C0', backgroundColor: '#FFFFFF',
+                    border: '1.5px dashed var(--gv-border)', backgroundColor: '#FFFFFF',
                     overflow: 'hidden', cursor: assetUploading || editSaving ? 'wait' : 'pointer',
                     transition: `border-color 200ms ${EASE}`,
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
                 >
                   {assetUploading ? (
                     <Loader size={48} />
                   ) : conference.logo_url ? (
                     <LogoDisc src={conference.logo_url} alt={conference.acronym} size={80} fallbackText={conference.acronym.slice(0, 3)} />
                   ) : (
-                    <Plus size={20} strokeWidth={2.2} style={{ color: '#9A8A78' }} />
+                    <Plus size={20} strokeWidth={2.2} style={{ color: 'var(--gv-muted)' }} />
                   )}
                 </div>
-                <p className="text-[12px]" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: 0 }}>
+                <p className="text-[12px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: 0 }}>
                   Click the box to upload a new logo. Square, transparent PNG works best. Max 5MB.
                 </p>
               </div>
@@ -3240,10 +3293,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         {isOrganizerViewer && editModal === 'description' && (
           <ModalOverlay onClose={() => { if (!editSaving) setEditModal(null); }}>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 'min(560px, 92vw)' }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(560px, 92vw)' }}>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>About the Conference</p>
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
+                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>About the Conference</p>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
               </div>
               <textarea
                 value={descDraft}
@@ -3251,14 +3304,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 rows={9}
                 placeholder="Tell delegates what your conference is about: history, venue, what makes it special..."
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                style={{ border: '1px solid #DDD4C0', backgroundColor: 'rgba(237,231,216,0.25)', color: '#1C1410', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                style={{ border: '1px solid var(--gv-border)', backgroundColor: 'rgba(237,231,216,0.25)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gv-main)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--gv-border)'; }}
               />
               {editError && <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '8px 0 0 0' }}>{editError}</p>}
               <div className="flex gap-3 mt-5">
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
-                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: editSaving ? '#DDD4C0' : '#1B3828', color: editSaving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={handleSaveDescription} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
               </div>
             </div>
           </ModalOverlay>
@@ -3266,10 +3319,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         {isOrganizerViewer && editModal === 'about' && (
           <ModalOverlay onClose={() => { if (!editSaving) setEditModal(null); }}>
-            <div className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 'min(480px, 92vw)', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 'min(480px, 92vw)', maxHeight: '85vh', overflowY: 'auto' }}>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-base font-bold" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Contact &amp; Social Links</p>
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: '#9A8A78', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
+                <p className="text-base font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Contact &amp; Social Links</p>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="focus:outline-none" style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close"><X size={18} /></button>
               </div>
               <div className="flex flex-col gap-3.5">
                 {([
@@ -3288,16 +3341,16 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       onChange={(e) => setAboutDraft(d => ({ ...d, [f.key]: e.target.value }))}
                       placeholder={f.placeholder}
                       style={modalInputStyle}
-                      onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                      onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--gv-main)'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--gv-border)'; }}
                     />
                   </div>
                 ))}
               </div>
               {editError && <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", margin: '12px 0 0 0' }}>{editError}</p>}
               <div className="flex gap-3 mt-5">
-                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
-                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: editSaving ? '#DDD4C0' : '#1B3828', color: editSaving ? '#9A8A78' : '#EED98A', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
+                <button onClick={() => { if (!editSaving) setEditModal(null); }} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif", cursor: 'pointer' }}>CANCEL</button>
+                <button onClick={handleSaveAbout} disabled={editSaving} className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none" style={{ backgroundColor: editSaving ? 'var(--gv-border)' : 'var(--gv-main)', color: editSaving ? 'var(--gv-muted)' : 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", border: 'none', cursor: editSaving ? 'default' : 'pointer' }}>{editSaving ? 'SAVING...' : 'SAVE'}</button>
               </div>
             </div>
           </ModalOverlay>
@@ -3315,12 +3368,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
         {/* ── Footer ─────────────────────────────────────────────────── */}
         <footer
-          className="relative z-10 border-t border-[#DDD4C0] px-6 py-8"
+          className="relative z-10 border-t border-[var(--gv-border)] px-6 py-8"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='0.18'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'repeat',
             backgroundSize: '300px 300px',
-            backgroundColor: '#EDE7D8',
+            backgroundColor: 'var(--gv-bg)',
           }}
         >
           <div className="flex flex-col items-center gap-4 md:grid md:grid-cols-3 md:gap-0 md:items-center">
@@ -3337,9 +3390,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram"
-                style={{ color: '#9A8A78', transition: 'color 0.15s' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#1B3828'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#9A8A78'; }}
+                style={{ color: 'var(--gv-muted)', transition: 'color 0.15s' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--gv-main)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--gv-muted)'; }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
@@ -3355,7 +3408,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                 </svg>
               </span>
             </div>
-            <p className="text-xs font-semibold text-[#1B3828] md:text-right">
+            <p className="text-xs font-semibold text-[var(--gv-main)] md:text-right">
               © {new Date().getFullYear()} Gavelling. Built for the MUN community.
             </p>
           </div>
