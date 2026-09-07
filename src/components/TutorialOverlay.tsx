@@ -899,7 +899,6 @@ const SB_COPY = {
     tune1: 'Change any point value, switch a source off, or add sources of your own.',
     tune2: 'Rename, add or remove the quality factors Commenters rate, and set the rating scale.',
     tune3: 'Ranking blend decides how much those quality ratings move the headline number.',
-    tune4: 'Hide scores from delegates keeps their speaking recap but removes the leaderboard.',
     blendInfo: 'The headline score is the objective point total blended with the 0–100 quality score from Commenter ratings. At 0% the ranking is pure points; at 100% it is pure quality.',
     blendNow: (n: number) => n === 0
       ? 'Currently 0% — quality ratings are recorded but do not move the ranking.'
@@ -927,7 +926,6 @@ const SB_COPY = {
     tune1: 'Cambia cualquier valor, desactiva una fuente o añade las tuyas.',
     tune2: 'Renombra, añade o quita los factores de calidad que valoran los comentaristas, y fija la escala.',
     tune3: 'La mezcla de clasificación decide cuánto pesan esas calificaciones en el número final.',
-    tune4: 'Ocultar puntajes a delegados mantiene su resumen pero quita la tabla de posiciones.',
     blendInfo: 'El puntaje final mezcla el total objetivo de puntos con el puntaje de calidad de 0 a 100 que dan los comentaristas. En 0% la clasificación es puro punto; en 100% es pura calidad.',
     blendNow: (n: number) => n === 0
       ? 'Ahora en 0%: las calificaciones se guardan pero no mueven la clasificación.'
@@ -955,7 +953,6 @@ const SB_COPY = {
     tune1: 'Changez n’importe quelle valeur, désactivez une source ou ajoutez les vôtres.',
     tune2: 'Renommez, ajoutez ou retirez les facteurs de qualité notés par les commentateurs, et réglez l’échelle.',
     tune3: 'Le mélange du classement décide du poids de ces notes dans le chiffre final.',
-    tune4: 'Masquer les scores aux délégués garde leur récapitulatif mais retire le classement.',
     blendInfo: 'Le score final mélange le total objectif de points et le score de qualité de 0 à 100 issu des évaluations des commentateurs. À 0 %, le classement est purement chiffré ; à 100 %, purement qualitatif.',
     blendNow: (n: number) => n === 0
       ? 'Actuellement 0 % : les notes de qualité sont enregistrées mais ne bougent pas le classement.'
@@ -983,7 +980,6 @@ const SB_COPY = {
     tune1: 'غيّر أي قيمة، أو عطّل مصدراً، أو أضف مصادر خاصة بك.',
     tune2: 'أعد تسمية عوامل الجودة التي يقيّمها المعلّقون أو أضفها أو احذفها، واضبط سلّم التقييم.',
     tune3: 'مزج الترتيب يحدّد مقدار تأثير تلك التقييمات في الرقم النهائي.',
-    tune4: 'إخفاء النقاط عن المندوبين يُبقي ملخّصهم ويزيل لوحة الصدارة.',
     blendInfo: 'الرقم النهائي هو مزيج من مجموع النقاط الموضوعي ودرجة الجودة من 0 إلى 100 المستمدة من تقييمات المعلّقين. عند 0% يكون الترتيب بالنقاط فقط، وعند 100% بالجودة فقط.',
     blendNow: (n: number) => n === 0
       ? 'القيمة الحالية 0% — تُسجَّل تقييمات الجودة لكنها لا تؤثر في الترتيب.'
@@ -1074,7 +1070,7 @@ function ScoreboardTutorialCard({ committee, language, box }: {
             </span>
           </div>
           <ul className="mt-2 space-y-1.5" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {[c.tune1, c.tune2, c.tune3, c.tune4].map((line, i) => (
+            {[c.tune1, c.tune2, c.tune3].map((line, i) => (
               <li key={i} className="flex gap-2" style={P}>
                 <span aria-hidden style={{ color: '#B6871F', fontWeight: 900, lineHeight: 1.55 }}>·</span>
                 <span className="flex-1">

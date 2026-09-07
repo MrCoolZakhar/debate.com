@@ -42,7 +42,6 @@ export interface ScoringConfig {
   factorRatingsEnabled: boolean;     // default false
   factorScaleMax: number;            // default 10
   scoreBlend: number;                // 0 = pure objective … 100 = pure quality (default 0)
-  hideScoresFromDelegates: boolean;  // default false
 }
 export const DEFAULT_SCORING: ScoringConfig = {
   sources: [
@@ -62,7 +61,7 @@ export const DEFAULT_SCORING: ScoringConfig = {
     { id: 'collaboration', name: 'Collaboration', enabled: true },
     { id: 'content', name: 'Content & Research', enabled: true },
   ],
-  factorRatingsEnabled: false, factorScaleMax: 10, scoreBlend: 0, hideScoresFromDelegates: false,
+  factorRatingsEnabled: false, factorScaleMax: 10, scoreBlend: 0,
 };
 
 export interface CommitteeSettings {

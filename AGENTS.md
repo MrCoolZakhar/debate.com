@@ -375,7 +375,7 @@ Default open tab is **`access`** (`SettingsPanel.tsx:387`).
 | Access | session code, chair code, head-chair claim ("Take the gavel"), `requireChairApproval`, `sponsorLabel`, `lockDelegateRollCall`, `disableChat`, `gslRequireNextSpeaker` |
 | Motions | drag-reorder + rename + enable/disable of the four caucus motions (`motionOrder`, `motionNames`), CoW timer toggle, rename-only Suspend/End Debate, Documents (`requireDocApproval`, `documentNames`) |
 | Voting | `substantiveThreshold`, `allowAbstentions`, `vetoMode` + `p5Delegations` / `vetoCountries`, `quorumThreshold` |
-| Points | scoring config — sources, factors, factor scale, score blend, hide-scores toggle |
+| Points | scoring config — sources, factors, factor scale, score blend |
 
 There is **no** custom-session-ID control, **no** multi-chair toggle and **no** delegation-name-requirement setting. `updateCommitteeCode` (`committeeService.ts:937`) and `migrateSettings` (`settingsStore.ts:179`) are both dead code — nothing calls them. `requireDelegationName` has zero occurrences in `src/`.
 
@@ -410,7 +410,17 @@ Persisted into `settings.scoring`; read everywhere via `getScoringConfig(committ
 - `scoreBlend` — 0 = pure objective points … 100 = pure subjective quality. Consumed by `computeHeadline`.
 - **The session scoreboard and the organiser scoreboard are ONE component**: `src/components/ScoreboardTable.tsx` (moved out of `manage/[slug]/live/`, which now re-exports its palette from `src/components/scoreboardTokens.ts` so all conferences-side importers resolve unchanged). `ScoreboardPanel` feeds it via `buildSessionScoreboardRows` (`src/lib/sessionScoreboard.ts`), a pure adapter from a live `Committee` to `ScoreboardDelegateRow[]` that reuses `scoring.ts` — no scoring maths is duplicated. Every session-specific capability is a defaulted-off prop (`locale`, `detailSummary`, `detailExtra`, `Stat.title`); NO organiser call site passes any of them, and it must stay that way unless you intend to change the organiser view too.
 - The row badge is the BLENDED headline; the ledger below it sums to the OBJECTIVE total. These legitimately differ whenever `scoreBlend > 0` — label them, never print one number in both places.
-- `hideScoresFromDelegates` — default false. **This claim used to be false**: it said the setting was enforced at `delegate/[code]/page.tsx:424`, which is the document-type picker. The setting was enforced NOWHERE — it appeared only in the type, the default, the toggle itself and `delegateTips.ts:98`. Points, the ledger, the by-time rank and the leaderboard were removed from the delegate view outright (see the `StatisticsTab` block comment), so it also promised to hide things that no longer existed. It now gates the one number a delegate can still see: the chair's factor ratings in the Stats-tab recap.
+- `hideScoresFromDelegates` — **GONE.** The field, its default, the Settings toggle, the four
+  translation keys, the tutorial line and the delegate factor recap it gated were all removed.
+  The setting existed to hide a panel that should never have been shown: CLAUDE.md section 2
+  states a delegate never sees chair notes, factor ratings or nominations before publication,
+  but the recap printed the chair's ratings and the flag defaulted to **false**, so by default
+  it leaked them. Deleting the flag alone would have made that leak unconditional, so the panel
+  went with it. The delegate Stats tab now states no score and no rating at all: speech count,
+  total time, speaking history and coaching tips only. Awards are the sanctioned route by which
+  a rating becomes something a delegate can see. `getScoringConfig` spreads the stored blob over
+  `DEFAULT_SCORING`, so committees whose `settings.scoring` JSONB still carries the old key just
+  have an unread extra runtime field. No migration, no backfill, no data loss.
 
 ---
 

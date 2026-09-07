@@ -95,7 +95,6 @@ export function selectDelegateTips(
   const enabledFlag = (key: string) => settings[key] !== false; // unset ⇒ enabled
   const moderatedEnabled = enabledFlag('motionModeratedCaucus');
   const tourEnabled = enabledFlag('motionTourDeTable');
-  const hideScores = cfg.hideScoresFromDelegates === true;
 
   const mn = motionNames(committee, language);
   // Which caucus a delegate can actually ask for. Never name a motion type the chair
@@ -164,8 +163,9 @@ export function selectDelegateTips(
       case 'drSponsor': return true;
       // "Get it passed" only means something once this delegation has one.
       case 'drPassed': return myDrs > 0;
-      // Chair-added source — only surfaced when the delegate can see category names.
-      default: return !hideScores;
+      // Chair-added source. Delegates see no scores at all now, but a chair-invented
+      // category NAME is guidance, not a number, so it is still worth surfacing.
+      default: return true;
     }
   };
 

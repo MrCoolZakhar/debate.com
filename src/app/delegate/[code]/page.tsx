@@ -15,7 +15,6 @@ import { Committee, CaucusState, Delegate, DocumentType, SpeakingLogEntry, Deleg
 import ChatPanel from '@/components/ChatPanel';
 import { getScoringConfig } from '@/lib/scoring';
 import { selectDelegateTips } from '@/lib/delegateTips';
-import { getDelegateFeedback } from '@/lib/committeeService';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
@@ -623,10 +622,10 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
 // ── Statistics Tab ────────────────────────────────────────────────────────────
 /**
- * Speeches only. Points, the category ledger, the by-time rank and the leaderboard are
- * deliberately gone: a delegate sees WHAT they said, under which topic or motion, and for
- * how long. The qualitative surfaces (the chair's factor recap, the coaching tips) stay —
- * neither states a score.
+ * Speeches only. Points, the category ledger, the by-time rank, the leaderboard and the
+ * chair's factor recap are all deliberately gone: a delegate sees WHAT they said, under
+ * which topic or motion, and for how long. Nothing on this tab states a score or a rating.
+ * The coaching tips stay, because guidance never states a number or a rank.
  */
 function StatisticsTab({ committee, country }: { committee: Committee; country: string }) {
   const { language } = useLanguage();
@@ -655,52 +654,12 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
     return t('delegate_gsl_fallback');
   };
 
-  // End recap — factor scores only (never the chair's private notes).
-  const [recap, setRecap] = useState<{ level: string; factorScores: Record<string, number>; createdAt: string }[]>([]);
-  useEffect(() => {
-    getDelegateFeedback(committee.id, country).then(setRecap);
-  }, [committee.id, country]);
-  // A dedicated end-of-committee recap, if one exists. NOTHING IN THE APP WRITES ONE:
-  // the only feedback level ever written is 'speech' (FeedbackLogPanel), so both filters
-  // below always miss and this panel was permanently blank — a delegate could be rated
-  // all session and still see nothing. The speech average is the same fallback
-  // computeQualityScore already uses (scoring.ts), so the delegate now sees exactly the
-  // numbers their score is actually built from.
-  const latestRecap = [...recap]
-    .filter((f) => f.level === 'conference')
-    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0]
-    ?? [...recap].filter((f) => f.level === 'session').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
-
-  // Mean of each enabled factor across every speech that carries a real rating. A 0 means
-  // "not rated" here exactly as it does in foldFactors/computeQualityScore, so an untouched
-  // slider can never drag an average down.
-  const speechAverages = useMemo(() => {
-    const out: Record<string, number> = {};
-    const speeches = recap.filter((f) => f.level === 'speech');
-    for (const f of cfg.factors) {
-      if (!f.enabled) continue;
-      const vals = speeches
-        .map((s) => s.factorScores?.[f.id])
-        .filter((v): v is number => typeof v === 'number' && v > 0);
-      if (vals.length) out[f.id] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
-    }
-    return out;
-  }, [recap, cfg.factors]);
-
-  const recapScores: Record<string, number> = latestRecap ? latestRecap.factorScores : speechAverages;
-  const recapIsAverage = !latestRecap;
-  const recapRatedCount = recap.filter(
-    (f) => f.level === 'speech' && Object.values(f.factorScores ?? {}).some((v) => (v ?? 0) > 0),
-  ).length;
-  // `hideScoresFromDelegates` finally gates something. Points, the ledger, the rank and the
-  // leaderboard were removed from this view entirely (see the block comment on this tab), so
-  // the setting had NO live consumer here at all — it promised "won't see point totals" about
-  // totals that no longer existed. The chair's factor ratings are now the only number a
-  // delegate can see, and this panel was permanently blank until the fallback above made it
-  // render, so without this gate turning the setting on would still show them.
-  const recapFactors = cfg.hideScoresFromDelegates
-    ? []
-    : cfg.factors.filter((f) => f.enabled && typeof recapScores[f.id] === 'number');
+  // The chair's factor ratings are deliberately NOT shown here. CLAUDE.md section 2 is
+  // explicit that a delegate never sees chair notes, factor ratings or nominations before
+  // publication, and this panel showed them by default: `hideScoresFromDelegates` defaulted
+  // to false, so the only thing standing between a delegate and their chair's private
+  // marks was a setting almost nobody found. The panel and the setting are both gone.
+  // Awards are the sanctioned way a rating becomes something a delegate can see.
 
   const num: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };
 
@@ -763,37 +722,6 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           </div>
         )}
       </Panel>
-
-      {/* Chair recap — factor bars only, never the chair's private notes */}
-      {recapFactors.length > 0 && (
-        <Panel style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <SectionLabel>{t('delegate_recap_header')}</SectionLabel>
-          {/* Say which number this is. An average over N speeches is a different claim
-              from a single considered end-of-session mark, and a delegate reading their
-              own ratings deserves to know which one they are looking at. */}
-          {recapIsAverage && recapRatedCount > 0 && (
-            <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: DG.faint, marginTop: -4 }}>
-              {t('delegate_recap_average', { count: String(recapRatedCount) })}
-            </p>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {recapFactors.map((f) => {
-              const v = recapScores[f.id];
-              return (
-                <div key={f.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: DG.body, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
-                    <span style={{ ...num, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: DG.forest }}>{v}/{cfg.factorScaleMax}</span>
-                  </div>
-                  <div style={{ height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${Math.min(100, (v / cfg.factorScaleMax) * 100)}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
-      )}
 
       {/* Tips */}
       {tips.length > 0 && (
