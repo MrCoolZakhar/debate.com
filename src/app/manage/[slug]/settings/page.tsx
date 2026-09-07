@@ -39,7 +39,10 @@ import {
   CopyToRolesModal, SetupIntro, Segmented, STATUS_STYLE,
   type RoleStatus as RoleStatusKind,
 } from './applicationsUi';
-import { AwardsSettings } from './awardsUi';
+// Awards are behind a holding screen for now. `./awardsUi` (AwardsSettings) is
+// untouched on disk; swap this import and the render below back to it to
+// re-enable the real configuration UI. See awardsComingSoon.tsx.
+import { AwardsComingSoon } from './awardsComingSoon';
 import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
@@ -2786,7 +2789,7 @@ export default function SettingsPage() {
     { key: 'conference',   label: 'Conference',   hint: 'Identity, media & fee',      icon: Building2 },
     { key: 'organizers',   label: 'Organizers',   hint: 'Team & permissions',         icon: Users2 },
     { key: 'privacy',      label: 'Privacy',       hint: 'Publishing & lineage',       icon: ShieldCheck },
-    { key: 'awards',       label: 'Awards',        hint: 'Categories, quotas & ratification', icon: Trophy },
+    { key: 'awards',       label: 'Awards',        hint: 'Coming soon',                icon: Trophy },
   ];
   const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
 
@@ -6383,10 +6386,13 @@ export default function SettingsPage() {
         );
       })()}
 
-      {/* Awards lives in its own module (settings/awardsUi.tsx): categories,
-          quotas, points, ratification and the chair deadline, all autosaved
-          into conferences.awards_config. */}
-      {activeTab === 'awards' && <AwardsSettings conference={conference} />}
+      {/* Awards: holding screen while the feature is finished. The real UI
+          (categories, quotas, points, ratification, chair deadline, all
+          autosaved into conferences.awards_config) is still on disk in
+          settings/awardsUi.tsx. To re-enable it, change the import at the top
+          of this file back to `import { AwardsSettings } from './awardsUi'`
+          and render `<AwardsSettings conference={conference} />` here. */}
+      {activeTab === 'awards' && <AwardsComingSoon />}
 
       {confirmModal}
     </div>

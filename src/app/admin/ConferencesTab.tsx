@@ -26,7 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownWideNarrow, ArrowUpRight, Building2, CalendarClock, Check, ChevronDown,
   CircleAlert, Clock, FileText, Gavel, Globe, LayoutTemplate, Mail, MapPin, Megaphone,
-  PencilLine, Rocket, Search, Target, Trophy, UserPlus, Users, Wallet, X,
+  PencilLine, Rocket, Search, Target, UserPlus, Users, Wallet, X,
 } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing } from '@/components/neu';
 import Portal from '@/components/Portal';
@@ -66,12 +66,17 @@ export interface AdminConferenceRow {
 }
 
 // ── Set-up steps ────────────────────────────────────────────────────────────
-// THE SAME NINE PRIORITIES THE ORGANISER IS SHOWN, in the same journey order
+// THE SAME EIGHT PRIORITIES THE ORGANISER IS SHOWN, in the same journey order
 // (src/app/manage/[slug]/page.tsx `checklist`). conference_setup_status() now
-// builds all nine, reports setup_total as the length of its own item list, and
-// counts setup_done and pending_keys over the same nine with no exception for
+// builds all eight, reports setup_total as the length of its own item list, and
+// counts setup_done and pending_keys over the same eight with no exception for
 // `publish` — so the ring, the hover list and the organiser's own ring can no
 // longer disagree, and there is nothing left for this file to patch.
+//
+// It was nine until awards went behind a coming-soon screen in Settings; the
+// item was removed from the SQL and from the organiser checklist in the same
+// change, and `admin_conference_overview()`'s setup_total fallback moved from
+// 9 to 8 with it.
 //
 // Before, the SQL built eight items, hardcoded 'setup_total', 7 and subtracted
 // `publish` from setup_done only, while pending_keys kept it. Three different
@@ -89,7 +94,9 @@ const SETUP_STEPS: { key: string; label: string; icon: typeof LayoutTemplate }[]
   { key: 'secretariat', label: 'Secretariat',        icon: Users },
   { key: 'financials',  label: 'Financials',         icon: Wallet },
   { key: 'delegate',    label: 'First delegate',     icon: UserPlus },
-  { key: 'awards',      label: 'Awards set up',      icon: Trophy },
+  // 'awards' was here. The awards checklist item was removed from
+  // conference_setup_status() when awards went behind a coming-soon screen, so
+  // the key can never come back in pending_keys. Restore this row if it does.
   { key: 'publish',     label: 'Published',          icon: Rocket },
 ];
 const STEP_BY_KEY = new Map(SETUP_STEPS.map(s => [s.key, s]));

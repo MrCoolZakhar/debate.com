@@ -5,7 +5,7 @@ import { useRouter, usePathname, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Building2, Users, MapPin, FileText,
-  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake, Trophy,
+  Mail, CreditCard, Settings, Briefcase, Menu, X, Radio, Upload, HeartHandshake,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -194,12 +194,11 @@ const NAV_SECTIONS = (slug: string, communicationsBadge = 0) => [
       { icon: HeartHandshake, label: 'Financial Aid', href: `/manage/${slug}/financial-aid`, external: false, badge: 0 },
     ],
   },
-  {
-    header: 'POST CONFERENCE',
-    items: [
-      { icon: Trophy, label: 'Awards', href: `/manage/${slug}/awards`, external: false, badge: 0 },
-    ],
-  },
+  // POST CONFERENCE / Awards used to sit here. Awards are now a tab inside
+  // Settings and that tab is a "coming soon" holding screen, so there is no
+  // destination worth a rail entry. /manage/[slug]/awards still exists and
+  // redirects to Settings → Awards, so old bookmarks do not 404. Restore this
+  // group (and the Trophy import) when the feature comes back.
   {
     header: 'SETTINGS',
     items: [

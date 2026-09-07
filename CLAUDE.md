@@ -63,7 +63,36 @@ There is **no analytics or tracking** by policy (`/privacy`). The admin console 
 
 ---
 
-## 5. Awards (chairs decide, secretariat ratifies, conference publishes)
+## 5. Awards (BEHIND A COMING-SOON SCREEN, 7 Sep 2026)
+
+**Current state, read this first.** Awards are hidden from organisers. Nothing was
+deleted and no data was touched:
+
+- Manage → **Settings → Awards** renders `settings/awardsComingSoon.tsx`, a holding
+  screen. The real configuration UI is still `settings/awardsUi.tsx`, on disk and
+  unrendered; re-enabling it is one import plus one render line in
+  `settings/page.tsx` (the comments there say exactly which).
+- The standalone secretariat desk is retired. `/manage/[slug]/awards` now redirects
+  to `/manage/[slug]/settings?tab=awards`, so bookmarks do not 404, and the desk
+  itself is preserved unrendered as `manage/[slug]/awards/AwardsConsole.tsx`. Its
+  rail entry (POST CONFERENCE / Awards) is gone, as are the two links that pointed
+  at it from the organiser scoreboard and the Live modal.
+- **Awards is no longer a set-up priority.** It was removed from the dashboard
+  checklist (`manage/[slug]/page.tsx`, 9 rows → 8), from `conference_setup_status()`
+  in the database (`setup_total` 9 → 8, it is `jsonb_array_length(v_items)`), from
+  `SETUP_STEPS` in `admin/ConferencesTab.tsx`, and the `setup_total` fallback in
+  `admin_conference_overview()` moved from 9 to 8. Because the organiser nudge
+  emails build their "STILL TO DO" list from `conference_setup_status().items`, no
+  organiser is nudged about awards any more (137 active conferences, 134 organisers,
+  stopped). The blue checkmark is untouched: `awards` was never in `v_ver_keys`.
+- Everything below still describes the feature as built, and everything below is
+  still true of the database. `conference_awards`, `conferences.awards_config`,
+  `awards_published_at`, the RLS policies and every RPC are intact. Awards already
+  published stay published: they are still on the public honour roll, still on
+  `MyAwardsCard`, still on `/account/cv`. The chair-side `AwardsCard` and the
+  session signposts (`resolveChairAwardsHref`) were left alone deliberately, since
+  they are participant surfaces and only matter at a conference that already has
+  awards configured.
 
 Model UN awards are given once per conference, at the closing ceremony. Per committee the dais names a Best Delegate, usually one or two Outstanding Delegates, a few Honourable Mentions, sometimes Verbal Commendations and a Best Position Paper. The secretariat sets categories and quotas beforehand, collects each committee's slate, ratifies it and announces. Delegation awards go to a school or society, tallied from committee honours.
 
@@ -71,10 +100,10 @@ Gavelling mirrors that exactly. Read `src/lib/awards.ts` (the vocabulary and con
 
 | Step | Surface | Storage |
 |---|---|---|
-| Configure categories, quotas, points, deadline, ratification | Manage → Settings → **Awards** (`settings/awardsUi.tsx`); dashboard checklist item `awards` (never a publish gate) | `conferences.awards_config` (jsonb; empty = platform defaults) |
+| Configure categories, quotas, points, deadline, ratification | Manage → Settings → **Awards** (`settings/awardsUi.tsx`, currently replaced by the coming-soon screen). There is no longer a dashboard checklist item for awards. | `conferences.awards_config` (jsonb; empty = platform defaults) |
 | Chair nominates, with the session scoreboard as evidence | the chair's conference page, `participant/AwardsCard.tsx` (`/conferences/[slug]/role/chair`) | `conference_awards` rows, `status = 'nominated'` |
 | Chair submits / withdraws | same card → `submit_committee_awards` / `withdraw_committee_awards` | `conference_committees.awards_submitted_*` |
-| Secretariat approves / returns with a note / edits / assigns delegation awards | `/manage/[slug]/awards` | `awards_approved_*`, `awards_return_note`, rows → `approved` |
+| Secretariat approves / returns with a note / edits / assigns delegation awards | `manage/[slug]/awards/AwardsConsole.tsx` (unrendered; the route redirects to Settings) | `awards_approved_*`, `awards_return_note`, rows → `approved` |
 | Publish (the ceremony) | same page → `publish_conference_awards()` | rows → `published`; one `gavelling_verified` `mun_cv_entries` row per recipient per conference; `points_ledger` at paid conferences; `conferences.awards_published_at` |
 | Delegate sees it | `participant/MyAwardsCard.tsx`, `/account/cv`, public honour roll `/conferences/[slug]/awards` | RLS: only `published` rows are readable outside the dais and the organising team |
 
@@ -91,7 +120,7 @@ Rules:
 
 One seal, the one social media uses (`src/components/VerifiedCheck.tsx`). Blue means verified, grey means not yet. Two things carry it:
 
-- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. "Get your first delegate" and awards are on the checklist but are not criteria. The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
+- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. "Get your first delegate" is on the checklist but is not a criterion. ("Set up awards" was the other non-criterion; it was removed from the checklist entirely when awards went behind the coming-soon screen, which changed nothing about verification.) The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
 - **An MUN CV entry** is blue when `source = 'gavelling_verified'` (written by the awards pipeline), grey when self-reported.
 
 Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes from its checkmark" email per organiser per conference, a follow-up after two weeks, and a congratulations when the mark lands, all through `email_outbox` and paced 48h from the organiser drip. `SetupReminderGate` (root layout) shows the same list once a day when an organiser with an unverified conference enters the site, via `my_incomplete_conferences()`.
@@ -148,7 +177,7 @@ src/app/
   (sessions)   create, join, chair/[code], delegate/[code], advisor/[code], voting/[code]
   (public)     /, sessions, about, contact, blog/*, [slug] (vanity), conferences/{explore,map,roles,[slug]/*}
   (participant) conferences/[slug]/{apply,pay,role/[role],papers,awards}, delegation/[societyId], my-conferences, drafts/[token], invites/*
-  (organiser)  manage/[slug]/{committees,applications,assignment,documents,communications,financials,financial-aid,settings,jobs,import,live,scoreboard,awards}
+  (organiser)  manage/[slug]/{committees,applications,assignment,documents,communications,financials,financial-aid,settings,jobs,import,live,scoreboard,awards*}   (*awards = redirect only)
   (account)    account/{profile,cv,calendar,unlimited}, auth/*, cv/[id]
   (staff)      admin
   api/         ambassador, contact, geo, indexnow, emails/queue-participant, og/*
