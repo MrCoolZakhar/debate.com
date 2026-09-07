@@ -123,6 +123,9 @@ interface Conference {
   aid_intro: string | null;
   theme: ConferenceTheme | null;
   theme_draft: ConferenceTheme | null;
+  show_committees: boolean;
+  show_committee_counts: boolean;
+  show_taken_countries: boolean;
 }
 
 interface SecretariatMember {
@@ -845,7 +848,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
         instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
         contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
         connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
-        financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified
+        financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified,
+        show_committees, show_committee_counts, show_taken_countries
       `)
       .eq('slug', slug)
       .single();
@@ -863,7 +867,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
             contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
             connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
-            financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified
+            financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified,
+            show_committees, show_committee_counts, show_taken_countries
           `)
           .eq('slug', slug)
           .single();
@@ -1378,6 +1383,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
   // Role-aware sidebar state
   const isOrganizerViewer = !!organizerRole || isOrganizer;
+
+  // The three public-page visibility switches (Settings → Conference →
+  // "What people can see"). An organiser sees everything on their own page,
+  // since they need it to run the conference, except in preview mode, where
+  // the whole point is to see what a visitor sees. !== false (not truthiness)
+  // so a row that predates these columns, or a null slipping through, still
+  // shows everything rather than going hidden by accident.
+  const asVisitor = !isOrganizerViewer || isPreview;
+  const showCommitteesSection = !asVisitor || conference.show_committees !== false;
+  const showCounts = !asVisitor || conference.show_committee_counts !== false;
+  const showTakenCountries = !asVisitor || conference.show_taken_countries !== false;
+
   const myApp = myApplications[0] ?? null;
   const attended = myApplications.some(a => a.status === 'assigned' || a.status === 'checked-in') || !!myAllocation;
   const myReview = user ? reviews.find(r => r.user_id === user.id) : undefined;
@@ -2627,6 +2644,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
 
               {/* Committees, sortable horizontal slider */}
               {(() => {
+                // Organiser has turned the whole section off: an empty-state
+                // card announcing committees would be worse than nothing.
+                // Data fetches feeding this (committeeSlots, committeeOccupied,
+                // get_committee_occupancy) keep running regardless, this is a
+                // display switch, not a privacy boundary.
+                if (!showCommitteesSection) return null;
+
                 const committeeStats = (c: Committee) => {
                   const slots = committeeSlots[c.id] ?? [];
                   const occ = committeeOccupied[c.id] ?? {};
@@ -2707,11 +2731,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           dir={sortKey === 'difficulty' ? sortDir : null}
                           onClick={() => cycleSort('difficulty')}
                         />
-                        <SortButton
-                          label="AVAILABILITY"
-                          dir={sortKey === 'availability' ? sortDir : null}
-                          onClick={() => cycleSort('availability')}
-                        />
+                        {showCounts && (
+                          <SortButton
+                            label="AVAILABILITY"
+                            dir={sortKey === 'availability' ? sortDir : null}
+                            onClick={() => cycleSort('availability')}
+                          />
+                        )}
                         <TypeFilterButton
                           mode={sortKey === 'type' ? (sortDir === 'asc' ? 'ga' : 'crisis') : null}
                           onClick={() => cycleSort('type')}
@@ -2961,7 +2987,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   </div>
                                   )}
 
-                                  {/* Capacity */}
+                                  {/* Capacity. Counts hidden: the card simply
+                                      ends after the chairs row above, no gap
+                                      left where this was. */}
+                                  {showCounts && (
                                   <div className="w-full mt-4">
                                     <div className="flex items-center justify-between mb-1.5">
                                       <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '9.5px', letterSpacing: '0.08em', color: '#6B5F52' }}>
@@ -2983,6 +3012,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       />
                                     </div>
                                   </div>
+                                  )}
                                   </div>
                                 </div>
 
@@ -3082,11 +3112,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <p className="font-bold text-[16px] leading-snug" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                                     {c.name}
                                   </p>
+                                  {showCounts && (
                                   <p className="mt-1" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--gv-muted)', margin: '4px 0 0 0' }}>
                                     {hasDoubles
                                       ? `${seatsTaken}/${seatCapacity} SEATS FILLED`
                                       : `${countriesTaken}/${countryCapacity} ${isCrisis ? 'ROLES' : 'SEATS'} FILLED`}
                                   </p>
+                                  )}
                                 </div>
                                 <button
                                   onClick={() => setExpandedRoster(null)}
@@ -3099,9 +3131,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <X size={15} />
                                 </button>
                               </div>
+                              {showCounts && (
                               <div className="mt-3 rounded-full overflow-hidden" style={{ height: '6px', backgroundColor: 'color-mix(in srgb, var(--gv-border) 65%, transparent)' }}>
                                 <div style={{ width: `${pct}%`, height: '100%', borderRadius: '9999px', background: 'linear-gradient(to right, var(--gv-main-mid), var(--gv-main-light))' }} />
                               </div>
+                              )}
                             </div>
                             <div className="px-3 pb-4 overflow-y-auto" style={{ maxHeight: '54vh' }}>
                               {slots.length === 0 ? (
@@ -3162,6 +3196,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                       >
                                         {s.country_name}
                                       </span>
+                                      {showTakenCountries && (
                                       <div className="flex items-center gap-1 flex-shrink-0">
                                         {Array.from({ length: seatsTakenHere }, (_, ti) => (
                                           <span
@@ -3183,6 +3218,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           </span>
                                         ))}
                                       </div>
+                                      )}
                                     </div>
                                     </Fragment>
                                   );
