@@ -7,13 +7,14 @@ import SessionsHeaderLogo from '@/components/SessionsHeaderLogo';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
-import { Committee, DelegateStatus } from '@/lib/types';
+import { Committee, Delegate, DelegateStatus } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { sessionSeatArt } from '@/lib/sessionFlags';
 import { Emoji } from '@/components/Emoji';
+import { Megaphone } from 'lucide-react';
 import { MajorityPie } from '@/components/RollCallPanel';
-import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings } from '@/lib/committeeService';
+import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, setDelegateObserver as setDelegateObserverInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings, subscribeToCommittee } from '@/lib/committeeService';
 import { useSettingsStore, DEFAULT_SETTINGS, impliedSettings, type CommitteeSettings } from '@/lib/settingsStore';
 import { VotingRulesPanel, VotingRulesPopover, computeVoteOutcome, isVetoDelegation } from '@/components/VotingRulesPanel';
 import { useAuth } from '@/components/AuthProvider';
@@ -86,17 +87,104 @@ interface DelegateVote {
 
 type VotingPhase = 'voting' | 'rights-speakers' | 'result';
 
+/**
+ * `Date.now()` behind a module-scope helper.
+ *
+ * The purity lint treats a bare `Date.now()` written inside a component body as a
+ * render-time impurity even when the call only ever happens from an event handler
+ * (see the standing error on RollCallPanel's `applyStatus`). The timestamps below
+ * are receipts for optimistic writes, so they must be taken at click time.
+ */
+function nowMs(): number {
+  return Date.now();
+}
+
+/**
+ * How long an optimistic observer placard survives without the refetched row
+ * agreeing. `setDelegateObserver` returns void and swallows its error, and every
+ * `delegates` write is gated on the `x-chair-suffix` header by RLS — the exact
+ * class of silent rejection that broke every delegate write for two months. Long
+ * enough for a slow write, short enough that a refused one cannot keep hiding
+ * behind a placard that looks correct. Mirrors RollCallPanel's OPTIMISTIC_TTL_MS.
+ */
+const OBSERVER_WRITE_TTL_MS = 8000;
+
+/** Announces delegations that joined the committee since this screen opened.
+ *  It never seats anyone: seating a delegation is the chair's decision. */
+function RosterNotice({ names, notInVote, onOpenRollCall, onDismiss }: {
+  names: string[];
+  /** A ballot is frozen, so the arrivals are not part of the vote on screen. */
+  notInVote: boolean;
+  onOpenRollCall: () => void;
+  onDismiss: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="w-full flex justify-center px-4 pt-3 shrink-0">
+      <div
+        className="w-full max-w-3xl rounded-xl px-4 py-2.5 flex items-center gap-3"
+        style={{ backgroundColor: 'rgba(182,135,31,0.14)', border: '1px solid rgba(182,135,31,0.40)' }}
+      >
+        <Emoji size="1.1rem">🪧</Emoji>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-[#1C1410]">{t('voting_roster_joined', { names: names.join(', ') })}</p>
+          <p className="text-xs text-[#6A5A4A]">
+            {notInVote ? `${t('voting_roster_not_in_vote')} ${t('voting_roster_open_roll_call')}` : t('voting_roster_open_roll_call')}
+          </p>
+        </div>
+        <button
+          onClick={onOpenRollCall}
+          className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-black transition-colors focus:outline-none gv-lift"
+          style={{ backgroundColor: '#1B3828', color: '#EED98A' }}
+        >
+          {t('voting_roll_call_heading')}
+        </button>
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="shrink-0 text-[#9A8A78] hover:text-[#1C1410] transition-colors focus:outline-none"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** An observer write that the DB never confirmed. Portaled above the roll call
+ *  modal so it is visible whether or not that modal is still open. */
+function ObserverWriteFailedBanner({ onDismiss }: { onDismiss: () => void }) {
+  const t = useT();
+  return (
+    <Portal>
+      <div
+        className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-md rounded-xl px-4 py-3 flex items-start gap-3 shadow-2xl"
+        style={{ backgroundColor: '#8B2020', color: 'white' }}
+        role="alert"
+      >
+        <span className="flex-1 text-sm font-semibold leading-snug">{t('voting_observer_write_failed')}</span>
+        <button onClick={onDismiss} aria-label="Dismiss" className="shrink-0 opacity-80 hover:opacity-100 focus:outline-none">✕</button>
+      </div>
+    </Portal>
+  );
+}
+
 // ── Roll call modal — defined OUTSIDE VotingPage so React never remounts it ──
 // (defining it inside caused new function type each render → unmount/remount → no CSS transitions)
 function RollCallModal({
   delegates,
   rollCallStatuses,
+  isObserverSeat,
+  onToggleObserver,
   onCycleStatus,
   onConfirm,
   side,
 }: {
-  delegates: Committee['delegates'];
+  delegates: Delegate[];
   rollCallStatuses: Record<string, DelegateStatus>;
+  /** The placard as the page currently believes it, optimistic write included. */
+  isObserverSeat: (d: Delegate) => boolean;
+  onToggleObserver: (d: Delegate) => void;
   onCycleStatus: (id: string) => void;
   onConfirm: () => void;
   /** Rendered immediately beside the roll call card (the voting-rules console). */
@@ -104,9 +192,26 @@ function RollCallModal({
 }) {
   const t = useT();
   const { language } = useLanguage();
-  // Observers are excluded from the voting roster entirely.
-  const votable = delegates.filter((d) => !d.isObserver);
+  // Observers do not vote, so they are not part of the ballot roster — but they are
+  // listed below it. Filtering them out of the modal entirely (which this modal used
+  // to do) left no row to take a placard off, and no way to put one on, on the one
+  // screen a chair is standing on when the denominator looks wrong.
+  const votable = delegates.filter((d) => !isObserverSeat(d));
+  const observers = delegates.filter((d) => isObserverSeat(d));
   const sorted = [...votable].sort((a, b) => compareCountryNames(a.country, b.country, language));
+  const sortedObservers = [...observers].sort((a, b) => compareCountryNames(a.country, b.country, language));
+  const observerButton = (d: Delegate, on: boolean) => (
+    <button
+      onClick={() => onToggleObserver(d)}
+      title={on ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
+      aria-label={on ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
+      aria-pressed={on}
+      className="shrink-0 p-1.5 rounded-md transition-all active:scale-90 focus:outline-none"
+      style={{ color: on ? 'rgba(238,217,138,0.9)' : 'rgba(255,255,255,0.4)' }}
+    >
+      <Megaphone size={16} />
+    </button>
+  );
   const thumbPos = (status: DelegateStatus) =>
     status === 'absent' ? 'left-[2px]' : status === 'present' ? 'left-[32px]' : 'left-[62px]';
   const thumbColor = (status: DelegateStatus) =>
@@ -145,6 +250,7 @@ function RollCallModal({
                   <SeatFlag seat={d} size={24} className="object-contain" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
                 </div>
                 <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
+                {observerButton(d, false)}
                 <button
                   onClick={() => onCycleStatus(d.id)}
                   className="relative w-[90px] h-[30px] rounded-full cursor-pointer shrink-0 select-none"
@@ -161,6 +267,40 @@ function RollCallModal({
               </div>
             );
           })}
+          {/* Observers, kept clearly apart from the ballot roster. The chair needs to
+              see WHY the denominator is smaller than the room, and needs one click to
+              take a placard back off. */}
+          {sortedObservers.length > 0 && (
+            <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+              <div className="px-3 pb-2">
+                <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: 'rgba(238,217,138,0.85)' }}>
+                  {t('voting_observers_heading', { n: sortedObservers.length })}
+                </p>
+                <p className="text-[11px] mt-0.5 leading-snug" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  {t('voting_observers_note')}
+                </p>
+              </div>
+              {sortedObservers.map((d) => (
+                <div
+                  key={d.id}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
+                  style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.22)', marginBottom: '2px' }}
+                >
+                  <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
+                    <SeatFlag seat={d} size={24} className="object-contain" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
+                  </div>
+                  <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
+                  <span
+                    className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+                    style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.85)', border: '1px solid rgba(238,217,138,0.3)' }}
+                  >
+                    {t('rollcall_observer')}
+                  </span>
+                  {observerButton(d, true)}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
           <button
@@ -438,10 +578,99 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const dragIndexRef = useRef<number | null>(null);
   const resultPersistedRef = useRef(false);
 
+  // ── Live roster plumbing ───────────────────────────────────────────────────
+  /** Monotonic ticket, taken before every fetch and re-checked after it resolves.
+   *  Realtime fires several events per chair action, so overlapping refetches are
+   *  the normal case, not an edge case: without this a slow earlier response lands
+   *  on top of a newer one and the roster goes backwards. */
+  const refetchSeqRef = useRef(0);
+  /** Ids whose roll-call status THIS chair set on THIS screen. Those keep the local
+   *  value across a refetch; every other id follows the DB. The old one-time seed
+   *  did the opposite — it froze the whole map at mount, so another chair's status
+   *  changes were ignored for the rest of the session. */
+  const touchedStatusRef = useRef<Set<string>>(new Set());
+  /** Every delegate id this screen has already seen. `null` until the first load,
+   *  so the initial roster is never announced as an arrival. */
+  const knownSeatIdsRef = useRef<Set<string> | null>(null);
+  const [newSeatIds, setNewSeatIds] = useState<string[]>([]);
+  /** Verdicts this screen has already recorded, re-applied after every refetch so a
+   *  refetch racing the write cannot revert a result that is already on screen. */
+  const docResultPatchRef = useRef<Record<string, 'passed' | 'failed'>>({});
+  /** Optimistic observer placards awaiting confirmation from the refetched row. */
+  const observerWriteRef = useRef<Record<string, { value: boolean; at: number }>>({});
+  const [observerOverrides, setObserverOverrides] = useState<Record<string, boolean>>({});
+  const [observerReconcileTick, setObserverReconcileTick] = useState(0);
+  const [observerWriteFailed, setObserverWriteFailed] = useState(false);
+  /**
+   * The room as it stood when this ballot opened.
+   *
+   * FREEZE THE BALLOT — do not merely re-key `currentVoterIndex` off a delegate id.
+   * Re-keying the pointer would protect only the pointer, but the numerator and the
+   * denominator are roster-derived too: `presentAndPvDelegates` is the unanimity and
+   * quorum NUMERATOR and `votableDelegates` is the quorum/veto DENOMINATOR passed as
+   * `totalCount`. A delegation arriving (or a placard changing) mid-ballot would
+   * therefore silently move the bar that a vote already in progress is being judged
+   * against. A roll-call vote is a snapshot of the room at the moment it opened, so
+   * the whole roster is snapshotted here and every count reads from it until the
+   * ballot ends. Rows are resolved back to the live row BY ID at render time, so a
+   * rename or a new crest still flows through while the array length can never
+   * change under the index. "Vote again" re-freezes from the live room.
+   */
+  const [ballot, setBallot] = useState<{ docId: string; order: Delegate[]; votable: Delegate[] } | null>(null);
+
   useEffect(() => {
-    async function load() {
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+
+    /** Re-apply verdicts this screen already recorded. `persistResult` writes them
+     *  optimistically; a refetch in flight when that write went out still carries
+     *  the pre-vote status, and would otherwise revert the result on screen. */
+    const withRecordedResults = (found: Committee): Committee => {
+      const patches = docResultPatchRef.current;
+      if (Object.keys(patches).length === 0) return found;
+      return {
+        ...found,
+        documents: (found.documents ?? []).map((d) => (patches[d.id] ? { ...d, status: patches[d.id] } : d)),
+      };
+    };
+
+    const absorb = (found: Committee) => {
+      setCommittee(withRecordedResults(found));
+      // MERGE, never re-seed: ids this chair touched on this screen keep their local
+      // value, everything else follows the DB.
+      setRollCallStatuses((prev) => {
+        const next: Record<string, DelegateStatus> = {};
+        found.delegates.forEach((d) => {
+          next[d.id] = touchedStatusRef.current.has(d.id) ? (prev[d.id] ?? d.status) : d.status;
+        });
+        return next;
+      });
+      // Announce arrivals. Never seat them — marking a delegation present is a
+      // chair's decision, and this screen counts votes.
+      const known = knownSeatIdsRef.current;
+      if (known === null) {
+        knownSeatIdsRef.current = new Set(found.delegates.map((d) => d.id));
+        return;
+      }
+      const arrivals = found.delegates.filter((d) => !known.has(d.id)).map((d) => d.id);
+      found.delegates.forEach((d) => known.add(d.id));
+      if (arrivals.length > 0) {
+        setNewSeatIds((prev) => [...prev, ...arrivals.filter((id) => !prev.includes(id))]);
+      }
+    };
+
+    const refetch = async () => {
+      const ticket = ++refetchSeqRef.current;
       const found = await getCommitteeByCode(code);
-      setCommittee(found ?? null);
+      if (cancelled || ticket !== refetchSeqRef.current || !found) return;
+      absorb(found);
+    };
+
+    async function load() {
+      const ticket = ++refetchSeqRef.current;
+      const found = await getCommitteeByCode(code);
+      if (cancelled || ticket !== refetchSeqRef.current) return;
+      if (!found) setCommittee(null);
       if (found) {
         // Defaults the committee's IDENTITY implies — today: a Security Council
         // starts with the P5 veto on. `impliedSettings` returns a key ONLY when it
@@ -482,14 +711,71 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         // real one — either way every chair holding the printed code is locked out.
         // It is written by the access-granted effect above rather than here, so the
         // standalone chair gate cannot be satisfied by this page's own write.
-        const statuses: Record<string, DelegateStatus> = {};
-        found.delegates.forEach((d) => { statuses[d.id] = d.status; });
-        setRollCallStatuses(statuses);
+        absorb(found);
       }
       setLoading(false);
+      if (cancelled || !found) return;
+      // The roster used to be frozen at mount: nothing refreshed committee.delegates,
+      // so a delegation added mid-session (chair sidebar, or the organiser's committee
+      // editor) stayed invisible and the quorum denominator here disagreed with the
+      // chair page's. speakers_list, current_speaker and messages are deliberately
+      // ignored — this page renders none of them.
+      unsubscribe = subscribeToCommittee(
+        found.id,
+        (table) => { if (table === 'delegates' || table === 'documents' || table === 'committees') refetch(); },
+        // Realtime does not replay events missed while the socket was down, so every
+        // (re-)SUBSCRIBED runs a catch-up fetch.
+        (status) => { if (status === 'SUBSCRIBED') refetch(); },
+      );
     }
     load();
+    return () => { cancelled = true; unsubscribe?.(); };
   }, [code]);
+
+  // ── Observer write reconciliation ──────────────────────────────────────────
+  // `setDelegateObserver` returns void and swallows its error, and every delegates
+  // write is gated on the x-chair-suffix header by RLS. So an optimistic placard is
+  // only a claim until the refetched row agrees with it: drop the override the
+  // moment it does, revert it and say so after OBSERVER_WRITE_TTL_MS if it never
+  // does. An RLS rejection must never hide behind a placard that looks correct.
+  useEffect(() => {
+    const pending = observerWriteRef.current;
+    const ids = Object.keys(pending);
+    if (ids.length === 0) return;
+    const flagById = new Map((committee?.delegates ?? []).map((d) => [d.id, d.isObserver === true]));
+    const now = nowMs();
+    let changed = false;
+    let failed = false;
+    let nextCheckIn = Infinity;
+    for (const id of ids) {
+      const entry = pending[id];
+      const dbFlag = flagById.get(id);
+      if (dbFlag === undefined || dbFlag === entry.value) {
+        delete pending[id];
+        changed = true;
+      } else if (now - entry.at >= OBSERVER_WRITE_TTL_MS) {
+        delete pending[id];
+        changed = true;
+        failed = true;
+      } else {
+        nextCheckIn = Math.min(nextCheckIn, OBSERVER_WRITE_TTL_MS - (now - entry.at));
+      }
+    }
+    if (changed) {
+      const rebuilt: Record<string, boolean> = {};
+      for (const [id, entry] of Object.entries(pending)) rebuilt[id] = entry.value;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the DB row is the external system this effect synchronises against; there is no render-time value that can tell a landed write from a silently refused one.
+      setObserverOverrides(rebuilt);
+      // Same reason: only this reconcile pass knows the write never landed, and a
+      // silent RLS rejection has to become visible.
+      if (failed) setObserverWriteFailed(true);
+    }
+    // Nothing will arrive if the write was refused, so self-schedule the backstop.
+    if (nextCheckIn !== Infinity) {
+      const timer = setTimeout(() => setObserverReconcileTick((n) => n + 1), nextCheckIn + 50);
+      return () => clearTimeout(timer);
+    }
+  }, [committee?.delegates, observerReconcileTick]);
 
   useEffect(() => {
     if (committee) document.title = `${abbreviateCommitteeName(committee.name)}: Voting`;
@@ -647,10 +933,29 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       ['introduced', 'passed', 'failed'].includes(d.status)
   );
   const selectedDoc = allDRs.find((d) => d.id === selectedDocId) ?? null;
-  // Use roll call statuses (local) if roll call is done, else use DB status
-  const presentDelegates = committee.delegates
-    .filter((d) => !d.isObserver && (rollCallDone ? rollCallStatuses[d.id] ?? d.status : d.status) !== 'absent')
+
+  /** The placard as this screen currently believes it, optimistic write included,
+   *  so the denominator moves the instant a chair hands one out. */
+  const isObserverSeat = (d: Delegate): boolean => observerOverrides[d.id] ?? d.isObserver === true;
+  const seatStatus = (d: Delegate): DelegateStatus => rollCallStatuses[d.id] ?? d.status;
+
+  // The live room. Used directly whenever no ballot is open, and it is what a new
+  // ballot is frozen from.
+  const livePresent = committee.delegates
+    .filter((d) => !isObserverSeat(d) && (rollCallDone ? seatStatus(d) : d.status) !== 'absent')
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
+  const livePresentAndPv = committee.delegates.filter((d) => !isObserverSeat(d) && seatStatus(d) !== 'absent');
+  const liveVotable = committee.delegates.filter((d) => !isObserverSeat(d));
+
+  // A frozen row is resolved back to the live row BY ID, so a rename or a new crest
+  // still flows through, with the snapshot as the fallback — the array length can
+  // never change under `currentVoterIndex`.
+  const liveSeatById = new Map(committee.delegates.map((d) => [d.id, d]));
+  const liveSeat = (d: Delegate): Delegate => liveSeatById.get(d.id) ?? d;
+  // Degrades to the live room if the selected draft resolution disappears.
+  const activeBallot = selectedDoc && ballot && ballot.docId === selectedDoc.id ? ballot : null;
+
+  const presentDelegates = activeBallot ? activeBallot.order.map(liveSeat) : livePresent;
 
   const forCount = votes.filter((v) => v.choice === 'for' || v.choice === 'for-rights').length;
   const againstCount = votes.filter((v) => v.choice === 'against' || v.choice === 'against-rights').length;
@@ -660,11 +965,12 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     .sort((a, b) => compareCountryNames(a.country, b.country, language));
   const withRights = withRightsAll.slice(0, 10);
 
-  // Unanimous mode looks at every present delegate (P and PV)
-  const presentAndPvDelegates = committee.delegates.filter(
-    (d) => !d.isObserver && (rollCallStatuses[d.id] ?? d.status) !== 'absent'
-  );
-  const votableDelegates = committee.delegates.filter((d) => !d.isObserver);
+  // Unanimous mode looks at every present delegate (P and PV). Both of these are
+  // frozen with the ballot: they are the unanimity/quorum numerator and the
+  // quorum/veto denominator, and a vote in progress must not be judged against a
+  // bar that moved under it. See the block comment on `ballot`.
+  const presentAndPvDelegates = activeBallot ? activeBallot.order.map(liveSeat) : livePresentAndPv;
+  const votableDelegates = activeBallot ? activeBallot.votable.map(liveSeat) : liveVotable;
   const tally = { forCount, againstCount, abstainCount };
 
   /** The veto seats in force under a given rule set. `custom` → the chair-picked
@@ -718,6 +1024,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
   const persistResult = (docId: string, result: 'passed' | 'failed', force = false) => {
     if (resultPersistedRef.current && !force) return;
     resultPersistedRef.current = true;
+    // Recorded so every refetch re-applies it: a fetch already in flight still
+    // carries the pre-vote status and would otherwise revert the verdict on screen.
+    docResultPatchRef.current[docId] = result;
     updateDocumentStatusInDB(docId, result, committee.code, committee.dbChairJoinSuffix ?? undefined);
     // Update local committee state so the DR list reflects the result immediately
     setCommittee((prev) => {
@@ -781,6 +1090,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   const startNewVote = (docId: string) => {
     setSelectedDocId(docId);
+    // Freeze the room as it stands right now. "Vote again" comes through here too,
+    // so a re-vote is judged against the room as it is at that moment.
+    setBallot({ docId, order: livePresent, votable: liveVotable });
     setVotes([]);
     setPhase('voting');
     setCurrentVoterIndex(0);
@@ -851,6 +1163,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   // ── Roll call modal (blocks until dismissed) ─────────────────────────────
   const cycleRollCallStatus = (id: string) => {
+    // Remembered so the merge on refetch keeps this chair's value for this seat and
+    // lets every untouched seat follow the DB.
+    touchedStatusRef.current.add(id);
     setRollCallStatuses((prev) => {
       const cur = prev[id] ?? 'absent';
       const next: DelegateStatus = cur === 'absent' ? 'present' : cur === 'present' ? 'present-voting' : 'absent';
@@ -859,26 +1174,71 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
     });
   };
 
+  /** Hand out or take back an observer placard. Optimistic first, write
+   *  fire-and-forget (AGENTS.md rule 5); the ref is the receipt the reconcile
+   *  effect above checks the DB against. */
+  const toggleObserverSeat = (d: Delegate) => {
+    const next = !isObserverSeat(d);
+    observerWriteRef.current[d.id] = { value: next, at: nowMs() };
+    setObserverOverrides((prev) => ({ ...prev, [d.id]: next }));
+    setObserverWriteFailed(false);
+    // Arms the TTL backstop even when no refetch ever arrives.
+    setObserverReconcileTick((n) => n + 1);
+    setDelegateObserverInDB(d.id, next, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    // An observer holds no voting placard, so present-voting drops to present.
+    if (next && seatStatus(d) === 'present-voting') {
+      touchedStatusRef.current.add(d.id);
+      setRollCallStatuses((prev) => ({ ...prev, [d.id]: 'present' }));
+      setDelegateStatusInDB(d.id, 'present', committee.code, committee.dbChairJoinSuffix ?? undefined);
+    }
+  };
+
+  const newSeats = newSeatIds
+    .map((id) => committee.delegates.find((d) => d.id === id))
+    .filter((d): d is Delegate => !!d);
+
+  // The roll call modal and the failure banner are shared by the document-selection
+  // screen and the ballot screens, so a chair can seat a late arrival or see a
+  // refused write without abandoning a vote in progress.
+  const rollCallModal = !rollCallDone ? (
+    <RollCallModal
+      delegates={committee.delegates}
+      rollCallStatuses={rollCallStatuses}
+      isObserverSeat={isObserverSeat}
+      onToggleObserver={toggleObserverSeat}
+      onCycleStatus={cycleRollCallStatus}
+      onConfirm={() => { setRollCallDone(true); setNewSeatIds([]); }}
+      side={
+        <VotingRulesPanel
+          {...rulesProps}
+          className="hidden md:flex w-[336px] shrink-0"
+          style={{ maxHeight: '85%', overflow: 'hidden' }}
+        />
+      }
+    />
+  ) : null;
+
+  const observerFailBanner = observerWriteFailed
+    ? <ObserverWriteFailedBanner onDismiss={() => setObserverWriteFailed(false)} />
+    : null;
+
+  const rosterNotice = newSeats.length > 0 ? (
+    <RosterNotice
+      names={newSeats.map((d) => getCountryDisplayName(d.country, language))}
+      notInVote={!!activeBallot}
+      onOpenRollCall={() => { setRollCallDone(false); setNewSeatIds([]); }}
+      onDismiss={() => setNewSeatIds([])}
+    />
+  ) : null;
+
   // ── Doc selection screen ──────────────────────────────────────────────────
   if (!selectedDoc) {
     return (
       <div className="min-h-screen bg-[#F6F1E9] flex flex-col">
         <VotingHeader {...headerProps} />
-        {!rollCallDone && (
-          <RollCallModal
-            delegates={committee.delegates}
-            rollCallStatuses={rollCallStatuses}
-            onCycleStatus={cycleRollCallStatus}
-            onConfirm={() => setRollCallDone(true)}
-            side={
-              <VotingRulesPanel
-                {...rulesProps}
-                className="hidden md:flex w-[336px] shrink-0"
-                style={{ maxHeight: '85%', overflow: 'hidden' }}
-              />
-            }
-          />
-        )}
+        {rollCallModal}
+        {observerFailBanner}
+        {rosterNotice}
         {showSettings && <SettingsPanel committee={committee} onClose={() => setShowSettings(false)} />}
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="w-full max-w-sm space-y-3">
@@ -920,6 +1280,17 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 );
               })
             )}
+            {/* Roll call was a one-way latch with no way back, so a delegation that
+                arrived after it was confirmed could never be seated from here. */}
+            <div className="pt-2 text-center">
+              <button
+                onClick={() => setRollCallDone(false)}
+                className="text-xs font-semibold underline transition-colors focus:outline-none"
+                style={{ color: '#6A5A4A' }}
+              >
+                {t('voting_roll_call_heading')}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -970,6 +1341,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           {t('voting_back_docs', { doc: docName(committee, 'draft-resolution', 'plural', t('documents_draft_resolutions_tab')) })}
         </button>
       </VotingHeader>
+      {rollCallModal}
+      {observerFailBanner}
+      {rosterNotice}
 
       {/* ── Active voting: one delegate at a time ── */}
       {phase === 'voting' && currentDelegate && (
