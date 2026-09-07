@@ -14,7 +14,8 @@
 //     number of in-row filter controls are real <button>s that stop the click
 //     from reaching the row, so the two interactions never fight.
 //   • Chips are tiered: only exceptions (short on seats, stalled, empty dais)
-//     get a saturated fill. Plain facts stay quiet and extruded.
+//     get a saturated fill. Plain facts stay quiet and extruded, and a fact
+//     nobody has told us yet gets no chip at all (see INTENT_ICON).
 //
 // Presentation only — the caller owns the RPC, the gate and the data.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,14 +24,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowDownWideNarrow, ArrowUpRight, Building2, CalendarClock, Check, ChevronDown,
-  CircleAlert, Clock, Gavel, Globe, LayoutTemplate, Mail, MapPin, PencilLine, Search,
-  UserPlus, Users, Wallet, X,
+  CircleAlert, Clock, FileText, Gavel, Globe, LayoutTemplate, Mail, MapPin, Megaphone,
+  PencilLine, Search, Target, UserPlus, Users, Wallet, X,
 } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
+import {
+  INTENT_OPTIONS, getConferenceIntent, intentAnswered, intentLabels,
+  type ConferenceIntent,
+} from '@/lib/conferenceIntent';
 import {
   FilterPopoverShell, FilterGroup, FilterHeading, CheckChip, toggleIn,
 } from '@/components/FilterPopover';
@@ -49,6 +54,10 @@ export interface AdminConferenceRow {
   committees: number; chairs_missing: number; applications: number; paid_applications: number;
   organizer_name: string | null; organizer_email: string | null;
   created_at: string; updated_at: string; last_nudge_at: string | null;
+  /** conferences.intent, the raw jsonb. Deliberately `unknown`: the only legal
+   *  reader is getConferenceIntent(), which is defensive by contract and drops
+   *  keys it does not recognise. Never destructure this blob by hand. */
+  intent: unknown;
   /** Not returned by admin_conference_overview(). Avatars are resolved from
    *  `profiles` by the caller and passed in via the `avatars` map instead; this
    *  optional field is only a fallback should the RPC ever start returning one. */
@@ -76,6 +85,70 @@ const STEP_BY_KEY = new Map(SETUP_STEPS.map(s => [s.key, s]));
 
 function outstandingSteps(pendingKeys: string[]) {
   return pendingKeys.filter(k => k !== 'publish').map(k => STEP_BY_KEY.get(k) ?? { key: k, label: k, icon: CircleAlert });
+}
+
+// ── Stated intent ───────────────────────────────────────────────────────────
+// What the organiser said, at the end of the creation wizard, they came here to
+// do. The option list itself lives in src/lib/conferenceIntent.ts and is not
+// restated here; this map only picks the Lucide glyph for each key, because
+// INTENT_OPTIONS carries a Fluent 3D emoji name for the wizard and the /admin
+// side is Lucide-only. Where a key overlaps a set-up step (committees, chairs,
+// emails, payments) the SAME glyph is used, so the hover panels agree.
+//
+// THREE STATES, and only one of them earns a chip:
+//   answered      → a QUIET chip plus a hover panel. It is a plain fact about a
+//                   sales conversation, never an exception, so it must never
+//                   take a saturated fill (see the chip tiering note at the top).
+//   asked+skipped → a fainter chip reading NOT SAID. Real information: we put
+//                   the question and they declined.
+//   never asked   → NOTHING. Every conference created before the question
+//                   shipped is in this state, which today is 195 of 198. A
+//                   marker on all of them would be noise on every row and would
+//                   read as a defect in the conference, which it is not. The
+//                   absence of a chip IS the state, and it costs no scanning.
+const INTENT_ICON: Record<string, typeof LayoutTemplate> = {
+  applications: FileText,
+  payments: Wallet,
+  committees: Building2,
+  emails: Mail,
+  chairs: Gavel,
+  marketing: Megaphone,
+};
+
+/** Two short labels fit the meta row beside location, dates and organiser.
+ *  Beyond that the row starts wrapping for a sales field, so the rest collapses
+ *  into a +N and the hover panel carries them in full. */
+const INTENT_CHIP_MAX = 2;
+
+/** Filter values that are NOT option keys. Kept distinct from INTENT_OPTIONS
+ *  keys so the two can never collide. */
+const INTENT_SKIPPED = 'skipped';
+const INTENT_UNASKED = 'unasked';
+
+/** "APPLICATIONS" → "Applications". Derived from the shared option list rather
+ *  than a second hand-written list of labels. */
+const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+
+const INTENT_FILTER_LABEL: Record<string, string> = {
+  ...Object.fromEntries(INTENT_OPTIONS.map(o => [o.key, titleCase(o.short)])),
+  [INTENT_SKIPPED]: 'Did not say',
+  [INTENT_UNASKED]: 'Never asked',
+};
+
+function matchesIntent(selected: Set<string>, intent: ConferenceIntent): boolean {
+  if (selected.has(INTENT_UNASKED) && !intentAnswered(intent)) return true;
+  if (selected.has(INTENT_SKIPPED) && intent.skipped && intent.keys.length === 0) return true;
+  return intent.keys.some(k => selected.has(k));
+}
+
+/** answered_at is a full ISO timestamp, not a calendar-day `date` column, so
+ *  unlike start_date/end_date it is safe to read through Date. */
+function answeredOn(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 // ── Small helpers ───────────────────────────────────────────────────────────
@@ -131,13 +204,19 @@ function hasEmptyDais(r: AdminConferenceRow) { return r.committees > 0 && r.chai
 // below, and clamps horizontally at both edges.
 
 function HoverPop({
-  children, panel, width = 252, label,
+  children, panel, width = 252, label, estimatedHeight = 200,
 }: {
   children: React.ReactNode;
   panel: React.ReactNode;
   width?: number;
   /** Screen-reader / native-tooltip summary of the same information. */
   label?: string;
+  /** Roughly how tall the panel will be, used only to decide whether to flip
+   *  above the trigger. The default suits the set-up list; a panel that can grow
+   *  taller than that must say so, or it opens downward and runs off the bottom
+   *  of the viewport (fixed position means no ancestor clips it, but the
+   *  viewport still can). */
+  estimatedHeight?: number;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement | null>(null);
@@ -149,12 +228,11 @@ function HoverPop({
     if (!el) return;
     const r = el.getBoundingClientRect();
     const M = 12;
-    const estimated = 200;
-    const up = r.bottom + 10 + estimated > window.innerHeight && r.top > estimated;
+    const up = r.bottom + 10 + estimatedHeight > window.innerHeight && r.top > estimatedHeight;
     let left = r.left + r.width / 2 - width / 2;
     left = Math.max(M, Math.min(left, window.innerWidth - width - M));
     setPos({ top: up ? r.top - 10 : r.bottom + 10, left, up });
-  }, [width]);
+  }, [width, estimatedHeight]);
 
   const show = useCallback(() => {
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
@@ -250,6 +328,27 @@ function QuietChip({ icon: Icon, children, title }: { icon: typeof Clock; childr
       }}
     >
       <Icon size={11.5} strokeWidth={2.4} style={{ color: NEU.deepGold }} />
+      {children}
+    </span>
+  );
+}
+
+/** Quieter still: same shape, no gold seat, ink dropped to the readable
+ *  secondary. Reserved for a fact whose content is an absence, where a
+ *  full-volume QuietChip would over-claim. `inkSoft`, never `muted` — this is a
+ *  real word a person has to read. */
+function FaintChip({ icon: Icon, children, title }: { icon: typeof Clock; children: React.ReactNode; title?: string }) {
+  return (
+    <span
+      title={title}
+      className="inline-flex items-center gap-1.5 flex-shrink-0"
+      style={{
+        padding: '4px 10px', borderRadius: 999, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+        color: NEU.inkSoft, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700,
+        letterSpacing: '0.03em', whiteSpace: 'nowrap', cursor: 'help',
+      }}
+    >
+      <Icon size={11.5} strokeWidth={2.4} style={{ color: NEU.inkSoft, opacity: 0.75 }} />
       {children}
     </span>
   );
@@ -487,10 +586,12 @@ type Filters = {
   organizer: Set<string>;
   setup: Set<string>;     // 'complete' | 'incomplete'
   flags: Set<string>;     // 'stalled' | 'seats' | 'dais' | 'tbd'
+  intent: Set<string>;    // an INTENT_OPTIONS key, or 'skipped' | 'unasked'
 };
 
 const EMPTY_FILTERS = (): Filters => ({
   state: new Set(), country: new Set(), organizer: new Set(), setup: new Set(), flags: new Set(),
+  intent: new Set(),
 });
 
 const FLAG_LABEL: Record<string, string> = {
@@ -500,7 +601,7 @@ const STATE_LABEL: Record<string, string> = { live: 'Live', draft: 'Draft' };
 const SETUP_LABEL: Record<string, string> = { complete: 'Set-up done', incomplete: 'Set-up pending' };
 
 function countFilters(f: Filters) {
-  return f.state.size + f.country.size + f.organizer.size + f.setup.size + f.flags.size;
+  return f.state.size + f.country.size + f.organizer.size + f.setup.size + f.flags.size + f.intent.size;
 }
 
 // ── The tab ─────────────────────────────────────────────────────────────────
@@ -584,6 +685,7 @@ export default function ConferencesTab({
         (filters.flags.has('dais') && hasEmptyDais(x)) ||
         (filters.flags.has('tbd') && x.dates_tbd));
     }
+    if (filters.intent.size) r = r.filter(x => matchesIntent(filters.intent, getConferenceIntent(x.intent)));
     if (search) {
       r = r.filter(x =>
         (x.acronym ?? '').toLowerCase().includes(search) ||
@@ -620,6 +722,14 @@ export default function ConferencesTab({
     ...Array.from(filters.country).map(v => ({ key: `country:${v}`, label: v, remove: () => toggle('country', v) })),
     ...Array.from(filters.organizer).map(v => ({ key: `org:${v}`, label: v, remove: () => toggle('organizer', v) })),
     ...Array.from(filters.flags).map(v => ({ key: `flag:${v}`, label: FLAG_LABEL[v] ?? v, remove: () => toggle('flags', v) })),
+    ...Array.from(filters.intent).map(v => ({
+      key: `intent:${v}`,
+      // "Wants payments" reads as a sentence; "Wants did not say" does not.
+      label: v === INTENT_SKIPPED || v === INTENT_UNASKED
+        ? INTENT_FILTER_LABEL[v]
+        : `Wants ${(INTENT_FILTER_LABEL[v] ?? v).toLowerCase()}`,
+      remove: () => toggle('intent', v),
+    })),
   ];
 
   const statTiles = [
@@ -684,6 +794,23 @@ export default function ConferencesTab({
             onToggle={v => toggle('flags', v)}
             onAll={() => setFilters(f => ({ ...f, flags: new Set(Object.keys(FLAG_LABEL)) }))}
             onNone={() => setFilters(f => ({ ...f, flags: new Set() }))}
+          />
+          {/* Stated intent is a plain fact, so it does not appear as a stat tile
+              and does not colour a row. It IS worth filtering on: "show me
+              everyone who said payments" is the whole reason the field is
+              collected. This is where that lives, rather than in the row, since
+              one chip cannot cleanly carry up to six separate filter values. */}
+          <FilterGroup
+            title="What they want" icon={Target}
+            options={[
+              ...INTENT_OPTIONS.map(o => ({ label: INTENT_FILTER_LABEL[o.key], value: o.key })),
+              { label: INTENT_FILTER_LABEL[INTENT_SKIPPED], value: INTENT_SKIPPED },
+              { label: INTENT_FILTER_LABEL[INTENT_UNASKED], value: INTENT_UNASKED },
+            ]}
+            selected={filters.intent}
+            onToggle={v => toggle('intent', v)}
+            onAll={() => setFilters(f => ({ ...f, intent: new Set([...INTENT_OPTIONS.map(o => o.key), INTENT_SKIPPED, INTENT_UNASKED]) }))}
+            onNone={() => setFilters(f => ({ ...f, intent: new Set() }))}
           />
           {countryOptions.length > 0 && (
             <div>
@@ -796,6 +923,7 @@ export default function ConferencesTab({
               onFilterState={v => only('state', v)}
               onFilterCountry={v => only('country', v)}
               onFilterOrganizer={v => only('organizer', v)}
+              onFilterIntent={v => only('intent', v)}
               onOpen={(newTab) => {
                 const href = `/manage/${r.slug}`;
                 if (newTab) window.open(href, '_blank', 'noopener');
@@ -812,7 +940,7 @@ export default function ConferencesTab({
 // ── One conference ──────────────────────────────────────────────────────────
 
 function ConferenceRow({
-  r, logo, avatar, filters, onFilterState, onFilterCountry, onFilterOrganizer, onOpen,
+  r, logo, avatar, filters, onFilterState, onFilterCountry, onFilterOrganizer, onFilterIntent, onOpen,
 }: {
   r: AdminConferenceRow;
   logo: string | null;
@@ -821,9 +949,14 @@ function ConferenceRow({
   onFilterState: (v: string) => void;
   onFilterCountry: (v: string) => void;
   onFilterOrganizer: (v: string) => void;
+  onFilterIntent: (v: string) => void;
   onOpen: (newTab: boolean) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const intent = useMemo(() => getConferenceIntent(r.intent), [r.intent]);
+  const intentShorts = intentLabels(intent);
+  const intentExtra = Math.max(0, intentShorts.length - INTENT_CHIP_MAX);
+  const intentSaidOn = answeredOn(intent.answeredAt);
   const idle = daysSince(r.updated_at);
   const stalled = isStalled(r);
   const short = isShortOnSeats(r);
@@ -958,6 +1091,86 @@ function ConferenceRow({
                   {r.organizer_name ?? r.organizer_email}
                 </span>
               </FilterChip>
+            )}
+            {/* What they said they came here to do. See the INTENT_ICON block
+                for why only two of the three states render anything at all. */}
+            {intentShorts.length > 0 && (
+              <HoverPop
+                width={286}
+                // Header, one two-line row per stated option, then the optional
+                // quote and date. Six options makes this ~330, well past the
+                // default estimate, and a row near the bottom of a long list is
+                // exactly where this panel gets read.
+                estimatedHeight={64 + intent.keys.length * 40 + (intent.other ? 46 : 0) + (intentSaidOn ? 22 : 0)}
+                label={`Said they want: ${intentShorts.join(', ')}${intent.other ? `. Also wrote: ${intent.other}` : ''}`}
+                panel={
+                  <div>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Target} size={24} />
+                      <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink }}>
+                        What they want Gavelling for
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {/* Iterated over INTENT_OPTIONS, not over intent.keys, so the
+                          panel is always in the canonical wizard order. Each row
+                          is a filter: hover the chip, click a line, see every
+                          conference that said the same thing. The portal means
+                          this click never reaches the row underneath. Keyboard
+                          users reach the identical values in the FILTERS
+                          popover, which is fully focusable. */}
+                      {INTENT_OPTIONS.filter(o => intent.keys.includes(o.key)).map(o => {
+                        const Icon = INTENT_ICON[o.key] ?? Target;
+                        const on = filters.intent.has(o.key);
+                        return (
+                          <button
+                            key={o.key}
+                            type="button"
+                            onClick={() => onFilterIntent(o.key)}
+                            title={`Filter to conferences that said ${INTENT_FILTER_LABEL[o.key].toLowerCase()}`}
+                            className="inline-flex items-start gap-2 w-full text-left focus:outline-none"
+                            style={{
+                              padding: '5px 7px', margin: '0 -7px', borderRadius: 9,
+                              border: 'none', cursor: 'pointer',
+                              background: on ? 'rgba(27,56,40,0.07)' : 'transparent',
+                              transition: `background 160ms ${EASE}`,
+                            }}
+                            onMouseEnter={e => { if (!on) (e.currentTarget as HTMLElement).style.background = 'rgba(27,56,40,0.04)'; }}
+                            onMouseLeave={e => { if (!on) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            <Icon size={13} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0, marginTop: 2 }} />
+                            <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink, lineHeight: 1.35 }}>
+                              {o.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {intent.other && (
+                      // Their own words, so quoted and set apart. inkSoft rather
+                      // than muted: this is a real sentence someone has to read.
+                      <p className="mt-2.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontStyle: 'italic', color: NEU.inkSoft, lineHeight: 1.45 }}>
+                        &ldquo;{intent.other}&rdquo;
+                      </p>
+                    )}
+                    {intentSaidOn && (
+                      <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 10.5, color: NEU.muted }}>
+                        Said at set-up on {intentSaidOn}
+                      </p>
+                    )}
+                  </div>
+                }
+              >
+                <QuietChip icon={Target}>
+                  {intentShorts.slice(0, INTENT_CHIP_MAX).join(' · ')}
+                  {intentExtra > 0 && <span style={{ color: NEU.inkSoft }}>{' '}+{intentExtra}</span>}
+                </QuietChip>
+              </HoverPop>
+            )}
+            {intentShorts.length === 0 && intent.skipped && (
+              <FaintChip icon={Target} title="Asked at set-up, chose not to answer">
+                NOT SAID
+              </FaintChip>
             )}
             {idle !== null && !stalled && (
               <span style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, fontVariantNumeric: 'tabular-nums' }}>

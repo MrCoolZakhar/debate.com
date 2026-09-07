@@ -25,7 +25,10 @@
 // rolling 24 hours, money never summed across currencies) and delegates "live
 // right now" to admin_live_committees() and auth dead ends to
 // admin_auth_flow_failures(). If a number here disagrees with the 13:00 email,
-// the page is wrong, not the email.
+// the page is wrong, not the email. The stated-intent mix goes one better than
+// inheriting a definition: both this page and compose_daily_platform_report()
+// read the single function platform_intent_mix(), so there is no second copy of
+// the aggregate that could drift out of step with the first.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -41,6 +44,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { getCountryByName, countryToContinent, type Continent } from '@/lib/countries';
+import { INTENT_OPTIONS } from '@/lib/conferenceIntent';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing,
 } from '@/components/neu';
@@ -77,6 +81,15 @@ interface Metrics {
     cities: { city: string; country: string | null; n: number }[];
     funnel: { submitted: number; accepted: number; assigned: number; checked_in: number; rejected: number; withdrawn: number };
     awaiting: number; awaiting_30d: number;
+    /** What organisers said they came here to do, from platform_intent_mix().
+     *  `intents` is one row per option key that at least one conference chose,
+     *  already sorted by count. The four denominators beside it are not
+     *  decoration: intent_unasked is every conference created before the
+     *  question existed, and without it the bars would imply a sample the
+     *  platform does not have. */
+    intents: NamedCount[];
+    intent_total: number; intent_answered: number;
+    intent_skipped: number; intent_unasked: number; intent_other: number;
   };
   money: {
     open: CurrencyRow[]; settled_24h: CurrencyRow[];
@@ -461,6 +474,19 @@ export default function DataTab() {
   const t = m.today;
   const f = m.conferences.funnel;
   const natPct = m.geography.total > 0 ? Math.round((m.geography.known / m.geography.total) * 100) : 0;
+
+  // Stated intent. Rows are built from INTENT_OPTIONS so an option nobody has
+  // picked still shows as a zero: the reader needs to see the whole menu they
+  // were offered, otherwise "nobody wants emails" and "emails was never an
+  // option" look identical. A key the aggregate returns that is no longer in
+  // INTENT_OPTIONS is a retired option and gets counted out loud rather than
+  // silently dropped.
+  const intentAnsweredN = m.conferences.intent_answered;
+  const intentByKey = new Map(m.conferences.intents.map(i => [i.name, i.n]));
+  const intentRows = INTENT_OPTIONS
+    .map(o => ({ key: o.key, label: o.short.charAt(0) + o.short.slice(1).toLowerCase(), n: intentByKey.get(o.key) ?? 0 }))
+    .sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+  const intentRetired = m.conferences.intents.filter(i => !INTENT_OPTIONS.some(o => o.key === i.name));
   const eduTotal = m.users.education.reduce((a, e) => a + e.n, 0) || 1;
   const inboundTotal = m.health.inbound.contact_7d + m.health.inbound.ambassador_7d + m.health.inbound.requests_open;
 
@@ -839,6 +865,64 @@ export default function DataTab() {
             City is free text, so near-duplicates such as Bangalore and Bengaluru are counted separately.
             The flag is the country, which is the reliable field.
           </p>
+
+          {/* What organisers say they want. The denominator is the headline, the
+              same way the nationality block leads with its coverage, because for
+              a long time almost every conference here predates the question. */}
+          <div className="flex items-center justify-between gap-2 flex-wrap" style={{ margin: '20px 0 4px' }}>
+            <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: NEU.inkSoft }}>
+              What organisers say they want
+            </p>
+            <Hint title={`Answered by ${int(intentAnsweredN)}`}>
+              <p style={{ fontWeight: 800, marginBottom: 6 }}>
+                This ranks {int(intentAnsweredN)} conferences, not {int(m.conferences.intent_total)}.
+              </p>
+              <p>
+                The question is asked once, at the end of the creation wizard, so every conference created
+                before it shipped has never been asked. {int(m.conferences.intent_unasked)} are in that state
+                and {int(m.conferences.intent_skipped)} were asked and skipped. Neither is a signal about what
+                organisers want, and neither is counted below.
+              </p>
+              <p style={{ marginTop: 6 }}>
+                Organisers can pick more than one, so the bars do not add up to the answered count. Each bar is
+                that option as a share of the {int(intentAnsweredN)} who answered.
+              </p>
+              <p style={{ marginTop: 6, color: NEU.inkSoft }}>
+                Same aggregate function as the 13:00 email, platform_intent_mix(), so the two cannot disagree.
+              </p>
+            </Hint>
+          </div>
+          <NeuInset small style={{ padding: '7px 11px', marginBottom: 11 }}>
+            <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.ink, ...NUM }}>
+              <strong>
+                {int(intentAnsweredN)} of {int(m.conferences.intent_total)} answered
+              </strong>
+              <span style={{ color: NEU.inkSoft }}>
+                {' '}· {int(m.conferences.intent_skipped)} skipped the question
+                · {int(m.conferences.intent_unasked)} were never asked
+              </span>
+            </p>
+          </NeuInset>
+          {intentAnsweredN === 0 ? (
+            <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft }}>
+              Nobody has answered yet. The six options are ready and waiting; there is nothing to rank until
+              conferences start coming through the new wizard.
+            </p>
+          ) : (
+            <RankedBars rows={intentRows} max={Math.max(1, intentAnsweredN)} />
+          )}
+          {m.conferences.intent_other > 0 && (
+            <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, marginTop: 8 }}>
+              {int(m.conferences.intent_other)} wrote their own answer in as well. Free text is not aggregated
+              here; it is on the conference row in the Conferences tab.
+            </p>
+          )}
+          {intentRetired.length > 0 && (
+            <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, marginTop: 8 }}>
+              {int(intentRetired.reduce((a, i) => a + i.n, 0))} answers name an option that is no longer offered
+              ({intentRetired.map(i => i.name).join(', ')}), so they are counted in the total but have no bar.
+            </p>
+          )}
         </Section>
       </div>
 

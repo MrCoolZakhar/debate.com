@@ -79,6 +79,11 @@ export interface Conference {
   awards_config: unknown;
   /** The ceremony moment: set once by `publish_conference_awards()`. */
   awards_published_at: string | null;
+  /** Raw `conferences.intent` JSONB: what the organiser said they came here to
+   *  do, asked once at the end of the creation wizard. Always read it through
+   *  `getConferenceIntent()` in `src/lib/conferenceIntent.ts`; never trust the
+   *  shape here. `{}` means the question was never put to them. */
+  intent: unknown;
   /** The PUBLISHED colour theme. Empty object means "use Gavelling's own
    *  palette" — see src/lib/theme.ts. */
   theme: ConferenceTheme;
@@ -146,7 +151,7 @@ const CONFERENCE_COLUMNS = [
   'predecessor_conference_id', 'predecessor_approved', 'min_age', 'max_age',
   'allocation_swap_mode', 'allocation_email_auto', 'email_theme',
   'financial_aid_enabled', 'aid_questions', 'aid_intro',
-  'awards_config', 'awards_published_at',
+  'awards_config', 'awards_published_at', 'intent',
   'theme', 'theme_draft',
   'is_verified', 'verified_at', 'emails_explored_at',
 ].join(', ');

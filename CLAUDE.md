@@ -102,6 +102,45 @@ Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes fr
 
 ---
 
+## 5d. Stated intent (what the organiser came here to do)
+
+A secretariat arrives with one job in mind. Some want applications and allocations, some
+only want to run the rooms on the day, some are here because their payment provider is a
+spreadsheet. The last screen of the creation wizard asks which, and the answer shapes what
+we lead them with afterwards.
+
+- **Contract:** `src/lib/conferenceIntent.ts` is the only definition of the six options
+  (`applications`, `payments`, `committees`, `emails`, `chairs`, `marketing`), their copy,
+  their admin labels, and the `boosts` that map each one onto dashboard checklist keys.
+  Never write a second option list.
+- **Storage:** `conferences.intent` (jsonb, NOT NULL, default `'{}'`), shape
+  `{keys, other, answered_at, skipped}`. Three states must stay distinguishable: `'{}'` is
+  never asked (every conference created before this shipped), `skipped: true` is asked and
+  declined, a non-empty `keys` is answered. The follow-up email depends on that distinction.
+- **Asked after the insert, not before.** The wizard creates the conference first and asks
+  on the way out, so a failed or slow intent write cannot cost anyone the conference they
+  just built. Both Continue and Skip always land on the dashboard.
+- **Intent reorders, it never removes.** `intentRank` sorts the dashboard's *pending*
+  checklist rows only. `doneCount`, the ring, the progress bar and `SetupCompletionNotices`
+  all keep reading the full unfiltered checklist so they cannot disagree with it, and
+  `publish` stays pinned last. Dropping a row would be a real bug: `financials` gates both
+  the blue checkmark (`conference_setup_status()`) and publishing itself
+  (`enforce_conference_publish_payment_gate`), so hiding it yields a conference that cannot
+  publish and cannot be told why.
+- **Follow-up email:** `queue_intent_followups(p_preview)`, cron `intent-followups` at
+  09:45 daily, via `email_outbox`. Three weeks after creation it reports which of the things
+  they asked for are actually live and links the ones that are not. It fires on its own
+  clock rather than as a `send-setup-nudges` milestone, because that function's DRAFT and
+  PUBLISHED tracks restart on publish and its 72h gap would swallow a day-21 email.
+  Deduped by `conference_setup_nudges` cadence `intent`, variant/milestone **200** (a free
+  band: -7..-1 run-up, 1..30 draft, 60..62 checkmark, 100..130 published), with the
+  once-ever guarantee resting on the `conference_setup_nudges_milestone_once` partial index
+  rather than on the query. The window is 21 to 28 days, not exactly 21, so one missed cron
+  run does not lose the email. It is gated on a non-empty `keys`, which is why the first run
+  emailed nobody: no conference that predates the feature can ever qualify.
+
+---
+
 ## 6. Where things live
 
 ```
@@ -115,7 +154,7 @@ src/app/
   api/         ambassador, contact, geo, indexnow, emails/queue-participant, og/*
 src/lib/
   sessions     types.ts, committeeService.ts (all session DB I/O + realtime), scoring.ts, sessionScoreboard.ts, settingsStore.ts, committeeFlags.ts, docNames.ts
-  conferences  conferenceAccess.ts, conferenceScoreboard.ts, awards.ts, awardsService.ts, slotGroups.ts, finance.ts, payments.ts, invoices.ts, emailEvents.ts, defaultEmails.ts, organizerPermissions.ts, publicFees.ts, seo.ts, vanity.ts
+  conferences  conferenceAccess.ts, conferenceScoreboard.ts, awards.ts, awardsService.ts, slotGroups.ts, conferenceIntent.ts, finance.ts, payments.ts, invoices.ts, emailEvents.ts, defaultEmails.ts, organizerPermissions.ts, publicFees.ts, seo.ts, vanity.ts
   shared       translations.ts (4 locales), countries.ts, supabase.ts (anon), supabase-auth.ts (getAuthedClient), sessionClient.ts (chair suffix header)
 src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, ScoreboardTable, ScoreboardPanel, MotionsModal, DocumentsModal, RollCallPanel, ChatPanel, SettingsPanel, FeedbackLogPanel, TutorialOverlay, GuidedWalkthrough
 ```
