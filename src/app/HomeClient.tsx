@@ -759,7 +759,11 @@ export default function HomeClient() {
                       </div>
                       <div className="text-7xl font-black text-[#2A5A3C]/40 mb-6 transition-all duration-300 group-hover:text-[#B6871F]/60 group-hover:scale-110 leading-none">{s.step}</div>
                       <h3 className="text-2xl font-black text-white mb-4 uppercase tracking-wider">{s.title}</h3>
-                      <p className="text-[#EED98A] text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-all duration-400 transform translate-y-3 group-hover:translate-y-0 max-w-xs mx-auto">{s.desc}</p>
+                      {/* The step description is the actual content of this section.
+                          Hover-only revealed it on desktop and never on a phone, which
+                          left mobile visitors reading "01 / TITLE" over a blank gap.
+                          Visible by default; the hover reveal is a desktop flourish. */}
+                      <p className="text-[#EED98A] text-base leading-relaxed opacity-100 translate-y-0 md:opacity-0 md:translate-y-3 md:group-hover:opacity-100 md:group-hover:translate-y-0 transition-all duration-400 transform max-w-xs mx-auto">{s.desc}</p>
                     </div>
                   ))}
                 </div>

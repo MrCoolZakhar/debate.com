@@ -106,6 +106,11 @@ export function FilterGroup({
 
 const PANEL_WIDTH = 340;
 const VIEWPORT_MARGIN = 12;
+/** Gap between the trigger and the panel, on whichever side it opens. */
+const PANEL_GAP = 10;
+/** Below this the panel is too short to be worth opening on that side, so we
+ *  flip rather than squeeze. */
+const MIN_PANEL_HEIGHT = 220;
 
 /** The FILTERS button + floating popover shell, portaled at fixed viewport
  *  coordinates so a clipping ancestor (a rounded overflow:hidden card, a
@@ -127,8 +132,15 @@ export function FilterPopoverShell({
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+  const [pos, setPos] = useState<
+    { top?: number; bottom?: number; left: number; width: number; maxHeight: number; flipped: boolean } | null
+  >(null);
 
+  // Places the panel so it can never run off the viewport (AGENTS.md UI rule:
+  // a floating layer must never be clipped, and must flip upward when there
+  // is not enough room below). This previously pinned `top` at the trigger's
+  // bottom edge and floored maxHeight at 160px, so a trigger low in a phone
+  // viewport put the whole panel below the fold with no way to scroll to it.
   const place = useCallback(() => {
     const b = btnRef.current;
     if (!b) return;
@@ -136,9 +148,39 @@ export function FilterPopoverShell({
     const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2);
     let left = r.right - width; // panel's right edge matches the button's right edge
     left = Math.max(VIEWPORT_MARGIN, Math.min(left, window.innerWidth - width - VIEWPORT_MARGIN));
-    const top = Math.min(r.bottom + 10, window.innerHeight - VIEWPORT_MARGIN);
-    const maxHeight = Math.max(160, window.innerHeight - top - VIEWPORT_MARGIN);
-    setPos({ top, left, width, maxHeight });
+
+    // Usable height on each side of the trigger, once the gap and the viewport
+    // margin are paid for.
+    const below = window.innerHeight - r.bottom - PANEL_GAP - VIEWPORT_MARGIN;
+    const above = r.top - PANEL_GAP - VIEWPORT_MARGIN;
+
+    if (below < MIN_PANEL_HEIGHT && above < MIN_PANEL_HEIGHT) {
+      // A short viewport (a phone in landscape, a keyboard open): neither side
+      // fits, so ignore the trigger and fill the viewport instead of hanging
+      // off an edge.
+      setPos({
+        top: VIEWPORT_MARGIN, left, width,
+        maxHeight: Math.max(120, window.innerHeight - VIEWPORT_MARGIN * 2),
+        flipped: false,
+      });
+      return;
+    }
+    if (below < MIN_PANEL_HEIGHT && above > below) {
+      // Anchor to the trigger's TOP edge and grow upward — `bottom` rather
+      // than `top`, because the panel's height depends on its content.
+      // Clamped so a trigger scrolled past the bottom edge cannot push the
+      // panel off with it (place() re-runs on scroll, so this is live).
+      const bottom = Math.max(VIEWPORT_MARGIN, window.innerHeight - r.top + PANEL_GAP);
+      setPos({
+        bottom, left, width,
+        maxHeight: Math.min(above, window.innerHeight - bottom - VIEWPORT_MARGIN),
+        flipped: true,
+      });
+      return;
+    }
+    // Same clamp on the other side, for a trigger scrolled above the viewport.
+    const top = Math.max(VIEWPORT_MARGIN, r.bottom + PANEL_GAP);
+    setPos({ top, left, width, maxHeight: window.innerHeight - top - VIEWPORT_MARGIN, flipped: false });
   }, []);
 
   useEffect(() => {
@@ -205,14 +247,15 @@ export function FilterPopoverShell({
             ref={panelRef}
             className="z-40"
             style={{
-              position: 'fixed', top: pos.top, left: pos.left, width: pos.width,
+              position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width,
               maxHeight: pos.maxHeight, overflowY: 'auto',
               backgroundColor: NEU.surface, borderRadius: 20, boxShadow: NEU.out,
               padding: 18,
-              animation: `neuFadeIn 200ms ${EASE}`,
+              animation: `${pos.flipped ? 'neuFadeInUp' : 'neuFadeIn'} 200ms ${EASE}`,
             }}
           >
-            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+            <style>{`@keyframes neuFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes neuFadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
             <div className="flex items-center justify-between mb-3.5">
               <div className="flex items-center gap-2">
                 <NeuIconDisc gradient={NEU_GRADIENTS.forest} icon={Filter} size={26} />

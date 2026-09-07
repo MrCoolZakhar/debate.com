@@ -44,7 +44,7 @@ import {
 // re-enable the real configuration UI. See awardsComingSoon.tsx.
 import { AwardsComingSoon } from './awardsComingSoon';
 import CustomizationCard from './CustomizationCard';
-import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
+import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
@@ -690,6 +690,9 @@ export default function SettingsPage() {
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
   const [roleConfigError, setRoleConfigError] = useState('');
+  /** Why the form builder is refusing to save. Sits beside the builder, not up
+   *  with roleConfigError, because the question that caused it is down here. */
+  const [blocksBlocked, setBlocksBlocked] = useState('');
   type SaveState = 'idle' | 'saving' | 'saved';
   const [stepSaveState, setStepSaveState] = useState<Record<number, SaveState>>({ 1: 'idle', 2: 'idle', 3: 'idle' });
   const savedTimersRef = useRef<Record<number, ReturnType<typeof setTimeout> | null>>({ 1: null, 2: null, 3: null });
@@ -2322,6 +2325,25 @@ export default function SettingsPage() {
     const role = selectedRole;
     setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, custom_questions: next } : rc)));
     setRoleConfigError('');
+
+    // A required choice question whose options are blank can never be
+    // answered, so it makes the whole application unsubmittable. Refuse to
+    // write the form while one is on it: local state still shows the edit, but
+    // the last good version is what stays in the database. The pending write
+    // is deliberately left untouched, so a valid change made a moment ago
+    // still lands.
+    const broken = unpublishableQuestions(next);
+    if (broken.length > 0) {
+      const name = broken[0].label.trim();
+      setBlocksBlocked(
+        broken.length === 1
+          ? `${name ? `"${name}"` : 'One question'} needs at least 2 options. Your form is not saved until you add them.`
+          : `${broken.length} questions need at least 2 options. Your form is not saved until you add them.`
+      );
+      markStep(3, 'idle');
+      return;
+    }
+    setBlocksBlocked('');
     blocksPendingRef.current.set(role, next);
     markStep(3, 'saving');
     if (blocksTimerRef.current) clearTimeout(blocksTimerRef.current);
@@ -2381,6 +2403,10 @@ export default function SettingsPage() {
     const role = selectedRole;
     return () => { flushRef.current(role); };
   }, [selectedRole, activeTab]);
+
+  // The refusal names a question on the role being edited, so it must not
+  // follow the organiser to another role's form.
+  useEffect(() => { setBlocksBlocked(''); }, [selectedRole]);
 
   // Leaving the Form step. Its panel is about to collapse, so write now.
   useEffect(() => {
@@ -3498,6 +3524,15 @@ export default function SettingsPage() {
                             </p>
                           )}
                         </div>
+                        {blocksBlocked && (
+                          <p
+                            role="alert"
+                            className="text-xs mb-3 rounded-lg px-3 py-2"
+                            style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
+                          >
+                            {blocksBlocked}
+                          </p>
+                        )}
                         <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
                       </div>
                     )}

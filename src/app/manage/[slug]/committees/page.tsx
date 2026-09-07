@@ -29,6 +29,7 @@ import {
   medallionTone,
   ModalOverlay,
   mintConferenceSession,
+  sessionCommitteeClient,
 } from '@/components/CommitteeEditorModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1369,10 +1370,22 @@ export default function CommitteesPage() {
     markBusy(busyKey, true);
     setActionError('');
     const supabase = getAuthedClient(session.access_token);
-    const code = await mintConferenceSession(supabase, committee.id, committee.name, (committee.topics ?? [])[0] ?? '', []);
+    // A session that mints but does not link is worse than no session: the code
+    // below would be handed out and joined, while the live wall, the scoreboard
+    // and awards would never find the room. Report it instead of swallowing it.
+    const mintProblems: string[] = [];
+    const code = await mintConferenceSession(
+      supabase, committee.id, committee.name, (committee.topics ?? [])[0] ?? '', [], [],
+      (msg) => { mintProblems.push(msg); },
+    );
     markBusy(busyKey, false);
     if (!code) {
       setActionError("Couldn't generate a session code. Please try again.");
+      return;
+    }
+    if (mintProblems.length > 0) {
+      setActionError(`A session was created for "${committee.name}", but it was not set up correctly: ${mintProblems.join('; ')}. Do not hand out this code. Refresh and try again.`);
+      loadCommittees({ silent: true });
       return;
     }
     // Show the minted code immediately; a silent refetch syncs session_id.
@@ -1397,24 +1410,75 @@ export default function CommitteesPage() {
     setActionError('');
     markBusy(c.id, true);
     const supabase = getAuthedClient(session.access_token);
+    // Set once the live room is confirmed gone (deleted here, or already
+    // absent), so the failure copy below can tell the organiser which half
+    // happened and the restored card can drop its dead session code.
+    let sessionGone = false;
     (async () => {
-      // Delete the linked session first, cascades all session children (delegates, speakers_list, current_speaker, motions, documents, messages, feedback).
+      // ── The live session goes FIRST, and its failure ABORTS the whole delete.
+      //
+      // `committees` has exactly one DELETE policy, `sess_chair_delete USING
+      // is_session_chair(id)`, and `is_session_chair` compares nothing but the
+      // `x-chair-suffix` HEADER. An organiser's JWT satisfies it in no way, so
+      // this delete used to match zero rows and return NO ERROR — the `if
+      // (sessionError) throw` could never fire — while the conference_committees
+      // delete on the next line went through. The room survived forever, still
+      // joinable by its code, with nothing on the conference side pointing at
+      // it. Ninety of those exist in production.
+      //
+      // ORDER: session first, then the conference committee. The FK is
+      // `conference_committees.session_id REFERENCES committees(id) ON DELETE
+      // SET NULL`, so the session can always be deleted independently. Session
+      // first means the only possible half-finished state is a conference
+      // committee that has lost its session code — visible on the card,
+      // recoverable with GENERATE CODE, and harmless. The other order recreates
+      // the exact orphan this is fixing, because once conference_committees is
+      // gone nothing remembers the room existed.
       if (c.session_id) {
-        const { error: sessionError } = await supabase.from('committees').delete().eq('id', c.session_id);
-        if (sessionError) throw sessionError;
+        const res = await sessionCommitteeClient(supabase, c.session_id);
+        if ('error' in res) {
+          // The row is already gone (a previously orphaned link, or a second
+          // click). Nothing to delete, so carry on to the committee itself.
+          if (!res.missing) throw new Error(res.error);
+          sessionGone = true;
+        } else {
+          // `.select('id')` is not decoration: an RLS mismatch on a DELETE is
+          // reported as zero rows changed, never as an error, so a returned row
+          // is the ONLY proof the room is actually gone.
+          const { data: gone, error: sessionError } = await res.client
+            .from('committees')
+            .delete()
+            .eq('id', c.session_id)
+            .select('id');
+          if (sessionError) throw new Error(`the live session refused the delete (${sessionError.message})`);
+          if (!gone || gone.length === 0) throw new Error('the live session refused the delete');
+          sessionGone = true;
+        }
       }
       // Delete the conference committee, cascades slots, allocations, awards, position_papers, study_guides, application_preferences; sets applications/job_postings to null (preserved).
-      const { error } = await supabase.from('conference_committees').delete().eq('id', c.id);
-      if (error) throw error;
-    })().catch(() => {
+      const { data: removed, error } = await supabase
+        .from('conference_committees')
+        .delete()
+        .eq('id', c.id)
+        .select('id');
+      if (error) throw new Error(error.message);
+      if (!removed || removed.length === 0) throw new Error('the committee refused the delete');
+    })().catch((e: unknown) => {
+      const reason = e instanceof Error && e.message ? e.message : 'the delete was rejected';
       if (removedRow) {
         setCommittees(prev => {
           const next = prev.filter(x => x.id !== c.id);
-          next.splice(Math.min(removedIndex, next.length), 0, removedRow);
+          // If the room went but the committee did not, the restored card must
+          // not keep advertising a join code that no longer resolves.
+          next.splice(Math.min(removedIndex, next.length), 0,
+            sessionGone ? { ...removedRow, session_id: null, session_code: null } : removedRow);
           return next;
         });
       }
-      setActionError(`Couldn't delete "${c.name}". It was restored.`);
+      setActionError(sessionGone
+        ? `The live room for "${c.name}" is gone, but the committee itself was not deleted: ${reason}. It is back on the list without its session code. Try deleting it again.`
+        : `Couldn't delete "${c.name}": ${reason}. It was restored, and its live room is still running.`);
+      loadCommittees({ silent: true });
     }).finally(() => markBusy(c.id, false));
   }
 

@@ -8,7 +8,7 @@ import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
-import { Globe, PenLine, ChevronLeft, Megaphone } from 'lucide-react';
+import { Globe, PenLine, ChevronLeft, Megaphone, X } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
 import Loader from '@/components/Loader';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
@@ -821,20 +821,27 @@ function CreatePageInner() {
                             {!isEditing && (
                               <button onClick={() => setObservers((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; })}
                                 title={t('create_observer_toggle')} aria-pressed={observers.has(name)}
-                                className="shrink-0 transition-transform active:scale-90"
-                                style={{ color: observers.has(name) ? '#B6871F' : '#9A8A78' }}>
+                                className="shrink-0 flex items-center justify-center transition-transform active:scale-90 focus:outline-none"
+                                style={{ width: 32, height: 32, color: observers.has(name) ? '#B6871F' : '#9A8A78' }}>
                                 <Megaphone size={15} strokeWidth={1.75} />
                               </button>
                             )}
+                            {/* Rename and remove are always visible: hiding them behind
+                                group-hover made both unreachable on touch, and rename has
+                                no alternative route at all (remove at least has Clear All). */}
                             {!isEditing && isCustom && (
                               <button onClick={() => { setEditingName(name); setEditDraft(name); }}
-                                className="text-[#9A8A78] hover:text-[#1B3828] transition-colors opacity-0 group-hover:opacity-100 me-1">
-                                <PenLine size={13} strokeWidth={2} />
+                                className="shrink-0 flex items-center justify-center text-[#9A8A78] hover:text-[#1B3828] transition-transform active:scale-90 focus:outline-none"
+                                style={{ width: 32, height: 32 }}>
+                                <PenLine size={15} strokeWidth={1.75} />
                               </button>
                             )}
                             {!isEditing && (
                               <button onClick={() => { setDelegates((p) => p.filter((d) => d !== name)); setObservers((prev) => { const n = new Set(prev); n.delete(name); return n; }); }}
-                                className="text-[#9A8A78] group-hover:text-red-500 transition-colors text-sm opacity-0 group-hover:opacity-100">✕</button>
+                                className="shrink-0 flex items-center justify-center text-[#9A8A78] hover:text-red-500 transition-transform active:scale-90 focus:outline-none"
+                                style={{ width: 32, height: 32 }}>
+                                <X size={15} strokeWidth={2} />
+                              </button>
                             )}
                           </div>
                         );

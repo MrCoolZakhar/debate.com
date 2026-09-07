@@ -29,7 +29,7 @@ import { Check, ChevronDown, AlertCircle, Minus, Plus } from 'lucide-react';
 import { NEU, OUTFIT, EASE } from '@/components/neu';
 import Portal from '@/components/Portal';
 import { DatePicker } from '@/components/DatePicker';
-import { type CustomQuestion, type CustomAnswerValue } from '@/lib/customQuestions';
+import { type CustomQuestion, type CustomAnswerValue, usableOptions } from '@/lib/customQuestions';
 import { wordCount, parseWordTarget } from '@/lib/applyQuestionPages';
 
 // ── Contrast-checked tokens ────────────────────────────────────────────────
@@ -598,7 +598,11 @@ export default function ApplicationQuestionCard({
   const done = answered(value);
   const str = typeof value === 'string' ? value : '';
   const arr = Array.isArray(value) ? value : [];
-  const options = q.options ?? [];
+  // Only options an applicant can actually pick. A blank option value stores
+  // '', which reads back as no answer, so offering one is offering a dead row
+  // (and duplicate blanks were duplicate React keys). Filtering here also
+  // keeps the <= 6 rows / > 6 listbox split honest.
+  const options = usableOptions(q);
   const helpId = q.help ? `q-${q.id}-help` : undefined;
   const errId = hasError ? `q-${q.id}-err` : undefined;
   const describedBy = [helpId, errId].filter(Boolean).join(' ') || undefined;

@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormBlock, type CustomQuestion, type CustomAnswers, type CustomAnswerValue } from '@/lib/customQuestions';
+import { type FormBlock, type CustomQuestion, type CustomAnswers, type CustomAnswerValue, usableOptions } from '@/lib/customQuestions';
 import { DatePicker } from '@/components/DatePicker';
 import { NEU } from '@/components/neu';
 
@@ -87,6 +87,9 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
         const q: CustomQuestion = block;
         const hasError = missingIds.includes(q.id);
         const value = answers[q.id];
+        // Blank options are never offered: picking one stores '', which reads
+        // back as no answer. They were also duplicate React keys.
+        const options = usableOptions(q);
         return (
           <div key={q.id}>
             <label className="block font-semibold text-sm mb-1 whitespace-pre-wrap" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
@@ -153,7 +156,7 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
                 onBlur={(e) => { e.currentTarget.style.borderColor = hasError ? INPUT_BORDER_ERROR : INPUT_BORDER; }}
               >
                 <option value="">Select an option…</option>
-                {(q.options ?? []).map(opt => (
+                {options.map(opt => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
               </select>
@@ -161,7 +164,7 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
 
             {q.type === 'multiple_choice' && (
               <div className="flex flex-col gap-2">
-                {(q.options ?? []).map(opt => (
+                {options.map(opt => (
                   <label key={opt} className="flex items-center gap-2.5 cursor-pointer">
                     <input
                       type="radio"
@@ -179,7 +182,7 @@ export default function CustomQuestionsField({ blocks, answers, onChange, missin
 
             {q.type === 'checkboxes' && (
               <div className="flex flex-col gap-2">
-                {(q.options ?? []).map(opt => (
+                {options.map(opt => (
                   <label key={opt} className="flex items-center gap-2.5 cursor-pointer">
                     <input
                       type="checkbox"

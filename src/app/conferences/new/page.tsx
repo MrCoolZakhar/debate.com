@@ -414,9 +414,16 @@ function suggestAcronym(fullName: string): string {
   const initials = fullName
     .split(/[\s-]+/)
     .filter((w) => w && !STOP_WORDS.has(w.toLowerCase()))
-    .map((w) => w[0].toUpperCase())
+    // The first LETTER OR DIGIT of the word, not its first character.
+    // "Model UN (Bangalore)" used to suggest "MU(", which fails
+    // ACRONYM_ALLOWED and disabled Continue with a red error under a field the
+    // organiser had never touched. A word with nothing usable in it drops out.
+    .map((w) => w.match(/[\p{L}\p{N}]/u)?.[0].toUpperCase() ?? '')
     .join('');
-  if (!initials) return '';
+  // Never suggest a value the organiser would then have to repair. Anything
+  // acronymProblem() rejects (under 2 characters, over 40) becomes an empty
+  // field, which reads as "please fill this in" and never as an error.
+  if (acronymProblem(initials)) return '';
   // Conferences do NOT need 'MUN' in their acronym. Only suggest a …MUN acronym
   // when the full name actually ends with "Model United Nations" (or a variant:
   // "Model UN" / "MUN") — those already yield …MUN from the initials anyway.

@@ -710,10 +710,21 @@ function CountryChip({
   );
 }
 
-/** A confirmed preference in the ranked list: drag handle + rank medallion +
- *  emblem/flag. Reorders by native HTML5 drag (the handle) or, when the
- *  handle has keyboard focus, ArrowUp/ArrowDown — dragging is never the
- *  only way to reorder. */
+/** A confirmed preference in the ranked list: rank medallion + emblem/flag +
+ *  a pair of up/down buttons.
+ *
+ *  This ranking is what allocation runs on, so reordering has to work for
+ *  everyone. It used to offer exactly two paths, native HTML5 drag and
+ *  ArrowUp/ArrowDown on the grip, and NEITHER reaches a phone: HTML5 drag
+ *  events do not fire on touch, and a delegate on a phone has no keyboard
+ *  focus ring to put on the grip. The only visible control was a 26px remove
+ *  button, so the whole workaround was "delete everything below this and add
+ *  it back in order".
+ *
+ *  The up/down buttons are therefore the primary control, at a 44px tap
+ *  target, on every viewport. Drag survives as a desktop accelerator (the row
+ *  is still `draggable` and the grip still takes ArrowUp/ArrowDown), but the
+ *  grip is hidden below `sm` where it can do nothing. */
 function RankedRow({
   index, total, committee, countryCode, countryName, onMove, onRemove, reducedMotion, isDragging,
   onDragStart, onDragOver, onDrop, onDragEnd,
@@ -741,16 +752,17 @@ function RankedRow({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className="flex items-center gap-3"
+      className="flex items-center gap-2"
       style={{
-        padding: '10px 12px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+        padding: '6px 8px 6px 10px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
         opacity: isDragging ? 0.5 : 1,
         cursor: 'grab',
         transition: reducedMotion ? 'none' : `opacity 160ms ${EASE}`,
       }}
     >
       {/* Drag handle, dotted grip — keyboard-focusable so ArrowUp/ArrowDown
-          reorder without a drag gesture. */}
+          reorder without a drag gesture. Desktop only: it is inert on touch,
+          and hiding it there gives the row the width the buttons need. */}
       <div
         role="button"
         tabIndex={0}
@@ -759,7 +771,7 @@ function RankedRow({
           if (e.key === 'ArrowUp') { e.preventDefault(); onMove(-1); }
           else if (e.key === 'ArrowDown') { e.preventDefault(); onMove(1); }
         }}
-        className="shrink-0 flex flex-col gap-[3px] px-1 py-2 focus:outline-none"
+        className="shrink-0 hidden sm:flex flex-col gap-[3px] px-1 py-2 focus:outline-none"
         style={{ cursor: 'grab' }}
       >
         {[0, 1, 2].map(r => (
@@ -785,23 +797,54 @@ function RankedRow({
       {countryCode ? <FlagImg code={resolved} size={22} /> : null}
 
       <div className="min-w-0 flex-1">
-        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink }}>
+        {/* Wraps to a second line rather than truncating: the reorder buttons
+            take real width on a phone, and a rank the delegate cannot read is
+            worse than a rank that takes two lines. */}
+        <p className="line-clamp-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere' }}>
           {countryName || committee?.abbreviation || committee?.name || 'Preference'}
         </p>
-        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5, color: NEU.muted }}>
+        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5, color: NEU.inkSoft }}>
           {countryName && committee ? (committee.abbreviation || committee.name) : committee ? committee.name : ''}
         </p>
       </div>
 
-      <div className="flex items-center gap-0.5 flex-shrink-0">
+      <div className="flex items-center flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => onMove(-1)}
+          disabled={index === 0}
+          aria-label={`Move ${countryName || committee?.abbreviation || committee?.name || 'this preference'} up to rank ${index}`}
+          className="flex items-center justify-center rounded-lg focus:outline-none"
+          style={{
+            width: 44, height: 44, border: 'none', background: 'none',
+            color: index === 0 ? '#C5B9A8' : NEU.forest,
+            cursor: index === 0 ? 'default' : 'pointer',
+          }}
+        >
+          <ChevronUp size={18} strokeWidth={2.6} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onMove(1)}
+          disabled={index === total - 1}
+          aria-label={`Move ${countryName || committee?.abbreviation || committee?.name || 'this preference'} down to rank ${index + 2}`}
+          className="flex items-center justify-center rounded-lg focus:outline-none"
+          style={{
+            width: 44, height: 44, border: 'none', background: 'none',
+            color: index === total - 1 ? '#C5B9A8' : NEU.forest,
+            cursor: index === total - 1 ? 'default' : 'pointer',
+          }}
+        >
+          <ChevronDown size={18} strokeWidth={2.6} />
+        </button>
         <button
           type="button" onClick={onRemove} aria-label="Remove preference"
           className="flex items-center justify-center rounded-lg focus:outline-none"
-          style={{ width: 26, height: 26, color: NEU.muted }}
+          style={{ width: 36, height: 44, border: 'none', background: 'none', color: NEU.muted, cursor: 'pointer' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
         >
-          <X size={15} strokeWidth={2.4} />
+          <X size={16} strokeWidth={2.4} />
         </button>
       </div>
     </div>
@@ -1308,6 +1351,12 @@ function ConferenceApplyInner() {
 
   /** How long after the last keystroke the draft is written. */
   const DRAFT_DEBOUNCE_MS = 800;
+
+  /** The `applications` row this submit already created, if a later step then
+   *  failed and sent the applicant back to press Submit again. Pressing Submit
+   *  a second time must finish the same application, never file a duplicate.
+   *  Cleared only by leaving the page (a successful submit redirects). */
+  const submittedAppIdRef = useRef<string | null>(null);
 
   /** This tab's id, so the row records which tab last wrote it. Lazily
    *  initialised once — a new one per tab is exactly the point. */
@@ -2232,22 +2281,40 @@ function ConferenceApplyInner() {
           societyId = selectedSocietyId;
         } else if (isInvoicingRole) {
           const normalized = societyInput.trim().toLowerCase();
-          const { data: existingSoc } = await supabase
+          // FATAL, both halves. supabase-js RESOLVES on a PostgREST/RLS error,
+          // so an unchecked result reads as success: the lookup would fall
+          // through to the insert and trip the unique index, and a failed
+          // insert would leave societyId null, filing a head delegate as an
+          // independent applicant with a delegation that does not exist and
+          // changing who gets invoiced. Neither may pass silently.
+          const { data: existingSoc, error: socLookupError } = await supabase
             .from('societies')
             .select('id')
             .eq('conference_id', conference!.id)
             .eq('name_normalized', normalized)
             .maybeSingle();
+          if (socLookupError) {
+            reportBlocked('resolve delegation', socLookupError, { conferenceSlug: slug, role });
+            throw new Error('We could not look up your delegation. Please try again.');
+          }
 
           if (existingSoc) {
             societyId = (existingSoc as { id: string }).id;
           } else {
-            const { data: newSoc } = await supabase
+            const { data: newSoc, error: socInsertError } = await supabase
               .from('societies')
               .insert({ conference_id: conference!.id, name: societyInput.trim(), name_normalized: normalized })
               .select('id')
               .single();
+            if (socInsertError) {
+              reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
+              throw new Error('We could not create your delegation. Please try again.');
+            }
             societyId = (newSoc as { id: string } | null)?.id ?? null;
+            if (!societyId) {
+              reportBlocked('create delegation', new Error('insert returned no row'), { conferenceSlug: slug, role });
+              throw new Error('We could not create your delegation. Please try again.');
+            }
           }
         }
       }
@@ -2334,17 +2401,31 @@ function ConferenceApplyInner() {
         insertPayload.experience_entries = experienceEntries;
       }
 
-      const { data: app, error: appError } = await supabase
-        .from('applications')
-        .insert(insertPayload)
-        .select('id')
-        .single();
+      // A previous attempt already filed this application and then failed on a
+      // later step (out of credits, the preference write below). Resume from
+      // that row rather than inserting a second application — the need_credit
+      // branch has always promised a retry "doesn't create a duplicate", and
+      // until now nothing enforced it. The society lookup and the credit RPC
+      // above/below are both safe to re-run; the voucher redemption is not,
+      // and is skipped on a resume.
+      const resumeAppId = submittedAppIdRef.current;
+      let newAppId: string;
+      if (resumeAppId) {
+        newAppId = resumeAppId;
+      } else {
+        const { data: app, error: appError } = await supabase
+          .from('applications')
+          .insert(insertPayload)
+          .select('id')
+          .single();
 
-      // A failed insert stops the applicant dead and never reaches an error
-      // boundary — the catch below turns it into a tidy inline message and
-      // nobody is ever told. Report it.
-      if (appError) { reportBlocked('submit application', appError, { conferenceSlug: slug, role }); throw appError; }
-      const newAppId = (app as { id: string }).id;
+        // A failed insert stops the applicant dead and never reaches an error
+        // boundary — the catch below turns it into a tidy inline message and
+        // nobody is ever told. Report it.
+        if (appError) { reportBlocked('submit application', appError, { conferenceSlug: slug, role }); throw appError; }
+        newAppId = (app as { id: string }).id;
+        submittedAppIdRef.current = newAppId;
+      }
 
       // Consume a Gavelling credit for this application. The Overview step
       // already gated submission on canApply, so need_credit here means the
@@ -2353,9 +2434,17 @@ function ConferenceApplyInner() {
       // surface it rather than silently sending an uncharged application
       // through, the application row stays as-is so a retry (after buying
       // credits) doesn't create a duplicate.
-      const { data: credit } = await supabase.rpc('consume_credit_for_application', {
+      //
+      // RECOVERABLE. A transport/RLS failure here is Gavelling's ledger, not
+      // the delegate's application, and the row is already in — stranding a
+      // valid application on an error screen over our own bookkeeping is the
+      // worse outcome. Report it and carry on. The business rule (need_credit)
+      // still blocks whenever the RPC actually answers. Without destructuring
+      // `error` at all, `data` came back null and need_credit could never fire.
+      const { data: credit, error: creditError } = await supabase.rpc('consume_credit_for_application', {
         p_application_id: newAppId,
       });
+      if (creditError) reportBlocked('consume application credit', creditError, { conferenceSlug: slug, role });
       const creditResult = credit as { ok?: boolean; consumed?: boolean; need_credit?: boolean } | null;
       if (creditResult?.need_credit) {
         setSubmitError("You're out of credits. Buy more or upgrade your subscription, then try submitting again.");
@@ -2368,12 +2457,15 @@ function ConferenceApplyInner() {
       // the voucher row, enforces active/expiry/limit, bumps redeemed_count).
       // Non-fatal: the application is already in, a failed redemption just
       // means the organizer sees the voucher columns without a redemption row.
-      if (appliedVoucher && breakdown.voucherDiscount > 0) {
-        await supabase.rpc('redeem_voucher', {
+      // RECOVERABLE, as the comment above already says — but it has to be
+      // observed to be known about, so report it.
+      if (!resumeAppId && appliedVoucher && breakdown.voucherDiscount > 0) {
+        const { error: voucherError } = await supabase.rpc('redeem_voucher', {
           p_voucher_id: appliedVoucher.voucherId,
           p_context: 'conference_signup',
           p_application_id: newAppId,
         });
+        if (voucherError) reportBlocked('redeem voucher', voucherError, { conferenceSlug: slug, role });
       }
 
       if (showPreferenceStep && preferences.length > 0) {
@@ -2387,7 +2479,19 @@ function ConferenceApplyInner() {
           country_code: p.countryCode || null,
           country_name: p.countryName || null,
         }));
-        await supabase.from('application_preferences').insert(prefRows);
+        // FATAL. This ranking is the input to allocation: an applicant whose
+        // preferences were dropped shows up on the assignment board with no
+        // preferences at all, and the delegate is never told. The result was
+        // completely unchecked, and supabase-js RESOLVES on a PostgREST/RLS
+        // error, so a try/catch would not have caught it either — it has to be
+        // destructured. Throwing here keeps the draft (discardDraft is below)
+        // so nothing the applicant typed is lost, and submittedAppIdRef makes
+        // the retry resume rather than file a second application.
+        const { error: prefInsertError } = await supabase.from('application_preferences').insert(prefRows);
+        if (prefInsertError) {
+          reportBlocked('save application preferences', prefInsertError, { conferenceSlug: slug, role });
+          throw new Error('Your application went through, but we could not save your committee ranking. Please press Submit again to save it.');
+        }
       }
 
       // Fire-and-forget: the confirmation redirect below must never wait on
@@ -2439,22 +2543,40 @@ function ConferenceApplyInner() {
           societyId = selectedSocietyId;
         } else if (isInvoicingRole) {
           const normalized = societyInput.trim().toLowerCase();
-          const { data: existingSoc } = await supabase
+          // FATAL, both halves. supabase-js RESOLVES on a PostgREST/RLS error,
+          // so an unchecked result reads as success: the lookup would fall
+          // through to the insert and trip the unique index, and a failed
+          // insert would leave societyId null, filing a head delegate as an
+          // independent applicant with a delegation that does not exist and
+          // changing who gets invoiced. Neither may pass silently.
+          const { data: existingSoc, error: socLookupError } = await supabase
             .from('societies')
             .select('id')
             .eq('conference_id', conference!.id)
             .eq('name_normalized', normalized)
             .maybeSingle();
+          if (socLookupError) {
+            reportBlocked('resolve delegation', socLookupError, { conferenceSlug: slug, role });
+            throw new Error('We could not look up your delegation. Please try again.');
+          }
 
           if (existingSoc) {
             societyId = (existingSoc as { id: string }).id;
           } else {
-            const { data: newSoc } = await supabase
+            const { data: newSoc, error: socInsertError } = await supabase
               .from('societies')
               .insert({ conference_id: conference!.id, name: societyInput.trim(), name_normalized: normalized })
               .select('id')
               .single();
+            if (socInsertError) {
+              reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
+              throw new Error('We could not create your delegation. Please try again.');
+            }
             societyId = (newSoc as { id: string } | null)?.id ?? null;
+            if (!societyId) {
+              reportBlocked('create delegation', new Error('insert returned no row'), { conferenceSlug: slug, role });
+              throw new Error('We could not create your delegation. Please try again.');
+            }
           }
         }
       }
@@ -3189,8 +3311,10 @@ function ConferenceApplyInner() {
         <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 10, marginLeft: 2 }}>
           YOUR RANKING · {preferences.length}
         </p>
-        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginBottom: 8, marginLeft: 2 }}>
-          Drag to reorder your preferences.
+        {/* Was "Drag to reorder your preferences." — which told a phone user to
+            do the one thing their device cannot do. Describe the buttons. */}
+        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, marginBottom: 8, marginLeft: 2 }}>
+          Use the arrows to reorder. Rank 1 is your first choice.
         </p>
         <div className="flex flex-col gap-2">
           {preferences.map((p, i) => (

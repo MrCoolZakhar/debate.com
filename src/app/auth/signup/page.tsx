@@ -26,6 +26,7 @@ import {
   destinationAfterVerify,
   isValidEmail,
   safeNext,
+  useAlertScroll,
   withNext,
 } from '../authUi';
 
@@ -104,6 +105,9 @@ function SignUpInner() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
+  // Same problem as the banner: this one is validated in JS, so the browser
+  // never scrolls to it and on a phone the field is well above the button.
+  const emailErrorRef = useAlertScroll<HTMLParagraphElement>(emailError);
   const [loading, setLoading] = useState(false);
   // Latch: a second click starts a second PKCE flow and overwrites the
   // code_verifier cookie, which is what produced bad_code_verifier failures.
@@ -401,7 +405,7 @@ function SignUpInner() {
                 aria-describedby={emailError ? 'signup-email-error' : undefined}
               />
               {emailError && (
-                <p id="signup-email-error" role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                <p ref={emailErrorRef} id="signup-email-error" role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
                   {emailError}
                 </p>
               )}
