@@ -285,12 +285,14 @@ export function ConferenceCard({
                 {currencySymbol(conf.fee_currency)}{formatFeeAmountCompact(conf.fee_amount)}
               </span>
             )}
-            <span className="flex items-center gap-1">
-              <Users size={13} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11.5px', color: 'rgba(237,231,216,0.8)' }}>
-                {conf.expected_delegates.toLocaleString()}
+            {conf.expected_delegates > 0 && (
+              <span className="flex items-center gap-1">
+                <Users size={13} style={{ color: 'rgba(237,231,216,0.66)', flexShrink: 0 }} />
+                <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '11.5px', color: 'rgba(237,231,216,0.8)' }}>
+                  {conf.expected_delegates.toLocaleString()}
+                </span>
               </span>
-            </span>
+            )}
           </div>
           <div className="flex-shrink-0"><ApplyButton applied={applied} member={member} /></div>
         </div>
@@ -454,13 +456,15 @@ export function ConferenceCard({
           className={`flex items-center justify-between ${heroCompact ? 'pt-1.5' : compact ? 'pt-2.5' : 'pt-3.5'}`}
           style={{ borderTop: '1px solid rgba(221,212,192,0.55)' }}
         >
-          <span
-            className="flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full"
-            style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
-          >
-            <Users size={13} style={{ color: '#9A8A78' }} />
-            {conf.expected_delegates.toLocaleString()}
-          </span>
+          {conf.expected_delegates > 0 ? (
+            <span
+              className="flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full"
+              style={{ backgroundColor: 'rgba(27,56,40,0.06)', color: '#4A4238', fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+            >
+              <Users size={13} style={{ color: '#9A8A78' }} />
+              {conf.expected_delegates.toLocaleString()}
+            </span>
+          ) : <span />}
           <ApplyButton applied={applied} member={member} />
         </div>
       </div>

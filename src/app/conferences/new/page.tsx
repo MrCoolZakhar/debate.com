@@ -648,7 +648,14 @@ export default function NewConferencePage() {
             country,
             city,
             format,
-            expected_delegates: expectedDelegates ? parseInt(expectedDelegates) : null,
+            // 0, never null: the column is `integer NOT NULL` with no default, so a
+            // skipped step 6 used to fail the whole insert with a 23502 after the
+            // organiser had filled in all twelve steps. 0 is the sentinel the rest of
+            // the product already reads as "no expectation set" — conference_setup_status()
+            // does `coalesce(expected_delegates, 0)` and passes the committees checklist
+            // row on `v_expected = 0`, the dashboard guards on `expectedDelegates > 0`
+            // and offers SET AN EXPECTED HEAD COUNT, and admin's isShortOnSeats() skips it.
+            expected_delegates: expectedDelegates ? parseInt(expectedDelegates) : 0,
             fee_amount: feeKind === 'paid' ? parseFloat(feeAmount) || 0 : 0,
             fee_currency: feeCurrency,
             description: description.trim() || null,
