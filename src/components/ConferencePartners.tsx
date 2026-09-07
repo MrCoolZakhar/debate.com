@@ -28,7 +28,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Star } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
 
@@ -52,6 +52,15 @@ export interface PartnerEntry {
   href: string | null;
   /** "City, Country" for a conference partner, if known. */
   location: string | null;
+  /** Renders larger, first, and with a star. Companies only in practice: the
+   *  editor only offers the toggle on a company row, since a linked
+   *  conference's logo and page belong to the other team. */
+  featured: boolean;
+  /** A company's own site, set by the organiser. When present the logo itself
+   *  links out and the popup opens from the name instead (an anchor cannot
+   *  nest inside the popup's button trigger). Conferences use `href` instead
+   *  and never carry this. */
+  websiteUrl: string | null;
 }
 
 /** Content column is max-width 1200; the rail only floats when the leftover
@@ -248,6 +257,126 @@ function PartnerButton({
   floating: boolean;
 }) {
   const ref = useRef<HTMLButtonElement | null>(null);
+  // Featured against the SAME baseline this component always used (46 / 42),
+  // never a literal on top of a literal.
+  const discSize = floating
+    ? (entry.featured ? 64 : 46)
+    : (entry.featured ? 56 : 42);
+
+  const disc = (
+    <span className="relative inline-flex flex-shrink-0">
+      <LogoDisc
+        src={entry.logoUrl}
+        alt={entry.name}
+        size={discSize}
+        fallbackText={entry.name.slice(0, 3)}
+        // Merged last by LogoDisc, so this replaces its default hairline rim
+        // with the conference's own accent, not the house gold — the ring is
+        // the one thing the theme owns, not the brand.
+        style={entry.featured ? { border: '1.5px solid var(--gv-accent)' } : undefined}
+      />
+      {entry.featured && (
+        <span
+          aria-hidden
+          className="absolute flex items-center justify-center"
+          style={{
+            top: -2,
+            right: -2,
+            width: 20,
+            height: 20,
+            borderRadius: 9999,
+            backgroundColor: 'var(--gv-surface)',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+          }}
+        >
+          <Star size={11} strokeWidth={2.4} fill="var(--gv-accent)" color="var(--gv-accent)" />
+        </span>
+      )}
+    </span>
+  );
+
+  const name = (
+    <span
+      className={floating ? undefined : 'truncate'}
+      style={{
+        fontFamily: "'Outfit', sans-serif",
+        fontWeight: 800,
+        fontSize: floating ? 10.5 : 13,
+        lineHeight: floating ? 1.25 : undefined,
+        letterSpacing: '0.02em',
+        color: '#1C1410',
+        maxWidth: '100%',
+        textAlign: floating ? 'center' : 'left',
+        // The rail is only ~104px wide, so a company name gets two lines
+        // before it is cut — truncating "Verification Test Co" to one line
+        // leaves barely a word.
+        ...(floating
+          ? { display: '-webkit-box', WebkitBoxOrient: 'vertical' as const, WebkitLineClamp: 2, overflow: 'hidden', wordBreak: 'break-word' as const }
+          : null),
+      }}
+    >
+      {entry.name}
+    </span>
+  );
+
+  const hoverIn = (e: React.MouseEvent<HTMLElement>) => {
+    const el = e.currentTarget;
+    el.style.transform = 'translateY(-2px)';
+    el.style.backgroundColor = 'rgba(238,217,138,0.18)';
+  };
+  const hoverOut = (e: React.MouseEvent<HTMLElement>) => {
+    const el = e.currentTarget;
+    el.style.transform = 'none';
+    el.style.backgroundColor = 'transparent';
+  };
+
+  // A partner with a website: the logo itself is a link out, and the popup
+  // (which only ever held the description/location) opens from the name
+  // instead. An anchor cannot nest inside the button that used to wrap both,
+  // and shouldn't: it would break keyboard behaviour.
+  if (entry.websiteUrl) {
+    return (
+      <div
+        className={floating ? 'flex flex-col items-center gap-1.5' : 'flex items-center gap-3 flex-shrink-0'}
+        style={{
+          padding: floating ? '8px 4px' : '6px 10px 6px 6px',
+          borderRadius: floating ? 16 : 999,
+          width: floating ? '100%' : undefined,
+          maxWidth: floating ? undefined : 240,
+          transition: `transform 240ms ${EASE}, background-color 240ms ${EASE}`,
+        }}
+        onMouseEnter={hoverIn}
+        onMouseLeave={hoverOut}
+      >
+        <a
+          href={entry.websiteUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={entry.name}
+          style={{ display: 'inline-flex', flexShrink: 0 }}
+        >
+          {disc}
+        </a>
+        <button
+          ref={ref}
+          type="button"
+          onClick={() => { if (ref.current) onOpen(entry, ref.current); }}
+          aria-haspopup="dialog"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            width: floating ? '100%' : undefined,
+            maxWidth: floating ? undefined : 200,
+          }}
+        >
+          {name}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <button
       ref={ref}
@@ -265,39 +394,11 @@ function PartnerButton({
         maxWidth: floating ? undefined : 240,
         transition: `transform 240ms ${EASE}, background-color 240ms ${EASE}`,
       }}
-      onMouseEnter={(e) => {
-        const el = e.currentTarget as HTMLElement;
-        el.style.transform = 'translateY(-2px)';
-        el.style.backgroundColor = 'rgba(238,217,138,0.18)';
-      }}
-      onMouseLeave={(e) => {
-        const el = e.currentTarget as HTMLElement;
-        el.style.transform = 'none';
-        el.style.backgroundColor = 'transparent';
-      }}
+      onMouseEnter={hoverIn}
+      onMouseLeave={hoverOut}
     >
-      <LogoDisc src={entry.logoUrl} alt={entry.name} size={floating ? 46 : 42} fallbackText={entry.name.slice(0, 3)} />
-      <span
-        className={floating ? undefined : 'truncate'}
-        style={{
-          fontFamily: "'Outfit', sans-serif",
-          fontWeight: 800,
-          fontSize: floating ? 10.5 : 13,
-          lineHeight: floating ? 1.25 : undefined,
-          letterSpacing: '0.02em',
-          color: '#1C1410',
-          maxWidth: '100%',
-          textAlign: floating ? 'center' : 'left',
-          // The rail is only ~104px wide, so a company name gets two lines
-          // before it is cut — truncating "Verification Test Co" to one line
-          // leaves barely a word.
-          ...(floating
-            ? { display: '-webkit-box', WebkitBoxOrient: 'vertical' as const, WebkitLineClamp: 2, overflow: 'hidden', wordBreak: 'break-word' as const }
-            : null),
-        }}
-      >
-        {entry.name}
-      </span>
+      {disc}
+      {name}
     </button>
   );
 }
@@ -342,6 +443,21 @@ export default function ConferencePartners({ partners }: { partners: PartnerEntr
   const active = open && partners.some(p => p.id === open.entry.id) ? open : null;
 
   if (partners.length === 0) return null;
+
+  // Featured first, then sort_order, then name. PartnerEntry doesn't carry
+  // sort_order itself: the array already arrives in that order (the editor's
+  // query is `.order('sort_order')`), so the original index is that column's
+  // stand-in and a plain featured-only sort would land on the same result.
+  // Spelled out as three levels anyway, so a future caller that hands in an
+  // unordered array still gets the right answer.
+  const ordered = partners
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      if (a.entry.featured !== b.entry.featured) return a.entry.featured ? -1 : 1;
+      if (a.index !== b.index) return a.index - b.index;
+      return a.entry.name.localeCompare(b.entry.name);
+    })
+    .map(({ entry }) => entry);
 
   const heading = (
     <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9, letterSpacing: '0.14em', color: '#B6871F', margin: 0 }}>
@@ -409,7 +525,7 @@ export default function ConferencePartners({ partners }: { partners: PartnerEntr
         >
           <div className="flex justify-center mb-2">{heading}</div>
           <div className="flex flex-col items-center gap-1">
-            {partners.map(p => (
+            {ordered.map(p => (
               <PartnerButton key={p.id} entry={p} onOpen={onOpen} floating />
             ))}
           </div>
@@ -428,7 +544,7 @@ export default function ConferencePartners({ partners }: { partners: PartnerEntr
             padding: 10,
           }}
         >
-          {partners.map(p => (
+          {ordered.map(p => (
             <PartnerButton key={p.id} entry={p} onOpen={onOpen} floating={false} />
           ))}
         </div>

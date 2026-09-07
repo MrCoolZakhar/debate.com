@@ -152,6 +152,8 @@ interface PartnerLinkRow {
   company_logo_url: string | null;
   company_description: string | null;
   sort_order: number;
+  featured: boolean;
+  company_url: string | null;
 }
 
 interface DisplayChair {
@@ -943,7 +945,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     const partnerClient = session ? getAuthedClient(session.access_token) : supabase;
     const { data: partnerLinks } = await partnerClient
       .from('conference_partners')
-      .select('id, partner_conference_id, company_name, company_logo_url, company_description, sort_order')
+      .select('id, partner_conference_id, company_name, company_logo_url, company_description, sort_order, featured, company_url')
       .eq('conference_id', conf.id)
       .eq('approved', true)
       .order('sort_order', { ascending: true });
@@ -979,6 +981,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
             description: row.company_description,
             href: null,
             location: null,
+            featured: row.featured,
+            websiteUrl: row.company_url,
           }];
         }
         const c = confById.get(row.partner_conference_id);
@@ -993,6 +997,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
           description: null,
           href: `/conferences/${c.slug}`,
           location: [c.city, c.country].filter(Boolean).join(', ') || null,
+          // The editor never offers the featured/website controls on a linked
+          // conference row (its logo and page belong to the other team), but
+          // the column still exists on every row, so pass it through honestly
+          // rather than hardcoding false.
+          featured: row.featured,
+          websiteUrl: null,
         }];
       })
     );
