@@ -10,9 +10,11 @@
 //     flag, live/draft state). Both badges are filter controls.
 //   • Set-up progress is a donut RING with the fraction inside it; hovering it
 //     reveals exactly which steps are outstanding.
-//   • Clicking ANYWHERE on a row opens that conference's dashboard. The small
-//     number of in-row filter controls are real <button>s that stop the click
-//     from reaching the row, so the two interactions never fight.
+//   • Clicking ANYWHERE on a row opens that conference's dashboard IN A NEW TAB.
+//     The row is a real <a href> so hover shows the target, middle-click and
+//     "copy link address" work, and the browser owns every modifier. The small
+//     number of in-row filter controls are real <button>s that preventDefault,
+//     so the two interactions never fight.
 //   • Chips are tiered: only exceptions (short on seats, stalled, empty dais)
 //     get a saturated fill. Plain facts stay quiet and extruded, and a fact
 //     nobody has told us yet gets no chip at all (see INTENT_ICON).
@@ -21,11 +23,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   ArrowDownWideNarrow, ArrowUpRight, Building2, CalendarClock, Check, ChevronDown,
   CircleAlert, Clock, FileText, Gavel, Globe, LayoutTemplate, Mail, MapPin, Megaphone,
-  PencilLine, Search, Target, UserPlus, Users, Wallet, X,
+  PencilLine, Rocket, Search, Target, Trophy, UserPlus, Users, Wallet, X,
 } from 'lucide-react';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuInset, NeuStatTile, NeuIconDisc, NeuRing } from '@/components/neu';
 import Portal from '@/components/Portal';
@@ -65,13 +66,21 @@ export interface AdminConferenceRow {
 }
 
 // ── Set-up steps ────────────────────────────────────────────────────────────
-// conference_setup_status() counts setup_done/setup_total over SEVEN steps and
-// deliberately excludes `publish` — but admin_conference_overview()'s
-// pending_keys array does NOT exclude it, so a 7/7 conference that simply is
-// not live still carries 'publish' in pending_keys. The ring and the hover list
-// both drop it: "is it live" is the logo's own corner badge, not a set-up step.
-// Icons are deliberately NOT ticks — every item in this list is outstanding, so
-// a checkmark would read as "done". Nor a Globe, which is the live badge's glyph.
+// THE SAME NINE PRIORITIES THE ORGANISER IS SHOWN, in the same journey order
+// (src/app/manage/[slug]/page.tsx `checklist`). conference_setup_status() now
+// builds all nine, reports setup_total as the length of its own item list, and
+// counts setup_done and pending_keys over the same nine with no exception for
+// `publish` — so the ring, the hover list and the organiser's own ring can no
+// longer disagree, and there is nothing left for this file to patch.
+//
+// Before, the SQL built eight items, hardcoded 'setup_total', 7 and subtracted
+// `publish` from setup_done only, while pending_keys kept it. Three different
+// answers to one question, and a ring that divided by a number matching none
+// of them.
+//
+// Icons are deliberately NOT ticks — every item rendered from this list is
+// outstanding, so a checkmark would read as "done". Nor a Globe, which is the
+// live badge's glyph.
 const SETUP_STEPS: { key: string; label: string; icon: typeof LayoutTemplate }[] = [
   { key: 'page',        label: 'Conference page',    icon: LayoutTemplate },
   { key: 'committees',  label: 'Committees & seats', icon: Building2 },
@@ -80,11 +89,13 @@ const SETUP_STEPS: { key: string; label: string; icon: typeof LayoutTemplate }[]
   { key: 'secretariat', label: 'Secretariat',        icon: Users },
   { key: 'financials',  label: 'Financials',         icon: Wallet },
   { key: 'delegate',    label: 'First delegate',     icon: UserPlus },
+  { key: 'awards',      label: 'Awards set up',      icon: Trophy },
+  { key: 'publish',     label: 'Published',          icon: Rocket },
 ];
 const STEP_BY_KEY = new Map(SETUP_STEPS.map(s => [s.key, s]));
 
 function outstandingSteps(pendingKeys: string[]) {
-  return pendingKeys.filter(k => k !== 'publish').map(k => STEP_BY_KEY.get(k) ?? { key: k, label: k, icon: CircleAlert });
+  return pendingKeys.map(k => STEP_BY_KEY.get(k) ?? { key: k, label: k, icon: CircleAlert });
 }
 
 // ── Stated intent ───────────────────────────────────────────────────────────
@@ -615,7 +626,6 @@ export default function ConferencesTab({
   /** conference id → its organiser's profiles.avatar_url, likewise. */
   avatars?: Record<string, string | null>;
 }) {
-  const router = useRouter();
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   // Peter #2: newest listed first, by created_at desc.
   const [sort, setSort] = useState<SortKey>('newest');
@@ -924,11 +934,6 @@ export default function ConferencesTab({
               onFilterCountry={v => only('country', v)}
               onFilterOrganizer={v => only('organizer', v)}
               onFilterIntent={v => only('intent', v)}
-              onOpen={(newTab) => {
-                const href = `/manage/${r.slug}`;
-                if (newTab) window.open(href, '_blank', 'noopener');
-                else router.push(href);
-              }}
             />
           ))}
         </div>
@@ -940,7 +945,7 @@ export default function ConferencesTab({
 // ── One conference ──────────────────────────────────────────────────────────
 
 function ConferenceRow({
-  r, logo, avatar, filters, onFilterState, onFilterCountry, onFilterOrganizer, onFilterIntent, onOpen,
+  r, logo, avatar, filters, onFilterState, onFilterCountry, onFilterOrganizer, onFilterIntent,
 }: {
   r: AdminConferenceRow;
   logo: string | null;
@@ -950,7 +955,6 @@ function ConferenceRow({
   onFilterCountry: (v: string) => void;
   onFilterOrganizer: (v: string) => void;
   onFilterIntent: (v: string) => void;
-  onOpen: (newTab: boolean) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const intent = useMemo(() => getConferenceIntent(r.intent), [r.intent]);
@@ -970,28 +974,34 @@ function ConferenceRow({
   const showFullNameBeneath = !!acronym && acronym.toLowerCase() !== r.full_name.trim().toLowerCase();
 
   return (
-    // Peter #7: the row itself is the link. `role="link"` + tabIndex makes it
-    // reachable and Enter-activatable; the keydown handler only fires when the
-    // event target IS the row, so Enter on a nested filter button never also
-    // opens the dashboard. Cmd/Ctrl/middle-click still opens a new tab.
-    <div
-      role="link"
-      tabIndex={0}
-      aria-label={`Open ${acronym || r.full_name} dashboard`}
-      onClick={e => onOpen(e.metaKey || e.ctrlKey)}
-      onAuxClick={e => { if (e.button === 1) { e.preventDefault(); onOpen(true); } }}
-      onKeyDown={e => {
-        if (e.target !== e.currentTarget) return;
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(e.metaKey || e.ctrlKey); }
-      }}
+    // Peter #7, revised: the row is a REAL LINK, and a plain click opens the
+    // dashboard IN A NEW TAB. Staff scan this list and dip into one conference
+    // at a time; losing the filtered list on every click was the whole
+    // complaint. Because it is an <a href target="_blank">, the browser owns
+    // all of it: hover shows the target, middle-click and cmd/ctrl-click open a
+    // tab, "copy link address" works, and Enter activates it. Nothing here
+    // routes by hand any more.
+    //
+    // The nested filter controls (CornerBadge, FilterChip) each call
+    // preventDefault() as well as stopPropagation(), which is what stops a
+    // filter click from also navigating. The HoverPop panel is portaled to
+    // <body>, so its rows are not inside this anchor at all and can never
+    // navigate. Keep both properties if you touch those components.
+    <a
+      href={`/manage/${r.slug}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open ${acronym || r.full_name} dashboard in a new tab`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="focus:outline-none"
+      className="block focus:outline-none"
       style={{
         backgroundColor: NEU.surface,
         borderRadius: 20,
         padding: '13px 16px',
         cursor: 'pointer',
+        textDecoration: 'none',
+        color: NEU.ink,
         boxShadow: hovered ? NEU.outHover : NEU.out,
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 240ms ${EASE}, transform 240ms ${EASE}`,
@@ -1192,6 +1202,10 @@ function ConferenceRow({
         {/* ── Set-up ring (#6) ── */}
         <HoverPop
           width={252}
+          // Nine steps rather than seven, so a fully-empty conference's panel is
+          // now taller than the 200 default and a row near the bottom of the
+          // list would open downward and run off the viewport.
+          estimatedHeight={64 + pending.length * 21}
           label={`Set-up ${done} of ${r.setup_total}${pending.length ? `; outstanding: ${pending.map(p => p.label).join(', ')}` : ''}`}
           panel={
             <div>
@@ -1221,11 +1235,9 @@ function ConferenceRow({
                   })}
                 </div>
               )}
-              {!r.is_public && (
-                <p className="mt-2.5" style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted }}>
-                  Not published yet.
-                </p>
-              )}
+              {/* No separate "Not published yet" footnote: `Published` is now
+                  one of the nine steps and appears in the list above whenever
+                  it is outstanding, so a footnote would say it twice. */}
             </div>
           }
         >
@@ -1256,7 +1268,7 @@ function ConferenceRow({
           }}
         />
       </div>
-    </div>
+    </a>
   );
 }
 
