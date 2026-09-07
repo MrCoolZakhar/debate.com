@@ -39,7 +39,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate } from '@/lib/conferenceDates';
-import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight, Ticket } from 'lucide-react';
+import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight, Ticket, Plus } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 import { usePendingInvites, inviteAcceptHref } from '@/hooks/usePendingInvites';
@@ -382,10 +382,12 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             ) : null}
           </div>
 
-          {/* Your conferences, lazily fetched; omitted entirely when empty.
-              Pending invitations head the list, then unfinished drafts —
-              see the file header. */}
-          {(confsLoading || invites.length > 0 || drafts.length > 0 || (myConfs !== null && myConfs.length > 0)) && (
+          {/* Your conferences, lazily fetched. Pending invitations head the list,
+              then unfinished drafts, see the file header. It renders once the fetch
+              has resolved even when the result is EMPTY, because the section header
+              carries the + that starts a conference and somebody with none yet is
+              exactly who needs it. Still hidden while the fetch is unresolved. */}
+          {(confsLoading || invites.length > 0 || drafts.length > 0 || myConfs !== null) && (
             <>
               <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
               <div className="pt-2.5 pb-1">
@@ -427,6 +429,28 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                       {draftCount}
                     </span>
                   )}
+                  {/* Start a conference. Last in the row so the two counts stay
+                      where they were, and the only create affordance in this menu.
+                      The section above it now renders once the list has loaded even
+                      when it is empty, because somebody with no conference yet is
+                      exactly who needs this. */}
+                  <Link
+                    href="/conferences/new"
+                    onClick={() => setOpen(false)}
+                    aria-label="Create a conference"
+                    title="Create a conference"
+                    className="flex-shrink-0 flex items-center justify-center rounded-full focus:outline-none transition-colors"
+                    style={{
+                      width: 18, height: 18,
+                      backgroundColor: 'rgba(27,56,40,0.07)',
+                      color: '#1B3828',
+                      textDecoration: 'none',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.16)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.07)'; }}
+                  >
+                    <Plus size={12} strokeWidth={3} />
+                  </Link>
                 </div>
 
                 {/* ── Pending invitations, ahead of even the drafts. Forest
@@ -591,17 +615,33 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                       </Link>
                     ))}
 
-                    <Link
-                      href="/my-conferences"
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
-                      style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                    >
-                      <span className="flex-1">All conferences</span>
-                      <ArrowRight size={13} strokeWidth={2.2} style={{ color: '#9A8A78' }} />
-                    </Link>
+                    {/* With nothing to list, "All conferences" points at an empty
+                        page. Send them where the + goes instead. */}
+                    {(myConfs ?? []).length === 0 && invites.length === 0 && drafts.length === 0 ? (
+                      <Link
+                        href="/conferences/new"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
+                        style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        <span className="flex-1">Create a conference</span>
+                        <ArrowRight size={13} strokeWidth={2.2} style={{ color: '#9A8A78' }} />
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/my-conferences"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 font-semibold transition-colors"
+                        style={{ color: '#1B3828', fontSize: '11px', letterSpacing: '0.05em', fontFamily: "'Outfit', sans-serif", textDecoration: 'none' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27, 56, 40, 0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        <span className="flex-1">All conferences</span>
+                        <ArrowRight size={13} strokeWidth={2.2} style={{ color: '#9A8A78' }} />
+                      </Link>
+                    )}
                   </>
                 )}
               </div>
