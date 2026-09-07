@@ -72,6 +72,17 @@ export interface FeedbackEntry {
   factorScores: Record<string, number>;
   speechContext: string | null;
   speechSeconds: number | null;
+  /** WHAT the speech was about: the caucus topic or motion label, or the committee
+   *  topic on the GSL. `speechContext` is a three-value enum, so without this every
+   *  note in a long session reads the same.
+   *
+   *  OPTIONAL, unlike the fields above, because this wall's loader
+   *  (`live/page.tsx`) does not select `speech_topic` / `spoken_at` yet — adding the
+   *  two column names to that one `.select()` is all it takes to light this up. */
+  speechTopic?: string | null;
+  /** When the SPEECH happened, which is not `createdAt` — that is when the chair
+   *  typed, and can be an hour later for a note written on a past speech. */
+  spokenAt?: string | null;
 }
 
 export interface LiveCommittee {
@@ -818,8 +829,17 @@ export function FeedbackRecap({ data }: { data: LiveCommittee }) {
                                   <p className="text-xs" style={{ color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.5 }}>{n.content}</p>
                                   <p className="text-[10px] mt-1 flex items-center gap-1.5 flex-wrap" style={{ color: SOFT, fontFamily: OUTFIT }}>
                                     <span className="font-bold">{n.chairName || 'Chair'}</span>
-                                    <span>· {timeAgo(n.createdAt)}</span>
+                                    {/* The speech's own time when the chair's console
+                                        recorded one, falling back to when the note was
+                                        typed. Those are not the same moment. */}
+                                    <span>· {timeAgo(n.spokenAt || n.createdAt)}</span>
                                     {ctx && <span>· {ctx}</span>}
+                                    {/* What the speech was about. Same vocabulary as the
+                                        chair's own scoreboard: context first, topic
+                                        second. */}
+                                    {n.speechTopic?.trim() && (
+                                      <span className="truncate max-w-[220px]" title={n.speechTopic}>· {n.speechTopic.trim()}</span>
+                                    )}
                                     {typeof n.speechSeconds === 'number' && n.speechSeconds > 0 && (
                                       <span style={{ fontVariantNumeric: 'tabular-nums' }}>· {fmtClock(n.speechSeconds)}</span>
                                     )}

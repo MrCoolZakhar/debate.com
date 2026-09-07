@@ -5,7 +5,7 @@ import { SeatFlag } from '@/components/SeatFlag';
 import { CaucusState, Committee } from '@/lib/types';
 import { getCountryDisplayName } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
-import { getScoringConfig } from '@/lib/scoring';
+import { getScoringConfig, RATING_MIN } from '@/lib/scoring';
 import { factorName } from '@/lib/scoringNames';
 import { addFeedback, updateFeedback, getFeedbackForCommittee } from '@/lib/committeeService';
 
@@ -15,6 +15,16 @@ interface FeedItem {
   kind: ItemKind;
   country: string;
   context: string;
+  /** What the speech was ABOUT: the caucus topic or motion label, or the committee
+   *  topic on the GSL. `context` is only a three-value enum, so on its own it
+   *  cannot tell one caucus from the next — which is exactly what a chair reading
+   *  their notes back needs to know. */
+  topic?: string;
+  /** When the speech was GIVEN. Distinct from the row's `created_at`, which is
+   *  when the chair typed, and can be an hour later for a note written on a past
+   *  speech through the collapsed capsule. Absent on `next` cards, and on a `live`
+   *  card it is the moment this turn started. */
+  spokenAt?: string;
   seconds?: number;
   timestamp?: string;
 }
@@ -22,14 +32,28 @@ interface RowState { id?: string; content: string; scores: Record<string, number
 /** Another chair's note on the same speech. Read-only here — each chair edits only their own row. */
 interface OtherNote { chairName: string; content: string; scores: Record<string, number>; }
 
-interface PastSpeech { country: string; context: string; seconds: number; timestamp: string; }
+/** Has this row a rating a chair actually set? A stored score below `RATING_MIN`
+ *  means "never rated" to every reader of `factor_scores`, so it must mean the
+ *  same thing on write. One helper, so the write guard and the display tick can
+ *  never disagree about what a rating is. */
+const hasRating = (scores: Record<string, number>) =>
+  Object.values(scores).some((v) => (v ?? 0) >= RATING_MIN);
+
+interface PastSpeech { country: string; context: string; topic: string; seconds: number; timestamp: string; }
 function pastSpeeches(committee: Committee): PastSpeech[] {
   return (committee.messages ?? [])
     .filter((m) => m.sender === '__system__' && m.recipient === '__log__' && m.content.startsWith('__log__:'))
     .map((m) => { try { return JSON.parse(m.content.slice('__log__:'.length)); } catch { return null; } })
-    .filter((e): e is { country: string; type?: string; context?: string; seconds?: number; timestamp?: string } =>
+    .filter((e): e is { country: string; type?: string; context?: string; topic?: string; seconds?: number; timestamp?: string } =>
       !!e && (!e.type || e.type === 'speech') && typeof e.seconds === 'number')
-    .map((e) => ({ country: e.country, context: e.context ?? 'speakers-list', seconds: e.seconds ?? 0, timestamp: e.timestamp ?? '' }));
+    // `topic` has been on the speaking log since `logSpeakingTime` was written
+    // (`committee.caucus?.purpose ?? committee.topic`). It was simply never read
+    // here, so the note the chair wrote about the speech lost what the speech was
+    // about while the log two rows away still had it.
+    .map((e) => ({
+      country: e.country, context: e.context ?? 'speakers-list', topic: e.topic ?? '',
+      seconds: e.seconds ?? 0, timestamp: e.timestamp ?? '',
+    }));
 }
 
 // The caucus that is ACTUALLY on the floor right now. `committee.caucus` alone is not
@@ -49,6 +73,18 @@ function liveContext(committee: Committee): string {
   return caucus.type === 'unmoderated' ? 'unmoderated-caucus' : 'moderated-caucus';
 }
 
+// The topic those speakers will be logged under. Deliberately mirrors what
+// `logSpeakingTime` is given by the chair page (`caucus?.purpose ?? topic`), with
+// the motion label as a second fallback so an untitled caucus still names itself
+// the way `tagFor` below already labels it on screen. Matching the log matters:
+// the reconcile pass overwrites this value with the log's once the speech lands,
+// and the two should agree rather than flicker.
+function liveTopic(committee: Committee): string {
+  const caucus = liveCaucus(committee);
+  if (!caucus) return committee.topic ?? '';
+  return caucus.purpose || caucus.motionLabel || committee.topic || '';
+}
+
 export default function FeedbackLogPanel({ committee, chairName, currentCountry, feedbackVersion = 0 }: {
   committee: Committee; chairName: string; currentCountry: string | null;
   /** Bumped by the chair page on every realtime `feedback` event — the refetch key. */
@@ -62,6 +98,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   const factors = cfg.factorRatingsEnabled ? cfg.factors.filter((f) => f.enabled) : [];
   const caucus = liveCaucus(committee);
   const ctx = liveContext(committee);
+  const liveTopicNow = liveTopic(committee);
 
   const past = useMemo(() => pastSpeeches(committee), [committee.messages]);
   // Upcoming queue (GSL or caucus), excluding whoever currently holds the floor.
@@ -88,12 +125,15 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
 
   const items: FeedItem[] = useMemo(() => {
     const out: FeedItem[] = [];
-    for (const p of past) out.push({ key: `past|${p.country}|${p.timestamp}`, kind: 'past', country: p.country, context: p.context, seconds: p.seconds, timestamp: p.timestamp });
-    if (currentCountry && liveKey) out.push({ key: liveKey, kind: 'live', country: currentCountry, context: ctx });
-    for (const u of upcoming) out.push({ key: `next|${u.delegateId}`, kind: 'next', country: u.country, context: ctx });
+    for (const p of past) out.push({ key: `past|${p.country}|${p.timestamp}`, kind: 'past', country: p.country, context: p.context, topic: p.topic, spokenAt: p.timestamp, seconds: p.seconds, timestamp: p.timestamp });
+    // The live card's speech STARTED when this turn started, which is the only
+    // honest answer available before the speech is logged. `next` cards have not
+    // happened yet, so they carry no time at all and get one when they reconcile.
+    if (currentCountry && liveKey) out.push({ key: liveKey, kind: 'live', country: currentCountry, context: ctx, topic: liveTopicNow, spokenAt: new Date(turnStartRef.current).toISOString() });
+    for (const u of upcoming) out.push({ key: `next|${u.delegateId}`, kind: 'next', country: u.country, context: ctx, topic: liveTopicNow });
     return out;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [past, currentCountry, liveKey, JSON.stringify(upcoming.map((u) => u.delegateId)), ctx]);
+  }, [past, currentCountry, liveKey, JSON.stringify(upcoming.map((u) => u.delegateId)), ctx, liveTopicNow]);
 
   // Load every chair's speech feedback, and re-load whenever a realtime `feedback`
   // event lands (`feedbackVersion`). This used to run exactly once per mount behind a
@@ -164,7 +204,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
           (!p.timestamp || !f.createdAt || f.createdAt <= p.timestamp));
         if (!orphan) continue;
         claim(key, orphan, true);
-        updateFeedback(orphan.id, { speechContext: p.context, speechSeconds: p.seconds },
+        updateFeedback(orphan.id, { speechContext: p.context, speechSeconds: p.seconds, speechTopic: p.topic || null, spokenAt: p.timestamp || null },
           committee.code, committee.dbChairJoinSuffix ?? undefined);
       }
 
@@ -229,7 +269,10 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
         stateRef.current[k].id && !stateRef.current[k].reconciled);
       if (!candKey) continue;
       const entry = stateRef.current[candKey];
-      updateFeedback(entry.id!, { speechContext: p.context, speechSeconds: p.seconds }, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      // The LOG is the authority on what the speech was about and when it ended, so
+      // the note adopts its topic and timestamp rather than keeping the guess the
+      // live card made from the caucus that happened to be on the floor.
+      updateFeedback(entry.id!, { speechContext: p.context, speechSeconds: p.seconds, speechTopic: p.topic || null, spokenAt: p.timestamp || null }, committee.code, committee.dbChairJoinSuffix ?? undefined);
       setState((prev) => ({
         ...prev,
         [pastKey]: { ...entry, reconciled: true },
@@ -246,11 +289,19 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
     // one — production carries several, each a chair who clicked into the box and
     // clicked straight back out. They render as a delegate having been "commented on"
     // when nobody wrote anything.
-    if (!content.trim() && !Object.values(scores).some((v) => (v ?? 0) > 0)) return;
+    //
+    // `hasRating` is the ONLY thing that decides whether a rating counts as
+    // deliberate, and it agrees with every reader: a score at or above RATING_MIN is
+    // a rating, anything below it is "not rated". This guard used to discard the
+    // bottom of the scale, because the slider offered 0 and 0 reads as absent — a
+    // chair could mark a delegation lowest on every factor and have nothing saved at
+    // all. The slider now starts at RATING_MIN, so the two ends agree.
+    if (!content.trim() && !hasRating(scores)) return;
     if (creatingRef.current.has(item.key)) return;
     creatingRef.current.add(item.key);
     addFeedback(committee.id, item.country, chairName, content, committee.code, committee.dbChairJoinSuffix ?? undefined, {
       level: 'speech', factorScores: scores, speechContext: item.context, speechSeconds: item.seconds ?? null,
+      speechTopic: item.topic || null, spokenAt: item.spokenAt || null,
     }).then((id) => {
       creatingRef.current.delete(item.key);
       if (!id) return;
@@ -346,7 +397,10 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
     if (item.context === ctx && caucus?.motionLabel) return caucus.motionLabel;
     return item.context === 'unmoderated-caucus' ? t('fb_tag_unmod') : t('fb_tag_caucus');
   };
-  const maxScale = Math.max(1, cfg.factorScaleMax);
+  // At least one notch above the floor, or the slider would be a single position
+  // and could express nothing. The Settings slider already refuses to go below 2;
+  // this covers an old committee whose stored value predates that floor.
+  const maxScale = Math.max(RATING_MIN + 1, cfg.factorScaleMax);
 
   // Every chair's note on one speech, mine first. The author prefix appears ONLY when
   // more than one chair has written — a single chair (the overwhelmingly common case)
@@ -365,10 +419,14 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
   const opacityByDist = [1, 0.7, 0.55, 0.45];
   const blurByDist = [0, 0.6, 1.2, 1.6];
 
-  // Qualitative ratings, sliders (lowest 0 … highest max) on the focused pill;
-  // compact greyed read-only bars on the nearest neighbour.
-  // Compact 2×2 grid of small rating sliders (interactive on the focused pill; greyed
-  // read-only values on the nearest neighbour). The slider track itself reads low→high.
+  // Qualitative ratings: sliders on the focused pill, compact greyed read-only
+  // values on the nearest neighbour. The track reads low → high.
+  //
+  // THE SCALE STARTS AT RATING_MIN, NOT AT 0. It used to start at 0, and 0 is what
+  // every reader of `factor_scores` treats as "never rated" — so a chair who marked
+  // a delegation lowest on every factor watched the sliders move and saved nothing.
+  // An unrated factor shows a dash rather than a number, so "lowest" and "not yet
+  // judged" are visibly different states instead of both reading 0.
   const metricStack = (item: FeedItem, rs: RowState, interactive: boolean) => (
     <div className="grid gap-x-4 gap-y-1.5" style={{ width: GRID_COL, gridTemplateColumns: '1fr 1fr' }}>
       {/* Every ENABLED factor, not the first four. The old cap meant a chair could add
@@ -377,11 +435,12 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
           enabled. The grid simply grows another row. */}
       {factors.map((f) => {
         const v = rs.scores[f.id] ?? 0;
+        const rated = v >= RATING_MIN;
         if (!interactive) {
           return (
             <div key={f.id} className="flex items-center gap-1.5">
               <span className="text-[9px] uppercase tracking-wide truncate flex-1" style={{ color: '#B8AE9C' }}>{factorName(f, language)}</span>
-              <span className="text-[11px] font-bold shrink-0" style={{ color: '#9A8A78' }}>{v}</span>
+              <span className="text-[11px] font-bold shrink-0" style={{ color: '#9A8A78' }}>{rated ? v : '–'}</span>
             </div>
           );
         }
@@ -389,13 +448,24 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
           <div key={f.id}>
             <div className="flex items-baseline justify-between gap-1">
               <span className="text-[9px] font-bold uppercase tracking-wide truncate" style={{ color: '#6A5A4A' }}>{factorName(f, language)}</span>
-              <span className="text-xs font-black shrink-0" style={{ color: '#1B3828' }}>{v}</span>
+              <span className="text-xs font-black shrink-0" style={{ color: rated ? '#1B3828' : '#B8AE9C' }}>{rated ? v : '–'}</span>
             </div>
             <input
-              type="range" min={0} max={maxScale} step={1} value={v}
+              type="range" min={RATING_MIN} max={maxScale} step={1}
+              // An unrated factor parks the thumb at the bottom of the scale without
+              // claiming that value. Committing it is what `onPointerUp` is for.
+              value={rated ? v : RATING_MIN}
+              aria-label={factorName(f, language)}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => setScore(item, f.id, parseInt(e.target.value))}
-              className="w-full" style={{ accentColor: '#1B3828', height: 14 }}
+              // RECORDING THE BOTTOM OF THE SCALE. The thumb already sits at
+              // RATING_MIN while a factor is unrated, so dragging it there fires no
+              // change event and the chair's deliberate "lowest" would be lost —
+              // the same silent discard the old min={0} caused, one notch up.
+              // Releasing the control commits whatever it is showing.
+              onPointerUp={(e) => { if (!rated) setScore(item, f.id, parseInt((e.currentTarget as HTMLInputElement).value)); }}
+              onKeyUp={(e) => { if (!rated) setScore(item, f.id, parseInt((e.currentTarget as HTMLInputElement).value)); }}
+              className="w-full" style={{ accentColor: '#1B3828', height: 14, opacity: rated ? 1 : 0.65 }}
             />
           </div>
         );
@@ -418,7 +488,7 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
               const isLive = item.kind === 'live';
               const isFocused = item.key === effectiveFocus;
               const isHover = hoverKey === item.key && !isFocused;
-              const scored = Object.values(rs.scores).some((x) => (x ?? 0) > 0);
+              const scored = hasRating(rs.scores);
               const notes = notesFor(item.key, rs);
               const theirs = notes.filter((n) => !n.isMine);
               const dist = focusIdx >= 0 ? Math.min(Math.abs(idx - focusIdx), 3) : 0;
@@ -452,7 +522,10 @@ export default function FeedbackLogPanel({ committee, chairName, currentCountry,
                       }}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="text-[11px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
+                        {/* The topic rides as a tooltip rather than a second line:
+                            it is now SAVED with the note, so the scoreboard prints it
+                            in full, and the dock header has no width to spare. */}
+                        <span title={item.topic || undefined} className="text-[11px] font-black uppercase tracking-wider shrink-0" style={{ color: '#1B3828' }}>{tagFor(item)}</span>
                         <SeatFlag country={item.country} size={26} className="shrink-0" />
                         <span className="flex-1 min-w-0 truncate text-base font-bold" style={{ color: '#1C1410' }}>{getCountryDisplayName(item.country, language)}</span>
                         {!isLive && <button onClick={(e) => { e.stopPropagation(); setFocusKey(null); }} className="shrink-0 text-sm" style={{ color: '#9A8A78' }}>✕</button>}

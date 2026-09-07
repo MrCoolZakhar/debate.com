@@ -192,6 +192,18 @@ export function computeSourceTotals(committee: Committee, country: string): Reco
 // ── Quality (subjective) scoring from chair recaps ──
 export interface QualityFeedback { country?: string; level: string; factorScores: Record<string, number>; createdAt: string; }
 
+// THE BOTTOM OF THE RATING SCALE IS 1, NOT 0.
+//
+// Every reader of `factor_scores` treats 0 as "this factor was never rated" — the
+// three filters below (`v > 0`), `foldFactors` in conferenceScoreboard.ts, and the
+// delegate's own recap. The rating slider used to offer 0 as the bottom of the
+// scale anyway, so a chair could mark a delegation lowest on every factor, watch
+// the slider move, and have the whole rating silently discarded on both write and
+// read. The slider now starts here. If 0 is ever made meaningful, all four read
+// sites have to change together — that is why this constant exists rather than a
+// bare `1` in the panel.
+export const RATING_MIN = 1;
+
 // Quality 0–100 from chair factor scores. Prefers the latest conference recap, then the
 // latest session recap; with neither (e.g. recap removed), falls back to averaging the
 // per-speech criteria the chair entered in the comment bar. Null when there's no data.
@@ -225,9 +237,65 @@ export function computeQualityScore(feedback: QualityFeedback[], country: string
   return Math.round((mean / Math.max(1, cfg.factorScaleMax)) * 100);
 }
 
-// Blend objective points with quality (0–100) by blend/100. 0 = pure objective, 100 = pure quality.
-export function computeHeadline(objectiveTotal: number, quality: number | null, blend: number): number {
-  const b = Math.max(0, Math.min(100, blend)) / 100;
+// ── The blend, and why the two halves are NOT the same unit ─────────────────
+//
+// `objectiveTotal` is a RAW POINT TOTAL out of the ledger. A real committee runs
+// somewhere between 100 and 400 by the end of a day. `computeQualityScore` above
+// returns a 0–100 INDEX: a normalised mean of the chair's factor ratings, which
+// says how well a delegation spoke and nothing at all about how much it did.
+//
+// The old blend interpolated straight between them:
+//     objectiveTotal * (1 - b) + quality * b
+// which adds metres to percent. A small committee (objective 40, quality 90,
+// blend 50) came out at 65 — a SCORE higher than its own ledger sums to. That is
+// exactly the "the final value seems inflated" report. A large committee got the
+// mirror image: objective 300, quality 90, blend 50 came out at 195, so the board
+// looked like ratings were punishing the hardest workers.
+//
+// The fix is to put quality into the committee's OWN point unit before blending.
+// The conversion factor has to satisfy four things at once:
+//
+//   • it must not depend on the row being scored, or a blend of 100 would not be
+//     a pure quality ordering (the objective would still be hiding inside it);
+//   • it must not depend on the other delegations. Normalising the objective
+//     against the committee's own maximum looks tempting and is wrong: it changes
+//     the RELATIVE weight of the two halves every time anyone speaks, so one
+//     delegate taking the floor reshuffles rows that did nothing;
+//   • it must move with the chair's own point values, so a committee that scores
+//     everything ten times higher keeps the same balance between the halves;
+//   • it must be strictly positive, so the blend stays monotonic in both inputs.
+//
+// The sum of the ENABLED source values is the one figure in the config that meets
+// all four. It is the committee's own statement of what a full sweep of
+// everything a delegation can do is worth, so quality 100 buys one full sweep and
+// quality 0 buys nothing. It is a pure function of the scoring config and moves
+// only when a chair edits Settings → Points.
+export function qualityPointScale(cfg: ScoringConfig): number {
+  const sum = cfg.sources.reduce((s, x) => s + (x.enabled ? x.value : 0), 0);
+  // Every source disabled or zeroed: there is no point unit to convert into, so
+  // fall back to the index itself rather than collapsing every score to nothing.
+  return sum > 0 ? sum : 100;
+}
+
+/**
+ * Objective points blended with chair quality, in POINTS.
+ *
+ * Guarantees, all of which the units above are what make true:
+ *   • blend 0 returns the objective total EXACTLY (not a rounded approximation);
+ *   • no ratings (`quality == null`) returns the objective total;
+ *   • blend 100 orders purely by quality;
+ *   • monotonic: more points never lowers the score, and a better mean rating
+ *     never lowers it either;
+ *   • stable: nothing here reads another delegation, so adding a delegation or
+ *     logging a speech cannot move a row that did not change.
+ *
+ * Takes the whole `ScoringConfig` rather than a bare blend number on purpose:
+ * the scale and the blend must come from the same config, and the session and
+ * conference scoreboards must never be able to pass one without the other.
+ */
+export function computeHeadline(objectiveTotal: number, quality: number | null, cfg: ScoringConfig): number {
+  const b = Math.max(0, Math.min(100, cfg.scoreBlend ?? 0)) / 100;
   if (quality == null || b === 0) return objectiveTotal;
-  return Math.round(objectiveTotal * (1 - b) + quality * b);
+  const qualityPoints = (quality / 100) * qualityPointScale(cfg);
+  return Math.round(objectiveTotal * (1 - b) + qualityPoints * b);
 }
