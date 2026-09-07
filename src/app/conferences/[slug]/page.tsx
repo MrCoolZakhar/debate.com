@@ -67,7 +67,7 @@ const CONFERENCE_COLUMNS = `
   instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url,
   contact_email, organizer_id, min_age, max_age, allocation_swap_mode, display_secretariat,
   connect_onboarding_status, payment_method, external_payment_url, external_payment_note,
-  financial_aid_enabled, aid_questions, aid_intro
+  financial_aid_enabled, aid_questions, aid_intro, theme, theme_draft, is_verified
 `;
 
 export const getConferenceFull = cache(async (slug: string) => {

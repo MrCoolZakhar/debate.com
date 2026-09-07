@@ -143,7 +143,9 @@ export interface RenderEmailHtmlArgs {
    * template should never have to paste an asset URL, and these differ for
    * every single recipient.
    */
-  media?: { countryCode?: string | null; committeeEmblem?: string | null };
+  /** `seatLogo` is a seat's own or group crest (already a PNG/WebP URL); when
+   *  present it replaces the twemoji flag for the `country` icon. */
+  media?: { countryCode?: string | null; committeeEmblem?: string | null; seatLogo?: string | null };
 }
 
 // ── Type + colour system ─────────────────────────────────────────────────────
@@ -693,7 +695,7 @@ function renderBlock(
       return `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${pts}.png`;
     };
     const iconFor = (from?: 'country' | 'committee'): string | null => {
-      if (from === 'country') return flagUrl(media?.countryCode);
+      if (from === 'country') return absolutizeUrl(media?.seatLogo ?? null, getSiteUrl()) ?? flagUrl(media?.countryCode);
       if (from === 'committee') return absolutizeUrl(media?.committeeEmblem ?? null, getSiteUrl());
       return null;
     };

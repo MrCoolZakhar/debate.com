@@ -7,6 +7,13 @@ export interface Delegate {
   country: string;
   status: DelegateStatus;
   isObserver?: boolean;
+  /** The seat's custom crest, flattened from the conference side at seed time
+   *  (`committee_country_slots.logo_url`, else the seat's group crest from
+   *  `conference_committees.groups`). NULL on every standalone session, which
+   *  is why the whole session falls back to the national flag exactly as
+   *  before. Resolve it with `sessionSeatArt` in `src/lib/sessionFlags.ts` —
+   *  never read it raw at a render site. */
+  logoUrl?: string | null;
 }
 
 export type SessionPhase =
@@ -181,4 +188,7 @@ export interface Committee {
   dbSeparateChairCode?: boolean;
   dbSettings?: Record<string, unknown> | null;
   dbScoring?: ScoringConfig | null;
+  /** committees.session_origin — 'conference' when the session was created from a conference
+   *  committee. Gates the award signposts: an anonymous standalone session must never show them. */
+  sessionOrigin?: 'conference' | 'standalone';
 }

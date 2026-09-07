@@ -8,8 +8,30 @@
 // never does money math for what actually gets charged — it only mirrors
 // that math (via finance.ts) to render a preview.
 
-import { getAuthedClient } from '@/lib/supabase-auth';
+import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { formatFee } from '@/lib/finance';
+
+/**
+ * The client used for every create-checkout invoke.
+ *
+ * WHY THIS IS NOT JUST getAuthedClient(accessToken).
+ * The pay page hands us session.access_token out of React context, captured
+ * at an earlier render. The pay page is the longest-lived page in the
+ * product: people open it, go and find their card, and come back. By then
+ * that token can be expired, create-checkout's admin.auth.getUser() returns
+ * nothing, and it answers 401, which the UI reports as "start card payment
+ * failed". A real user hit exactly this on 5 September and succeeded on a
+ * retry 19 seconds later.
+ *
+ * So we read the token fresh from the auth SDK at call time, the same rule
+ * getFreshAuthedClient() already enforces for database writes on long-lived
+ * pages. The passed token stays as a fallback for the case where the SDK has
+ * no session at all, so behaviour never gets worse than it is today.
+ */
+async function checkoutClient(fallbackToken: string) {
+  const fresh = await getFreshAuthedClient();
+  return fresh ?? getAuthedClient(fallbackToken);
+}
 
 // ── Provider seam ──────────────────────────────────────────────────────────
 
@@ -251,7 +273,7 @@ async function manualProvider(args: CreateCheckoutArgs): Promise<PaymentResult> 
 // disabled, ...) come back as { ok:false, error } and are surfaced verbatim.
 
 async function stripeProvider(args: CreateCheckoutArgs): Promise<PaymentResult> {
-  const supabase = getAuthedClient(args.accessToken);
+  const supabase = await checkoutClient(args.accessToken);
   const { data, error } = await supabase.functions.invoke('create-checkout', {
     body: {
       applicationId: args.applicationId,
@@ -289,7 +311,7 @@ export interface PayInvoiceArgs {
 }
 
 export async function payInvoiceCheckout(args: PayInvoiceArgs): Promise<PaymentResult> {
-  const supabase = getAuthedClient(args.accessToken);
+  const supabase = await checkoutClient(args.accessToken);
   const { data, error } = await supabase.functions.invoke('create-checkout', {
     body: { invoiceId: args.invoiceId },
   });
@@ -319,7 +341,7 @@ export interface PayInvoicesArgs {
 }
 
 export async function payInvoicesCheckout(args: PayInvoicesArgs): Promise<PaymentResult> {
-  const supabase = getAuthedClient(args.accessToken);
+  const supabase = await checkoutClient(args.accessToken);
   const { data, error } = await supabase.functions.invoke('create-checkout', {
     body: { invoiceIds: args.invoiceIds },
   });

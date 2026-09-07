@@ -588,6 +588,8 @@ const EVENT_STAGE: Record<EventKey, Stage> = {
   documents_published: 'Session',
   session_chair_invite: 'Session',
   session_join_invite: 'Session',
+  awards_open: 'Session',
+  award_received: 'Session',
   chair_assigned: 'Team & questions',
   committee_chair_invite: 'Team & questions',
   organizer_invite: 'Team & questions',
@@ -1606,11 +1608,27 @@ function CommunicationsPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Ticks the dashboard's "Explore emails" set-up item. Client-local by design
-  // — see src/lib/emailsExplored.ts for why it is not a DB flag.
+  // Ticks the dashboard's "Explore emails" set-up item twice over: in
+  // localStorage for the instant tick (src/lib/emailsExplored.ts), and once on
+  // the server as conferences.emails_explored_at, which is what
+  // conference_setup_status() and the verification mark read. Fire-and-forget;
+  // the row filter keeps a second browser from re-stamping it.
+  const stampEmailsExplored = useCallback(() => {
+    if (!conference?.id) return;
+    markEmailsExplored(conference.id);
+    if (conference.emails_explored_at || !accessToken) return;
+    const supabase = getAuthedClient(accessToken);
+    void supabase
+      .from('conferences')
+      .update({ emails_explored_at: new Date().toISOString() })
+      .eq('id', conference.id)
+      .is('emails_explored_at', null)
+      .then(({ error }) => { if (!error) void refreshConferenceQuiet(); });
+  }, [conference?.id, conference?.emails_explored_at, accessToken, refreshConferenceQuiet]);
+
   useEffect(() => {
-    if (conference?.id) markEmailsExplored(conference.id);
-  }, [conference?.id]);
+    stampEmailsExplored();
+  }, [stampEmailsExplored]);
 
   // ── Data state ──
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -3100,8 +3118,8 @@ function CommunicationsPageInner() {
   const closeTour = useCallback(() => {
     setTourOpen(false);
     try { window.localStorage.setItem(COMMS_TOUR_SEEN_KEY, '1'); } catch { /* private mode */ }
-    if (conference?.id) markEmailsExplored(conference.id);
-  }, [conference?.id]);
+    stampEmailsExplored();
+  }, [stampEmailsExplored]);
 
   if (!conference) return null;
 

@@ -11,6 +11,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { reportBlocked } from '@/lib/reportCrash';
 import { useAuth } from '@/components/AuthProvider';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
+import { effectiveSlotArt, parseGroups, type SlotGroup } from '@/lib/slotGroups';
 import { ageAt } from '@/lib/age';
 import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import DelegationsView from '@/app/manage/[slug]/assignment/DelegationsView';
@@ -165,6 +166,10 @@ interface SlotRow {
   country_name: string;
   delegation_size: number;
   importance: ImportanceTier;
+  /** A seat's own crest; see `src/lib/slotGroups.ts`. */
+  logo_url?: string | null;
+  /** The seat's group in `CommitteeData.groups` (parliamentary committees). */
+  group_id?: string | null;
 }
 
 interface DisplayChair {
@@ -183,6 +188,22 @@ interface CommitteeData {
   display_chairs: DisplayChair[] | null;
   committee_country_slots: SlotRow[];
   conference_allocations: AllocationRow[];
+  committee_type?: string | null;
+  /** `conference_committees.groups` jsonb, read through `parseGroups`. */
+  groups?: unknown;
+}
+
+// ── Seat art ──────────────────────────────────────────────────────────────────
+// A seat draws its own logo, then its group's logo, then the national flag
+// (`effectiveSlotArt`). These two helpers resolve the logo half so every
+// `CountryFlag` on the board can be handed a `logoUrl` in one line.
+function slotLogoUrl(committee: Pick<CommitteeData, 'groups'>, slot: SlotRow): string | null {
+  const art = effectiveSlotArt(slot, parseGroups(committee.groups));
+  return art.kind === 'logo' ? art.url : null;
+}
+function committeeSeatLogo(committee: Pick<CommitteeData, 'groups' | 'committee_country_slots'>, countryCode: string): string | null {
+  const slot = committee.committee_country_slots.find(s => s.country_code === countryCode);
+  return slot ? slotLogoUrl(committee, slot) : null;
 }
 
 // ── Double-delegation seat helpers ────────────────────────────────────────────
@@ -723,16 +744,43 @@ function isIsoCode(code: string | null | undefined): boolean {
   return /^[A-Za-z]{2}$/.test((code ?? '').trim());
 }
 function CountryFlag({
-  code, w, h, radius = 2, shadow, dim, style, alt, title,
+  code, w, h, radius = 2, shadow, dim, style, alt, title, logoUrl,
 }: {
   code: string | null | undefined;
   w: number; h: number; radius?: number;
   shadow?: string; dim?: number;
   style?: React.CSSProperties; alt?: string; title?: string;
+  /** A seat's own or group crest (`slotLogoUrl`). Wins over the flag: drawn
+   *  as a square that fits the same box, never stretched to flag aspect, on
+   *  a faint ivory disc. */
+  logoUrl?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
   const clean = (code ?? '').trim();
   const label = alt ?? title ?? '';
+  if (logoUrl) {
+    const box = Math.min(w, h);
+    return (
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        aria-label={label || undefined}
+        title={title}
+        style={{
+          width: box, height: box, borderRadius: Math.min(radius, 5),
+          backgroundColor: 'rgba(250,248,243,0.85)', overflow: 'hidden',
+          boxShadow: shadow, opacity: dim, ...style,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={logoUrl}
+          alt={label}
+          draggable={false}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        />
+      </span>
+    );
+  }
   if (!isIsoCode(clean) || failed) {
     return (
       <span
@@ -1070,6 +1118,52 @@ function RailSourceToggle({ value, onChange }: { value: 'delegates' | 'delegatio
   );
 }
 
+// Where a delegate already sits, if anywhere in this conference. Matched on
+// application_id first, then on user_id: an imported delegate has no account
+// yet, so their row carries a null user_id and only the application ties them
+// to a seat. Used by the pre-flight guard below AND by the duplicate-key
+// handler, so both say exactly the same thing.
+type ExistingSeat = { committeeId: string; label: string; country: string | null };
+async function findExistingSeat(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  app: AcceptedApp,
+): Promise<ExistingSeat | null> {
+  const userId = app.profiles?.id ?? null;
+  const filter = userId
+    ? `application_id.eq.${app.id},user_id.eq.${userId}`
+    : `application_id.eq.${app.id}`;
+  const { data } = await supabase
+    .from('conference_allocations')
+    .select('conference_committee_id, country_name, conference_committees(name, abbreviation)')
+    .eq('conference_id', conferenceId)
+    .or(filter)
+    .limit(1)
+    .maybeSingle();
+  const row = data as {
+    conference_committee_id: string;
+    country_name: string | null;
+    conference_committees: { name: string; abbreviation: string | null } | { name: string; abbreviation: string | null }[] | null;
+  } | null;
+  if (!row) return null;
+  const cc = Array.isArray(row.conference_committees) ? row.conference_committees[0] : row.conference_committees;
+  return {
+    committeeId: row.conference_committee_id,
+    label: cc ? (cc.abbreviation || cc.name) : 'another committee',
+    country: row.country_name ?? null,
+  };
+}
+
+/** One wording for "this person already has a room", wherever we notice it. */
+function alreadySeatedMessage(held: { label: string; country: string | null } | null): string {
+  const where = held ? ` They hold ${held.label}${held.country ? ` (${held.country})` : ''}.` : '';
+  return `This delegate is already allocated in another committee.${where} Remove that seat first. Nobody can sit in two rooms.`;
+}
+
+/** Same person, same committee: almost always the organiser's own double click. */
+const ALREADY_IN_COMMITTEE_MESSAGE =
+  'They are already seated in this committee. If you just placed them, that assignment went through.';
+
 // Single write path for every allocation on this page: insert into
 // conference_allocations (incl. conference_id), friendly duplicate errors,
 // then round-trip the application status to 'assigned'.
@@ -1102,7 +1196,18 @@ async function insertAllocation(
   // strands every imported delegate until they happen to register.
   const userId = app.profiles?.id ?? null;
 
-  const { error: insertErr } = await supabase.from('conference_allocations').insert({
+  // Pre-flight. Until now the ONLY thing that noticed a delegate already had a
+  // room was the unique index, so the organiser learned it from a failed write
+  // on a card the board was still offering them. Ask first, name the room, and
+  // never attempt the insert.
+  const held = await findExistingSeat(supabase, conferenceId, app);
+  if (held) {
+    return held.committeeId === committee.id
+      ? ALREADY_IN_COMMITTEE_MESSAGE
+      : alreadySeatedMessage(held);
+  }
+
+  const { data: insertedRow, error: insertErr } = await supabase.from('conference_allocations').insert({
     conference_id: conferenceId,
     conference_committee_id: committee.id,
     user_id: userId,
@@ -1112,7 +1217,7 @@ async function insertAllocation(
     allocation_sent: false,
     seat,
     assigned_by: actorId,
-  });
+  }).select('id').maybeSingle();
   if (insertErr) {
     if (insertErr.message.includes('SEAT_UNAVAILABLE')) {
       return 'That country does not have a second seat in this committee.';
@@ -1125,20 +1230,10 @@ async function insertAllocation(
       // to name the room, because "already allocated" while staring at a board
       // of twenty countries is unactionable.
       if (insertErr.message.includes('one_seat_per_delegate')) {
-        let held = '';
-        if (userId) {
-          const { data } = await supabase
-            .from('conference_allocations')
-            .select('country_name, conference_committees(name, abbreviation)')
-            .eq('conference_id', conferenceId)
-            .eq('user_id', userId)
-            .limit(1)
-            .maybeSingle();
-          const row = data as { country_name: string; conference_committees: { name: string; abbreviation: string | null } | { name: string; abbreviation: string | null }[] | null } | null;
-          const cc = Array.isArray(row?.conference_committees) ? row?.conference_committees[0] : row?.conference_committees;
-          if (cc) held = ` They hold ${cc.abbreviation || cc.name}${row?.country_name ? ` (${row.country_name})` : ''}.`;
-        }
-        return `This delegate is already allocated in another committee.${held} Remove that seat first — nobody can sit in two rooms.`;
+        // The pre-flight above normally catches this. Reaching here means the
+        // other seat landed between that read and this write, so look it up
+        // again and say the same thing.
+        return alreadySeatedMessage(await findExistingSeat(supabase, conferenceId, app));
       }
       // Two further indexes catch a repeat allocation within ONE committee: the
       // old (committee, user_id) one for registered delegates, and the partial
@@ -1149,7 +1244,7 @@ async function insertAllocation(
       // collides with is usually one they created a second earlier. Say what
       // actually happened and what to do about it.
       return insertErr.message.includes('user_id') || insertErr.message.includes('_application_key')
-        ? 'They are already seated in this committee — if you just placed them, that assignment went through.'
+        ? ALREADY_IN_COMMITTEE_MESSAGE
         : insertErr.message.includes('country_code')
         ? 'That seat is already taken.'
         : 'This allocation already exists.';
@@ -1157,7 +1252,13 @@ async function insertAllocation(
     return insertErr.message;
   }
 
-  await supabase.from('applications').update({
+  // This flip used to be fired and forgotten, and that is what turned a
+  // one-off failure into a permanent one: the allocation row existed while the
+  // application still read 'accepted', so the delegate stayed in the unassigned
+  // rail, kept being suggested on every load, and every attempt to seat them
+  // died on the one-seat-per-delegate index. Check it, and if the pair cannot
+  // be made consistent, undo the seat rather than leave it half written.
+  const { error: statusErr } = await supabase.from('applications').update({
     status: 'assigned',
     assigned_committee_id: committee.id,
     assigned_country_code: slot.country_code,
@@ -1165,6 +1266,18 @@ async function insertAllocation(
     decided_by: actorId,
     decided_at: new Date().toISOString(),
   }).eq('id', app.id);
+  if (statusErr) {
+    const seatId = (insertedRow as { id: string } | null)?.id ?? null;
+    if (seatId) {
+      await supabase.from('conference_allocations').delete().eq('id', seatId);
+    } else {
+      await supabase.from('conference_allocations').delete()
+        .eq('conference_committee_id', committee.id)
+        .eq('country_code', slot.country_code)
+        .eq('seat', seat);
+    }
+    return 'Could not finish this assignment, so the seat was rolled back. Nothing was half saved. Try again.';
+  }
 
   // Strictly AFTER the applications update: queueEventEmail resolves the
   // {{committee}} and {{country}} tokens by reading that row back, so queueing
@@ -1619,7 +1732,7 @@ function DropAllocateModal({ committee, app, needy = false, pushDraftNotice, onC
               const busy = busySlotId === slot.id;
               return (
                 <NeuInset key={slot.id} small className="flex items-center gap-3 px-3 py-2.5">
-                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} />
+                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
@@ -1736,7 +1849,7 @@ function SocietyDropAllocateModal({ committee, society, onClose, onAssigned }: S
               const busy = busySlotId === slot.id;
               return (
                 <NeuInset key={slot.id} small className="flex items-center gap-3 px-3 py-2.5">
-                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} />
+                  <CountryFlag code={slot.country_code} w={24} h={17} radius={3} shadow={FLAG_SHADOW} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
@@ -1975,7 +2088,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
           <p className="mb-2" style={{ color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontSize: 10, fontWeight: 700 }}>COUNTRY</p>
           {preSelectedSlot ? (
             <NeuInset small className="flex items-center gap-3 p-3">
-              <CountryFlag code={preSelectedSlot.country_code} w={24} h={17} radius={3} alt={preSelectedSlot.country_name} />
+              <CountryFlag code={preSelectedSlot.country_code} w={24} h={17} radius={3} alt={preSelectedSlot.country_name} logoUrl={slotLogoUrl(committee, preSelectedSlot)} />
               <p className="text-sm font-semibold" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{preSelectedSlot.country_name}</p>
               <div style={{ marginLeft: 'auto' }}><TierBadge tier={preSelectedSlot.importance} /></div>
             </NeuInset>
@@ -1992,7 +2105,7 @@ function AssignModal({ committee, unassigned, preSelectedSlot, preSelectedSeat, 
                     style={{ backgroundColor: selected ? NEU.surface : 'transparent', boxShadow: selected ? NEU.outSm : 'none' }}
                     onClick={() => setSelectedSlot(slot)}
                   >
-                    <CountryFlag code={slot.country_code} w={20} h={14} radius={2} alt={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={20} h={14} radius={2} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <p className="text-sm" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
                     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <TierBadge tier={slot.importance} />
@@ -2372,9 +2485,10 @@ function CountrySlotGrid({
   if (slots.length === 0) {
     return <p className="text-xs py-1" style={{ color: NEU.muted, fontFamily: OUTFIT }}>No country slots in this committee.</p>;
   }
-  return (
-    <div className="flex flex-wrap gap-1.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
-      {slots.map(slot => {
+  // A parliamentary ('custom') committee with groups renders its seats in
+  // group order under a thin header (colour dot + name); ungrouped seats last.
+  const groups: SlotGroup[] = committee.committee_type === 'custom' ? parseGroups(committee.groups) : [];
+  const renderSlot = (slot: SlotRow) => {
         const rows = byCountry.get(slot.country_code) ?? [];
         const flag = (
           <CountryFlag
@@ -2386,6 +2500,7 @@ function CountrySlotGrid({
             dim={rows.length > 0 ? undefined : 0.42}
             alt={slot.country_name}
             title={slot.country_name}
+            logoUrl={slotLogoUrl(committee, slot)}
           />
         );
 
@@ -2461,7 +2576,40 @@ function CountrySlotGrid({
           );
         }
         return <span key={slot.id} style={{ lineHeight: 0 }}>{flag}</span>;
-      })}
+  };
+
+  if (groups.length > 0) {
+    const sections = groups
+      .map(group => ({ group, members: slots.filter(s => s.group_id === group.id) }))
+      .filter(x => x.members.length > 0);
+    const ungrouped = slots.filter(s => !s.group_id || !groups.some(g => g.id === s.group_id));
+    const header = (name: string, color: string | null) => (
+      <div className="flex items-center gap-1.5" style={{ marginBottom: 5 }}>
+        <span aria-hidden style={{ width: 7, height: 7, borderRadius: 9999, backgroundColor: color ?? NEU.muted, flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: NEU.muted, fontFamily: OUTFIT, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{name}</span>
+      </div>
+    );
+    return (
+      <div className="flex flex-col gap-2.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+        {sections.map(({ group, members }) => (
+          <div key={group.id}>
+            {header(group.name, group.color)}
+            <div className="flex flex-wrap gap-1.5">{members.map(renderSlot)}</div>
+          </div>
+        ))}
+        {ungrouped.length > 0 && (
+          <div>
+            {header('Ungrouped', null)}
+            <div className="flex flex-wrap gap-1.5">{ungrouped.map(renderSlot)}</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+      {slots.map(renderSlot)}
     </div>
   );
 }
@@ -2756,7 +2904,7 @@ function CommitteeOverviewModal({
                     className="w-full flex items-center gap-3 px-3 py-2.5 focus:outline-none text-left"
                     style={{ backgroundColor: NEU.base, borderRadius: 14, boxShadow: NEU.inSm }}
                   >
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} dim={0.5} alt={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <div className="flex-1 min-w-0">
                       <p className="truncate" style={{ fontSize: 13.5, fontWeight: 700, color: NEU.ink, fontFamily: OUTFIT }}>{slot.country_name}</p>
                       <p style={{ fontSize: 10.5, color: NEU.muted, fontFamily: MONO, letterSpacing: '0.06em', marginTop: 1 }}>OPEN SEAT{seatLabel(seatNum)}</p>
@@ -2781,7 +2929,7 @@ function CommitteeOverviewModal({
                     className="flex items-center gap-3 px-3 py-2.5"
                     style={{ backgroundColor: NEU.surface, borderRadius: 14, boxShadow: NEU.outSm }}
                   >
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     <DelegationAvatar size={30} />
                     <div className="flex-1 min-w-0">
                       <p className="truncate" style={{ fontSize: 14, fontWeight: 800, color: NEU.ink, fontFamily: OUTFIT, lineHeight: 1.15 }}>
@@ -2826,7 +2974,7 @@ function CommitteeOverviewModal({
                     style={{ cursor: 'pointer' }}
                     title="Open application detail"
                   >
-                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} />
+                    <CountryFlag code={slot.country_code} w={30} h={30} radius={9999} shadow={FLAG_SHADOW} alt={slot.country_name} title={slot.country_name} logoUrl={slotLogoUrl(committee, slot)} />
                     {/* Seat row is a role="button" <div> (not a real <button>), so the
                         link is legal; nested keeps the expand/collapse toggle intact. */}
                     <PersonAvatar name={name} url={alloc.profiles?.avatar_url ?? null} size={30} userId={alloc.user_id} nested />
@@ -3185,6 +3333,171 @@ function ChairBoardPanel({
   );
 }
 
+// ── Local mutation ledger ─────────────────────────────────────────────────────
+// Every allocation on this board is written optimistically and then confirmed
+// by a silent refetch. `loadSeq` only orders load against load, which is not
+// enough: a load already in flight when the NEXT assignment is made carries a
+// snapshot taken before that write, and replacing `accepted` / `committees`
+// wholesale with it puts the delegate back in the rail and drops the seat that
+// is visibly on screen. That is what "fast successive assignments bug out"
+// looks like.
+//
+// So each local change is also recorded here with a monotonic stamp, and every
+// load merges instead of replacing: anything the incoming snapshot cannot yet
+// know about is re-applied on top of it. A record is retired only once a load
+// that STARTED AFTER the write actually settled comes back agreeing with it.
+type LocalMutation =
+  | { kind: 'seat'; settled: number | null; at: number; appId: string; committeeId: string; row: AllocationRow; app: AcceptedApp }
+  | { kind: 'free'; settled: number | null; at: number; allocationId: string; committeeId: string | null; app: AcceptedApp | null }
+  | { kind: 'seat-society'; settled: number | null; at: number; committeeId: string; rows: AllocationRow[] };
+
+// A settled write that later loads still disagree with must not pin the board
+// forever (that would be the old bug with the sign flipped). Long enough to
+// cover a slow round trip, short enough that a genuinely lost write shows the
+// server's truth on its own. Only a load can age a record out, so this can
+// only fire if a load actually runs once the record is that old — which is
+// what RECONCILE_MAX_RETRIES below guarantees.
+const LOCAL_MUTATION_TTL_MS = 20000;
+
+// How long a reconcile waits for more actions before it runs, so a burst of
+// assignments produces ONE trailing load.
+const RECONCILE_DELAY_MS = 450;
+
+// Follow-up reconciles allowed after a load that left the ledger non-empty.
+//
+// Nothing else revisits a held record: this page has no polling and no
+// visibilitychange listener, and a load never schedules another load, so the
+// last load of a burst used to be a record's final chance to retire. A write
+// that silently no-opped (an RLS-rejected 0-row update) therefore pinned a
+// seat to a value the database does not have, with no indicator, because the
+// busy state had already cleared, and LOCAL_MUTATION_TTL_MS could never fire.
+//
+// So a load that leaves the ledger non-empty arms another one, backing off
+// RECONCILE_DELAY_MS * 2^n. Six retries put the LAST pass at 63x the delay
+// (~28s) after the burst, which is past LOCAL_MUTATION_TTL_MS — so if the
+// server still disagrees by then, that pass expires the record through the
+// ordinary age check at the top of mergeLocalMutations and the server value
+// finally shows. Six is the smallest bound that clears the TTL.
+const RECONCILE_MAX_RETRIES = 6;
+
+/** Every application / user that holds a seat in the snapshot, temp rows included. */
+function seatedIdentitiesIn(comms: CommitteeData[]) {
+  const appIds = new Set<string>();
+  const userIds = new Set<string>();
+  const seatByKey = new Map<string, { allocationId: string; committeeId: string; countryCode: string; countryName: string }>();
+  for (const c of comms) {
+    for (const a of c.conference_allocations) {
+      const seat = { allocationId: a.id, committeeId: c.id, countryCode: a.country_code, countryName: a.country_name };
+      if (a.application_id) { appIds.add(a.application_id); seatByKey.set(`app:${a.application_id}`, seat); }
+      // A DELEGATION (block) seat has neither, so it can never mark a person.
+      if (a.user_id) { userIds.add(a.user_id); seatByKey.set(`usr:${a.user_id}`, seat); }
+    }
+  }
+  return { appIds, userIds, seatByKey };
+}
+
+// Self-heal for the bug above: an applicant whose status flip failed reads
+// 'accepted' while an allocation row for them already exists. The allocation is
+// the truth, so they leave the unassigned rail (and therefore the suggestion
+// pool) even before the status is repaired.
+function splitAlreadySeated(apps: AcceptedApp[], comms: CommitteeData[]) {
+  const { appIds, userIds, seatByKey } = seatedIdentitiesIn(comms);
+  const unseated: AcceptedApp[] = [];
+  const stale: AcceptedApp[] = [];
+  for (const a of apps) {
+    const uid = a.profiles?.id ?? null;
+    if (appIds.has(a.id) || (uid && userIds.has(uid))) stale.push(a);
+    else unseated.push(a);
+  }
+  return { unseated, stale, seatByKey };
+}
+
+/**
+ * Re-apply pending local changes on top of a freshly loaded snapshot, and
+ * retire the records the server has caught up with. `startStamp` is the ledger
+ * clock read when this load STARTED, so a record settled after that point is
+ * one the snapshot provably predates.
+ */
+function mergeLocalMutations(
+  pending: Map<string, LocalMutation>,
+  apps: AcceptedApp[],
+  comms: CommitteeData[],
+  startStamp: number,
+): { apps: AcceptedApp[]; comms: CommitteeData[] } {
+  if (pending.size === 0) return { apps, comms };
+
+  const { appIds: seatedAppIds } = seatedIdentitiesIn(comms);
+  const allocIds = new Set<string>();
+  for (const c of comms) for (const a of c.conference_allocations) allocIds.add(a.id);
+
+  // 1. Retire what this snapshot already confirms.
+  const now = Date.now();
+  for (const [key, m] of Array.from(pending)) {
+    if (now - m.at > LOCAL_MUTATION_TTL_MS) { pending.delete(key); continue; }
+    if (m.settled === null || m.settled > startStamp) continue; // load predates the write
+    if (m.kind === 'seat') {
+      if (seatedAppIds.has(m.appId)) pending.delete(key);
+    } else if (m.kind === 'free') {
+      if (!allocIds.has(m.allocationId)) pending.delete(key);
+    } else if (m.rows.every(r => comms.some(c => c.id === m.committeeId && c.conference_allocations.some(
+      a => !a.id.startsWith('temp-') && a.society_id === r.society_id && a.country_code === r.country_code && a.seat === r.seat,
+    )))) {
+      pending.delete(key);
+    }
+  }
+  if (pending.size === 0) return { apps, comms };
+
+  // 2. Re-apply whatever is still pending.
+  const removeAppIds = new Set<string>();
+  const restoreApps: AcceptedApp[] = [];
+  const dropAllocIds = new Set<string>();
+  const addRows = new Map<string, AllocationRow[]>();
+  const queueRow = (committeeId: string, row: AllocationRow) => {
+    const list = addRows.get(committeeId);
+    if (list) list.push(row);
+    else addRows.set(committeeId, [row]);
+  };
+
+  for (const m of pending.values()) {
+    if (m.kind === 'seat') {
+      removeAppIds.add(m.appId);
+      // Only re-add the temp row when the snapshot carries no row for this
+      // application at all, otherwise a load that DID see the real row would
+      // leave the delegate seated twice.
+      if (!seatedAppIds.has(m.appId)) queueRow(m.committeeId, m.row);
+    } else if (m.kind === 'free') {
+      dropAllocIds.add(m.allocationId);
+      if (m.app) restoreApps.push(m.app);
+    } else {
+      for (const r of m.rows) {
+        const present = comms.some(c => c.id === m.committeeId && c.conference_allocations.some(
+          a => a.society_id === r.society_id && a.country_code === r.country_code && a.seat === r.seat,
+        ));
+        if (!present) queueRow(m.committeeId, r);
+      }
+    }
+  }
+
+  // Restore first, then remove: a change-seat in progress frees the old row and
+  // seats the same delegate elsewhere, and the seat must win.
+  const byId = new Map(apps.map(a => [a.id, a]));
+  for (const a of restoreApps) if (!byId.has(a.id)) byId.set(a.id, a);
+  for (const id of removeAppIds) byId.delete(id);
+
+  const nextComms = (dropAllocIds.size === 0 && addRows.size === 0)
+    ? comms
+    : comms.map(c => {
+        const add = addRows.get(c.id);
+        const kept = dropAllocIds.size === 0
+          ? c.conference_allocations
+          : c.conference_allocations.filter(a => !dropAllocIds.has(a.id));
+        if (!add && kept === c.conference_allocations) return c;
+        return { ...c, conference_allocations: add ? [...kept, ...add] : kept };
+      });
+
+  return { apps: Array.from(byId.values()), comms: nextComms };
+}
+
 // ── AssignmentPage ────────────────────────────────────────────────────────────
 
 export default function AssignmentPage() {
@@ -3246,13 +3559,35 @@ export default function AssignmentPage() {
 
   // Monotonic sequence for loads, a slow older response never overwrites a
   // newer one (silent background refetches can race with each other and with
-  // full loads).
+  // full loads). This orders load against LOAD only, which is why the ledger
+  // below exists: it orders load against WRITE.
   const loadSeq = useRef(0);
+
+  // See LocalMutation. `mutSeq` is the ledger clock: it ticks when a write
+  // settles, and each load records its value at the moment it started.
+  const localMutations = useRef(new Map<string, LocalMutation>());
+  const mutSeq = useRef(0);
+  // Applications repaired once per page life, so a stale row cannot put the
+  // client into a repair loop.
+  const healedAppIds = useRef(new Set<string>());
+
+  function noteLocalMutation(key: string, m: LocalMutation) {
+    localMutations.current.set(key, m);
+  }
+  /** The write landed: from here a load that starts later may retire this record. */
+  function settleLocalMutation(key: string) {
+    const m = localMutations.current.get(key);
+    if (m) m.settled = ++mutSeq.current;
+  }
+  function dropLocalMutation(key: string) {
+    localMutations.current.delete(key);
+  }
 
   const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!conference) return;
     if (!accessToken) return;
     const seq = ++loadSeq.current;
+    const startStamp = mutSeq.current;
     // silent: background refresh, never flips the page-level loading flag,
     // so the board stays mounted and interactive while fresh data arrives.
     if (!opts?.silent) setLoading(true);
@@ -3277,8 +3612,8 @@ export default function AssignmentPage() {
       supabase
         .from('conference_committees')
         .select(`
-          id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs,
-          committee_country_slots (id, country_code, country_name, delegation_size, importance),
+          id, name, abbreviation, difficulty, total_slots, logo_url, chair_user_ids, display_chairs, committee_type, groups,
+          committee_country_slots (id, country_code, country_name, delegation_size, importance, logo_url, group_id),
           conference_allocations (
             id, user_id, country_code, country_name, allocation_sent, allocation_sent_at, application_id, society_id, seat,
             profiles (id, display_name, email, nationality, date_of_birth, mun_experience_level, avatar_url),
@@ -3333,19 +3668,49 @@ export default function AssignmentPage() {
       id: s.id, name: s.name, memberCount: socCounts.get(s.id) ?? 0,
     }));
 
-    setAccepted(apps);
-    setCommittees(comms);
+    // Anyone the server already has a seat for leaves the rail even if their
+    // application still reads 'accepted' (a status flip that never landed).
+    const { unseated, stale, seatByKey } = splitAlreadySeated(apps, comms);
+    const merged = mergeLocalMutations(localMutations.current, unseated, comms, startStamp);
+
+    setAccepted(merged.apps);
+    setCommittees(merged.comms);
     setChairApps((chairRes.data ?? []) as unknown as ChairApp[]);
     setChairInvites((inviteRes.data ?? []) as unknown as PendingChairInvite[]);
     setSocieties(socs);
     setLoading(false);
+
+    // Repair the rows the UI just healed above, so the next organiser to open
+    // this board does not have to heal them again. Fire and forget: if RLS
+    // refuses the write the display fix still stands and nothing is worse than
+    // it was.
+    // A seat this device has just deallocated is still in the snapshot, and
+    // "seated row + accepted status" is exactly what it looks like. Repairing
+    // that one would put the delegate straight back in the committee they were
+    // removed from, so pending frees are excluded.
+    const pendingFreeIds = new Set<string>();
+    for (const m of localMutations.current.values()) if (m.kind === 'free') pendingFreeIds.add(m.allocationId);
+
+    const toRepair = stale.filter(a => !healedAppIds.current.has(a.id));
+    for (const a of toRepair) {
+      const held = seatByKey.get(`app:${a.id}`) ?? (a.profiles?.id ? seatByKey.get(`usr:${a.profiles.id}`) : undefined);
+      if (!held || pendingFreeIds.has(held.allocationId)) continue;
+      healedAppIds.current.add(a.id);
+      void supabase.from('applications').update({
+        status: 'assigned',
+        assigned_committee_id: held.committeeId,
+        assigned_country_code: held.countryCode,
+        assigned_country_name: held.countryName,
+      }).eq('id', a.id).eq('status', 'accepted').then(() => {}, () => {});
+    }
 
     // Enrich with MUN history (CV entries + platform awards), non-blocking
     const userIds = Array.from(new Set(apps.map(a => a.profiles?.id).filter(Boolean))) as string[];
     if (userIds.length > 0) {
       const [cvRes, awRes] = await Promise.all([
         supabase.from('mun_cv_entries').select('user_id, award').in('user_id', userIds),
-        supabase.from('conference_awards').select('user_id, award_label').in('user_id', userIds),
+        // Published only: nominations are not history until the ceremony.
+        supabase.from('conference_awards').select('user_id, award_label').eq('status', 'published').in('user_id', userIds),
       ]);
       if (seq !== loadSeq.current) return; // stale response
       const map: Record<string, UserHistory> = {};
@@ -3396,11 +3761,73 @@ export default function AssignmentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
+  // Coalesced confirmation refetch. Every allocation write used to fire its own
+  // silent load, so five assignments in five seconds meant five overlapping
+  // loads all racing the writes that followed them. One trailing load now
+  // confirms the whole burst, and the ledger keeps the board honest until it
+  // arrives.
+  //
+  // One extra rule on top of the debounce: a load that comes back still holding
+  // records arms another load, up to RECONCILE_MAX_RETRIES with an exponential
+  // back-off. Without it the last load of a burst was the last load, full stop,
+  // and a record the server never confirmed had no later pass to be aged out by.
+  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Follow-up passes already spent on the current disagreement. Reset by any
+  // new action, so a fresh record always gets the full budget.
+  const reconcileRetries = useRef(0);
+  // Cleared on unmount, so a load that resolves after the board is gone cannot
+  // arm a timer nothing is left to clear. Set (not just cleared) by the effect
+  // below, because StrictMode's mount/unmount/mount would otherwise leave this
+  // ref stuck false for the real mount.
+  const reconcileAlive = useRef(true);
+  useEffect(() => {
+    reconcileAlive.current = true;
+    return () => {
+      reconcileAlive.current = false;
+      if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+      reconcileTimer.current = null;
+    };
+  }, []);
+
+  /** Arm one silent load `delay` ms from now, replacing any pending one. */
+  const armReconcile = useCallback((delay: number) => {
+    if (!reconcileAlive.current) return;
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+    reconcileTimer.current = setTimeout(() => {
+      reconcileTimer.current = null;
+      void loadData({ silent: true }).then(() => {
+        // Unmounted while the load was in flight: arming here would leak a
+        // timer past the cleanup above.
+        if (!reconcileAlive.current) return;
+        // Everything retired, or the budget is spent and mergeLocalMutations
+        // has aged the survivors out. Either way the board matches the server.
+        if (localMutations.current.size === 0 || reconcileRetries.current >= RECONCILE_MAX_RETRIES) {
+          reconcileRetries.current = 0;
+          return;
+        }
+        const attempt = reconcileRetries.current++;
+        armReconcileRef.current(RECONCILE_DELAY_MS * 2 ** attempt);
+      });
+    }, delay);
+  }, [loadData]);
+  // Indirection so the timer callback can re-arm without armReconcile having to
+  // close over itself.
+  const armReconcileRef = useRef(armReconcile);
+  useEffect(() => { armReconcileRef.current = armReconcile; }, [armReconcile]);
+
+  const scheduleReconcile = useCallback(() => {
+    reconcileRetries.current = 0;
+    armReconcile(RECONCILE_DELAY_MS);
+  }, [armReconcile]);
+
   // ── Optimistic allocation commit ────────────────────────────────────────────
   // Applies exactly the change the user made, the allocation appears in the
   // committee panel and the applicant leaves the unassigned rail, with a temp
   // row id. The real UUID arrives via a silent background refetch.
-  function applyLocalAllocation(committee: CommitteeData, app: AcceptedApp, slot: SlotRow, seat: number, sent = false): AllocationRow {
+  // `persisted` = the insert already returned OK before this was called (every
+  // modal path). Such a record can be retired by the very next load; an
+  // optimistic one waits for its caller to settle it.
+  function applyLocalAllocation(committee: CommitteeData, app: AcceptedApp, slot: SlotRow, seat: number, sent = false, persisted = false): AllocationRow {
     const row: AllocationRow = {
       id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       // null, not '': AllocationRow.user_id is string | null, and an imported
@@ -3423,6 +3850,15 @@ export default function AssignmentPage() {
       c.id === committee.id ? { ...c, conference_allocations: [...c.conference_allocations, row] } : c
     ));
     setAccepted(prev => prev.filter(a => a.id !== app.id));
+    noteLocalMutation(`seat:${app.id}`, {
+      kind: 'seat',
+      settled: persisted ? ++mutSeq.current : null,
+      at: Date.now(),
+      appId: app.id,
+      committeeId: committee.id,
+      row,
+      app,
+    });
     return row;
   }
 
@@ -3448,6 +3884,15 @@ export default function AssignmentPage() {
     setCommittees(prev => prev.map(c =>
       c.id === committee.id ? { ...c, conference_allocations: [...c.conference_allocations, ...rows] } : c
     ));
+    // Always called after the insert succeeded inside the modal, so it settles
+    // immediately.
+    noteLocalMutation(`soc:${committee.id}:${slot.country_code}`, {
+      kind: 'seat-society',
+      settled: ++mutSeq.current,
+      at: Date.now(),
+      committeeId: committee.id,
+      rows,
+    });
     return rows;
   }
 
@@ -3458,16 +3903,43 @@ export default function AssignmentPage() {
       c.id === committeeId ? { ...c, conference_allocations: c.conference_allocations.filter(a => a.id !== tempRowId) } : c
     ));
     setAccepted(prev => (prev.some(a => a.id === app.id) ? prev : [...prev, app]));
+    // The change never happened, so no load should ever re-apply it.
+    dropLocalMutation(`seat:${app.id}`);
   }
 
   // ── One-click assign (used by suggestion cards) ─────────────────────────────
   // Optimistic: the suggestion card disappears and the allocation shows in the
   // committee panel immediately; the insert persists in the background.
+  // Keyed on the APPLICANT, not on applicant+slot. A delegate can only hold one
+  // seat in the whole conference, so a second click on the same person in a
+  // DIFFERENT committee is exactly the collision that has to be blocked, and
+  // the old app+slot key waved it straight through.
   const inFlightAssignKeys = useRef(new Set<string>());
   function quickAssign(sug: Suggestion) {
     if (!session || !conference) return;
-    const key = `${sug.app.id}-${sug.slot.id}`;
+    const key = sug.app.id;
+    const cardKey = `${sug.app.id}-${sug.slot.id}`;
     if (inFlightAssignKeys.current.has(key)) return;
+
+    // Local pre-flight: the board already knows every seat it is showing, so a
+    // delegate who holds one never reaches the insert. insertAllocation runs the
+    // authoritative check against the DB; this one is instant and stops the
+    // optimistic row from ever appearing.
+    const heldRow = committees
+      .flatMap(c => c.conference_allocations.map(a => ({ c, a })))
+      .find(({ a }) => a.application_id === sug.app.id || (!!sug.app.profiles?.id && a.user_id === sug.app.profiles.id));
+    if (heldRow) {
+      showFlash('err', heldRow.c.id === sug.committee.id
+        ? ALREADY_IN_COMMITTEE_MESSAGE
+        : alreadySeatedMessage({
+            label: heldRow.c.abbreviation ?? heldRow.c.name,
+            country: heldRow.a.country_name,
+          }));
+      // Open the room they are actually in: its overview list is where the
+      // "remove that seat first" affordance lives.
+      setOverviewCommitteeId(heldRow.c.id);
+      return;
+    }
 
     const byCountry = groupAllocationsByCountry(sug.committee.conference_allocations);
     const seat = lowestOpenSeat(sug.slot, byCountry);
@@ -3479,7 +3951,7 @@ export default function AssignmentPage() {
     }
 
     inFlightAssignKeys.current.add(key);
-    setQuickAssigning(key);
+    setQuickAssigning(cardKey);
     const supabase = getAuthedClient(session.access_token);
     const conferenceId = conference.id;
 
@@ -3495,24 +3967,35 @@ export default function AssignmentPage() {
         rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
         // The seat was shown as filled and then silently vanished. ONE report
         // per click — inFlightAssignKeys makes a concurrent second call for the
-        // same app/slot impossible, and the .catch below is the other half of
+        // same applicant impossible, and the .catch below is the other half of
         // this same branch, never an additional one.
         reportBlocked('assign delegate to committee', new Error(err), {
           conferenceId, committeeId: sug.committee.id, applicationId: sug.app.id, slotId: sug.slot.id,
         });
         showFlash('err', err);
+        // insertAllocation refused off the DATABASE's view of the seats, so
+        // this board's snapshot is provably behind it — "already allocated in
+        // another committee" is exactly a seat we are not showing. Refetch, or
+        // the suggestion engine offers the same delegate again immediately.
+        scheduleReconcile();
         return;
       }
-      loadData({ silent: true }); // swap the temp row for the real UUID
+      // The row is real now, so a load that starts from here on may retire the
+      // ledger record and swap the temp id for the real UUID.
+      settleLocalMutation(`seat:${sug.app.id}`);
+      scheduleReconcile();
     })().catch((e) => {
       rollbackLocalAllocation(sug.committee.id, sug.app, tempRow.id);
       reportBlocked('assign delegate to committee', e, {
         conferenceId, committeeId: sug.committee.id, applicationId: sug.app.id, slotId: sug.slot.id,
       });
       showFlash('err', 'Could not save this assignment.');
+      // The other half of the branch above: the insert may still have landed
+      // before it threw, so the rollback we just did is a guess. Go and look.
+      scheduleReconcile();
     }).finally(() => {
       inFlightAssignKeys.current.delete(key);
-      setQuickAssigning(prev => (prev === key ? null : prev));
+      setQuickAssigning(prev => (prev === cardKey ? null : prev));
     });
   }
 
@@ -3638,8 +4121,20 @@ export default function AssignmentPage() {
       ...c,
       conference_allocations: c.conference_allocations.filter(a => a.id !== allocation.id),
     })));
+    const mutKey = `free:${allocation.id}`;
+    noteLocalMutation(mutKey, {
+      kind: 'free',
+      settled: null,
+      at: Date.now(),
+      allocationId: allocation.id,
+      committeeId,
+      // Carried so a load still holding the old snapshot puts them back in the
+      // rail rather than showing them nowhere at all.
+      app: allocation.application_id ? allocationToApp(allocation) : null,
+    });
 
     const rollback = () => {
+      dropLocalMutation(mutKey);
       if (!committeeId) return;
       setCommittees(prev => prev.map(c =>
         c.id === committeeId ? { ...c, conference_allocations: [...c.conference_allocations, allocation] } : c
@@ -3658,6 +4153,9 @@ export default function AssignmentPage() {
           conferenceId, allocationId: allocation.id, committeeId,
         });
         showFlash('err', 'Could not remove this allocation.');
+        // The rollback restored a row the server refused to delete. Whether it
+        // is still there, and in what shape, is now the server's answer to give.
+        scheduleReconcile();
         return;
       }
       if (allocation.application_id) {
@@ -3677,13 +4175,17 @@ export default function AssignmentPage() {
           showFlash('err', 'Allocation removed, but the notification email could not be queued.');
         }
       }
-      loadData({ silent: true }); // brings the delegate back into the unassigned rail
+      settleLocalMutation(mutKey);
+      scheduleReconcile(); // brings the delegate back into the unassigned rail
     })().catch((e) => {
       rollback();
       reportBlocked('remove delegate allocation', e, {
         conferenceId, allocationId: allocation.id, committeeId,
       });
       showFlash('err', 'Could not remove this allocation.');
+      // The delete may have landed before the status reset or the email queue
+      // threw, so the restored row is a guess. Let the server settle it.
+      scheduleReconcile();
     }).finally(() => inFlightRemoveIds.current.delete(allocation.id));
   }
 
@@ -3742,6 +4244,9 @@ export default function AssignmentPage() {
       if (error) {
         rollback();
         showFlash('err', `Could not assign ${name} to ${label}.`);
+        // chair_user_ids was written off the array this client is holding, so a
+        // refusal means that array is suspect. Same rule as the seat paths.
+        scheduleReconcile();
         return;
       }
       if (chairApp.status === 'accepted') {
@@ -3757,6 +4262,7 @@ export default function AssignmentPage() {
     })().catch(() => {
       rollback();
       showFlash('err', `Could not assign ${name} to ${label}.`);
+      scheduleReconcile();
     }).finally(() => inFlightChairIds.current.delete(committee.id));
   }
 
@@ -3812,6 +4318,9 @@ export default function AssignmentPage() {
       if (error) {
         rollback();
         showFlash('err', `Could not remove ${name} from ${label}.`);
+        // nextIds was derived from the dais this client is showing, so a
+        // refusal means that dais is suspect. Same rule as the seat paths.
+        scheduleReconcile();
         return;
       }
       if (!chairsElsewhere) {
@@ -3825,6 +4334,7 @@ export default function AssignmentPage() {
     })().catch(() => {
       rollback();
       showFlash('err', `Could not remove ${name} from ${label}.`);
+      scheduleReconcile();
     }).finally(() => inFlightChairIds.current.delete(committee.id));
   }
 
@@ -3850,10 +4360,14 @@ export default function AssignmentPage() {
       if (error) {
         setChairInvites(prev => (prev.some(i => i.id === invite.id) ? prev : [...prev, invite]));
         showFlash('err', `Could not revoke the invite to ${label}.`);
+        // The chip was put back on faith. The invite may already have been
+        // revoked or accepted elsewhere, so ask.
+        scheduleReconcile();
       }
     })().catch(() => {
       setChairInvites(prev => (prev.some(i => i.id === invite.id) ? prev : [...prev, invite]));
       showFlash('err', `Could not revoke the invite to ${label}.`);
+      scheduleReconcile();
     }).finally(() => inFlightInviteIds.current.delete(invite.id));
   }
 
@@ -3913,6 +4427,11 @@ export default function AssignmentPage() {
   // simply scores 0 on the preference terms; their suggestion is then driven
   // by committee fill-need, the seat-importance signal and their experience /
   // difficulty skill match, so they are never skipped here.
+  // Everyone who already holds a seat anywhere in this conference, temp rows
+  // included, so a seat taken a moment ago drops its holder out of the pool on
+  // the very next render rather than at the next load.
+  const seatedIdentities = useMemo(() => seatedIdentitiesIn(committees), [committees]);
+
   const suggestions = useMemo<Suggestion[]>(() => {
     // For every candidate, rank ALL their open-seat options best-first (not just
     // their single best). Keeping the full ranked list is what lets the greedy
@@ -3923,6 +4442,14 @@ export default function AssignmentPage() {
     // single best seat collapsed to one suggestion and the strip could show
     // fewer than 3 even with plenty of unassigned applicants and open seats.
     const ranked = accepted
+      // isSlotFull filters SEATS. This filters PEOPLE, which nothing did: a
+      // delegate whose application still read 'accepted' while an allocation
+      // row existed for them was suggested on every single load, and every
+      // click on that card failed on the one-seat-per-delegate index. user_id
+      // is the fallback because an imported delegate's row may carry no
+      // application_id.
+      .filter(app => !seatedIdentities.appIds.has(app.id)
+        && !(app.profiles?.id ? seatedIdentities.userIds.has(app.profiles.id) : false))
       .map(app => {
         const options: Suggestion[] = [];
         for (const c of committees) {
@@ -4048,7 +4575,7 @@ export default function AssignmentPage() {
         ? { ...s, reasons: [...s.reasons, 'NEEDS DELEGATES'] }
         : s
     );
-  }, [accepted, committees, needyCommitteeIds]);
+  }, [accepted, committees, needyCommitteeIds, seatedIdentities]);
 
   if (!conference) return null;
 
@@ -4249,7 +4776,7 @@ export default function AssignmentPage() {
                               {sug.app.profiles?.display_name ?? sug.app.invited_name}
                             </p>
                             <ArrowRight size={12} style={{ color: NEU.muted, flexShrink: 0 }} />
-                            <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} />
+                            <CountryFlag code={sug.slot.country_code} w={19} h={13} radius={2} alt={sug.slot.country_name} logoUrl={slotLogoUrl(sug.committee, sug.slot)} />
                             <p className="text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>{sug.slot.country_name}</p>
                           </div>
                           {expanded
@@ -4489,7 +5016,7 @@ export default function AssignmentPage() {
                           {firstPref && (
                             <div className="flex items-center gap-1.5 mt-2">
                               <PrefRankBadge order={1} size={16} />
-                              <CountryFlag code={firstPref.country_code} w={17} h={12} radius={2} alt={firstPref.country_name} />
+                              <CountryFlag code={firstPref.country_code} w={17} h={12} radius={2} alt={firstPref.country_name} logoUrl={(() => { const cc = committees.find(c => c.id === firstPref.conference_committee_id); return cc ? committeeSeatLogo(cc, firstPref.country_code) : null; })()} />
                               <span className="truncate" style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT }}>
                                 {firstPref.conference_committees?.name ?? 'Unknown'} · {firstPref.country_name}
                               </span>
@@ -4623,10 +5150,10 @@ export default function AssignmentPage() {
             // The insert already succeeded inside the modal (its button was
             // the only busy control), commit the same change locally and
             // swap in the real row id with a silent refetch.
-            applyLocalAllocation(dropModalCommittee, dropModalApp, slot, seat);
+            applyLocalAllocation(dropModalCommittee, dropModalApp, slot, seat, false, true);
             showFlash('ok', msg);
             setSelectedAppId(null);
-            loadData({ silent: true });
+            scheduleReconcile();
           }}
         />
       )}
@@ -4642,7 +5169,7 @@ export default function AssignmentPage() {
             // row(s) locally and swap in the real row ids with a silent refetch.
             applyLocalSocietyAllocation(societyDropModalCommittee, societyDropModalSociety, slot);
             showFlash('ok', msg);
-            loadData({ silent: true });
+            scheduleReconcile();
           }}
         />
       )}
@@ -4671,8 +5198,8 @@ export default function AssignmentPage() {
           onAssigned={(app, slot, seat, sentEmail) => {
             // Writes already succeeded inside the modal, commit the same
             // change locally and fetch the real row id silently.
-            applyLocalAllocation(assignModalCommittee, app, slot, seat, sentEmail);
-            loadData({ silent: true });
+            applyLocalAllocation(assignModalCommittee, app, slot, seat, sentEmail, true);
+            scheduleReconcile();
           }}
         />
       )}
@@ -4696,7 +5223,14 @@ export default function AssignmentPage() {
             const supabase = getAuthedClient(session.access_token);
             const committeeId = overviewCommittee.id;
             const { error } = await supabase.from('conference_allocations').delete().eq('id', alloc.id);
-            if (error) { showFlash('err', 'Could not free that seat.'); return; }
+            if (error) {
+              showFlash('err', 'Could not free that seat.');
+              // Nothing local changed yet, but the delete was aimed at a row id
+              // out of this snapshot and the server refused it. Go and look
+              // rather than leaving a seat on screen that may not be there.
+              scheduleReconcile();
+              return;
+            }
             if (alloc.application_id) {
               await supabase.from('applications').update({
                 status: 'accepted', assigned_committee_id: null, assigned_country_code: null, assigned_country_name: null,
@@ -4706,8 +5240,23 @@ export default function AssignmentPage() {
             setCommittees(prev => prev.map(c => c.id === committeeId
               ? { ...c, conference_allocations: c.conference_allocations.filter(a => a.id !== alloc.id) }
               : c));
+            // This path used to patch local state and stop there, with no
+            // reconcile at all: a load already in flight simply re-materialised
+            // the seat that was just freed, and closing the assign modal without
+            // picking a new country left the board lying either way. Record the
+            // free (the delete above was awaited, so it is already settled) and
+            // confirm it.
+            noteLocalMutation(`free:${alloc.id}`, {
+              kind: 'free',
+              settled: ++mutSeq.current,
+              at: Date.now(),
+              allocationId: alloc.id,
+              committeeId,
+              app: alloc.application_id ? allocationToApp(alloc) : null,
+            });
             setOverviewCommitteeId(null);
             setAssignModal({ committeeId, preApp: allocationToApp(alloc), moveFrom: alloc });
+            scheduleReconcile();
           }}
         />
       )}
@@ -4733,11 +5282,20 @@ export default function AssignmentPage() {
                   ? { ...c, conference_allocations: c.conference_allocations.filter(a => a.id !== removedSiblingId) }
                   : c
               ));
+              // The modal awaited both writes, so both records are settled.
+              noteLocalMutation(`free:${removedSiblingId}`, {
+                kind: 'free',
+                settled: ++mutSeq.current,
+                at: Date.now(),
+                allocationId: removedSiblingId,
+                committeeId: conflict.committee.id,
+                app: conflict.sibling.application_id ? allocationToApp(conflict.sibling) : null,
+              });
             }
-            applyLocalAllocation(conflict.committee, conflict.app, conflict.slot, conflict.seat);
+            applyLocalAllocation(conflict.committee, conflict.app, conflict.slot, conflict.seat, false, true);
             setConflict(null);
             showFlash('ok', msg);
-            loadData({ silent: true });
+            scheduleReconcile();
           }}
         />
       )}

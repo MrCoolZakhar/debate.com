@@ -41,8 +41,11 @@ import {
   GraduationCap, Trophy, Crown, Sparkles,
   MapPin, Landmark, Check, X, Plus, Minus, ArrowRight, CalendarClock,
   Ticket, Infinity as InfinityIcon, Globe, Lock, ChevronUp, ChevronDown,
-  Info, Coins, Pencil,
+  Info, Coins, Pencil, Ban,
 } from 'lucide-react';
+
+/** Destructive-action red, matching /drafts/[token] exactly. */
+const DANGER = '#8B2020';
 
 const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`;
 
@@ -350,6 +353,10 @@ type StepKindName = 'society' | 'invoicing' | 'preferences' | 'experience' | 'mu
  * simply goes inert rather than inventing a scrollbar.
  */
 const STEP_MIN_BODY = 700;
+
+/** Height of the preview banner, in px. WizardShell subtracts this from its
+ *  viewport cap so the Continue pill sits where it does in the real flow. */
+const PREVIEW_BANNER_H = 35;
 
 /** Human names for the wizard stages, shown on the WizardShell progress rail. */
 const STEP_LABEL: Record<StepKindName, string> = {
@@ -938,6 +945,9 @@ function ConferenceApplyInner() {
   // stranger, with canPreview still false, leaves this false and the page
   // behaves exactly as it does today, walls and all.
   const previewing = isPreview && canPreview;
+  // WizardShell's viewport cap needs to know about the banner's chrome too,
+  // or a short window pushes the Continue pill below the fold in preview.
+  const wizardExtraChrome = previewing ? PREVIEW_BANNER_H : 0;
 
   // ── Age gate (conference.min_age), DOB comes from the user's profile
   const [myDob, setMyDob] = useState<string | null>(null);
@@ -1301,6 +1311,11 @@ function ConferenceApplyInner() {
   /** Once true the creation gate is satisfied for good and every later change
    *  saves unconditionally — including back to empty. */
   const draftExistsRef = useRef(false);
+  /** Render mirror of draftExistsRef. The ref is read inside the saver and
+   *  must not trigger a render there, but the "discard application" escape
+   *  hatch at the top of the flow only exists once a row really does — so it
+   *  needs a state companion. Set wherever draftExistsRef is. */
+  const [hasDraft, setHasDraft] = useState(false);
   /** Hard off switch: conflict, submit in flight, or a refusal we can't fix. */
   const draftOffRef = useRef(false);
   const draftInFlightRef = useRef(false);
@@ -1316,6 +1331,12 @@ function ConferenceApplyInner() {
   const [draftReady, setDraftReady] = useState(false);
   /** Another tab owns this draft. We stop saving and say so — see below. */
   const [draftConflict, setDraftConflict] = useState(false);
+  /** Two-stage confirm for the "discard application" control. Armed only by
+   *  an explicit click, exactly like /drafts/[token]: deleting somebody's
+   *  half-written application must never be one stray tap away. */
+  const [discardArmed, setDiscardArmed] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardError, setDiscardError] = useState('');
 
   const draftAnswers: ApplyDraftAnswers = {
     isIndependent,
@@ -1389,6 +1410,7 @@ function ConferenceApplyInner() {
         draftRevisionUnknownRef.current = false;
         if (sync.status === 'gone') {
           draftExistsRef.current = false;
+          setHasDraft(false);
           draftRevisionRef.current = 0;
         } else {
           draftRevisionRef.current = sync.revision;
@@ -1422,6 +1444,7 @@ function ConferenceApplyInner() {
 
         if (res.ok) {
           draftExistsRef.current = true;
+          setHasDraft(true);
           draftRevisionRef.current = res.revision;
           if (draftPendingRef.current && !draftOffRef.current) continue;
           return;
@@ -1501,6 +1524,7 @@ function ConferenceApplyInner() {
         draftRevisionRef.current = row.revision;
         draftTokenRef.current = row.discardToken;
         draftExistsRef.current = true;
+        setHasDraft(true);
         // Treat what we just restored as already-saved, so simply resuming
         // does not immediately burn a revision (which would hand a spurious
         // conflict to a second tab that had not been touched).
@@ -1579,22 +1603,66 @@ function ConferenceApplyInner() {
   /** Drop the draft row once the application it drafted actually exists (or
    *  has been withdrawn). Turns autosave off first so an in-flight debounce
    *  can never resurrect what we just deleted. */
-  async function discardDraft(client: ReturnType<typeof getAuthedClient>) {
+  async function discardDraft(client: ReturnType<typeof getAuthedClient>): Promise<boolean> {
     draftOffRef.current = true;
-    if (!conference || !user) return;
+    if (!conference || !user) return false;
+    let deleted = false;
     try {
-      await discardApplyDraft(client, {
+      deleted = await discardApplyDraft(client, {
         conferenceId: conference.id,
         userId: user.id,
         role,
         token: draftTokenRef.current,
       });
     } catch { /* the application is in; a lingering draft must not block the redirect */ }
+    if (deleted) {
+      draftExistsRef.current = false;
+      draftRevisionRef.current = 0;
+      setHasDraft(false);
+    }
     /* Tell the profile badge the count moved. Every caller redirects straight
        after this, and the route change remounts SiteNav — so the badge already
        corrected itself by accident. Announcing it explicitly makes that a
        guarantee rather than a side effect of how we happen to navigate today. */
     notifyDraftsChanged();
+    /* The submit/withdraw callers ignore this: for them the application row
+       already exists, so a stranded draft is untidy rather than harmful, and
+       autosave must stay off regardless. Only the explicit "discard
+       application" control below acts on a false. */
+    return deleted;
+  }
+
+  /**
+   * The explicit escape hatch at the top of the flow. Same delete path as
+   * every other caller — never a direct `.delete()` on `application_drafts`,
+   * which `discard_application_draft` exists precisely to keep off the client.
+   *
+   * Uses a FRESH client: an applicant who left this tab open for an hour has
+   * an expired access token, and the RPC's ownership check would come back
+   * `unauthenticated` and read to them as an unexplained failure.
+   */
+  async function handleDiscardApplication() {
+    if (discarding) return;
+    setDiscarding(true);
+    setDiscardError('');
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setDiscarding(false);
+      setDiscardError('Your session has expired. Please refresh and sign in again.');
+      return;
+    }
+    const deleted = await discardDraft(supabase);
+    if (deleted) {
+      setDiscardArmed(false);
+      router.push(`/conferences/${slug}`);
+      return;
+    }
+    // Nothing was deleted. discardDraft has already shut autosave off, so put
+    // it back on: whatever they type from here must keep saving.
+    draftOffRef.current = false;
+    draftFingerprintRef.current = null;
+    setDiscarding(false);
+    setDiscardError('We could not delete this draft. It may already be gone, or it is not on this account. Refresh the page and try again.');
   }
 
   // ── Pooled/delegation credit balance for the Overview gate, refetched
@@ -2727,6 +2795,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title={!showSociety ? 'A little background' : isInvoicingRole ? 'Your delegation' : 'How are you applying?'}
         sub={
@@ -2912,6 +2981,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={() => setStep(s => s - 1)}
         title="Paying for delegation spots?"
         sub="Separate from your own registration fee — this only covers spots for your delegates."
@@ -3148,6 +3218,7 @@ function ConferenceApplyInner() {
           total={totalSteps}
           labels={stepLabels}
           minBodyHeight={STEP_MIN_BODY}
+          extraChrome={wizardExtraChrome}
           onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
           title="Your preferences"
           sub={subtitle}
@@ -3165,6 +3236,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="Your preferences"
         sub={subtitle}
@@ -3357,6 +3429,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="About you"
         sub="Set your MUN experience level, or import it from your MUN CV. The organiser sees it with your application and uses it for allocations."
@@ -3727,6 +3800,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={step > 1 ? () => setStep(s => s - 1) : undefined}
         title="MUN experience"
         sub="List the conferences you have chaired or staffed. Import them from your MUN CV, or add them one at a time."
@@ -3799,6 +3873,7 @@ function ConferenceApplyInner() {
           )}
         </div>
 
+        {!previewing && (
         <div className="mt-3">
           <button
             type="button"
@@ -3829,6 +3904,7 @@ function ConferenceApplyInner() {
             </p>
           )}
         </div>
+        )}
 
         <WizardFooter onNext={handleContinue} nextLabel="Continue" primary />
 
@@ -3957,6 +4033,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         subStep={pages.length > 1 ? { index: questionPage, total: pages.length } : undefined}
         onBack={canGoBack ? handleBackQuestions : undefined}
         title={heading}
@@ -4056,6 +4133,7 @@ function ConferenceApplyInner() {
         total={totalSteps}
         labels={stepLabels}
         minBodyHeight={STEP_MIN_BODY}
+        extraChrome={wizardExtraChrome}
         onBack={() => {
           // Landing back on Experience (skipped entirely for advisors) always
           // re-opens the Questions step's first section page.
@@ -4663,27 +4741,35 @@ function ConferenceApplyInner() {
 
   return (
     <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
+      <SiteNav />
+
       {/* Unmistakable, and present on every step since this wraps the whole
           wizard dispatch below. Rendered in normal flow (not fixed) so the
-          rest of the page simply sits below it, no padding offset needed. */}
+          rest of the page simply sits below it, no padding offset needed.
+          After SiteNav, not before: SiteNav's floating pill otherwise sits on
+          top of the banner text. zIndex clears both the grain layer (1) and
+          the nav itself. */}
       {previewing && (
         <div
           className="relative w-full text-center"
           style={{
             backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT,
             fontSize: 12, fontWeight: 800, letterSpacing: '0.08em',
-            padding: '9px 16px', zIndex: 2,
+            padding: '9px 16px', zIndex: 20,
           }}
         >
           PREVIEW MODE. Nothing you type here is saved and no application is created.
         </div>
       )}
-      <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
-      <SiteNav />
 
       <div className="relative z-10 flex-1 px-6 py-10" style={{ maxWidth: 760, margin: '0 auto', width: '100%' }}>
-        {/* Breadcrumb */}
-        <div className="mb-4">
+        {/* Breadcrumb, and opposite it the escape hatch for a resumed draft.
+            This row is the only always-rendered strip above the steps: each
+            step supplies its own WizardShell and that has no slot for a
+            trailing control. Deliberately quiet — muted, 11.5px, no border,
+            no fill. Discarding is an exit, never a call to action. */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <Link
             href={`/conferences/${slug}`}
             className="text-xs"
@@ -4691,7 +4777,74 @@ function ConferenceApplyInner() {
           >
             ← {conference.acronym}
           </Link>
+
+          {/* Only when a draft row actually exists. Never in edit mode (there
+              is no draft, and the thing to abandon is an application already
+              submitted), never in preview (nothing is saved), and never while
+              another tab owns the row — deleting from the losing tab would
+              bin what the other tab is still writing. */}
+          {hasDraft && !isEditMode && !previewing && !draftConflict && (
+            discardArmed ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600, color: NEU.ink }}>
+                  Discard this draft for good?
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDiscardApplication}
+                  disabled={discarding}
+                  className="focus:outline-none"
+                  style={{
+                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 700,
+                    color: DANGER, background: 'none', border: 'none', padding: 0,
+                    cursor: discarding ? 'default' : 'pointer',
+                    opacity: discarding ? 0.6 : 1,
+                    textDecoration: 'underline', textUnderlineOffset: 3,
+                  }}
+                >
+                  {discarding ? 'Discarding...' : 'Yes, discard'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDiscardArmed(false); setDiscardError(''); }}
+                  disabled={discarding}
+                  className="focus:outline-none"
+                  style={{
+                    fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600,
+                    color: NEU.inkSoft, background: 'none', border: 'none', padding: 0,
+                    cursor: discarding ? 'default' : 'pointer',
+                  }}
+                >
+                  Keep it
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setDiscardArmed(true); setDiscardError(''); }}
+                className="inline-flex items-center gap-1.5 focus:outline-none transition-colors"
+                style={{
+                  fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 600,
+                  color: NEU.inkSoft, background: 'none', border: 'none', padding: 0,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = DANGER; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
+                onFocus={(e) => { (e.currentTarget as HTMLElement).style.color = DANGER; }}
+                onBlur={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
+              >
+                <Ban size={13} strokeWidth={2.2} />
+                Discard application
+              </button>
+            )
+          )}
         </div>
+
+        {discardError && (
+          <p className="mb-4 text-xs text-right" style={{ color: DANGER, fontFamily: OUTFIT, lineHeight: 1.5 }}>
+            {discardError}
+          </p>
+        )}
 
         {isEditMode && (
           <div className="flex justify-center mb-2">

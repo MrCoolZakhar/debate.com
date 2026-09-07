@@ -306,12 +306,16 @@ export function foldFactors(
 export async function loadConferenceScoreboard(
   supabase: SupabaseClient,
   conferenceId: string,
+  /** Restrict to these conference_committees ids (a chair's own committee for the awards slate). */
+  onlyCommitteeIds?: string[],
 ): Promise<ConferenceScoreboard> {
-  const { data: ccData, error: ccError } = await supabase
+  let ccQuery = supabase
     .from('conference_committees')
     .select('id, name, abbreviation, session_id, session_code')
     .eq('conference_id', conferenceId)
     .order('name');
+  if (onlyCommitteeIds && onlyCommitteeIds.length > 0) ccQuery = ccQuery.in('id', onlyCommitteeIds);
+  const { data: ccData, error: ccError } = await ccQuery;
 
   if (ccError) {
     console.error('[conferenceScoreboard] conference_committees load failed:', ccError);

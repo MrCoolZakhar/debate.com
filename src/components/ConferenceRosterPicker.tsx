@@ -12,15 +12,16 @@
 // Reuses shared logic (findCountryFlexible, UN_COUNTRIES) rather than copying.
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X } from 'lucide-react';
+import { Globe, Users, PenLine, Megaphone, Info, ArrowDownAZ, X, ImagePlus, Replace, FolderInput, Plus, Check, GripVertical } from 'lucide-react';
 import Portal from '@/components/Portal';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName, findCountryFlexible, countryMatchRank } from '@/lib/countries';
 import {
   UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS,
   ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES,
   US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS,
 } from '@/lib/presets';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import { type SlotGroup, newGroupId, GROUP_COLORS, effectiveSlotArt, PARLIAMENT_PRESETS } from '@/lib/slotGroups';
 
 // ── Importance tiers ──────────────────────────────────────────────────────────
 // Mirrors the assignment page's model so tiers set here round-trip through the
@@ -43,13 +44,18 @@ const TIER_META: Record<ImportanceTier, { label: string; color: string; bg: stri
 // importance tier and observer flag. Characters always carry the neutral
 // 'standard' tier. Observers apply to both countries and characters, mirroring
 // the standalone session flow (src/app/create/page.tsx).
+// `logoUrl` is the seat's own flag image (committee_country_slots.logo_url) and
+// `groupId` the seat group it sits in (committee_country_slots.group_id), see
+// src/lib/slotGroups.ts. Both are null for the ordinary flag-and-country seat.
 export interface RosterEntry {
   name: string;
   importance: ImportanceTier;
   isObserver?: boolean;
+  logoUrl?: string | null;
+  groupId?: string | null;
 }
 
-export const entry = (name: string, importance: ImportanceTier = 'standard', isObserver = false): RosterEntry => ({ name, importance, isObserver });
+export const entry = (name: string, importance: ImportanceTier = 'standard', isObserver = false): RosterEntry => ({ name, importance, isObserver, logoUrl: null, groupId: null });
 
 // ── Importance dashes ─────────────────────────────────────────────────────────
 // A small clickable stack of vertical bars. Dash count + colour both encode the
@@ -251,19 +257,11 @@ const BUNDLES: Record<string, { label: string; logoPath?: string; members: strin
   ArabLeague: { label: 'Arab League', logoPath: '/logos/arab-league.png',  members: ['Algeria', 'Bahrain', 'Comoros', 'Djibouti', 'Egypt', 'Iraq', 'Jordan', 'Kuwait', 'Lebanon', 'Libya', 'Mauritania', 'Morocco', 'Oman', 'Palestine', 'Qatar', 'Saudi Arabia', 'Somalia', 'Sudan', 'Syria', 'Tunisia', 'United Arab Emirates', 'Yemen'] },
 };
 
-// Common shorthands the paste matcher understands before falling through to
-// the shared accent/locale-aware findCountryFlexible.
-const COUNTRY_ACRONYMS: Record<string, string> = {
-  uk: 'United Kingdom', us: 'United States', usa: 'United States',
-  uae: 'United Arab Emirates', drc: 'DR Congo', roc: 'Taiwan',
-  rok: 'South Korea', dprk: 'North Korea', car: 'Central African Republic',
-  png: 'Papua New Guinea',
-};
-
+// The acronym table that used to live here (uk, usa, uae, drc, roc, rok,
+// dprk, car, png) moved into COUNTRY_NAME_ALIASES in src/lib/countries.ts,
+// where findCountryFlexible consults it before its loose fallback. Three
+// copies of that table had drifted apart; there is now one.
 function fuzzyMatchCountry(raw: string): string | null {
-  const n = raw.trim().toLowerCase();
-  if (!n) return null;
-  if (COUNTRY_ACRONYMS[n]) return COUNTRY_ACRONYMS[n];
   return findCountryFlexible(raw);
 }
 
@@ -394,26 +392,218 @@ interface ReviewRow { name: string; isCountry: boolean }
 // genuinely local to the list (which row is being renamed, and the
 // display-only sort) came with it.
 //
-// Rows are CARDS, not one-line strips, and their controls are always visible
-// rather than revealed on hover — the old hover-only remove/rename simply did
-// not exist on a touch device.
-export function ConferenceRosterSelected({ mode, value, onChange, style, className }: {
+// Rows are ONE LINE each: art, name, then a cluster of small controls that
+// stay visible (muted) and brighten when the row is hovered or a control is
+// focused. The two-line bordered cards this replaced wrapped every country
+// onto two lines in the docked rail, which is the complaint this fixes.
+//
+// Two optional layers sit on top of the plain list:
+//   - seat flags: a per-row image upload, offered only where it is useful.
+//     Custom (parliamentary) committees always get it. Every other type gets
+//     it only on a seat with no national flag to draw (a character or a
+//     free-text entity), or on a seat that already carries an image, so it can
+//     be replaced or cleared. A recognised country keeps its real flag and has
+//     no image control at all. Once an image lands, an inline "apply to
+//     others" strip offers to copy it to the same group, every eligible seat,
+//     or a hand-picked set.
+//   - groups (custom committees only): political groups / parties / benches.
+//     The list becomes one section per group plus "Ungrouped"; rows drag
+//     between sections, or move through the row's "Move to" select.
+
+type UploadTarget = { kind: 'seat'; idx: number } | { kind: 'group'; id: string };
+
+// Fixed-position anchor for the small floating panels below (flag chooser,
+// group menu). Left-aligned to the anchor, clamped to the viewport, flipped
+// above when there is no room beneath. Repositions on scroll and resize, and
+// whenever `anchorKey` changes (the group menu hops from pill to pill while
+// staying open). Placement is measured on the next frame, never mid-render.
+function useFloatingPos(
+  open: boolean,
+  anchorKey: string | number | null,
+  anchorRef: React.RefObject<HTMLElement | null>,
+  width: number,
+  estHeight: number,
+) {
+  const [pos, setPos] = useState<{ top: number; left: number; up: boolean } | null>(null);
+  const place = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const margin = 8;
+    const left = Math.max(margin, Math.min(r.left, window.innerWidth - width - margin));
+    const up = r.bottom + 6 + estHeight > window.innerHeight - margin && r.top - 6 - estHeight > margin;
+    setPos({ top: up ? r.top - 6 : r.bottom + 6, left, up });
+  }, [anchorRef, width, estHeight]);
+  useEffect(() => {
+    if (!open) {
+      const id = requestAnimationFrame(() => setPos(null));
+      return () => cancelAnimationFrame(id);
+    }
+    const id = requestAnimationFrame(place);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, anchorKey, place]);
+  return pos;
+}
+
+const floatingPanelStyle: React.CSSProperties = {
+  position: 'fixed', zIndex: 10000,
+  backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 12,
+  boxShadow: '0 12px 34px rgba(27,56,40,0.18), 0 2px 8px rgba(27,56,40,0.08)',
+  fontFamily: "'Outfit', sans-serif",
+};
+
+const chipStyle: React.CSSProperties = { outline: 'none',
+  fontFamily: "'Outfit', sans-serif", fontSize: 10.5, fontWeight: 700, letterSpacing: '0.03em',
+  padding: '3px 9px', borderRadius: 999, border: '1px solid #DDD4C0', backgroundColor: '#FFFDF8',
+  color: '#1B3828', cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1.3,
+};
+
+// Row + control styling lives in one scoped stylesheet rather than a hover
+// handler per control: the whole cluster brightens together when the ROW is
+// hovered, which per-button handlers cannot express.
+const ROSTER_ROW_CSS = `
+.gv-rs-row { display:flex; align-items:center; gap:7px; height:34px; padding:0 4px 0 4px; border-bottom:1px solid #EFE9DB; border-radius:6px; transition:background-color 120ms; }
+.gv-rs-row:hover { background-color:rgba(27,56,40,0.04); }
+div:last-child > .gv-rs-row { border-bottom-color:transparent; }
+.gv-rs-row.gv-rs-dragging { opacity:0.45; }
+.gv-rs-ctl { outline:none; color:#B3A794; display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:5px; flex-shrink:0; background:transparent; border:0; padding:0; cursor:pointer; transition:color 120ms, background-color 120ms; line-height:0; }
+.gv-rs-row:hover .gv-rs-ctl { color:#1B3828; }
+.gv-rs-ctl:hover { background-color:rgba(27,56,40,0.08); }
+.gv-rs-ctl:focus-visible { color:#1B3828; box-shadow:0 0 0 2px rgba(27,56,40,0.35); }
+.gv-rs-ctl.gv-rs-danger:hover { color:#8B2020 !important; }
+.gv-rs-ctl.gv-rs-lit { color:#B6871F; }
+.gv-rs-row:hover .gv-rs-ctl.gv-rs-lit { color:#B6871F; }
+.gv-rs-art { position:relative; width:26px; height:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.gv-rs-art-x { outline:none; position:absolute; top:-7px; right:-8px; width:14px; height:14px; border-radius:999px; background:#8B2020; color:#FFFFFF; display:flex; align-items:center; justify-content:center; border:0; padding:0; cursor:pointer; opacity:0; transition:opacity 120ms; }
+.gv-rs-art:hover .gv-rs-art-x, .gv-rs-art-x:focus-visible { opacity:1; }
+.gv-rs-move { position:relative; }
+.gv-rs-move select { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.gv-rs-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 8px 3px 6px; border-radius:999px; border:1px solid #DDD4C0; background:#FFFDF8; cursor:pointer; font-family:'Outfit',sans-serif; font-size:10.5px; font-weight:700; color:#1C1410; line-height:1.3; white-space:nowrap; max-width:100%; }
+.gv-rs-pill:hover, .gv-rs-pill:focus-visible { border-color:#1B3828; outline:none; }
+.gv-rs-menu-btn { display:flex; align-items:center; gap:7px; width:100%; text-align:left; padding:7px 10px; border-radius:8px; border:0; background:transparent; cursor:pointer; font-family:'Outfit',sans-serif; font-size:12px; font-weight:600; color:#1C1410; }
+.gv-rs-menu-btn:hover, .gv-rs-menu-btn:focus-visible { background:rgba(27,56,40,0.06); outline:none; }
+.gv-rs-menu-btn.gv-rs-danger { color:#8B2020; }
+`;
+
+export function ConferenceRosterSelected({
+  mode, value, onChange, style, className,
+  groups = [], onGroupsChange, onUploadLogo, committeeType,
+}: {
   mode: 'country' | 'character';
   value: RosterEntry[];
   onChange: (roster: RosterEntry[]) => void;
   style?: React.CSSProperties;
   className?: string;
+  /** Seat groups (parties, benches). Only rendered for `committeeType === 'custom'`. */
+  groups?: SlotGroup[];
+  onGroupsChange?: (groups: SlotGroup[]) => void;
+  /** Uploads a seat or group image and resolves to its public URL (null on
+   *  failure). Enables the per-row flag control, on the seats that can use one
+   *  (see `canSeatArt` below). */
+  onUploadLogo?: (file: File, kind: 'seat' | 'group') => Promise<string | null>;
+  committeeType?: string;
 }) {
   const isCharacter = mode === 'character';
+  const isCustom = committeeType === 'custom';
+  const showGroups = isCustom && !!onGroupsChange;
+  const hasGroups = showGroups && groups.length > 0;
+  const canLogo = !!onUploadLogo;
+
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
   // Display-only ordering of the selected list. 'entered' keeps insertion order;
   // 'az' sorts alphabetically; 'importance' ranks by tier (high → standard).
-  // This never mutates `value` — handlers below always resolve the ORIGINAL
-  // index — so parent state/observer/tier semantics are untouched.
-  const [orderMode, setOrderMode] = useState<'entered' | 'az' | 'importance'>('entered');
+  // This never mutates `value` (handlers below always resolve the ORIGINAL
+  // index) so parent state/observer/tier semantics are untouched. With groups
+  // present the order applies inside each section.
+  // A to Z is the default: a roster is read by looking a seat up by name, and
+  // added order is only useful right after a paste. Clicking the lit option
+  // restores added order.
+  const [orderMode, setOrderMode] = useState<'entered' | 'az' | 'importance'>('az');
 
-  const removeIdx = (idx: number) => onChange(value.filter((_, i) => i !== idx));
+  // Flag upload plumbing: one hidden file input, the target remembered in a
+  // ref between click and change.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadTarget = useRef<UploadTarget | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+  // Latest props for the async upload path (the await outlives the closure).
+  const valueRef = useRef(value);
+  const groupsRef = useRef(groups);
+  useEffect(() => { valueRef.current = value; }, [value]);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+
+  // Every group mutation goes through here. Two reasons:
+  //   1. It reads `groupsRef.current` and writes it back synchronously, so two
+  //      changes fired before React re-renders (two preset picks in a row) both
+  //      land. Reading the `groups` PROP instead made the second change compute
+  //      from the pre-first-change array, which dropped the first one.
+  //   2. A group id is generated ONCE and never regenerated. Seats reference a
+  //      group by id (committee_country_slots.group_id), so a new id for an
+  //      existing group orphans every seat in it: the section lookup misses and
+  //      the seats fall into Ungrouped. Rename and recolour keep the id.
+  const mutateGroups = useCallback((updater: (prev: SlotGroup[]) => SlotGroup[]) => {
+    if (!onGroupsChange) return;
+    const next = updater(groupsRef.current);
+    groupsRef.current = next;
+    onGroupsChange(next);
+  }, [onGroupsChange]);
+
+  // Can this seat show an image of its own? A custom committee always can:
+  // every seat there is a party or a bench, and nothing else draws it. Anywhere
+  // else the image is only offered where there is no national flag to override
+  // (a character or a free-text entity), or where an image is already set, so
+  // it can be replaced or removed. Nobody redraws the flag of France.
+  const canSeatArt = useCallback(
+    (r: RosterEntry) => canLogo && (isCustom || isCharacter || !!r.logoUrl || !getCountryByName(r.name)),
+    [canLogo, isCustom, isCharacter],
+  );
+
+  // "Apply to others" strip: which row just received an image, and the URL.
+  const [applyFor, setApplyFor] = useState<{ idx: number; url: string } | null>(null);
+  // The "Choose…" checklist: the set of ORIGINAL indices ticked so far.
+  const [chooser, setChooser] = useState<Set<number> | null>(null);
+  const chooserAnchorRef = useRef<HTMLButtonElement>(null);
+  const chooserPanelRef = useRef<HTMLDivElement>(null);
+  const chooserPos = useFloatingPos(!!chooser, applyFor?.idx ?? null, chooserAnchorRef, 240, 280);
+
+  // Groups bar state.
+  const [addingGroup, setAddingGroup] = useState(false);
+  const [groupDraft, setGroupDraft] = useState('');
+  const [groupMenuId, setGroupMenuId] = useState<string | null>(null);
+  const [groupRename, setGroupRename] = useState('');
+  const groupMenuAnchorRef = useRef<HTMLElement | null>(null);
+  const groupMenuPanelRef = useRef<HTMLDivElement>(null);
+  const groupMenuPos = useFloatingPos(!!groupMenuId, groupMenuId, groupMenuAnchorRef, 220, 200);
+
+  // Drag and drop between sections.
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropKey, setDropKey] = useState<string | null>(null);
+
+  // Outside click closes the two floating panels.
+  useEffect(() => {
+    if (!chooser && !groupMenuId) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (chooser && !chooserPanelRef.current?.contains(t) && !chooserAnchorRef.current?.contains(t)) setChooser(null);
+      if (groupMenuId && !groupMenuPanelRef.current?.contains(t) && !groupMenuAnchorRef.current?.contains(t)) setGroupMenuId(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [chooser, groupMenuId]);
+
+  const removeIdx = (idx: number) => {
+    onChange(value.filter((_, i) => i !== idx));
+    // Keep the "apply to others" strip on the row it belongs to: indices
+    // above the removed row shift down by one.
+    if (applyFor?.idx === idx) { setApplyFor(null); setChooser(null); }
+    else if (applyFor && idx < applyFor.idx) { setApplyFor({ ...applyFor, idx: applyFor.idx - 1 }); setChooser(null); }
+  };
 
   const cycleTier = (idx: number) => {
     const cur = value[idx].importance;
@@ -434,6 +624,122 @@ export function ConferenceRosterSelected({ mode, value, onChange, style, classNa
     setEditingIdx(null);
   };
 
+  const setRowGroup = (idx: number, groupId: string | null) => {
+    onChange(value.map((r, i) => (i === idx ? { ...r, groupId } : r)));
+  };
+
+  const clearRowLogo = (idx: number) => {
+    onChange(value.map((r, i) => (i === idx ? { ...r, logoUrl: null } : r)));
+    if (applyFor?.idx === idx) { setApplyFor(null); setChooser(null); }
+  };
+
+  // ── Flag upload ──
+  const pickFile = (t: UploadTarget) => {
+    if (!onUploadLogo) return;
+    uploadTarget.current = t;
+    fileRef.current?.click();
+  };
+
+  const onFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    const t = uploadTarget.current;
+    uploadTarget.current = null;
+    if (!f || !t || !onUploadLogo) return;
+    const key = t.kind === 'seat' ? `seat:${t.idx}` : `group:${t.id}`;
+    setUploading(key);
+    const url = await onUploadLogo(f, t.kind);
+    setUploading(null);
+    if (!url) return;
+    if (t.kind === 'seat') {
+      onChange(valueRef.current.map((r, i) => (i === t.idx ? { ...r, logoUrl: url } : r)));
+      // Offer to reuse it, but only when there is another seat to reuse it on.
+      setChooser(null);
+      setApplyFor(valueRef.current.length > 1 ? { idx: t.idx, url } : null);
+    } else {
+      mutateGroups((prev) => prev.map((g) => (g.id === t.id ? { ...g, logo_url: url } : g)));
+    }
+  };
+
+  const applyFlag = (pick: (i: number, r: RosterEntry) => boolean) => {
+    if (!applyFor) return;
+    const { idx, url } = applyFor;
+    // The source row always takes it. Every other row has to be a seat that can
+    // show an image at all, so "All seats" can never paint over a real flag.
+    onChange(valueRef.current.map((r, i) => (i === idx || (pick(i, r) && canSeatArt(r)) ? { ...r, logoUrl: url } : r)));
+    setApplyFor(null);
+    setChooser(null);
+  };
+
+  // ── Groups ──
+  const nextColor = (list: SlotGroup[], offset = 0) => GROUP_COLORS[(list.length + offset) % GROUP_COLORS.length];
+
+  const commitNewGroup = () => {
+    const name = groupDraft.trim();
+    setAddingGroup(false);
+    setGroupDraft('');
+    if (!name) return;
+    mutateGroups((prev) => (
+      prev.some((g) => g.name.toLowerCase() === name.toLowerCase())
+        ? prev
+        : [...prev, { id: newGroupId(), name, logo_url: null, color: nextColor(prev) }]
+    ));
+  };
+
+  // Presets APPEND. Names already on the bar are skipped, existing groups keep
+  // their id and their seats, and nothing is ever cleared. Picking two presets
+  // in a row leaves both sets on the bar.
+  const applyPreset = (key: string) => {
+    const preset = PARLIAMENT_PRESETS.find((p) => p.key === key);
+    if (!preset) return;
+    mutateGroups((prev) => {
+      const have = new Set(prev.map((g) => g.name.toLowerCase()));
+      const additions: SlotGroup[] = [];
+      for (const n of preset.groups) {
+        if (have.has(n.toLowerCase())) continue;
+        have.add(n.toLowerCase());
+        additions.push({ id: newGroupId(), name: n, logo_url: null, color: nextColor(prev, additions.length) });
+      }
+      return additions.length > 0 ? [...prev, ...additions] : prev;
+    });
+  };
+
+  // Opens on click or keyboard activation, never on hover: this is a menu with
+  // a destructive item, and it is portaled straight over the rest of the groups
+  // bar. Opening it by passing the pointer across a pill put "Remove group"
+  // under a click aimed at the preset select below it.
+  const openGroupMenu = (id: string, el: HTMLElement) => {
+    groupMenuAnchorRef.current = el;
+    const g = groupsRef.current.find((x) => x.id === id);
+    setGroupRename(g?.name ?? '');
+    setGroupMenuId(id);
+  };
+
+  const commitGroupRename = (id: string) => {
+    const name = groupRename.trim();
+    if (!name) return;
+    // Rename in place. The id is deliberately untouched: it is what the seats
+    // point at.
+    mutateGroups((prev) => (
+      prev.some((g) => g.id !== id && g.name.toLowerCase() === name.toLowerCase())
+        ? prev
+        : prev.map((g) => (g.id === id ? { ...g, name } : g))
+    ));
+  };
+
+  const removeGroup = (id: string) => {
+    if (!onGroupsChange) return;
+    setGroupMenuId(null);
+    mutateGroups((prev) => prev.filter((g) => g.id !== id));
+    // Seats in the removed group go back to Ungrouped; the editor writes the
+    // null through to committee_country_slots.group_id on save.
+    if (value.some((r) => r.groupId === id)) onChange(value.map((r) => (r.groupId === id ? { ...r, groupId: null } : r)));
+  };
+
+  const clearGroupLogo = (id: string) => {
+    mutateGroups((prev) => prev.map((g) => (g.id === id ? { ...g, logo_url: null } : g)));
+  };
+
   // Rows to render, paired with their original index so every handler mutates
   // the correct `value` entry regardless of display order.
   const displayRows = useMemo(() => {
@@ -446,11 +752,70 @@ export function ConferenceRosterSelected({ mode, value, onChange, style, classNa
     return rows;
   }, [value, orderMode]);
 
+  // One section per group, then Ungrouped. Without groups: a single flat list.
+  const sections = useMemo(() => {
+    if (!hasGroups) return [{ key: '__all', group: null as SlotGroup | null, rows: displayRows }];
+    const ids = new Set(groups.map((g) => g.id));
+    const out = groups.map((g) => ({ key: g.id, group: g as SlotGroup | null, rows: displayRows.filter((x) => x.r.groupId === g.id) }));
+    out.push({ key: '__ungrouped', group: null, rows: displayRows.filter((x) => !x.r.groupId || !ids.has(x.r.groupId)) });
+    return out;
+  }, [hasGroups, groups, displayRows]);
+
+  const groupCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of value) if (r.groupId) m.set(r.groupId, (m.get(r.groupId) ?? 0) + 1);
+    return m;
+  }, [value]);
+
+  const applyRow = applyFor ? value[applyFor.idx] : null;
+  const applyGroupName = applyRow?.groupId ? groups.find((g) => g.id === applyRow.groupId)?.name ?? null : null;
+  // Only seats that can show an image are offered a copy of one. On a country
+  // committee that is usually nobody, so the strip stays hidden.
+  const applyTargets = useMemo(() => {
+    if (!applyFor) return [] as { r: RosterEntry; i: number }[];
+    return value.map((r, i) => ({ r, i })).filter(({ r, i }) => i !== applyFor.idx && canSeatArt(r));
+  }, [applyFor, value, canSeatArt]);
+  const sameGroupCount = applyRow?.groupId ? applyTargets.filter(({ r }) => r.groupId === applyRow.groupId).length : 0;
+
+  const noun = isCustom ? 'seats' : isCharacter ? 'characters' : 'countries';
+  const menuGroup = groupMenuId ? groups.find((g) => g.id === groupMenuId) ?? null : null;
+
+  // ── Drag and drop (native, same pattern as the assignment board) ──
+  const dragEnabled = hasGroups;
+  const sectionDropProps = (key: string, groupId: string | null) => dragEnabled ? {
+    onDragOver: (e: React.DragEvent) => {
+      if (dragIdx === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (dropKey !== key) setDropKey(key);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropKey((k) => (k === key ? null : k));
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      const data = e.dataTransfer.getData('text/plain');
+      setDropKey(null);
+      setDragIdx(null);
+      if (!data.startsWith('slot:')) return;
+      const i = Number(data.slice(5));
+      if (!Number.isInteger(i) || !value[i]) return;
+      if ((value[i].groupId ?? null) !== groupId) setRowGroup(i, groupId);
+    },
+  } : {};
+
   return (
     <div className={`flex flex-col min-h-0 ${className ?? ''}`} style={style}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <label style={{ ...labelStyle, marginBottom: 0 }}>{isCharacter ? 'Selected characters' : 'Selected countries'}</label>
+      <style>{ROSTER_ROW_CSS}</style>
+      {canLogo && (
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{ display: 'none' }} onChange={onFilePicked} />
+      )}
+
+      {/* Header. `flex-wrap` so the label, the count badge and CLEAR ALL never
+          squash each other in the narrow rail. */}
+      <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 mb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>{isCustom ? 'Selected seats' : isCharacter ? 'Selected characters' : 'Selected countries'}</label>
           <span style={{ fontSize: 9, fontWeight: 700, color: '#1B3828', backgroundColor: 'rgba(238,217,138,0.3)', padding: '1px 6px', borderRadius: 999, fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
             {value.length}
           </span>
@@ -459,31 +824,51 @@ export function ConferenceRosterSelected({ mode, value, onChange, style, classNa
             <div className="mt-2.5 flex gap-2.5">
               <span className="shrink-0 mt-0.5"><Megaphone size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} /></span>
               <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
-                <b style={{ color: '#1C1410' }}>Observer</b> (megaphone) marks a seat as a non-voting observer — they can speak but hold no vote. Click to toggle; lit gold = observer.
+                <b style={{ color: '#1C1410' }}>Observer</b> (megaphone) marks a seat as a non-voting observer: they can speak but hold no vote. Click to toggle; lit gold = observer.
               </p>
             </div>
-            <div className="mt-2.5 flex gap-2.5">
-              <span className="shrink-0 mt-1"><DashLegend tier="high" /></span>
-              <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
-                <b style={{ color: '#1C1410' }}>Importance dashes</b> rank how sought-after a seat is. They steer allocation &amp; assignment — higher tiers are offered to stronger applicants and surface first in suggestions.
-              </p>
-            </div>
-            <div className="mt-2.5 flex items-center gap-3" style={{ borderTop: '1px solid #EDE7D8', paddingTop: 10 }}>
-              {(['standard', 'low', 'medium', 'high'] as const).map((t) => (
-                <span key={t} className="inline-flex items-center gap-1">
-                  <DashLegend tier={t} />
-                  <span style={{ fontSize: 9.5, color: '#9A8A78', fontWeight: 600 }}>{TIER_META[t].label}</span>
-                </span>
-              ))}
-            </div>
+            {!isCharacter && (
+              <div className="mt-2.5 flex gap-2.5">
+                <span className="shrink-0 mt-1"><DashLegend tier="high" /></span>
+                <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
+                  <b style={{ color: '#1C1410' }}>Importance dashes</b> rank how sought-after a seat is. They steer allocation and assignment: higher tiers are offered to stronger applicants and surface first in suggestions.
+                </p>
+              </div>
+            )}
+            {canLogo && (
+              <div className="mt-2.5 flex gap-2.5">
+                <span className="shrink-0 mt-0.5"><ImagePlus size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} /></span>
+                <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
+                  <b style={{ color: '#1C1410' }}>Flag</b> gives a seat its own picture. {isCustom ? 'Every seat here can take one.' : 'It is offered on seats with no national flag of their own.'} After you set one, you can copy it to other seats.
+                </p>
+              </div>
+            )}
+            {showGroups && (
+              <div className="mt-2.5 flex gap-2.5">
+                <span className="shrink-0 mt-0.5"><FolderInput size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} /></span>
+                <p style={{ margin: 0, fontSize: 11.5, color: '#4A3F33', lineHeight: 1.5 }}>
+                  <b style={{ color: '#1C1410' }}>Groups</b> are parties or benches. Drag a seat under a group header, or use the move control on the row.
+                </p>
+              </div>
+            )}
+            {!isCharacter && (
+              <div className="mt-2.5 flex items-center gap-3" style={{ borderTop: '1px solid #EDE7D8', paddingTop: 10 }}>
+                {(['standard', 'low', 'medium', 'high'] as const).map((t) => (
+                  <span key={t} className="inline-flex items-center gap-1">
+                    <DashLegend tier={t} />
+                    <span style={{ fontSize: 9.5, color: '#9A8A78', fontWeight: 600 }}>{TIER_META[t].label}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </HoverInfo>
         </div>
         <div className="flex items-center gap-2">
           {value.length > 0 && (
             <button
-              onClick={() => onChange([])}
+              onClick={() => { onChange([]); setApplyFor(null); setChooser(null); }}
               className="text-xs font-bold uppercase tracking-wide transition-colors focus:outline-none"
-              style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9 }}
+              style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
             >
@@ -493,13 +878,72 @@ export function ConferenceRosterSelected({ mode, value, onChange, style, classNa
         </div>
       </div>
 
-      {/* Order toggle — A–Z ↔ Importance (country mode only). Display-only. */}
-      {!isCharacter && value.length > 1 && (
+      {/* Groups bar (custom committees only). */}
+      {showGroups && (
+        <div className="mb-2 flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span style={{ ...labelStyle, marginBottom: 0, fontSize: 9.5 }}>Groups</span>
+            {groups.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                className="gv-rs-pill"
+                title={`${g.name}: rename, set a flag, or remove`}
+                aria-expanded={groupMenuId === g.id}
+                onClick={(e) => { if (groupMenuId === g.id) setGroupMenuId(null); else openGroupMenu(g.id, e.currentTarget); }}
+                style={{ borderColor: groupMenuId === g.id ? '#1B3828' : undefined }}
+              >
+                {g.logo_url
+                  ? <img src={g.logo_url} alt="" draggable={false} style={{ width: 14, height: 14, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }} />
+                  : <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: g.color ?? '#1B3828', flexShrink: 0 }} />}
+                <span className="truncate" style={{ maxWidth: 120 }}>{g.name}</span>
+                <span style={{ fontSize: 9.5, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{groupCounts.get(g.id) ?? 0}</span>
+              </button>
+            ))}
+            {addingGroup ? (
+              <input
+                autoFocus
+                value={groupDraft}
+                onChange={(e) => setGroupDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitNewGroup(); } else if (e.key === 'Escape') { setAddingGroup(false); setGroupDraft(''); } }}
+                onBlur={commitNewGroup}
+                placeholder="Group name"
+                aria-label="New group name"
+                style={{ ...inputStyle, width: 130, padding: '3px 8px', fontSize: 11.5, borderRadius: 999 }}
+              />
+            ) : (
+              <button type="button" className="gv-rs-pill" onClick={() => setAddingGroup(true)} style={{ borderStyle: 'dashed', color: '#1B3828' }}>
+                <Plus size={11} strokeWidth={2.5} />
+                Group
+              </button>
+            )}
+            <select
+              value=""
+              onChange={(e) => { applyPreset(e.target.value); e.target.value = ''; }}
+              aria-label="Start from a preset"
+              title="Append a parliament's groups"
+              className="focus:outline-none"
+              style={{ fontFamily: "'Outfit', sans-serif", fontSize: 10.5, fontWeight: 600, color: '#6E5F4E', border: '1px solid #DDD4C0', borderRadius: 999, padding: '3px 8px', backgroundColor: '#FAF8F3', cursor: 'pointer', maxWidth: 150 }}
+            >
+              <option value="">Start from a preset</option>
+              {PARLIAMENT_PRESETS.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+          {groups.length === 0 && (
+            <p style={{ margin: 0, fontSize: 10.5, color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Add parties or benches, then drag seats under them.</p>
+          )}
+        </div>
+      )}
+
+      {/* Order toggle. Display-only; sorts inside each section when grouped. */}
+      {value.length > 1 && (
         <div className="flex items-center gap-1 mb-2 rounded-lg p-0.5 self-start" style={{ backgroundColor: '#EFE9DB', border: '1px solid #E1D9C6' }}>
           {([
-            { key: 'az', label: 'A–Z', icon: <ArrowDownAZ size={11} strokeWidth={2} /> },
-            { key: 'importance', label: 'Importance', icon: <DashLegend tier="high" /> },
-          ] as const).map((opt) => {
+            { key: 'az' as const, label: 'A-Z', icon: <ArrowDownAZ size={11} strokeWidth={2} /> },
+            ...(!isCharacter ? [{ key: 'importance' as const, label: 'Importance', icon: <DashLegend tier="high" /> }] : []),
+          ]).map((opt) => {
             const active = orderMode === opt.key;
             return (
               <button
@@ -507,7 +951,7 @@ export function ConferenceRosterSelected({ mode, value, onChange, style, classNa
                 type="button"
                 onClick={() => setOrderMode((cur) => (cur === opt.key ? 'entered' : opt.key))}
                 aria-pressed={active}
-                title={active ? 'Sorted — click to restore added order' : `Sort by ${opt.label === 'A–Z' ? 'name' : 'importance'}`}
+                title={active ? 'Sorted. Click to restore added order' : `Sort by ${opt.key === 'az' ? 'name' : 'importance'}`}
                 className="inline-flex items-center gap-1 rounded-md px-2 py-1 transition-colors focus:outline-none"
                 style={{
                   fontFamily: "'Outfit', sans-serif", fontSize: 9.5, fontWeight: 700,
@@ -525,98 +969,277 @@ export function ConferenceRosterSelected({ mode, value, onChange, style, classNa
         </div>
       )}
 
-      {/* The cards themselves. `auto-fill` at a 188px minimum is what makes this
-          fit at every width the editor is used at: one column in the docked
-          rail (~300px), two or three when the rail widens on a large screen or
-          the panel wraps full-width on a small one. No breakpoints to keep in
-          sync with the modal's own. */}
+      {/* The list: a single column of one-line rows, hairline-separated. */}
       <div
         className="flex-1 rounded-xl min-h-0"
-        style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', overflowY: 'auto', padding: value.length === 0 ? 0 : 8 }}
+        style={{ border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', overflowY: 'auto', padding: value.length === 0 ? 0 : '4px 6px' }}
       >
         {value.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full px-3 py-8">
-            <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'NO CHARACTERS' : 'NO COUNTRIES'}</p>
+            <p className="text-xs font-bold uppercase text-center" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{`NO ${noun.toUpperCase()}`}</p>
             <p className="text-xs text-center mt-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>{isCharacter ? 'Type or paste names to add' : 'Search, use bundles, or paste'}</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(188px, 1fr))', gap: 8 }}>
-            {displayRows.map(({ r: row, i: idx }) => {
-              const found = isCharacter ? undefined : getCountryByName(row.name);
-              const isCustom = !found;
-              const isEditing = editingIdx === idx;
-              const isObserver = !!row.isObserver;
-              return (
-                <div
-                  key={`${row.name}-${idx}`}
-                  className="flex flex-col gap-1.5 transition-colors"
-                  style={{ border: '1px solid #E7DFCB', borderRadius: 12, backgroundColor: '#FFFDF8', padding: '9px 10px' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#C9BEA2'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#E7DFCB'; }}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {found
-                      ? <img src={getFlagUrl(found.code)} alt={found.code} style={{ width: 26, height: 18, objectFit: 'cover', borderRadius: 3, flexShrink: 0, boxShadow: '0 0 0 1px rgba(0,0,0,0.08)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                      : (isCharacter
-                          ? <Users size={17} strokeWidth={1.5} style={{ color: '#B6871F', flexShrink: 0 }} />
-                          : <Globe size={17} strokeWidth={1.5} style={{ color: '#9A8A78', flexShrink: 0 }} />)
-                    }
-                    {isEditing ? (
-                      <input
-                        autoFocus
-                        value={editDraft}
-                        onChange={(e) => setEditDraft(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') commitRename(idx, editDraft); else if (e.key === 'Escape') setEditingIdx(null); }}
-                        onBlur={() => commitRename(idx, editDraft)}
-                        className="flex-1 min-w-0 text-[13.5px] bg-transparent outline-none"
-                        style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
-                      />
-                    ) : (
-                      <span className="flex-1 min-w-0 text-[13.5px] font-semibold truncate" title={row.name} style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                        {row.name}
-                      </span>
-                    )}
+          sections.map((sec, sIdx) => {
+            const isDropTarget = dropKey === sec.key;
+            const g = sec.group;
+            const isUngrouped = hasGroups && !g;
+            return (
+              <div
+                key={sec.key}
+                {...sectionDropProps(sec.key, g?.id ?? null)}
+                style={{
+                  borderRadius: 8, marginTop: hasGroups && sIdx > 0 ? 6 : 0, padding: hasGroups ? '2px 2px 4px' : 0,
+                  boxShadow: isDropTarget ? '0 0 0 2px #1B3828 inset' : 'none',
+                  backgroundColor: isDropTarget ? 'rgba(27,56,40,0.05)' : 'transparent',
+                  transition: 'box-shadow 120ms, background-color 120ms',
+                }}
+              >
+                {hasGroups && (
+                  <div className="flex items-center gap-2" style={{ padding: '5px 4px 4px' }}>
+                    <span style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: g ? (g.color ?? '#1B3828') : '#C9BEA2', flexShrink: 0 }} />
+                    {g?.logo_url && <img src={g.logo_url} alt="" draggable={false} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }} />}
+                    <span className="truncate" style={{ fontFamily: "'Outfit', sans-serif", fontSize: 10.5, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: g ? '#1B3828' : '#9A8A78' }}>
+                      {g ? g.name : 'Ungrouped'}
+                    </span>
+                    <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 9.5, fontWeight: 700, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>{sec.rows.length}</span>
                   </div>
-                  {!isEditing && (
-                    <div className="flex items-center gap-1.5" style={{ borderTop: '1px solid #F0EDE6', paddingTop: 5 }}>
-                      {/* Importance — country mode only. Vertical dashes: count + colour encode the tier. */}
-                      {!isCharacter && (
-                        <ImportanceDashes tier={row.importance} onClick={() => cycleTier(idx)} />
-                      )}
-                      {/* Observer toggle — countries AND characters, mirrors /create's megaphone */}
-                      <button
-                        onClick={() => toggleObserver(idx)}
-                        title={isObserver ? 'Observer — click to make a voting delegate' : 'Mark as observer'}
-                        aria-pressed={isObserver}
-                        className="focus:outline-none transition-transform active:scale-90 shrink-0"
-                        style={{ color: isObserver ? '#B6871F' : '#B3A794' }}
+                )}
+                {hasGroups && sec.rows.length === 0 && (
+                  <p style={{ margin: 0, padding: '4px 8px 6px', fontSize: 10.5, color: '#B3A794', fontFamily: "'Outfit', sans-serif", fontStyle: 'italic' }}>
+                    {isUngrouped ? 'Drop a seat here to ungroup it' : 'No seats yet. Drag seats here'}
+                  </p>
+                )}
+                {sec.rows.map(({ r: row, i: idx }) => {
+                  const found = isCharacter ? undefined : getCountryByName(row.name);
+                  const isCustomName = !found;
+                  const isEditing = editingIdx === idx;
+                  const isObserver = !!row.isObserver;
+                  const art = effectiveSlotArt({ country_code: found?.code ?? row.name, logo_url: row.logoUrl ?? null, group_id: row.groupId ?? null }, groups);
+                  const ownLogo = !!row.logoUrl;
+                  // A recognised country on a country committee keeps its real
+                  // flag and gets no image control at all.
+                  const rowCanArt = canSeatArt(row);
+                  const isUploading = uploading === `seat:${idx}`;
+                  const isDragging = dragIdx === idx;
+                  return (
+                    <div key={`${row.name}-${idx}`}>
+                      <div
+                        className={`gv-rs-row${isDragging ? ' gv-rs-dragging' : ''}`}
+                        draggable={dragEnabled && !isEditing}
+                        onDragStart={dragEnabled ? (e) => { e.dataTransfer.setData('text/plain', `slot:${idx}`); e.dataTransfer.effectAllowed = 'move'; setDragIdx(idx); } : undefined}
+                        onDragEnd={dragEnabled ? () => { setDragIdx(null); setDropKey(null); } : undefined}
+                        style={dragEnabled ? { cursor: 'grab' } : undefined}
                       >
-                        <Megaphone size={13} strokeWidth={1.75} />
-                      </button>
-                      <span className="flex-1" />
-                      {/* Rename — custom entries & all characters */}
-                      {(isCustom || isCharacter) && (
-                        <button onClick={() => { setEditingIdx(idx); setEditDraft(row.name); }} className="focus:outline-none shrink-0" style={{ color: '#B3A794' }} title="Rename" aria-label={`Rename ${row.name}`}><PenLine size={13} /></button>
+                        {dragEnabled && <GripVertical size={12} style={{ color: '#D5CBB6', flexShrink: 0, marginRight: -3 }} aria-hidden />}
+                        {/* Art: the seat's own image, its group's, the national flag, or the mode glyph. */}
+                        <span className="gv-rs-art">
+                          {art.kind === 'logo' ? (
+                            <span style={{ width: 22, height: 22, borderRadius: 999, backgroundColor: 'rgba(27,56,40,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <img src={art.url} alt={art.label} draggable={false} style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 5 }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                            </span>
+                          ) : art.kind === 'flag' ? (
+                            <img src={getFlagUrl(art.code)} alt={art.code} draggable={false} style={{ width: 26, height: 18, objectFit: 'cover', borderRadius: 3, boxShadow: '0 0 0 1px rgba(0,0,0,0.08)' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          ) : isCharacter ? (
+                            <Users size={17} strokeWidth={1.5} style={{ color: '#B6871F' }} />
+                          ) : (
+                            <Globe size={17} strokeWidth={1.5} style={{ color: '#9A8A78' }} />
+                          )}
+                          {ownLogo && !isEditing && (
+                            <button type="button" className="gv-rs-art-x" onClick={() => clearRowLogo(idx)} title="Remove flag" aria-label={`Remove flag from ${row.name}`}>
+                              <X size={9} strokeWidth={3} />
+                            </button>
+                          )}
+                        </span>
+                        {isEditing ? (
+                          <input
+                            autoFocus
+                            value={editDraft}
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') commitRename(idx, editDraft); else if (e.key === 'Escape') setEditingIdx(null); }}
+                            onBlur={() => commitRename(idx, editDraft)}
+                            className="flex-1 min-w-0 text-[13px] bg-transparent outline-none"
+                            style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", borderBottom: '1px solid #1B3828' }}
+                          />
+                        ) : (
+                          <span className="flex-1 min-w-0 text-[13px] font-semibold truncate" title={row.name} style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                            {row.name}
+                          </span>
+                        )}
+                        {!isEditing && (
+                          <span className="flex items-center gap-0.5 shrink-0">
+                            {/* Importance: country mode only. Vertical dashes: count + colour encode the tier. */}
+                            {!isCharacter && (
+                              <ImportanceDashes tier={row.importance} onClick={() => cycleTier(idx)} />
+                            )}
+                            {/* Observer toggle: countries AND characters, mirrors /create's megaphone */}
+                            <button
+                              type="button"
+                              onClick={() => toggleObserver(idx)}
+                              title={isObserver ? 'Observer. Click to make a voting delegate' : 'Mark as observer'}
+                              aria-pressed={isObserver}
+                              className={`gv-rs-ctl${isObserver ? ' gv-rs-lit' : ''}`}
+                            >
+                              <Megaphone size={13} strokeWidth={1.75} />
+                            </button>
+                            {/* Flag upload / replace */}
+                            {rowCanArt && (
+                              <button
+                                type="button"
+                                onClick={() => pickFile({ kind: 'seat', idx })}
+                                disabled={isUploading}
+                                title={ownLogo ? 'Replace flag' : 'Set a flag'}
+                                aria-label={`${ownLogo ? 'Replace' : 'Set'} flag for ${row.name}`}
+                                className={`gv-rs-ctl${ownLogo ? ' gv-rs-lit' : ''}`}
+                                style={isUploading ? { opacity: 0.5, cursor: 'wait' } : undefined}
+                              >
+                                {ownLogo ? <Replace size={13} strokeWidth={1.75} /> : <ImagePlus size={13} strokeWidth={1.75} />}
+                              </button>
+                            )}
+                            {/* Move to group: pointer/keyboard fallback for the drag. */}
+                            {hasGroups && (
+                              <span className="gv-rs-ctl gv-rs-move" title="Move to a group">
+                                <FolderInput size={13} strokeWidth={1.75} />
+                                <select
+                                  aria-label={`Move ${row.name} to a group`}
+                                  value={row.groupId && groups.some((x) => x.id === row.groupId) ? row.groupId : ''}
+                                  onChange={(e) => setRowGroup(idx, e.target.value || null)}
+                                >
+                                  <option value="">Ungrouped</option>
+                                  {groups.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                                </select>
+                              </span>
+                            )}
+                            {/* Rename: custom entries and all characters */}
+                            {(isCustomName || isCharacter) && (
+                              <button type="button" onClick={() => { setEditingIdx(idx); setEditDraft(row.name); }} className="gv-rs-ctl" title="Rename" aria-label={`Rename ${row.name}`}><PenLine size={13} /></button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeIdx(idx)}
+                              className="gv-rs-ctl gv-rs-danger"
+                              title="Remove"
+                              aria-label={`Remove ${row.name}`}
+                            >
+                              <X size={13} strokeWidth={2.4} />
+                            </button>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* "Apply to others" strip, inline under the row that just got a flag.
+                          Hidden when no other seat can take one. */}
+                      {applyFor?.idx === idx && applyTargets.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap" style={{ margin: '4px 0 6px', padding: '7px 9px', borderRadius: 10, backgroundColor: 'rgba(238,217,138,0.22)', border: '1px solid rgba(182,135,31,0.35)' }}>
+                          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600, color: '#1C1410', marginRight: 2 }}>Use this flag for other seats too?</span>
+                          {applyGroupName && sameGroupCount > 0 && (
+                            <button type="button" style={chipStyle} onClick={() => applyFlag((_, r) => r.groupId === applyRow?.groupId)} title={`Every seat in ${applyGroupName}`}>
+                              Same group ({sameGroupCount})
+                            </button>
+                          )}
+                          <button type="button" style={chipStyle} onClick={() => applyFlag(() => true)}>All seats ({applyTargets.length})</button>
+                          <button
+                            ref={chooserAnchorRef}
+                            type="button"
+                            style={{ ...chipStyle, borderColor: chooser ? '#1B3828' : undefined }}
+                            onClick={() => setChooser((c) => (c ? null : new Set<number>()))}
+                            aria-expanded={!!chooser}
+                          >
+                            Choose…
+                          </button>
+                          <button type="button" style={{ ...chipStyle, color: '#6E5F4E', backgroundColor: 'transparent' }} onClick={() => { setApplyFor(null); setChooser(null); }}>No</button>
+                        </div>
                       )}
-                      <button
-                        onClick={() => removeIdx(idx)}
-                        className="focus:outline-none shrink-0"
-                        style={{ color: '#B3A794', lineHeight: 0 }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#B3A794'; }}
-                        title="Remove"
-                        aria-label={`Remove ${row.name}`}
-                      >
-                        <X size={13} strokeWidth={2.4} />
-                      </button>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            );
+          })
         )}
       </div>
+
+      {/* "Choose…" checklist, portaled so the rail's scroll box never clips it. */}
+      {chooser && applyFor && chooserPos && (
+        <Portal>
+          <div
+            ref={chooserPanelRef}
+            style={{ ...floatingPanelStyle, top: chooserPos.top, left: chooserPos.left, width: 240, transform: chooserPos.up ? 'translateY(-100%)' : undefined, display: 'flex', flexDirection: 'column', maxHeight: 300 }}
+          >
+            <p style={{ margin: 0, padding: '9px 12px 6px', fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#B6871F' }}>Copy flag to</p>
+            <div style={{ overflowY: 'auto', padding: '0 6px', flex: 1, minHeight: 0 }}>
+              {applyTargets.map(({ r, i }) => {
+                const on = chooser.has(i);
+                return (
+                  <label key={`${r.name}-${i}`} className="flex items-center gap-2" style={{ padding: '5px 6px', borderRadius: 7, cursor: 'pointer', fontSize: 12, color: '#1C1410', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => setChooser((c) => { const n = new Set(c ?? []); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                      style={{ accentColor: '#1B3828' }}
+                    />
+                    <span className="truncate">{r.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2" style={{ padding: '8px 10px 10px', borderTop: '1px solid #EDE7D8' }}>
+              <button type="button" style={{ ...chipStyle, color: '#6E5F4E', backgroundColor: 'transparent' }} onClick={() => setChooser(null)}>Cancel</button>
+              <button
+                type="button"
+                disabled={chooser.size === 0}
+                onClick={() => applyFlag((i) => chooser.has(i))}
+                style={{ ...chipStyle, marginLeft: 'auto', backgroundColor: chooser.size === 0 ? '#DDD4C0' : '#1B3828', color: chooser.size === 0 ? '#9A8A78' : '#EED98A', borderColor: 'transparent', cursor: chooser.size === 0 ? 'default' : 'pointer' }}
+              >
+                <span className="inline-flex items-center gap-1"><Check size={11} strokeWidth={3} /> Apply to {chooser.size}</span>
+              </button>
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* Group pill menu: rename, flag, remove. A menu with actions, so it opens
+          on click and closes on Escape or an outside click. It used to open on
+          hover, and because it is portaled over the rest of the groups bar a
+          click aimed at the preset select underneath landed on "Remove group",
+          which deleted the group and dropped its seats into Ungrouped. */}
+      {menuGroup && groupMenuPos && (
+        <Portal>
+          <div
+            ref={groupMenuPanelRef}
+            onKeyDown={(e) => { if (e.key === 'Escape') setGroupMenuId(null); }}
+            style={{ ...floatingPanelStyle, top: groupMenuPos.top, left: groupMenuPos.left, width: 220, transform: groupMenuPos.up ? 'translateY(-100%)' : undefined, padding: 6 }}
+          >
+            <div className="flex items-center gap-2" style={{ padding: '4px 6px 6px' }}>
+              <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: menuGroup.color ?? '#1B3828', flexShrink: 0 }} />
+              <input
+                value={groupRename}
+                onChange={(e) => setGroupRename(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitGroupRename(menuGroup.id); } else if (e.key === 'Escape') setGroupMenuId(null); }}
+                onBlur={() => commitGroupRename(menuGroup.id)}
+                aria-label="Group name"
+                style={{ ...inputStyle, padding: '4px 8px', fontSize: 12, borderRadius: 7 }}
+              />
+            </div>
+            <button type="button" className="gv-rs-menu-btn" onClick={() => pickFile({ kind: 'group', id: menuGroup.id })} disabled={uploading === `group:${menuGroup.id}`}>
+              {menuGroup.logo_url
+                ? <img src={menuGroup.logo_url} alt="" draggable={false} style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 4 }} />
+                : <ImagePlus size={14} strokeWidth={1.75} style={{ color: '#B6871F' }} />}
+              {uploading === `group:${menuGroup.id}` ? 'Uploading…' : menuGroup.logo_url ? 'Replace flag' : 'Set flag'}
+            </button>
+            {menuGroup.logo_url && (
+              <button type="button" className="gv-rs-menu-btn" onClick={() => clearGroupLogo(menuGroup.id)}>
+                <X size={14} strokeWidth={2} style={{ color: '#9A8A78' }} />
+                Remove flag
+              </button>
+            )}
+            <button type="button" className="gv-rs-menu-btn gv-rs-danger" onClick={() => removeGroup(menuGroup.id)}>
+              <X size={14} strokeWidth={2} />
+              {(() => { const n = groupCounts.get(menuGroup.id) ?? 0; return n > 0 ? `Remove group (${n} seat${n === 1 ? '' : 's'})` : 'Remove group'; })()}
+            </button>
+          </div>
+        </Portal>
+      )}
     </div>
   );
 }
@@ -641,9 +1264,19 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
   const names = value.map((r) => r.name);
   const nameSet = new Set(names.map((n) => n.toLowerCase()));
 
+  // Ranked through the shared matcher so diacritics, aliases and locale names
+  // all resolve: typing "tu" finds Türkiye, "uk" finds the United Kingdom.
+  // Never hand-roll .toLowerCase().includes() here again, that is what broke
+  // every renamed country. Exact and alias hits first, then prefix, then
+  // substring; ties fall back to the list's own order.
   const available = isCharacter
     ? []
-    : UN_COUNTRIES.filter((c) => !nameSet.has(c.name.toLowerCase()) && c.name.toLowerCase().includes(search.toLowerCase()));
+    : UN_COUNTRIES
+        .filter((c) => !nameSet.has(c.name.toLowerCase()))
+        .map((c) => ({ c, rank: countryMatchRank(c.name, search, 'en') }))
+        .filter((x): x is { c: typeof UN_COUNTRIES[number]; rank: number } => x.rank !== null)
+        .sort((a, b) => a.rank - b.rank || a.c.name.localeCompare(b.c.name))
+        .map((x) => x.c);
 
   const searchAnchorRef = useRef<HTMLDivElement>(null);
   const searchMenuOpen = !!(search.trim() && (available.length > 0 || !nameSet.has(search.trim().toLowerCase())));
@@ -892,8 +1525,8 @@ export function ConferenceRosterPicker({ mode, value, onChange, showSelected = t
               })}
             </div>
             <div className="flex items-center gap-3 px-6 py-4 shrink-0" style={{ borderTop: '1px solid #DDD4C0' }}>
-              <button onClick={() => setReview(null)} className="px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors focus:outline-none" style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}>Cancel</button>
-              <button onClick={commitReview} disabled={review.length === 0} className="flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
+              <button onClick={() => setReview(null)} className="gv-lift px-5 py-3 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors focus:outline-none" style={{ color: '#6A5A4A', backgroundColor: '#EDE7D8', border: '1px solid #DDD4C0', fontFamily: "'Outfit', sans-serif" }}>Cancel</button>
+              <button onClick={commitReview} disabled={review.length === 0} className="gv-lift flex-1 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 focus:outline-none" style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif" }}>
                 Add {review.length}
               </button>
             </div>

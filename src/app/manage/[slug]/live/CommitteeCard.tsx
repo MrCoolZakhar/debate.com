@@ -28,13 +28,16 @@
 // the same codebase (`manage/[slug]/committees/page.tsx:1568, 1587`).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Users, FileText, ScrollText, Trophy, AlertTriangle, Info,
   Mic, Timer, Pause, Flag, Moon, Copy, Check, Send, UserRound,
 } from 'lucide-react';
 import { LogoDisc } from '@/components/LogoDisc';
-import { FlagImg } from '@/components/FlagImg';
+import { artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
+import { type SessionSeat } from '@/lib/sessionFlags';
+import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
+import { getCountryByCode } from '@/lib/countries';
 import Avatar from '@/components/Avatar';
 import Portal from '@/components/Portal';
 import ProfileLink from '@/components/ProfileLink';
@@ -192,21 +195,99 @@ function headlineSize(text: string): number {
  *  and the same `UserRound` glyph in its `PersonAvatar` at `:668`): a lucide
  *  `UserRound` head-and-shoulders in a disc. `NEU.forest` on `NEU.surface` is
  *  10.73:1, far past the 3:1 a glyph needs. */
-function DelegationMark({ country, size }: { country: string; size: number }) {
+/** ONE RESOLUTION PATH, SHARED WITH THE LIVE SESSION.
+ *
+ *  This used to be a private `SeatArtContext` local to this file, resolving a
+ *  seat's crest with its own copy of the precedence rule. `src/lib/sessionFlags.ts`
+ *  forbids exactly that: two implementations of the same rule drift, and a
+ *  delegation's mark on the organiser's wall stops matching the mark the chair
+ *  and the delegates are looking at. It had already drifted — anything rendering
+ *  the shared `<SeatFlag>` under `/manage/[slug]/live` (the scoreboard rows) found
+ *  no `SeatArtProvider` and fell back to the national flag while this card drew
+ *  the crest.
+ *
+ *  So the card now MOUNTS the shared `SeatArtProvider` and `DelegationMark` is a
+ *  thin wrapper over the shared `<SeatFlag>`. The two sources this file used to
+ *  merge at read time are merged once, at provider time, by `mergedSeatRoster`:
+ *
+ *  TWO SOURCES, IN THIS ORDER.
+ *  1. The session's OWN answer: `delegates.logo_url`, keyed by the delegation
+ *     name this card actually renders. No lookup, no code-vs-name ambiguity.
+ *  2. The page's per-conference `loadSlotArtIndex`, the fallback for a session
+ *     seeded before the column existed (rows still NULL) and for a seat whose
+ *     delegate row has not arrived — or was never written at all.
+ *  Neither: flags, exactly as before. */
+function slotLogoFor(index: SlotArtIndex | null | undefined, ccId: string, country: string): string | null {
+  if (!index) return null;
   const code = flagCodeFor(country);
-  if (code) return <FlagImg code={code} size={size} />;
+  // The slot index is keyed by the slot's country_code, which is the ISO code
+  // for a country seat and the name itself for a character or parliamentary
+  // seat, so try both.
+  const entry = index.get(slotArtKey(ccId, code || country)) ?? index.get(slotArtKey(ccId, country));
+  const art = artFromIndex(entry, code || country);
+  return art.kind === 'logo' ? art.url : null;
+}
+
+/** The roster handed to `SeatArtProvider`: every seat this card might name, with
+ *  its crest already flattened to one URL — the same shape `delegates` has in a
+ *  live session, so `<SeatFlag>` resolves identically on both sides. */
+export function mergedSeatRoster(
+  delegates: readonly { country: string; logoUrl?: string | null }[],
+  index: SlotArtIndex | null | undefined,
+  ccId: string,
+): SessionSeat[] {
+  const out: SessionSeat[] = [];
+  const seen = new Set<string>();
+  for (const d of delegates) {
+    if (!d?.country) continue;
+    out.push({ country: d.country, logoUrl: d.logoUrl ?? slotLogoFor(index, ccId, d.country) });
+    seen.add(d.country.trim().toLowerCase());
+  }
+  // Slot rows for seats the session has no delegate row for. Named by country
+  // name, because that is what every render site under this card holds.
+  if (index) {
+    const prefix = `${ccId}|`;
+    for (const [key, entry] of index) {
+      if (!key.startsWith(prefix)) continue;
+      const codeOrName = key.slice(prefix.length);
+      const art = artFromIndex(entry, codeOrName);
+      if (art.kind !== 'logo') continue;
+      const name = getCountryByCode(codeOrName)?.name ?? codeOrName;
+      if (seen.has(name.trim().toLowerCase())) continue;
+      seen.add(name.trim().toLowerCase());
+      out.push({ country: name, logoUrl: art.url });
+    }
+  }
+  return out;
+}
+
+/** THE MARK FOR ONE DELEGATION — a flag, a crest, or a person.
+ *
+ *  The person branch: a crisis cabinet post, a Room Order seat and a specialised
+ *  committee's character are not countries, so `SeatFlag` resolves `kind: 'none'`
+ *  and would draw a GLOBE — and the one thing a globe cannot mean is "this is a
+ *  person, not a country". The replacement is what the assignment page already
+ *  draws for a character/custom seat (`manage/[slug]/assignment/page.tsx:741`):
+ *  a lucide `UserRound` in a disc. `NEU.forest` on `NEU.surface` is 10.73:1. */
+function DelegationMark({ country, size }: { country: string; size: number }) {
   return (
-    <span
-      className="inline-flex items-center justify-center flex-shrink-0"
-      aria-hidden
-      style={{
-        width: size, height: size, borderRadius: '50%',
-        backgroundColor: NEU.surface, color: NEU.forest,
-        boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)',
-      }}
-    >
-      <UserRound size={Math.round(size * 0.62)} strokeWidth={2} />
-    </span>
+    <SeatFlag
+      country={country}
+      size={size}
+      fallback={
+        <span
+          className="inline-flex items-center justify-center flex-shrink-0"
+          aria-hidden
+          style={{
+            width: size, height: size, borderRadius: '50%',
+            backgroundColor: NEU.surface, color: NEU.forest,
+            boxShadow: 'inset 0 0 0 1px rgba(27,56,40,0.14)',
+          }}
+        >
+          <UserRound size={Math.round(size * 0.62)} strokeWidth={2} />
+        </span>
+      }
+    />
   );
 }
 
@@ -876,8 +957,13 @@ export function CommitteeCard({
   onOpenScoreboard,
   onOpenDocuments,
   onOpenDelegate,
+  seatArt,
 }: {
   data: LiveCommittee;
+  /** Custom seat / group crests for the whole conference, keyed by
+   *  `slotArtKey(conference_committee_id, country_code)`. Optional: without
+   *  it every delegation draws its flag (or the person mark) as before. */
+  seatArt?: SlotArtIndex;
   /** Acronym-over-full-name identity, resolved for the WHOLE conference at once
    *  (uniqueness within the conference is part of the rule — see
    *  `committeeIdentities`), so it is handed in rather than derived per card. */
@@ -926,6 +1012,15 @@ export function CommitteeCard({
     ? data.conf.chairs
     : (data.session?.chairNames ?? []).map((name) => ({ id: null, name, avatarUrl: null }));
 
+  // This room's crests, flattened to the same {country, logoUrl} shape a live
+  // session's `delegates` have, then handed to the SHARED `SeatArtProvider`. So
+  // a delegation's mark on this wall is resolved by the very same function that
+  // resolves it for the chair and the delegates — see mergedSeatRoster.
+  const seatRoster = useMemo(
+    () => mergedSeatRoster(data.delegates, seatArt, data.conf.id),
+    [data.delegates, seatArt, data.conf.id],
+  );
+
   const top = warnings[0] ?? null;
   const extraWarnings = Math.max(0, warnings.length - 1);
   // The warning slot reserves height only when it has a tenant — see
@@ -934,6 +1029,7 @@ export function CommitteeCard({
   const hasSlotContent = status === 'not-started' || !!top;
 
   return (
+    <SeatArtProvider delegates={seatRoster}>
     <div
       role="button"
       tabIndex={0}
@@ -1328,6 +1424,7 @@ export function CommitteeCard({
         </button>
       </div>
     </div>
+    </SeatArtProvider>
   );
 }
 

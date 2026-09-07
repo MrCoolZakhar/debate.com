@@ -10,11 +10,13 @@
 // submission stays a flat, quiet row, the contrast itself signals which
 // rows invite a click.
 
-import { Fragment } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronRight, X } from 'lucide-react';
 import ProfileLink from '@/components/ProfileLink';
 import { FlagImg } from '@/components/FlagImg';
+import { supabase } from '@/lib/supabase';
+import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import { getCountryByCode } from '@/lib/countries';
 import { isPaperLate, countUnread, type PaperMessageStub } from '@/lib/positionPapers';
 import { NEU, NEU_GRADIENTS, NeuCard } from '@/components/neu';
@@ -68,8 +70,13 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function PositionPaperRoster({
   conferenceSlug, currentUserId, deadline, allocations, papers, messagesByPaper, busyIds, onApprove, onReject, statusFilter,
+  conferenceCommitteeId,
 }: {
   conferenceSlug: string;
+  /** The committee these seats belong to. When given, seats with a custom
+   *  crest (or a group crest) draw it instead of the flag; without it every
+   *  row draws its flag as before. See `src/lib/slotGroups.ts`. */
+  conferenceCommitteeId?: string | null;
   currentUserId: string;
   deadline: string | null;
   allocations: RosterAllocation[];
@@ -84,6 +91,23 @@ export default function PositionPaperRoster({
   statusFilter?: string;
 }) {
   const router = useRouter();
+
+  const [seatArt, setSeatArt] = useState<SlotArtIndex>(() => new Map());
+  useEffect(() => {
+    // No reset on the way out: `seatLogoFor` keys every lookup by the
+    // committee id, so an index from an earlier committee can never match.
+    if (!conferenceCommitteeId) return;
+    let cancelled = false;
+    loadSlotArtIndex(supabase, [conferenceCommitteeId])
+      .then(index => { if (!cancelled) setSeatArt(index); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [conferenceCommitteeId]);
+  const seatLogoFor = (code: string): string | null => {
+    if (!conferenceCommitteeId) return null;
+    const art = artFromIndex(seatArt.get(slotArtKey(conferenceCommitteeId, code)), code);
+    return art.kind === 'logo' ? art.url : null;
+  };
 
   const byCountry = new Map<string, RosterAllocation[]>();
   for (const a of allocations) {
@@ -128,7 +152,7 @@ export default function PositionPaperRoster({
 
         const rowBody = (
           <div className="flex items-center gap-3 flex-wrap">
-            <FlagImg code={code} size={22} />
+            <FlagImg code={code} size={22} logoUrl={seatLogoFor(code)} label={cName} />
             <div style={{ minWidth: 0 }}>
               <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#1C1410', margin: 0 }}>{cName}</p>
               {shownSeats.length > 0 && (

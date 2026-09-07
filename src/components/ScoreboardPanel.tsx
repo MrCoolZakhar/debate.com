@@ -34,7 +34,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Portal from '@/components/Portal';
-import { FlagImg } from '@/components/FlagImg';
+import { SeatFlag } from '@/components/SeatFlag';
 import { NEU, NeuPill, OUTFIT } from '@/components/neu';
 import { SOFT, RED, CARD_BORDER_COLOR } from '@/components/scoreboardTokens';
 import {
@@ -42,7 +42,7 @@ import {
   type SortKey, type ScoreboardLabels,
 } from '@/components/ScoreboardTable';
 import { Committee } from '@/lib/types';
-import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { getCountryDisplayName } from '@/lib/countries';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { buildSessionScoreboardRows } from '@/lib/sessionScoreboard';
 import {
@@ -50,6 +50,8 @@ import {
 } from '@/lib/conferenceScoreboard';
 import type { LedgerRow } from '@/lib/scoring';
 import { logEvent, getFeedbackForCommittee, type FeedbackEntry } from '@/lib/committeeService';
+import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
+import { Trophy } from 'lucide-react';
 
 function csvEscape(v: string | number): string {
   const s = String(v);
@@ -77,6 +79,24 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
   useEffect(() => {
     getFeedbackForCommittee(committee.id).then(setFeedback);
   }, [committee.id, feedbackVersion]);
+
+  // Awards are decided on the conference page, never here — this is only a signpost, and
+  // it exists ONLY for conference-linked sessions. An anonymous standalone session renders
+  // nothing (PRD hard gate). The href is prefetched so the click can open synchronously in
+  // a new tab without tripping popup blockers; a slow/failed prefetch falls back to the
+  // chair's conference hub at click time.
+  const isConferenceSession = committee.sessionOrigin === 'conference';
+  const [awardsHref, setAwardsHref] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isConferenceSession) return;
+    let cancelled = false;
+    resolveChairAwardsHref(committee.code).then((href) => { if (!cancelled) setAwardsHref(href); });
+    return () => { cancelled = true; };
+  }, [isConferenceSession, committee.code]);
+  const openAwards = () => {
+    if (awardsHref) { window.open(awardsHref, '_blank', 'noopener,noreferrer'); return; }
+    resolveChairAwardsHref(committee.code).then((href) => window.open(href, '_blank', 'noopener,noreferrer'));
+  };
 
   // A half-typed award belongs to the delegation it was typed under. Collapsing
   // one row and opening another must not carry the amount and reason across —
@@ -289,6 +309,14 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
             <div className="w-1 h-4 rounded-full" style={{ backgroundColor: NEU.gold }} />
             <span className="text-sm font-black tracking-wide" style={{ color: NEU.gold }}>{t('sb_title')}</span>
             <div className="ms-auto flex items-center gap-2">
+              {isConferenceSession && (
+                <button onClick={openAwards} title={t('chair_ended_awards_title')}
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift inline-flex items-center gap-1.5"
+                  style={{ backgroundColor: 'rgba(238,217,138,0.14)', color: NEU.gold, border: `1px solid rgba(238,217,138,0.35)` }}>
+                  <Trophy size={13} strokeWidth={2.4} aria-hidden="true" />
+                  {t('sb_awards_link')}
+                </button>
+              )}
               <button onClick={exportCsv} className="text-xs font-bold px-3 py-1.5 rounded-lg gv-lift" style={{ backgroundColor: NEU.gold, color: NEU.forest }}>{t('sb_export_csv')}</button>
               <button onClick={onClose} className="text-[#EDE7D8] hover:text-white text-lg leading-none" aria-label={t('sb_close')}>✕</button>
             </div>
@@ -371,7 +399,7 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                             widening the table (which would force the whole row to scroll). */}
                         <td style={{ ...TD, textAlign: 'start', maxWidth: 220 }}>
                           <span className="flex items-center gap-1.5 min-w-0">
-                            <span className="shrink-0 flex"><FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} className="shrink-0" /></span>
+                            <span className="shrink-0 flex"><SeatFlag country={r.country} size={20} className="shrink-0" /></span>
                             <span className="truncate" style={{ color: NEU.ink }} title={getCountryDisplayName(r.country, language)}>{getCountryDisplayName(r.country, language)}</span>
                           </span>
                         </td>

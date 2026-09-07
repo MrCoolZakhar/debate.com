@@ -1,12 +1,16 @@
 'use client';
 
 import { Committee } from '@/lib/types';
-import { getCountryByName, getCountryDisplayName, getFlagUrl, compareCountryNames } from '@/lib/countries';
+import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import { SeatFlag, useSeatArt } from '@/components/SeatFlag';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 // A flag tile with a VISIBLE globe fallback (not display:none).
 function FlagTile({ country, active, spoken }: { country: string; active: boolean; spoken: boolean }) {
-  const code = getCountryByName(country)?.code ?? '';
+  // Seat crest first, national flag second — same tile, same ring, same globe
+  // fallback. `hasArt` replaces the old `code` truthiness check.
+  const art = useSeatArt(country);
+  const hasArt = art.kind !== 'none';
   return (
     <div className="relative flex flex-col items-center gap-1" style={{ width: 64 }}>
       <div className="relative rounded-xl overflow-hidden flex items-center justify-center"
@@ -15,17 +19,10 @@ function FlagTile({ country, active, spoken }: { country: string; active: boolea
           boxShadow: active ? '0 0 0 3px #EED98A, 0 0 12px 2px rgba(184,132,74,0.5)' : '0 0 0 1px rgba(28,20,16,0.12)',
           backgroundColor: '#DDD4C0',
         }}>
-        {code ? (
-          <img src={getFlagUrl(code)} alt={country}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            onError={(e) => {
-              const img = e.currentTarget as HTMLImageElement;
-              img.style.display = 'none';
-              const sib = img.nextElementSibling as HTMLElement | null;
-              if (sib) sib.style.display = 'flex';
-            }} />
+        {hasArt ? (
+          <SeatFlag country={country} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : null}
-        <span style={{ display: code ? 'none' : 'flex', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🌐</span>
+        <span style={{ display: hasArt ? 'none' : 'flex', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🌐</span>
         {spoken && !active && (
           <span style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: '50%', backgroundColor: '#3D7A52', boxShadow: '0 0 0 1.5px #FAF8F3' }} />
         )}

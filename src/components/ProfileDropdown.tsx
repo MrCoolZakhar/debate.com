@@ -20,6 +20,18 @@
  * ivory row ending in its ROLE; a draft row is gold-washed, carries a
  * FileClock instead of a role, and is labelled UNFINISHED. Clicking one
  * resumes the wizard rather than opening the conference page.
+ *
+ * PENDING INVITATIONS SIT ABOVE THE DRAFTS
+ * An imported delegate who creates an account has no other surface telling
+ * them somebody is waiting on them, so their invitation now leads the same
+ * list, ahead of drafts and ahead of accepted conferences. It reads the same
+ * way a draft does but in the opposite direction: forest-washed instead of
+ * gold-washed, carries a Ticket instead of a role, and is labelled INVITED.
+ * Clicking one goes to the claim page, not the conference page.
+ *
+ * The order is deliberate. An invitation has somebody waiting on it and takes
+ * one click to resolve; a draft is your own unfinished work with nobody
+ * blocked behind it; neither is a conference you are actually attending yet.
  */
 
 import Link from 'next/link';
@@ -27,9 +39,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { compareStartDate } from '@/lib/conferenceDates';
-import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight } from 'lucide-react';
+import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight, Ticket } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
+import { usePendingInvites, inviteAcceptHref } from '@/hooks/usePendingInvites';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 
 /** One row in the dropdown's "YOUR CONFERENCES" section. */
@@ -84,6 +97,8 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
   // Half-finished applications. Fetched lazily on first open, exactly like the
   // conference list below; they are omitted entirely when there are none.
   const { count: draftCount, drafts } = useDraftCount(open);
+  // Pending imported-delegate invitations, same lazy-on-open shape.
+  const { count: inviteCount, invites } = usePendingInvites(open);
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
@@ -368,8 +383,9 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
           </div>
 
           {/* Your conferences, lazily fetched; omitted entirely when empty.
-              Unfinished drafts head the list — see the file header. */}
-          {(confsLoading || drafts.length > 0 || (myConfs !== null && myConfs.length > 0)) && (
+              Pending invitations head the list, then unfinished drafts —
+              see the file header. */}
+          {(confsLoading || invites.length > 0 || drafts.length > 0 || (myConfs !== null && myConfs.length > 0)) && (
             <>
               <div style={{ height: '1px', backgroundColor: '#DDD4C0' }} />
               <div className="pt-2.5 pb-1">
@@ -380,6 +396,21 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   >
                     YOUR CONFERENCES
                   </p>
+                  {/* Invitations count first, forest rather than gold. */}
+                  {inviteCount !== null && inviteCount > 0 && (
+                    <span
+                      className="flex-shrink-0 flex items-center justify-center rounded-full"
+                      style={{
+                        minWidth: 18, height: 18, padding: '0 5px', fontSize: 10, fontWeight: 700,
+                        fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums',
+                        backgroundColor: 'rgba(61,122,82,0.16)',
+                        color: '#2A5A3C',
+                      }}
+                      title={inviteCount === 1 ? '1 invitation waiting' : `${inviteCount} invitations waiting`}
+                    >
+                      {inviteCount}
+                    </span>
+                  )}
                   {/* The old row's count badge, kept — it just moved onto the
                       section that now holds the drafts. */}
                   {draftCount !== null && draftCount > 0 && (
@@ -398,8 +429,57 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
                   )}
                 </div>
 
-                {/* ── Unfinished drafts, first. Gold wash + UNFINISHED tag so
-                    they never read as a conference this person is going to. ── */}
+                {/* ── Pending invitations, ahead of even the drafts. Forest
+                    wash + INVITED tag: somebody is waiting on these. ── */}
+                {invites.slice(0, 3).map((i) => (
+                  <Link
+                    key={i.id}
+                    href={inviteAcceptHref(i)}
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2 transition-colors"
+                    style={{ textDecoration: 'none', backgroundColor: 'rgba(61,122,82,0.09)' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(61,122,82,0.17)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(61,122,82,0.09)'; }}
+                    title={`You were invited to ${i.acronym || i.fullName} as a ${i.role.replace(/-/g, ' ')}`}
+                  >
+                    <span
+                      style={{
+                        width: '20px', height: '20px', borderRadius: '50%',
+                        backgroundColor: '#FFFEFA', border: '0.5px solid rgba(61,122,82,0.45)',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        overflow: 'hidden', flexShrink: 0,
+                      }}
+                    >
+                      {i.logoUrl ? (
+                        <img
+                          src={i.logoUrl}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '2px' }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <Ticket size={11} strokeWidth={2.4} style={{ color: '#2A5A3C' }} />
+                      )}
+                    </span>
+                    <span
+                      className="flex-1 truncate font-semibold"
+                      style={{ color: '#1C1410', fontSize: '12px', letterSpacing: '0.03em', fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      {i.acronym || i.fullName}
+                    </span>
+                    <span
+                      className="font-bold uppercase shrink-0 inline-flex items-center gap-1"
+                      style={{ color: '#2A5A3C', fontSize: '9px', letterSpacing: '0.06em', fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      <Ticket size={10} strokeWidth={2.6} />
+                      INVITED
+                    </span>
+                  </Link>
+                ))}
+
+                {/* ── Unfinished drafts, after any invitations. Gold wash +
+                    UNFINISHED tag so they never read as a conference this
+                    person is going to. ── */}
                 {drafts.slice(0, 3).map((d) => (
                   <Link
                     key={d.id}

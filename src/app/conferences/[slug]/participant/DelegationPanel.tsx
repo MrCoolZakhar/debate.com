@@ -15,6 +15,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeftRight, X } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 import { FlagImg } from '@/components/FlagImg';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import { ModalOverlay } from '@/components/CommitteeEditorModal';
@@ -68,13 +69,15 @@ function pledgeStatusLabel(m: PoolMember): string {
 
 // ── Member row ───────────────────────────────────────────────────────────────
 
-function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwap, covered }: {
+function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwap, covered, seatLogo }: {
   member: PoolMember;
   swapMode: boolean;
   swapSelectable: boolean;
   swapSelected: boolean;
   onToggleSwap: () => void;
   covered?: boolean;
+  /** The seat's own or group crest, drawn instead of the flag when set. */
+  seatLogo?: string | null;
 }) {
   const name = member.profiles?.display_name ?? 'Unknown';
   const chip = derivePaymentChip(member.payment_status ?? 'unpaid', !!member.self_paid, 0);
@@ -130,7 +133,7 @@ function MemberRow({ member, swapMode, swapSelectable, swapSelected, onToggleSwa
         </div>
         {alloc && (
           <div className="flex items-center gap-1.5 mt-0.5">
-            {member.assigned_country_code && <FlagImg code={member.assigned_country_code} size={13} />}
+            {member.assigned_country_code && <FlagImg code={member.assigned_country_code} size={13} logoUrl={seatLogo} label={member.assigned_country_name ?? undefined} />}
             <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>{alloc}</p>
           </div>
         )}
@@ -220,6 +223,14 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
   const [swapResult, setSwapResult] = useState<SwapResultInfo | null>(null);
   const [pendingSwapRequest, setPendingSwapRequest] = useState<SwapActivityRow | null>(null);
   const [recentSwapNotice, setRecentSwapNotice] = useState<SwapActivityRow | null>(null);
+  // Custom seat / group crests for the committees this delegation sits in,
+  // keyed by committee + seat (`src/lib/slotGroups.ts`).
+  const [seatArt, setSeatArt] = useState<SlotArtIndex>(() => new Map());
+  const seatLogoFor = useCallback((m: PoolMember): string | null => {
+    if (!m.assigned_committee_id || !m.assigned_country_code) return null;
+    const art = artFromIndex(seatArt.get(slotArtKey(m.assigned_committee_id, m.assigned_country_code)), m.assigned_country_code);
+    return art.kind === 'logo' ? art.url : null;
+  }, [seatArt]);
 
   const load = useCallback(async () => {
     if (!societyId || !session) return;
@@ -230,10 +241,13 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
       supabase.from('applications').select(POOL_MEMBER_SELECT).eq('society_id', societyId).in('status', ['accepted', 'assigned']),
       supabase.rpc('society_credit_covered_apps', { p_society: societyId }),
     ]);
+    const memberList = (memberRows ?? []) as unknown as PoolMember[];
     setSociety((societyRow as Society | null) ?? null);
-    setMembers((memberRows ?? []) as unknown as PoolMember[]);
+    setMembers(memberList);
     setCoveredIds(new Set((coveredRows ?? []) as string[]));
     setLoading(false);
+    const ccIds = memberList.map(m => m.assigned_committee_id).filter((id): id is string => !!id);
+    void loadSlotArtIndex(supabase, ccIds).then(setSeatArt).catch(() => {});
   }, [societyId, session]);
 
   useEffect(() => { load(); }, [load]);
@@ -437,7 +451,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
           <p className="mb-2" style={{ fontSize: 9, fontWeight: 700, color: '#B6871F', fontFamily: OUTFIT, letterSpacing: '0.12em' }}>ADVISORS</p>
           <div className="flex flex-col gap-1.5">
             {advisors.map(m => (
-              <MemberRow key={m.id} member={m} swapMode={false} swapSelectable={false} swapSelected={false} onToggleSwap={() => {}} />
+              <MemberRow key={m.id} member={m} swapMode={false} swapSelectable={false} swapSelected={false} onToggleSwap={() => {}} seatLogo={seatLogoFor(m)} />
             ))}
           </div>
         </div>
@@ -454,6 +468,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
                 swapSelected={swapSelection.includes(m.id)}
                 onToggleSwap={() => toggleSwapSelect(m.id)}
                 covered={coveredIds.has(m.id)}
+                seatLogo={seatLogoFor(m)}
               />
             ))}
           </div>
@@ -473,6 +488,7 @@ export default function DelegationPanel({ conferenceId, societyId, allocationSwa
                 swapSelected={swapSelection.includes(m.id)}
                 onToggleSwap={() => toggleSwapSelect(m.id)}
                 covered={coveredIds.has(m.id)}
+                seatLogo={seatLogoFor(m)}
               />
             ))}
           </div>

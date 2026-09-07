@@ -18,6 +18,7 @@ import { Pill, type PillTone, OUTFIT } from '@/app/account/accountUi';
 import { NEU, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
 import { formatConferenceDates } from '@/lib/conferenceDates';
+import VerifiedCheck from '@/components/VerifiedCheck';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ export interface CardConference {
   banner_url: string | null;
   is_public?: boolean;
   status?: string;
+  /** Blue seal beside the name when true; nothing at all otherwise. */
+  is_verified?: boolean;
 }
 
 /** A role the signed-in user holds at a conference, becomes a tinted tag chip. */
@@ -237,6 +240,7 @@ export function PersonalConferenceCard({
               style={{ color: hovered ? NEU.forest : NEU.ink, fontFamily: OUTFIT, fontSize: '17px', letterSpacing: '-0.01em' }}
             >
               {primary}
+              <VerifiedCheck verified={!!conference.is_verified} size={17} title="Verified conference" className="ml-1.5 mb-0.5" />
               <ArrowUpRight
                 size={14}
                 strokeWidth={2.6}

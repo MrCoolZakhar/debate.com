@@ -8,7 +8,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, DelegateStatus } from '@/lib/types';
-import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
+import { sessionSeatArt } from '@/lib/sessionFlags';
 import { Emoji } from '@/components/Emoji';
 import { MajorityPie } from '@/components/RollCallPanel';
 import { getCommitteeByCode, setPhase as setPhaseInDB, setDelegateStatus as setDelegateStatusInDB, updateDocumentStatus as updateDocumentStatusInDB, saveCommitteeSettings } from '@/lib/committeeService';
@@ -140,7 +142,7 @@ function RollCallModal({
                 }}
               >
                 <div className="w-9 h-9 rounded-full bg-[#DDD4C0] border border-[#C8BAA8] flex items-center justify-center shrink-0 overflow-hidden">
-                  {(() => { const f = getCountryByName(d.country); return f ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.25rem">🌐</Emoji>; })()}
+                  <SeatFlag seat={d} size={24} className="object-contain" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
                 </div>
                 <span className="flex-1 text-sm text-white truncate">{getCountryDisplayName(d.country, language)}</span>
                 <button
@@ -224,11 +226,17 @@ function VotingHeader({ committeeName, onBack, onEndDebate, onOpenSettings, rule
   );
 }
 
-function getFlag(country: string) {
-  const found = getCountryByName(country);
-  return found
-    ? <img src={getFlagUrl(found.code)} alt={found.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-    : <Emoji size="1em">🌐</Emoji>;
+/** Inline 1em mark beside a delegation name. A component rather than the old
+ *  `getFlag()` call so it can read the seat's crest off <SeatArtProvider>. */
+function SeatMark({ country }: { country: string }) {
+  return (
+    <SeatFlag
+      country={country}
+      className="inline-block object-contain"
+      style={{ width: '1em', height: '1em' }}
+      fallback={<Emoji size="1em">🌐</Emoji>}
+    />
+  );
 }
 
 function VoteScale({ forCount, againstCount, totalVoted }: {
@@ -945,6 +953,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
 
   return (
     <FitToScreen>
+    <SeatArtProvider delegates={committee.delegates}>
     <div className="h-full w-full bg-[#F6F1E9] flex flex-col overflow-hidden">
       <VotingHeader {...headerProps}>
         <span className="text-xs font-mono font-bold text-[#1B3828] bg-[#DDD4C0] px-2 py-0.5 rounded shrink-0">
@@ -982,15 +991,13 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           <div className="flex-1 flex flex-col items-center justify-center min-h-0">
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
-                const f = getCountryByName(currentDelegate.country);
+                const art = sessionSeatArt(currentDelegate);
                 const size = '220px';
-                return f ? (
+                return art.kind !== 'none' ? (
                   <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
-                    <img
-                      src={getFlagUrl(f.code)}
-                      alt={f.code}
+                    <SeatFlag
+                      seat={currentDelegate}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
                 ) : (
@@ -1092,16 +1099,16 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             <p className="text-[10px] text-[#9A8A78] font-mono text-center mb-2 tracking-widest">{t('voting_up_next')}</p>
             <div className="flex items-center justify-center gap-4 h-[80px]">
               {upcomingDelegates.map((d, i) => {
-                const qf = getCountryByName(d.country);
+                const qArt = sessionSeatArt(d);
                 const qHeight = i === 0 ? 52 : Math.max(20, 38 - i * 5);
                 const qWidth = Math.round(qHeight * 1.5);
                 const qRadius = i === 0 ? 8 : 5;
                 const qShadow = `0 0 0 ${i === 0 ? 2.5 : 1.5}px rgba(28,20,16,0.22)`;
                 return (
                   <div key={d.id} className="flex flex-col items-center gap-1" style={{ opacity: Math.max(0.2, 1 - i * 0.18) }}>
-                    {qf ? (
+                    {qArt.kind !== 'none' ? (
                       <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0 }}>
-                        <img src={getFlagUrl(qf.code)} alt={qf.code} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        <SeatFlag seat={d} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       </div>
                     ) : (
                       <div style={{ width: qWidth, height: qHeight, borderRadius: qRadius, overflow: 'hidden', boxShadow: qShadow, flexShrink: 0, position: 'relative', backgroundColor: 'rgba(221,212,192,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1172,15 +1179,15 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
             </p>
             <div className="select-none mb-3 flex items-center justify-center">
               {(() => {
-                const f = getCountryByName(orderedRights[rightsIndex].country);
+                const rightsSeat = committee.delegates.find((d) => d.id === orderedRights[rightsIndex].delegateId)
+                  ?? { country: orderedRights[rightsIndex].country };
+                const art = sessionSeatArt(rightsSeat);
                 const size = '196px';
-                return f ? (
+                return art.kind !== 'none' ? (
                   <div style={{ width: size, aspectRatio: '3 / 2', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 0 0 3.75px rgba(28,20,16,0.22)', flexShrink: 0 }}>
-                    <img
-                      src={getFlagUrl(f.code)}
-                      alt={f.code}
+                    <SeatFlag
+                      seat={rightsSeat}
                       style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                     />
                   </div>
                 ) : (
@@ -1248,7 +1255,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
                 >
                   {!isCurrent && <span className="text-[#9A8A78] text-xs">⠿</span>}
                   <span className="text-xs w-5 font-mono text-end opacity-60">{absIdx + 1}</span>
-                  <span>{getFlag(v.country)} {getCountryDisplayName(v.country, language)}</span>
+                  <span><SeatMark country={v.country} /> {getCountryDisplayName(v.country, language)}</span>
                   <span className={`ms-auto text-xs font-semibold ${
                     isCurrent ? 'text-[#EED98A]' :
                     v.choice === 'for-rights' ? 'text-[#2A7A3C]' : 'text-[#8B2020]'
@@ -1442,6 +1449,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
         </div></Portal>
       )}
     </div>
+    </SeatArtProvider>
     </FitToScreen>
   );
 }

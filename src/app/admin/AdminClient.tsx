@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Activity, Building2, Radio, ShieldCheck, Users } from 'lucide-react';
+import { Activity, BarChart3, Building2, Radio, ShieldCheck, Users } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -27,15 +27,22 @@ import ConferencesTab, { type AdminConferenceRow } from './ConferencesTab';
 import UsersTab from './UsersTab';
 import ActivityTab from './ActivityTab';
 import LiveCommitteesTab from './LiveCommitteesTab';
+// The morning landing page: platform numbers, grouped for a founder read.
+// Same contract as the other siblings — no props, own fetch, own DB-side gate
+// (admin_platform_metrics / admin_data_lists, both is_platform_admin).
+import DataTab from './DataTab';
 
 // Shared branded spinner (Gavelling green), built by a sibling agent.
 import Loader from '@/components/Loader';
 
 const MONO = 'ui-monospace, monospace';
 
-type TabKey = 'conferences' | 'users' | 'activity' | 'live';
+type TabKey = 'data' | 'conferences' | 'users' | 'activity' | 'live';
 
+// Data is first and is the default: this console is opened every morning to
+// read the numbers, and the other four tabs are what you go to afterwards.
 const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
+  { key: 'data',        label: 'Data',        icon: BarChart3 },
   { key: 'conferences', label: 'Conferences', icon: Building2 },
   { key: 'users',       label: 'Users',       icon: Users },
   { key: 'activity',    label: 'Activity',    icon: Activity },
@@ -48,7 +55,7 @@ export default function AdminClient() {
   const [logos, setLogos] = useState<Record<string, string | null>>({});
   const [avatars, setAvatars] = useState<Record<string, string | null>>({});
   const [denied, setDenied] = useState(false);
-  const [tab, setTab] = useState<TabKey>('conferences');
+  const [tab, setTab] = useState<TabKey>('data');
 
   const load = useCallback(async () => {
     if (!session) { setDenied(true); return; }
@@ -204,6 +211,7 @@ export default function AdminClient() {
         {/* Panels. Only the selected tab mounts, so a sibling tab never fetches
             until a staff member actually opens it. */}
         <div role="tabpanel" id={`admin-panel-${tab}`} aria-labelledby={`admin-tab-${tab}`}>
+          {tab === 'data' && <DataTab />}
           {tab === 'conferences' && <ConferencesTab rows={rows} logos={logos} avatars={avatars} />}
           {tab === 'users' && <UsersTab />}
           {tab === 'activity' && <ActivityTab />}

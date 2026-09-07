@@ -203,13 +203,13 @@ function UploadStudyGuideModal({
         {uploadError && <p style={{ fontSize: 12, color: '#8B2020', fontFamily: OUTFIT, marginBottom: 12 }}>{uploadError}</p>}
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} className="focus:outline-none" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
+          <button onClick={onClose} className="focus:outline-none gv-lift" style={{ flex: 1, border: '1.5px solid #DDD4C0', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}>
             CANCEL
           </button>
           <button
             onClick={handleUpload}
             disabled={disabled}
-            className="focus:outline-none"
+            className="focus:outline-none gv-lift"
             style={{ flex: 1, border: 'none', borderRadius: 12, padding: '10px 0', fontFamily: OUTFIT, fontWeight: 700, fontSize: 13, backgroundColor: disabled ? '#DDD4C0' : '#1B3828', color: disabled ? '#9A8A78' : '#EED98A', cursor: disabled ? 'default' : 'pointer' }}
           >
             {uploading ? 'UPLOADING...' : 'UPLOAD'}
@@ -781,7 +781,7 @@ export default function DocumentsPage() {
                     <p style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 15, color: '#1C1410' }}>Study Guides</p>
                     <button
                       onClick={() => setShowUploadModal(true)}
-                      className="focus:outline-none"
+                      className="focus:outline-none gv-lift"
                       style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}
                     >
                       UPLOAD STUDY GUIDE
@@ -825,7 +825,7 @@ export default function DocumentsPage() {
                                 <button
                                   onClick={() => handlePublishGuide(guide.id, false)}
                                   title={releaseAt && new Date(releaseAt).getTime() <= Date.now() ? "Won't hide it, the schedule already released it. Clear the schedule in Settings to fully unpublish." : undefined}
-                                  className="focus:outline-none"
+                                  className="focus:outline-none gv-lift"
                                   style={{ border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
                                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -840,7 +840,7 @@ export default function DocumentsPage() {
                                 </span>
                                 <button
                                   onClick={() => selectedCommitteeId && handleUnscheduleGuide(guide.id, selectedCommitteeId)}
-                                  className="focus:outline-none"
+                                  className="focus:outline-none gv-lift"
                                   style={{ border: '1px solid #DDD4C0', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontFamily: OUTFIT, fontWeight: 700, color: '#1C1410', backgroundColor: 'transparent', cursor: 'pointer' }}
                                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
                                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -860,7 +860,7 @@ export default function DocumentsPage() {
                                 )}
                                 <button
                                   onClick={() => handlePublishGuide(guide.id, true)}
-                                  className="focus:outline-none"
+                                  className="focus:outline-none gv-lift"
                                   style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11, color: '#EED98A', backgroundColor: '#1B3828', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
                                 >
                                   PUBLISH
@@ -911,7 +911,7 @@ export default function DocumentsPage() {
                         <button
                           key={f}
                           onClick={() => setFilterStatus(f)}
-                          className="focus:outline-none"
+                          className="focus:outline-none gv-lift"
                           style={{
                             fontFamily: OUTFIT, fontSize: 10, fontWeight: 700,
                             padding: '5px 12px', borderRadius: 9999, cursor: 'pointer', letterSpacing: '0.06em',
@@ -933,6 +933,7 @@ export default function DocumentsPage() {
                   ) : (
                     <PositionPaperRoster
                       conferenceSlug={conference.slug}
+                      conferenceCommitteeId={selectedCommitteeId ?? null}
                       currentUserId={user?.id ?? ''}
                       deadline={selectedCommittee?.position_paper_deadline ?? null}
                       allocations={rosterAllocations}

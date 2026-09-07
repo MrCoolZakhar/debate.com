@@ -319,22 +319,6 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              <span
-                className="absolute right-0 z-10 pointer-events-none"
-                style={{
-                  top: '-8px',
-                  backgroundColor: '#1B3828',
-                  color: '#EED98A',
-                  border: '1.5px solid rgba(238,217,138,0.55)',
-                  borderRadius: '5px',
-                  padding: '0px 4px',
-                  fontSize: '7px',
-                  fontWeight: 900,
-                  letterSpacing: '0.08em',
-                  whiteSpace: 'nowrap',
-                  lineHeight: '13px',
-                }}
-              >✨ NEW</span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/gavel-mark.webp" alt="" decoding="async" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
               <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '—' : creditBalance}</span>

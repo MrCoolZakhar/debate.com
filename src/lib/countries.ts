@@ -237,7 +237,32 @@ export const UN_COUNTRIES: Country[] = [
 ];
 
 /**
- * Former or alternate spellings that must keep resolving to a current country.
+ * THE FOLDING RULE — read this before writing any country comparison.
+ *
+ * `fold()` lowercases, trims and strips combining diacritics: "Türkiye" folds
+ * to "turkiye", "Côte d'Ivoire" to "cote d'ivoire", "São Tomé" to "sao tome".
+ *
+ * This is not cosmetic. A raw `'türkiye'.toLowerCase().includes('tu')` is
+ * FALSE — the second character is `ü`, not `u` — so the day the canonical name
+ * changed from "Turkey" to "Türkiye" every typeahead in the app stopped
+ * finding it from "Tu". The same breaks Côte d'Ivoire and São Tomé, and in
+ * ES/FR it breaks Perú, México and Turquía.
+ *
+ * NEW CALL SITES MUST NOT hand-roll `.toLowerCase().includes(...)` over a
+ * country name. Use one of the shared helpers, which fold BOTH sides and
+ * consult COUNTRY_NAME_ALIASES:
+ *   - `countryMatchRank(enName, query, language)` — ranked, for ordered typeaheads
+ *   - `matchesCountryQuery` / `startsWithCountryQuery` — boolean, on an EN name
+ *   - `matchesSearch(country, query, language)` — boolean, on a `Country`
+ *   - `findCountryFlexible(freeText)` — free text → canonical EN name (imports)
+ */
+export function fold(s: string): string {
+  return (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+/**
+ * Former or alternate spellings, shorthands and acronyms that must resolve to
+ * a current country.
  *
  * Türkiye asked the UN to retire "Turkey" in English in 2022 and the UN
  * adopted it, so that is the name the app shows. But roughly 120 rows across
@@ -247,18 +272,138 @@ export const UN_COUNTRIES: Country[] = [
  * quietly unresolve all of them. It also catches the diacritic-free "Turkiye"
  * that anyone without an ü on their keyboard will type.
  *
- * Keyed on the folded (lowercased, accent-stripped) form.
+ * This is also the ONE home for the country acronyms ("uk", "drc", "dprk")
+ * that used to be copy-pasted into three separate components. A shorthand that
+ * lives here is understood by every search box, every paste importer and every
+ * flag lookup at once.
+ *
+ * Keyed on the folded (lowercased, accent-stripped) form. Values MUST be an
+ * exact canonical `UN_COUNTRIES[].name`.
  */
-const COUNTRY_NAME_ALIASES: Record<string, string> = {
+export const COUNTRY_NAME_ALIASES: Record<string, string> = {
+  // ── Türkiye ────────────────────────────────────────────────────────────────
   turkey: 'Türkiye',
   turkiye: 'Türkiye',
+  'republic of turkiye': 'Türkiye',
+  'republic of turkey': 'Türkiye',
+  // ── Renamed or alternately-spelled states ──────────────────────────────────
+  czechia: 'Czech Republic',
+  holland: 'Netherlands',
+  'the netherlands': 'Netherlands',
+  'kingdom of the netherlands': 'Netherlands',
+  burma: 'Myanmar',
+  swaziland: 'Eswatini',
+  macedonia: 'North Macedonia',
+  fyrom: 'North Macedonia',
+  'former yugoslav republic of macedonia': 'North Macedonia',
+  'cape verde': 'Cabo Verde',
+  'ivory coast': "Côte d'Ivoire",
+  'cote divoire': "Côte d'Ivoire",
+  "cote d'ivoire": "Côte d'Ivoire",
+  'cote d ivoire': "Côte d'Ivoire",
+  'sao tome': 'São Tomé and Príncipe',
+  'sao tome and principe': 'São Tomé and Príncipe',
+  'sao tome & principe': 'São Tomé and Príncipe',
+  'east timor': 'Timor-Leste',
+  'timor leste': 'Timor-Leste',
+  'vatican city': 'Holy See',
+  vatican: 'Holy See',
+  'state of palestine': 'Palestine',
+  // ── The two Congos — order-independent, both spelled out ───────────────────
+  drc: 'DR Congo',
+  'dr congo': 'DR Congo',
+  'democratic republic of the congo': 'DR Congo',
+  'democratic republic of congo': 'DR Congo',
+  'congo kinshasa': 'DR Congo',
+  'congo drc': 'DR Congo',
+  'republic of the congo': 'Congo',
+  'congo brazzaville': 'Congo',
+  // ── Long-form UN names ─────────────────────────────────────────────────────
+  'russian federation': 'Russia',
+  'the russian federation': 'Russia',
+  rus: 'Russia',
+  ussr: 'Russia',
+  'soviet union': 'Russia',
+  'syrian arab republic': 'Syria',
+  'islamic republic of iran': 'Iran',
+  'iran islamic republic of': 'Iran',
+  'lao pdr': 'Laos',
+  'laos pdr': 'Laos',
+  "lao people's democratic republic": 'Laos',
+  'lao peoples democratic republic': 'Laos',
+  'viet nam': 'Vietnam',
+  'bolivia plurinational': 'Bolivia',
+  'plurinational state of bolivia': 'Bolivia',
+  'bolivia plurinational state of': 'Bolivia',
+  'venezuela bolivarian': 'Venezuela',
+  'bolivarian republic of venezuela': 'Venezuela',
+  'venezuela bolivarian republic of': 'Venezuela',
+  'united republic of tanzania': 'Tanzania',
+  'republic of moldova': 'Moldova',
+  'brunei darussalam': 'Brunei',
+  'federated states of micronesia': 'Micronesia',
+  'micronesia federated states of': 'Micronesia',
+  // ── The Koreas ─────────────────────────────────────────────────────────────
+  'republic of korea': 'South Korea',
+  'korea republic of': 'South Korea',
+  rok: 'South Korea',
+  dprk: 'North Korea',
+  "democratic people's republic of korea": 'North Korea',
+  'democratic peoples republic of korea': 'North Korea',
+  // ── Acronyms and shorthands (formerly duplicated per-component) ────────────
+  uk: 'United Kingdom',
+  gb: 'United Kingdom',
+  gbr: 'United Kingdom',
+  'great britain': 'United Kingdom',
+  britain: 'United Kingdom',
+  england: 'United Kingdom',
+  'the united kingdom': 'United Kingdom',
+  'united kingdom of great britain and northern ireland': 'United Kingdom',
+  us: 'United States',
+  usa: 'United States',
+  america: 'United States',
+  'the united states': 'United States',
+  'united states of america': 'United States',
+  uae: 'United Arab Emirates',
+  emirates: 'United Arab Emirates',
+  'the emirates': 'United Arab Emirates',
+  chn: 'China',
+  prc: 'China',
+  "people's republic of china": 'China',
+  'peoples republic of china': 'China',
+  fra: 'France',
+  roc: 'Taiwan',
+  'chinese taipei': 'Taiwan',
+  car: 'Central African Republic',
+  png: 'Papua New Guinea',
 };
 
+/** Canonical EN name → every folded alias key that points at it. Lets a
+ *  typeahead match a HALF-typed alias ("turke") as well as a complete one. */
+const ALIAS_KEYS_BY_COUNTRY: Map<string, string[]> = (() => {
+  const m = new Map<string, string[]>();
+  for (const [key, name] of Object.entries(COUNTRY_NAME_ALIASES)) {
+    const list = m.get(name);
+    if (list) list.push(key);
+    else m.set(name, [key]);
+  }
+  return m;
+})();
+
 export function getCountryByName(name: string): Country | undefined {
-  const direct = UN_COUNTRIES.find((c) => c.name.toLowerCase() === name.toLowerCase());
+  const n = fold(name);
+  if (!n) return undefined;
+  const direct = UN_COUNTRIES.find((c) => fold(c.name) === n);
   if (direct) return direct;
-  const aliased = COUNTRY_NAME_ALIASES[fold(name)];
+  const aliased = COUNTRY_NAME_ALIASES[n];
   return aliased ? UN_COUNTRIES.find((c) => c.name === aliased) : undefined;
+}
+
+/** ISO code when the text names a country, otherwise its folded form. Use this
+ *  whenever two free-text country strings from different sources have to be
+ *  compared for equality (a stored conference country vs. a filter list). */
+export function countryIdentity(name: string): string {
+  return getCountryByName(name)?.code ?? fold(name);
 }
 
 export function getCountryByCode(code: string): Country | undefined {
@@ -458,57 +603,118 @@ export function compareCountryNames(a: string, b: string, language: string): num
     getCountryDisplayName(b, language), language, { sensitivity: 'base' });
 }
 
-// Fold accents + lowercase for matching
-function fold(s: string): string {
-  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+/** True when `q` starts a WORD of `haystack` — so "emirates" finds
+ *  "United Arab Emirates" and "guinea" finds "Papua New Guinea", without the
+ *  noise of a bare substring match. Both arguments must already be folded. */
+function startsAWord(haystack: string, q: string): boolean {
+  if (haystack.startsWith(q)) return true;
+  let i = haystack.indexOf(q, 1);
+  while (i !== -1) {
+    if (!/[a-z0-9]/.test(haystack[i - 1])) return true;
+    i = haystack.indexOf(q, i + 1);
+  }
+  return false;
 }
 
-// Match a free-text token to a country across EN + ES + FR names, accent-insensitive
+/**
+ * How well `query` matches the country whose canonical EN name is `enName`.
+ *
+ *   0 — exact (EN or localised name)
+ *   1 — exact alias ("turkey", "uk", "drc")
+ *   2 — prefix of the name, of its localised name, or of one of its aliases,
+ *       at a word boundary ("tu" → Türkiye, "emirates" → United Arab Emirates)
+ *   3 — substring anywhere in the name or its localised name
+ *   null — no match
+ *
+ * Every country typeahead should map/filter/sort on this rather than rolling
+ * its own two-pass "prefix filter then substring filter" — the ranking is what
+ * puts Türkiye above Portugal when someone types "tu".
+ */
+export function countryMatchRank(enName: string, query: string, language: string): number | null {
+  const q = fold(query);
+  if (!q) return null;
+  const en = fold(enName);
+  const display = language && language !== 'en' ? fold(getCountryDisplayName(enName, language)) : '';
+  const aliases = ALIAS_KEYS_BY_COUNTRY.get(enName) ?? [];
+
+  if (en === q || (display !== '' && display === q)) return 0;
+  if (aliases.includes(q)) return 1;
+  if (startsAWord(en, q) || (display !== '' && startsAWord(display, q))) return 2;
+  if (aliases.some((a) => startsAWord(a, q))) return 2;
+  if (en.includes(q) || (display !== '' && display.includes(q))) return 3;
+  return null;
+}
+
+/** Shortest name first, alphabetical on ties — a deterministic winner where the
+ *  old `.find()` silently depended on UN_COUNTRIES array order. */
+function pickShortest(list: Country[]): string {
+  return [...list].sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name))[0].name;
+}
+
+/** Longest name first — the MOST SPECIFIC name contained in a longer input, so
+ *  "Democratic Republic of the Congo" resolves to DR Congo, not to Congo. */
+function pickLongest(list: Country[]): string {
+  return [...list].sort((a, b) => b.name.length - a.name.length || a.name.localeCompare(b.name))[0].name;
+}
+
+/**
+ * Free text → canonical EN country name, for paste/CSV importers.
+ *
+ * The order below is load-bearing. Exact names, then aliases, then localised
+ * names, then ISO codes ALL run before the loose fallback, because the loose
+ * fallback guesses: it used to resolve "UK" to **Ukraine** (fold('Ukraine')
+ * starts with "uk") and "Democratic Republic of the Congo" to **Congo** (the
+ * shorter name won on array order). Aliases now claim both, the fallback
+ * refuses inputs under 3 characters, and its ties break deterministically.
+ */
 export function findCountryFlexible(input: string): string | null {
   const n = fold(input);
   if (!n) return null;
-  // exact across EN names
-  let hit = UN_COUNTRIES.find((c) => fold(c.name) === n);
-  if (hit) return hit.name;
-  // retired spellings, before the loose fallback below starts guessing
+  // 1. exact across canonical EN names
+  const exact = UN_COUNTRIES.find((c) => fold(c.name) === n);
+  if (exact) return exact.name;
+  // 2. retired spellings, long-form UN names and acronyms
   const aliased = COUNTRY_NAME_ALIASES[n];
   if (aliased) return aliased;
-  // exact across ES/FR dictionaries (value match → map code back to EN canonical name)
-  for (const dict of [COUNTRY_NAMES_ES, COUNTRY_NAMES_FR]) {
+  // 3. exact across the ES/FR/AR dictionaries (value match → code → EN name)
+  for (const dict of [COUNTRY_NAMES_ES, COUNTRY_NAMES_FR, COUNTRY_NAMES_AR]) {
     const codeEntry = Object.entries(dict).find(([, v]) => fold(v) === n);
     if (codeEntry) { const c = UN_COUNTRIES.find((u) => u.code === codeEntry[0]); if (c) return c.name; }
   }
-  // startsWith / includes fallback on EN names
-  hit = UN_COUNTRIES.find((c) => fold(c.name).startsWith(n)) ?? UN_COUNTRIES.find((c) => fold(c.name).includes(n) || n.includes(fold(c.name)));
-  return hit ? hit.name : null;
-}
-
-export function matchesSearch(c: Country, search: string, language: string): boolean {
-  const s = search.toLowerCase();
-  if (c.name.toLowerCase().includes(s)) return true;
-  if (language !== 'en') {
-    const localName = getCountryDisplayName(c.name, language).toLowerCase();
-    if (localName.includes(s)) return true;
+  // 4. a bare ISO 3166-1 alpha-2 code, as rosters are often exported
+  if (/^[a-z]{2}$/.test(n)) {
+    const byCode = UN_COUNTRIES.find((c) => c.code.toLowerCase() === n);
+    if (byCode) return byCode.name;
   }
-  return false;
+  // 5. loose fallback — never for 1–2 characters, which are codes or noise
+  if (n.length < 3) return null;
+  const prefixed = UN_COUNTRIES.filter((c) => fold(c.name).startsWith(n));
+  if (prefixed.length) return pickShortest(prefixed);
+  const contains = UN_COUNTRIES.filter((c) => fold(c.name).includes(n));
+  if (contains.length) return pickShortest(contains);
+  const contained = UN_COUNTRIES.filter((c) => n.includes(fold(c.name)));
+  if (contained.length) return pickLongest(contained);
+  return null;
 }
 
+/** Boolean form on a `Country`. An empty search matches everything, so a
+ *  picker rendering `UN_COUNTRIES.filter(matchesSearch)` still lists them all. */
+export function matchesSearch(c: Country, search: string, language: string): boolean {
+  if (!search.trim()) return true;
+  return countryMatchRank(c.name, search, language) !== null;
+}
+
+/** Boolean form on a canonical EN name. Empty query matches nothing. */
 export function matchesCountryQuery(enName: string, query: string, language: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return false;
-  if (enName.trim().toLowerCase().includes(q)) return true;
-  const displayName = getCountryDisplayName(enName, language).toLowerCase();
-  if (displayName.includes(q)) return true;
-  return false;
+  return countryMatchRank(enName, query, language) !== null;
 }
 
+/** The "show these first" tier: exact, alias and word-boundary prefix hits.
+ *  Call sites pair it with `matchesCountryQuery` to get a two-tier ordering
+ *  without sorting; new call sites should prefer `countryMatchRank` directly. */
 export function startsWithCountryQuery(enName: string, query: string, language: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return false;
-  if (enName.trim().toLowerCase().startsWith(q)) return true;
-  const displayName = getCountryDisplayName(enName, language).toLowerCase();
-  if (displayName.startsWith(q)) return true;
-  return false;
+  const rank = countryMatchRank(enName, query, language);
+  return rank !== null && rank <= 2;
 }
 
 // ── Continents ───────────────────────────────────────────────────────────────

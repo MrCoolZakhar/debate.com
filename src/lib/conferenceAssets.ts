@@ -1,10 +1,13 @@
 // Shared conference asset upload — banners and logos both land in the public
 // 'conference-assets' bucket under their own folder, mirroring the recipe in
 // manage/[slug]/settings (handleBannerUpload / handleLogoUpload).
+// 'seat-logos' and 'group-logos' are the per-seat crests and the seat-group
+// crests of custom (parliamentary) committees, see src/lib/slotGroups.ts. They
+// are treated exactly like logos: small, PNG, transparency preserved.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type ConferenceAssetFolder = 'banners' | 'logos';
+export type ConferenceAssetFolder = 'banners' | 'logos' | 'seat-logos' | 'group-logos';
 
 export type UploadConferenceAssetResult =
   | { url: string; error?: undefined }
@@ -14,7 +17,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 // Display caps — banners render full-width hero art, logos render inside a
 // small disc. Anything larger is downscaled before upload so pages stay light.
-const CAP: Record<ConferenceAssetFolder, number> = { banners: 1600, logos: 512 };
+const CAP: Record<ConferenceAssetFolder, number> = { banners: 1600, logos: 512, 'seat-logos': 512, 'group-logos': 512 };
 
 // Formats we should never rasterize/re-encode (vectors, animations) — upload as-is.
 const PASSTHROUGH = new Set(['image/svg+xml', 'image/gif']);
@@ -37,7 +40,8 @@ async function compressImageFile(
 
   try {
     const cap = CAP[folder];
-    const isLogo = folder === 'logos';
+    // Everything but a banner is logo-shaped art: PNG out, alpha kept.
+    const isLogo = folder !== 'banners';
     const outType = isLogo ? 'image/png' : 'image/jpeg';
     const outExt = isLogo ? 'png' : 'jpg';
 

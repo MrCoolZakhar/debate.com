@@ -10,6 +10,7 @@ import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { getDefaultEventEmail } from '@/lib/defaultEmails';
+import { loadSlotArtIndex, artFromIndex, slotArtKey, type SlotArtIndex } from '@/lib/slotGroups';
 
 // ── Event registry ────────────────────────────────────────────────────────────
 // Single source of truth for platform email events, shared by this lib
@@ -56,6 +57,8 @@ export const EVENT_REGISTRY = [
   { key: 'request_received', label: 'Question received', description: 'Sent to your organizing team when a participant asks a question on Gavelling, and again as a digest every 3 days while questions are still awaiting a reply. Each organizer can turn it off under Questions & Reminders on their own profile.', defaultDelivery: 'immediate' },
   { key: 'delegation_swap', label: 'Delegation swap', description: 'Sent to both delegates when their committee allocations are swapped within a delegation.', defaultDelivery: 'immediate' },
   { key: 'import_join_invite', label: 'Import: join Gavelling', description: 'Sent to imported applicants asking them to create a Gavelling account so their registration attaches automatically. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
+  { key: 'awards_open', label: 'Awards open for chairs', description: "Sent to a committee's chairs when the secretariat opens award nominations, pointing them to their committee page to nominate.", defaultDelivery: 'manual' },
+  { key: 'award_received', label: 'Award received', description: 'Sent to a delegate when the conference publishes their award. Names the award, committee and delegation, and points to their MUN CV.', defaultDelivery: 'immediate' },
 ] as const satisfies readonly EventDef[];
 
 /** Union of every valid event key, derived from the registry itself so
@@ -114,6 +117,12 @@ export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   request_received: 'requests',
   delegation_swap: 'applications',
   import_join_invite: 'applications',
+  // Chairs are addressed through their chair application, the same way
+  // session_chair_invite and chair_assigned reach them.
+  awards_open: 'applications',
+  // A delegate's own honour is the answer to their whole application; it sits
+  // with the other application-side milestones, not with marketing.
+  award_received: 'applications',
 };
 
 /** The profiles column each category is gated on. 'requests' reuses the
@@ -269,6 +278,7 @@ interface RecipientRow {
   payment_status: string | null;
   societies: { name: string } | null;
   assigned_committee: { abbreviation: string | null; name: string; logo_url: string | null } | null;
+  assigned_committee_id: string | null;
   assigned_country_name: string | null;
   assigned_country_code: string | null;
   profiles: {
@@ -374,6 +384,7 @@ export async function queueEventEmail(
         id, role, society_id, payment_status,
         societies (name),
         assigned_committee:conference_committees!assigned_committee_id (abbreviation, name, logo_url),
+        assigned_committee_id,
         assigned_country_name,
         assigned_country_code,
         profiles (display_name, email, notify_email_applications, notify_email_payments, notify_email_documents, notify_email_marketing),
@@ -394,6 +405,19 @@ export async function queueEventEmail(
   // events (see ALWAYS_SEND_EVENTS) pass through untouched.
   const recipients = allRecipients.filter(app => recipientAllowsEvent(eventKey, app.profiles));
   if (recipients.length === 0) return { outcome, drafted: useDraft, queued: 0, queuedApplicationIds: [], eventKey, eventLabel };
+
+  // A seat's own crest or its group's crest (parliamentary committees) stands
+  // in for the flag in the facts panel. One batched read for every committee
+  // in this send, never a query per recipient. See `src/lib/slotGroups.ts`.
+  const seatArt: SlotArtIndex = await loadSlotArtIndex(
+    supabase,
+    recipients.map(app => app.assigned_committee_id).filter((id): id is string => !!id),
+  ).catch(() => new Map());
+  const seatLogoFor = (app: RecipientRow): string | null => {
+    if (!app.assigned_committee_id || !app.assigned_country_code) return null;
+    const art = artFromIndex(seatArt.get(slotArtKey(app.assigned_committee_id, app.assigned_country_code)), app.assigned_country_code);
+    return art.kind === 'logo' ? art.url : null;
+  };
 
   const renderConf: EmailRenderConference = {
     slug: conference?.slug ?? '',
@@ -441,6 +465,7 @@ export async function queueEventEmail(
         media: {
           countryCode: app.assigned_country_code ?? null,
           committeeEmblem: app.assigned_committee?.logo_url ?? null,
+          seatLogo: seatLogoFor(app),
         },
       }),
       status: 'pending' as const,
@@ -1061,4 +1086,123 @@ export async function queueLeaderAllocationEmail(
     console.error('[queueLeaderAllocationEmail] request threw:', err);
     return { outcome: 'unconfigured', drafted: false, queued: 0, eventKey, eventLabel };
   }
+}
+
+// ── Awards emails ───────────────────────────────────────────────────────────
+// Both ride on queueEventEmail so an organiser can draft, turn off or preview
+// them from the Communications page like any other event. Neither resolves a
+// recipient by hand: chairs are reached through their chair application (the
+// same lookup the session_chair_invite path uses), delegates through the
+// application behind their allocation.
+
+export interface AwardsEmailSummary {
+  /** Outbox rows written across every call made. */
+  queued: number;
+  /** Committees (awards_open) or awards (award_received) that had nobody to email. */
+  skipped: number;
+  /** The three-state outcome of the LAST queueEventEmail call, for DraftNotice-style nudges. */
+  outcome: QueueOutcome;
+}
+
+/** Notify the chairs of `committeeIds` that award nominations are open.
+ *  One queueEventEmail per committee so {{committee}} names the right room.
+ *  `extraCtx` is merged into every recipient's context (deadline text etc.). */
+export async function queueAwardsOpenEmails(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  committeeIds: string[],
+  extraCtx?: EmailTokenContext
+): Promise<AwardsEmailSummary> {
+  const summary: AwardsEmailSummary = { queued: 0, skipped: 0, outcome: 'no-recipients' };
+  if (committeeIds.length === 0) return summary;
+
+  const { data: committeesData } = await supabase
+    .from('conference_committees')
+    .select('id, name, abbreviation, chair_user_ids')
+    .in('id', committeeIds);
+  const committees = (committeesData ?? []) as { id: string; name: string; abbreviation: string | null; chair_user_ids: string[] | null }[];
+
+  const allChairIds = Array.from(new Set(committees.flatMap(c => c.chair_user_ids ?? [])));
+  if (allChairIds.length === 0) {
+    summary.skipped = committees.length;
+    return summary;
+  }
+  // Chairs are addressed through their chair application, exactly as
+  // session_chair_invite does on the committees page.
+  const { data: appsData } = await supabase
+    .from('applications')
+    .select('id, user_id')
+    .eq('conference_id', conferenceId)
+    .eq('role', 'chair')
+    .in('user_id', allChairIds);
+  const appByUser = new Map<string, string>();
+  for (const a of (appsData ?? []) as { id: string; user_id: string | null }[]) {
+    if (a.user_id) appByUser.set(a.user_id, a.id);
+  }
+
+  for (const c of committees) {
+    const applicationIds = Array.from(new Set((c.chair_user_ids ?? []).map(uid => appByUser.get(uid)).filter((x): x is string => !!x)));
+    if (applicationIds.length === 0) { summary.skipped += 1; continue; }
+    const res = await queueEventEmail(supabase, conferenceId, 'awards_open', applicationIds, {
+      committee: c.abbreviation ?? c.name,
+      ...extraCtx,
+    });
+    summary.outcome = res.outcome;
+    summary.queued += res.queued ?? 0;
+  }
+  return summary;
+}
+
+/** The minimum an award row needs to be emailed. Structural so callers can
+ *  pass a ConferenceAwardRow (src/lib/awards.ts) without importing it here. */
+export interface AwardEmailRow {
+  id: string;
+  conference_committee_id: string | null;
+  allocation_id: string | null;
+  award_label: string;
+  country_name: string | null;
+}
+
+export interface AwardEmailAllocation {
+  id: string;
+  application_id: string | null;
+}
+
+/** Tell each recipient their award has been published. One call per award,
+ *  because the award name, committee and country differ per recipient and
+ *  queueEventEmail takes one context per call. Committee names are looked up
+ *  once. Delegation awards (no allocation) and unclaimed seats are skipped:
+ *  there is no application to write to. */
+export async function queueAwardReceivedEmails(
+  supabase: ReturnType<typeof getAuthedClient>,
+  conferenceId: string,
+  awards: AwardEmailRow[],
+  allocations: AwardEmailAllocation[]
+): Promise<AwardsEmailSummary> {
+  const summary: AwardsEmailSummary = { queued: 0, skipped: 0, outcome: 'no-recipients' };
+  const appByAllocation = new Map(allocations.map(a => [a.id, a.application_id]));
+  const committeeIds = Array.from(new Set(awards.map(a => a.conference_committee_id).filter((x): x is string => !!x)));
+  const committeeName = new Map<string, string>();
+  if (committeeIds.length > 0) {
+    const { data } = await supabase
+      .from('conference_committees')
+      .select('id, name, abbreviation')
+      .in('id', committeeIds);
+    for (const c of (data ?? []) as { id: string; name: string; abbreviation: string | null }[]) {
+      committeeName.set(c.id, c.abbreviation ?? c.name);
+    }
+  }
+
+  for (const award of awards) {
+    const applicationId = award.allocation_id ? appByAllocation.get(award.allocation_id) : null;
+    if (!applicationId) { summary.skipped += 1; continue; }
+    const res = await queueEventEmail(supabase, conferenceId, 'award_received', [applicationId], {
+      award: award.award_label,
+      committee: award.conference_committee_id ? committeeName.get(award.conference_committee_id) ?? null : null,
+      country: award.country_name,
+    });
+    summary.outcome = res.outcome;
+    summary.queued += res.queued ?? 0;
+  }
+  return summary;
 }

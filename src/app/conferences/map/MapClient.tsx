@@ -8,6 +8,7 @@ import SiteNav from '@/components/SiteNav';
 import { supabase } from '@/lib/supabase';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { LogoDisc } from '@/components/LogoDisc';
+import VerifiedCheck from '@/components/VerifiedCheck';
 
 type ContinentKey =
   | 'north-america'
@@ -130,6 +131,7 @@ interface HighlightConf {
   country: string;
   logo_url: string | null;
   start_date: string | null;
+  is_verified: boolean;
 }
 
 interface ContinentData {
@@ -154,7 +156,7 @@ async function fetchActiveConferences(countries: string[]): Promise<number> {
 async function fetchContinentDetail(countries: string[]): Promise<{ highlighted: HighlightConf | null; flagCountries: string[] }> {
   const { data: confs } = await supabase
     .from('conferences')
-    .select('id, slug, full_name, acronym, country, logo_url, start_date')
+    .select('id, slug, full_name, acronym, country, logo_url, start_date, is_verified')
     .eq('is_public', true)
     .eq('status', 'published')
     .in('country', countries);
@@ -181,7 +183,7 @@ async function fetchContinentDetail(countries: string[]): Promise<{ highlighted:
     if (!id) return null;
     const c = confs.find((x) => x.id === id);
     return c
-      ? { slug: c.slug, full_name: c.full_name, acronym: c.acronym, country: c.country, logo_url: c.logo_url, start_date: c.start_date }
+      ? { slug: c.slug, full_name: c.full_name, acronym: c.acronym, country: c.country, logo_url: c.logo_url, start_date: c.start_date, is_verified: !!c.is_verified }
       : null;
   };
 
@@ -809,10 +811,11 @@ export default function MapClient() {
                         <span
                           style={{
                             fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, color: '#1B3828',
-                            lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190,
+                            lineHeight: 1.25, display: 'flex', alignItems: 'center', gap: 5, maxWidth: 190, minWidth: 0,
                           }}
                         >
-                          {detail.highlighted.full_name}
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail.highlighted.full_name}</span>
+                          <VerifiedCheck verified={detail.highlighted.is_verified} size={16} title="Verified conference" />
                         </span>
                         {formatMonthYear(detail.highlighted.start_date) && (
                           <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 500, letterSpacing: '0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 10, color: '#9A8A78', marginTop: 1 }}>

@@ -5,7 +5,8 @@ import Portal from '@/components/Portal';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { Committee, PendingMotion, PendingMotionType } from '@/lib/types';
-import { getCountryByName, getFlagUrl, getCountryDisplayName, compareCountryNames } from '@/lib/countries';
+import { getCountryByName, getCountryDisplayName, compareCountryNames, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
+import { SeatFlag } from '@/components/SeatFlag';
 
 const SQUARE_FLAGS = new Set(['CH', 'NP']);
 import { Emoji } from '@/components/Emoji';
@@ -248,9 +249,12 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
   // Chair entry: always show at top when query is empty or matches "chair"
   const chairBlocked = blockedCountries?.has(CHAIR_KEY) ?? false;
   const showChair = !q || chairDisplayName(language).toLowerCase().includes(q);
+  // Prefix hits first, then substring hits — via the shared country helpers, so
+  // the match folds diacritics ("Turkiye" finds "Türkiye") and honours the
+  // translated name in every locale. Never re-hand-roll this on `dName`.
   const delegateMatches = q
-    ? candidates.filter((c) => c !== CHAIR_KEY && dName(c).toLowerCase().startsWith(q))
-        .concat(candidates.filter((c) => c !== CHAIR_KEY && !dName(c).toLowerCase().startsWith(q) && dName(c).toLowerCase().includes(q)))
+    ? candidates.filter((c) => c !== CHAIR_KEY && startsWithCountryQuery(c, q, language))
+        .concat(candidates.filter((c) => c !== CHAIR_KEY && !startsWithCountryQuery(c, q, language) && matchesCountryQuery(c, q, language)))
     : [];
   const matches = showChair ? [CHAIR_KEY, ...delegateMatches] : delegateMatches;
   const top = matches[0] ?? null;
@@ -309,7 +313,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
         <div className="flex items-center gap-3 bg-[#1B3828]/10 border-2 border-[#3D7A52]/40 rounded-xl px-4 py-3">
           {value === CHAIR_KEY
             ? <span className="text-lg leading-none">🪑</span>
-            : (() => { const f = getCountryByName(value); return f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="w-7 h-5 inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null; })()}
+            : <SeatFlag country={value} style={{ width: 28, height: 20, borderRadius: '6px', border: '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="inline-block" fallback={null} />}
           <span className="text-sm text-[#1C1410] flex-1 font-semibold">{dName(value)}</span>
           <button onClick={() => { setOpen(true); setQuery(''); onChange(''); inputRef.current?.focus(); }} className="text-xs font-bold transition-colors focus:outline-none" style={{ color: '#2A5A3C' }}>{t('motions_change')}</button>
         </div>
@@ -336,7 +340,6 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
           >
             {matches.slice(0, 7).map((country, i) => {
               const isChair = country === CHAIR_KEY;
-              const found = isChair ? null : getCountryByName(country);
               const isBlocked = blockedCountries?.has(country) ?? false;
               return (
                 <button key={country}
@@ -348,7 +351,7 @@ function ProposerInput({ candidates, value, onChange, blockedCountries, optional
                   }`}>
                   {isChair
                     ? <span className="text-base leading-none">🪑</span>
-                    : found ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.125rem">🌐</Emoji>}
+                    : <SeatFlag country={country} size={20} className="object-contain inline-block" fallback={<Emoji size="1.125rem">🌐</Emoji>} />}
                   <span className="text-sm flex-1">{dName(country)}</span>
                   {isBlocked
                     ? <span className="text-xs text-[#B8844A] shrink-0 font-semibold">{t('motions_motion_on_floor')}</span>
@@ -855,7 +858,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           </span>
           {m.proposedBy === CHAIR_KEY
             ? <span className={`shrink-0 ${large ? 'text-3xl' : 'text-xl'}`}>🪑</span>
-            : f ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ borderRadius: '8px', border: SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className={large ? 'w-14 h-10 inline-block' : 'w-8 h-6 inline-block'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : null}
+            : <SeatFlag country={m.proposedBy} style={{ width: large ? 56 : 32, height: large ? 40 : 24, borderRadius: '8px', border: f && SQUARE_FLAGS.has(f.code) ? 'none' : '1.5px solid rgba(28,20,16,0.10)', objectFit: 'cover' }} className="inline-block" fallback={null} />}
         </div>
 
         {/* Custom motions: badge line + the informational no-op strip */}
@@ -1472,7 +1475,6 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                     if (!meta) return null;
                     const mins = Math.floor(m.totalTime / 60);
                     const secs = m.totalTime % 60;
-                    const proposerFlag = m.proposedBy ? getCountryByName(m.proposedBy) : null;
                     const rowIsCustom = m.type === 'custom';
                     return (
                       <div key={m.id} className="rounded-xl px-4 py-4" style={rowIsCustom
@@ -1490,7 +1492,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               <div className="flex items-center gap-1.5 mt-1">
                                 {m.proposedBy === CHAIR_KEY
                                   ? <span className="text-base leading-none">🪑</span>
-                                  : proposerFlag ? <img src={getFlagUrl(proposerFlag.code)} alt={proposerFlag.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1rem">🌐</Emoji>}
+                                  : <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<Emoji size="1rem">🌐</Emoji>} />}
                                 <span className="text-sm font-semibold text-[#1C1410]">{m.proposedBy === CHAIR_KEY ? chairDisplayName(language) : getCountryDisplayName(m.proposedBy, language)}</span>
                               </div>
                             )}

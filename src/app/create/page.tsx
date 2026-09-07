@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createCommittee as createCommitteeInDB } from '@/lib/committeeService';
 import { useSettingsStore } from '@/lib/settingsStore';
-import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, matchesSearch, findCountryFlexible, compareCountryNames } from '@/lib/countries';
+import { UN_COUNTRIES, getFlagUrl, getCountryByName, getCountryDisplayName, countryMatchRank, findCountryFlexible, compareCountryNames } from '@/lib/countries';
 import { UNSC_MEMBERS, WHO_MEMBERS, IMF_MEMBERS, WORLD_BANK_MEMBERS, UNEP_MEMBERS, ICC_ROLES, ICJ_ROLES, CRISIS_MEMBERS, FIFA_MEMBERS, HOUSE_OF_COMMONS_ROLES, US_SENATE_MEMBERS, PRESS_ROLES, EUROPEAN_PARLIAMENT_MEMBERS } from '@/lib/presets';
 import { Globe, PenLine, ChevronLeft, Megaphone } from 'lucide-react';
 import { FlagImg } from '@/components/FlagImg';
@@ -108,23 +108,11 @@ const BUNDLES: Record<string, { label: string; acronym: string; logoPath?: strin
   ArabLeague: { label: 'Arab League', acronym: 'LAS',  logoPath: '/logos/arab-league.png',  members: ['Algeria', 'Bahrain', 'Comoros', 'Djibouti', 'Egypt', 'Iraq', 'Jordan', 'Kuwait', 'Lebanon', 'Libya', 'Mauritania', 'Morocco', 'Oman', 'Palestine', 'Qatar', 'Saudi Arabia', 'Somalia', 'Sudan', 'Syria', 'Tunisia', 'United Arab Emirates', 'Yemen'] },
 };
 
-const COUNTRY_ACRONYMS: Record<string, string> = {
-  'uk':   'United Kingdom',
-  'us':   'United States',
-  'usa':  'United States',
-  'uae':  'United Arab Emirates',
-  'drc':  'DR Congo',
-  'roc':  'Taiwan',
-  'rok':  'South Korea',
-  'dprk': 'North Korea',
-  'car':  'Central African Republic',
-  'png':  'Papua New Guinea',
-};
-
+// The acronym table that used to live here ("uk", "drc", "dprk"…) moved into
+// COUNTRY_NAME_ALIASES in countries.ts, where findCountryFlexible consults it
+// alongside the retired spellings — one table, understood by every search box
+// and every paste importer at once.
 function fuzzyMatchCountry(raw: string): string | null {
-  const n = raw.trim().toLowerCase();
-  if (!n) return null;
-  if (COUNTRY_ACRONYMS[n]) return COUNTRY_ACRONYMS[n];
   return findCountryFlexible(raw);
 }
 
@@ -505,9 +493,17 @@ function CreatePageInner() {
 
   const canProceed = committeeName.trim() && topic.trim();
 
-  const available = UN_COUNTRIES.filter(
-    (c) => !delegates.includes(c.name) && matchesSearch(c, search, language)
-  );
+  // Ranked, accent-folded, alias-aware (see THE FOLDING RULE in countries.ts):
+  // typing "Tu" now surfaces Türkiye, and "Turkey" or "UK" find their country
+  // under its current name. Exact/alias/prefix hits sort above substring ones.
+  const available = search.trim()
+    ? UN_COUNTRIES
+        .filter((c) => !delegates.includes(c.name))
+        .map((c) => ({ c, rank: countryMatchRank(c.name, search, language) }))
+        .filter((x): x is { c: (typeof UN_COUNTRIES)[number]; rank: number } => x.rank !== null)
+        .sort((a, b) => a.rank - b.rank || compareCountryNames(a.c.name, b.c.name, language))
+        .map((x) => x.c)
+    : UN_COUNTRIES.filter((c) => !delegates.includes(c.name));
 
   const addDelegate = (name: string) => {
     if (!delegates.includes(name)) setDelegates((p) => [...p, name]);
@@ -708,7 +704,8 @@ function CreatePageInner() {
                             {i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
                           </button>
                         ))}
-                        {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => c.name.toLowerCase() === search.trim().toLowerCase()) && (
+                        {/* "Add as custom" only when the text is not already an exact country — rank 0 covers accents, aliases and the localised name, so typing "turkiye" or "Turquía" no longer offers to add a custom delegation beside the real Türkiye. */}
+                        {search.trim() && !delegates.includes(search.trim()) && !available.some((c) => countryMatchRank(c.name, search, language) === 0) && (
                           <button onMouseDown={(e) => { e.preventDefault(); addDelegate(search.trim()); setSearch(''); }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors text-[#1C1410] hover:bg-[#DDD4C0] border-t border-[#DDD4C0]">
                             <Globe size={18} strokeWidth={1.5} className="text-[#9A8A78] shrink-0" />

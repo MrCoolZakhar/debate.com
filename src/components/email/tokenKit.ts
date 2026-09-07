@@ -21,7 +21,7 @@
 
 import {
   UserRound, BadgeCheck, Users, Landmark, Globe, Wallet, Building2, CalendarDays,
-  CreditCard, Mail, MessageSquare, KeyRound, Link2, Ban,
+  CreditCard, Mail, MessageSquare, KeyRound, Link2, Ban, Trophy,
 } from 'lucide-react';
 import { EMAIL_TOKEN_LABELS, type EmailTokenKey } from '@/lib/emailTokens';
 
@@ -57,6 +57,7 @@ export const TOKEN_IDENTITY: Record<EmailTokenKey, TokenIdentity> = {
   conference_name: { emoji: 'Classical building', glyph: '🏛️', icon: Building2, short: 'Conference', family: 'conference', becomes: 'This conference, spelled out in full.' },
   conference_dates: { emoji: 'Calendar', glyph: '📅', icon: CalendarDays, short: 'The dates', family: 'conference', becomes: 'The conference dates, written out.' },
   session_code: { emoji: 'Key', glyph: '🔑', icon: KeyRound, short: 'Session code', family: 'conference', becomes: 'The six-character code for their committee room.' },
+  award: { emoji: 'Trophy', glyph: '🏆', icon: Trophy, short: 'Their award', family: 'conference', becomes: 'The award they received, such as Best Delegate.' },
   request_subject: { emoji: 'Envelope', glyph: '✉️', icon: Mail, short: 'Their subject', family: 'thread', becomes: 'The subject line of the message you are replying to.' },
   request_body: { emoji: 'Speech balloon', glyph: '💬', icon: MessageSquare, short: 'Their message', family: 'thread', becomes: 'The message you are replying to, quoted back.' },
   draft_link: { emoji: 'Link', glyph: '🔗', icon: Link2, short: 'Draft link', family: 'link', becomes: 'A private link back to their unfinished application.' },

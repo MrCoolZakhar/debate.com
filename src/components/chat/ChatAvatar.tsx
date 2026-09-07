@@ -1,7 +1,6 @@
 'use client';
 
-import { getCountryByName } from '@/lib/countries';
-import { FlagImg } from '@/components/FlagImg';
+import { SeatFlag } from '@/components/SeatFlag';
 import { NEU, NEU_GRADIENTS, OUTFIT } from '@/components/neu';
 import { CHAT } from './chatTokens';
 
@@ -99,7 +98,6 @@ export function ChatAvatar({
     );
   }
 
-  const code = name ? getCountryByName(name)?.code : undefined;
   return (
     <span
       className="inline-flex items-center justify-center overflow-hidden"
@@ -110,7 +108,7 @@ export function ChatAvatar({
       }}
       aria-hidden
     >
-      <FlagImg code={code ?? ''} size={size} />
+      <SeatFlag country={name ?? ''} size={size} />
     </span>
   );
 }

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Star, X, Megaphone, MessageSquare, ClipboardCheck, FileText, CreditCard, TrendingUp, ArrowRight, Camera, Globe2, Sparkles, Cake, Mail, User, Bell, ShieldAlert, MapPin, GraduationCap, School } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { UN_COUNTRIES, getCountryByName, getFlagUrl } from '@/lib/countries';
+import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
 import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, LevelInsignia, OUTFIT } from '../accountUi';
@@ -410,10 +410,16 @@ export default function ProfilePage() {
 
   const natCountry = getCountryByName(nationality);
   const natFlag = natCountry ? getFlagUrl(natCountry.code) : null;
+  // Accent-folded + alias-aware ranking — see THE FOLDING RULE in countries.ts.
+  // The old `.includes()` could not find "Türkiye" from "Tu".
   const natMatches = useMemo(() => {
-    const q = nationality.trim().toLowerCase();
+    const q = nationality.trim();
     if (!q) return UN_COUNTRIES;
-    return UN_COUNTRIES.filter((c) => c.name.toLowerCase().includes(q));
+    return UN_COUNTRIES
+      .map((c) => ({ c, rank: countryMatchRank(c.name, q, 'en') }))
+      .filter((x): x is { c: typeof UN_COUNTRIES[number]; rank: number } => x.rank !== null)
+      .sort((a, b) => a.rank - b.rank || a.c.name.localeCompare(b.c.name))
+      .map((x) => x.c);
   }, [nationality]);
 
   const exp = experienceProgress(cvCount ?? 0);

@@ -13,6 +13,7 @@ import { committeeDisplayName } from '@/lib/presetNames';
 import { LogoDisc } from '@/components/LogoDisc';
 import { ENTRY_TYPE_MAP, COMMITTEE_SUGGESTIONS, type CVEntry } from '@/components/CVEntryModal';
 import { experienceProgress } from '@/lib/munExperience';
+import VerifiedCheck from '@/components/VerifiedCheck';
 import {
   GlassCard, LevelBadge, LevelInsignia, LEVEL_ACCENT, AwardChip, getCommitteeLogo, monogramFor, OUTFIT,
 } from '../accountUi';
@@ -168,6 +169,9 @@ export function TimelineEntry({
   // delegation awards (green disc + Users glyph via AwardChip's `delegation`
   // flag). Delegate awards stay individual (per-award icons).
   const isDelegation = entry.entry_type === 'faculty-advisor';
+  // Blue when Gavelling wrote the entry from a conference the person attended;
+  // grey when they typed it themselves.
+  const verifiedEntry = entry.source === 'gavelling_verified';
   const displayAwards = (entry.entry_type === 'delegate' || isDelegation)
     ? (entry.awards.length > 0 ? entry.awards : (entry.award && entry.award !== 'None' ? [entry.award] : []))
     : [];
@@ -278,10 +282,16 @@ export function TimelineEntry({
             return (
               <>
                 <h3
-                  className="font-black leading-tight"
-                  style={{ color: '#1B3828', fontFamily: OUTFIT, fontSize: '18px', letterSpacing: '-0.01em', margin: 0 }}
+                  className="font-black leading-tight flex items-center min-w-0"
+                  style={{ color: '#1B3828', fontFamily: OUTFIT, fontSize: '18px', letterSpacing: '-0.01em', margin: 0, gap: 6 }}
                 >
-                  {disp.primary}
+                  <span>{disp.primary}</span>
+                  <VerifiedCheck
+                    verified={verifiedEntry}
+                    showUnverified
+                    size={18}
+                    title={verifiedEntry ? 'Verified by Gavelling' : 'Self-reported'}
+                  />
                 </h3>
                 {disp.secondary && (
                   <p className="mt-0.5" style={{ color: '#9A8A78', fontFamily: OUTFIT, fontSize: '11.5px', fontWeight: 500, margin: '2px 0 0 0', lineHeight: 1.3 }}>

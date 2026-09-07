@@ -14,9 +14,10 @@ import {
 import { getScoringConfig } from '@/lib/scoring';
 import type { ScoringConfig } from '@/lib/settingsStore';
 import { loadConferenceScoreboard, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
+import { getAwardsConfig } from '@/lib/awards';
 import {
   type LiveCommittee, type ChairPerson, type CaucusJson,
-  presence, RecapModal, AwardsModal, RosterModal, type DocFilter,
+  presence, RecapModal, RosterModal, type DocFilter,
 } from './LiveModals';
 import {
   BroadcastComposer, RecentBroadcasts, broadcastTargets, groupBroadcasts,
@@ -25,9 +26,12 @@ import {
 } from './BroadcastComposer';
 import { CommitteeCard, GridFootnote } from './CommitteeCard';
 import { FloorDetail, useNowTick } from './PhaseVariants';
+import { SeatArtProvider } from '@/components/SeatFlag';
+import { mergedSeatRoster } from './CommitteeCard';
 import { CommitteeScoreboardModal } from './CommitteeScoreboardModal';
 import { DelegateCardModal } from './DelegateCardModal';
 import { loadAllocationIndex, type AllocationIndex } from './allocations';
+import { loadSlotArtIndex, type SlotArtIndex } from '@/lib/slotGroups';
 import {
   type RoomStatus, roomStatus, sortByUrgency, cardWarnings,
   committeeIdentities,
@@ -62,7 +66,6 @@ export default function LiveStatusPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
   const [recapFor, setRecapFor] = useState<string | null>(null);
-  const [awardsFor, setAwardsFor] = useState<string | null>(null);
   const [rosterFor, setRosterFor] = useState<string | null>(null);
   // Which documents section the recap should open on. Set by the WP / DR chips
   // on a card, reset to 'all' whenever the recap is opened from the card body,
@@ -94,6 +97,10 @@ export default function LiveStatusPage() {
   const [broadcastBusyKey, setBroadcastBusyKey] = useState<string | null>(null);
   const [broadcastError, setBroadcastError] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Custom seat / group crests for every committee, keyed by committee + seat
+  // (`src/lib/slotGroups.ts`). Loaded beside the committee list on each pass
+  // and handed to every card; a failed read keeps the last index.
+  const [seatArt, setSeatArt] = useState<SlotArtIndex>(() => new Map());
   const loadingRef = useRef(false);
   const loadStartedRef = useRef(0);
 
@@ -131,6 +138,7 @@ export default function LiveStatusPage() {
       }
 
       const confRows = confCommittees ?? [];
+      void loadSlotArtIndex(authed, confRows.map((c) => c.id)).then(setSeatArt).catch(() => {});
       const sessionIds = confRows.map((c) => c.session_id).filter((id): id is string => !!id);
 
       // Chair profile pictures. `display_chairs` is a trigger-maintained mirror
@@ -176,7 +184,11 @@ export default function LiveStatusPage() {
             .select('committee_id, country, time_remaining, started_at')
             .in('committee_id', sessionIds),
           anonSupabase.from('delegates')
-            .select('committee_id, country, status, is_observer')
+            // logo_url is the seat's own crest, flattened from the conference
+            // side at seed time — see `src/lib/sessionFlags.ts`. It lets a card
+            // draw a delegation's real mark without the slot index having to
+            // resolve it by name.
+            .select('committee_id, country, status, is_observer, logo_url')
             .in('committee_id', sessionIds),
           anonSupabase.from('speakers_list')
             .select('committee_id, country, position, list_type')
@@ -406,6 +418,7 @@ export default function LiveStatusPage() {
                 country: d.country as string,
                 status: d.status as string,
                 isObserver: (d.is_observer as boolean | null) ?? false,
+                logoUrl: (d.logo_url as string | null) ?? null,
               }))
             : [],
           gslQueue: sid ? bySession(queues, sid).filter((q) => q.list_type === 'gsl').map((q) => q.country as string) : [],
@@ -549,7 +562,6 @@ export default function LiveStatusPage() {
 
   // ── Derived ──
   const recapData = recapFor ? rows?.find((r) => r.conf.id === recapFor) ?? null : null;
-  const awardsData = awardsFor ? rows?.find((r) => r.conf.id === awardsFor) ?? null : null;
   const rosterData = rosterFor ? rows?.find((r) => r.conf.id === rosterFor) ?? null : null;
   const scoreboardData = scoreboardFor ? rows?.find((r) => r.conf.id === scoreboardFor) ?? null : null;
   const delegateData = delegateFor ? rows?.find((r) => r.conf.id === delegateFor.confId) ?? null : null;
@@ -850,6 +862,7 @@ export default function LiveStatusPage() {
                 onOpenScoreboard={(d) => setScoreboardFor(d.conf.id)}
                 onOpenDocuments={(d, type) => { setRecapDocFilter(type); setRecapFor(d.conf.id); }}
                 onOpenDelegate={(d, country) => setDelegateFor({ confId: d.conf.id, country })}
+                seatArt={seatArt}
               />
             ))}
           </div>
@@ -868,6 +881,11 @@ export default function LiveStatusPage() {
           data={recapData}
           initialDocFilter={recapDocFilter}
           conferenceSlug={conference.slug}
+          // The Awards tab names the slate's state from the conference's config
+          // and ceremony stamp; it loads the committee's own rows on open.
+          awardsConfig={getAwardsConfig(conference.awards_config)}
+          awardsPublishedAt={conference.awards_published_at}
+          conferenceEndDate={conference.end_date}
           // The recap's Scoreboard tab renders the SAME body the standalone
           // Points modal does, off the same lazily-loaded conference payload.
           scoreboard={scoreboard}
@@ -887,32 +905,39 @@ export default function LiveStatusPage() {
             : null}
         />
       )}
-      {awardsData && <AwardsModal data={awardsData} onClose={() => setAwardsFor(null)} />}
       {rosterData && <RosterModal data={rosterData} onClose={() => setRosterFor(null)} />}
+      {/* Both modals are siblings of the card grid, so they sit outside the
+          provider each card mounts. Without their own they would resolve a
+          seat's art differently from the room it is reporting on, which
+          sessionFlags.ts forbids. Same roster, same merge, one answer. */}
       {scoreboardData && conference && (
-        <CommitteeScoreboardModal
-          data={scoreboardData}
-          scoreboard={scoreboard}
-          loading={scoreboardLoading}
-          error={scoreboardError}
-          conferenceSlug={conference.slug}
-          onClose={() => setScoreboardFor(null)}
-        />
+        <SeatArtProvider delegates={mergedSeatRoster(scoreboardData.delegates, seatArt, scoreboardData.conf.id)}>
+          <CommitteeScoreboardModal
+            data={scoreboardData}
+            scoreboard={scoreboard}
+            loading={scoreboardLoading}
+            error={scoreboardError}
+            conferenceSlug={conference.slug}
+            onClose={() => setScoreboardFor(null)}
+          />
+        </SeatArtProvider>
       )}
       {/* ONE delegation, opened from a flag in a card's queue strip. Shares the
           scoreboard payload the committee Points view uses, plus the allocation
           index that resolves the delegation to the person (or, under double
           delegation, the two people) actually representing it. */}
       {delegateData && (
-        <DelegateCardModal
-          data={delegateData}
-          country={delegateFor!.country}
-          scoreboard={scoreboard}
-          allocations={allocations}
-          loading={scoreboardLoading}
-          error={scoreboardError}
-          onClose={() => setDelegateFor(null)}
-        />
+        <SeatArtProvider delegates={mergedSeatRoster(delegateData.delegates, seatArt, delegateData.conf.id)}>
+          <DelegateCardModal
+            data={delegateData}
+            country={delegateFor!.country}
+            scoreboard={scoreboard}
+            allocations={allocations}
+            loading={scoreboardLoading}
+            error={scoreboardError}
+            onClose={() => setDelegateFor(null)}
+          />
+        </SeatArtProvider>
       )}
       {/* SCOPED broadcast — the same composer, handed a one-committee target
           list. `session_broadcasts` has zero production rows, so this path was

@@ -1,21 +1,18 @@
-// "Explore emails" set-up item — DELIBERATELY CLIENT-LOCAL.
+// "Explore emails" set-up item: the localStorage half.
 //
-// The dashboard's set-up priorities checklist is otherwise a pure function of
-// the database, and is mirrored server-side by the Postgres function
-// `public.conference_setup_status(uuid)` (consumed by the `send-setup-nudges`
-// edge function that emails organisers their outstanding items).
+// The item asks "have you had a look at what the email system can do?", not
+// "have you enabled an email?". It is recorded in two places by the
+// communications page (src/app/manage/[slug]/communications/page.tsx):
 //
-// This item is the one exception: it does not ask "have you enabled an email?",
-// it asks "have you had a look at what the email system can do?". There is no
-// DB flag for that, and adding one would mean writing to the conferences row on
-// a mere page view. So it lives in localStorage, per conference, per browser.
+//   1. here, in localStorage, per conference, per browser, so the dashboard
+//      ticks the item instantly on the way back, and
+//   2. on the server, as `conferences.emails_explored_at`, stamped once (only
+//      while still null) through the authed client.
 //
-// CONSEQUENCE — the nudge email CANNOT see this. `conference_setup_status`
-// keeps the emails item on its old `enabled_email_count > 0` condition, so an
-// organiser who has explored emails but enabled none will still see the item
-// ticked on the dashboard while the nudge email still lists it. That
-// divergence is intentional; do not try to "fix" it by writing this flag to the
-// database without an explicit decision to persist it server-side.
+// The server column is what `public.conference_setup_status(uuid)` (the
+// `send-setup-nudges` edge function) and the verification mark read. This
+// file stays for the instant tick and for browsers whose stamp has not been
+// refetched yet; it is never the source of truth for the checkmark.
 
 const PREFIX = 'gv-emails-explored-';
 

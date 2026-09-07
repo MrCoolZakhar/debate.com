@@ -331,19 +331,17 @@ Awards only apply to **conference-linked sessions**. No award UI in anonymous se
 
 ### 7.2 Chair Award Assignment
 
-After a conference committee session ends, chairs assign awards:
-- Best Delegate
-- Outstanding Delegate
-- Honorable Mention
-- Best Position Paper
-- Best Speaker
-- Custom award (organizer-definable per conference)
+**Built (September 2026).** Chairs decide, the secretariat ratifies, the conference publishes.
 
-Awards save automatically to the delegate's Gavelling profile / MUN CV.
+- The organiser configures the categories in Settings → Awards: Best Delegate, Outstanding Delegate, Honourable Mention, Best Position Paper on by default; Verbal Commendation, Best Delegation and Best Small Delegation off by default; custom awards per conference. Each category has a per-committee quota and a points value. The organiser also sets the chair deadline (default: conference end date) and whether the secretariat must approve each slate.
+- After their last session, chairs nominate from their own conference page (the Awards card), with the committee's session scoreboard beside the slots as evidence, and submit the slate. A "Suggest from the record" action pre-fills empty slots from the blended score; the chair always edits.
+- The secretariat reviews every committee at Manage → Awards: approve, return with a note, edit, and assign delegation awards from the tallied standings. Publishing is the ceremony.
+- On publish, each award becomes a verified entry (`source = 'gavelling_verified'`) on the recipient's MUN CV, the delegate is emailed, and the public honour roll at `/conferences/[slug]/awards` goes live. Nominations are never visible to delegates before publication.
+- "Best Speaker" from the original list was not built as a default; organisers can add it as a custom award.
 
 ### 7.3 Gavelling Points for Awards
 
-Delegates receiving awards in paid conference sessions automatically receive Gavelling Points (see Part 15).
+Delegates receiving awards in paid conference sessions automatically receive Gavelling Points (see Part 15). Implemented in `publish_conference_awards()`: points per category come from the awards config, and mint only when any delegate role at the conference carries a fee.
 
 ---
 

@@ -11,7 +11,8 @@ import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
 import DocumentsModal from '@/components/DocumentsModal';
-import { getFlagUrl, getCountryByName, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
+import { getCountryByName, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
+import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { getCommitteeDisplayName, committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { Emoji } from '@/components/Emoji';
@@ -22,6 +23,7 @@ import CowDelegationBoard from '@/components/CowDelegationBoard';
 import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
 import { supabase } from '@/lib/supabase';
 import ChatPanel from '@/components/ChatPanel';
 import ChatDisabledNotice from '@/components/ChatDisabledNotice';
@@ -252,15 +254,12 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
       {query && matches.length > 0 && (
         <div data-tutorial="speakers-autocomplete" className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((d, i) => {
-            const found = getCountryByName(d.country);
             const alreadyOnList = onList.has(d.id);
             if (alreadyOnList) {
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    : <Emoji size="1.125rem">🌐</Emoji>}
+                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
                 </span>
                   <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
                   <span className="text-xs text-[#9A8A78]">already on list</span>
@@ -272,9 +271,7 @@ function AddSpeakerInput({ committee, onAdd }: { committee: Committee; onAdd: (i
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    : <Emoji size="1.125rem">🌐</Emoji>}
+                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
                 </span>
                 <span className="text-sm">{getCountryDisplayName(d.country, language)}</span>
                 {isFirst && <span className="ms-auto text-xs text-[#9A8A78]">Enter ↵</span>}
@@ -334,7 +331,6 @@ function RtrCountryInput({
       {query && matches.length > 0 && !value && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10">
           {matches.slice(0, 5).map((d, i) => {
-            const found = getCountryByName(d.country);
             return (
               <button
                 key={d.id}
@@ -342,9 +338,7 @@ function RtrCountryInput({
                 className={`w-full flex items-center gap-2 px-3 py-2 text-start text-xs transition-colors ${i === 0 ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}
               >
                 <span className="shrink-0 w-5 h-5 inline-flex items-center justify-center">
-                {found
-                  ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-4 h-4 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                  : <Emoji size="0.875rem">🌐</Emoji>}
+                <SeatFlag country={d.country} size={16} className="object-contain" fallback={<Emoji size="0.875rem">🌐</Emoji>} />
               </span>
                 <span className="flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {i === 0 && <span className="text-[#9A8A78] shrink-0">Enter ↵</span>}
@@ -401,7 +395,7 @@ function DraggableSpeakersQueue({ list, onReorder, onRemove, lastSpeakerDelegate
                 </div>
               ) : (
                 <div style={{ width: '60px', height: '45px', borderRadius: '8px', position: 'relative', boxShadow: flagCountry && SQUARE_FLAGS.has(flagCountry.code) ? 'none' : '0 0 0 1.5px rgba(28,20,16,0.20)', backgroundColor: '#F0EBE1', flexShrink: 0 }}>
-                  {flagCountry ? <img src={getFlagUrl(flagCountry.code)} alt={s.country} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1.5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>}
+                  <SeatFlag country={s.country} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', display: 'block' }} fallback={<Emoji size="1.5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>} />
                 </div>
               )}
               {!isRoomOrderTdT && (
@@ -451,7 +445,6 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
           <div className="px-4 py-8 text-center text-[#9A8A78] text-sm">{t('gsl_no_speakers_queued')}</div>
         ) : (
           queue.map((s, i) => {
-            const found = getCountryByName(s.country);
             return (
               <div
                 key={s.delegateId}
@@ -471,9 +464,7 @@ function CaucusQueueSidebar({ committee, onRemove, onReorder, lastSpeakerDelegat
               >
                 <span className="text-xs text-[#9A8A78] font-mono w-5 text-end shrink-0">{i + 1}</span>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                {found
-                  ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                  : <Emoji size="1.125rem">🌐</Emoji>}
+                  <SeatFlag country={s.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
               </span>
                 <span className="flex-1 text-sm text-[#1C1410] line-clamp-2 break-words whitespace-normal leading-tight">{getCountryDisplayName(s.country, language)}</span>
                 {lastSpeakerDelegateId && s.delegateId === lastSpeakerDelegateId && (
@@ -536,7 +527,6 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
       {query && matches.length > 0 && (
         <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl overflow-hidden shadow-xl z-10 max-h-48 overflow-y-auto">
           {matches.slice(0, 6).map((d) => {
-            const found = getCountryByName(d.country);
             const alreadyOnList = onList.has(d.id);
             const spoke = spokenCountries.includes(d.country);
             const isCurrent = isCurrentSpeaker(d);
@@ -544,9 +534,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
               return (
                 <div key={d.id} className="w-full flex items-center gap-3 px-4 py-2.5 opacity-40">
                   <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    : <Emoji size="1.125rem">🌐</Emoji>}
+                    <SeatFlag country={d.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
                 </span>
                   <span className="text-sm flex-1 text-[#9A8A78]">{getCountryDisplayName(d.country, language)}</span>
                   <span className="text-xs text-[#9A8A78]">{isCurrent ? 'currently speaking' : 'already on list'}</span>
@@ -558,9 +546,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
               <button key={d.id} onMouseDown={(e) => { e.preventDefault(); commit(d); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-start transition-colors ${isFirst ? 'bg-[#1B3828]/20 text-[#1C1410]' : 'text-[#1C1410] hover:bg-[#DDD4C0]'}`}>
                 <span className="shrink-0 w-6 h-6 inline-flex items-center justify-center">
-                  {found
-                    ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    : <Emoji size="1.125rem">🌐</Emoji>}
+                  <SeatFlag country={d.country} size={20} className="object-contain" fallback={<Emoji size="1.125rem">🌐</Emoji>} />
                 </span>
                 <span className="text-sm flex-1">{getCountryDisplayName(d.country, language)}</span>
                 {spoke && <span className="text-[10px] text-[#B6871F] shrink-0">already spoke</span>}
@@ -1061,12 +1047,11 @@ function ModeratedCaucusMain({
               </div>
             ) : (
               <div style={{ width: '165px', height: '110px', borderRadius: '12px', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
-                {(() => {
-                  const f = getCountryByName(committee.caucus!.currentSpeaker!);
-                  return f
-                    ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
-                })()}
+                <SeatFlag
+                  country={committee.caucus!.currentSpeaker!}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', display: 'block' }}
+                  fallback={<Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>}
+                />
               </div>
             )}
             <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(committee.caucus!.currentSpeaker!, language)}</h1>
@@ -1220,9 +1205,38 @@ function ModeratedCaucusMain({
 }
 
 // ── Session Ended Content ─────────────────────────────────────────────────────
+// ── Awards signpost (conference-linked sessions ONLY) ─────────────────────────
+// Awards are a CONFERENCE feature: the slate is decided on the chair's conference page
+// and announced by the secretariat. The session never hosts award UI — it only points
+// there, and only when `committee.sessionOrigin === 'conference'`. An anonymous
+// standalone session must render NOTHING award-related (PRD hard gate), so every
+// caller of this CTA checks the origin first. Both the Moderator and a Commenter may
+// open it — it is deliberately NOT gated on isViewOnly.
+//
+// Rendered as a real anchor with a prefetched href (not a click-then-resolve
+// `window.open`) so opening in a new tab never trips a popup blocker; until the
+// lookup lands, or when the conference is private to anon, it points at the chair's
+// conference hub, which lists every committee they chair.
+function ChairAwardsCta({ code, label, className, style }: {
+  code: string; label: string; className?: string; style?: React.CSSProperties;
+}) {
+  const [href, setHref] = useState('/my-conferences');
+  useEffect(() => {
+    let cancelled = false;
+    resolveChairAwardsHref(code).then((h) => { if (!cancelled) setHref(h); });
+    return () => { cancelled = true; };
+  }, [code]);
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={className} style={style}>
+      {label}
+    </a>
+  );
+}
+
 function SessionEndedContent({ committee, hoursRemaining }: { committee: Committee; hoursRemaining: number | null }) {
   const { language } = useLanguage();
   const t = useT();
+  const isConferenceSession = committee.sessionOrigin === 'conference';
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
       <h1 className="text-5xl font-black mb-4" style={{ color: '#1B3828' }}>{t('session_ended_title')}</h1>
@@ -1230,6 +1244,28 @@ function SessionEndedContent({ committee, hoursRemaining }: { committee: Committ
       <p className="text-lg mb-8" style={{ color: '#9A8A78' }}>{committee.topic}</p>
       {hoursRemaining !== null && (
         <p className="text-base" style={{ color: '#9A8A78' }}>{t('session_hours_until_delete', { n: hoursRemaining ?? 0, s: hoursRemaining !== 1 ? 's' : '' })}</p>
+      )}
+      {/* Conference-linked sessions only — see ChairAwardsCta. Standalone sessions get nothing here. */}
+      {isConferenceSession && (
+        <div className="mt-8 w-full max-w-md rounded-2xl px-6 py-5 text-start"
+          style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: '0 6px 18px rgba(28,20,16,0.06)' }}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B6871F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+              <path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+              <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+              <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+            </svg>
+            <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('chair_ended_awards_title')}</span>
+          </div>
+          <p className="text-sm leading-relaxed mb-4" style={{ color: '#6A5A4A' }}>{t('chair_ended_awards_body')}</p>
+          <ChairAwardsCta
+            code={committee.code}
+            label={t('chair_ended_awards_cta')}
+            className="inline-flex items-center px-5 py-2.5 rounded-xl text-sm font-black transition-colors focus:outline-none gv-lift-dark"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em' }}
+          />
+        </div>
       )}
       <p className="text-xs mt-8" style={{ color: '#9A8A78' }}>{t('session_adjourned_hint')}</p>
     </div>
@@ -3201,6 +3237,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   return (
     <FitToScreen>
+    <SeatArtProvider delegates={committee.delegates}>
     <div className="h-full w-full flex flex-col overflow-hidden relative" style={{ backgroundColor: '#EDE7D8' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-2" data-tutorial="topbar">
@@ -3276,6 +3313,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
             <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
           </svg>
         </button>
+        {/* Once the gavel has fallen, a conference chair's next job is the award slate — a
+            subtle second affordance beside the scoreboard trophy. Conference sessions ONLY;
+            never rendered for a standalone session. */}
+        {sessionEnded && committee.sessionOrigin === 'conference' && (
+          <ChairAwardsCta
+            code={committee.code}
+            label={t('chair_ended_awards_cta')}
+            className="text-[11px] font-bold px-2.5 py-1 rounded-lg shrink-0 gv-lift transition-colors"
+            style={{ backgroundColor: 'rgba(182,135,31,0.12)', color: '#8B5A20', border: '1px solid rgba(182,135,31,0.35)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.03em' }}
+          />
+        )}
         <button data-tutorial="tab-settings" onClick={() => setShowSettings(true)} title={t('chair_hdr_settings')}
           className="text-[#9A8A78] hover:text-[#1C1410] transition-colors shrink-0"
           style={{ lineHeight: 0 }}>
@@ -3375,10 +3423,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               let delegateId = '';
               let desiredStatus: 'present' | 'present-voting' = 'present';
               try { const parsed = JSON.parse(m.topic); delegateId = parsed.delegateId; desiredStatus = parsed.desiredStatus; } catch {}
-              const found = getCountryByName(m.proposedBy);
-              const flagEl = found
-                ? <img src={getFlagUrl(found.code)} alt={found.code} className="w-5 h-5 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                : <Emoji size="1.125rem">🌐</Emoji>;
+              const flagEl = <SeatFlag country={m.proposedBy} size={20} className="object-contain inline-block" fallback={<Emoji size="1.125rem">🌐</Emoji>} />;
               return (
                 <div key={m.id} className="flex items-center gap-2.5 text-sm rounded-xl px-2.5 py-1" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
                   <span className="font-mono text-lg">{flagEl}</span>
@@ -3763,12 +3808,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       {/* ZONE 2 — Flag + name + timer + progress: compresses as viewport shrinks */}
                       <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-1">
                         <div style={{ width: '165px', height: '110px', borderRadius: '12px', boxShadow: '0 0 0 2.5px rgba(28,20,16,0.22)', flexShrink: 0, position: 'relative' }}>
-                          {(() => {
-                            const f = getCountryByName(committee.currentSpeaker.country);
-                            return f
-                              ? <img src={getFlagUrl(f.code)} alt={f.code} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                              : <Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>;
-                          })()}
+                          <SeatFlag
+                            country={committee.currentSpeaker.country}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', display: 'block' }}
+                            fallback={<Emoji size="5rem" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>🌐</Emoji>}
+                          />
                         </div>
                         <h1 className="font-black text-[#1C1410] text-center" style={{ fontSize: '1.8rem', margin: '8px 0' }}>{getCountryDisplayName(committee.currentSpeaker.country, language)}</h1>
                         {isViewOnly ? (
@@ -4078,12 +4122,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               // ── Active timer view ──────────────────────────────
               <>
                 <div className="flex items-center gap-2 mb-3 px-1">
-                  {(() => {
-                    const f = getCountryByName(rtrCountry);
-                    return f
-                      ? <img src={getFlagUrl(f.code)} alt={f.code} className="w-6 h-6 object-contain inline-block" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                      : <Emoji size="1.25rem">🌐</Emoji>;
-                  })()}
+                  <SeatFlag country={rtrCountry} size={24} className="object-contain inline-block" fallback={<Emoji size="1.25rem">🌐</Emoji>} />
                   <span className="text-sm text-[#1C1410] font-bold flex-1">{rtrCountry}</span>
                   <span className="text-xs font-black uppercase tracking-wide" style={{ color: '#B8844A' }}>{t('gsl_right_to_reply_popover')}</span>
                 </div>
@@ -4126,6 +4165,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         </div>
       )}
     </div>
+    </SeatArtProvider>
     </FitToScreen>
   );
 }

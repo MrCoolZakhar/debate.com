@@ -45,6 +45,7 @@ import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { LogoDisc } from '@/components/LogoDisc';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatConferenceDates } from '@/lib/conferenceDates';
+import VerifiedCheck from '@/components/VerifiedCheck';
 
 // Photo-forward hero cards: kill the Ken Burns zoom + hover lift for users who
 // asked the OS for less motion. Scoped to the hero tier's own class names.
@@ -72,6 +73,8 @@ export interface CardConference {
   format?: string;
   logo_url: string | null;
   banner_url: string | null;
+  /** Blue seal beside the name when true; nothing at all otherwise. */
+  is_verified?: boolean;
 }
 
 // Deterministic forest-tone gradient per conference (used when no banner art exists)
@@ -241,10 +244,11 @@ export function ConferenceCard({
           style={{
             fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: '27px', lineHeight: 1.05,
             letterSpacing: '0.01em', color: '#FAF8F3', margin: 0, textShadow: '0 1px 12px rgba(0,0,0,0.5)',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
           }}
         >
-          {headingLabel}
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{headingLabel}</span>
+          <VerifiedCheck verified={!!conf.is_verified} size={21} title="Verified conference" />
         </h3>
         <div className="flex items-end justify-between gap-3" style={{ marginTop: '7px' }}>
           {/* Facts row: location+flag · fee · attendees (dates live top-right on the photo) */}
@@ -431,10 +435,11 @@ export function ConferenceCard({
             color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontVariantNumeric: 'tabular-nums',
             fontSize: dense ? '24px' : '30px', lineHeight: 1.05, letterSpacing: '0.01em',
             marginTop: dense ? '2px' : '4px',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0,
           }}
         >
-          {headingLabel}
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{headingLabel}</span>
+          <VerifiedCheck verified={!!conf.is_verified} size={dense ? 17 : 21} title="Verified conference" />
         </h3>
 
         {/* Location */}

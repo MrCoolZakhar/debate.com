@@ -31,8 +31,8 @@ import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquareQuote, ChevronRight, Trophy, ExternalLink } from 'lucide-react';
 import { NEU, NeuInset, NeuPill, OUTFIT, EASE } from '@/components/neu';
-import { FlagImg } from '@/components/FlagImg';
-import { getCountryByName, getCountryDisplayName } from '@/lib/countries';
+import { SeatFlag } from '@/components/SeatFlag';
+import { getCountryDisplayName } from '@/lib/countries';
 import { committeeDisplayName } from '@/lib/presetNames';
 import {
   formatSpeakingTime, COMMENT_LEVEL_LABEL,
@@ -407,7 +407,7 @@ export function ScoreboardTable({
                 {sortKey === 'name' ? '' : i + 1}
               </span>
               <span style={{ width: 22, flexShrink: 0, display: 'inline-flex' }}>
-                <FlagImg code={getCountryByName(r.country)?.code ?? ''} size={20} />
+                <SeatFlag country={r.country} size={20} />
               </span>
               <span style={{ flex: '1 1 0', minWidth: 0 }}>
                 <span style={{ display: 'block', fontFamily: OUTFIT, fontWeight: 600, fontSize: 13.5, color: NEU.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

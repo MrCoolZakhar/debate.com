@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
-  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase,
+  Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase, Trophy,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -38,12 +38,17 @@ import {
   CopyToRolesModal, SetupIntro, Segmented, STATUS_STYLE,
   type RoleStatus as RoleStatusKind,
 } from './applicationsUi';
+import { AwardsSettings } from './awardsUi';
+import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import ProfileLink from '@/components/ProfileLink';
 
 // ── Types ──────────────────────────────────────────────────────────────────
+
+/** The settings sub-tabs; also the accepted values of the ?tab= deep link. */
+type SettingsTab = 'applications' | 'conference' | 'organizers' | 'privacy' | 'awards';
 
 interface RoleConfig {
   id: string;
@@ -545,12 +550,12 @@ export default function SettingsPage() {
   // secretariat accept redirect uses (?tab=team&highlight=<organizer id>) —
   // same tab as 'organizers', named the way a person reading the URL would
   // expect rather than the internal section key.
-  const initialTab = ((): 'applications' | 'conference' | 'organizers' | 'privacy' => {
+  const initialTab = ((): SettingsTab => {
     const t = searchParams.get('tab') ?? searchParams.get('section');
     if (t === 'team') return 'organizers';
-    return t === 'conference' || t === 'organizers' || t === 'privacy' ? t : 'applications';
+    return t === 'conference' || t === 'organizers' || t === 'privacy' || t === 'awards' ? t : 'applications';
   })();
-  const [activeTab, setActiveTab] = useState<'applications' | 'conference' | 'organizers' | 'privacy'>(initialTab);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   // Which role's configuration the Applications section is showing. Derived
   // from ?role= rather than held in state, so a deep link lands on the right
   // role and the back button walks back through them.
@@ -2497,7 +2502,7 @@ export default function SettingsPage() {
   // forest active state. Drives the same `activeTab` state the content blocks
   // already switch on, no logic change, purely the switcher's new skin.
   const SECTIONS: {
-    key: 'applications' | 'conference' | 'organizers' | 'privacy';
+    key: SettingsTab;
     label: string;
     hint: string;
     icon: typeof SlidersHorizontal;
@@ -2506,6 +2511,7 @@ export default function SettingsPage() {
     { key: 'conference',   label: 'Conference',   hint: 'Identity, media & fee',      icon: Building2 },
     { key: 'organizers',   label: 'Organizers',   hint: 'Team & permissions',         icon: Users2 },
     { key: 'privacy',      label: 'Privacy',       hint: 'Publishing & lineage',       icon: ShieldCheck },
+    { key: 'awards',       label: 'Awards',        hint: 'Categories, quotas & ratification', icon: Trophy },
   ];
   const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
 
@@ -2729,7 +2735,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={handleCopyApplicationLink}
-                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
                       style={{
                         padding: '7px 12px',
                         fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
@@ -2893,7 +2899,7 @@ export default function SettingsPage() {
                                   key={String(opt.value)}
                                   type="button"
                                   onClick={() => saveRoleConfig(role, { auto_accept: opt.value })}
-                                  className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
+                                  className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all gv-lift"
                                   style={{
                                     backgroundColor: active ? '#1B3828' : 'transparent',
                                     color: active ? '#EED98A' : '#1C1410',
@@ -2925,7 +2931,7 @@ export default function SettingsPage() {
                                   key={opt.value}
                                   type="button"
                                   onClick={() => saveRoleConfig(role, { payment_timing: opt.value })}
-                                  className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all"
+                                  className="flex-1 py-2.5 rounded-[10px] font-bold text-sm focus:outline-none transition-all gv-lift"
                                   style={{
                                     backgroundColor: active ? '#1B3828' : 'transparent',
                                     color: active ? '#EED98A' : '#1C1410',
@@ -3270,7 +3276,7 @@ export default function SettingsPage() {
                     </p>
                     <button
                       onClick={() => router.push(`/manage/${conference.slug}/financials/settings`)}
-                      className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors"
+                      className="rounded-xl px-6 py-3 text-sm font-bold focus:outline-none transition-colors gv-lift"
                       style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.04em', cursor: 'pointer' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -3289,6 +3295,14 @@ export default function SettingsPage() {
       {/* ── VISUAL TAB ── */}
       {activeTab === 'conference' && (
         <div>
+          <CustomizationCard
+            conferenceId={conference.id}
+            conferenceSlug={conference.slug}
+            initialDraft={conference.theme_draft ?? {}}
+            initialPublished={conference.theme ?? {}}
+            cardStyle={cardStyle}
+          />
+
           {/* ── Marketing first. The banner and the logo are the two things a
               visitor actually sees, and they were buried under six fields of
               logistics nobody opens twice. ── */}
@@ -3407,7 +3421,7 @@ export default function SettingsPage() {
               <div>
                 <button
                   onClick={() => { if (!logoUploading) document.getElementById('settings-logo-upload')?.click(); }}
-                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none"
+                  className="rounded-xl py-2 px-4 font-bold text-xs tracking-widest transition-colors focus:outline-none gv-lift"
                   style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.07em' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
@@ -3511,7 +3525,7 @@ export default function SettingsPage() {
                       key={opt.value}
                       type="button"
                       onClick={() => setStudentLevel(opt.value)}
-                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none"
+                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none gv-lift"
                       style={{
                         backgroundColor: active ? '#1B3828' : 'transparent',
                         color: active ? '#EED98A' : '#9A8A78',
@@ -3540,7 +3554,7 @@ export default function SettingsPage() {
                       key={opt.value}
                       type="button"
                       onClick={() => setFormat(opt.value)}
-                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none"
+                      className="flex-1 rounded-xl py-2.5 font-bold text-xs transition-colors focus:outline-none gv-lift"
                       style={{
                         backgroundColor: active ? '#1B3828' : 'transparent',
                         color: active ? '#EED98A' : '#9A8A78',
@@ -4457,7 +4471,7 @@ export default function SettingsPage() {
           </p>
           <button
             onClick={() => { if (!isOwner) { setDeleteError('Only the conference owner can delete this view.'); return; } setDeleteError(''); setConfirmingDelete(true); }}
-            className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors"
+            className="w-full rounded-xl py-2.5 font-semibold text-sm focus:outline-none transition-colors gv-lift"
             style={{ border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020', backgroundColor: 'transparent', fontFamily: "'Outfit', sans-serif" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
@@ -4583,7 +4597,7 @@ export default function SettingsPage() {
                       <button
                         onClick={() => handleClaimDecision(claim.id, true)}
                         disabled={lineageBusy === claim.id}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
                         style={{
                           backgroundColor: lineageBusy === claim.id ? '#DDD4C0' : '#1B3828',
                           color: lineageBusy === claim.id ? '#9A8A78' : '#EED98A',
@@ -4598,7 +4612,7 @@ export default function SettingsPage() {
                       <button
                         onClick={() => handleClaimDecision(claim.id, false)}
                         disabled={lineageBusy === claim.id}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
                         style={{
                           backgroundColor: 'transparent',
                           color: '#8B2020',
@@ -4662,7 +4676,7 @@ export default function SettingsPage() {
                   setPartnerQuery('');
                   setPartnerResults([]);
                 }}
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-bold focus:outline-none transition-colors"
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
                 style={{
                   fontFamily: "'Outfit', sans-serif",
                   letterSpacing: '0.08em',
@@ -4747,7 +4761,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => void handleAddCompanyPartner()}
                 disabled={companySaving || companyLogoUploading || !companyName.trim()}
-                className="rounded-lg py-2 px-4 font-bold text-[11px] focus:outline-none transition-colors"
+                className="rounded-lg py-2 px-4 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
                 style={{
                   backgroundColor: companySaving || !companyName.trim() ? '#DDD4C0' : '#1B3828',
                   color: companySaving || !companyName.trim() ? '#9A8A78' : '#EED98A',
@@ -4969,7 +4983,7 @@ export default function SettingsPage() {
                       <button
                         onClick={() => handlePartnerClaimDecision(claim.link_id, true)}
                         disabled={busy}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
                         style={{
                           backgroundColor: busy ? '#DDD4C0' : '#1B3828',
                           color: busy ? '#9A8A78' : '#EED98A',
@@ -4984,7 +4998,7 @@ export default function SettingsPage() {
                       <button
                         onClick={() => handlePartnerClaimDecision(claim.link_id, false)}
                         disabled={busy}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
                         style={{
                           backgroundColor: 'transparent',
                           color: '#8B2020',
@@ -5227,14 +5241,14 @@ export default function SettingsPage() {
                           disabled={blocked}
                           aria-pressed={active}
                           title={blocked ? 'Only the conference owner can grant super admin.' : undefined}
-                          className="text-left rounded-2xl focus:outline-none"
+                          className="text-left rounded-2xl focus:outline-none gv-lift"
                           style={{
                             padding: 14, fontFamily: OUTFIT,
                             backgroundColor: active ? 'rgba(27,56,40,0.08)' : '#FFFDF9',
                             border: active ? '1.5px solid rgba(27,56,40,0.42)' : '1.5px solid #E4DAC4',
                             cursor: blocked ? 'not-allowed' : 'pointer',
                             opacity: blocked ? 0.5 : 1,
-                            transitionProperty: 'background-color, border-color, scale',
+                            transitionProperty: 'background-color, border-color, scale, box-shadow, transform',
                             transitionDuration: '150ms', transitionTimingFunction: EASE,
                           }}
                           onMouseDown={(e) => { if (!blocked) (e.currentTarget as HTMLElement).style.scale = '0.99'; }}
@@ -5343,12 +5357,12 @@ export default function SettingsPage() {
                 <button
                   onClick={() => { if (inviteStep === 1) setInviteOpen(false); else setInviteStep((inviteStep - 1) as 1 | 2); }}
                   disabled={inviting}
-                  className="flex items-center gap-1.5 rounded-xl focus:outline-none"
+                  className="flex items-center gap-1.5 rounded-xl focus:outline-none gv-lift"
                   style={{
                     minHeight: 44, padding: '0 14px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700,
                     color: NEU.inkSoft, background: 'transparent', border: '1.5px solid #DDD4C0',
                     opacity: inviting ? 0.5 : 1,
-                    transitionProperty: 'color, border-color', transitionDuration: '140ms',
+                    transitionProperty: 'color, border-color, box-shadow, transform', transitionDuration: '140ms',
                   }}
                 >
                   {inviteStep === 1 ? <X size={14} /> : <ArrowLeft size={14} />}
@@ -5359,14 +5373,14 @@ export default function SettingsPage() {
                   <button
                     onClick={() => setInviteStep((inviteStep + 1) as 2 | 3)}
                     disabled={inviteStep === 1 && !inviteEmail.trim()}
-                    className="rounded-xl focus:outline-none"
+                    className="rounded-xl focus:outline-none gv-lift"
                     style={{
                       minHeight: 44, padding: '0 20px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
                       letterSpacing: '0.05em', border: 'none',
                       backgroundColor: (inviteStep === 1 && !inviteEmail.trim()) ? '#DDD4C0' : '#1B3828',
                       color: (inviteStep === 1 && !inviteEmail.trim()) ? NEU.inkSoft : '#EED98A',
                       cursor: (inviteStep === 1 && !inviteEmail.trim()) ? 'default' : 'pointer',
-                      transitionProperty: 'background-color, scale', transitionDuration: '150ms',
+                      transitionProperty: 'background-color, scale, box-shadow, transform', transitionDuration: '150ms',
                       transitionTimingFunction: EASE,
                     }}
                     onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; }}
@@ -5379,14 +5393,14 @@ export default function SettingsPage() {
                   <button
                     onClick={handleInvite}
                     disabled={inviting || !inviteEmail.trim()}
-                    className="rounded-xl focus:outline-none"
+                    className="rounded-xl focus:outline-none gv-lift"
                     style={{
                       minHeight: 44, padding: '0 20px', fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
                       letterSpacing: '0.05em', border: 'none',
                       backgroundColor: (inviting || !inviteEmail.trim()) ? '#DDD4C0' : '#1B3828',
                       color: (inviting || !inviteEmail.trim()) ? NEU.inkSoft : '#EED98A',
                       cursor: (inviting || !inviteEmail.trim()) ? 'default' : 'pointer',
-                      transitionProperty: 'background-color, scale', transitionDuration: '150ms',
+                      transitionProperty: 'background-color, scale, box-shadow, transform', transitionDuration: '150ms',
                       transitionTimingFunction: EASE,
                     }}
                     onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.scale = '0.96'; }}
@@ -5548,12 +5562,12 @@ export default function SettingsPage() {
                         onClick={() => handleMoveOrganizer(idx, -1)}
                         disabled={idx <= 0}
                         aria-label={`Move ${name} earlier on the public page`}
-                        className="flex items-center justify-center rounded-xl focus:outline-none flex-shrink-0"
+                        className="flex items-center justify-center rounded-xl focus:outline-none flex-shrink-0 gv-lift"
                         style={{
                           width: 40, height: 40, color: NEU.inkSoft, background: 'transparent',
                           border: '1.5px solid #DDD4C0',
                           cursor: idx <= 0 ? 'default' : 'pointer', opacity: idx <= 0 ? 0.35 : 1,
-                          transitionProperty: 'color, border-color', transitionDuration: '140ms',
+                          transitionProperty: 'color, border-color, box-shadow, transform', transitionDuration: '140ms',
                         }}
                         onMouseEnter={(e) => { if (idx > 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
@@ -5564,13 +5578,13 @@ export default function SettingsPage() {
                         onClick={() => handleMoveOrganizer(idx, 1)}
                         disabled={idx >= organizers.length - 1}
                         aria-label={`Move ${name} later on the public page`}
-                        className="flex items-center justify-center rounded-xl focus:outline-none flex-shrink-0"
+                        className="flex items-center justify-center rounded-xl focus:outline-none flex-shrink-0 gv-lift"
                         style={{
                           width: 40, height: 40, color: NEU.inkSoft, background: 'transparent',
                           border: '1.5px solid #DDD4C0',
                           cursor: idx >= organizers.length - 1 ? 'default' : 'pointer',
                           opacity: idx >= organizers.length - 1 ? 0.35 : 1,
-                          transitionProperty: 'color, border-color', transitionDuration: '140ms',
+                          transitionProperty: 'color, border-color, box-shadow, transform', transitionDuration: '140ms',
                         }}
                         onMouseEnter={(e) => { if (idx < organizers.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
@@ -5605,13 +5619,13 @@ export default function SettingsPage() {
                             }}
                             aria-haspopup="menu"
                             aria-expanded={bundleMenuFor?.orgId === org.id}
-                            className="flex items-center gap-1.5 focus:outline-none"
+                            className="flex items-center gap-1.5 focus:outline-none gv-lift"
                             style={{
                               minHeight: 38, padding: '9px 14px', borderRadius: 999, fontFamily: OUTFIT,
                               fontSize: 12, fontWeight: 800, letterSpacing: '0.05em',
                               color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.09)',
                               border: '1.5px solid rgba(27,56,40,0.28)', cursor: 'pointer',
-                              transitionProperty: 'background-color, scale',
+                              transitionProperty: 'background-color, scale, box-shadow, transform',
                               transitionDuration: '140ms', transitionTimingFunction: EASE,
                             }}
                             onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.15)'; }}
@@ -5717,12 +5731,12 @@ export default function SettingsPage() {
                   <div className="mt-6 pt-5" style={{ borderTop: '1px solid #E4DAC4' }}>
                     <button
                       onClick={() => { close(); handleRemoveOrganizer(org.id); }}
-                      className="flex items-center justify-center gap-2 w-full focus:outline-none"
+                      className="flex items-center justify-center gap-2 w-full focus:outline-none gv-lift"
                       style={{
                         minHeight: 44, borderRadius: 14, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800,
                         letterSpacing: '0.04em', color: '#8B2020', background: 'transparent',
                         border: '1.5px solid rgba(139,32,32,0.30)', cursor: 'pointer',
-                        transitionProperty: 'background-color, scale', transitionDuration: '140ms',
+                        transitionProperty: 'background-color, scale, box-shadow, transform', transitionDuration: '140ms',
                         transitionTimingFunction: EASE,
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.06)'; }}
@@ -5750,6 +5764,11 @@ export default function SettingsPage() {
           </Portal>
         );
       })()}
+
+      {/* Awards lives in its own module (settings/awardsUi.tsx): categories,
+          quotas, points, ratification and the chair deadline, all autosaved
+          into conferences.awards_config. */}
+      {activeTab === 'awards' && <AwardsSettings conference={conference} />}
 
       {confirmModal}
     </div>

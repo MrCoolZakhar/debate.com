@@ -107,7 +107,7 @@
 ### DB operations
 - `addToSpeakersList` — inserts to speakers_list with list_type='gsl'
 - `removeFromSpeakersList` — deletes from speakers_list where list_type='gsl'
-- `reorderSpeakersList` — delete all gsl entries + reinsert in new order
+- `reorderSpeakersList` — parallel in-place `position` updates (NOT delete + reinsert: a DELETE realtime event flashes an empty list on delegate phones)
 - `nextSpeaker` — updates current_speaker row, optionally removes a delegate from speakers_list
 - `startSpeakerTimer` — sets started_at timestamp
 - `stopSpeakerTimer` — clears started_at
@@ -484,6 +484,45 @@ setIsViewOnly(!!myChairName && !!head && head !== myChairName);
 
 ---
 
+## FEATURE: AWARDS (conference-linked sessions only)
+
+### The shape
+- Awards are a CONFERENCE feature. The live session only signposts them. The gate is
+  `committee.sessionOrigin === 'conference'` (surfaced by `rowToCommittee`); an anonymous
+  standalone session must never render an award affordance (PRD rule 8).
+- Vocabulary, config reader, slate lifecycle and scoreboard suggestions: `src/lib/awards.ts`.
+  Every read/write: `src/lib/awardsService.ts`. Nothing else may touch `conference_awards`.
+- Lifecycle: `nominated` (chair) → `approved` (secretariat, `approve_committee_awards`) →
+  `published` (conference, `publish_conference_awards`). Per-committee stamps live on
+  `conference_committees.awards_submitted_at / awards_approved_at / awards_return_note`;
+  the ceremony moment is `conferences.awards_published_at`. Categories, quotas, points,
+  deadline and `requireApproval` are `conferences.awards_config` (jsonb; `{}` = defaults).
+- Publishing mints ONE `mun_cv_entries` row per recipient per conference with
+  `source = 'gavelling_verified'` (upgrading a self-reported entry for the same conference in
+  place) and a `points_ledger` row of type `earned_award` at paid conferences. It is
+  idempotent: already-published rows are never touched, so late additions republish safely.
+
+### Surfaces
+- Chair: `conferences/[slug]/participant/AwardsCard.tsx` on their conference page, with the
+  session scoreboard (`loadConferenceScoreboard(..., [committeeId])`) beside the slots.
+- Secretariat: `/manage/[slug]/awards` (review, return with note, edit, delegation
+  standings, publish, certificates CSV) and Settings → Awards (`settings/awardsUi.tsx`).
+- Delegate: `participant/MyAwardsCard.tsx`, `/account/cv`, public `/conferences/[slug]/awards`.
+- Session: `ScoreboardPanel` header link and the End View card on the chair page, both
+  resolved through `resolveChairAwardsHref(code)` and both conference-only.
+
+### Rules
+- **Nominations are secret until publish.** RLS on `conference_awards` exposes unpublished
+  rows only to the committee's chairs and the organising team. Never add a read path around it.
+- `award_type` keys are stable identifiers. Renaming a built-in changes `label`, never `key`.
+  `DEFAULT_AWARD_TYPES[].points` must match `award_points_for()` in the database.
+- The chair's decision is qualitative. `suggestSlate` fills EMPTY slots from the blended
+  headline score and is always editable; it must never be applied without the chair seeing it.
+- `committee_awards_locked()` (approved or published) is what stops chair writes. The UI
+  mirrors it with `chairCanEdit(slateState(...))`; treat the DB as the truth.
+
+---
+
 ## FEATURE: DELEGATE VIEW
 
 ### Tabs
@@ -600,6 +639,7 @@ setIsViewOnly(!!myChairName && !!head && head !== myChairName);
 13. **Never regenerate `chairJoinSuffix` when the DB already has one** — it is the ONLY write credential (`x-chair-suffix` → `is_session_chair`) and the code every chair typed on the join page. Overwriting it locks every chair out of a live committee. `SettingsPanel.tsx:415-425` generates one only when the store copy is `''`; keep that guard.
 14. **Never read a setting via `getSettings(code)` on the delegate or advisor pages** — neither page ever hydrates the store, so it silently returns `DEFAULT_SETTINGS`. Use `getCommitteeFlags` / `sponsorLabel` / `getScoringConfig` / `docName`, which are pure functions of the committee row.
 15. **Never treat `isViewOnly` as a permission** — it is a UI gate only. RLS grants full write access to anyone holding the chair suffix.
+16. **Never render award UI in a standalone session, and never expose an unpublished nomination to a delegate** — awards are gated on `sessionOrigin === 'conference'` and on the `conference_awards` RLS. See FEATURE: AWARDS.
 
 ---
 

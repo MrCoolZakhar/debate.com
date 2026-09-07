@@ -16,7 +16,8 @@ import ChatPanel from '@/components/ChatPanel';
 import { getScoringConfig } from '@/lib/scoring';
 import { selectDelegateTips } from '@/lib/delegateTips';
 import { getDelegateFeedback } from '@/lib/committeeService';
-import { getFlagUrl, getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
+import { getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
+import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import { supabase } from '@/lib/supabase';
 import { Emoji } from '@/components/Emoji';
@@ -95,9 +96,17 @@ function GavelLoader() {
   );
 }
 
-function flagFor(country: string) {
-  const c = getCountryByName(country);
-  return c ? <img src={getFlagUrl(c.code)} alt={c.code} className="inline-block object-contain" style={{ width: '1em', height: '1em' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} /> : <Emoji size="1em">🌐</Emoji>;
+/** Inline 1em mark beside a delegation name. A component rather than the old
+ *  `flagFor()` call so it can read the seat's crest off <SeatArtProvider>. */
+function SeatMark({ country }: { country: string }) {
+  return (
+    <SeatFlag
+      country={country}
+      className="inline-block object-contain"
+      style={{ width: '1em', height: '1em' }}
+      fallback={<Emoji size="1em">🌐</Emoji>}
+    />
+  );
 }
 
 function autoDocCode(type: DocumentType, existingDocs: { type: DocumentType }[]): string {
@@ -270,15 +279,18 @@ function SponsorsInput({
   };
 
   return (
+    /* Holds `committee` already, so it provides its own seat roster rather than
+       depending on where in the delegate tree it happens to be mounted. */
+    <SeatArtProvider delegates={committee.delegates}>
     <div>
       {/* Selected sponsors tags */}
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[24px]">
         <span className="inline-flex items-center gap-1 text-xs bg-[#1B3828]/20 border border-[#1B3828]/30 text-[#6A5A4A] rounded-full px-2.5 py-0.5 font-medium">
-          {flagFor(myCountry)} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ms-0.5">{language === 'ar' ? '(أنت)' : language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
+          {<SeatMark country={myCountry} />} {getCountryDisplayName(myCountry, language)} <span className="text-[#9A8A78] ms-0.5">{language === 'ar' ? '(أنت)' : language === 'fr' ? '(vous)' : language === 'es' ? '(tú)' : '(you)'}</span>
         </span>
         {value.map((c) => (
           <span key={c} className="inline-flex items-center gap-1 text-xs bg-[#FAF8F3] border border-[#DDD4C0] text-[#6A5A4A] rounded-full px-2.5 py-0.5">
-            {flagFor(c)} {getCountryDisplayName(c, language)}
+            {<SeatMark country={c} />} {getCountryDisplayName(c, language)}
             <button onClick={() => onChange(value.filter((x) => x !== c))} className="ms-1 text-[#9A8A78] hover:text-red-400 font-bold leading-none">×</button>
           </span>
         ))}
@@ -304,7 +316,7 @@ function SponsorsInput({
                 onMouseDown={(e) => { e.preventDefault(); add(c); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-start transition-colors ${i === 0 ? 'bg-[#DDD4C0] text-[#1C1410]' : 'text-[#6A5A4A] hover:bg-[#DDD4C0]'}`}
               >
-                {flagFor(c)} {getCountryDisplayName(c, language)}
+                {<SeatMark country={c} />} {getCountryDisplayName(c, language)}
                 {i === 0 && <span className="ms-auto text-xs text-[#9A8A78]">↵ Enter</span>}
               </button>
             ))}
@@ -312,6 +324,7 @@ function SponsorsInput({
         )}
       </div>
     </div>
+    </SeatArtProvider>
   );
 }
 
@@ -1345,6 +1358,8 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   const myIso = getCountryByName(country)?.code ?? '';
   const myName = getCountryDisplayName(country, language);
+  // This seat's own crest, when the conference gave it one. Null everywhere else.
+  const mySeatLogo = myDelegate?.logoUrl ?? null;
   const unreadTotal = chatUnreadTotal(
     committee.messages, country, false, committee.chairNames ?? [], chatReadCounts,
   );
@@ -1581,7 +1596,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         )}
 
         <div className="dgv-rise" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, margin: '26px 0' }}>
-          <FlagDisc code={myIso} name={myName} size={104} ring={DG.hairline} />
+          <FlagDisc code={myIso} name={myName} size={104} ring={DG.hairline} logoUrl={mySeatLogo} />
           <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 22, fontWeight: 900, color: DG.ink }}>{myName}</p>
         </div>
 
@@ -1713,7 +1728,13 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
           {isMod && committee.caucus.currentSpeaker && (
             <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 9 }}>
               <Equalizer color={DG.forest} size={14} />
-              <FlagDisc code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''} name={committee.caucus.currentSpeaker} size={26} ring={DG.ivory} />
+              <FlagDisc
+                code={getCountryByName(committee.caucus.currentSpeaker)?.code ?? ''}
+                name={committee.caucus.currentSpeaker}
+                size={26}
+                ring={DG.ivory}
+                logoUrl={committee.delegates.find((d) => d.country === committee.caucus!.currentSpeaker)?.logoUrl ?? null}
+              />
               <span style={{ minWidth: 0, flex: 1, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: committee.caucus.currentSpeaker === country ? DG.deepGold : DG.forest, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {getCountryDisplayName(committee.caucus.currentSpeaker, language)}
                 {committee.caucus.currentSpeaker === country && t('delegate_you_suffix')}
@@ -1801,7 +1822,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     <div style={{ fontFamily: OUTFIT, fontSize: 12, color: DG.faint }}>
       {sponsors.map((s, i) => (
         <span key={s} style={{ color: i === 0 ? DG.body : DG.faint, fontWeight: i === 0 ? 600 : 400 }}>
-          {i > 0 ? ', ' : ''}{flagFor(s)} {getCountryDisplayName(s, language)}
+          {i > 0 ? ', ' : ''}{<SeatMark country={s} />} {getCountryDisplayName(s, language)}
         </span>
       ))}
     </div>
@@ -1830,6 +1851,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   return (
     /* One screen, no page scroll. Fixed dvh + overflow hidden, and every band
        inside is flex with min-height:0 so the bottom row absorbs the slack. */
+    <SeatArtProvider delegates={committee.delegates}>
     <div
       className="flex flex-col"
       style={{ height: '100dvh', overflow: 'hidden', background: DG.ivory }}
@@ -1949,6 +1971,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                 <FlagOrdinalDisc
                   code={myIso}
                   name={myName}
+                  logoUrl={mySeatLogo}
                   size={discSize}
                   live={isCurrentSpeaker}
                   primary={
@@ -2275,6 +2298,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         )}
       </Sheet>
     </div>
+    </SeatArtProvider>
   );
 }
 

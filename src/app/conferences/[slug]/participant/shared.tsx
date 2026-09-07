@@ -11,9 +11,10 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 
 export const OUTFIT = "'Outfit', sans-serif";
 
-export function SectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+export function SectionCard({ children, className = '', id }: { children: React.ReactNode; className?: string; id?: string }) {
   return (
     <div
+      id={id}
       className={`rounded-[20px] p-6 md:p-7 ${className}`}
       style={{
         backgroundColor: '#FAF8F3',
