@@ -47,6 +47,7 @@ import { ModalOverlay } from '@/components/CommitteeEditorModal';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuCard, NeuIconDisc, type NeuGradient,
 } from '@/components/neu';
+import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import { getGateState, roleLabel, statusPriority } from '../participant/shared';
 import AidRequestModal from '../participant/AidRequestModal';
 import DelegationCreditsCard from '../participant/DelegationCreditsCard';
@@ -67,6 +68,7 @@ interface PayConference {
   financial_aid_enabled: boolean;
   aid_questions: unknown[];
   aid_intro: string | null;
+  theme: ConferenceTheme | null;
 }
 
 interface PayApplication {
@@ -377,7 +379,7 @@ export default function PayPage() {
         .select(`
           id, full_name, fee_currency, contact_email,
           payment_method, connect_onboarding_status, external_payment_url, external_payment_note,
-          financial_aid_enabled, aid_questions, aid_intro
+          financial_aid_enabled, aid_questions, aid_intro, theme
         `)
         .eq('slug', slug)
         .single();
@@ -468,7 +470,7 @@ export default function PayPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
+    <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(conference?.theme ?? {}), backgroundColor: NEU.base }}>
       <SiteNav />
       <div className="flex-1 w-full max-w-[900px] mx-auto px-6 py-10">
         <Link
@@ -585,7 +587,7 @@ function ManualPayAction({
             target="_blank"
             rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 mb-3 font-bold text-sm focus:outline-none"
-            style={{ border: '1.5px solid #DDD4C0', color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
+            style={{ border: '1.5px solid var(--gv-border)', color: NEU.ink, fontFamily: OUTFIT, letterSpacing: '0.06em', textDecoration: 'none' }}
           >
             GO TO PAYMENT PAGE
           </a>
@@ -677,7 +679,7 @@ function RemovePledgeAction({
         type="button"
         onClick={() => { setError(''); setOpen(o => !o); }}
         className="text-xs font-semibold focus:outline-none hover:underline flex-shrink-0"
-        style={{ color: '#9A8A78', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        style={{ color: 'var(--gv-muted)', fontFamily: OUTFIT, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
       >
         REMOVE
       </button>
@@ -688,12 +690,12 @@ function RemovePledgeAction({
             className="rounded-xl p-3.5"
             style={{
               position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: POP_W,
-              backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', boxShadow: NEU.out,
+              backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', boxShadow: NEU.out,
               animation: `neuPopIn 160ms ${EASE}`,
             }}
           >
             <style>{'@keyframes neuPopIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }'}</style>
-            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: '#1C1410', lineHeight: 1.5, margin: 0 }}>{message}</p>
+            <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: 'var(--gv-on-surface)', lineHeight: 1.5, margin: 0 }}>{message}</p>
             {error && (
               <p className="mt-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#8B2020', lineHeight: 1.45 }}>{error}</p>
             )}
@@ -702,7 +704,7 @@ function RemovePledgeAction({
                 onClick={() => setOpen(false)}
                 disabled={busy}
                 className="flex-1 rounded-lg py-1.5 text-xs font-bold focus:outline-none"
-                style={{ border: '1px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
+                style={{ border: '1px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, cursor: busy ? 'default' : 'pointer' }}
               >
                 CANCEL
               </button>
@@ -837,7 +839,7 @@ function GenericInvoiceCard({
       </div>
 
       {expanded && (
-        <div style={{ padding: '0 18px 18px 18px', borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+        <div style={{ padding: '0 18px 18px 18px', borderTop: '1px solid color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
           <div className="pt-4">
             {description && (
               <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.muted, lineHeight: 1.6, marginBottom: 14 }}>
@@ -866,8 +868,8 @@ function GenericInvoiceCard({
                   disabled={paying}
                   className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
                   style={{
-                    backgroundColor: paying ? '#DDD4C0' : NEU.forest,
-                    color: paying ? '#9A8A78' : NEU.gold,
+                    backgroundColor: paying ? 'var(--gv-border)' : NEU.forest,
+                    color: paying ? 'var(--gv-muted)' : NEU.gold,
                     fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: paying ? 'default' : 'pointer',
                   }}
                 >
@@ -974,14 +976,14 @@ function AddonsModal({
     <ModalOverlay onClose={() => { if (!saving) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
       >
         <div className="flex items-center justify-between gap-3">
-          <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Buy Add-ons</p>
+          <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Buy Add-ons</p>
           <button
             onClick={() => { if (!saving) onClose(); }}
             className="flex-shrink-0 focus:outline-none"
-            style={{ color: '#9A8A78', border: 'none', background: 'none', cursor: saving ? 'default' : 'pointer' }}
+            style={{ color: 'var(--gv-muted)', border: 'none', background: 'none', cursor: saving ? 'default' : 'pointer' }}
           >
             <X size={18} />
           </button>
@@ -1000,7 +1002,7 @@ function AddonsModal({
                 <div
                   key={addon.id}
                   className="rounded-xl px-4 py-3"
-                  style={{ border: '1px solid #DDD4C0', backgroundColor: sel.checked || isPurchased ? 'rgba(27,56,40,0.03)' : '#FFFFFF' }}
+                  style={{ border: '1px solid var(--gv-border)', backgroundColor: sel.checked || isPurchased ? 'color-mix(in srgb, var(--gv-main) 3%, transparent)' : '#FFFFFF' }}
                 >
                   <div className="flex items-start gap-3">
                     <input
@@ -1009,18 +1011,18 @@ function AddonsModal({
                       disabled={isPurchased}
                       onChange={() => toggleChecked(addon.id)}
                       className="flex-shrink-0 mt-0.5"
-                      style={{ width: 16, height: 16, accentColor: '#1B3828', cursor: isPurchased ? 'default' : 'pointer' }}
+                      style={{ width: 16, height: 16, accentColor: 'var(--gv-main)', cursor: isPurchased ? 'default' : 'pointer' }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: '#1C1410' }}>{addon.label}</p>
-                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#1C1410', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: 'var(--gv-on-surface)' }}>{addon.label}</p>
+                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: 'var(--gv-on-surface)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
                           {centsToFee(addon.amount_cents, addon.currency)}
-                          <span style={{ color: '#9A8A78', fontWeight: 600 }}> ea.</span>
+                          <span style={{ color: 'var(--gv-muted)', fontWeight: 600 }}> ea.</span>
                         </span>
                       </div>
                       {addon.description && (
-                        <p className="mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', lineHeight: 1.5 }}>
+                        <p className="mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'var(--gv-muted)', lineHeight: 1.5 }}>
                           {addon.description}
                         </p>
                       )}
@@ -1031,7 +1033,7 @@ function AddonsModal({
                         </p>
                       ) : sel.checked && (
                         <div className="mt-2.5 flex items-center gap-2.5">
-                          <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: '#9A8A78', letterSpacing: '0.06em' }}>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: 'var(--gv-muted)', letterSpacing: '0.06em' }}>
                             QTY
                           </span>
                           <div className="inline-flex items-center gap-2.5">
@@ -1040,18 +1042,18 @@ function AddonsModal({
                               onClick={() => setQuantity(addon.id, sel.quantity - 1)}
                               disabled={sel.quantity <= 1}
                               className="flex items-center justify-center rounded-full focus:outline-none"
-                              style={{ width: 24, height: 24, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: sel.quantity <= 1 ? '#DDD4C0' : '#1B3828', cursor: sel.quantity <= 1 ? 'default' : 'pointer' }}
+                              style={{ width: 24, height: 24, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: sel.quantity <= 1 ? 'var(--gv-border)' : 'var(--gv-main)', cursor: sel.quantity <= 1 ? 'default' : 'pointer' }}
                             >
                               <Minus size={12} />
                             </button>
-                            <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: '#1C1410', minWidth: 16, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: 'var(--gv-on-surface)', minWidth: 16, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                               {sel.quantity}
                             </span>
                             <button
                               type="button"
                               onClick={() => setQuantity(addon.id, sel.quantity + 1)}
                               className="flex items-center justify-center rounded-full focus:outline-none"
-                              style={{ width: 24, height: 24, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1B3828', cursor: 'pointer' }}
+                              style={{ width: 24, height: 24, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-main)', cursor: 'pointer' }}
                             >
                               <Plus size={12} />
                             </button>
@@ -1075,7 +1077,7 @@ function AddonsModal({
             onClick={() => { if (!saving) onClose(); }}
             disabled={saving}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: saving ? 'default' : 'pointer' }}
+            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: saving ? 'default' : 'pointer' }}
           >
             CANCEL
           </button>
@@ -1085,8 +1087,8 @@ function AddonsModal({
               disabled={saving}
               className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
               style={{
-                backgroundColor: saving ? '#DDD4C0' : '#1B3828',
-                color: saving ? '#9A8A78' : '#EED98A',
+                backgroundColor: saving ? 'var(--gv-border)' : 'var(--gv-main)',
+                color: saving ? 'var(--gv-muted)' : 'var(--gv-on-main)',
                 fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: saving ? 'default' : 'pointer',
               }}
             >
@@ -1162,8 +1164,8 @@ function AddSpotsPanel({
           disabled={adding}
           className="flex-1 rounded-xl py-2.5 text-xs font-bold focus:outline-none"
           style={{
-            border: 'none', backgroundColor: adding ? '#DDD4C0' : NEU.forest,
-            color: adding ? '#9A8A78' : NEU.gold,
+            border: 'none', backgroundColor: adding ? 'var(--gv-border)' : NEU.forest,
+            color: adding ? 'var(--gv-muted)' : NEU.gold,
             fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding ? 'default' : 'pointer',
           }}
         >
@@ -1239,14 +1241,14 @@ function AdvisorTicketsModal({
     <ModalOverlay onClose={() => { if (!adding) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 400, maxWidth: 'calc(100vw - 32px)' }}
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 400, maxWidth: 'calc(100vw - 32px)' }}
       >
         <div className="flex items-center justify-between gap-3">
-          <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Buy Advisor Tickets</p>
+          <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Buy Advisor Tickets</p>
           <button
             onClick={() => { if (!adding) onClose(); }}
             className="flex-shrink-0 focus:outline-none"
-            style={{ color: '#9A8A78', border: 'none', background: 'none', cursor: adding ? 'default' : 'pointer' }}
+            style={{ color: 'var(--gv-muted)', border: 'none', background: 'none', cursor: adding ? 'default' : 'pointer' }}
           >
             <X size={18} />
           </button>
@@ -1266,12 +1268,12 @@ function AdvisorTicketsModal({
           </div>
         </div>
 
-        <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: '#9A8A78', lineHeight: 1.5, margin: 0 }}>
+        <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'var(--gv-muted)', lineHeight: 1.5, margin: 0 }}>
           Tickets stay with your delegation once purchased, pooled the same way as delegate spots.
         </p>
 
         <div>
-          <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: '#9A8A78', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
+          <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: 'var(--gv-muted)', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
             HOW MANY TICKETS
           </label>
           <div className="flex items-center gap-2.5">
@@ -1280,7 +1282,7 @@ function AdvisorTicketsModal({
               onClick={() => setCount(c => Math.max(1, c - 1))}
               disabled={count <= 1}
               className="flex items-center justify-center rounded-full focus:outline-none"
-              style={{ width: 32, height: 32, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: count <= 1 ? '#DDD4C0' : '#1B3828', cursor: count <= 1 ? 'default' : 'pointer' }}
+              style={{ width: 32, height: 32, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: count <= 1 ? 'var(--gv-border)' : 'var(--gv-main)', cursor: count <= 1 ? 'default' : 'pointer' }}
             >
               <Minus size={14} />
             </button>
@@ -1296,7 +1298,7 @@ function AdvisorTicketsModal({
               type="button"
               onClick={() => setCount(c => c + 1)}
               className="flex items-center justify-center rounded-full focus:outline-none"
-              style={{ width: 32, height: 32, border: '1px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1B3828', cursor: 'pointer' }}
+              style={{ width: 32, height: 32, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-main)', cursor: 'pointer' }}
             >
               <Plus size={14} />
             </button>
@@ -1315,7 +1317,7 @@ function AdvisorTicketsModal({
             onClick={() => { if (!adding) onClose(); }}
             disabled={adding}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding ? 'default' : 'pointer' }}
+            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding ? 'default' : 'pointer' }}
           >
             CANCEL
           </button>
@@ -1324,8 +1326,8 @@ function AdvisorTicketsModal({
             disabled={adding}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
             style={{
-              backgroundColor: adding ? '#DDD4C0' : '#1B3828',
-              color: adding ? '#9A8A78' : '#EED98A',
+              backgroundColor: adding ? 'var(--gv-border)' : 'var(--gv-main)',
+              color: adding ? 'var(--gv-muted)' : 'var(--gv-on-main)',
               fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding ? 'default' : 'pointer',
             }}
           >
@@ -1426,14 +1428,14 @@ function ProofUploadModal({
     <ModalOverlay onClose={() => { if (!submitting) onClose(); }}>
       <div
         className="rounded-2xl p-6 flex flex-col gap-4"
-        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 420, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
+        style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 420, maxWidth: 'calc(100vw - 32px)', maxHeight: '85vh', overflowY: 'auto' }}
       >
         <div className="flex items-center justify-between gap-3">
-          <p className="font-black text-lg" style={{ color: '#1C1410', fontFamily: OUTFIT }}>Upload Payment Proof</p>
+          <p className="font-black text-lg" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>Upload Payment Proof</p>
           <button
             onClick={() => { if (!submitting) onClose(); }}
             className="flex-shrink-0 focus:outline-none"
-            style={{ color: '#9A8A78', border: 'none', background: 'none', cursor: submitting ? 'default' : 'pointer' }}
+            style={{ color: 'var(--gv-muted)', border: 'none', background: 'none', cursor: submitting ? 'default' : 'pointer' }}
           >
             <X size={18} />
           </button>
@@ -1453,7 +1455,7 @@ function ProofUploadModal({
         />
 
         {previewUrl ? (
-          <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid #DDD4C0' }}>
+          <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid var(--gv-border)' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
@@ -1465,7 +1467,7 @@ function ProofUploadModal({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="absolute bottom-2 right-2 rounded-lg px-3 py-1.5 text-xs font-bold focus:outline-none"
-              style={{ backgroundColor: 'rgba(28,20,16,0.72)', color: '#FAF8F3', fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-on-bg) 72%, transparent)', color: 'var(--gv-surface)', fontFamily: OUTFIT, border: 'none', cursor: 'pointer' }}
             >
               CHANGE
             </button>
@@ -1475,11 +1477,11 @@ function ProofUploadModal({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="rounded-xl py-8 flex flex-col items-center gap-2 focus:outline-none"
-            style={{ border: '1.5px dashed #DDD4C0', backgroundColor: 'transparent', cursor: 'pointer' }}
+            style={{ border: '1.5px dashed var(--gv-border)', backgroundColor: 'transparent', cursor: 'pointer' }}
           >
-            <ImageUp size={22} style={{ color: '#9A8A78' }} />
+            <ImageUp size={22} style={{ color: 'var(--gv-muted)' }} />
             <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: '#6E5F4E' }}>Choose an image</span>
-            <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: '#9A8A78' }}>JPG or PNG, up to 10MB</span>
+            <span style={{ fontFamily: OUTFIT, fontSize: 10.5, color: 'var(--gv-muted)' }}>JPG or PNG, up to 10MB</span>
           </button>
         )}
 
@@ -1490,7 +1492,7 @@ function ProofUploadModal({
             onClick={() => { if (!submitting) onClose(); }}
             disabled={submitting}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
-            style={{ border: '1.5px solid #DDD4C0', color: '#1C1410', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting ? 'default' : 'pointer' }}
+            style={{ border: '1.5px solid var(--gv-border)', color: 'var(--gv-on-surface)', backgroundColor: 'transparent', fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting ? 'default' : 'pointer' }}
           >
             CANCEL
           </button>
@@ -1499,8 +1501,8 @@ function ProofUploadModal({
             disabled={submitting || !file}
             className="flex-1 rounded-xl py-2.5 font-bold text-sm focus:outline-none transition-colors"
             style={{
-              backgroundColor: submitting || !file ? '#DDD4C0' : '#1B3828',
-              color: submitting || !file ? '#9A8A78' : '#EED98A',
+              backgroundColor: submitting || !file ? 'var(--gv-border)' : 'var(--gv-main)',
+              color: submitting || !file ? 'var(--gv-muted)' : 'var(--gv-on-main)',
               fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: submitting || !file ? 'default' : 'pointer',
             }}
           >
@@ -1592,7 +1594,7 @@ function PaymentsPanel({
             </button>
 
             {expanded && (
-              <div style={{ padding: '0 18px 16px 18px', borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+              <div style={{ padding: '0 18px 16px 18px', borderTop: '1px solid color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
                 <div className="pt-3 flex flex-col gap-2">
                   {items.map(item => {
                     const inv = Array.isArray(item.invoice) ? item.invoice[0] : item.invoice;
@@ -1888,8 +1890,8 @@ function PayInvoiceAndActions({
             onClick={() => setLeftTab('invoices')}
             className="rounded-full px-4 py-1.5 text-xs font-bold focus:outline-none transition-colors"
             style={{
-              border: leftTab === 'invoices' ? `1.5px solid ${NEU.forest}` : '1.5px solid #DDD4C0',
-              backgroundColor: leftTab === 'invoices' ? 'rgba(27,56,40,0.06)' : 'transparent',
+              border: leftTab === 'invoices' ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
+              backgroundColor: leftTab === 'invoices' ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
               color: leftTab === 'invoices' ? NEU.forest : NEU.muted,
               fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
             }}
@@ -1901,8 +1903,8 @@ function PayInvoiceAndActions({
             onClick={() => setLeftTab('payments')}
             className="rounded-full px-4 py-1.5 text-xs font-bold focus:outline-none transition-colors"
             style={{
-              border: leftTab === 'payments' ? `1.5px solid ${NEU.forest}` : '1.5px solid #DDD4C0',
-              backgroundColor: leftTab === 'payments' ? 'rgba(27,56,40,0.06)' : 'transparent',
+              border: leftTab === 'payments' ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
+              backgroundColor: leftTab === 'payments' ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
               color: leftTab === 'payments' ? NEU.forest : NEU.muted,
               fontFamily: OUTFIT, letterSpacing: '0.04em', cursor: 'pointer',
             }}
@@ -1965,7 +1967,7 @@ function PayInvoiceAndActions({
             </div>
 
             {invoiceOpen && (
-              <div style={{ padding: '0 20px 20px 20px', borderTop: '1px solid rgba(27,56,40,0.08)' }}>
+              <div style={{ padding: '0 20px 20px 20px', borderTop: '1px solid color-mix(in srgb, var(--gv-main) 8%, transparent)' }}>
                 {isCovered ? (
                   <div className="pt-4">
                     <div className="flex items-center justify-between pb-4">
@@ -1993,7 +1995,7 @@ function PayInvoiceAndActions({
                       <span style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.green, fontWeight: 600 }}>−{centsToFee(voucherDiscountCents, currency)}</span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between pt-1.5 mt-0.5" style={{ borderTop: '1px dashed rgba(27,56,40,0.16)' }}>
+                  <div className="flex items-center justify-between pt-1.5 mt-0.5" style={{ borderTop: '1px dashed color-mix(in srgb, var(--gv-main) 16%, transparent)' }}>
                     <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>Total</span>
                     <span style={{ fontFamily: OUTFIT, fontSize: 13, color: NEU.ink, fontWeight: 800 }}>{centsToFee(netCents, currency)}</span>
                   </div>
@@ -2043,8 +2045,8 @@ function PayInvoiceAndActions({
                           disabled={voucherApplying || !voucherCode.trim()}
                           className="rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none"
                           style={{
-                            border: 'none', backgroundColor: voucherApplying || !voucherCode.trim() ? '#DDD4C0' : NEU.forest,
-                            color: voucherApplying || !voucherCode.trim() ? '#9A8A78' : NEU.gold,
+                            border: 'none', backgroundColor: voucherApplying || !voucherCode.trim() ? 'var(--gv-border)' : NEU.forest,
+                            color: voucherApplying || !voucherCode.trim() ? 'var(--gv-muted)' : NEU.gold,
                             fontFamily: OUTFIT, whiteSpace: 'nowrap', cursor: voucherApplying || !voucherCode.trim() ? 'default' : 'pointer',
                           }}
                         >
@@ -2104,8 +2106,8 @@ function PayInvoiceAndActions({
                       disabled={paying}
                       className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
                       style={{
-                        backgroundColor: paying ? '#DDD4C0' : NEU.forest,
-                        color: paying ? '#9A8A78' : NEU.gold,
+                        backgroundColor: paying ? 'var(--gv-border)' : NEU.forest,
+                        color: paying ? 'var(--gv-muted)' : NEU.gold,
                         fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: paying ? 'default' : 'pointer',
                       }}
                     >
@@ -2194,8 +2196,8 @@ function PayInvoiceAndActions({
                   disabled={selectedPaying}
                   className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
                   style={{
-                    backgroundColor: selectedPaying ? '#DDD4C0' : NEU.forest,
-                    color: selectedPaying ? '#9A8A78' : NEU.gold,
+                    backgroundColor: selectedPaying ? 'var(--gv-border)' : NEU.forest,
+                    color: selectedPaying ? 'var(--gv-muted)' : NEU.gold,
                     fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none', cursor: selectedPaying ? 'default' : 'pointer',
                   }}
                 >
@@ -2306,21 +2308,21 @@ function PayInvoiceAndActions({
 
       {stubMessage && (
         <ModalOverlay onClose={() => setStubMessage(null)}>
-          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
+          <div className="rounded-2xl p-6 flex flex-col gap-4" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', width: 380, maxWidth: 'calc(100vw - 32px)' }}>
             <div
               className="flex items-center justify-center flex-shrink-0"
               style={{ width: 44, height: 44, borderRadius: '9999px', backgroundColor: 'rgba(184,132,74,0.14)', border: '1px solid rgba(184,132,74,0.3)' }}
             >
               <CreditCard size={19} style={{ color: '#B8844A' }} />
             </div>
-            <p className="text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+            <p className="text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT, lineHeight: 1.6 }}>
               {stubMessage}
             </p>
             {conference.contact_email && (
               <a
                 href={`mailto:${conference.contact_email}`}
                 className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold focus:outline-none"
-                style={{ border: '1px solid #DDD4C0', color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.04)', fontFamily: OUTFIT, textDecoration: 'none' }}
+                style={{ border: '1px solid var(--gv-border)', color: 'var(--gv-main)', backgroundColor: 'color-mix(in srgb, var(--gv-main) 4%, transparent)', fontFamily: OUTFIT, textDecoration: 'none' }}
               >
                 <Mail size={14} />
                 {conference.contact_email}
@@ -2329,7 +2331,7 @@ function PayInvoiceAndActions({
             <button
               onClick={() => setStubMessage(null)}
               className="rounded-xl py-2.5 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT }}
             >
               GOT IT
             </button>
