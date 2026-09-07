@@ -586,6 +586,10 @@ export default function SettingsPage() {
   // leaves you after the last step.
   const [openStep, setOpenStep] = useState<number>(1);
   const [linkCopied, setLinkCopied] = useState(false);
+  // Conference tab: a separate "one open at a time" cursor, independent of
+  // the applications tab's openStep, so the two folds cannot fight.
+  const [openConfSection, setOpenConfSection] = useState<number>(1);
+  const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -605,6 +609,18 @@ export default function SettingsPage() {
   const [logoError, setLogoError] = useState('');
   // Logo picked but not yet uploaded, the drag-to-fit crop modal is open.
   const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
+
+  // Public-page visibility switches (conferences.show_committee_counts,
+  // show_taken_countries, show_committees). Not on the Conference type from
+  // useManage() — CONFERENCE_COLUMNS in the manage layout doesn't select
+  // them, so they're fetched directly by this page. All three default true.
+  const [showCommitteeCounts, setShowCommitteeCounts] = useState(true);
+  const [showTakenCountries, setShowTakenCountries] = useState(true);
+  const [showCommittees, setShowCommittees] = useState(true);
+  const [visibilityStatus, setVisibilityStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [visibilitySavingKey, setVisibilitySavingKey] = useState<string | null>(null);
+  const [visibilityError, setVisibilityError] = useState('');
+  const visibilitySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Conference details (identity + logistics, mirrors the creation form)
   const [fullName, setFullName] = useState('');
@@ -1117,6 +1133,29 @@ export default function SettingsPage() {
     setIntentKeys(hydratedIntent);
     intentBaseline.current = snap({ intentKeys: hydratedIntent });
   }, [conference?.id, loadRoleConfigs, loadRolesWithApplications, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
+
+  // The three public-page visibility switches aren't part of the Conference
+  // type (see the state declarations above), so they get their own fetch
+  // rather than riding the hydration effect above.
+  useEffect(() => {
+    if (!conference?.id) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from('conferences')
+        .select('show_committee_counts, show_taken_countries, show_committees')
+        .eq('id', conference.id)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      const row = data as { show_committee_counts: boolean | null; show_taken_countries: boolean | null; show_committees: boolean | null };
+      setShowCommitteeCounts(row.show_committee_counts ?? true);
+      setShowTakenCountries(row.show_taken_countries ?? true);
+      setShowCommittees(row.show_committees ?? true);
+    })();
+    return () => { cancelled = true; };
+  }, [conference?.id]);
 
   // Partner typeahead: debounced authed search over public conferences,
   // excluding this conference and anything already linked.
@@ -2142,6 +2181,65 @@ export default function SettingsPage() {
       },
       () => setRoleConfigError('Could not copy the link. Your browser blocked clipboard access.'),
     );
+  }
+
+  function handleCopyConferenceLink() {
+    if (!conference) return;
+    const url = `${window.location.origin}/conferences/${conference.slug}`;
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setConfLinkCopied(true);
+        window.setTimeout(() => setConfLinkCopied(false), 2000);
+      },
+      () => {},
+    );
+  }
+
+  // Same verified-write pattern as saveSwapMode: an error OR zero rows
+  // updated is a failure, never a silent false success. These three take
+  // effect immediately and are not part of the theme draft/publish flow.
+  async function saveVisibility(
+    column: 'show_committee_counts' | 'show_taken_countries' | 'show_committees',
+    value: boolean,
+    setter: (v: boolean) => void,
+  ) {
+    if (!conference) return;
+    if (visibilitySavedTimerRef.current) {
+      clearTimeout(visibilitySavedTimerRef.current);
+      visibilitySavedTimerRef.current = null;
+    }
+    setVisibilitySavingKey(column);
+    setVisibilityStatus('saving');
+    setVisibilityError('');
+
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setVisibilitySavingKey(null);
+      setVisibilityStatus('idle');
+      setVisibilityError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('conferences')
+      .update({ [column]: value })
+      .eq('id', conference.id)
+      .select('id');
+
+    if (error || !data || data.length !== 1) {
+      setVisibilitySavingKey(null);
+      setVisibilityStatus('idle');
+      setVisibilityError(saveFailMessage(error));
+      return;
+    }
+
+    setter(value);
+    setVisibilitySavingKey(null);
+    setVisibilityStatus('saved');
+    visibilitySavedTimerRef.current = setTimeout(() => {
+      setVisibilityStatus('idle');
+      visibilitySavedTimerRef.current = null;
+    }, 2000);
   }
 
   /** Patch local state at once so typing stays responsive, then debounce the
@@ -3402,19 +3500,163 @@ export default function SettingsPage() {
       {/* ── VISUAL TAB ── */}
       {activeTab === 'conference' && (
         <div>
-          <CustomizationCard
-            conferenceId={conference.id}
-            conferenceSlug={conference.slug}
-            initialDraft={conference.theme_draft ?? {}}
-            initialPublished={conference.theme ?? {}}
-            cardStyle={cardStyle}
-          />
+          {/* ── Persistent header bar. Never collapses: a preview link and a
+              copy-link button, the same visual language as the applications
+              tab's role header bar. ── */}
+          <div className="flex items-center gap-3 flex-wrap mb-5">
+            <div className="flex items-center gap-3 ml-auto">
+              <a
+                href={`/conferences/${conference.slug}?preview=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
+                style={{
+                  padding: '7px 12px',
+                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                  letterSpacing: '0.06em',
+                  color: '#1B3828', backgroundColor: 'transparent',
+                  border: '1.5px solid #DDD4C0', cursor: 'pointer',
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                <Eye size={13} strokeWidth={2.4} />
+                PREVIEW
+              </a>
+              <button
+                type="button"
+                onClick={handleCopyConferenceLink}
+                className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
+                style={{
+                  padding: '7px 12px',
+                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                  letterSpacing: '0.06em',
+                  color: '#1B3828', backgroundColor: 'transparent',
+                  border: '1.5px solid #DDD4C0', cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {confLinkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
+                {confLinkCopied ? 'COPIED' : 'COPY LINK'}
+              </button>
+            </div>
+          </div>
+
+          {/* Section 1: Colours. CustomizationCard paints its own card chrome
+              (it receives cardStyle as a prop), so it renders flat inside this
+              section's body rather than as a second nested card. */}
+          <div style={cardStyle}>
+            <StepHeader
+              n={1} label="Colours" sub="Your palette across the whole conference."
+              complete={true} open={openConfSection === 1}
+              onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
+            />
+            {openConfSection === 1 && (
+              <div className="mt-5">
+                <CustomizationCard
+                  conferenceId={conference.id}
+                  conferenceSlug={conference.slug}
+                  initialDraft={conference.theme_draft ?? {}}
+                  initialPublished={conference.theme ?? {}}
+                  cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: What people can see. Three switches on columns that
+              already exist and already default to true; each write takes
+              effect immediately and is not part of the theme draft/publish
+              flow. */}
+          <div style={cardStyle}>
+            <StepHeader
+              n={2} label="What people can see" sub="Choose what a visitor sees on your public page."
+              complete={true} open={openConfSection === 2} status={visibilityStatus}
+              onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
+            />
+            {openConfSection === 2 && (
+              <div className="mt-5 flex flex-col gap-3">
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show member counts</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>How many delegates are in each committee.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_committee_counts' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showCommitteeCounts}
+                      onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show taken countries</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Which country slots are already allocated.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_taken_countries' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showTakenCountries}
+                      onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show the committee list</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Turn this off if your committees are not announced yet.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_committees' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showCommittees}
+                      onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                {visibilityError && (
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visibilityError}</p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* ── Marketing first. The banner and the logo are the two things a
               visitor actually sees, and they were buried under six fields of
               logistics nobody opens twice. ── */}
           {/* Banner card */}
           <div style={cardStyle}>
+            <StepHeader
+              n={3} label="Conference banner" sub="The wide image at the top of your page."
+              complete={!!conference.banner_url} open={openConfSection === 3}
+              onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
+            />
+            {openConfSection === 3 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
             <div
@@ -3499,10 +3741,19 @@ export default function SettingsPage() {
             {bannerError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{bannerError}</p>
             )}
+            </div>
+            )}
           </div>
 
           {/* Logo card */}
           <div style={cardStyle}>
+            <StepHeader
+              n={4} label="Conference logo" sub="The round mark beside your conference name."
+              complete={!!conference.logo_url} open={openConfSection === 4}
+              onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
+            />
+            {openConfSection === 4 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Logo</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
             <div className="flex items-center gap-5">
@@ -3553,10 +3804,20 @@ export default function SettingsPage() {
             {logoError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{logoError}</p>
             )}
+            </div>
+            )}
           </div>
 
           {/* Conference Details card */}
           <div style={cardStyle}>
+            <StepHeader
+              n={5} label="Conference details" sub="Name, dates, location and description."
+              complete={true} open={openConfSection === 5}
+              status={detailsSaving ? 'saving' : detailsSaved ? 'saved' : 'idle'}
+              onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
+            />
+            {openConfSection === 5 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Details</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
 
@@ -3785,6 +4046,8 @@ export default function SettingsPage() {
             {detailsError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{detailsError}</p>
             )}
+            </div>
+            )}
           </div>
 
           {/* ── What the selected role ranks. Only roles that can hold a
@@ -3793,6 +4056,13 @@ export default function SettingsPage() {
               version of it. ── */}
           {showPrefCard && (
             <div style={cardStyle}>
+              <StepHeader
+                n={6} label="Delegate or chair preferences" sub="What applicants get to rank."
+                complete={true} open={openConfSection === 6}
+                onClick={() => setOpenConfSection(openConfSection === 6 ? 0 : 6)}
+              />
+              {openConfSection === 6 && (
+              <div className="mt-5">
               <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                 <Emoji3D name="Globe showing europe-africa" size={20} fallback={Globe} fallbackColor="#1B3828" />
                 {selectedRole === 'chair' ? 'Chair preferences' : 'Delegate preferences'}
@@ -3853,11 +4123,20 @@ export default function SettingsPage() {
               {prefModeError && (
                 <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
               )}
+              </div>
+              )}
             </div>
           )}
 
           {/* ── Swaps ── */}
           <div style={cardStyle}>
+            <StepHeader
+              n={7} label="Delegation allocation swaps" sub="Whether delegates may trade allocations."
+              complete={true} open={openConfSection === 7}
+              onClick={() => setOpenConfSection(openConfSection === 7 ? 0 : 7)}
+            />
+            {openConfSection === 7 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
               Delegation allocation swaps
@@ -3888,10 +4167,20 @@ export default function SettingsPage() {
             {swapModeError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
             )}
+            </div>
+            )}
           </div>
 
           {/* ── Age range ── */}
           <div style={cardStyle}>
+            <StepHeader
+              n={8} label="Age of participants" sub="The age range this conference is open to."
+              complete={true} open={openConfSection === 8}
+              status={minAgeSaving ? 'saving' : minAgeSaved ? 'saved' : 'idle'}
+              onClick={() => setOpenConfSection(openConfSection === 8 ? 0 : 8)}
+            />
+            {openConfSection === 8 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               <Emoji3D name="Birthday cake" size={20} />
               Age of participants
@@ -3953,6 +4242,8 @@ export default function SettingsPage() {
                     ? `Applicants must be at least ${view.min_age} years old at the start of your conference.`
                     : `Applicants must be no older than ${view.max_age} at the start of your conference.`}
               </p>
+            )}
+            </div>
             )}
           </div>
 
