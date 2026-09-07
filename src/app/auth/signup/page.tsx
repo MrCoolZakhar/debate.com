@@ -36,7 +36,9 @@ const TODAY_ISO = new Date().toISOString().slice(0, 10);
  * Date-of-birth field built on the shared friendly DatePicker.
  * `max` = today (nobody is born in the future) and the calendar seeds around
  * 2005 so the typical delegate isn't stranded on the current month; the year
- * <input> inside the picker lets them jump decades in one keystroke.
+ * dropdown inside the picker jumps decades in one tap. It used to be a number
+ * input that reverted every keystroke, which left phones with no way at all to
+ * set a birth year, so this field blocked mobile sign-up outright.
  */
 function DobField({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   return (
