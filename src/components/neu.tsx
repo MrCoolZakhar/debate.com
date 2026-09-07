@@ -21,40 +21,48 @@ import { Check, ChevronRight } from 'lucide-react';
 export const OUTFIT = "'Outfit', sans-serif";
 export const EASE = 'cubic-bezier(0.22,1,0.36,1)';
 
+// These are CSS variables, not literals, so a themed conference can override
+// every one of them on a wrapper element (see themeCssVars() in
+// src/lib/theme.ts) and the whole neumorphic set repaints at once. :root in
+// globals.css holds the Gavelling values, so an unthemed page reads exactly
+// as it always has. `amber` is deliberately excluded below: it is a semantic
+// warning colour, not brand, and must read the same on every conference.
 export const NEU = {
-  base: '#EDE7D8',      // page background
-  surface: '#F0EBDD',   // card surface, a hair lighter, same family
-  ink: '#1C1410',
-  forest: '#1B3828',
-  gold: '#EED98A',
-  deepGold: '#B6871F',
+  base: 'var(--gv-bg)',      // page background
+  surface: 'var(--gv-surface)',   // card surface. Was its own literal
+  // (#F0EBDD) distinct from #FAF8F3 elsewhere in the app; unified onto the
+  // one surface variable, since both were the same idea spelled twice.
+  ink: 'var(--gv-on-surface)',
+  forest: 'var(--gv-main)',
+  gold: 'var(--gv-text-light)',
+  deepGold: 'var(--gv-accent)',
   amber: '#B8844A',
-  green: '#3D7A52',
-  muted: '#9A8A78',
+  green: 'var(--gv-main-light)',
+  muted: 'var(--gv-muted)',
   // Accessible secondary ink. `muted` is a 3.15:1 wash on `surface` and must
   // NEVER carry body copy — it is for decorative rules, disabled glyphs and
   // placeholder marks only. `inkSoft` is its readable sibling (6.8:1 on
   // `surface`): use it for emails, meta values, captions, any real sentence
   // that is not primary.
-  inkSoft: '#5B4F42',
+  inkSoft: 'color-mix(in srgb, var(--gv-on-surface) 72%, var(--gv-surface))',
   // Extruded pair, light top-left, forest-tinted dark bottom-right.
-  out: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px rgba(27,56,40,0.16)',
-  outHover: '-8px -8px 18px rgba(255,255,255,0.92), 10px 10px 26px rgba(27,56,40,0.21)',
+  out: '-6px -6px 14px rgba(255,255,255,0.85), 8px 8px 20px color-mix(in srgb, var(--gv-main) 16%, transparent)',
+  outHover: '-8px -8px 18px rgba(255,255,255,0.92), 10px 10px 26px color-mix(in srgb, var(--gv-main) 21%, transparent)',
   // Tighter, crisper pair for small chips/discs/buttons.
-  outSm: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px rgba(27,56,40,0.15)',
-  outSmHover: '-4px -4px 9px rgba(255,255,255,0.95), 5px 5px 12px rgba(27,56,40,0.2)',
+  outSm: '-3px -3px 7px rgba(255,255,255,0.9), 4px 4px 9px color-mix(in srgb, var(--gv-main) 15%, transparent)',
+  outSmHover: '-4px -4px 9px rgba(255,255,255,0.95), 5px 5px 12px color-mix(in srgb, var(--gv-main) 20%, transparent)',
   // Pressed-in pair, wells, tracks, done rows.
-  in: 'inset 4px 4px 10px rgba(27,56,40,0.14), inset -4px -4px 10px rgba(255,255,255,0.8)',
-  inSm: 'inset 2px 2px 6px rgba(27,56,40,0.13), inset -2px -2px 6px rgba(255,255,255,0.8)',
+  in: 'inset 4px 4px 10px color-mix(in srgb, var(--gv-main) 14%, transparent), inset -4px -4px 10px rgba(255,255,255,0.8)',
+  inSm: 'inset 2px 2px 6px color-mix(in srgb, var(--gv-main) 13%, transparent), inset -2px -2px 6px rgba(255,255,255,0.8)',
 } as const;
 
 /** Saturated two-stop gradients, the only place "vibrant" is allowed. */
 export const NEU_GRADIENTS = {
-  forest: ['#1B3828', '#3D7A52'] as [string, string],
-  gold: ['#EED98A', '#B6871F'] as [string, string],
+  forest: ['var(--gv-main)', 'var(--gv-main-light)'] as [string, string],
+  gold: ['var(--gv-text-light)', 'var(--gv-accent)'] as [string, string],
   amber: ['#B8844A', '#8A5A2E'] as [string, string],
-  sage: ['#3D7A52', '#7FA98C'] as [string, string],
-  green: ['#2F6644', '#3D7A52'] as [string, string],
+  sage: ['var(--gv-main-light)', 'color-mix(in srgb, var(--gv-main-light) 55%, white)'] as [string, string],
+  green: ['color-mix(in srgb, var(--gv-main) 80%, var(--gv-main-light))', 'var(--gv-main-light)'] as [string, string],
 };
 
 export type NeuGradient = [string, string];
@@ -67,13 +75,33 @@ type LucideIcon = React.ComponentType<{
 
 const grad = (g: NeuGradient) => `linear-gradient(135deg, ${g[0]}, ${g[1]})`;
 
-/** Darker stop of a gradient, readable glyph colour on a soft emoji seat. */
+// forest/gold/sage/green are CSS variables now (see NEU above), so their
+// real colour is unknowable at this point, in JS — the literal hex luminance
+// compare below can no longer run on them. This records which stop darkStop
+// already picked for each, so an unthemed page's icon fallback colour is
+// unchanged: forest/sage/green's darker stop was always their first ([0]);
+// gold's was its second ([1]), the deep gold, not the pale one.
+const KNOWN_DARKER_STOP: Record<string, string> = {
+  [NEU_GRADIENTS.forest.join('|')]: NEU_GRADIENTS.forest[0],
+  [NEU_GRADIENTS.gold.join('|')]: NEU_GRADIENTS.gold[1],
+  [NEU_GRADIENTS.sage.join('|')]: NEU_GRADIENTS.sage[0],
+  [NEU_GRADIENTS.green.join('|')]: NEU_GRADIENTS.green[0],
+};
+
+/** Darker stop of a gradient, readable glyph colour on a soft emoji seat.
+ *  Real hex pairs (amber, or any one-off custom gradient) still get a
+ *  genuine luminance comparison; the four named gradients above no longer
+ *  carry real hex and use the recorded answer instead. */
 const darkStop = (g: NeuGradient): string => {
-  const lum = (hex: string) => {
-    const n = parseInt(hex.slice(1), 16);
-    return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
-  };
-  return lum(g[0]) <= lum(g[1]) ? g[0] : g[1];
+  const isHex = (s: string) => /^#[0-9a-fA-F]{6}$/.test(s);
+  if (isHex(g[0]) && isHex(g[1])) {
+    const lum = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+    };
+    return lum(g[0]) <= lum(g[1]) ? g[0] : g[1];
+  }
+  return KNOWN_DARKER_STOP[g.join('|')] ?? g[0];
 };
 
 // ── Emoji3D, Microsoft Fluent 3D emoji from jsDelivr (same CDN family as ──
@@ -244,11 +272,11 @@ export function NeuIconDisc({
         height: size,
         borderRadius: Math.max(12, Math.round(size * 0.34)),
         background: soft
-          ? `linear-gradient(135deg, ${gradient[0]}40, ${gradient[1]}33), ${NEU.surface}`
+          ? `linear-gradient(135deg, color-mix(in srgb, ${gradient[0]} 25%, transparent), color-mix(in srgb, ${gradient[1]} 20%, transparent)), ${NEU.surface}`
           : grad(gradient),
         boxShadow: soft
-          ? `0 3px 8px ${gradient[0]}2E, ${NEU.outSm}`
-          : `0 4px 10px ${gradient[0]}44, ${NEU.outSm}`,
+          ? `0 3px 8px color-mix(in srgb, ${gradient[0]} 18%, transparent), ${NEU.outSm}`
+          : `0 4px 10px color-mix(in srgb, ${gradient[0]} 27%, transparent), ${NEU.outSm}`,
         ...style,
       }}
     >
@@ -427,7 +455,7 @@ export function NeuProgress({
           width: pct === 0 ? 0 : `max(${(pct * 100).toFixed(1)}%, ${height}px)`,
           borderRadius: 999,
           background: grad(gradient),
-          boxShadow: `0 2px 6px ${gradient[0]}55`,
+          boxShadow: `0 2px 6px color-mix(in srgb, ${gradient[0]} 33%, transparent)`,
           transition: `width 600ms ${EASE}`,
         }}
       />
@@ -525,7 +553,7 @@ export function NeuPill({
     background: active ? grad(gradient) : undefined,
     color: active ? '#FFFFFF' : hovered && onClick ? NEU.forest : NEU.ink,
     boxShadow: active
-      ? `0 3px 8px ${gradient[0]}55, ${NEU.outSm}`
+      ? `0 3px 8px color-mix(in srgb, ${gradient[0]} 33%, transparent), ${NEU.outSm}`
       : hovered && onClick ? NEU.outSmHover : NEU.outSm,
     transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}`,
     ...style,
@@ -579,7 +607,7 @@ export function NeuButton({
 }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
-  const color = textColor ?? (gradient === NEU_GRADIENTS.gold ? NEU.forest : NEU.gold);
+  const color = textColor ?? 'var(--gv-on-main)';
   return (
     <button
       onClick={onClick}
@@ -602,7 +630,7 @@ export function NeuButton({
         fontWeight: 800,
         letterSpacing: '0.05em',
         cursor: disabled ? 'default' : 'pointer',
-        boxShadow: disabled ? 'none' : hovered ? `0 6px 16px ${gradient[0]}66, ${NEU.outSmHover}` : `0 4px 10px ${gradient[0]}4D, ${NEU.outSm}`,
+        boxShadow: disabled ? 'none' : hovered ? `0 6px 16px color-mix(in srgb, ${gradient[0]} 40%, transparent), ${NEU.outSmHover}` : `0 4px 10px color-mix(in srgb, ${gradient[0]} 30%, transparent), ${NEU.outSm}`,
         // Scale-on-press (0.96) for tactile feedback; hover lifts, press depresses.
         transform: disabled ? 'none' : pressed ? 'scale(0.96)' : hovered ? 'translateY(-2px)' : 'translateY(0)',
         transition: `box-shadow 260ms ${EASE}, transform 160ms ${EASE}`,
