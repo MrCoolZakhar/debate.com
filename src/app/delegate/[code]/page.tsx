@@ -343,20 +343,54 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
   );
 }
 
+/* A document's link lives in `content` (there is no link column). The delegate
+   list rendered fileUrl only, so a link pasted by anyone — chair or delegate —
+   was invisible to every delegate in the room. */
+function docLinkHref(content?: string): string | null {
+  const v = (content ?? '').trim();
+  return /^https?:\/\//i.test(v) ? v : null;
+}
+
+function DocLinkRow({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="focus:outline-none"
+      style={{
+        alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6,
+        fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: DG.forest, textDecoration: 'underline',
+      }}
+    >
+      🔗 {label}
+    </a>
+  );
+}
+
 // ── Documents Tab ─────────────────────────────────────────────────────────────
 function DelegateDocumentsTab({ committee, country }: { committee: Committee; country: string }) {
   const t = useT();
   const [title, setTitle] = useState('');
   const [docType, setDocType] = useState<DocumentType>('working-paper');
   const [coSponsors, setCoSponsors] = useState<string[]>([]);
+  /* The delegate form hardcoded content: '' and had no link field at all, so a
+     delegate working in Google Docs had nowhere to put the document. The chair's
+     SubmitForm writes the link into the same `content` column — there is no
+     dedicated link column and we must not add one. */
+  const [link, setLink] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   /* A failed attachment used to be console-only, so the button just snapped
      back to "Attach file" and the delegate had no idea why. */
   const [uploadError, setUploadError] = useState(false);
+  /* Pre-flight rejection (wrong type or too big). Kept apart from uploadError so
+     the delegate is told the file was never sent, not that the network failed. */
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Submission limits were only ever enforced in the chair's DocumentsModal, which
@@ -397,6 +431,44 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
     }
   };
 
+  /* Pre-flight. The bucket rejects non-PDFs and anything over 10 MB, and that
+     rejection only ever reached the delegate as the generic upload-failed line,
+     which reads like a connection problem. Check both here, before the request.
+     The message is composed from the file's own name and size plus a symbolic
+     rule so it stays readable in every locale without a new translation key. */
+  const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+  const FILE_RULE = 'PDF ≤ 10 MB';
+  const acceptFile = async (file: File | null | undefined) => {
+    if (!file) return;
+    const isPdf = file.type
+      ? file.type === 'application/pdf'
+      : file.name.toLowerCase().endsWith('.pdf');
+    // Reset the input on rejection, or re-picking the same file fires no change event.
+    const reject = (msg: string) => {
+      setUploadError(false);
+      setFileError(msg);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    if (!isPdf) {
+      reject(`${file.name} · ${FILE_RULE}`);
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      reject(`${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB · ${FILE_RULE}`);
+      return;
+    }
+    setFileError(null);
+    await uploadFile(file);
+  };
+
+  const clearFile = () => {
+    setFileName(null);
+    setFileUrl(null);
+    setUploadError(false);
+    setFileError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSubmit = async () => {
     if (!title.trim() || sending || uploading || limitReached) return;
     setSending(true);
@@ -405,14 +477,18 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
       docCode: autoDocCode(docType, committee.documents ?? []),
       title: title.trim(),
       sponsors: [country, ...coSponsors],
-      content: '',
+      content: link.trim(),
       status: 'submitted',
       ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
     }, committee.code);
     setTitle('');
     setCoSponsors([]);
+    setLink('');
     setFileName(null);
     setFileUrl(null);
+    setUploadError(false);
+    setFileError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setSubmitted(true);
     setSending(false);
     setTimeout(() => setSubmitted(false), 3000);
@@ -456,27 +532,67 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <SponsorsInput committee={committee} myCountry={country} value={coSponsors} onChange={setCoSponsors} />
         </div>
 
-        {/* File */}
+        {/* Google Docs link — same `content` column the chair's form writes */}
+        <div>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+            {t('documents_google_docs_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>({t('documents_google_docs_optional')})</span>
+          </label>
+          <input type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)}
+            placeholder="https://docs.google.com/..."
+            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+        </div>
+
+        {/* File — a real dropzone, not a text button. The old "+ Attach file"
+            link read as if there were no upload here at all. */}
         <div>
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
-          <div className="flex items-center gap-2">
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-              className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors disabled:opacity-60 gv-lift">
-              {uploading ? '⏳ …' : fileName ? `📎 ${fileName}` : t('delegate_doc_attach_btn')}
-            </button>
-            {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">{t('delegate_doc_remove')}</button>}
-          </div>
+          {fileName || uploading ? (
+            <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-3">
+              <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
+                {uploading
+                  ? <><span className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {fileName}</>
+                  : <>📎 {fileName}</>}
+              </span>
+              {!uploading && (
+                <button onClick={clearFile} aria-label={t('delegate_doc_remove')} title={t('delegate_doc_remove')}
+                  className="text-sm text-[#9A8A78] hover:text-red-500 transition-colors focus:outline-none">✕</button>
+              )}
+            </div>
+          ) : (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={async (e) => { e.preventDefault(); setDragging(false); await acceptFile(e.dataTransfer.files?.[0]); }}
+              className={`w-full border border-dashed rounded-xl px-4 py-5 text-sm text-center cursor-pointer select-none transition-colors focus:outline-none ${
+                dragging
+                  ? 'border-[#1B3828] bg-[#1B3828]/10 text-[#1B3828]'
+                  : 'bg-[#FAF8F3] border-[#DDD4C0] hover:border-[#1B3828] text-[#9A8A78] hover:text-[#6A5A4A]'
+              }`}
+            >
+              <span className="block text-xl mb-1">📎</span>
+              {/* The shared key is prefixed "+ " for a text button in all four
+                  locales; the dropzone has its own glyph, so drop the prefix. */}
+              <span className="font-semibold">{t('documents_upload_pdf').replace(/^\+\s*/, '')}</span>
+              <span className="block text-xs mt-1" style={{ color: '#9A8A78' }}>{FILE_RULE}</span>
+            </div>
+          )}
+          {fileError && (
+            <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
+              ⚠ {fileError}
+            </p>
+          )}
           {uploadError && (
             <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
               {t('delegate_doc_upload_failed')}
             </p>
           )}
-          <input ref={fileInputRef} type="file" accept=".pdf" className="hidden"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              await uploadFile(f);
-            }} />
+          <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" className="hidden"
+            onChange={async (e) => { await acceptFile(e.target.files?.[0]); }} />
         </div>
 
         {limitReached && (
@@ -2258,6 +2374,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     {doc.fileUrl && doc.fileName && (
                       <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
                     )}
+                    {docLinkHref(doc.content) && (
+                      <DocLinkRow href={docLinkHref(doc.content)!} label={t('documents_google_docs_label')} />
+                    )}
                   </div>
                 ))
               )}
@@ -2289,6 +2408,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     {docSponsors(doc.sponsors)}
                     {doc.fileUrl && doc.fileName && (
                       <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                    )}
+                    {docLinkHref(doc.content) && (
+                      <DocLinkRow href={docLinkHref(doc.content)!} label={t('documents_google_docs_label')} />
                     )}
                   </div>
                 ))
