@@ -166,6 +166,10 @@ const MUTED = '#6E6456';      // footer / small variant — 5.4:1 (was #9A8A78, 
 const PAGE_BG = '#F1EDE4';
 const CARD_BG = '#FFFFFF';
 const CHIP_BG = '#FAF8F3';
+/** LogoDisc's disc colour on the web side. Reads as white on ivory and on the
+ *  brand colour alike, which is why the logo sits on it rather than on the
+ *  page. */
+const DISC_BG = '#FDFCF9';
 const HAIRLINE = '#E7E1D3';
 const FOOTER_BG = '#F7F4EC';
 /** Bullet marker. Deep enough to sit on white (the pale brand gold is 1.4:1
@@ -420,6 +424,27 @@ function hasDistinctFullName(conference: EmailRenderConference): boolean {
   return !!f && !!a && a !== f;
 }
 
+/**
+ * A conference logo on a round white disc, the email twin of LogoDisc.
+ *
+ * The logo is NEVER itself the circle. Clipping the upload with a
+ * border-radius crops whatever reaches its edges: a wide crest loses its
+ * flanks and leaves a ragged ring. So the DISC is round, and the artwork is
+ * contained inside it with a margin, exactly as LogoDisc does on the web.
+ * `e-chip` sits on the disc, not the image, so dark mode keeps the backdrop
+ * light instead of tinting the artwork.
+ */
+function logoDisc(url: string, alt: string, disc: number): string {
+  const art = Math.round(disc * 0.85);
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr>`
+    + `<td align="center" valign="middle" width="${disc}" height="${disc}" class="e-chip"`
+    + ` style="width:${disc}px;height:${disc}px;background-color:${DISC_BG};border:1px solid ${HAIRLINE};`
+    + `border-radius:${Math.round(disc / 2)}px;line-height:0;font-size:0;mso-line-height-rule:exactly;">`
+    + `<img src="${escapeHtml(url)}" width="${art}" height="${art}" alt="${escapeHtml(alt)}"`
+    + ` style="display:block;width:${art}px;height:${art}px;object-fit:contain;border:0;margin:0 auto;" />`
+    + `</td></tr></table>`;
+}
+
 function renderIdentityRow(
   conference: EmailRenderConference,
   logoAbs: string | null,
@@ -434,6 +459,7 @@ function renderIdentityRow(
   const border = opts.onAccent ? '' : `border-bottom:1px solid ${HAIRLINE};`;
   const pad = opts.onAccent ? '30px 32px' : '22px 40px';
 
+
   // object-fit:contain on a light chip — a logo is a mark, not a portrait, so
   // it must never be cropped. NEVER point this at a Gavelling wide lockup
   // (/GavellingLogo.png, /Conferences.webp): if a Gavelling fallback is ever
@@ -441,8 +467,7 @@ function renderIdentityRow(
   // See public/README.md.
   const logo = (display: 'block' | 'inline-block') =>
     logoAbs
-      ? `<img src="${escapeHtml(logoAbs)}" width="52" height="52" alt="${escapeHtml(conference.acronym)}" class="e-chip"
-              style="display:${display};width:52px;height:52px;object-fit:contain;border-radius:10px;background-color:${CHIP_BG};" />`
+      ? `<div style="display:${display};">${logoDisc(logoAbs, conference.acronym, 52)}</div>`
       : '';
 
   // Only the on-card variant gets the dark-mode classes. The on-accent variant
@@ -502,8 +527,7 @@ function renderAboveCardIdentity(conference: EmailRenderConference, logoAbs: str
     conference.full_name;
   return `<tr><td align="center" style="padding:0 0 20px 0;">
     ${logoAbs
-      ? `<div style="padding:0 0 11px 0;"><img src="${escapeHtml(logoAbs)}" width="58" height="58" alt="${escapeHtml(acronym)}" class="e-chip"
-             style="display:inline-block;width:58px;height:58px;object-fit:contain;border-radius:29px;background-color:${CHIP_BG};" /></div>`
+      ? `<div style="padding:0 0 11px 0;">${logoDisc(logoAbs, acronym, 64)}</div>`
       : ''}
     <div class="e-accent" style="font-family:${SANS};font-size:15px;line-height:1.3;font-weight:800;letter-spacing:0.12em;color:${INK_SOFT};text-transform:uppercase;">
       ${escapeHtml(acronym)}
