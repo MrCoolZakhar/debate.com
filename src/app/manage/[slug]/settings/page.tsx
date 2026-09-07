@@ -31,7 +31,7 @@ import {
   FINANCIALS_READONLY_KEY, TEAM_KEY, type BundleId, type PermissionMap,
 } from '@/lib/organizerPermissions';
 import { activeFeePhase, type FeePhase } from '@/lib/finance';
-import { currencyPickerGroups } from '@/lib/currencies';
+import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
@@ -203,10 +203,6 @@ const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
 // ── Constants & helpers ────────────────────────────────────────────────────
 
 const ROLES = ROLE_ORDER;
-
-// Pinned USD/EUR/GBP + alphabetical rest, split once for every currency
-// picker in this page, mirrors the creation flow's symbol+code display.
-const CURRENCY_GROUPS = currencyPickerGroups();
 
 // License-safe banner presets shipped in /public/banners (see its README.md).
 const BANNER_PRESETS = [
@@ -3315,23 +3311,13 @@ export default function SettingsPage() {
                           <div>
                             <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Fee</label>
                             <div className="flex gap-2">
-                              <select
-                                defaultValue={config.fee_currency}
-                                onFocus={fgInput}
-                                onBlur={(e) => {
-                                  e.currentTarget.style.borderColor = '#DDD4C0';
-                                  saveRoleConfig(role, { fee_currency: e.target.value });
-                                }}
-                                style={{ ...inputStyle, width: '30%', cursor: 'pointer' }}
-                              >
-                                {CURRENCY_GROUPS.pinned.map(c => (
-                                  <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
-                                ))}
-                                <option disabled>──────────</option>
-                                {CURRENCY_GROUPS.rest.map(c => (
-                                  <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
-                                ))}
-                              </select>
+                              <CurrencyPicker
+                                value={config.fee_currency}
+                                onChange={(code) => saveRoleConfig(role, { fee_currency: code })}
+                                ariaLabel={`${roleLabel(role)} fee currency`}
+                                variant="bordered"
+                                style={{ width: 118, flexShrink: 0 }}
+                              />
                               <input
                                 type="number"
                                 min={0}
@@ -3343,7 +3329,7 @@ export default function SettingsPage() {
                                   e.currentTarget.style.borderColor = '#DDD4C0';
                                   saveRoleConfig(role, { fee_amount: parseFloat(e.target.value) || 0 });
                                 }}
-                                style={{ ...inputStyle, width: '70%' }}
+                                style={{ ...inputStyle, flex: 1, minWidth: 0 }}
                               />
                             </div>
                           </div>

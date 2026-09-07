@@ -14,14 +14,12 @@ import { ShieldAlert } from 'lucide-react';
 import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { currencyPickerGroups } from '@/lib/currencies';
+import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { PillToggle } from '@/app/account/accountUi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc, NeuPill,
 } from '@/components/neu';
 import { inputStyle, fieldLabelStyle } from './shared';
-
-const CURRENCY_GROUPS = currencyPickerGroups();
 
 interface SurchargeRow {
   id: string;
@@ -167,7 +165,7 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
 
             <div>
               <label htmlFor="appfee-amount" style={fieldLabelStyle}>Amount</label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-stretch gap-2">
                 <input
                   id="appfee-amount"
                   type="number"
@@ -182,15 +180,12 @@ export default function ApplicationFeeSection({ conference }: { conference: Conf
                   placeholder="25.00"
                   style={inputStyle}
                 />
-                <select
+                <CurrencyPicker
                   value={currency}
-                  onChange={e => setCurrency(e.target.value)}
-                  style={{ ...inputStyle, width: 96, cursor: 'pointer' }}
-                >
-                  {CURRENCY_GROUPS.pinned.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                  <option disabled>──────</option>
-                  {CURRENCY_GROUPS.rest.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                </select>
+                  onChange={setCurrency}
+                  ariaLabel="Application fee currency"
+                  style={{ width: 118, flexShrink: 0 }}
+                />
               </div>
             </div>
 

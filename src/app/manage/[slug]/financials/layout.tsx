@@ -11,10 +11,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { History, LayoutGrid, Receipt, Settings as SettingsIcon } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
-import { currencySymbol } from '@/lib/finance';
 import {
-  NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuPill, type NeuGradient,
+  NEU, NEU_GRADIENTS, OUTFIT, EASE, type NeuGradient,
 } from '@/components/neu';
+import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { FinancialsCurrencyProvider, useFinancialsCurrency, mutedCaption } from './shared';
 
 // Local mirror of NeuPill's visual treatment, but rendered as a real <Link>
@@ -74,25 +74,20 @@ function FinancialsHeader({ acronym }: { acronym: string }) {
           <h1 style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 26, color: NEU.ink, letterSpacing: '-0.01em' }}>
             Financials
           </h1>
-          {/* Display-currency switcher, conference currency first, then the
-              full CURRENCIES list. Scrollable so 13 codes stay on one clean
-              row without wrapping. */}
-          <div
-            className="flex items-center gap-1.5 overflow-x-auto"
-            style={{ maxWidth: 320, scrollbarWidth: 'none', paddingBottom: 2 }}
-          >
-            {currencyOptions.map(c => (
-              <span key={c} className="flex-shrink-0">
-                <NeuPill
-                  active={displayCurrency === c}
-                  gradient={NEU_GRADIENTS.forest}
-                  onClick={currencyOptions.length > 1 ? () => setDisplayCurrency(c) : undefined}
-                >
-                  {currencySymbol(c)} {c}
-                </NeuPill>
-              </span>
-            ))}
-          </div>
+          {/* Display-currency switcher. Was a horizontally scrolling row of
+              every FX-backed code, which on a phone meant swiping a hidden
+              strip to find one. Now the shared searchable picker, limited to
+              the same `currencyOptions` set, and inert when the conference
+              currency is the only one we hold a rate for. */}
+          <CurrencyPicker
+            value={displayCurrency}
+            onChange={setDisplayCurrency}
+            options={currencyOptions}
+            variant="pill"
+            showName
+            disabled={currencyOptions.length <= 1}
+            ariaLabel="Display currency"
+          />
         </div>
         {converted && (
           <p className="mt-1" style={mutedCaption}>

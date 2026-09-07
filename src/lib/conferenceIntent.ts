@@ -1,9 +1,14 @@
 // ============================================================
 // src/lib/conferenceIntent.ts
 //
-// What the organiser told us they came here to do, asked once at the end of
-// the creation wizard and stored on `conferences.intent` (jsonb, NOT NULL,
-// default '{}').
+// What the organiser told us they came here to do, asked once in the creation
+// wizard and stored on `conferences.intent` (jsonb, NOT NULL, default '{}').
+//
+// It is asked BEFORE the insert now, as a required step, so the answer rides
+// along in the conferences row itself and there is no follow-up UPDATE that can
+// fail. The wizard therefore never produces `skipped: true` any more, but the
+// state stays supported: conferences created before this, and the Settings
+// editor, both still rely on it.
 //
 // WHY THIS EXISTS
 // A secretariat arrives with one job in mind. Some want applications and
@@ -52,7 +57,7 @@ export interface IntentOption {
 export const INTENT_OPTIONS: IntentOption[] = [
   {
     key: 'applications',
-    label: 'Taking delegate applications and doing allocations',
+    label: 'Applications & Allocations',
     sub: 'Collect applications, score them, assign countries.',
     emoji: 'Ballot box with ballot',
     short: 'APPLICATIONS',
@@ -60,7 +65,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
   },
   {
     key: 'payments',
-    label: 'Handling payments',
+    label: 'Payments',
     sub: 'Take delegate fees straight into your own account.',
     emoji: 'Credit card',
     short: 'PAYMENTS',
@@ -68,7 +73,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
   },
   {
     key: 'committees',
-    label: 'Running committees at the conference',
+    label: 'Running Committees',
     sub: 'Live rooms, speakers lists, voting, the scoreboard.',
     emoji: 'Classical building',
     short: 'COMMITTEES',
@@ -76,7 +81,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
   },
   {
     key: 'emails',
-    label: 'Sending mass emails to delegates',
+    label: 'Emails',
     sub: 'One send to everyone, or to a committee, or to the unpaid.',
     emoji: 'Envelope',
     short: 'EMAILS',
@@ -84,7 +89,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
   },
   {
     key: 'chairs',
-    label: 'Recruiting international chairs',
+    label: 'Recruiting Chairs',
     sub: 'Post the roles and let chairs apply from anywhere.',
     emoji: 'Globe showing europe-africa',
     short: 'CHAIRS',
@@ -92,7 +97,7 @@ export const INTENT_OPTIONS: IntentOption[] = [
   },
   {
     key: 'marketing',
-    label: 'Marketing your conference',
+    label: 'Marketing',
     sub: 'Conferences on Gavelling see a 10 to 20% larger delegate count.',
     emoji: 'Megaphone',
     short: 'MARKETING',

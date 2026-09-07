@@ -13,15 +13,13 @@ import type { Conference } from '@/app/manage/[slug]/layout';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { currencyPickerGroups } from '@/lib/currencies';
+import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { formatFee } from '@/lib/finance';
 import { PillToggle } from '@/app/account/accountUi';
 import {
   NEU, NEU_GRADIENTS, OUTFIT, NeuCard, NeuButton, NeuIconDisc,
 } from '@/components/neu';
 import { inputStyle, fieldLabelStyle } from './shared';
-
-const CURRENCY_GROUPS = currencyPickerGroups();
 
 const TARGET_OPTIONS = [
   { value: 'per_delegate', label: 'Every delegate' },
@@ -232,7 +230,7 @@ export default function AddonsSection({ conference }: { conference: Conference }
 
           <div>
             <label htmlFor="addon-amount" style={fieldLabelStyle}>Amount</label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-stretch gap-2">
               <input
                 id="addon-amount"
                 type="number"
@@ -243,15 +241,12 @@ export default function AddonsSection({ conference }: { conference: Conference }
                 placeholder="15.00"
                 style={inputStyle}
               />
-              <select
+              <CurrencyPicker
                 value={currency}
-                onChange={e => setCurrency(e.target.value)}
-                style={{ ...inputStyle, width: 96, cursor: 'pointer' }}
-              >
-                {CURRENCY_GROUPS.pinned.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                <option disabled>──────</option>
-                {CURRENCY_GROUPS.rest.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-              </select>
+                onChange={setCurrency}
+                ariaLabel="Add-on currency"
+                style={{ width: 118, flexShrink: 0 }}
+              />
             </div>
           </div>
 

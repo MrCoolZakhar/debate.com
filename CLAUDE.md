@@ -135,8 +135,8 @@ Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes fr
 
 A secretariat arrives with one job in mind. Some want applications and allocations, some
 only want to run the rooms on the day, some are here because their payment provider is a
-spreadsheet. The last screen of the creation wizard asks which, and the answer shapes what
-we lead them with afterwards.
+spreadsheet. The creation wizard asks which, on the step before the review screen, and the
+answer shapes what we lead them with afterwards.
 
 - **Contract:** `src/lib/conferenceIntent.ts` is the only definition of the six options
   (`applications`, `payments`, `committees`, `emails`, `chairs`, `marketing`), their copy,
@@ -146,9 +146,14 @@ we lead them with afterwards.
   `{keys, other, answered_at, skipped}`. Three states must stay distinguishable: `'{}'` is
   never asked (every conference created before this shipped), `skipped: true` is asked and
   declined, a non-empty `keys` is answered. The follow-up email depends on that distinction.
-- **Asked after the insert, not before.** The wizard creates the conference first and asks
-  on the way out, so a failed or slow intent write cannot cost anyone the conference they
-  just built. Both Continue and Skip always land on the dashboard.
+- **Asked before the insert, and required.** It is step 12 of 13 and the answer rides along
+  in `insertRow` as `intent: intentPayload(keys)`, so there is no post-create UPDATE to fail
+  and nothing exists yet that a failed write could cost anyone. It was briefly the other way
+  round, asked after creation to protect against exactly that; requiring it up front removes
+  the risk instead of mitigating it. Continue is disabled until at least one option is picked
+  and `readyToCreate` enforces it, so the wizard can no longer produce `skipped: true` at all.
+  The Settings editor still can, by clearing every option, which is why the three states below
+  still matter.
 - **Intent reorders, it never removes.** `intentRank` sorts the dashboard's *pending*
   checklist rows only. `doneCount`, the ring, the progress bar and `SetupCompletionNotices`
   all keep reading the full unfiltered checklist so they cannot disagree with it, and
