@@ -1220,7 +1220,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                 </>)}
               </div>
 
-              {/* Blend + hide */}
+              {/* Blend */}
               <div className="mt-6 pt-6" style={{ borderTop: '1px solid #DDD4C0' }}>
                 <SectionLabel>{t('settings_points_blend_heading')}</SectionLabel>
                 <div className="flex items-center justify-between text-[10px] font-mono mb-1" style={{ color: '#9A8A78' }}>
@@ -1229,14 +1229,6 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                 <input type="range" min={0} max={100} value={scoring.scoreBlend}
                   onChange={(e) => updScoring({ ...scoring, scoreBlend: parseInt(e.target.value) })}
                   className="w-full accent-[#1B3828]" />
-                <div className="mt-4">
-                  <Toggle
-                    label={t('settings_points_hide_label')}
-                    note={t('settings_points_hide_note')}
-                    value={scoring.hideScoresFromDelegates}
-                    onChange={(v) => updScoring({ ...scoring, hideScoresFromDelegates: v })}
-                  />
-                </div>
               </div>
             </div></ReadOnlyRegion>
           )}

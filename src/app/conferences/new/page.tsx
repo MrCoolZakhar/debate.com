@@ -5,7 +5,8 @@
  *
  * One question per screen, built on the shared wizard kit
  * (src/components/wizard.tsx). The submit logic writes exactly the same
- * columns as the old two-step form and redirects to /manage/{slug}.
+ * columns as the old two-step form, asks one last question once the row is
+ * real (INTENT_STEP), and redirects to /manage/{slug}.
  * Description, socials and banner are collected in their own skippable steps;
  * the remaining optional fields (visibility, previous editions) are deferred
  * to Settings after creation.
@@ -15,7 +16,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, X, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, X, ClipboardList, CreditCard, Building2, Megaphone, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -32,6 +33,7 @@ import { currencyPickerGroups } from '@/lib/currencies';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem } from '@/lib/conferenceLabels';
 import { committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
+import { INTENT_OPTIONS, intentPayload } from '@/lib/conferenceIntent';
 
 const CURRENCY_GROUPS = currencyPickerGroups();
 
@@ -62,6 +64,30 @@ const REVIEW_STEP = TOTAL_STEPS;
 // "skip everything" momentum. Seats and countries are deliberately NOT asked
 // here — they belong to the full editor at /manage/[slug]/committees, and the
 // step says so.
+
+// "What will you use Gavelling for?", asked ONCE and deliberately NOT counted
+// as a wizard step (hence TOTAL_STEPS + 1, and a rail that reads 12 of 12).
+//
+// It is asked AFTER the conferences row exists, not before: the organiser has
+// already got the thing they came for, so the question cannot add a single
+// second of friction in front of the CREATE CONFERENCE button, and a failed or
+// slow write costs them nothing. Continue and "Do this later" both land on the
+// dashboard, always — see finishIntent.
+const INTENT_STEP = TOTAL_STEPS + 1;
+
+// Lucide stand-in per intent option, handed to Emoji3D so a card can never be
+// left with an empty icon well when a Fluent asset does not resolve. The case
+// that prompted it is fixed (INTENT_OPTIONS asked for "Globe showing
+// Europe-Africa"; the asset folder is lower case), but the Fluent names are
+// hand-written strings with no compile-time check, so the net stays.
+const INTENT_FALLBACK_ICONS: Record<string, LucideIcon> = {
+  applications: ClipboardList,
+  payments: CreditCard,
+  committees: Building2,
+  emails: Mail,
+  chairs: Globe,
+  marketing: Megaphone,
+};
 
 // Bundled banner artwork, mirrors settings' BANNER_PRESETS so the organiser
 // can set a banner during creation exactly as they would afterwards.
@@ -471,6 +497,13 @@ export default function NewConferencePage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
+  // What they came here to do (INTENT_STEP). `createdRef` is set the moment the
+  // conference is real, so the intent screen always knows which row to write to
+  // and where to send them next, whatever happens to that write.
+  const createdRef = useRef<{ id: string; slug: string } | null>(null);
+  const [intentKeys, setIntentKeys] = useState<string[]>([]);
+  const [intentSaving, setIntentSaving] = useState(false);
+
   // Description + social links (all skippable). Stored raw here; each social
   // value is passed through normalizeSocialUrl at insert time so bare handles
   // ("@mymun") and domains ("mymun.org") become valid absolute URLs.
@@ -648,7 +681,14 @@ export default function NewConferencePage() {
             country,
             city,
             format,
-            expected_delegates: expectedDelegates ? parseInt(expectedDelegates) : null,
+            // 0, never null: the column is `integer NOT NULL` with no default, so a
+            // skipped step 6 used to fail the whole insert with a 23502 after the
+            // organiser had filled in all twelve steps. 0 is the sentinel the rest of
+            // the product already reads as "no expectation set" — conference_setup_status()
+            // does `coalesce(expected_delegates, 0)` and passes the committees checklist
+            // row on `v_expected = 0`, the dashboard guards on `expectedDelegates > 0`
+            // and offers SET AN EXPECTED HEAD COUNT, and admin's isShortOnSeats() skips it.
+            expected_delegates: expectedDelegates ? parseInt(expectedDelegates) : 0,
             fee_amount: feeKind === 'paid' ? parseFloat(feeAmount) || 0 : 0,
             fee_currency: feeCurrency,
             description: description.trim() || null,
@@ -769,11 +809,53 @@ export default function NewConferencePage() {
       }
 
       setSubmitting(false);
-      router.push('/manage/' + slug);
+      // Created. One last question before the dashboard — see INTENT_STEP.
+      // Nothing below this point can fail the creation any more.
+      createdRef.current = { id: conferenceId, slug };
+      goTo(INTENT_STEP);
     } catch (err) {
       setSubmitting(false);
       setError('Unexpected error: ' + (err instanceof Error ? err.message : String(err)));
     }
+  }
+
+  function toggleIntent(key: string) {
+    setIntentKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
+
+  /**
+   * Records the answer and ALWAYS lands them on their dashboard.
+   *
+   * The conference already exists, so this write is a bonus: it races a 4s
+   * timeout and the navigation happens either way, which means a slow network,
+   * an expired token or any error at all can never trap someone on this screen
+   * or make them think their conference did not save. A client-side push does
+   * not tear down the request, so a merely slow write still completes.
+   *
+   * Skipping writes the payload too (intentPayload sets `skipped: true` for an
+   * empty selection): "asked and declined" has to stay distinguishable from
+   * "never asked", because the follow-up email reads exactly that difference.
+   */
+  async function finishIntent(keys: string[]) {
+    if (intentSaving) return;
+    const created = createdRef.current;
+    // Unreachable — this screen only renders after createdRef is set — but a
+    // dead Continue button is the one outcome that is never acceptable here.
+    if (!created) { router.push('/my-conferences'); return; }
+    setIntentSaving(true);
+    try {
+      const result = await Promise.race([
+        getAuthedClient()
+          .from('conferences')
+          .update({ intent: intentPayload(keys) })
+          .eq('id', created.id),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+      ]);
+      if (result?.error) console.error('Failed to record conference intent:', result.error.message);
+    } catch (err) {
+      console.error('Failed to record conference intent:', err);
+    }
+    router.push('/manage/' + created.slug);
   }
 
   // ── Per-step validation before advancing ─────────────────────────────────
@@ -1554,6 +1636,53 @@ export default function NewConferencePage() {
                   >
                     {submitting ? 'CREATING…' : 'CREATE CONFERENCE'}
                   </NeuButton>
+                </div>
+              </WizardShell>
+            )}
+
+            {/* ── After creation, what they will use Gavelling for ────── */}
+            {step === INTENT_STEP && (
+              <WizardShell
+                // 12 of 12: the wizard is finished, the conference exists. This
+                // question is a bonus, so it never adds a dot to the rail, and
+                // there is no back arrow — there is nothing left to go back to.
+                step={TOTAL_STEPS} total={TOTAL_STEPS}
+                title="What will you use Gavelling for?"
+                sub={`${acronym.trim() || fullName} is created. Pick everything that applies and your dashboard will put it first.`}
+              >
+                {/* CardSelect truncates its label and sub to one line each,
+                    which is right for a country or a head-count range and wrong
+                    for a full sentence. Scoped to this wrapper only, so the
+                    shared component is untouched and no other step changes. */}
+                <div className="gv-intent-cards">
+                  <style>{'.gv-intent-cards .truncate { white-space: normal; overflow: visible; text-overflow: clip; }'}</style>
+                  <CardSelect
+                    options={INTENT_OPTIONS.map((o) => ({
+                      key: o.key,
+                      label: o.label,
+                      sub: o.sub,
+                      icon: (
+                        <Emoji3D
+                          name={o.emoji}
+                          size={48}
+                          fallback={INTENT_FALLBACK_ICONS[o.key]}
+                          fallbackColor={NEU.forest}
+                        />
+                      ),
+                    }))}
+                    value={intentKeys}
+                    onChange={toggleIntent}
+                    multiple
+                    columns={3}
+                  />
+                </div>
+                <ContinueButton
+                  label={intentSaving ? 'Saving…' : 'Continue to your dashboard'}
+                  disabled={intentKeys.length === 0 || intentSaving}
+                  onClick={() => finishIntent(intentKeys)}
+                />
+                <div className="flex justify-center" style={{ marginTop: 12 }}>
+                  <SkipLink onClick={() => finishIntent([])} label="Do this later" />
                 </div>
               </WizardShell>
             )}

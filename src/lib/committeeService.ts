@@ -944,13 +944,28 @@ export interface FeedbackEntry {
   factorScores: Record<string, number>;
   speechContext: string | null;
   speechSeconds: number | null;
+  // WHAT the speech was about — the caucus topic or motion label, or the committee
+  // topic on the GSL. `speechContext` alone is a three-value enum, so without this
+  // every note in an eight-hour session read identically and a chair could not tell
+  // one caucus from another. The speaking log has carried the topic all along; it
+  // was simply never copied onto the note.
+  speechTopic: string | null;
+  // WHEN the speech happened. `createdAt` is when the CHAIR TYPED, and a note
+  // written on a past speech through the collapsed capsule can be typed an hour
+  // later. Null on rows written before this column existed, and on a note started
+  // while the delegate still holds the floor until the speech is logged.
+  spokenAt: string | null;
   createdAt: string;
 }
 
 export async function addFeedback(
   committeeId: string, country: string, chairName: string, content: string,
   code: string, chairSuffix: string | undefined,
-  opts?: { level?: FeedbackLevel; factorScores?: Record<string, number>; speechContext?: string | null; speechSeconds?: number | null },
+  opts?: {
+    level?: FeedbackLevel; factorScores?: Record<string, number>;
+    speechContext?: string | null; speechSeconds?: number | null;
+    speechTopic?: string | null; spokenAt?: string | null;
+  },
 ): Promise<string | null> {
   const { data, error } = await sessionClient(code, chairSuffix).from('feedback').insert({
     committee_id: committeeId, country, chair_name: chairName, content,
@@ -958,13 +973,20 @@ export async function addFeedback(
     factor_scores: opts?.factorScores ?? {},
     speech_context: opts?.speechContext ?? null,
     speech_seconds: opts?.speechSeconds ?? null,
+    speech_topic: opts?.speechTopic ?? null,
+    spoken_at: opts?.spokenAt ?? null,
   }).select('id').single();
   if (error) { console.error('Error adding feedback:', error); return null; }
   return data.id as string;
 }
 
 export async function updateFeedback(
-  id: string, patch: { content?: string; factorScores?: Record<string, number>; speechContext?: string | null; speechSeconds?: number | null },
+  id: string,
+  patch: {
+    content?: string; factorScores?: Record<string, number>;
+    speechContext?: string | null; speechSeconds?: number | null;
+    speechTopic?: string | null; spokenAt?: string | null;
+  },
   code: string, chairSuffix?: string,
 ): Promise<void> {
   const update: Record<string, unknown> = {};
@@ -972,6 +994,8 @@ export async function updateFeedback(
   if (patch.factorScores !== undefined) update.factor_scores = patch.factorScores;
   if (patch.speechContext !== undefined) update.speech_context = patch.speechContext;
   if (patch.speechSeconds !== undefined) update.speech_seconds = patch.speechSeconds;
+  if (patch.speechTopic !== undefined) update.speech_topic = patch.speechTopic;
+  if (patch.spokenAt !== undefined) update.spoken_at = patch.spokenAt;
   const { error } = await sessionClient(code, chairSuffix).from('feedback').update(update).eq('id', id);
   if (error) console.error('Error updating feedback:', error);
 }
@@ -991,6 +1015,8 @@ function rowToFeedback(row: DbRow): FeedbackEntry {
     factorScores: (row.factor_scores as Record<string, number>) ?? {},
     speechContext: (row.speech_context as string | null) ?? null,
     speechSeconds: (row.speech_seconds as number | null) ?? null,
+    speechTopic: (row.speech_topic as string | null) ?? null,
+    spokenAt: (row.spoken_at as string | null) ?? null,
     createdAt: row.created_at as string,
   };
 }

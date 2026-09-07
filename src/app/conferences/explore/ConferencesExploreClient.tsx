@@ -323,10 +323,14 @@ function ConferenceListRow({
 
       {/* Delegates */}
       <div className="hidden lg:flex items-center gap-2 flex-shrink-0" style={{ width: '96px' }}>
-        <Users size={18} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
-        <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
-          {conf.expected_delegates.toLocaleString()}
-        </span>
+        {conf.expected_delegates > 0 && (
+          <>
+            <Users size={18} strokeWidth={2} style={{ color: '#9A8A78', flexShrink: 0 }} />
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: '15px', color: '#1C1410' }}>
+              {conf.expected_delegates.toLocaleString()}
+            </span>
+          </>
+        )}
       </div>
 
       {/* Fee, a gold 3D ticket for paid conferences, forest FREE pill otherwise */}

@@ -220,7 +220,7 @@ export default function LiveStatusPage() {
           // row is a factor rating with no prose, so factor_scores is as much
           // the payload as `content` is.
           anonSupabase.from('feedback')
-            .select('committee_id, country, chair_name, content, created_at, level, factor_scores, speech_context, speech_seconds')
+            .select('committee_id, country, chair_name, content, created_at, level, factor_scores, speech_context, speech_seconds, speech_topic, spoken_at')
             .in('committee_id', sessionIds)
             .order('created_at', { ascending: true }),
         ]);
@@ -451,6 +451,10 @@ export default function LiveStatusPage() {
                 factorScores: (f.factor_scores as Record<string, number> | null) ?? {},
                 speechContext: (f.speech_context as string | null) ?? null,
                 speechSeconds: (f.speech_seconds as number | null) ?? null,
+                // Which caucus and when the speech was actually given, as opposed to
+                // when the chair typed. LiveModals renders both when present.
+                speechTopic: (f.speech_topic as string | null) ?? null,
+                spokenAt: (f.spoken_at as string | null) ?? null,
               }))
             : [],
         };

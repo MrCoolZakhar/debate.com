@@ -130,6 +130,9 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     statChairNotes: t('sb_stat_chair_notes'),
     statPoints: t('sb_stat_points'),
     statObjectivePts: t('sb_stat_objective_pts'),
+    statQuality: t('sb_stat_quality'),
+    titleQuality: t('sb_title_quality'),
+    qualityUnrated: t('sb_quality_unrated'),
     titleSpeechesSplit: t('sb_title_speeches_split'),
     titleMotions: t('sb_title_motions'),
     titleWpDr: t('sb_title_wp_dr'),
@@ -148,6 +151,16 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
     speechOne: t('sb_speech_one'),
     speechMany: t('sb_speech_many'),
     commentSpeechSeconds: t('sb_comment_speech_seconds'),
+    commentLevelSpeech: t('sb_comment_level_speech'),
+    commentLevelSession: t('sb_comment_level_session'),
+    commentLevelConference: t('sb_comment_level_conference'),
+    // The same four words the comment dock tags a speech with, so a chair reads
+    // the identical vocabulary while writing the note and while reading it back.
+    ctxGsl: t('fb_tag_gsl'),
+    ctxModerated: t('fb_tag_caucus'),
+    ctxUnmoderated: t('fb_tag_unmod'),
+    ctxTour: t('fb_tag_tour'),
+    commentWritten: t('sb_comment_written'),
   }), [t]);
 
   // `SORTS` is exported with English labels because the organiser scoreboard
@@ -381,14 +394,22 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                       <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_rtr_title')}>{t('sb_matrix_rtr')}</th>
                       <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_wp_title')}>{t('sb_matrix_wp')}</th>
                       <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_dr_title')}>{t('sb_matrix_dr')}</th>
+                      {/* THIS COLUMN IS ALREADY INSIDE POINTS. Manual awards and
+                          deductions are ledger rows like any other, so a chair who
+                          reads ± as something to add to Points counts them twice.
+                          The header says so, the tooltip says so, and the legend
+                          under the table says so. */}
                       <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_manual_title')}>±</th>
                       {/* WAS "TOTAL", AND IT WAS NOT THE TOTAL ANYONE ELSE MEANT.
                           This column is `computeObjectiveScore` — the ledger sum
                           — while the Ranking tab's badge is the blended
                           headline. Under any `scoreBlend > 0` they differ, and
                           the column was labelled as though they could not. Both
-                          are shown now, each under its own name. */}
+                          are shown now, each under its own name, with QUALITY
+                          between them so the thing that moves one into the other
+                          is visible rather than hidden in a tooltip. */}
                       <th style={{ ...TH, textAlign: 'end' }} title={t('sb_matrix_points_title')}>{t('sb_stat_points')}</th>
+                      <th style={{ ...TH, textAlign: 'end' }} title={t('sb_title_quality')}>{t('sb_matrix_quality')}</th>
                       <th style={{ ...TH, textAlign: 'end', color: NEU.forest }} title={t('sb_matrix_score_title')}>{t('sb_col_score')}</th>
                     </tr>
                   </thead>
@@ -412,11 +433,33 @@ export default function ScoreboardPanel({ committee, onClose, feedbackVersion = 
                         <td style={TD}>{r.draftResolutions}</td>
                         <td style={{ ...TD, color: r.manual < 0 ? RED : SOFT }}>{r.manual}</td>
                         <td style={{ ...TD, color: NEU.ink }}>{r.objective}</td>
+                        {/* An index out of 100, never points — the row already
+                            carried it and the matrix showed neither it nor the
+                            factor ratings, which is why the SCORE column looked
+                            like it was inventing a number. */}
+                        <td style={{ ...TD, color: r.quality != null ? NEU.ink : SOFT }}>
+                          {/* An en dash, not a translated phrase: this cell sits in
+                              a narrow numeric column and the row's own CHAIR
+                              RATINGS section already says in words when a
+                              delegation has no ratings. */}
+                          {r.quality != null ? r.quality : '–'}
+                        </td>
                         <td style={{ ...TD, color: NEU.forest, fontWeight: 900 }}>{r.headline}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                {/* THE THREE TOTALS, SAID IN WORDS.
+                    Tooltips are not enough here: the owner read the matrix as
+                    double counting, because ± sits beside POINTS (it is already
+                    inside it) and SCORE sits beside POINTS with nothing visible
+                    between them to explain the difference. This line names all
+                    three, in reading order, under the table they describe. */}
+                {allRows.length > 0 && (
+                  <p style={{ fontFamily: OUTFIT, fontSize: 11.5, lineHeight: 1.6, color: SOFT, marginBlockStart: 12 }}>
+                    {t('sb_matrix_legend')}
+                  </p>
+                )}
                 {allRows.length === 0 && (
                   <p style={{ fontFamily: OUTFIT, fontSize: 13, color: SOFT, textAlign: 'center', padding: '32px 0' }}>
                     {t('sb_empty_no_delegations')}

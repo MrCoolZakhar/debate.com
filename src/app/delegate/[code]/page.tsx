@@ -15,7 +15,6 @@ import { Committee, CaucusState, Delegate, DocumentType, SpeakingLogEntry, Deleg
 import ChatPanel from '@/components/ChatPanel';
 import { getScoringConfig } from '@/lib/scoring';
 import { selectDelegateTips } from '@/lib/delegateTips';
-import { getDelegateFeedback } from '@/lib/committeeService';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
@@ -343,20 +342,54 @@ function InlinePdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: str
   );
 }
 
+/* A document's link lives in `content` (there is no link column). The delegate
+   list rendered fileUrl only, so a link pasted by anyone — chair or delegate —
+   was invisible to every delegate in the room. */
+function docLinkHref(content?: string): string | null {
+  const v = (content ?? '').trim();
+  return /^https?:\/\//i.test(v) ? v : null;
+}
+
+function DocLinkRow({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="focus:outline-none"
+      style={{
+        alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6,
+        fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: DG.forest, textDecoration: 'underline',
+      }}
+    >
+      🔗 {label}
+    </a>
+  );
+}
+
 // ── Documents Tab ─────────────────────────────────────────────────────────────
 function DelegateDocumentsTab({ committee, country }: { committee: Committee; country: string }) {
   const t = useT();
   const [title, setTitle] = useState('');
   const [docType, setDocType] = useState<DocumentType>('working-paper');
   const [coSponsors, setCoSponsors] = useState<string[]>([]);
+  /* The delegate form hardcoded content: '' and had no link field at all, so a
+     delegate working in Google Docs had nowhere to put the document. The chair's
+     SubmitForm writes the link into the same `content` column — there is no
+     dedicated link column and we must not add one. */
+  const [link, setLink] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
   /* A failed attachment used to be console-only, so the button just snapped
      back to "Attach file" and the delegate had no idea why. */
   const [uploadError, setUploadError] = useState(false);
+  /* Pre-flight rejection (wrong type or too big). Kept apart from uploadError so
+     the delegate is told the file was never sent, not that the network failed. */
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Submission limits were only ever enforced in the chair's DocumentsModal, which
@@ -397,6 +430,44 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
     }
   };
 
+  /* Pre-flight. The bucket rejects non-PDFs and anything over 10 MB, and that
+     rejection only ever reached the delegate as the generic upload-failed line,
+     which reads like a connection problem. Check both here, before the request.
+     The message is composed from the file's own name and size plus a symbolic
+     rule so it stays readable in every locale without a new translation key. */
+  const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+  const FILE_RULE = 'PDF ≤ 10 MB';
+  const acceptFile = async (file: File | null | undefined) => {
+    if (!file) return;
+    const isPdf = file.type
+      ? file.type === 'application/pdf'
+      : file.name.toLowerCase().endsWith('.pdf');
+    // Reset the input on rejection, or re-picking the same file fires no change event.
+    const reject = (msg: string) => {
+      setUploadError(false);
+      setFileError(msg);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    if (!isPdf) {
+      reject(`${file.name} · ${FILE_RULE}`);
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      reject(`${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB · ${FILE_RULE}`);
+      return;
+    }
+    setFileError(null);
+    await uploadFile(file);
+  };
+
+  const clearFile = () => {
+    setFileName(null);
+    setFileUrl(null);
+    setUploadError(false);
+    setFileError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSubmit = async () => {
     if (!title.trim() || sending || uploading || limitReached) return;
     setSending(true);
@@ -405,14 +476,18 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
       docCode: autoDocCode(docType, committee.documents ?? []),
       title: title.trim(),
       sponsors: [country, ...coSponsors],
-      content: '',
+      content: link.trim(),
       status: 'submitted',
       ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
     }, committee.code);
     setTitle('');
     setCoSponsors([]);
+    setLink('');
     setFileName(null);
     setFileUrl(null);
+    setUploadError(false);
+    setFileError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setSubmitted(true);
     setSending(false);
     setTimeout(() => setSubmitted(false), 3000);
@@ -456,27 +531,67 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
           <SponsorsInput committee={committee} myCountry={country} value={coSponsors} onChange={setCoSponsors} />
         </div>
 
-        {/* File */}
+        {/* Google Docs link — same `content` column the chair's form writes */}
+        <div>
+          <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>
+            {t('documents_google_docs_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>({t('documents_google_docs_optional')})</span>
+          </label>
+          <input type="url" inputMode="url" value={link} onChange={(e) => setLink(e.target.value)}
+            placeholder="https://docs.google.com/..."
+            className="w-full bg-[#FAF8F3] border border-[#DDD4C0] rounded-lg px-3 py-2 text-[#1C1410] text-sm placeholder-[#9A8A78] focus:outline-none focus:border-[#1B3828] transition-colors" />
+        </div>
+
+        {/* File — a real dropzone, not a text button. The old "+ Attach file"
+            link read as if there were no upload here at all. */}
         <div>
           <label className="text-xs font-bold mb-1.5 block" style={{ color: '#1B3828', fontFamily: "'DM Mono', monospace" }}>{t('delegate_doc_attachment_label')} <span className="font-normal" style={{ color: '#9A8A78' }}>{t('delegate_doc_attachment_optional')}</span></label>
-          <div className="flex items-center gap-2">
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-              className="text-xs bg-[#FAF8F3] border border-[#DDD4C0] hover:border-[#1B3828] text-[#6A5A4A] px-3 py-2 rounded-lg transition-colors disabled:opacity-60 gv-lift">
-              {uploading ? '⏳ …' : fileName ? `📎 ${fileName}` : t('delegate_doc_attach_btn')}
-            </button>
-            {fileName && <button onClick={() => { setFileName(null); setFileUrl(null); }} className="text-xs text-[#9A8A78] hover:text-red-400">{t('delegate_doc_remove')}</button>}
-          </div>
+          {fileName || uploading ? (
+            <div className="flex items-center gap-2 bg-[#FAF8F3] border border-[#DDD4C0] rounded-xl px-3 py-3">
+              <span className="text-sm text-[#1C1410] flex-1 truncate flex items-center gap-2">
+                {uploading
+                  ? <><span className="w-3.5 h-3.5 border-2 border-[#1B3828] border-t-transparent rounded-full animate-spin shrink-0" /> {fileName}</>
+                  : <>📎 {fileName}</>}
+              </span>
+              {!uploading && (
+                <button onClick={clearFile} aria-label={t('delegate_doc_remove')} title={t('delegate_doc_remove')}
+                  className="text-sm text-[#9A8A78] hover:text-red-500 transition-colors focus:outline-none">✕</button>
+              )}
+            </div>
+          ) : (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={async (e) => { e.preventDefault(); setDragging(false); await acceptFile(e.dataTransfer.files?.[0]); }}
+              className={`w-full border border-dashed rounded-xl px-4 py-5 text-sm text-center cursor-pointer select-none transition-colors focus:outline-none ${
+                dragging
+                  ? 'border-[#1B3828] bg-[#1B3828]/10 text-[#1B3828]'
+                  : 'bg-[#FAF8F3] border-[#DDD4C0] hover:border-[#1B3828] text-[#9A8A78] hover:text-[#6A5A4A]'
+              }`}
+            >
+              <span className="block text-xl mb-1">📎</span>
+              {/* The shared key is prefixed "+ " for a text button in all four
+                  locales; the dropzone has its own glyph, so drop the prefix. */}
+              <span className="font-semibold">{t('documents_upload_pdf').replace(/^\+\s*/, '')}</span>
+              <span className="block text-xs mt-1" style={{ color: '#9A8A78' }}>{FILE_RULE}</span>
+            </div>
+          )}
+          {fileError && (
+            <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
+              ⚠ {fileError}
+            </p>
+          )}
           {uploadError && (
             <p className="text-xs mt-1.5" style={{ color: '#8B2020' }}>
               {t('delegate_doc_upload_failed')}
             </p>
           )}
-          <input ref={fileInputRef} type="file" accept=".pdf" className="hidden"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              await uploadFile(f);
-            }} />
+          <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" className="hidden"
+            onChange={async (e) => { await acceptFile(e.target.files?.[0]); }} />
         </div>
 
         {limitReached && (
@@ -507,10 +622,10 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
 
 // ── Statistics Tab ────────────────────────────────────────────────────────────
 /**
- * Speeches only. Points, the category ledger, the by-time rank and the leaderboard are
- * deliberately gone: a delegate sees WHAT they said, under which topic or motion, and for
- * how long. The qualitative surfaces (the chair's factor recap, the coaching tips) stay —
- * neither states a score.
+ * Speeches only. Points, the category ledger, the by-time rank, the leaderboard and the
+ * chair's factor recap are all deliberately gone: a delegate sees WHAT they said, under
+ * which topic or motion, and for how long. Nothing on this tab states a score or a rating.
+ * The coaching tips stay, because guidance never states a number or a rank.
  */
 function StatisticsTab({ committee, country }: { committee: Committee; country: string }) {
   const { language } = useLanguage();
@@ -539,52 +654,12 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
     return t('delegate_gsl_fallback');
   };
 
-  // End recap — factor scores only (never the chair's private notes).
-  const [recap, setRecap] = useState<{ level: string; factorScores: Record<string, number>; createdAt: string }[]>([]);
-  useEffect(() => {
-    getDelegateFeedback(committee.id, country).then(setRecap);
-  }, [committee.id, country]);
-  // A dedicated end-of-committee recap, if one exists. NOTHING IN THE APP WRITES ONE:
-  // the only feedback level ever written is 'speech' (FeedbackLogPanel), so both filters
-  // below always miss and this panel was permanently blank — a delegate could be rated
-  // all session and still see nothing. The speech average is the same fallback
-  // computeQualityScore already uses (scoring.ts), so the delegate now sees exactly the
-  // numbers their score is actually built from.
-  const latestRecap = [...recap]
-    .filter((f) => f.level === 'conference')
-    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0]
-    ?? [...recap].filter((f) => f.level === 'session').sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0];
-
-  // Mean of each enabled factor across every speech that carries a real rating. A 0 means
-  // "not rated" here exactly as it does in foldFactors/computeQualityScore, so an untouched
-  // slider can never drag an average down.
-  const speechAverages = useMemo(() => {
-    const out: Record<string, number> = {};
-    const speeches = recap.filter((f) => f.level === 'speech');
-    for (const f of cfg.factors) {
-      if (!f.enabled) continue;
-      const vals = speeches
-        .map((s) => s.factorScores?.[f.id])
-        .filter((v): v is number => typeof v === 'number' && v > 0);
-      if (vals.length) out[f.id] = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
-    }
-    return out;
-  }, [recap, cfg.factors]);
-
-  const recapScores: Record<string, number> = latestRecap ? latestRecap.factorScores : speechAverages;
-  const recapIsAverage = !latestRecap;
-  const recapRatedCount = recap.filter(
-    (f) => f.level === 'speech' && Object.values(f.factorScores ?? {}).some((v) => (v ?? 0) > 0),
-  ).length;
-  // `hideScoresFromDelegates` finally gates something. Points, the ledger, the rank and the
-  // leaderboard were removed from this view entirely (see the block comment on this tab), so
-  // the setting had NO live consumer here at all — it promised "won't see point totals" about
-  // totals that no longer existed. The chair's factor ratings are now the only number a
-  // delegate can see, and this panel was permanently blank until the fallback above made it
-  // render, so without this gate turning the setting on would still show them.
-  const recapFactors = cfg.hideScoresFromDelegates
-    ? []
-    : cfg.factors.filter((f) => f.enabled && typeof recapScores[f.id] === 'number');
+  // The chair's factor ratings are deliberately NOT shown here. CLAUDE.md section 2 is
+  // explicit that a delegate never sees chair notes, factor ratings or nominations before
+  // publication, and this panel showed them by default: `hideScoresFromDelegates` defaulted
+  // to false, so the only thing standing between a delegate and their chair's private
+  // marks was a setting almost nobody found. The panel and the setting are both gone.
+  // Awards are the sanctioned way a rating becomes something a delegate can see.
 
   const num: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' };
 
@@ -647,37 +722,6 @@ function StatisticsTab({ committee, country }: { committee: Committee; country: 
           </div>
         )}
       </Panel>
-
-      {/* Chair recap — factor bars only, never the chair's private notes */}
-      {recapFactors.length > 0 && (
-        <Panel style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <SectionLabel>{t('delegate_recap_header')}</SectionLabel>
-          {/* Say which number this is. An average over N speeches is a different claim
-              from a single considered end-of-session mark, and a delegate reading their
-              own ratings deserves to know which one they are looking at. */}
-          {recapIsAverage && recapRatedCount > 0 && (
-            <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: DG.faint, marginTop: -4 }}>
-              {t('delegate_recap_average', { count: String(recapRatedCount) })}
-            </p>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {recapFactors.map((f) => {
-              const v = recapScores[f.id];
-              return (
-                <div key={f.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: DG.body, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
-                    <span style={{ ...num, flexShrink: 0, fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: DG.forest }}>{v}/{cfg.factorScaleMax}</span>
-                  </div>
-                  <div style={{ height: 8, borderRadius: 999, background: DG.ivory, boxShadow: LIFT.inSm, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 999, background: DG.forest, width: `${Math.min(100, (v / cfg.factorScaleMax) * 100)}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
-      )}
 
       {/* Tips */}
       {tips.length > 0 && (
@@ -2258,6 +2302,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     {doc.fileUrl && doc.fileName && (
                       <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
                     )}
+                    {docLinkHref(doc.content) && (
+                      <DocLinkRow href={docLinkHref(doc.content)!} label={t('documents_google_docs_label')} />
+                    )}
                   </div>
                 ))
               )}
@@ -2289,6 +2336,9 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
                     {docSponsors(doc.sponsors)}
                     {doc.fileUrl && doc.fileName && (
                       <InlinePdfViewer fileUrl={doc.fileUrl} fileName={doc.fileName} />
+                    )}
+                    {docLinkHref(doc.content) && (
+                      <DocLinkRow href={docLinkHref(doc.content)!} label={t('documents_google_docs_label')} />
                     )}
                   </div>
                 ))

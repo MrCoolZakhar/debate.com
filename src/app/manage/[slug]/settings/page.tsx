@@ -7,6 +7,7 @@ import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase, Trophy,
+  ClipboardList, CreditCard, Megaphone, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -43,6 +44,7 @@ import CustomizationCard from './CustomizationCard';
 import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
+import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
 import ProfileLink from '@/components/ProfileLink';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -360,6 +362,19 @@ function saveFailMessage(error?: { message: string } | null): string {
 // b@y.com" case that silently broke reply-to on every email this conference sent.
 const CONTACT_EMAIL_PATTERN = /^[^\s@|]+@[^\s@|]+\.[^\s@|]+$/;
 
+// Lucide stand-in per intent option, so a row can never be left with an empty
+// icon well when a Fluent asset does not resolve. Same net the creation wizard
+// keeps: the Fluent names in INTENT_OPTIONS are hand-written strings with no
+// compile-time check.
+const INTENT_FALLBACK_ICONS: Record<string, LucideIcon> = {
+  applications: ClipboardList,
+  payments: CreditCard,
+  committees: Building2,
+  emails: MailIcon,
+  chairs: Globe,
+  marketing: Megaphone,
+};
+
 const inputStyle: React.CSSProperties = {
   backgroundColor: '#FAF8F3',
   border: '1.5px solid #DDD4C0',
@@ -608,6 +623,15 @@ export default function SettingsPage() {
   const [detailsSaved, setDetailsSaved] = useState(false);
   const [detailsError, setDetailsError] = useState('');
 
+  // What the organiser said they use Gavelling for (`conferences.intent`),
+  // asked once at the end of the creation wizard and editable here. It sorts
+  // the dashboard's pending priority rows and nothing else — see
+  // src/lib/conferenceIntent.ts. Held as the key array only; the rest of the
+  // payload shape is intentPayload's business.
+  const [intentKeys, setIntentKeys] = useState<string[]>([]);
+  const [intentSaved, setIntentSaved] = useState(false);
+  const [intentError, setIntentError] = useState('');
+
   // Age range (Applications → General). min_age has existed since launch;
   // max_age is its other half, and both are measured on the start date.
   const [minAge, setMinAge] = useState('');
@@ -669,6 +693,24 @@ export default function SettingsPage() {
     const t = setTimeout(() => setHighlightPulse(false), 2600);
     return () => clearTimeout(t);
   }, [highlightOrgId, activeTab, organizers]);
+  // ── Intent deep link, from the dashboard's ordering aside ─────────────────
+  // ?tab=conference&focus=intent scrolls the "What you use Gavelling for" card
+  // into view and rings it once. Same shape as the team highlight above: the
+  // Conference tab is long, and a link that only lands at the top of it would
+  // read as a dead end.
+  const focusParam = searchParams.get('focus');
+  const [intentPulse, setIntentPulse] = useState(false);
+  const intentFocusedRef = useRef(false);
+  useEffect(() => {
+    if (focusParam !== 'intent' || activeTab !== 'conference' || intentFocusedRef.current) return;
+    const el = document.getElementById('intent-card');
+    if (!el) return;
+    intentFocusedRef.current = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setIntentPulse(true);
+    const t = setTimeout(() => setIntentPulse(false), 2600);
+    return () => clearTimeout(t);
+  }, [focusParam, activeTab, conference]);
   // The form builder edits whichever role the tab is on.
   const selectedRole = activeRole;
   const [inviteEmail, setInviteEmail] = useState('');
@@ -812,6 +854,7 @@ export default function SettingsPage() {
   // zero-row writes reporting false success.
   const [visualSaving, setVisualSaving] = useState(false);
   const [detailsSaving, setDetailsSaving] = useState(false);
+  const [intentSaving, setIntentSaving] = useState(false);
   const [minAgeSaving, setMinAgeSaving] = useState(false);
   const [swapModeSaving, setSwapModeSaving] = useState(false);
   const [publicToggleSaving, setPublicToggleSaving] = useState(false);
@@ -826,9 +869,11 @@ export default function SettingsPage() {
   const detailsBaseline = useRef<string | null>(null);
   const visualBaseline = useRef<string | null>(null);
   const minAgeBaseline = useRef<string | null>(null);
+  const intentBaseline = useRef<string | null>(null);
   const detailsSnap = () => snap({ fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
   const visualSnap = () => snap({ description, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
   const minAgeSnap = () => snap({ minAge, maxAge });
+  const intentSnap = () => snap({ intentKeys });
 
   // Stale-response guards: each loader bumps its counter at call start and
   // bails after every await if a newer call has started since.
@@ -1065,6 +1110,12 @@ export default function SettingsPage() {
       minAge: conference.min_age != null ? String(conference.min_age) : '',
       maxAge: conference.max_age != null ? String(conference.max_age) : '',
     });
+    // Read defensively through the shared contract, which drops any key that
+    // is not one of the six — a stored value can never put an unknown option
+    // on screen or into the next write.
+    const hydratedIntent = getConferenceIntent(conference.intent).keys;
+    setIntentKeys(hydratedIntent);
+    intentBaseline.current = snap({ intentKeys: hydratedIntent });
   }, [conference?.id, loadRoleConfigs, loadRolesWithApplications, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
 
   // Partner typeahead: debounced authed search over public conferences,
@@ -2428,6 +2479,51 @@ export default function SettingsPage() {
     setTimeout(() => setDetailsSaved(false), 2500);
   }
 
+  /**
+   * Writes `conferences.intent`. The payload shape belongs to intentPayload,
+   * which sets `skipped: true` for an empty array — deliberate and preserved
+   * here: clearing every option means "do not reorder my dashboard", which is
+   * a different thing from a conference that was never asked (`intent = '{}'`,
+   * every conference created before the question shipped).
+   */
+  async function handleSaveIntent() {
+    if (!conference || intentSaving) return;
+    setIntentError('');
+    setIntentSaving(true);
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setIntentSaving(false);
+      setIntentError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+    const { data, error } = await supabase.from('conferences')
+      .update({ intent: intentPayload(intentKeys) })
+      .eq('id', conference.id).select('id');
+    if (error || !data || data.length !== 1) {
+      setIntentSaving(false);
+      setIntentError(saveFailMessage(error));
+      return;
+    }
+    await refreshConferenceQuiet();
+    intentBaseline.current = intentSnap();
+    setIntentSaving(false);
+    setIntentSaved(true);
+    setTimeout(() => setIntentSaved(false), 2500);
+  }
+
+  /** Toggle one option, rebuilt in INTENT_OPTIONS order so the stored array is
+   *  canonical and re-picking an option cannot produce a different-looking
+   *  snapshot of the same answer. Order carries no meaning downstream —
+   *  intentRank folds the keys into a Set. */
+  function toggleIntent(key: string) {
+    setIntentKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return INTENT_OPTIONS.filter(o => next.has(o.key)).map(o => o.key);
+    });
+    setIntentError('');
+  }
+
   // Debounced autosave for the three manual-input sections above: bail while
   // unhydrated (baseline still null) or a save is already in flight, bail if
   // nothing actually changed since the baseline, else save after 800ms of
@@ -2456,6 +2552,17 @@ export default function SettingsPage() {
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates, detailsSaving, conference]);
+
+  // Same debounced autosave as the three above. 800ms of quiet also means a
+  // burst of toggles (picking four of the six is one thought, not four) lands
+  // as a single write rather than four.
+  useEffect(() => {
+    if (!conference || intentBaseline.current === null || intentSaving) return;
+    if (intentSnap() === intentBaseline.current) return;
+    const t = setTimeout(() => { void handleSaveIntent(); }, 800);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intentKeys, intentSaving, conference]);
 
   if (!conference) return null;
 
@@ -3897,6 +4004,98 @@ export default function SettingsPage() {
             <AutoSaveStatus saving={visualSaving} saved={visualSaved} />
             {visualError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visualError}</p>
+            )}
+          </div>
+
+          {/* ── What you use Gavelling for ──────────────────────────────────
+              The creation wizard asks this once on the way out and nothing
+              could change it afterwards, so a conference whose needs moved
+              (applications closed, the rooms are next) was stuck with the
+              order it picked in week one. Six options, straight from
+              INTENT_OPTIONS, written back through intentPayload.
+
+              Deliberately last in this tab: everything above it is the
+              conference the public sees, this is a preference about the
+              organiser's own dashboard. ── */}
+          <div
+            id="intent-card"
+            style={{
+              ...cardStyle,
+              boxShadow: intentPulse
+                ? '0 0 0 3px rgba(238,217,138,0.55), 0 1px 2px rgba(27,56,40,0.04)'
+                : cardStyle.boxShadow,
+              transition: 'box-shadow 400ms ease',
+            }}
+          >
+            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              What you use Gavelling for
+            </p>
+            {/* One line, and it says exactly what the setting does. It is not a
+                permission, it turns nothing on or off, and it never hides a
+                priority — `financials` in particular gates both the checkmark
+                and publishing, so a hidden row would be a real bug. */}
+            <p className="text-sm mb-4" style={{ color: NEU.inkSoft, fontFamily: "'Outfit', sans-serif" }}>
+              This only changes the order of the priorities on your dashboard. Nothing is switched on or off, and no work is hidden. Pick everything that applies.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
+              {INTENT_OPTIONS.map(opt => {
+                const on = intentKeys.includes(opt.key);
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    onClick={() => toggleIntent(opt.key)}
+                    className="flex items-start rounded-xl focus:outline-none text-left"
+                    style={{
+                      gap: 10, padding: '12px 13px',
+                      backgroundColor: on ? 'rgba(27,56,40,0.06)' : 'transparent',
+                      border: on ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                      boxShadow: on ? '0 4px 12px rgba(27,56,40,0.14)' : 'none',
+                      fontFamily: "'Outfit', sans-serif",
+                      cursor: 'pointer',
+                      transition: 'background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease',
+                    }}
+                  >
+                    <span
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: 20, height: 20, borderRadius: 6, marginTop: 1,
+                        backgroundColor: on ? '#1B3828' : 'transparent',
+                        border: on ? '1.5px solid #1B3828' : '1.5px solid #C9BEA6',
+                        transition: 'background-color 150ms ease, border-color 150ms ease',
+                      }}
+                    >
+                      {on && <Check size={13} strokeWidth={3} color="#EED98A" />}
+                    </span>
+                    <Emoji3D
+                      name={opt.emoji}
+                      size={26}
+                      fallback={INTENT_FALLBACK_ICONS[opt.key]}
+                      fallbackColor="#1B3828"
+                      style={{ flexShrink: 0, marginTop: -1 }}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold" style={{ color: '#1C1410' }}>{opt.label}</span>
+                      <span className="block text-xs mt-0.5" style={{ color: NEU.inkSoft, lineHeight: 1.45 }}>{opt.sub}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* Clearing everything is a real answer, not an empty form:
+                intentPayload writes skipped:true and the dashboard keeps its
+                plain build order. Worth saying, because an all-grey card
+                otherwise looks like nothing was saved. */}
+            {intentKeys.length === 0 && (
+              <p className="text-xs mt-3" style={{ color: NEU.inkSoft, fontFamily: "'Outfit', sans-serif" }}>
+                Nothing picked. Your dashboard lists the priorities in the normal build order.
+              </p>
+            )}
+            <AutoSaveStatus saving={intentSaving} saved={intentSaved} />
+            {intentError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{intentError}</p>
             )}
           </div>
         </div>

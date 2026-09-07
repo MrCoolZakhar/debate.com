@@ -1621,7 +1621,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               {[
                 { icon: Monitor, gradient: NEU_GRADIENTS.forest, label: 'Format', value: capitalize(conference.format.replace('-', ' ')) },
                 { icon: GraduationCap, gradient: NEU_GRADIENTS.amber, label: 'Level', value: conference.student_level === 'school' ? 'High School' : capitalize(conference.student_level) },
-                { icon: Users, gradient: NEU_GRADIENTS.green, label: 'Delegates', value: conference.expected_delegates.toLocaleString() },
+                ...(conference.expected_delegates > 0
+                  ? [{ icon: Users, gradient: NEU_GRADIENTS.green, label: 'Delegates', value: conference.expected_delegates.toLocaleString() }]
+                  : []),
               ].map((cell) => (
                 <div
                   key={cell.label}

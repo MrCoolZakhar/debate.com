@@ -51,7 +51,7 @@ export const TOKEN_IDENTITY: Record<EmailTokenKey, TokenIdentity> = {
      'Busts in silhouette' 200. */
   delegation_name: { emoji: 'Busts in silhouette', glyph: '🧑‍🤝‍🧑', icon: Users, short: 'Delegation', family: 'place', becomes: 'The school or society they came with.' },
   committee: { emoji: 'Ballot box with ballot', glyph: '🗳️', icon: Landmark, short: 'Committee', family: 'place', becomes: 'The committee they were allocated to.' },
-  country: { emoji: 'Globe showing Europe-Africa', glyph: '🌍', icon: Globe, short: 'Country', family: 'place', becomes: 'The country or seat they represent.' },
+  country: { emoji: 'Globe showing europe-africa', glyph: '🌍', icon: Globe, short: 'Country', family: 'place', becomes: 'The country or seat they represent.' },
   payment_status: { emoji: 'Money bag', glyph: '💰', icon: Wallet, short: 'Paid or not', family: 'money', becomes: 'Paid, Unpaid, Waived, and so on.' },
   fee: { emoji: 'Credit card', glyph: '💳', icon: CreditCard, short: 'Their fee', family: 'money', becomes: 'The amount owed for their role, at the current phase.' },
   conference_name: { emoji: 'Classical building', glyph: '🏛️', icon: Building2, short: 'Conference', family: 'conference', becomes: 'This conference, spelled out in full.' },

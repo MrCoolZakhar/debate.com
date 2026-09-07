@@ -85,6 +85,11 @@ export function buildSessionScoreboardRows(
         factorScores: f.factorScores,
         speechContext: f.speechContext,
         speechSeconds: f.speechSeconds,
+        // WHAT it was about and WHEN it was said. Without these a note carried
+        // only a three-value context enum and the time the chair typed, so every
+        // note in a long session collapsed onto the same line of metadata.
+        speechTopic: f.speechTopic,
+        spokenAt: f.spokenAt,
         createdAt: f.createdAt,
       }));
 
@@ -98,7 +103,11 @@ export function buildSessionScoreboardRows(
       status: d.status,
       isObserver: d.isObserver ?? false,
 
-      headline: computeHeadline(activity.total, quality, cfg.scoreBlend),
+      // Blend in POINTS, never index-against-points. `computeHeadline` takes the
+      // whole config so the blend and the unit scale can never come from different
+      // places. `conferenceScoreboard.ts` calls it identically; the two must not
+      // drift.
+      headline: computeHeadline(activity.total, quality, cfg),
       objective: activity.total,
       quality,
 

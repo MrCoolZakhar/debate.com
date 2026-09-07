@@ -28,6 +28,7 @@ import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
 import { getAwardsConfig, chairDeadline } from '@/lib/awards';
+import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
 
@@ -1337,9 +1338,10 @@ export default function DashboardPage() {
 
   // ── Set-up priorities: 9 detection checks, in journey order ──────────────
   // Base order = the natural build journey (page → committees → chairs → email →
-  // secretariat → financials → delegate → awards → launch), and it is the order
-  // the pending rows render in — done rows are filtered out entirely rather
-  // than sorted to the bottom (see pendingChecklist).
+  // secretariat → financials → delegate → awards → launch). Done rows are
+  // filtered out entirely rather than sorted to the bottom, and what is left is
+  // then reordered around the organiser's stated intent — both in
+  // `pendingChecklist` below, which is where the render order is decided.
   const awardsCfg = getAwardsConfig(conference.awards_config);
   const awardsDeadline = chairDeadline(awardsCfg, conference.end_date ?? null);
   const awardsCategoryCount = awardsCfg.types.filter(t => t.enabled).length;
@@ -1525,7 +1527,33 @@ export default function DashboardPage() {
   // the heading, the ring and the progress bar all report total progress, and
   // they would be meaningless read against a list that only holds what is
   // left. Only the rendered rows are filtered.
-  const pendingChecklist = checklist.filter(c => !c.done);
+  //
+  // The pending rows are then ordered around what the organiser told us at the
+  // end of creation (`conferences.intent`). This is presentation only: the sort
+  // runs on the FILTERED COPY, so `checklist` itself, `doneCount`, the ring, the
+  // progress bar and SetupCompletionNotices all still read the full nine rows in
+  // journey order and cannot disagree with each other. Nothing is ever dropped —
+  // `financials` in particular gates the blue checkmark and publishing itself,
+  // so a conference that hid it could neither publish nor be told why.
+  //
+  // Stable by construction: the comparator returns 0 for equal ranks, so within
+  // each band the journey order survives untouched. An intent of `{}` (every
+  // conference created before this shipped, and anyone who skipped) boosts
+  // nothing, so every row scores 1 except `publish` at 2 — and `publish` is
+  // already last in the array, which makes the order for them byte-identical to
+  // what it was.
+  const intent = getConferenceIntent(conference.intent);
+  const intentRankOf = intentRank(intent);
+  const pendingInJourneyOrder = checklist.filter(c => !c.done);
+  const pendingChecklist = [...pendingInJourneyOrder]
+    .sort((a, b) => intentRankOf(a.key) - intentRankOf(b.key));
+  // Only worth a line when the answer actually moved a row on THIS screen.
+  // Compared row by row rather than inferred from the answer, so a conference
+  // whose order happens to come out identical (marketing boosts `page`, which
+  // already leads) never claims a change the organiser cannot see.
+  const intentReordered =
+    intent.keys.length > 0 &&
+    pendingChecklist.some((c, i) => c.key !== pendingInJourneyOrder[i].key);
 
   function handlePublishClick() {
     if (committeeCount === 0) {
@@ -1671,6 +1699,24 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="flex flex-col" style={{ gap: 5 }}>
+              {/* One quiet line, and only when the answer actually moved a row,
+                  so the order never looks arbitrary. Settings → Conference now
+                  edits `conferences.intent`, so the sentence has somewhere to
+                  point: only the last two words are the link, in the readable
+                  ink token, so the aside stays an aside on a dense screen
+                  rather than becoming a call to action. */}
+              {intentReordered && (
+                <p style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.muted, margin: '0 0 1px 2px' }}>
+                  Ordered around what you told us you need.{' '}
+                  <Link
+                    href={`/manage/${slug}/settings?tab=conference&focus=intent`}
+                    className="focus:outline-none"
+                    style={{ color: NEU.inkSoft, textDecoration: 'underline', textUnderlineOffset: 2 }}
+                  >
+                    Change this
+                  </Link>
+                </p>
+              )}
               {pendingChecklist.map(item => (
                 <NeuChecklistRow
                   key={item.key}

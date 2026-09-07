@@ -621,7 +621,7 @@ function RollCallPanelInner({
                   setDragOverIndex(null);
                 }}
                 onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
+                className={`group/seat flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all ${
                   !matchesSearch
                     ? 'opacity-20'
                     : isCurrentSpeaker
@@ -675,13 +675,26 @@ function RollCallPanelInner({
                 {isObserver && (
                   <span className="text-[9px] shrink-0 font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md" style={{ backgroundColor: 'rgba(238,217,138,0.15)', color: 'rgba(238,217,138,0.85)', border: '1px solid rgba(238,217,138,0.3)' }}>{t('rollcall_observer')}</span>
                 )}
-                {/* Observer placard toggle, available during roll call and mid-session */}
-                {(isRollCallPhase || showStatusSliders) && !(isReadOnly || isViewOnly) && (
+                {/* Observer placard toggle. It used to be gated on
+                    `isRollCallPhase || showStatusSliders`, which meant that
+                    mid-session it existed only inside the ROLL CALL sidebar tab
+                    (`showSliders`, off by default) — so "you can't change delegates
+                    to observers" was true of every screen a chair actually stands
+                    on. The gate is now write-access alone. To keep the sidebar
+                    quiet it is revealed on hover/focus, except where it was always
+                    visible before (roll call, sliders) and on an existing observer,
+                    whose placard must stay one click away from coming off. */}
+                {!(isReadOnly || isViewOnly) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleObserver(d.id, isObserver); }}
                     title={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
+                    aria-label={isObserver ? t('rollcall_observer_remove') : t('rollcall_observer_make')}
                     aria-pressed={isObserver}
-                    className="shrink-0 p-1 rounded-md transition-transform active:scale-90"
+                    className={`shrink-0 p-1 rounded-md transition-all active:scale-90 focus:outline-none ${
+                      (isRollCallPhase || showStatusSliders || isObserver)
+                        ? ''
+                        : 'opacity-0 group-hover/seat:opacity-100 focus-visible:opacity-100'
+                    }`}
                     style={{ color: isObserver ? 'rgba(238,217,138,0.9)' : 'rgba(237,231,216,0.4)' }}
                   >
                     <Megaphone size={15} />

@@ -67,6 +67,12 @@ export interface ScoreboardComment {
   factorScores: Record<string, number>;
   speechContext: string | null;
   speechSeconds: number | null;
+  /** The caucus topic or motion label the speech was given under. Null on the GSL
+   *  when the committee has no topic, and on rows written before it was stored. */
+  speechTopic: string | null;
+  /** When the SPEECH happened, which is not `createdAt` — that is when the chair
+   *  typed. Null until the speech is logged, and on pre-existing rows. */
+  spokenAt: string | null;
   createdAt: string;
 }
 
@@ -362,7 +368,7 @@ export async function loadConferenceScoreboard(
     fetchAllByCommittee(supabase, 'documents', 'id, committee_id, type, doc_code, title, sponsors, status, created_at', sessionIds),
     fetchAllByCommittee(
       supabase, 'feedback',
-      'id, committee_id, country, chair_name, content, level, factor_scores, speech_context, speech_seconds, created_at',
+      'id, committee_id, country, chair_name, content, level, factor_scores, speech_context, speech_seconds, speech_topic, spoken_at, created_at',
       sessionIds,
     ),
   ]);
@@ -396,6 +402,8 @@ export async function loadConferenceScoreboard(
       factorScores: (f.factor_scores as Record<string, number>) ?? {},
       speechContext: (f.speech_context as string | null) ?? null,
       speechSeconds: (f.speech_seconds as number | null) ?? null,
+      speechTopic: (f.speech_topic as string | null) ?? null,
+      spokenAt: (f.spoken_at as string | null) ?? null,
       createdAt: f.created_at as string,
     }));
 
@@ -418,6 +426,8 @@ export async function loadConferenceScoreboard(
           factorScores: f.factorScores,
           speechContext: f.speechContext,
           speechSeconds: f.speechSeconds,
+          speechTopic: f.speechTopic,
+          spokenAt: f.spokenAt,
           createdAt: f.createdAt,
         }));
 
@@ -434,7 +444,11 @@ export async function loadConferenceScoreboard(
         status: d.status,
         isObserver: d.isObserver ?? false,
 
-        headline: computeHeadline(activity.total, quality, cfg.scoreBlend),
+        // Blend in POINTS, never index-against-points. `computeHeadline` takes the
+        // whole config so the blend and the unit scale can never come from
+        // different places. `sessionScoreboard.ts` calls it identically; the two
+        // must not drift.
+        headline: computeHeadline(activity.total, quality, cfg),
         objective: activity.total,
         quality,
 
@@ -480,8 +494,24 @@ export function formatSpeakingTime(totalSeconds: number): string {
   return s ? `${m}m ${s}s` : `${m}m`;
 }
 
+/** ENGLISH DEFAULTS ONLY — the organiser surfaces (`/manage/**`) are English by
+ *  design and read this directly. The session console is translated into four
+ *  locales, so it must NOT use this: `ScoreboardTable` takes the same three
+ *  strings through its `labels` prop, which the chair's `ScoreboardPanel` fills
+ *  from `useT()`. Same escape hatch as every other label in that component. */
 export const COMMENT_LEVEL_LABEL: Record<FeedbackLevel, string> = {
   speech: 'Speech note',
   session: 'Session recap',
   conference: 'Conference recap',
+};
+
+/** The label a note's speaking context reads as. English defaults, for the same
+ *  reason as above; the session console passes translated ones. Kept
+ *  byte-identical to `contextLabel` on the organiser live wall
+ *  (`manage/[slug]/live/LiveModals.tsx`) so the two never invent rival words. */
+export const COMMENT_CONTEXT_LABEL: Record<string, string> = {
+  'speakers-list': 'GSL',
+  'moderated-caucus': 'CAUCUS',
+  'unmoderated-caucus': 'UNMOD',
+  'tour-de-table': 'TOUR',
 };

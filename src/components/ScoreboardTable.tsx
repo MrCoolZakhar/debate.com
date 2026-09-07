@@ -35,8 +35,8 @@ import { SeatFlag } from '@/components/SeatFlag';
 import { getCountryDisplayName } from '@/lib/countries';
 import { committeeDisplayName } from '@/lib/presetNames';
 import {
-  formatSpeakingTime, COMMENT_LEVEL_LABEL,
-  type ConferenceScoreboard, type ScoreboardDelegateRow,
+  formatSpeakingTime, COMMENT_LEVEL_LABEL, COMMENT_CONTEXT_LABEL,
+  type ConferenceScoreboard, type ScoreboardComment, type ScoreboardDelegateRow,
 } from '@/lib/conferenceScoreboard';
 import { SOFT, RED, CARD_BORDER_COLOR } from './scoreboardTokens';
 
@@ -67,6 +67,11 @@ export interface ScoreboardLabels {
   statSpeeches: string; statSpeakingTime: string; statMotions: string;
   statRightsOfReply: string; statWpDr: string; statChairNotes: string;
   statPoints: string; statObjectivePts: string;
+  /** The subjective half of the board, as a visible number. It had no label
+   *  anywhere before: `row.quality` reached the screen only inside `title=`
+   *  tooltips and one CSV column, so the one qualitative thing a chair could
+   *  actually SEE was the per-factor bar. */
+  statQuality: string; titleQuality: string; qualityUnrated: string;
   titleSpeechesSplit: string; titleMotions: string; titleWpDr: string;
   titleLedgerBlended: string; titleLedger: string;
   titleRowSpeeches: string; titleScoreBlended: string; titleScore: string;
@@ -74,6 +79,13 @@ export interface ScoreboardLabels {
   emptyNoScored: string; emptyNoRatings: string; emptyNoComments: string;
   observer: string; absent: string;
   speechOne: string; speechMany: string; commentSpeechSeconds: string;
+  /** A note's level, when it is not an ordinary speech note. */
+  commentLevelSpeech: string; commentLevelSession: string; commentLevelConference: string;
+  /** The speaking context a speech note hangs off. Same four words the organiser
+   *  live wall uses, so the two surfaces never invent rival vocabulary. */
+  ctxGsl: string; ctxModerated: string; ctxUnmoderated: string; ctxTour: string;
+  /** Tooltip on a note whose speech time and typing time differ. */
+  commentWritten: string;
 }
 
 /** The exact literals this file carried before the prop existed. Any caller that
@@ -98,6 +110,9 @@ export const DEFAULT_SCOREBOARD_LABELS: ScoreboardLabels = {
   statChairNotes: 'CHAIR NOTES',
   statPoints: 'POINTS',
   statObjectivePts: 'OBJECTIVE PTS',
+  statQuality: 'QUALITY',
+  titleQuality: 'Mean of the chair factor ratings, on a 0 to 100 scale. It is not points, and it is not added to them.',
+  qualityUnrated: 'Not rated',
   titleSpeechesSplit: "{gsl} on the speakers' list · {caucus} in caucus",
   titleMotions: 'Motions this delegation raised',
   titleWpDr: 'Sponsored {wp} working paper(s) and {dr} draft resolution(s)',
@@ -116,6 +131,14 @@ export const DEFAULT_SCOREBOARD_LABELS: ScoreboardLabels = {
   speechOne: 'speech',
   speechMany: 'speeches',
   commentSpeechSeconds: '{n}s speech',
+  commentLevelSpeech: COMMENT_LEVEL_LABEL.speech,
+  commentLevelSession: COMMENT_LEVEL_LABEL.session,
+  commentLevelConference: COMMENT_LEVEL_LABEL.conference,
+  ctxGsl: COMMENT_CONTEXT_LABEL['speakers-list'],
+  ctxModerated: COMMENT_CONTEXT_LABEL['moderated-caucus'],
+  ctxUnmoderated: COMMENT_CONTEXT_LABEL['unmoderated-caucus'],
+  ctxTour: COMMENT_CONTEXT_LABEL['tour-de-table'],
+  commentWritten: 'Written {time}',
 };
 
 const fmt = (tpl: string, vars: Record<string, string | number>): string =>
@@ -213,6 +236,56 @@ export function DelegateDetail({ row, summary = false, extra, labels = DEFAULT_S
   // finally formats in its own locale.
   const dateLocale = locale === 'en' ? 'en-GB' : locale;
 
+  // ── A note's metadata line ────────────────────────────────────────────────
+  //
+  // It used to print level, author, seconds and a DAY/MONTH/YEAR date. Three
+  // things were wrong with that at once. The level is 'speech' on every row ever
+  // written, so it said nothing. The date has no time in it, so every note in an
+  // eight-hour session collapsed onto one identical string. And the speaking
+  // context was on the row all along and simply never rendered, so a chair could
+  // not tell a GSL note from a caucus note at all.
+  //
+  // Now it reads: where the speech was given, what it was about, who wrote it, how
+  // long it ran, and when — to the minute.
+  const stamp = (iso: string) =>
+    new Date(iso).toLocaleString(dateLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+  const levelLabel = (c: ScoreboardComment) =>
+    c.level === 'session' ? labels.commentLevelSession
+      : c.level === 'conference' ? labels.commentLevelConference
+        : labels.commentLevelSpeech;
+
+  // A speech note leads with WHERE it was given; anything else leads with what
+  // kind of note it is. An unknown context falls back to the stored value rather
+  // than being dropped, so a context added later still shows something true.
+  const contextLabel = (c: ScoreboardComment): string => {
+    if (c.level !== 'speech') return levelLabel(c);
+    switch (c.speechContext) {
+      case 'speakers-list': return labels.ctxGsl;
+      case 'moderated-caucus': return labels.ctxModerated;
+      case 'unmoderated-caucus': return labels.ctxUnmoderated;
+      case 'tour-de-table': return labels.ctxTour;
+      default: return c.speechContext ? c.speechContext.toUpperCase() : levelLabel(c);
+    }
+  };
+
+  const commentMeta = (c: ScoreboardComment): string => [
+    contextLabel(c),
+    c.speechTopic?.trim() || '',
+    c.chairName || '',
+    c.speechSeconds ? fmt(labels.commentSpeechSeconds, { n: c.speechSeconds }) : '',
+    // `spokenAt` is when the SPEECH happened; `createdAt` is when the chair typed,
+    // which for a note written on a past speech can be an hour later. Show the
+    // speech, fall back to the row's own time on the older rows that have no
+    // `spokenAt`, and keep the typing time in the tooltip.
+    c.spokenAt || c.createdAt ? stamp((c.spokenAt || c.createdAt) as string) : '',
+  ].filter(Boolean).join(' · ');
+
+  const commentMetaTitle = (c: ScoreboardComment): string | undefined =>
+    c.spokenAt && c.createdAt && c.spokenAt !== c.createdAt
+      ? fmt(labels.commentWritten, { time: stamp(c.createdAt) })
+      : undefined;
+
   return (
     <div style={{ backgroundColor: 'rgba(27,56,40,0.035)', borderBlockStart: `1px solid ${CARD_BORDER_COLOR}`, padding: '16px 18px' }}>
       {summary && (
@@ -234,6 +307,19 @@ export function DelegateDetail({ row, summary = false, extra, labels = DEFAULT_S
               label={row.quality != null && row.headline !== row.objective ? labels.statObjectivePts : labels.statPoints}
               value={String(row.objective)}
               title={row.quality != null ? fmt(labels.titleLedgerBlended, { headline: row.headline, quality: row.quality }) : labels.titleLedger}
+            />
+            {/* QUALITY, AS A NUMBER A CHAIR CAN READ.
+                `row.quality` existed on every row from the first version of this
+                table and reached the screen only through `title=` tooltips and one
+                CSV column, so the only visible qualitative thing was the factor bar
+                further down — and a chair looking at POINTS beside SCORE had no way
+                to see what moved one into the other. It is an INDEX out of 100, not
+                points: it is scaled into the committee's own point unit before the
+                blend (see `qualityPointScale` in scoring.ts), never added raw. */}
+            <Stat
+              label={labels.statQuality}
+              value={row.quality != null ? `${row.quality}` : labels.qualityUnrated}
+              title={labels.titleQuality}
             />
           </div>
         </>
@@ -298,11 +384,8 @@ export function DelegateDetail({ row, summary = false, extra, labels = DEFAULT_S
                 }}
               >
                 <p style={{ fontFamily: OUTFIT, fontSize: 12.5, color: NEU.ink, lineHeight: 1.5 }}>{c.content}</p>
-                <p style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, marginBlockStart: 5 }}>
-                  {COMMENT_LEVEL_LABEL[c.level]}
-                  {c.chairName ? ` · ${c.chairName}` : ''}
-                  {c.speechSeconds ? ` · ${fmt(labels.commentSpeechSeconds, { n: c.speechSeconds })}` : ''}
-                  {c.createdAt ? ` · ${new Date(c.createdAt).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                <p title={commentMetaTitle(c)} style={{ fontFamily: OUTFIT, fontSize: 10.5, color: SOFT, marginBlockStart: 5 }}>
+                  {commentMeta(c)}
                 </p>
               </div>
             ))

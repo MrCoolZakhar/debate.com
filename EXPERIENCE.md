@@ -115,9 +115,11 @@ Settings tabs: Voting (threshold, abstentions, veto mode + lists, quorum), Motio
 chair suffix, **chair approval / waiting room**, multi-chair, name requirement, lock delegate
 roll call, disable chat, sponsor label), Points (scoring). Scoring is an objective ledger
 (attendance, speeches, speaking-time, motions, RTR, docs) blended with chair quality factors;
-`hideScoresFromDelegates` hides the delegate score card. Chat: Everyone + per-chair + per-delegate
-threads; FA can nudge. Feedback: chair's private notes + factor scores; delegates see only the
-factor "recap". Multi-chair: head chair by presence join-order (F-HRC-1).
+The delegate sees NO score at all: points, the ledger, the by-time rank, the leaderboard and
+the chair's factor recap were all removed, and `hideScoresFromDelegates` went with them.
+Chat: Everyone + per-chair + per-delegate
+threads; FA can nudge. Feedback: chair's private notes + factor scores, both dais-only until
+awards publish. Multi-chair: head chair by presence join-order (F-HRC-1).
 
 ---
 
@@ -161,7 +163,7 @@ Ranked by severity. Every High/Medium item was confirmed against source.
 |---|---|---|---|
 | **L1** | **Right of Reply never touches the GSL** — it runs a standalone overlay timer + a score event. Behaviour is arguably *correct* (a reply isn't a queue slot), but AGENTS.md explicitly claims RTR "inserts a delegate at the TOP of speakersList." Fix the doc. | `chair/[code]/page.tsx:2806`; doc claim in AGENTS.md | CODE |
 | **L2** | **"Vote Again" is all-or-nothing** — no way to fix a single misrecorded placard; correcting one vote means re-clicking the whole round (and re-opens every vote to change). | `voting/[code]/page.tsx` `startNewVote` | OBSERVED |
-| **L3** | **`hideScoresFromDelegates` flips with no notice** — the delegate's score card just vanishes, reading as a bug rather than a chair choice. | delegate Stats tab render | OBSERVED |
+| **L3** | ~~**`hideScoresFromDelegates` flips with no notice** — the delegate's score card just vanishes, reading as a bug rather than a chair choice.~~ **RESOLVED 7 Sep 2026:** the setting and the factor recap it gated were both removed. The recap showed the chair's ratings and the flag defaulted to false, so it contradicted CLAUDE.md section 2 ("delegates never see factor ratings before publication"); deleting the flag alone would have made that permanent. Nothing on the delegate Stats tab states a score now, so there is nothing left to flip. | delegate Stats tab render | RESOLVED |
 | **L4** | **Suspend/Resume forces the whole room back through roll call** — right for a formal committee, too heavy for a continuous-crisis recess ("reconvene" should keep the roster). | `startResumeRollCall` → `pre-session` | CODE |
 | **L5** | **Delegate self-status is rate-limited to 3 changes / 3h.** A volatile character who repeatedly leaves and returns can exhaust it; the chair can still re-seat them, but the delegate can't self-serve. | `delegate/[code]/page.tsx` rate-limit helpers | CODE |
 | **L6** | **Default `motionOrder` ranks Unmoderated above Moderated** — a debatable default that surprises chairs (configurable). | `settingsStore.ts:98` | CODE |
