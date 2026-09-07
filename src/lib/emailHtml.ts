@@ -434,13 +434,31 @@ function hasDistinctFullName(conference: EmailRenderConference): boolean {
  * `e-chip` sits on the disc, not the image, so dark mode keeps the backdrop
  * light instead of tinting the artwork.
  */
+/**
+ * Ask Supabase for a PNG at the size we actually draw, rather than shipping
+ * whatever was uploaded.
+ *
+ * The upload pipeline only converts JPEG-ish input; SVG, GIF and WebP pass
+ * through untouched. WebP with an alpha channel is the dangerous one in email:
+ * a client or image proxy that cannot decode it composites it on a dark matte,
+ * so a transparent crest arrives as a solid dark tile covering the disc behind
+ * it. A URL that is not a Supabase public object passes through untouched.
+ */
+function emailImageUrl(url: string, px: number): string {
+  const marker = '/storage/v1/object/public/';
+  if (!url.includes(marker)) return url;
+  const base = url.split('?')[0].replace(marker, '/storage/v1/render/image/public/');
+  const size = Math.max(px, 16);
+  return `${base}?width=${size}&height=${size}&resize=contain&format=origin`;
+}
+
 function logoDisc(url: string, alt: string, disc: number): string {
   const art = Math.round(disc * 0.85);
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr>`
     + `<td align="center" valign="middle" width="${disc}" height="${disc}" class="e-chip"`
     + ` style="width:${disc}px;height:${disc}px;background-color:${DISC_BG};border:1px solid ${HAIRLINE};`
     + `border-radius:${Math.round(disc / 2)}px;line-height:0;font-size:0;mso-line-height-rule:exactly;">`
-    + `<img src="${escapeHtml(url)}" width="${art}" height="${art}" alt="${escapeHtml(alt)}"`
+    + `<img src="${escapeHtml(emailImageUrl(url, art * 2))}" width="${art}" height="${art}" alt="${escapeHtml(alt)}"`
     + ` style="display:block;width:${art}px;height:${art}px;object-fit:contain;border:0;margin:0 auto;" />`
     + `</td></tr></table>`;
 }
