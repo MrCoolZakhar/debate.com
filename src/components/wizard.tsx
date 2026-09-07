@@ -118,8 +118,8 @@ export function WizardShell({
                   ? `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`
                   : done
                     ? NEU.forest
-                    : 'rgba(27,56,40,0.16)',
-                boxShadow: active ? `0 2px 6px ${NEU.deepGold}55` : undefined,
+                    : 'color-mix(in srgb, var(--gv-main) 16%, transparent)',
+                boxShadow: active ? `0 2px 6px color-mix(in srgb, ${NEU.deepGold} 33%, transparent)` : undefined,
                 transition: `width 320ms ${EASE}, background 320ms ${EASE}, box-shadow 320ms ${EASE}`,
               }}
             />
@@ -271,8 +271,8 @@ function StepRail({
                         ? `linear-gradient(90deg, ${NEU.gold}, ${NEU.deepGold})`
                         : tickDone
                           ? NEU.forest
-                          : 'rgba(27,56,40,0.14)',
-                      boxShadow: tickActive ? `0 2px 6px ${NEU.deepGold}55` : NEU.inSm,
+                          : 'color-mix(in srgb, var(--gv-main) 14%, transparent)',
+                      boxShadow: tickActive ? `0 2px 6px color-mix(in srgb, ${NEU.deepGold} 33%, transparent)` : NEU.inSm,
                       transition: `background 320ms ${EASE}, box-shadow 320ms ${EASE}`,
                     }}
                   />
@@ -305,7 +305,7 @@ function StepRail({
                 textTransform: 'uppercase',
                 // NEU.muted is a 2.71:1 wash — future steps are decorative
                 // here, but anything the applicant must READ uses inkSoft.
-                color: active ? NEU.forest : done ? NEU.inkSoft : 'rgba(27,56,40,0.34)',
+                color: active ? NEU.forest : done ? NEU.inkSoft : 'color-mix(in srgb, var(--gv-main) 34%, transparent)',
                 transition: `color 320ms ${EASE}`,
               }}
             >
@@ -343,7 +343,7 @@ function GoldCheck({ visible }: { visible: boolean }) {
         height: 24,
         borderRadius: 999,
         background: `linear-gradient(135deg, ${NEU.gold}, ${NEU.deepGold})`,
-        boxShadow: `0 2px 7px ${NEU.deepGold}66`,
+        boxShadow: `0 2px 7px color-mix(in srgb, ${NEU.deepGold} 40%, transparent)`,
         opacity: visible ? 1 : 0,
         transform: visible ? 'scale(1)' : 'scale(0.25)',
         filter: visible ? 'blur(0px)' : 'blur(4px)',
@@ -360,11 +360,11 @@ function GoldCheck({ visible }: { visible: boolean }) {
 // the ivory page; hover grows the card and deepens the shadow so it reads as
 // picked-up. Selected stays clearly distinct (forest border + gold check
 // overlay). Motion rides the house cubic-bezier easing.
-const CARD_FLOAT = '-4px -5px 12px rgba(255,255,255,0.6), 6px 10px 24px rgba(27,56,40,0.14)';
+const CARD_FLOAT = '-4px -5px 12px rgba(255,255,255,0.6), 6px 10px 24px color-mix(in srgb, var(--gv-main) 14%, transparent)';
 // Hovered: a larger, softer drop shadow that also blooms a gold-tinted glow, so
 // the lifted card glints warm against the ivory page.
 const CARD_LIFT_GLASS =
-  '-6px -7px 20px rgba(255,255,255,0.9), 12px 20px 46px rgba(27,56,40,0.22), 0 12px 44px rgba(182,135,31,0.24)';
+  '-6px -7px 20px rgba(255,255,255,0.9), 12px 20px 46px color-mix(in srgb, var(--gv-main) 22%, transparent), 0 12px 44px color-mix(in srgb, var(--gv-accent) 24%, transparent)';
 
 function cardBaseStyle(selected: boolean, hovered: boolean, pressed = false): React.CSSProperties {
   return {
@@ -375,7 +375,7 @@ function cardBaseStyle(selected: boolean, hovered: boolean, pressed = false): Re
       ? '2px solid rgba(255,255,255,0.8)'
       : selected
         ? `2px solid ${NEU.forest}`
-        : '2px solid rgba(27,56,40,0.10)',
+        : '2px solid color-mix(in srgb, var(--gv-main) 10%, transparent)',
     borderRadius: 22,
     // Glassmorphism on hover: a whitish semi-transparent fill + backdrop blur,
     // so the card frosts over the ivory ground. Selected (unhovered) keeps the
