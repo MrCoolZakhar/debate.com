@@ -59,6 +59,12 @@ export interface AdminConferenceRow {
    *  reader is getConferenceIntent(), which is defensive by contract and drops
    *  keys it does not recognise. Never destructure this blob by hand. */
   intent: unknown;
+  /** The stored blue checkmark. Comes from the RPC rather than a follow-up
+   *  read, so a dropped secondary request can never make the Verified tile
+   *  quietly report zero. `refresh_conference_verification()` is its only
+   *  writer; a guard trigger rejects direct writes to the column. */
+  is_verified: boolean;
+  verified_at: string | null;
   /** Not returned by admin_conference_overview(). Avatars are resolved from
    *  `profiles` by the caller and passed in via the `avatars` map instead; this
    *  optional field is only a fallback should the RPC ever start returning one. */
@@ -603,13 +609,14 @@ type Filters = {
   country: Set<string>;
   organizer: Set<string>;
   setup: Set<string>;     // 'complete' | 'incomplete'
+  verified: Set<string>;  // 'yes' | 'no' — the blue checkmark, not set-up progress
   flags: Set<string>;     // 'stalled' | 'seats' | 'dais' | 'tbd'
   intent: Set<string>;    // an INTENT_OPTIONS key, or 'skipped' | 'unasked'
 };
 
 const EMPTY_FILTERS = (): Filters => ({
   state: new Set(), country: new Set(), organizer: new Set(), setup: new Set(), flags: new Set(),
-  intent: new Set(),
+  verified: new Set(), intent: new Set(),
 });
 
 const FLAG_LABEL: Record<string, string> = {
@@ -617,6 +624,7 @@ const FLAG_LABEL: Record<string, string> = {
 };
 const STATE_LABEL: Record<string, string> = { live: 'Live', draft: 'Draft' };
 const SETUP_LABEL: Record<string, string> = { complete: 'Set-up done', incomplete: 'Set-up pending' };
+const VERIFIED_LABEL: Record<string, string> = { yes: 'Verified', no: 'Not verified' };
 
 function countFilters(f: Filters) {
   return f.state.size + f.country.size + f.organizer.size + f.setup.size + f.flags.size + f.intent.size;
@@ -681,7 +689,7 @@ export default function ConferencesTab({
     total: rows.length,
     live: rows.filter(r => r.is_public).length,
     drafts: rows.filter(r => !r.is_public).length,
-    setupDone: rows.filter(r => r.setup_complete).length,
+    verified: rows.filter(r => r.is_verified).length,
     stalled: rows.filter(isStalled).length,
     shortSeats: rows.filter(isShortOnSeats).length,
   }), [rows]);
@@ -695,6 +703,7 @@ export default function ConferencesTab({
       return !!key && filters.organizer.has(key);
     });
     if (filters.setup.size) r = r.filter(x => filters.setup.has(x.setup_complete ? 'complete' : 'incomplete'));
+    if (filters.verified.size) r = r.filter(x => filters.verified.has(x.is_verified ? 'yes' : 'no'));
     if (filters.flags.size) {
       r = r.filter(x =>
         (filters.flags.has('stalled') && isStalled(x)) ||
@@ -736,6 +745,7 @@ export default function ConferencesTab({
   const activeChips: { key: string; label: string; remove: () => void }[] = [
     ...Array.from(filters.state).map(v => ({ key: `state:${v}`, label: STATE_LABEL[v] ?? v, remove: () => toggle('state', v) })),
     ...Array.from(filters.setup).map(v => ({ key: `setup:${v}`, label: SETUP_LABEL[v] ?? v, remove: () => toggle('setup', v) })),
+    ...Array.from(filters.verified).map(v => ({ key: `verified:${v}`, label: VERIFIED_LABEL[v] ?? v, remove: () => toggle('verified', v) })),
     ...Array.from(filters.country).map(v => ({ key: `country:${v}`, label: v, remove: () => toggle('country', v) })),
     ...Array.from(filters.organizer).map(v => ({ key: `org:${v}`, label: v, remove: () => toggle('organizer', v) })),
     ...Array.from(filters.flags).map(v => ({ key: `flag:${v}`, label: FLAG_LABEL[v] ?? v, remove: () => toggle('flags', v) })),
@@ -753,7 +763,7 @@ export default function ConferencesTab({
     { label: 'All conferences', value: stats.total,      emoji: 'Card index',        icon: Building2,   gradient: NEU_GRADIENTS.forest, active: activeCount === 0, onClick: clearAll },
     { label: 'Live',            value: stats.live,       emoji: 'Globe showing europe-africa', icon: Globe, gradient: NEU_GRADIENTS.green,  active: filters.state.size === 1 && filters.state.has('live'),  onClick: () => only('state', 'live') },
     { label: 'Drafts',          value: stats.drafts,     emoji: 'Memo',              icon: PencilLine,  gradient: NEU_GRADIENTS.amber,  active: filters.state.size === 1 && filters.state.has('draft'), onClick: () => only('state', 'draft') },
-    { label: 'Set-up done',     value: stats.setupDone,  emoji: 'Check mark button', icon: Check,       gradient: NEU_GRADIENTS.sage,   active: filters.setup.size === 1 && filters.setup.has('complete'), onClick: () => only('setup', 'complete') },
+    { label: 'Verified',        value: stats.verified,   emoji: 'Check mark button', icon: Check,       gradient: NEU_GRADIENTS.sage,   active: filters.verified.size === 1 && filters.verified.has('yes'), onClick: () => only('verified', 'yes') },
     { label: `Stalled ${STALE_DAYS}d+`, value: stats.stalled, emoji: 'Hourglass not done', icon: Clock, gradient: NEU_GRADIENTS.gold,   active: filters.flags.size === 1 && filters.flags.has('stalled'), onClick: () => only('flags', 'stalled') },
     { label: 'Short on seats',  value: stats.shortSeats, emoji: 'Chair',             icon: CircleAlert, gradient: NEU_GRADIENTS.amber,  active: filters.flags.size === 1 && filters.flags.has('seats'),   onClick: () => only('flags', 'seats') },
   ];
@@ -803,6 +813,14 @@ export default function ConferencesTab({
             onToggle={v => toggle('setup', v)}
             onAll={() => setFilters(f => ({ ...f, setup: new Set(['complete', 'incomplete']) }))}
             onNone={() => setFilters(f => ({ ...f, setup: new Set() }))}
+          />
+          <FilterGroup
+            title="Checkmark" icon={Check}
+            options={[{ label: 'Verified', value: 'yes' }, { label: 'Not verified', value: 'no' }]}
+            selected={filters.verified}
+            onToggle={v => toggle('verified', v)}
+            onAll={() => setFilters(f => ({ ...f, verified: new Set(['yes', 'no']) }))}
+            onNone={() => setFilters(f => ({ ...f, verified: new Set() }))}
           />
           <FilterGroup
             title="Needs attention" icon={CircleAlert}

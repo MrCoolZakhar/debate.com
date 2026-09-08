@@ -86,19 +86,37 @@ export default function OnboardingPage() {
       if (cancelled) return;
       if (!data.user) { router.replace('/'); return; }
       setUserId(data.user.id);
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('nationality, date_of_birth')
-        .eq('id', data.user.id)
-        .maybeSingle();
-      if (cancelled) return;
+
       // A row we could not read is NOT a row with blanks in it. Raising the
       // gate on a transient fetch error, an RLS refusal, or a profiles row the
       // signup trigger has not committed yet would show an unskippable screen
       // whose save has nothing to update — the user would fill it in, be let
-      // through, and still have no nationality. Fall through instead.
-      if (error || !profile) { setBasicsNeeded(false); return; }
-      const row = profile as { nationality: string | null; date_of_birth: string | null };
+      // through, and still have no nationality. Falling through is the safe
+      // failure, and it stays the safe failure.
+      //
+      // But falling through on the FIRST miss was letting real people past.
+      // The common case here is a Google account arriving microseconds ahead
+      // of its own signup trigger, which resolves on its own in well under a
+      // second: of 419 accounts created this month, 27 still have no
+      // nationality and every one of them came in through OAuth. So give the
+      // row a moment to appear before giving up. Three tries over ~900ms is
+      // invisible to someone who just clicked through Google, and it turns
+      // most of that 27 into people who get asked.
+      type BasicsRow = { nationality: string | null; date_of_birth: string | null };
+      let profile: BasicsRow | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await supabase
+          .from('profiles')
+          .select('nationality, date_of_birth')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (!res.error && res.data) { profile = res.data as BasicsRow; break; }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+      }
+      if (cancelled) return;
+      if (!profile) { setBasicsNeeded(false); return; }
+      const row = profile;
       setBasicsNationality(row.nationality ?? '');
       setBasicsDob(row.date_of_birth ?? '');
       setBasicsNeeded(!row.nationality || !row.date_of_birth);
