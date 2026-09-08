@@ -18,6 +18,7 @@ import { Pill, type PillTone, OUTFIT } from '@/app/account/accountUi';
 import { NEU, EASE } from '@/components/neu';
 import { LogoDisc } from '@/components/LogoDisc';
 import { formatConferenceDates } from '@/lib/conferenceDates';
+import { conferenceAcronymLabel, editionYear } from '@/lib/conferenceLabels';
 import VerifiedCheck from '@/components/VerifiedCheck';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -93,25 +94,24 @@ export function countdown(start: string | null, end: string | null): { label: st
 }
 
 // ── Acronym-forward name ─────────────────────────────────────────────────────
-// Primary label = the acronym; if the acronym does not already carry the
-// 4-digit year, the trailing year parsed from the full name is appended
-// (so "Harvard World Model United Nations 2027" / "WorldMUN" → "WorldMUN 2027").
-// Secondary = the full spelled-out name, shown small above the primary. With no
-// acronym, the full name is the sole (primary) label.
+// Primary label = the acronym with its edition year, through the one shared
+// helper (`conferenceAcronymLabel`), so the year comes from the start date
+// rather than from whatever happens to be written in the full name. Secondary =
+// the full spelled-out name, shown small above the primary. With no acronym,
+// the full name is the sole (primary) label.
 
 export function acronymForward(
   fullName: string,
   acronym: string | null | undefined,
+  startDate?: string | null,
 ): { primary: string; secondary: string | null } {
   const acr = (acronym ?? '').trim();
   if (!acr) return { primary: fullName, secondary: null };
-  let primary = acr;
-  if (!/\b(?:19|20)\d{2}\b/.test(acr)) {
-    const years = fullName.match(/\b(?:19|20)\d{2}\b/g);
-    const year = years?.[years.length - 1];
-    if (year) primary = `${acr} ${year}`;
-  }
-  return { primary, secondary: fullName };
+  // Dates can be TBD, so keep the old fallback: a year written into the full
+  // name is better than no year at all.
+  const fromName = fullName.match(/\b(?:19|20)\d{2}\b/g);
+  const year = editionYear({ start_date: startDate ?? null }) ?? fromName?.[fromName.length - 1] ?? null;
+  return { primary: conferenceAcronymLabel({ acronym: acr, year }) || acr, secondary: fullName };
 }
 
 // ── Role tag chip ────────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ export function PersonalConferenceCard({
   const flag = country ? getFlagUrl(country.code) : null;
   const cd = countdown(conf.start_date, conf.end_date);
   const place = [conf.city, conf.country].filter(Boolean).join(', ');
-  const { primary, secondary } = acronymForward(conf.full_name, conf.acronym);
+  const { primary, secondary } = acronymForward(conf.full_name, conf.acronym, conf.start_date);
 
   return (
     <div

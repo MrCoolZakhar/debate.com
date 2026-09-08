@@ -19,6 +19,7 @@ import { FlagImg } from '@/components/FlagImg';
 import { currencySymbol, formatFeeAmountCompact } from '@/lib/utils';
 import { fetchDelegateFees, applyDelegateFee } from '@/lib/publicFees';
 import { compareStartDate, hasConcluded, splitConferenceDates } from '@/lib/conferenceDates';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { ConferenceCard } from '../ConferenceCard';
 import VerifiedCheck from '@/components/VerifiedCheck';
 
@@ -281,7 +282,7 @@ function ConferenceListRow({
             transition: 'color 160ms ease', lineHeight: 1.2,
           }}
         >
-          <span className="truncate">{conf.acronym || conf.full_name}</span>
+          <span className="truncate">{conferenceAcronymLabel(conf) || conf.full_name}</span>
           <VerifiedCheck verified={!!conf.is_verified} size={18} title="Verified conference" />
         </div>
         <div

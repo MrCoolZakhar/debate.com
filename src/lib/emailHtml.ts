@@ -411,6 +411,17 @@ function renderBulletList(chunk: string, linkColor: string, marginBottom: number
 
 // ── Header ───────────────────────────────────────────────────────────────────
 
+/** The conference's short name as a READER sees it: acronym + edition year,
+ *  falling back to the full name. The year is the single most useful
+ *  disambiguator in a mailbox — last year's edition is sitting right above
+ *  this message. Degrades to the bare acronym when the caller did not select
+ *  `start_date`. */
+function shortName(conference: EmailRenderConference): string {
+  return conferenceAcronymLabel({ acronym: conference.acronym, start_date: conference.start_date ?? null })
+    || conference.acronym
+    || conference.full_name;
+}
+
 /** True when the acronym is a genuine shorthand for the full name, i.e. worth
  *  printing both. Mirrors the app-wide "acronym big, full name small beneath"
  *  rule; when they're effectively the same string, printing both is noise. */
@@ -495,7 +506,7 @@ function renderIdentityRow(
   const subCls = opts.onAccent ? '' : ' class="e-muted"';
   const nameStack =
     `<div${nameCls} style="font-family:${SERIF};font-size:20px;line-height:1.25;font-weight:bold;letter-spacing:0.03em;color:${nameInk};">` +
-    `${escapeHtml(conference.acronym || conference.full_name)}</div>` +
+    `${escapeHtml(shortName(conference))}</div>` +
     (hasDistinctFullName(conference)
       ? `<div${subCls} style="font-family:${SANS};font-size:12px;line-height:1.45;color:${subInk};${subOpacity}padding-top:4px;">${escapeHtml(conference.full_name)}</div>`
       : '');
@@ -539,10 +550,7 @@ function renderAboveCardIdentity(conference: EmailRenderConference, logoAbs: str
   // year's conference has the previous edition's mail sitting right above it.
   // conferenceAcronymLabel is the same helper the share cards and the site
   // use, so it never doubles a year that is already in the acronym.
-  const acronym =
-    conferenceAcronymLabel({ acronym: conference.acronym, start_date: conference.start_date ?? null }) ||
-    conference.acronym ||
-    conference.full_name;
+  const acronym = shortName(conference);
   return `<tr><td align="center" style="padding:0 0 20px 0;">
     ${logoAbs
       ? `<div style="padding:0 0 11px 0;">${logoDisc(logoAbs, acronym, 64)}</div>`
@@ -567,7 +575,7 @@ function renderReplyPanel(conference: EmailRenderConference, accent: string): st
       <tr>
         <td class="e-rule" width="4" style="width:4px;background-color:${accent};font-size:0;line-height:0;border-radius:10px 0 0 10px;">&nbsp;</td>
         <td class="e-soft" style="padding:15px 18px;font-family:${SANS};font-size:14px;line-height:1.6;color:${INK_SOFT};">
-          <strong class="e-ink" style="color:${INK};">Questions?</strong> Reply to this email and it reaches the ${escapeHtml(conference.acronym || conference.full_name)} team.
+          <strong class="e-ink" style="color:${INK};">Questions?</strong> Reply to this email and it reaches the ${escapeHtml(shortName(conference))} team.
         </td>
       </tr>
     </table>
@@ -894,7 +902,7 @@ export function renderEmailHtml({
     `style="display:block;width:26px;height:26px;border:0;margin:0 auto 9px;opacity:0.75;" />`;
 
   const sentBy =
-    `Sent to you by ${escapeHtml(conference.acronym || conference.full_name)} through Gavelling, the platform it runs on.` +
+    `Sent to you by ${escapeHtml(shortName(conference))} through Gavelling, the platform it runs on.` +
     `<br><a href="${escapeHtml(prefsUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">Email preferences</a>` +
     `&nbsp;&middot;&nbsp;<a href="${escapeHtml(siteUrl)}" target="_blank" style="color:${MUTED};text-decoration:underline;">gavelling.com</a>`;
 

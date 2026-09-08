@@ -8,6 +8,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { UN_COUNTRIES, getCountryByName, getFlagUrl, countryMatchRank } from '@/lib/countries';
 import { deriveExperienceLevel, experienceProgress } from '@/lib/munExperience';
 import { ageAt } from '@/lib/age';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { Eyebrow, GlassCard, PillToggle, Pill, ExperienceInfo, LevelInsignia, OUTFIT } from '../accountUi';
 import { NEU, NeuIconDisc, NEU_GRADIENTS } from '@/components/neu';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -620,7 +621,7 @@ export default function ProfilePage() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-[14px] font-bold" style={{ color: '#1C1410', fontFamily: OUTFIT, margin: 0 }}>
-                      How was {conf.acronym}?
+                      How was {conferenceAcronymLabel(conf)}?
                     </p>
                     <p className="text-[12px] truncate" style={{ color: '#9A8A78', fontFamily: OUTFIT, margin: '1px 0 0 0' }}>
                       Leave a review of{' '}
@@ -641,7 +642,7 @@ export default function ProfilePage() {
                   </button>
                   <button
                     onClick={() => dismissReviewPrompt(conf.id)}
-                    aria-label={`Dismiss review prompt for ${conf.acronym}`}
+                    aria-label={`Dismiss review prompt for ${conferenceAcronymLabel(conf)}`}
                     className="flex items-center justify-center flex-shrink-0 rounded-full focus:outline-none transition-colors"
                     style={{ width: '26px', height: '26px', border: 'none', backgroundColor: 'transparent', color: '#9A8A78', cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}

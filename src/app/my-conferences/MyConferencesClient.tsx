@@ -11,6 +11,7 @@ import { useConfirmModal } from '@/components/ConfirmModal';
 import { discardApplyDraft } from '@/lib/applyDraft';
 import { notifyDraftsChanged } from '@/hooks/useDraftCount';
 import { committeeDisplayName } from '@/lib/presetNames';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import DecorativeBleed from '@/components/DecorativeBleed';
@@ -54,6 +55,7 @@ interface ChairInvite {
   id: string;
   token: string;
   conferenceName: string;
+  /** Already carries the edition year (`conferenceAcronymLabel`). */
   acronym: string;
   committeeName: string;
 }
@@ -62,6 +64,7 @@ interface OrganizerInvite {
   id: string;
   token: string;
   conferenceName: string;
+  /** Already carries the edition year (`conferenceAcronymLabel`). */
   acronym: string;
   slug: string;
   /** The public-facing role the inviting team picked for them, chosen in the
@@ -88,8 +91,14 @@ interface DraftRow {
   slug: string;
   acronym: string;
   fullName: string;
+  startDate: string | null;
   logoUrl: string | null;
 }
+
+/** The conference columns the invite/draft joins select, shared so the label
+ *  helper always has the start date it needs for the edition year. */
+type ConfNameRow = { full_name: string; acronym: string; start_date: string | null };
+type DraftConfRow = ConfNameRow & { slug: string; logo_url: string | null };
 
 const DRAFT_ROLE_LABEL: Record<string, string> = {
   'delegate': 'Delegate',
@@ -510,7 +519,7 @@ function PendingImportInvitesSection({ invites }: { invites: ImportInvite[] }) {
               <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Mail} size={40} />
               <div className="flex-1 min-w-0">
                 <p className="font-black text-sm truncate" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
-                  {inv.conference.acronym} invited you as {inv.role.replace(/-/g, ' ')}
+                  {conferenceAcronymLabel(inv.conference)} invited you as {inv.role.replace(/-/g, ' ')}
                 </p>
                 <p className="text-xs truncate mt-0.5" style={{ color: NEU.muted, fontFamily: OUTFIT }}>
                   {subtitle}
@@ -603,8 +612,12 @@ function DraftRowCard({ draft, onDelete }: { draft: DraftRow; onDelete: (draft: 
   const [busy, setBusy] = useState(false);
   // House UI rule: acronym primary, full name small beneath — and only when the
   // acronym is a real collapse of the name, never a redundant second line.
-  const primary = committeeDisplayName(draft.fullName, draft.acronym) || draft.fullName;
-  const secondary = primary === draft.fullName ? null : draft.fullName;
+  const collapsed = committeeDisplayName(draft.fullName, draft.acronym) || draft.fullName;
+  const secondary = collapsed === draft.fullName ? null : draft.fullName;
+  // The acronym identifies the conference on its own here, so it carries the year.
+  const primary = secondary
+    ? conferenceAcronymLabel({ acronym: collapsed, full_name: draft.fullName, start_date: draft.startDate }) || collapsed
+    : collapsed;
   const roleLabel = DRAFT_ROLE_LABEL[draft.role] ?? draft.role;
 
   return (
@@ -767,12 +780,12 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     const supabase = getAuthedClient(session.access_token);
     const { data: rows } = await supabase
       .from('conference_chair_invites')
-      .select('id, token, conferences (full_name, acronym), conference_committees (name)')
+      .select('id, token, conferences (full_name, acronym, start_date), conference_committees (name)')
       .eq('invited_user_id', user.id)
       .eq('status', 'pending');
     const invites = ((rows ?? []) as unknown as {
       id: string; token: string;
-      conferences: { full_name: string; acronym: string } | { full_name: string; acronym: string }[] | null;
+      conferences: ConfNameRow | ConfNameRow[] | null;
       conference_committees: { name: string } | { name: string }[] | null;
     }[]).map(r => {
       const conf = first(r.conferences);
@@ -780,7 +793,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
       return {
         id: r.id, token: r.token,
         conferenceName: conf?.full_name ?? 'Unknown conference',
-        acronym: conf?.acronym ?? '',
+        acronym: conf ? conferenceAcronymLabel(conf) : '',
         committeeName: committee?.name ?? 'Unknown committee',
       };
     });
@@ -795,13 +808,12 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     const supabase = getAuthedClient(session.access_token);
     const { data } = await supabase
       .from('application_drafts')
-      .select('id, role, updated_at, discard_token, conference_id, conferences (slug, acronym, full_name, logo_url)')
+      .select('id, role, updated_at, discard_token, conference_id, conferences (slug, acronym, full_name, logo_url, start_date)')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
     const rows = ((data ?? []) as unknown as {
       id: string; role: string; updated_at: string; discard_token: string; conference_id: string;
-      conferences: { slug: string; acronym: string; full_name: string; logo_url: string | null }
-        | { slug: string; acronym: string; full_name: string; logo_url: string | null }[] | null;
+      conferences: DraftConfRow | DraftConfRow[] | null;
     }[]).flatMap((r) => {
       const conf = first(r.conferences);
       // A draft whose conference we can no longer read is not actionable —
@@ -816,6 +828,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
         slug: conf.slug,
         acronym: conf.acronym,
         fullName: conf.full_name,
+        startDate: conf.start_date,
         logoUrl: conf.logo_url,
       }];
     });
@@ -825,7 +838,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   async function handleDeleteDraft(draft: DraftRow) {
     const { confirmed } = await confirm({
       title: 'Delete this draft?',
-      body: `Your saved answers for ${draft.acronym || draft.fullName} will be permanently deleted. You can always start the application again.`,
+      body: `Your saved answers for ${conferenceAcronymLabel({ acronym: draft.acronym, full_name: draft.fullName, start_date: draft.startDate }) || draft.fullName} will be permanently deleted. You can always start the application again.`,
       confirmLabel: 'Delete draft',
       danger: true,
     });
@@ -863,7 +876,7 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
   const loadOrganizerInvites = useCallback(async () => {
     if (!user || !session) return;
     const supabase = getAuthedClient(session.access_token);
-    const select = 'id, token, public_title, conferences (full_name, acronym, slug)';
+    const select = 'id, token, public_title, conferences (full_name, acronym, slug, start_date)';
     // Two queries, not one .or(): invited_user_id-keyed invites (the normal
     // case) plus email-keyed invites (invited_user_id null) for someone who
     // just created their account with the invited address — matches RLS's
@@ -879,14 +892,14 @@ function MyConferencesInner({ embedded = false }: { embedded?: boolean }) {
     const rows = [...(byUser.data ?? []), ...(byEmail.data ?? [])];
     const invites = (rows as unknown as {
       id: string; token: string; public_title: string | null;
-      conferences: { full_name: string; acronym: string; slug: string } | { full_name: string; acronym: string; slug: string }[] | null;
+      conferences: (ConfNameRow & { slug: string }) | (ConfNameRow & { slug: string })[] | null;
     }[]).map(r => {
       const conf = first(r.conferences);
       return {
         id: r.id, token: r.token,
         publicTitle: r.public_title ?? null,
         conferenceName: conf?.full_name ?? 'Unknown conference',
-        acronym: conf?.acronym ?? '',
+        acronym: conf ? conferenceAcronymLabel(conf) : '',
         slug: conf?.slug ?? '',
       };
     });

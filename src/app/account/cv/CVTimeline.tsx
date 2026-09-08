@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Emoji3D, NEU } from '@/components/neu';
 import { committeeDisplayName } from '@/lib/presetNames';
+import { conferenceAcronymLabel, editionYear } from '@/lib/conferenceLabels';
 import { LogoDisc } from '@/components/LogoDisc';
 import { ENTRY_TYPE_MAP, COMMITTEE_SUGGESTIONS, type CVEntry } from '@/components/CVEntryModal';
 import { experienceProgress } from '@/lib/munExperience';
@@ -34,11 +35,14 @@ const CONFERENCE_ACRONYMS: { match: RegExp; acronym: string; full: string }[] = 
   { match: /hult (ashridge )?model united nations/i,        acronym: 'HultMUN',  full: 'Hult Model United Nations' },
 ];
 
-export function conferenceDisplay(name: string): { primary: string; secondary: string | null } {
-  const year = (name.match(/\b(19|20)\d{2}\b/) ?? [''])[0];
+export function conferenceDisplay(name: string, eventDate?: string | null): { primary: string; secondary: string | null } {
+  // The edition year: from the name when it carries one, otherwise from the
+  // entry's own date. An acronym alone ("LIMUN") names no particular edition.
+  const inName = (name.match(/\b(19|20)\d{2}\b/) ?? [''])[0];
+  const year = inName || editionYear({ start_date: eventDate ?? null });
   for (const c of CONFERENCE_ACRONYMS) {
     if (c.match.test(name)) {
-      return { primary: year ? `${c.acronym} ${year}` : c.acronym, secondary: c.full };
+      return { primary: conferenceAcronymLabel({ acronym: c.acronym, year }) || c.acronym, secondary: c.full };
     }
   }
   return { primary: name, secondary: null };
@@ -278,7 +282,7 @@ export function TimelineEntry({
 
           {/* Conference name — ACRONYM primary, spelled-out name small beneath */}
           {(() => {
-            const disp = conferenceDisplay(entry.conference_name);
+            const disp = conferenceDisplay(entry.conference_name, entry.event_date);
             return (
               <>
                 <h3

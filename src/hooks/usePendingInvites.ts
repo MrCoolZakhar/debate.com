@@ -36,12 +36,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 
 /** One pending imported-delegate invitation, with the conference it belongs to. */
 export interface InviteSummary {
   id: string;
   role: string;
   slug: string;
+  /** Already carries the edition year (`conferenceAcronymLabel`). */
   acronym: string;
   fullName: string;
   logoUrl: string | null;
@@ -107,7 +109,7 @@ export function usePendingInvites(enabled: boolean = true) {
         id: r.application_id,
         role: r.role,
         slug: r.conference.slug,
-        acronym: r.conference.acronym,
+        acronym: conferenceAcronymLabel(r.conference) || r.conference.acronym,
         fullName: r.conference.full_name,
         logoUrl: r.conference.logo_url,
         claimToken: r.claim_token,

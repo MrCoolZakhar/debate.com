@@ -212,6 +212,8 @@ export async function queueAdHocEmail(
     logo_url: conference.logo_url,
     contact_email: conference.contact_email,
     email_theme: conference.email_theme,
+    // Feeds the edition year in the masthead and the footer.
+    start_date: conference.start_date,
   };
   const flatBody = flattenBlocksToPlainText(blocks, renderConf);
 

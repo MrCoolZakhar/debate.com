@@ -38,6 +38,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 
 export const DRAFTS_CHANGED_EVENT = 'gv-drafts-changed';
 
@@ -46,6 +47,7 @@ export interface DraftSummary {
   id: string;
   role: string;
   slug: string;
+  /** Already carries the edition year (`conferenceAcronymLabel`). */
   acronym: string;
   fullName: string;
   logoUrl: string | null;
@@ -83,11 +85,11 @@ export function useDraftCount(enabled: boolean = true) {
     const supabase = getAuthedClient(session.access_token);
     const { data, error } = await supabase
       .from('application_drafts')
-      .select('id, role, updated_at, conferences (slug, acronym, full_name, logo_url)')
+      .select('id, role, updated_at, conferences (slug, acronym, full_name, logo_url, start_date)')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
 
-    type Conf = { slug: string; acronym: string; full_name: string; logo_url: string | null };
+    type Conf = { slug: string; acronym: string; full_name: string; logo_url: string | null; start_date: string | null };
     const rows = ((data ?? []) as unknown as {
       id: string; role: string; updated_at: string; conferences: Conf | Conf[] | null;
     }[]).flatMap((r) => {
@@ -97,7 +99,9 @@ export function useDraftCount(enabled: boolean = true) {
         id: r.id,
         role: r.role,
         slug: conf.slug,
-        acronym: conf.acronym,
+        // Labelled at source so every reader (the profile menu, the drafts
+        // list) names the edition, not just the series.
+        acronym: conferenceAcronymLabel(conf) || conf.acronym,
         fullName: conf.full_name,
         logoUrl: conf.logo_url,
         updatedAt: r.updated_at,

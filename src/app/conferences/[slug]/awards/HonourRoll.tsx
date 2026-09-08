@@ -15,6 +15,7 @@ import { FlagImg } from '@/components/FlagImg';
 import ProfileLink from '@/components/ProfileLink';
 import { AwardArtwork, AwardChip, OUTFIT } from '@/app/account/accountUi';
 import { formatConferenceDates } from '@/lib/conferenceDates';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { getAwardsConfig, type ConferenceAwardRow } from '@/lib/awards';
 import VerifiedCheck from '@/components/VerifiedCheck';
 
@@ -43,7 +44,7 @@ export default function HonourRoll({ conference, committees, awards }: {
   committees: HonourRollCommittee[];
   awards: ConferenceAwardRow[];
 }) {
-  const name = conference.acronym || conference.full_name;
+  const name = conferenceAcronymLabel(conference) || conference.full_name;
   const dates = formatConferenceDates(conference.start_date, conference.end_date, { fallback: '' });
 
   const config = useMemo(() => getAwardsConfig(conference.awards_config), [conference.awards_config]);

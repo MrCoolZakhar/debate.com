@@ -144,7 +144,7 @@ interface PartnerLink {
 function partnerLabel(link: PartnerLink): string {
   return link.partner_conference_id === null
     ? (link.company_name ?? 'Partner')
-    : (link.conf?.acronym ?? 'Unknown conference');
+    : (link.conf ? conferenceAcronymLabel(link.conf) || 'Unknown conference' : 'Unknown conference');
 }
 
 interface IncomingPartnerClaim {
@@ -2049,7 +2049,7 @@ export default function SettingsPage() {
     if (link.id.startsWith('temp-')) return; // still being created
     const label = link.partner_conference_id === null
       ? (link.company_name ?? 'this partner')
-      : (link.conf?.acronym ?? 'this conference');
+      : (link.conf ? conferenceAcronymLabel(link.conf) || 'this conference' : 'this conference');
     const { confirmed } = await confirm({
       title: `Remove the partner link with ${label}?`,
       confirmLabel: 'Remove',
@@ -4534,7 +4534,7 @@ export default function SettingsPage() {
                   <PartnerDisc logoUrl={c.logo_url} acronym={c.acronym} size={32} />
                   <span className="min-w-0">
                     <span className="block font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      {c.acronym}
+                      {conferenceAcronymLabel(c)}
                     </span>
                     <span className="block text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                       {[c.city, c.country].filter(Boolean).join(', ') || c.full_name}

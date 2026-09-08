@@ -9,6 +9,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { pageMetadata } from '@/lib/seo';
 import { conferenceOgImageUrl } from '@/lib/ogVersion';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { supabase } from '@/lib/supabase';
 import { loadPublishedAwards } from '@/lib/awardsService';
 import { getConference } from '../page';
@@ -21,7 +22,7 @@ export const revalidate = 60;
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const conf = await getConference(slug);
-  const name = conf?.acronym || conf?.full_name || 'Conference';
+  const name = (conf ? conferenceAcronymLabel(conf) : '') || conf?.full_name || 'Conference';
   const full = conf?.full_name || name;
   return pageMetadata({
     title: `${name} Awards`,

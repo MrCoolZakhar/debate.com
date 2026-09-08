@@ -19,6 +19,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import Portal from '@/components/Portal';
 import { formatConferenceDates, MONTHS_SHORT_EN_GB } from '@/lib/conferenceDates';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
   NEU, NEU_GRADIENTS, NeuCard, NeuInset, NeuIconDisc, NeuButton, NeuPill,
   Emoji3D, OUTFIT, EASE, type NeuGradient,
@@ -350,7 +351,7 @@ function PostingCard({
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = GOLD_DEEP; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = FOREST; }}
               >
-                {conf.acronym}
+                {conferenceAcronymLabel(conf)}
               </Link>
               <p className="truncate" style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 11.5, margin: 0, marginTop: 1 }}>
                 {conf.full_name}
@@ -594,7 +595,7 @@ function ApplyModal({
                 {posting.role_name}
               </p>
               <p style={{ color: MUTED, fontFamily: OUTFIT, fontSize: 12.5, margin: 0, marginTop: 2 }}>
-                <span style={{ color: FOREST, fontWeight: 800 }}>{posting.conferences?.acronym}</span>
+                <span style={{ color: FOREST, fontWeight: 800 }}>{posting.conferences ? conferenceAcronymLabel(posting.conferences) : ''}</span>
                 {posting.conferences?.full_name ? ` · ${posting.conferences.full_name}` : ''}
               </p>
             </div>

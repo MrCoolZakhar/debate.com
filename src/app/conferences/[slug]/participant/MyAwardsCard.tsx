@@ -20,6 +20,7 @@ import { cvShareUrl } from '@/lib/cvLink';
 import type { CVEntry } from '@/components/CVEntryModal';
 import { loadPublishedAwards } from '@/lib/awardsService';
 import type { ConferenceAwardRow } from '@/lib/awards';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { SectionCard, OUTFIT } from './shared';
 import type { ParticipantAllocation } from './types';
 
@@ -28,6 +29,7 @@ interface ConferenceBits {
   acronym: string | null;
   logo_url: string | null;
   awards_published_at: string | null;
+  start_date: string | null;
   end_date: string | null;
 }
 
@@ -49,7 +51,7 @@ export default function MyAwardsCard({ conferenceId, conferenceSlug, myAllocatio
       const supabase = getAuthedClient(session.access_token);
       const { data } = await supabase
         .from('conferences')
-        .select('full_name, acronym, logo_url, awards_published_at, end_date')
+        .select('full_name, acronym, logo_url, awards_published_at, start_date, end_date')
         .eq('id', conferenceId)
         .maybeSingle();
       if (cancelled) return;
@@ -127,7 +129,7 @@ export default function MyAwardsCard({ conferenceId, conferenceSlug, myAllocatio
             Congratulations
           </h3>
           <p className="text-[13px] mt-1.5" style={{ color: '#6B5F52', fontFamily: OUTFIT, margin: '6px 0 0 0', lineHeight: 1.55 }}>
-            The {conference.acronym || conference.full_name} secretariat has announced the awards for {committeeName}.
+            The {conferenceAcronymLabel(conference) || conference.full_name} secretariat has announced the awards for {committeeName}.
           </p>
 
           <div className="flex flex-wrap gap-2 mt-4">

@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
 import FitToScreen from '@/components/FitToScreen';
@@ -445,7 +446,7 @@ function JoinPageInner() {
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>
                   {conferenceCommittee
-                    ? `${conferenceCommittee.conferences?.acronym ?? ''} · ${conferenceCommittee.name}`
+                    ? `${conferenceCommittee.conferences ? conferenceAcronymLabel(conferenceCommittee.conferences) : ''} · ${conferenceCommittee.name}`
                     : 'Sign in to verify your allocation'}
                 </p>
               </div>

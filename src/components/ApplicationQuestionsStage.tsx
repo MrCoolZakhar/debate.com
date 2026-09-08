@@ -19,6 +19,7 @@ import {
   type FormBlock, type QuestionBlock, type CustomAnswers, type CustomAnswerValue, questionsOf,
 } from '@/lib/customQuestions';
 import { stagePhoto } from '@/lib/applyQuestionPages';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 
 const HELP_INK = NEU.inkSoft;
 
@@ -47,17 +48,21 @@ function pairable(b: FormBlock): b is QuestionBlock {
 // photo otherwise, and a forest gradient if even that fails to paint — no new
 // assets, no external pipeline.
 export function ConferencePlate({
-  seed, bannerUrl, logoUrl, acronym, fullName, questionCount,
+  seed, bannerUrl, logoUrl, acronym, fullName, startDate, questionCount,
 }: {
   seed: string;
   bannerUrl?: string | null;
   logoUrl?: string | null;
   acronym: string;
   fullName: string;
+  /** Feeds the edition year appended to the acronym. */
+  startDate?: string | null;
   questionCount: number;
 }) {
   const photo = bannerUrl || stagePhoto(seed);
   const showFullName = fullName && fullName.trim().toLowerCase() !== acronym.trim().toLowerCase();
+  // The plate names the conference, so the acronym carries its edition year.
+  const acronymLabel = conferenceAcronymLabel({ acronym, full_name: fullName, start_date: startDate ?? null }) || acronym;
 
   return (
     <div
@@ -102,7 +107,7 @@ export function ConferencePlate({
         </span>
         <div className="min-w-0 flex-1">
           <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 22, lineHeight: 1.1, color: '#FFFCF4', letterSpacing: '-0.01em' }}>
-            {acronym}
+            {acronymLabel}
           </p>
           {showFullName && (
             <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 13, color: 'rgba(255,252,244,0.78)', marginTop: 2 }}>
@@ -135,16 +140,19 @@ export function ConferencePlate({
 // is continuity (the same photography) and position ("SECTION 2 OF 3"), which
 // the H1 cannot say.
 export function SectionStrip({
-  seed, index, total, acronym, bannerUrl,
+  seed, index, total, acronym, startDate, bannerUrl,
 }: {
   seed: string;
   /** 0-based page index. */
   index: number;
   total: number;
   acronym: string;
+  /** Feeds the edition year appended to the acronym. */
+  startDate?: string | null;
   bannerUrl?: string | null;
 }) {
   const photo = bannerUrl || stagePhoto(seed, index);
+  const acronymLabel = conferenceAcronymLabel({ acronym, start_date: startDate ?? null }) || acronym;
   return (
     <div
       className="relative w-full overflow-hidden"
@@ -158,7 +166,7 @@ export function SectionStrip({
       <span aria-hidden className="absolute inset-0" style={{ background: 'linear-gradient(100deg, rgba(20,36,27,0.88) 0%, rgba(20,36,27,0.60) 55%, rgba(20,36,27,0.26) 100%)' }} />
       <div className="absolute inset-0 flex items-center justify-between gap-3" style={{ padding: '0 16px' }}>
         <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 14.5, color: '#FFFCF4', letterSpacing: '0.01em' }}>
-          {acronym}
+          {acronymLabel}
         </p>
         <span
           className="flex-shrink-0"

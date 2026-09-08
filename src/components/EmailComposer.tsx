@@ -47,6 +47,7 @@ import {
   BUTTON_DESTINATION_LABELS, flattenBlocksToPlainText,
 } from '@/lib/emailBlocks';
 import { renderEmailHtml, resolveEmailTheme, type EmailRenderConference } from '@/lib/emailHtml';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
 import { Emoji3D, NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
@@ -662,6 +663,12 @@ export default function EmailComposer({
   const useBannerHeader = theme.headerStyle === 'banner' && !!conference.banner_url;
   const headerLogo = theme.showLogo ? conference.logo_url : null;
   const distinctFullName = !!conference.acronym && !!conference.full_name && conference.full_name !== conference.acronym;
+  // Mirrors `shortName` in emailHtml.ts: the masthead and the footer name the
+  // EDITION, not just the series, so the preview matches what is sent.
+  const confShortName =
+    conferenceAcronymLabel({ acronym: conference.acronym, start_date: conference.start_date ?? null })
+    || conference.acronym
+    || conference.full_name;
   const accentInk = inkOnColor(theme.accentColor);
 
   useEffect(() => { onChangeRef.current = onChange; });
@@ -1584,7 +1591,7 @@ export default function EmailComposer({
             )}
             <span className="min-w-0">
               <span className="block" style={{ fontFamily: MAIL_SERIF, fontSize: 20, fontWeight: 700, lineHeight: 1.25, letterSpacing: '0.03em', color: MAIL_INK }}>
-                {conference.acronym || conference.full_name}
+                {confShortName}
               </span>
               {distinctFullName && (
                 <span className="block" style={{ fontFamily: MAIL_SANS, fontSize: 12, lineHeight: 1.45, color: MAIL_MUTED, paddingTop: 4 }}>
@@ -1602,7 +1609,7 @@ export default function EmailComposer({
               </div>
             )}
             <div style={{ fontFamily: MAIL_SERIF, fontSize: 20, fontWeight: 700, lineHeight: 1.25, letterSpacing: '0.03em', color: accentInk }}>
-              {conference.acronym || conference.full_name}
+              {confShortName}
             </div>
             {distinctFullName && (
               <div style={{ fontFamily: MAIL_SANS, fontSize: 12, lineHeight: 1.45, color: accentInk, opacity: 0.78, paddingTop: 4 }}>
@@ -1723,7 +1730,7 @@ export default function EmailComposer({
           {conference.contact_email}
         </div>
         <div style={{ fontFamily: MAIL_SANS, fontSize: 12, lineHeight: 1.7, color: MAIL_MUTED, paddingTop: 14 }}>
-          Sent to you by {conference.acronym || conference.full_name} through Gavelling, the platform it runs on.
+          Sent to you by {confShortName} through Gavelling, the platform it runs on.
           <br />
           <span style={{ textDecoration: 'underline' }}>Manage email preferences</span>
           {' · '}
@@ -2051,7 +2058,7 @@ export default function EmailComposer({
         />
         <div className="min-w-0 flex-1" style={{ minWidth: 200 }}>
           <p className="truncate" style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', color: SOFT }}>
-            {conference.acronym.toUpperCase()} · {conference.contact_email}
+            {confShortName.toUpperCase()} · {conference.contact_email}
           </p>
           <input
             ref={subjectRef}

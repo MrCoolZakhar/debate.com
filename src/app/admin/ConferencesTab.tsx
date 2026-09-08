@@ -33,6 +33,7 @@ import Portal from '@/components/Portal';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
   INTENT_OPTIONS, getConferenceIntent, intentAnswered, intentLabels,
   type ConferenceIntent,
@@ -998,7 +999,9 @@ function ConferenceRow({
   const countryCode = r.country ? getCountryByName(r.country)?.code : undefined;
   const organizerKey = r.organizer_name ?? r.organizer_email;
   const dates = r.dates_tbd ? null : formatRange(r.start_date, r.end_date);
-  const acronym = (r.acronym ?? '').trim();
+  // The list spans every conference on the platform, several editions of the
+  // same series among them, so the acronym carries its year.
+  const acronym = conferenceAcronymLabel(r);
   const showFullNameBeneath = !!acronym && acronym.toLowerCase() !== r.full_name.trim().toLowerCase();
 
   return (

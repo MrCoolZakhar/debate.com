@@ -1728,7 +1728,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-[14px] font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
-                      How was {conference.acronym}?
+                      How was {conferenceAcronymLabel(conference)}?
                     </p>
                     <p className="text-[12px]" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", margin: '1px 0 0 0' }}>
                       Leave a review to help future delegates.
@@ -1880,7 +1880,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                     )}
                     <div className="min-w-0">
                       <p className="font-semibold text-[15px]" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>{conference.full_name}</p>
-                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: 0 }}>{conference.acronym}</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 500, margin: 0 }}>{conferenceAcronymLabel(conference)}</p>
                       {conference.contact_email && (
                         <a
                           href={`mailto:${conference.contact_email}`}

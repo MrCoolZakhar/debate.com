@@ -11,6 +11,7 @@ import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useCredits } from '@/hooks/useCredits';
 import { getFlagUrl, getCountryByName } from '@/lib/countries';
 import { ageAt } from '@/lib/age';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatFee } from '@/lib/utils';
 import { Pill, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 import { experienceProgress, EXPERIENCE_BANDS } from '@/lib/munExperience';
@@ -4114,7 +4115,7 @@ function ConferenceApplyInner() {
     const lead = isFirstPage ? leadTitleBlock(page.blocks) : null;
     const heading = page.section?.title
       || lead?.title
-      || (conference ? `${conference.acronym} would like to know you` : 'A few questions');
+      || (conference ? `${conferenceAcronymLabel(conference)} would like to know you` : 'A few questions');
     const subheading = page.section?.description
       || lead?.description
       || 'Your answers go straight to the selection committee.';
@@ -4179,6 +4180,7 @@ function ConferenceApplyInner() {
             logoUrl={conference.logo_url}
             acronym={conference.acronym}
             fullName={conference.full_name}
+            startDate={conference.start_date}
             questionCount={countQuestions(allBlocks)}
           />
         )}
@@ -4188,6 +4190,7 @@ function ConferenceApplyInner() {
             index={questionPage}
             total={pages.length}
             acronym={conference.acronym}
+            startDate={conference.start_date}
             bannerUrl={conference.banner_url}
           />
         )}
@@ -4599,7 +4602,7 @@ function ConferenceApplyInner() {
                   Withdraw this application?
                 </p>
                 <p className="text-xs mb-3" style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 72%, transparent)', fontFamily: OUTFIT, lineHeight: 1.6 }}>
-                  Your application to {conference?.acronym} will be cancelled and removed from your conferences. Any Gavelling credit you spent is refunded. This can&apos;t be undone — you&apos;d need to apply again.
+                  Your application to {conference ? conferenceAcronymLabel(conference) : 'this conference'} will be cancelled and removed from your conferences. Any Gavelling credit you spent is refunded. This can&apos;t be undone — you&apos;d need to apply again.
                 </p>
                 {withdrawError && (
                   <p className="text-xs mb-3" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
@@ -4781,7 +4784,7 @@ function ConferenceApplyInner() {
               This conference requires delegates to be {ageRequirementText}
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
-              Based on your date of birth, you will be {ageAtStart} when {conference.acronym} starts, so you can&apos;t apply this time. If your date of birth is wrong, you can update it in your profile.
+              Based on your date of birth, you will be {ageAtStart} when {conferenceAcronymLabel(conference)} starts, so you can&apos;t apply this time. If your date of birth is wrong, you can update it in your profile.
             </p>
             <div className="flex items-center justify-center gap-4">
               <Link
@@ -4796,7 +4799,7 @@ function ConferenceApplyInner() {
                 className="text-sm font-semibold"
                 style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
               >
-                ← Back to {conference.acronym}
+                ← Back to {conferenceAcronymLabel(conference)}
               </Link>
             </div>
           </div>
@@ -4861,7 +4864,7 @@ function ConferenceApplyInner() {
                 className="text-sm font-semibold"
                 style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
               >
-                ← Back to {conference.acronym}
+                ← Back to {conferenceAcronymLabel(conference)}
               </Link>
             </div>
           </div>
@@ -4908,7 +4911,7 @@ function ConferenceApplyInner() {
             className="text-xs"
             style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 600, letterSpacing: '0.06em', textDecoration: 'none' }}
           >
-            ← {conference.acronym}
+            ← {conferenceAcronymLabel(conference)}
           </Link>
 
           {/* Only when a draft row actually exists. Never in edit mode (there
@@ -5045,7 +5048,7 @@ function ConferenceApplyInner() {
             }}
           >
             Your progress saves automatically — you can close this and pick it up later.
-            {conference ? ` The ${conference.acronym} team can see your answers before you submit.` : ' The organising team can see your answers before you submit.'}
+            {conference ? ` The ${conferenceAcronymLabel(conference)} team can see your answers before you submit.` : ' The organising team can see your answers before you submit.'}
           </p>
         )}
       </div>

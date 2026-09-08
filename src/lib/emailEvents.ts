@@ -6,6 +6,7 @@ import { getAuthedClient } from '@/lib/supabase-auth';
 import { resolveTokens, type EmailTokenContext } from '@/lib/emailTokens';
 import { normalizeBlocks, flattenBlocksToPlainText, getSiteUrl, type EmailBlock } from '@/lib/emailBlocks';
 import { renderEmailHtml, type EmailRenderConference, type EmailTheme } from '@/lib/emailHtml';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { formatFee } from '@/lib/utils';
 import { activePhaseFee, type FeePhase } from '@/lib/finance';
 import { triggerEmailDelivery } from '@/lib/emailDelivery';
@@ -559,7 +560,7 @@ export async function queueChairInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -647,7 +648,7 @@ export async function queueOrganizerInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -698,7 +699,7 @@ export async function queueOrganizerInviteEmail(
     // The account instruction used to live on the end of this line. It now sits
     // in the appended note below, which names the actual address rather than
     // saying "this email address" and hoping they know which one that is.
-    { type: 'paragraph', content: `${inviterName} invited you to join the organizing team of ${renderConf.acronym || renderConf.full_name} on Gavelling.` },
+    { type: 'paragraph', content: `${inviterName} invited you to join the organizing team of ${conferenceAcronymLabel(renderConf) || renderConf.full_name} on Gavelling.` },
     { type: 'button', label: 'Create an account and accept', destination: 'organizer_invite_accept' },
   ];
 
@@ -773,7 +774,7 @@ export async function queueImportJoinInviteEmails(
   const [{ data: confData }, { data: templateData }, { data: claimData }, { data: allocData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -938,7 +939,7 @@ export async function queueRequestReceivedEmail(
   const [{ data: confData }, { data: templateData }, { data: organizerData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
