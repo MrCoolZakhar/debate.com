@@ -1114,9 +1114,19 @@ export default function DashboardPage() {
    *  visiting the emails page and the row being refetched. */
   const emailStageDone = conference?.is_verified
     ? true
-    : verification
-      ? !verification.pending.includes('email')
-      : (!!conference?.emails_explored_at || emailsExplored);
+    // A UNION, deliberately, not a precedence chain. Any one of these being
+    // true means the step is genuinely done, and reading them in priority
+    // order is what made this row stick: `verification.pending` is fetched
+    // once per conference, so coming back from the emails page it still
+    // listed 'email', the row stayed unticked, `doneCount` never moved, and
+    // VerificationStrip's refresh effect is keyed on `doneCount` — the stale
+    // answer prevented the very refresh that would have corrected it.
+    // localStorage ticks the instant they click through, the server column
+    // arrives with refreshConferenceQuiet, and verification confirms it
+    // later. None of them can now be outvoted by a stale sibling.
+    : (!!conference?.emails_explored_at
+        || emailsExplored
+        || (!!verification && !verification.pending.includes('email')));
 
   // Recent-activity feed: recent applications + allocations, expanded into
   // per-timestamp events (submitted / paid / checked-in / resubmitted /
@@ -1476,27 +1486,13 @@ export default function DashboardPage() {
       onClick: () => router.push(`/manage/${slug}/financials/settings`),
     },
     {
-      key: 'delegate',
-      icon: UserPlus,
-      emoji: 'Graduation cap',
-      gradient: NEU_GRADIENTS.green,
-      title: 'Get your first delegate',
-      sub: delegateApps > 0 ? `${delegateApps} delegate application${delegateApps === 1 ? '' : 's'} received.` : 'Share your page and receive an application.',
-      done: delegateApps > 0,
-      // Pending: open the share popup (link + story recipe), no deep link.
-      // Done: jump to the applications that came in.
-      onClick: delegateApps > 0
-        ? () => router.push(`/manage/${slug}/applications`)
-        : () => setShowShareModal(true),
-    },
-    {
       // Compact publish CTA lives here as the checklist's launch row, the
       // big accent quick-actions card was removed with the one-page layout.
       key: 'publish',
       icon: Rocket,
       emoji: 'Rocket',
       gradient: NEU_GRADIENTS.forest,
-      title: 'Launch delegate registrations',
+      title: 'Publish your conference',
       sub: conference.is_public ? 'Your conference is live.' : 'Publish your conference to gavelling.com.',
       done: conference.is_public,
       onClick: handlePublishClick,

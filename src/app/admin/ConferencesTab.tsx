@@ -99,7 +99,10 @@ const SETUP_STEPS: { key: string; label: string; icon: typeof LayoutTemplate }[]
   { key: 'email',       label: 'Applicant email',    icon: Mail },
   { key: 'secretariat', label: 'Secretariat',        icon: Users },
   { key: 'financials',  label: 'Financials',         icon: Wallet },
-  { key: 'delegate',    label: 'First delegate',     icon: UserPlus },
+  // 'delegate' was here. "Get your first delegate" was dropped from the
+  // organiser checklist and from conference_setup_status() in the same change:
+  // it measured demand, not readiness, it was never a verification criterion,
+  // and it was the row that made this list and the organiser's disagree.
   // 'awards' was here. The awards checklist item was removed from
   // conference_setup_status() when awards went behind a coming-soon screen, so
   // the key can never come back in pending_keys. Restore this row if it does.
