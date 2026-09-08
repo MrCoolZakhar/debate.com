@@ -655,6 +655,10 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   const conferenceId = conference?.id;
   const [loadingConf, setLoadingConf] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  /** The conference read failed (as opposed to came back empty). Keeps the
+   *  organiser on their own URL with a Try again button instead of silently
+   *  evicting them to the homepage over a dropped request. */
+  const [loadFailed, setLoadFailed] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -721,16 +725,30 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
     if (!session) return;
     const supabase = getAuthedClient(session.access_token);
 
-    const { data: confData } = await supabase
+    const { data: confData, error: confError } = await supabase
       .from('conferences')
       .select(CONFERENCE_COLUMNS)
       .eq('slug', slug)
       .single();
 
+    // `data` is null for BOTH "no such conference" and "the request failed",
+    // and this used to redirect to the homepage on either. That threw an
+    // organiser out of the console mid-work over a dropped request, an
+    // expired token (getAuthedClient pins the token from React state and
+    // never refreshes it) or a transient 5xx, with nothing on screen to say
+    // why. Only a real zero-row answer means the conference is not there.
+    // PGRST116 is PostgREST's "0 rows for .single()"; anything else is a
+    // failure we must show, not navigate away from.
+    if (confError && confError.code !== 'PGRST116') {
+      setLoadFailed(true);
+      setLoadingConf(false);
+      return;
+    }
     if (!confData) {
       router.replace('/');
       return;
     }
+    setLoadFailed(false);
 
     // Ownership check: organizer_id on the conference OR conference_organizers table
     const owner = (confData as any).organizer_id === user!.id;
@@ -866,6 +884,37 @@ export default function ManageLayout({ children }: { children: React.ReactNode }
   }
 
   if (!user) return null;
+
+  // The read failed rather than came back empty. Stay on this URL and offer a
+  // retry: this is the difference between "your conference is gone" and "that
+  // one request did not land", and only one of those is worth throwing an
+  // organiser out of the console for.
+  if (loadFailed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="max-w-md w-full text-center rounded-2xl p-8" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+          <p style={{ fontSize: 10, color: '#B8844A', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.14em', fontWeight: 700, marginBottom: 12 }}>
+            COULD NOT LOAD
+          </p>
+          <h1 className="text-xl font-bold mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            We could not load this conference
+          </h1>
+          <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            The connection dropped or your session went stale. Your conference is safe. Try again, and if it keeps happening, sign out and back in.
+          </p>
+          <button
+            onClick={() => { setLoadFailed(false); void loadConference(); }}
+            className="rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none transition-colors"
+            style={{ backgroundColor: '#1B3828', color: '#EED98A', border: 'none', fontFamily: "'Outfit', sans-serif" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+          >
+            TRY AGAIN
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (accessDenied) {
     return (

@@ -691,15 +691,43 @@ export async function queueOrganizerInviteEmail(
   // alone either way — same as the existing-account path, it's on the
   // organizer to know their template greets an invitee by name.
   const noAccountBlocks: EmailBlock[] = [
-    { type: 'paragraph', content: `${inviterName} invited you to join the organizing team of ${renderConf.acronym || renderConf.full_name} on Gavelling. Create your free account with this email address to accept.` },
+    // The account instruction used to live on the end of this line. It now sits
+    // in the appended note below, which names the actual address rather than
+    // saying "this email address" and hoping they know which one that is.
+    { type: 'paragraph', content: `${inviterName} invited you to join the organizing team of ${renderConf.acronym || renderConf.full_name} on Gavelling.` },
     { type: 'button', label: 'CREATE ACCOUNT AND ACCEPT', destination: 'organizer_invite_accept' },
   ];
 
-  const blocks: EmailBlock[] = useTemplate
+  const baseBlocks: EmailBlock[] = useTemplate
     ? normalizeBlocks(template!.body_blocks, template!.body)
     : accountExists
       ? (fallback?.blocks ?? [])
       : noAccountBlocks;
+
+  /* Name the address the invite is tied to, in every variant including a
+   * conference's own customized template.
+   *
+   * respond_organizer_invite refuses unless the signed-in account's email
+   * matches this one, and the invitee usually opens the link on a device
+   * where they are already signed in as somebody else — 38 of the 49 pending
+   * organizer invites go to an address with no Gavelling account at all, so
+   * "somebody else" is often their own personal account. Saying which address
+   * to use, here, is what stops that trip ending at a refusal.
+   *
+   * Appended rather than merged, and appended even to a custom template: this
+   * is a deliverability fact about the link below it, not copy, and a template
+   * written before this existed cannot know to say it. It is the one thing we
+   * add to an organizer's own words, and it adds a line rather than changing
+   * any of theirs. Send-time only, so the Communications preview still shows
+   * the organizer exactly the template they wrote. */
+  const blocks: EmailBlock[] = [
+    ...baseBlocks,
+    {
+      type: 'paragraph',
+      variant: 'small',
+      content: `This invitation is tied to ${invitedEmail}. Sign in with that address to accept it, or create a free account with it if you do not have one yet.`,
+    },
+  ];
   const subjectSource = useTemplate ? template!.subject : (fallback?.subject ?? '');
   const flatBody = flattenBlocksToPlainText(blocks, renderConf, { organizerInviteToken: token });
 
