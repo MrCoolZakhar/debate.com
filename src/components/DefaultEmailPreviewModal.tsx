@@ -50,8 +50,14 @@ export default function DefaultEmailPreviewModal({
   const candidate = candidateId ? previewCandidates.find(c => c.id === candidateId) ?? null : null;
   const ctx: EmailTokenContext = candidate?.ctx ?? testSendContext;
 
+  // `variant: 'transactional'` matters. Every real send of these defaults goes
+  // through queueEventEmail, which passes it; the preview did not, so it
+  // defaulted to 'broadcast' and showed the organiser a banner masthead, a
+  // wider card and an in-card footer that none of these emails actually ship
+  // with. An organiser approving copy here was approving a layout that never
+  // arrives.
   const html = useMemo(
-    () => (def ? renderEmailHtml({ blocks: def.blocks, conference, ctx }) : ''),
+    () => (def ? renderEmailHtml({ blocks: def.blocks, conference, ctx, variant: 'transactional' }) : ''),
     [def, conference, ctx]
   );
 

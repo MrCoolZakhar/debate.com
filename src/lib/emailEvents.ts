@@ -691,11 +691,15 @@ export async function queueOrganizerInviteEmail(
   // alone either way — same as the existing-account path, it's on the
   // organizer to know their template greets an invitee by name.
   const noAccountBlocks: EmailBlock[] = [
+    // On the house style now (heading, body, sentence-case button). This was
+    // hand-assembled and had drifted: no heading variant, and a SHOUTING-CAPS
+    // label of the kind defaultEmails.ts's style note rules out.
+    { type: 'paragraph', variant: 'heading', content: "You've been invited to organize" },
     // The account instruction used to live on the end of this line. It now sits
     // in the appended note below, which names the actual address rather than
     // saying "this email address" and hoping they know which one that is.
     { type: 'paragraph', content: `${inviterName} invited you to join the organizing team of ${renderConf.acronym || renderConf.full_name} on Gavelling.` },
-    { type: 'button', label: 'CREATE ACCOUNT AND ACCEPT', destination: 'organizer_invite_accept' },
+    { type: 'button', label: 'Create an account and accept', destination: 'organizer_invite_accept' },
   ];
 
   const baseBlocks: EmailBlock[] = useTemplate

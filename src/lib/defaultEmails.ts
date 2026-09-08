@@ -59,9 +59,14 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   draft_reminder: {
     subject: 'Your {{conference_name}} application is still unfinished',
     blocks: [
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou started an application to {{conference_name}} as a {{role}} and haven't finished it yet. Your answers are saved — pick up where you left off." },
-      { type: 'button', label: 'FINISH MY APPLICATION', destination: 'apply_page', role: '{{role}}' },
-      { type: 'paragraph', content: 'Not applying after all? You can delete the draft at {{draft_link}}. To stop reminders about it, use {{draft_stop_link}}.' },
+      // Brought onto the house style: this was the last entry in the file with
+      // no heading variant, a SHOUTING-CAPS button label the style note above
+      // explicitly forbids, and its opt-out links set at full body size so the
+      // footnote competed with the ask.
+      { type: 'paragraph', variant: 'heading', content: 'Your application is waiting' },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou started an application to {{conference_name}} as a {{role}} and haven't finished it yet. Your answers are saved, so you can pick up exactly where you left off." },
+      { type: 'button', label: 'Finish my application', destination: 'apply_page', role: '{{role}}' },
+      { type: 'paragraph', variant: 'small', content: 'Not applying after all? You can delete the draft at {{draft_link}}. To stop reminders about it, use {{draft_stop_link}}.' },
     ],
   },
   application_accepted: {

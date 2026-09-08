@@ -6,6 +6,7 @@ import { Sparkles, Ticket, Crown, Coins, Infinity as InfinityIcon, Check, Loader
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { useCredits } from '@/hooks/useCredits';
+import { CreditCoin } from '@/components/CreditCoin';
 import { extractFunctionErrorMessage, unlimitedPricing, creditPricing, proPricing } from '@/lib/payments';
 import { formatFee } from '@/lib/finance';
 import { Eyebrow, GlassCard } from '../accountUi';
@@ -597,7 +598,10 @@ export default function UnlimitedPage() {
       <GlassCard className="!p-6 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
           <div className="flex items-start gap-4">
-            <NeuIconDisc gradient={NEU_GRADIENTS.gold} icon={Coins} size={48} />
+            {/* The coin itself, not a Lucide glyph in a gold seat. This is the
+                same mark as the nav chip, so the thing you spend and the thing
+                you count are visibly one object. */}
+            <CreditCoin size={48} title="Gavelling credits" style={{ marginTop: 2 }} />
             <div>
               <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 4 }}>
                 YOUR CREDITS

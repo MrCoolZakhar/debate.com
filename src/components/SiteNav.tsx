@@ -8,6 +8,7 @@ import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Globe, FileClock } from 'lucide-react';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import { useCredits } from '@/hooks/useCredits';
+import { CreditCoin } from '@/components/CreditCoin';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
 
 const NAV_LINKS_CONFIG = [
@@ -319,8 +320,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/gavel-mark.webp" alt="" decoding="async" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+              <CreditCoin size={16} />
               <span style={{ fontVariantNumeric: 'tabular-nums' }}>{creditsLoading || creditBalance === null ? '—' : creditBalance}</span>
             </Link>
           )}
@@ -574,8 +574,7 @@ export default function SiteNav({ logoOverride, overlay = false, hideLanguage = 
                   textDecoration: 'none',
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/gavel-mark.webp" alt="" decoding="async" loading="lazy" style={{ height: 16, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+                <CreditCoin size={16} />
                 <span style={{ fontSize: '13px', fontWeight: 800, color: '#1B3828', fontFamily: "'Outfit', sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                   {creditsLoading || creditBalance === null ? '—' : creditBalance}
                 </span>
