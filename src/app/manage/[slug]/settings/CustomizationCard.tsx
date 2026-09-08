@@ -267,6 +267,15 @@ export default function CustomizationCard({
 
   async function handlePublish() {
     if (publishing || isPublished) return;
+    const warnings = themeWarnings(draft);
+    if (warnings.length > 0) {
+      const { confirmed } = await confirm({
+        title: 'Publish these colours?',
+        body: `${warnings.join(' ')} Preview your page before you publish. Published colours are public straight away.`,
+        confirmLabel: 'PUBLISH ANYWAY',
+      });
+      if (!confirmed) return;
+    }
     setPublishing(true);
     setPublishError('');
     const supabase = await getFreshAuthedClient();
