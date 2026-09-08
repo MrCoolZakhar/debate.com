@@ -21,7 +21,7 @@
  * shifts every time the derivation formula is retuned for someone else's
  * colours — a designer nudging `mix()`'s blend amount for readability on an
  * organizer's neon theme should never also repaint Gavelling's own surfaces.
- * The ten Gavelling values are our real, chosen hex colours, hand-picked and
+ * The eleven Gavelling values are our real, chosen hex colours, hand-picked and
  * frozen; `resolveTheme` reuses the same MATH but never the same OUTPUT path
  * for us. `GAVELLING_THEME` is also the exact fast-path return for "no theme
  * set" (an empty or missing object), so it has to be correct standalone, not
@@ -45,6 +45,7 @@ export interface ResolvedTheme {
   mainMid: string;
   mainLight: string;
   accent: string;
+  accentLight: string;
   textLight: string;
   textDark: string;
   muted: string;
@@ -60,6 +61,7 @@ export const GAVELLING_THEME: Readonly<ResolvedTheme> = Object.freeze({
   mainMid: '#2A5A3C',
   mainLight: '#3D7A52',
   accent: '#B6871F',
+  accentLight: '#EED98A',
   textLight: '#EED98A',
   textDark: '#1C1410',
   muted: '#9A8A78',
@@ -167,6 +169,8 @@ export function resolveTheme(theme: ConferenceTheme | null | undefined): Resolve
   // Two lighter steps of the main colour, for hover states and secondary fills.
   const mainMid = mix(main, '#FFFFFF', 0.18);
   const mainLight = mix(main, '#FFFFFF', 0.34);
+  // Light stop of the accent gradient/disc pairing, derived the same way.
+  const accentLight = mix(accent, '#FFFFFF', 0.55);
 
   return {
     background: GAVELLING_THEME.background,
@@ -176,6 +180,7 @@ export function resolveTheme(theme: ConferenceTheme | null | undefined): Resolve
     mainMid,
     mainLight,
     accent,
+    accentLight,
     textLight: GAVELLING_THEME.textLight,
     textDark: GAVELLING_THEME.textDark,
     muted: GAVELLING_THEME.muted,
@@ -204,6 +209,7 @@ export function themeCssVars(theme: ConferenceTheme | null | undefined): React.C
     '--gv-main-mid': t.mainMid,
     '--gv-main-light': t.mainLight,
     '--gv-accent': t.accent,
+    '--gv-accent-light': t.accentLight,
     '--gv-text-light': t.textLight,
     '--gv-text-dark': t.textDark,
     '--gv-muted': t.muted,

@@ -34,7 +34,7 @@ export const NEU = {
   // one surface variable, since both were the same idea spelled twice.
   ink: 'var(--gv-on-surface)',
   forest: 'var(--gv-main)',
-  gold: 'var(--gv-text-light)',
+  gold: 'var(--gv-accent-light)',
   deepGold: 'var(--gv-accent)',
   amber: '#B8844A',
   green: 'var(--gv-main-light)',
@@ -59,7 +59,7 @@ export const NEU = {
 /** Saturated two-stop gradients, the only place "vibrant" is allowed. */
 export const NEU_GRADIENTS = {
   forest: ['var(--gv-main)', 'var(--gv-main-light)'] as [string, string],
-  gold: ['var(--gv-text-light)', 'var(--gv-accent)'] as [string, string],
+  gold: ['var(--gv-accent-light)', 'var(--gv-accent)'] as [string, string],
   amber: ['#B8844A', '#8A5A2E'] as [string, string],
   sage: ['var(--gv-main-light)', 'color-mix(in srgb, var(--gv-main-light) 55%, white)'] as [string, string],
   green: ['color-mix(in srgb, var(--gv-main) 80%, var(--gv-main-light))', 'var(--gv-main-light)'] as [string, string],

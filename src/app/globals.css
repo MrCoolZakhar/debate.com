@@ -49,8 +49,8 @@
 
 /* Gavelling conference theme variables (src/lib/theme.ts). These are the
    Gavelling DEFAULTS — a themed conference overrides them on a wrapper
-   element via themeCssVars(), which resolves an organizer's five picked
-   colours into these same fourteen custom properties, scoped to that
+   element via themeCssVars(), which resolves an organizer's picked
+   colours into these same fifteen custom properties, scoped to that
    wrapper. Placed after the imports and the @theme block above so neither
    can ever override them.
 
@@ -67,6 +67,7 @@
   --gv-main-mid: #2A5A3C;
   --gv-main-light: #3D7A52;
   --gv-accent: #B6871F;
+  --gv-accent-light: #EED98A;
   --gv-text-light: #EED98A;
   --gv-text-dark: #1C1410;
   --gv-muted: #9A8A78;
