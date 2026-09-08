@@ -48,6 +48,24 @@ Design consequences: mobile-first on every delegate and applicant surface; the c
 
 Hard rules: organisers are never charged; Unlimited status is server-verified; public fee display goes through the `conference_public_fees` view because `conferences.fee_amount` is a stale denormalised column (`src/lib/publicFees.ts`).
 
+**Stripe's own limits are the thing that breaks a big bill, and they live only in
+the edge function.** `create-checkout` (v18, 8 Sep 2026; not in git, read it with
+the Supabase MCP tools) has two guards, and both exist because a delegation with a
+long invoice list hit them in production:
+
+- A metadata VALUE is capped at 500 characters. `metadata[invoice_ids]` used to be
+  one comma-joined list of UUIDs, which overflows at the 14th invoice and makes
+  Stripe reject the whole session, so the participant simply cannot pay.
+  `setIdListMetadata()` now spreads them over `invoice_ids`, `invoice_ids_2`, ...
+  plus `invoice_ids_count`. **Nothing reads this metadata** - `stripe-webhook`
+  matches work by `payments.stripe_checkout_session_id` - so it is forensic only,
+  it may be truncated, and no settlement path may start depending on it.
+- Checkout accepts at most 20 `line_items`. Above that, `fitLineItems()` groups by
+  invoice KIND and unit price and puts the count in Stripe's `quantity` (grouping
+  by label merges nothing: fifteen pledge spots have fifteen different labels).
+  The per-invoice `payments` rows and the itemised receipt are untouched, so the
+  ledger still breaks the payment down invoice by invoice.
+
 ---
 
 ## 4. Growth loops (what the code is built to do)
