@@ -2265,10 +2265,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.14em', color: 'var(--gv-on-main)', margin: '0 0 8px 0' }}>
                           {(organizerRole ?? 'owner').toUpperCase()}
                         </p>
-                        <p className="font-bold text-base mb-1 text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="font-bold text-base mb-1" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif" }}>
                           You run this conference
                         </p>
-                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
                           Manage applications, committees, and your public page.
                         </p>
                         {myApp && (
@@ -2276,7 +2276,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             className="flex items-center justify-between rounded-xl px-3.5 py-2.5 mb-3"
                             style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
                           >
-                            <span className="text-[12px] font-semibold" style={{ color: 'rgba(237,231,216,0.9)', fontFamily: "'Outfit', sans-serif" }}>
+                            <span className="text-[12px] font-semibold" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 90%, transparent)', fontFamily: "'Outfit', sans-serif" }}>
                               Also applied as {roleLabel(myApp.role)}
                             </span>
                             <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', color: 'var(--gv-on-main)' }}>
@@ -2287,7 +2287,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         <Link
                           href={`/manage/${slug}`}
                           className="flex items-center justify-center gap-2 w-full rounded-xl py-3 font-bold text-sm transition-colors focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                         >
@@ -2303,10 +2303,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           accepted:     { label: 'ACCEPTED',     bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: 'You are in. Your allocation will follow.' },
                           assigned:     { label: 'ASSIGNED',     bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
                           'checked-in': { label: 'CHECKED IN',   bg: 'color-mix(in srgb, var(--gv-main-light) 35%, transparent)',   color: '#A8D5B8',              hint: '' },
-                          waitlisted:   { label: 'WAITLISTED',   bg: 'rgba(237,231,216,0.12)', color: 'rgba(237,231,216,0.8)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
+                          waitlisted:   { label: 'WAITLISTED',   bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: 'You are on the waitlist. We will notify you if a spot opens.' },
                           rejected:     { label: 'NOT ACCEPTED', bg: 'rgba(139,32,32,0.35)',   color: '#E8A9A9',              hint: 'Your application was not accepted this time.' },
                         };
-                        const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'rgba(237,231,216,0.8)', hint: '' };
+                        const meta = STATUS_META[myApp.status] ?? { label: myApp.status.toUpperCase(), bg: 'rgba(237,231,216,0.12)', color: 'color-mix(in srgb, var(--gv-on-main) 80%, transparent)', hint: '' };
                         const allocCountry = myAllocation ? getCountryByName(myAllocation.country_name) : null;
                         const allocFlag = allocCountry ? getFlagUrl(allocCountry.code) : null;
                         // The conference application fee (if any) is always
@@ -2321,7 +2321,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               YOUR APPLICATION
                             </p>
                             <div className="flex items-center justify-between gap-3 mb-1">
-                              <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                              <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                                 {roleLabel(myApp.role)}
                               </p>
                               <span
@@ -2332,7 +2332,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               </span>
                             </div>
                             {meta.hint && (
-                              <p className="text-xs" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: '4px 0 0 0' }}>
+                              <p className="text-xs" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, margin: '4px 0 0 0' }}>
                                 {meta.hint}
                               </p>
                             )}
@@ -2340,7 +2340,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                               <Link
                                 href={`/conferences/${slug}/pay`}
                                 className="w-full flex items-center justify-center gap-2 rounded-xl py-3 mt-4 font-bold text-sm transition-colors focus:outline-none"
-                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
+                                style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textDecoration: 'none' }}
                                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
                               >
@@ -2353,10 +2353,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                 className="mt-4 rounded-xl px-4 py-3.5"
                                 style={{ backgroundColor: 'rgba(238,217,138,0.08)', border: '1px solid rgba(238,217,138,0.18)' }}
                               >
-                                <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'rgba(238,217,138,0.75)', margin: '0 0 6px 0' }}>
+                                <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'color-mix(in srgb, var(--gv-on-main) 75%, transparent)', margin: '0 0 6px 0' }}>
                                   YOUR ALLOCATION
                                 </p>
-                                <p className="text-[13.5px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+                                <p className="text-[13.5px] font-bold" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
                                   {myAllocation.conference_committees?.name ?? 'Committee'}
                                 </p>
                                 <div className="flex items-center gap-2 mt-1.5">
@@ -2397,18 +2397,18 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       /* 4, Signed out: one elegant APPLY NOW routing through sign-in */
                       <>
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>Ready to take the floor?</p>
+                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Ready to take the floor?</p>
                           {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
-                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
                           Sign in with a free account to start your application.
                         </p>
                         <button
                           onClick={() => router.push(`/auth/signin?next=/conferences/${slug}`)}
                           className="w-full rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
+                          onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
                           onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
                           onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                           onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
@@ -2418,8 +2418,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       </>
                     ) : enabledRoles.length === 0 ? (
                       <>
-                        <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>No open applications</p>
-                        <p className="text-xs mt-1" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif" }}>
+                        <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif" }}>No open applications</p>
+                        <p className="text-xs mt-1" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif" }}>
                           Check back when applications open.
                         </p>
                       </>
@@ -2427,19 +2427,19 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       /* 3, Signed in, no involvement: one APPLY NOW revealing a role picker */
                       <>
                         <div className="flex items-center justify-between gap-2 mb-1">
-                          <p className="font-bold text-base text-white" style={{ fontFamily: "'Outfit', sans-serif", margin: 0 }}>Apply to this Conference</p>
+                          <p className="font-bold text-base" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>Apply to this Conference</p>
                           {(conference.min_age != null || conference.max_age != null) && <MinAgeChip minAge={conference.min_age} maxAge={conference.max_age} />}
                         </div>
-                        <p className="text-xs mb-4" style={{ color: 'rgba(237,231,216,0.7)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
+                        <p className="text-xs mb-4" style={{ color: 'color-mix(in srgb, var(--gv-on-main) 70%, transparent)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.6 }}>
                           {hasOpenRoles ? 'Applications are open.' : 'Applications are currently closed.'}
                         </p>
                         <button
                           onClick={() => setRolePickerOpen(v => !v)}
                           aria-expanded={rolePickerOpen}
                           className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-bold text-sm focus:outline-none"
-                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'white'; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-accent)'; }}
+                          style={{ backgroundColor: 'var(--gv-accent)', color: 'var(--gv-on-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', transition: `background-color 200ms ${EASE}, transform 160ms ${EASE}` }}
+                          onMouseEnter={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'white'; el.style.color = 'var(--gv-main)'; }}
+                          onMouseLeave={(e) => { const el = (e.currentTarget as HTMLElement); el.style.backgroundColor = 'var(--gv-accent)'; el.style.color = 'var(--gv-on-accent)'; }}
                           onPointerDown={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
                           onPointerUp={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                           onPointerLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
@@ -2453,7 +2453,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         </button>
                         {rolePickerOpen && (
                           <div className="mt-3 flex flex-col gap-1.5">
-                            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'rgba(238,217,138,0.75)', margin: '4px 0 2px 0' }}>
+                            <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '8.5px', letterSpacing: '0.14em', color: 'color-mix(in srgb, var(--gv-on-main) 75%, transparent)', margin: '4px 0 2px 0' }}>
                               CHOOSE YOUR ROLE
                             </p>
                             {enabledRoles.map(r => {
@@ -2488,12 +2488,12 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   <span className="flex items-center gap-3 min-w-0">
                                     <RoleApplyGlyph role={r.role} size={30} />
                                     <span className="min-w-0">
-                                      <span className="block text-[13px] font-bold text-white truncate" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                                      <span className="block text-[13px] font-bold truncate" style={{ color: 'var(--gv-on-main)', fontFamily: "'Outfit', sans-serif" }}>
                                         {roleLabel(r.role)}
                                       </span>
                                       <span
                                         className="block mt-0.5"
-                                        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? 'var(--gv-on-main)' : 'rgba(237,231,216,0.55)' }}
+                                        style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: '10px', letterSpacing: '0.08em', color: open ? 'var(--gv-on-main)' : 'color-mix(in srgb, var(--gv-on-main) 55%, transparent)' }}
                                       >
                                         {open ? fee : reason}
                                       </span>
