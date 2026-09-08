@@ -677,12 +677,6 @@ export default function SettingsPage() {
   const [swapMode, setSwapMode] = useState('request');
   const [swapModeError, setSwapModeError] = useState('');
 
-  // Preference mode is per-role, on application_role_configs.preference_mode
-  // (roleConfigs, already loaded). prefMode itself is derived below from the
-  // selected role's config row, not held as its own state.
-  const [prefModeSaving, setPrefModeSaving] = useState(false);
-  const [prefModeError, setPrefModeError] = useState('');
-
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
   const [roleConfigError, setRoleConfigError] = useState('');
@@ -896,8 +890,8 @@ export default function SettingsPage() {
   const visualBaseline = useRef<string | null>(null);
   const minAgeBaseline = useRef<string | null>(null);
   const intentBaseline = useRef<string | null>(null);
-  const detailsSnap = () => snap({ fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
-  const visualSnap = () => snap({ description, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
+  const detailsSnap = () => snap({ fullName, acronym, description, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates });
+  const visualSnap = () => snap({ contactEmail, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl });
   const minAgeSnap = () => snap({ minAge, maxAge });
   const intentSnap = () => snap({ intentKeys });
 
@@ -1119,7 +1113,7 @@ export default function SettingsPage() {
     // effects see no diff (and thus don't fire) right after a fresh load.
     detailsBaseline.current = snap({
       fullName: conference.full_name ?? '', acronym: conference.acronym ?? '',
-      contactEmail: conference.contact_email ?? '',
+      description: conference.description ?? '',
       studentLevel: (conference.student_level as 'school' | 'university' | 'both' | '') ?? '',
       startDate: conference.start_date ?? '', endDate: conference.end_date ?? '',
       datesTbd: conference.dates_tbd ?? false,
@@ -1128,7 +1122,7 @@ export default function SettingsPage() {
       expectedDelegates: conference.expected_delegates != null ? String(conference.expected_delegates) : '',
     });
     visualBaseline.current = snap({
-      description: conference.description ?? '', instagramUrl: conference.instagram_url ?? '',
+      contactEmail: conference.contact_email ?? '', instagramUrl: conference.instagram_url ?? '',
       facebookUrl: conference.facebook_url ?? '', tiktokUrl: conference.tiktok_url ?? '',
       whatsappUrl: conference.whatsapp_url ?? '', websiteUrl: conference.website_url ?? '',
     });
@@ -1397,39 +1391,6 @@ export default function SettingsPage() {
     await refreshConferenceQuiet();
     setSwapMode(mode);
     setSwapModeSaving(false);
-  }
-
-  // Same verified-write pattern as saveSwapMode: control-busy, exact rollback
-  // (roleConfigs only picks up the new value after the DB write is confirmed,
-  // never before — prefMode is derived from roleConfigs, so this is what
-  // makes it visibly flip). Writes application_role_configs, not conferences:
-  // preference_mode is per role now, not a single conference-wide column.
-  async function savePrefMode(mode: string) {
-    if (!conference || prefModeSaving) return;
-    setPrefModeSaving(true);
-    setPrefModeError('');
-
-    const supabase = await getFreshAuthedClient();
-    if (!supabase) {
-      setPrefModeSaving(false);
-      setPrefModeError('Your session has expired, please refresh and sign in again.');
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('application_role_configs')
-      .update({ preference_mode: mode })
-      .eq('conference_id', conference.id)
-      .eq('role', selectedRole)
-      .select('id');
-
-    if (error || !data || data.length !== 1) {
-      setPrefModeSaving(false);
-      setPrefModeError(saveFailMessage(error));
-      return;
-    }
-    setRoleConfigs(prev => prev.map(rc => (rc.role === selectedRole ? { ...rc, preference_mode: mode } : rc)));
-    setPrefModeSaving(false);
   }
 
   // ── Organizer actions ───────────────────────────────────────────────────
@@ -2179,11 +2140,6 @@ export default function SettingsPage() {
   const selectedConfig = roleConfigs.find(rc => rc.role === selectedRole);
   const currentBlocks: FormBlock[] = normalizeBlocks(selectedConfig?.custom_questions ?? []);
   const selectedRoleHasApplications = rolesWithApplications.has(selectedRole);
-  // Derived, not held in state: whichever role's bookmark is selected, this
-  // always reflects that role's own row, and needs no effect to keep in sync.
-  const prefMode: string = selectedConfig?.preference_mode ?? 'none';
-  const prefModeOptions = selectedRole === 'chair' ? CHAIR_PREF_MODE_OPTIONS : PREF_MODE_OPTIONS;
-  const showPrefCard = roleCanHavePreference(selectedRole);
   const otherRoles = ROLES.filter(r => r !== selectedRole);
   const [copyNotice, setCopyNotice] = useState('');
 
@@ -2589,12 +2545,18 @@ export default function SettingsPage() {
 
   async function handleSaveVisual() {
     if (!conference || visualSaving) return;
+    const trimmedEmail = contactEmail.trim();
+    if (trimmedEmail && !CONTACT_EMAIL_PATTERN.test(trimmedEmail)) {
+      setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+      return;
+    }
+    setContactEmailError('');
     setVisualError('');
     setVisualSaving(true);
     // Normalize bare handles/domains ("@mymun", "instagram.com/mymun", "mymun")
     // into valid absolute URLs so the public page's links always work.
     const updates = {
-      description: description || null,
+      contact_email: contactEmail || null,
       instagram_url: normalizeSocialUrl(instagramUrl, 'instagram'),
       facebook_url: normalizeSocialUrl(facebookUrl, 'facebook'),
       tiktok_url: normalizeSocialUrl(tiktokUrl, 'tiktok'),
@@ -2630,12 +2592,6 @@ export default function SettingsPage() {
       return;
     }
     setAcronymError('');
-    const trimmedEmail = contactEmail.trim();
-    if (trimmedEmail && !CONTACT_EMAIL_PATTERN.test(trimmedEmail)) {
-      setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
-      return;
-    }
-    setContactEmailError('');
     setDetailsError('');
     setDetailsSaving(true);
     const parsedDelegates = parseInt(expectedDelegates, 10);
@@ -2649,7 +2605,7 @@ export default function SettingsPage() {
     const { data, error } = await supabase.from('conferences').update({
       full_name: fullName,
       acronym: trimmedAcr,
-      contact_email: contactEmail || null,
+      description: description || null,
       student_level: studentLevel || null,
       start_date: datesTbd ? null : (startDate || null),
       end_date: datesTbd ? null : (endDate || null),
@@ -2736,7 +2692,7 @@ export default function SettingsPage() {
     const t = setTimeout(() => { void handleSaveVisual(); }, 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [description, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl, visualSaving, conference]);
+  }, [contactEmail, instagramUrl, facebookUrl, tiktokUrl, whatsappUrl, websiteUrl, visualSaving, conference]);
 
   useEffect(() => {
     if (!conference || detailsBaseline.current === null || detailsSaving) return;
@@ -2744,7 +2700,7 @@ export default function SettingsPage() {
     const t = setTimeout(() => { void handleSaveDetails(); }, 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullName, acronym, contactEmail, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates, detailsSaving, conference]);
+  }, [fullName, acronym, description, studentLevel, startDate, endDate, datesTbd, country, city, format, expectedDelegates, detailsSaving, conference]);
 
   // Same debounced autosave as the three above. 800ms of quiet also means a
   // burst of toggles (picking four of the six is one thought, not four) lands
@@ -3269,6 +3225,78 @@ export default function SettingsPage() {
                             size="md"
                           />
                         </div>
+                        {/* Preference ranking — what this role is asked to rank
+                            on the application form. roleCanHavePreference (and
+                            the database's second CHECK) is what decides who
+                            gets a control here at all; every other role
+                            renders nothing, not a disabled version of it. */}
+                        {roleCanHavePreference(role) && (
+                          role === 'chair' ? (
+                            <div className="mt-4 flex items-center justify-between gap-3">
+                              <div>
+                                <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                  Ask for their committee preference
+                                </label>
+                                <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                  Chairs rank which committee they would like to chair, and you assign from their ranking.
+                                </p>
+                              </div>
+                              <PillToggle
+                                value={config.preference_mode === 'committees_only'}
+                                onChange={(v) => saveRoleConfig(role, { preference_mode: v ? 'committees_only' : 'none' })}
+                                size="md"
+                              />
+                            </div>
+                          ) : (
+                            <div className="mt-4">
+                              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                                Delegate preferences
+                                <InfoHint
+                                  label="About delegate preferences"
+                                  text="What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."
+                                />
+                              </label>
+                              <p className="text-xs mt-0.5 mb-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                Choose what delegates rank when they apply. The application form shows only the pickers you enable here.
+                              </p>
+                              <div className="grid grid-cols-1" style={{ gap: 8 }}>
+                                {PREF_MODE_OPTIONS.map(opt => {
+                                  const active = (config.preference_mode ?? 'none') === opt.value;
+                                  return (
+                                    <button
+                                      key={opt.value}
+                                      type="button"
+                                      onClick={() => saveRoleConfig(role, { preference_mode: opt.value })}
+                                      className="flex items-center rounded-xl focus:outline-none"
+                                      style={{
+                                        gap: 10, padding: '11px 13px', textAlign: 'left',
+                                        backgroundColor: active ? '#1B3828' : 'transparent',
+                                        color: active ? '#EED98A' : '#1C1410',
+                                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                                        boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
+                                        fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      {/* The thing(s) being ranked, drawn rather than described:
+                                          a committee emblem and, for roles that pair it with a
+                                          country, a flag. */}
+                                      <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
+                                        {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                                        {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                                        {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
+                                      </span>
+                                      <span className="min-w-0">{opt.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                                {PREF_MODE_OPTIONS.find(o => o.value === (config.preference_mode ?? 'none'))?.desc}
+                              </p>
+                            </div>
+                          )
+                        )}
                         {/* MUN experience — chair and secretariat only. The
                             database CHECK refuses true for every other role,
                             so a control for them could never work and must
@@ -3638,13 +3666,13 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Section 1: Colours. CustomizationCard paints its own card chrome
-              (it receives cardStyle as a prop), so it renders flat inside this
-              section's body rather than as a second nested card. */}
+          {/* Section 1: Customizability. CustomizationCard paints its own
+              card chrome (it receives cardStyle as a prop), so it renders
+              flat here, followed by the three public-visibility switches. */}
           <div style={cardStyle}>
             <StepHeader
-              n={1} label="Colours" sub="Your main colour and accent, across the whole conference."
-              complete={true} open={openConfSection === 1}
+              n={1} label="Customizability" sub="Your colours and what visitors can see."
+              complete={true} open={openConfSection === 1} status={visibilityStatus}
               onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
             />
             {openConfSection === 1 && (
@@ -3656,22 +3684,8 @@ export default function SettingsPage() {
                   initialPublished={conference.theme ?? {}}
                   cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
                 />
-              </div>
-            )}
-          </div>
-
-          {/* Section 2: What people can see. Three switches on columns that
-              already exist and already default to true; each write takes
-              effect immediately and is not part of the theme draft/publish
-              flow. */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={2} label="What people can see" sub="Choose what a visitor sees on your public page."
-              complete={true} open={openConfSection === 2} status={visibilityStatus}
-              onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
-            />
-            {openConfSection === 2 && (
-              <div className="mt-5 flex flex-col gap-3">
+                <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
+                <div className="flex flex-col gap-3">
                 <div
                   className="flex items-center justify-between p-4 rounded-xl"
                   style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
@@ -3735,21 +3749,23 @@ export default function SettingsPage() {
                 {visibilityError && (
                   <p className="text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visibilityError}</p>
                 )}
+                </div>
               </div>
             )}
           </div>
 
-          {/* ── Marketing first. The banner and the logo are the two things a
-              visitor actually sees, and they were buried under six fields of
-              logistics nobody opens twice. ── */}
+          {/* Section 2: Conference banner and logo. The two things a visitor
+              actually sees, stacked banner first then logo with a divider,
+              no longer buried under six fields of logistics nobody opens
+              twice. */}
           {/* Banner card */}
           <div style={cardStyle}>
             <StepHeader
-              n={3} label="Conference banner" sub="The wide image at the top of your page."
-              complete={!!conference.banner_url} open={openConfSection === 3}
-              onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
+              n={2} label="Conference banner and logo" sub="The images at the top of your page."
+              complete={!!conference.banner_url && !!conference.logo_url} open={openConfSection === 2}
+              onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
             />
-            {openConfSection === 3 && (
+            {openConfSection === 2 && (
             <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
@@ -3835,19 +3851,9 @@ export default function SettingsPage() {
             {bannerError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{bannerError}</p>
             )}
-            </div>
-            )}
-          </div>
 
-          {/* Logo card */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={4} label="Conference logo" sub="The round mark beside your conference name."
-              complete={!!conference.logo_url} open={openConfSection === 4}
-              onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
-            />
-            {openConfSection === 4 && (
-            <div className="mt-5">
+            <div className="my-5" style={{ borderTop: '1px solid #F0EDE6' }} />
+
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Logo</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
             <div className="flex items-center gap-5">
@@ -3905,12 +3911,12 @@ export default function SettingsPage() {
           {/* Conference Details card */}
           <div style={cardStyle}>
             <StepHeader
-              n={5} label="Conference details" sub="Name, dates, location and description."
-              complete={true} open={openConfSection === 5}
+              n={3} label="Conference details" sub="Name, dates, location, description and age range."
+              complete={true} open={openConfSection === 3}
               status={detailsSaving ? 'saving' : detailsSaved ? 'saved' : 'idle'}
-              onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
+              onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
             />
-            {openConfSection === 5 && (
+            {openConfSection === 3 && (
             <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Details</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
@@ -3928,49 +3934,27 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="flex gap-3 mb-4">
-              <div style={{ width: '40%' }}>
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Acronym</label>
-                <input
-                  type="text"
-                  value={acronym}
-                  onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => {
-                    setAcronymError(acronymProblem(e.target.value));
-                    e.currentTarget.style.borderColor = '#DDD4C0';
-                  }}
-                  placeholder="e.g. LIMUN, or Model NATO Germany"
-                  style={inputStyle}
-                />
-                {acronymError ? (
-                  <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{acronymError}</p>
-                ) : (
-                  <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                    Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong>
-                  </p>
-                )}
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Contact email</label>
-                <input
-                  type="email"
-                  value={contactEmail}
-                  onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
-                  placeholder="hello@yourmun.org"
-                  style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-                  onBlur={(e) => {
-                    const trimmed = e.target.value.trim();
-                    if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
-                    else setContactEmailError('');
-                    e.currentTarget.style.borderColor = '#DDD4C0';
-                  }}
-                />
-                {contactEmailError && (
-                  <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{contactEmailError}</p>
-                )}
-              </div>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Acronym</label>
+              <input
+                type="text"
+                value={acronym}
+                onChange={(e) => { setAcronym(e.target.value); if (acronymError) setAcronymError(''); }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => {
+                  setAcronymError(acronymProblem(e.target.value));
+                  e.currentTarget.style.borderColor = '#DDD4C0';
+                }}
+                placeholder="e.g. LIMUN, or Model NATO Germany"
+                style={inputStyle}
+              />
+              {acronymError ? (
+                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{acronymError}</p>
+              ) : (
+                <p className="text-xs mt-1" suppressHydrationWarning style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  Shown as <strong style={{ color: '#1C1410' }}>{conferenceAcronymLabel({ acronym, start_date: startDate || conference.start_date })}</strong>
+                </p>
+              )}
             </div>
 
             <div className="mb-4">
@@ -4136,145 +4120,25 @@ export default function SettingsPage() {
               />
             </div>
 
-            <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
-            {detailsError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{detailsError}</p>
-            )}
-            </div>
-            )}
-          </div>
-
-          {/* ── What the selected role ranks. Only roles that can hold a
-              preference get this card at all — faculty-advisor, observer,
-              secretariat and staff render nothing here, not a disabled
-              version of it. ── */}
-          {showPrefCard && (
-            <div style={cardStyle}>
-              <StepHeader
-                n={6} label="Delegate or chair preferences" sub="What applicants get to rank."
-                complete={true} open={openConfSection === 6}
-                onClick={() => setOpenConfSection(openConfSection === 6 ? 0 : 6)}
+            <div className="mb-5">
+              <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Description</p>
+              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Shown on your public conference page.</p>
+              <textarea
+                rows={6}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
+                maxLength={1500}
+                style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
               />
-              {openConfSection === 6 && (
-              <div className="mt-5">
-              <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                <Emoji3D name="Globe showing europe-africa" size={20} fallback={Globe} fallbackColor="#1B3828" />
-                {selectedRole === 'chair' ? 'Chair preferences' : 'Delegate preferences'}
-                <InfoHint
-                  label={selectedRole === 'chair' ? 'About chair preferences' : 'About delegate preferences'}
-                  text={selectedRole === 'chair'
-                    ? "Whether a chair applicant is asked to rank which committee they would like to chair. Choose a committee gives you their ranking to work from; None skips the step and leaves every committee assignment to you."
-                    : "What a delegate is asked to rank on the application form, and therefore what your allocation has to work with. Ranking committee-and-country pairs gives the fullest picture and the best automatic allocation, but it is also the longest form to fill in. Committees only, or countries only, are shorter. None skips the step entirely and leaves every seat for you to assign by hand."}
-                />
-              </p>
-              <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                {selectedRole === 'chair'
-                  ? 'Choose whether chairs rank which committee they want, or whether you assign committees yourself.'
-                  : 'Choose what delegates rank when they apply. The application form shows only the pickers you enable here.'}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 8 }}>
-                {prefModeOptions.map(opt => {
-                  const active = prefMode === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => savePrefMode(opt.value)}
-                      disabled={prefModeSaving}
-                      className="flex items-center rounded-xl focus:outline-none"
-                      style={{
-                        gap: 10, padding: '11px 13px', textAlign: 'left',
-                        backgroundColor: active ? '#1B3828' : 'transparent',
-                        color: active ? '#EED98A' : '#1C1410',
-                        border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                        boxShadow: active ? '0 4px 12px rgba(27,56,40,0.2)' : 'none',
-                        fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.04em',
-                        opacity: prefModeSaving ? 0.6 : 1,
-                        cursor: prefModeSaving ? 'wait' : 'pointer',
-                      }}
-                    >
-                      {/* The thing(s) being ranked, drawn rather than described:
-                          a committee emblem and, for roles that pair it with a
-                          country, a flag. */}
-                      <span className="inline-flex items-center flex-shrink-0" style={{ gap: 3 }}>
-                        {opt.value !== 'countries_only' && opt.value !== 'none' && <Emoji3D name="Classical building" size={19} fallback={Building2} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                        {opt.value !== 'committees_only' && opt.value !== 'none' && <Emoji3D name="Crossed flags" size={19} fallback={Globe} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                        {opt.value === 'none' && <Emoji3D name="Cross mark" size={19} fallback={X} fallbackColor={active ? '#EED98A' : '#1B3828'} />}
-                      </span>
-                      <span className="min-w-0">{opt.label}</span>
-                    </button>
-                  );
-                })}
+              <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "'Outfit', sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>
+                {description.length} / 1500
               </div>
-              <div className="flex items-center gap-2 mt-2.5">
-                {prefModeSaving && (
-                  <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-                )}
-                <p className="text-xs" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  {prefModeOptions.find(o => o.value === prefMode)?.desc}
-                </p>
-              </div>
-              {prefModeError && (
-                <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
-              )}
-              </div>
-              )}
             </div>
-          )}
 
-          {/* ── Swaps ── */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={7} label="Delegation allocation swaps" sub="Whether delegates may trade allocations."
-              complete={true} open={openConfSection === 7}
-              onClick={() => setOpenConfSection(openConfSection === 7 ? 0 : 7)}
-            />
-            {openConfSection === 7 && (
-            <div className="mt-5">
-            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-              <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
-              Delegation allocation swaps
-              <InfoHint
-                label="About allocation swaps"
-                text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them, putting a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."
-              />
-            </p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              Control whether delegation leaders can trade committee allocations within their own delegation.
-            </p>
-            <div className="flex items-center" style={{ gap: 8 }}>
-              <div className="flex-1">
-                <Segmented
-                  options={SWAP_MODE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
-                  value={swapMode}
-                  disabled={swapModeSaving}
-                  onChange={(v) => saveSwapMode(v)}
-                />
-              </div>
-              {swapModeSaving && (
-                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
-              )}
-            </div>
-            <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-              {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
-            </p>
-            {swapModeError && (
-              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
-            )}
-            </div>
-            )}
-          </div>
-
-          {/* ── Age range ── */}
-          <div style={cardStyle}>
-            <StepHeader
-              n={8} label="Age of participants" sub="The age range this conference is open to."
-              complete={true} open={openConfSection === 8}
-              status={minAgeSaving ? 'saving' : minAgeSaved ? 'saved' : 'idle'}
-              onClick={() => setOpenConfSection(openConfSection === 8 ? 0 : 8)}
-            />
-            {openConfSection === 8 && (
-            <div className="mt-5">
+            <div className="mb-5">
             <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               <Emoji3D name="Birthday cake" size={20} />
               Age of participants
@@ -4338,19 +4202,67 @@ export default function SettingsPage() {
               </p>
             )}
             </div>
+
+            <AutoSaveStatus saving={detailsSaving} saved={detailsSaved} />
+            {detailsError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{detailsError}</p>
+            )}
+            </div>
             )}
           </div>
 
+          {/* ── Swaps ── */}
+          <div style={cardStyle}>
+            <StepHeader
+              n={4} label="Delegation allocation swaps" sub="Whether delegates may trade allocations."
+              complete={true} open={openConfSection === 4}
+              onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
+            />
+            {openConfSection === 4 && (
+            <div className="mt-5">
+            <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
+              Delegation allocation swaps
+              <InfoHint
+                label="About allocation swaps"
+                text="Once you have allocated a delegation its seats, its head delegate and faculty advisor may want to move their own people between them, putting a stronger delegate onto a harder country, say. Off keeps every move with your team. Request lets them ask and you approve. Self-serve lets them rearrange inside their own delegation freely and notifies you; they can never take a seat from another delegation."
+              />
+            </p>
+            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              Control whether delegation leaders can trade committee allocations within their own delegation.
+            </p>
+            <div className="flex items-center" style={{ gap: 8 }}>
+              <div className="flex-1">
+                <Segmented
+                  options={SWAP_MODE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                  value={swapMode}
+                  disabled={swapModeSaving}
+                  onChange={(v) => saveSwapMode(v)}
+                />
+              </div>
+              {swapModeSaving && (
+                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin flex-shrink-0" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+              )}
+            </div>
+            <p className="text-xs mt-2" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              {SWAP_MODE_OPTIONS.find(o => o.value === swapMode)?.desc}
+            </p>
+            {swapModeError && (
+              <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
+            )}
+            </div>
+            )}
+          </div>
 
-          {/* Section 9: Partners and sponsors. Moved here from the Privacy
+          {/* Section 5: Partners and sponsors. Moved here from the Privacy
               tab: partners are conference identity, not a privacy setting. */}
           <div style={cardStyle}>
             <StepHeader
-              n={9} label="Partners and sponsors" sub="Other conferences and companies shown on your page."
-              complete={true} open={openConfSection === 9}
-              onClick={() => setOpenConfSection(openConfSection === 9 ? 0 : 9)}
+              n={5} label="Partners and sponsors" sub="Other conferences and companies shown on your page."
+              complete={true} open={openConfSection === 5}
+              onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
             />
-            {openConfSection === 9 && (
+            {openConfSection === 5 && (
             <div className="mt-5">
         <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
           Partners
@@ -4779,28 +4691,38 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Description + socials card */}
+          {/* Section 6: Social media and communication. Contact email first,
+              because it is the one an applicant actually uses to reach a
+              conference, then the five URL fields. */}
           <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Description</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Shown on your public conference page.</p>
-            <textarea
-              rows={6}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tell delegates about your conference, theme, highlights, what to expect..."
-              maxLength={1500}
-              style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.6' }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            <StepHeader
+              n={6} label="Social media and communication" sub="How applicants find you and reach you."
+              complete={true} open={openConfSection === 6}
+              status={visualSaving ? 'saving' : visualSaved ? 'saved' : 'idle'}
+              onClick={() => setOpenConfSection(openConfSection === 6 ? 0 : 6)}
             />
-            <div style={{ textAlign: 'right', marginTop: 6, fontFamily: "'Outfit', sans-serif", fontSize: 11.5, fontWeight: 600, color: '#9A8A78', fontVariantNumeric: 'tabular-nums' }}>
-              {description.length} / 1500
+            {openConfSection === 6 && (
+            <div className="mt-5">
+            <div className="mb-3">
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Contact email</label>
+              <input
+                type="email"
+                value={contactEmail}
+                onChange={(e) => { setContactEmail(e.target.value); if (contactEmailError) setContactEmailError(''); }}
+                placeholder="hello@yourmun.org"
+                style={inputStyle}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+                onBlur={(e) => {
+                  const trimmed = e.target.value.trim();
+                  if (trimmed && !CONTACT_EMAIL_PATTERN.test(trimmed)) setContactEmailError('Enter a single email address, e.g. contact@yourmun.org.');
+                  else setContactEmailError('');
+                  e.currentTarget.style.borderColor = '#DDD4C0';
+                }}
+              />
+              {contactEmailError && (
+                <p className="text-xs mt-1" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{contactEmailError}</p>
+              )}
             </div>
-          </div>
-
-          <div style={cardStyle}>
-            <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Social Media & Links</p>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Optional. All fields saved together.</p>
             <div className="flex flex-col gap-3">
               {([
                 { label: 'Instagram URL', value: instagramUrl, setter: setInstagramUrl },
@@ -4823,9 +4745,10 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            <AutoSaveStatus saving={visualSaving} saved={visualSaved} />
             {visualError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visualError}</p>
+            )}
+            </div>
             )}
           </div>
 
