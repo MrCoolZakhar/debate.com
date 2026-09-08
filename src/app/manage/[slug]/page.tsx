@@ -1096,6 +1096,28 @@ export default function DashboardPage() {
     setEmailsExplored(hasExploredEmails(conference.id));
   }, [conference?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Is the "Explore emails" stage done, as THE SERVER counts it?
+   *
+   *  This row used to be ticked from localStorage alone, which made it the one
+   *  checklist item that could disagree with the database. `conference_setup_status()`
+   *  counts it done when `emails_explored_at IS NOT NULL` **OR** an enabled
+   *  `email_templates` row exists — so an organiser who had already turned an
+   *  email on, or who came back on a second device, in another browser, in a
+   *  private window, or after clearing site data, was told to go and do a step
+   *  the checkmark logic had already credited. It never cleared, because
+   *  nothing they could do on the dashboard would write that browser's key.
+   *
+   *  The server is the only authority worth having here, and it is already on
+   *  screen: the layout reads `verification_pending` from that same function.
+   *  A verified conference has, by definition, no pending verification stage.
+   *  localStorage survives only as the optimistic tick for the seconds between
+   *  visiting the emails page and the row being refetched. */
+  const emailStageDone = conference?.is_verified
+    ? true
+    : verification
+      ? !verification.pending.includes('email')
+      : (!!conference?.emails_explored_at || emailsExplored);
+
   // Recent-activity feed: recent applications + allocations, expanded into
   // per-timestamp events (submitted / paid / checked-in / resubmitted /
   // allocated), merged newest-first.
@@ -1415,11 +1437,11 @@ export default function DashboardPage() {
       gradient: NEU_GRADIENTS.gold,
       title: 'Explore emails',
       sub: 'See what you can send applicants automatically.',
-      // Ticked by visiting the communications page. That page records the
-      // visit twice: in localStorage (src/lib/emailsExplored.ts) for the
-      // instant tick here, and on the server as conferences.emails_explored_at,
-      // which is what conference_setup_status() and the verification mark read.
-      done: emailsExplored,
+      // Ticked by visiting the communications page, or by having any email
+      // turned on. See `emailStageDone` above: the answer comes from
+      // conference_setup_status() so this row cannot disagree with the
+      // checkmark, which is exactly what it used to do.
+      done: emailStageDone,
       onClick: () => router.push(`/manage/${slug}/communications`),
     },
     {

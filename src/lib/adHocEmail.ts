@@ -144,7 +144,15 @@ export async function queueAdHocEmail(
     return { ...empty, error: 'A subject and a message are both required.' };
   }
 
-  const [{ data: confData }, { data: recipientsData }, { data: roleConfigsData }] = await Promise.all([
+  // EVERY ONE OF THESE THREE READS IS CHECKED. They used to destructure only
+  // `data`, so a failed read — an expired token (getAuthedClient pins the one
+  // captured in React state and never refreshes it), an RLS denial, a dropped
+  // request, a PostgREST 5xx — arrived here as `null`, became an empty
+  // recipient list, and was reported to the organiser as "no eligible
+  // recipients". That sent them looking at their audience filter for a problem
+  // that was never there, and it is why a send can fail leaving no row in
+  // either email_sends or email_outbox and no trace of why.
+  const [confRes, recipientsRes, roleConfigsRes] = await Promise.all([
     supabase
       .from('conferences')
       .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme')
@@ -167,10 +175,27 @@ export async function queueAdHocEmail(
       .eq('conference_id', conferenceId),
   ]);
 
-  const conference = confData as ConferenceRow | null;
+  // A failed read is a failure, and it is not the same thing as an empty
+  // answer. Say which read broke and what the database said, so the next
+  // person to see this gets a cause instead of a shrug.
+  const readError = confRes.error ?? recipientsRes.error ?? roleConfigsRes.error;
+  if (readError) {
+    const which = confRes.error ? 'conference' : recipientsRes.error ? 'recipients' : 'role fees';
+    return { ...empty, error: `Could not load the ${which} for this send: ${readError.message}` };
+  }
+
+  const conference = confRes.data as ConferenceRow | null;
   if (!conference) return { ...empty, error: 'Could not load this conference.' };
-  const roleConfigs = (roleConfigsData ?? []) as RoleFeeConfigRow[];
-  const allRecipients = (recipientsData ?? []) as unknown as RecipientRow[];
+  const roleConfigs = (roleConfigsRes.data ?? []) as RoleFeeConfigRow[];
+  const allRecipients = (recipientsRes.data ?? []) as unknown as RecipientRow[];
+
+  // The caller picked these recipients from the same table a moment ago, so
+  // "you selected N people and the database returned none of them" is a
+  // failure, not an empty audience. Reporting it as an empty audience is what
+  // made this indistinguishable from an opt-out.
+  if (allRecipients.length === 0) {
+    return { ...empty, error: 'Could not load the recipients for this send. Refresh the page and try again.' };
+  }
 
   // Consent gate, through the shared predicate — an organizer-composed
   // broadcast is a 'marketing' email, exactly as the Communications composer
