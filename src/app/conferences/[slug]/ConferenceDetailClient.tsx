@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock, ScrollText, CreditCard } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
+import Portal from '@/components/Portal';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -3096,8 +3097,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                         for (const slot of slots) orderedSlots.push({ slot, header: null });
                       }
                       return (
+                        <Portal>
                         <div
-                          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+                          className="fixed inset-0 z-[100] flex items-center justify-center px-6"
                           style={{ backgroundColor: 'color-mix(in srgb, var(--gv-on-bg) 45%, transparent)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
                           onClick={() => setExpandedRoster(null)}
                         >
@@ -3227,6 +3229,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             </div>
                           </div>
                         </div>
+                        </Portal>
                       );
                     })()}
                   </div>
