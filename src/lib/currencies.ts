@@ -81,6 +81,9 @@ export const CURRENCIES: CurrencyOption[] = [
   { code: 'MYR', symbol: 'RM', name: 'Malaysian Ringgit', country: 'MY', countryLabel: 'Malaysia', usedIn: ['MY'] },
   { code: 'NGN', symbol: '₦', name: 'Nigerian Naira', country: 'NG', countryLabel: 'Nigeria', usedIn: ['NG'] },
   { code: 'NOK', symbol: 'kr', name: 'Norwegian Krone', country: 'NO', countryLabel: 'Norway', usedIn: ['NO', 'SJ', 'BV'] },
+  // Nepal writes the rupee as रू (or Rs). Distinct from INR/PKR/LKR, which is
+  // why it needs its own row rather than borrowing one of theirs.
+  { code: 'NPR', symbol: 'रू', name: 'Nepalese Rupee', country: 'NP', countryLabel: 'Nepal', usedIn: ['NP'] },
   { code: 'NZD', symbol: 'NZ$', name: 'New Zealand Dollar', country: 'NZ', countryLabel: 'New Zealand', usedIn: ['NZ', 'CK', 'NU', 'TK', 'PN'] },
   { code: 'OMR', symbol: 'OMR', name: 'Omani Rial', country: 'OM', countryLabel: 'Oman', usedIn: ['OM'] },
   { code: 'PEN', symbol: 'S/', name: 'Peruvian Sol', country: 'PE', countryLabel: 'Peru', usedIn: ['PE'] },
