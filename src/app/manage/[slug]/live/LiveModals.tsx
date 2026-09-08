@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Mic, FileText, ScrollText, Users, Gavel, Trophy, MessageSquareText, ExternalLink, ChevronDown, Timer, Clock, CheckCircle2, Megaphone, FileCheck, Radio, Medal } from 'lucide-react';
-import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import {
@@ -1706,7 +1705,9 @@ interface SlateStampRow {
   awards_return_note: string | null;
 }
 
-function AwardsRecap({ committeeId, conferenceSlug, config, publishedAt, conferenceEndDate }: {
+// `conferenceSlug` stays in the props type (the caller still passes it) but is
+// no longer read here: the only consumer was the link to the retired awards desk.
+function AwardsRecap({ committeeId, config, publishedAt, conferenceEndDate }: {
   committeeId: string;
   conferenceSlug: string;
   config: AwardsConfig;
@@ -1747,16 +1748,11 @@ function AwardsRecap({ committeeId, conferenceSlug, config, publishedAt, confere
     (order.get(a.award_type) ?? 99) - (order.get(b.award_type) ?? 99) || a.position - b.position);
   const completeness = rows ? slateCompleteness(rows, config) : null;
 
-  const deskLink = (
-    <Link
-      href={`/manage/${conferenceSlug}/awards`}
-      className="inline-flex items-center gap-2 text-xs font-bold focus:outline-none"
-      style={{ color: NEU.forest, fontFamily: OUTFIT, textDecoration: 'none' }}
-    >
-      <ExternalLink size={12} />
-      Open the awards desk
-    </Link>
-  );
+  // "Open the awards desk" linked to /manage/[slug]/awards. That desk is
+  // retired for now (Settings → Awards is a coming-soon screen), so there is
+  // nowhere to send anyone. This panel still reads the slate, which is
+  // untouched in the database. Restore the link with the rest of the feature.
+  const deskLink = null;
 
   if (error) return <p className="text-sm" style={{ color: RED, fontFamily: OUTFIT }}>{error}</p>;
   if (!rows || !state) {
@@ -1836,7 +1832,8 @@ function AwardsRecap({ committeeId, conferenceSlug, config, publishedAt, confere
       )}
 
       <p className="text-[11px]" style={{ color: SOFT, fontFamily: OUTFIT }}>
-        Approve, return or edit this slate, tally delegation awards and publish from the awards desk.
+        Awards are being rebuilt, so there is nowhere to ratify or publish this slate yet. Everything
+        recorded here is saved and nothing is lost.
       </p>
       {deskLink}
     </div>

@@ -140,18 +140,55 @@ export function isChoiceType(t: QuestionType): boolean {
   return t === 'dropdown' || t === 'multiple_choice' || t === 'checkboxes';
 }
 
+/** The options an applicant can actually pick. A blank option VALUE is
+ *  unpickable by construction: choosing it stores '', and `answerIsEmpty('')`
+ *  is true, so it can never satisfy a required question. Every renderer and
+ *  every validation goes through this, so a stray blank left in the builder is
+ *  simply invisible on the form rather than a dead row that traps someone.
+ *  Nothing in the data model relies on an empty option label. */
+export function usableOptions(q: Pick<CustomQuestion, 'options'>): string[] {
+  return (q.options ?? []).map(o => o.trim()).filter(Boolean);
+}
+
+/** '' when a choice question is safe to publish, otherwise the reason it is
+ *  not. Fewer than two usable options is not a matter of taste: with one the
+ *  question answers itself, with none a required question cannot be answered
+ *  at all. The builder refuses to save while this returns a reason. */
+export function optionsProblem(q: Pick<CustomQuestion, 'type' | 'options'>): string {
+  if (!isChoiceType(q.type)) return '';
+  return usableOptions(q).length < 2 ? 'At least 2 options are required.' : '';
+}
+
+/** Live question blocks that must not reach the database. Archived blocks are
+ *  excluded: they are off the form, so they cannot trap anyone. */
+export function unpublishableQuestions(blocks: FormBlock[]): QuestionBlock[] {
+  return questionsOf(blocks).filter(q => optionsProblem(q) !== '');
+}
+
+/** Can an applicant give this question an answer at all? A choice question
+ *  with no usable option has nothing to pick. */
+function isAnswerable(q: CustomQuestion): boolean {
+  return !isChoiceType(q.type) || usableOptions(q).length > 0;
+}
+
 export function answerIsEmpty(v: CustomAnswerValue | undefined): boolean {
   if (v === undefined) return true;
   if (Array.isArray(v)) return v.length === 0;
   return v.trim() === '';
 }
 
+/** A required question counts as missing only when it can be answered.
+ *  A required dropdown or choice question whose options are all blank (or
+ *  absent) offers nothing to pick, so treating it as missing would bounce the
+ *  applicant back to that page on every submit with no way through. The
+ *  builder now refuses to publish one; this is the guard for the ones already
+ *  live on conferences today. */
 export function validateAnswers(
   questions: CustomQuestion[],
   answers: CustomAnswers
 ): { valid: boolean; missingIds: string[] } {
   const missingIds = questions
-    .filter(q => q.required && answerIsEmpty(answers[q.id]))
+    .filter(q => q.required && isAnswerable(q) && answerIsEmpty(answers[q.id]))
     .map(q => q.id);
   return { valid: missingIds.length === 0, missingIds };
 }

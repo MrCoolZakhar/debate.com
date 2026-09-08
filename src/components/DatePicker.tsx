@@ -117,6 +117,29 @@ export function DatePicker({
   const minDate = useMemo(() => parseISO(min), [min]);
   const maxDate = useMemo(() => parseISO(max), [max]);
   const [view, setView] = useState<Date>(() => selected ?? parseISO(initialView) ?? new Date());
+
+  // Selectable years for the header dropdown.
+  //
+  // This used to be <input type="number" value={view.getFullYear()} onChange={...}>
+  // whose handler only called setView for a value ALREADY in 1900..2100. Typing
+  // "1998" starts as "1", which failed that test, so state never moved and the
+  // controlled input snapped straight back to the old year. Typing a year was
+  // impossible. Desktop still had the number spinners, so it merely looked
+  // tedious; a phone has no spinners, so the control was completely dead and
+  // every mobile user entering a date of birth at sign-up was stuck.
+  //
+  // A <select> cannot have an intermediate state, so it cannot reproduce that
+  // class of bug, and it is one tap on touch instead of twenty on a spinner.
+  // The range follows min/max when they are given (date of birth passes
+  // max = today, so it offers a real birth-year span) and always includes the
+  // year currently in view, so there is never a selected value with no option.
+  const years = useMemo(() => {
+    const viewYear = view.getFullYear();
+    const nowYear = new Date().getFullYear();
+    const lo = Math.min(minDate ? minDate.getFullYear() : nowYear - 100, viewYear);
+    const hi = Math.max(maxDate ? maxDate.getFullYear() : nowYear + 20, viewYear);
+    return Array.from({ length: hi - lo + 1 }, (_, i) => hi - i);
+  }, [view, minDate, maxDate]);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
@@ -280,8 +303,11 @@ export function DatePicker({
                 className="focus:outline-none" style={{ fontFamily: OUTFIT, fontWeight: 800, color: '#1C1410', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                 {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
               </select>
-              <input type="number" value={view.getFullYear()} onChange={(e) => { const y = Number(e.target.value); if (y >= 1900 && y <= 2100) setView(new Date(y, view.getMonth(), 1)); }}
-                className="focus:outline-none" style={{ width: 58, fontFamily: OUTFIT, fontWeight: 800, color: '#1C1410', background: 'transparent', border: 'none', fontVariantNumeric: 'tabular-nums' }} />
+              <select value={view.getFullYear()} onChange={(e) => setView(new Date(Number(e.target.value), view.getMonth(), 1))}
+                aria-label="Year"
+                className="focus:outline-none" style={{ fontFamily: OUTFIT, fontWeight: 800, color: '#1C1410', background: 'transparent', border: 'none', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+                {years.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
             <button type="button" onClick={() => setView(new Date(view.getFullYear(), view.getMonth() + 1, 1))}
               className="rounded-lg p-1.5 focus:outline-none" style={{ color: '#1B3828' }}

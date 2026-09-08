@@ -1,11 +1,13 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Check, Send, Search, Award } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
+import { supabase as anonClient } from '@/lib/supabase';
+import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 
 const OUTFIT = "'Outfit', sans-serif";
 
@@ -22,7 +24,7 @@ function roleWithArticle(role: string): string {
   return ROLE_WITH_ARTICLE[role] ?? `a ${role.replace(/-/g, ' ')}`;
 }
 
-function ConfirmationInner() {
+function ConfirmationInner({ theme }: { theme: ConferenceTheme }) {
   const { slug } = useParams() as { slug: string };
   const searchParams = useSearchParams();
   const rawRole = searchParams.get('role');
@@ -43,7 +45,7 @@ function ConfirmationInner() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+    <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(theme), backgroundColor: 'var(--gv-bg)' } as React.CSSProperties}>
       <div
         className="pointer-events-none fixed inset-0 z-[1]"
         style={{
@@ -68,7 +70,7 @@ function ConfirmationInner() {
             style={{
               inset: '-24px',
               borderRadius: '9999px',
-              background: 'radial-gradient(circle at 50% 42%, rgba(238,217,138,0.35) 0%, rgba(237,231,216,0) 70%)',
+              background: 'radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--gv-accent) 35%, transparent) 0%, color-mix(in srgb, var(--gv-bg) 0%, transparent) 70%)',
             }}
           />
           <div
@@ -76,30 +78,30 @@ function ConfirmationInner() {
             style={{
               width: '96px',
               height: '96px',
-              background: 'linear-gradient(150deg, #16301F 0%, #1B3828 48%, #2A5A3C 100%)',
-              border: '1.5px solid rgba(238,217,138,0.55)',
-              boxShadow: '0 12px 34px rgba(27,56,40,0.3), 0 0 0 8px rgba(238,217,138,0.12)',
+              background: 'linear-gradient(150deg, #16301F 0%, var(--gv-main) 48%, var(--gv-main-mid) 100%)',
+              border: '1.5px solid color-mix(in srgb, var(--gv-accent) 55%, transparent)',
+              boxShadow: '0 12px 34px color-mix(in srgb, var(--gv-main) 30%, transparent), 0 0 0 8px color-mix(in srgb, var(--gv-accent) 12%, transparent)',
             }}
           >
-            <Check size={44} strokeWidth={2.6} style={{ color: '#EED98A' }} />
+            <Check size={44} strokeWidth={2.6} style={{ color: 'var(--gv-on-main)' }} />
           </div>
         </div>
 
         <p
           className="text-xs mb-3"
-          style={{ color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em', animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '100ms' }}
+          style={{ color: 'var(--gv-accent)', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.14em', animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '100ms' }}
         >
           {resubmitted ? 'APPLICATION RESUBMITTED' : 'APPLICATION SUBMITTED'}
         </p>
         <h1
           className="mb-2"
-          style={{ color: '#1C1410', fontFamily: OUTFIT, fontWeight: 900, fontSize: '32px', letterSpacing: '-0.01em', textWrap: 'balance', animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '180ms' }}
+          style={{ color: 'var(--gv-on-bg)', fontFamily: OUTFIT, fontWeight: 900, fontSize: '32px', letterSpacing: '-0.01em', textWrap: 'balance', animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: '180ms' }}
         >
           {resubmitted ? "You're back in the queue!" : "You're in the queue!"}
         </h1>
         <p
           className={`text-sm leading-relaxed max-w-sm ${timingNote ? 'mb-3' : 'mb-9'}`}
-          style={{ color: '#9A8A78', fontFamily: OUTFIT }}
+          style={{ color: 'var(--gv-muted)', fontFamily: OUTFIT }}
         >
           {resubmitted
             ? "Your application has been resubmitted. The conference team will take another look and you'll hear back soon."
@@ -108,7 +110,7 @@ function ConfirmationInner() {
         {timingNote && (
           <p
             className="text-sm leading-relaxed mb-9 max-w-sm"
-            style={{ color: '#9A8A78', fontFamily: OUTFIT }}
+            style={{ color: 'var(--gv-muted)', fontFamily: OUTFIT }}
           >
             {timingNote}
           </p>
@@ -119,14 +121,14 @@ function ConfirmationInner() {
           <div
             className="rounded-2xl px-5 py-6"
             style={{
-              backgroundColor: '#FAF8F3',
-              border: '1.5px solid #D8CDB6',
-              boxShadow: '0 2px 6px rgba(27,56,40,0.05), 0 16px 40px rgba(27,56,40,0.08)',
+              backgroundColor: 'var(--gv-surface)',
+              border: '1.5px solid var(--gv-border)',
+              boxShadow: '0 2px 6px color-mix(in srgb, var(--gv-main) 5%, transparent), 0 16px 40px color-mix(in srgb, var(--gv-main) 8%, transparent)',
             }}
           >
             <p
               className="mb-5"
-              style={{ fontFamily: OUTFIT, fontSize: '10px', fontWeight: 800, letterSpacing: '0.16em', color: '#B6871F', textTransform: 'uppercase' }}
+              style={{ fontFamily: OUTFIT, fontSize: '10px', fontWeight: 800, letterSpacing: '0.16em', color: 'var(--gv-accent)', textTransform: 'uppercase' }}
             >
               What happens next
             </p>
@@ -136,16 +138,16 @@ function ConfirmationInner() {
                 const done = t.state === 'done';
                 const active = t.state === 'active';
                 const discBg = done
-                  ? 'linear-gradient(150deg, #16301F, #2A5A3C)'
+                  ? 'linear-gradient(150deg, #16301F, var(--gv-main-mid))'
                   : active
-                  ? 'radial-gradient(circle at 50% 36%, rgba(238,217,138,0.28) 0%, rgba(250,248,243,0) 74%)'
-                  : '#EDE7D8';
+                  ? 'radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--gv-accent) 28%, transparent) 0%, color-mix(in srgb, var(--gv-surface) 0%, transparent) 74%)'
+                  : 'var(--gv-bg)';
                 const discBorder = done
-                  ? '1.5px solid rgba(238,217,138,0.4)'
+                  ? '1.5px solid color-mix(in srgb, var(--gv-accent) 40%, transparent)'
                   : active
-                  ? '1.5px solid rgba(182,135,31,0.5)'
-                  : '1.5px solid #D8CDB6';
-                const iconColor = done ? '#EED98A' : active ? '#B6871F' : '#9A8A78';
+                  ? '1.5px solid color-mix(in srgb, var(--gv-accent) 50%, transparent)'
+                  : '1.5px solid var(--gv-border)';
+                const iconColor = done ? 'var(--gv-on-main)' : active ? 'var(--gv-accent)' : 'var(--gv-muted)';
                 return (
                   <div key={t.label} className="flex items-start flex-1" style={{ animation: 'gvRise 480ms cubic-bezier(0.2,0,0,1) both', animationDelay: `${260 + i * 60}ms` }}>
                     <div className="flex flex-col items-center flex-1 min-w-0">
@@ -156,20 +158,20 @@ function ConfirmationInner() {
                           height: '44px',
                           background: discBg,
                           border: discBorder,
-                          boxShadow: active ? '0 0 0 4px rgba(238,217,138,0.18)' : 'none',
+                          boxShadow: active ? '0 0 0 4px color-mix(in srgb, var(--gv-accent) 18%, transparent)' : 'none',
                         }}
                       >
                         <Icon size={19} strokeWidth={2.2} style={{ color: iconColor }} />
                       </span>
                       <p
                         className="mt-2.5"
-                        style={{ fontFamily: OUTFIT, fontSize: '12.5px', fontWeight: 700, color: active || done ? '#1C1410' : '#9A8A78' }}
+                        style={{ fontFamily: OUTFIT, fontSize: '12.5px', fontWeight: 700, color: active || done ? 'var(--gv-on-surface)' : 'var(--gv-muted)' }}
                       >
                         {t.label}
                       </p>
                       <p
                         className="mt-0.5 px-1"
-                        style={{ fontFamily: OUTFIT, fontSize: '10.5px', color: '#9A8A78', lineHeight: 1.35 }}
+                        style={{ fontFamily: OUTFIT, fontSize: '10.5px', color: 'var(--gv-muted)', lineHeight: 1.35 }}
                       >
                         {t.sub}
                       </p>
@@ -182,7 +184,7 @@ function ConfirmationInner() {
                           height: '2px',
                           marginTop: '21px',
                           borderRadius: '2px',
-                          backgroundColor: done ? '#2A5A3C' : '#DDD4C0',
+                          backgroundColor: done ? 'var(--gv-main-mid)' : 'var(--gv-border)',
                         }}
                       />
                     )}
@@ -198,15 +200,15 @@ function ConfirmationInner() {
             href={portalHref}
             className="rounded-xl py-3 px-6 font-bold text-sm focus:outline-none transition-colors text-center"
             style={{
-              backgroundColor: '#1B3828',
-              color: '#EED98A',
+              backgroundColor: 'var(--gv-main)',
+              color: 'var(--gv-on-main)',
               textDecoration: 'none',
               fontFamily: OUTFIT,
               letterSpacing: '0.08em',
-              boxShadow: '0 6px 18px rgba(27,56,40,0.22)',
+              boxShadow: '0 6px 18px color-mix(in srgb, var(--gv-main) 22%, transparent)',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
           >
             CONFERENCE PORTAL →
           </Link>
@@ -215,13 +217,13 @@ function ConfirmationInner() {
             className="rounded-xl py-3 px-6 font-bold text-sm focus:outline-none transition-colors text-center"
             style={{
               border: '1.5px solid #C8BEA8',
-              color: '#1C1410',
+              color: 'var(--gv-on-bg)',
               textDecoration: 'none',
               fontFamily: OUTFIT,
               letterSpacing: '0.08em',
               backgroundColor: 'transparent',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.04)'; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 4%, transparent)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
           >
             PAYMENT PORTAL
@@ -232,12 +234,12 @@ function ConfirmationInner() {
           href="/conferences/explore"
           className="mt-5 text-xs font-medium focus:outline-none transition-colors"
           style={{
-            color: '#9A8A78',
+            color: 'var(--gv-muted)',
             textDecoration: 'none',
             fontFamily: OUTFIT,
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#1C1410'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-on-bg)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--gv-muted)'; }}
         >
           explore more conferences
         </Link>
@@ -247,15 +249,56 @@ function ConfirmationInner() {
 }
 
 export default function ConfirmationPage() {
+  const { slug } = useParams() as { slug: string };
+  // Published theme only: this page is only ever reached by really
+  // submitting an application, which preview mode cannot do, so there is no
+  // draft-vs-published distinction to make here.
+  const [theme, setTheme] = useState<ConferenceTheme | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await anonClient
+          .from('conferences')
+          .select('theme')
+          .eq('slug', slug)
+          .maybeSingle();
+        if (cancelled) return;
+        // Any error, or no row for this slug, degrades to Gavelling's own
+        // palette rather than ever hanging on this fetch.
+        if (error || !data) {
+          setTheme({});
+          return;
+        }
+        setTheme((data as { theme: ConferenceTheme | null }).theme ?? {});
+      } catch {
+        if (!cancelled) setTheme({});
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [slug]);
+
+  // Theme not resolved yet: the same loading UI the page always showed,
+  // in Gavelling's own colours (nothing to override yet), so there is no
+  // flash of the wrong palette once the real theme arrives.
+  if (theme === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--gv-bg)' }}>
+        <Loader size={64} label="Loading confirmation" />
+      </div>
+    );
+  }
+
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="min-h-screen flex items-center justify-center" style={{ ...themeCssVars(theme), backgroundColor: 'var(--gv-bg)' } as React.CSSProperties}>
           <Loader size={64} label="Loading confirmation" />
         </div>
       }
     >
-      <ConfirmationInner />
+      <ConfirmationInner theme={theme} />
     </Suspense>
   );
 }

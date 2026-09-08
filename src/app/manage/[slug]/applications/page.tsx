@@ -2722,10 +2722,20 @@ export default function ApplicationsPage() {
         // Refund whatever credit the applicant spent, if any — a benign
         // {refunded:false} just means there was nothing to refund (e.g. they
         // still have another live application holding the credit).
+        //
+        // THIS IS MONEY, AND THE CATCH BELOW CANNOT SEE A FAILED RPC.
+        // supabase-js RESOLVES rather than rejects on a PostgREST error, so a
+        // bare `await` on an rpc() looks exactly like success and the message
+        // below could never appear. Check `error` explicitly.
         try {
           const freshSupabase = await getFreshAuthedClient();
-          if (freshSupabase) {
-            await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+          if (!freshSupabase) {
+            setActionError('Rejected, but the credit refund could not be confirmed. Refresh to verify.');
+          } else {
+            const { error: refundError } = await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+            if (refundError) {
+              setActionError(`Rejected, but the credit was not refunded (${refundError.message}). Refund it manually or refresh to verify.`);
+            }
           }
         } catch {
           setActionError('Rejected, but the credit refund could not be confirmed. Refresh to verify.');
@@ -3090,11 +3100,18 @@ export default function ApplicationsPage() {
         }
 
         // Refund whatever credit the applicant spent, if any — same benign
-        // {refunded:false} handling as reject.
+        // {refunded:false} handling as reject, and the same reason the RPC's
+        // own `error` has to be read: a PostgREST failure resolves, so the
+        // catch below never sees it.
         try {
           const freshSupabase = await getFreshAuthedClient();
-          if (freshSupabase) {
-            await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+          if (!freshSupabase) {
+            setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
+          } else {
+            const { error: refundError } = await freshSupabase.rpc('refund_credit_for_application', { p_application_id: appId });
+            if (refundError) {
+              setActionError(`Withdrawn, but the credit was not refunded (${refundError.message}). Refund it manually or refresh to verify.`);
+            }
           }
         } catch {
           setActionError('Withdrawn, but the credit refund could not be confirmed. Refresh to verify.');
@@ -3246,12 +3263,24 @@ export default function ApplicationsPage() {
 
     (async () => {
       const supabase = getAuthedClient(session.access_token);
-      await supabase.from('conference_allocations').delete().eq('application_id', appId);
-      const { error } = await supabase.from('applications').delete().eq('id', appId);
-      if (error) throw error;
+      // `applications` has RLS enabled with INSERT, SELECT and UPDATE policies
+      // ONLY. There is no DELETE policy, so a direct .delete() matched zero rows
+      // and returned NO ERROR: the row vanished optimistically and reappeared on
+      // the next reconcile, every single time. The applicant side already knew
+      // this and goes through withdraw_application instead.
+      //
+      // delete_application is a SECURITY DEFINER RPC that checks the caller is
+      // an organiser of the conference, refuses an application with a linked
+      // account (those belong in 'rejected' / 'withdrawn', not deleted), and
+      // removes the allocation in the SAME transaction as the row.
+      const { data, error } = await supabase.rpc('delete_application', { p_application_id: appId });
+      if (error) throw new Error(error.message);
+      const res = (data ?? {}) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(res.error || 'the delete was rejected');
     })()
       .then(scheduleReconcile)
-      .catch(() => {
+      .catch((e: unknown) => {
+        const reason = e instanceof Error && e.message ? e.message : 'the delete was rejected';
         // The row is back, so the ledger must stop claiming it is deleted.
         pendingPatches.current.delete(appId);
         setApplications(cur => {
@@ -3260,7 +3289,7 @@ export default function ApplicationsPage() {
           next.splice(Math.min(prevIndex, next.length), 0, prevRow);
           return next;
         });
-        setActionError('Could not delete the application. Please try again.');
+        setActionError(`Could not delete the application: ${reason}`);
       })
       .finally(() => markBusy(appId, false));
   }
@@ -3299,17 +3328,29 @@ export default function ApplicationsPage() {
         // the payment + batch rows, settles the invoice and runs
         // settle_invoice_effects, so manual payments land identically wherever
         // they are recorded.
+        //
+        // The read and the RPC are both checked explicitly: supabase-js
+        // resolves on a PostgREST error, so the catch below only ever sees a
+        // thrown network fault. Without this check a failed settlement was the
+        // exact symptom described above, silently.
         try {
-          const { data: openInvoices } = await supabase
+          let settleFailure: string | null = null;
+          const { data: openInvoices, error: invoiceReadError } = await supabase
             .from('invoices')
             .select('id')
             .eq('application_id', app.id)
             .not('status', 'in', '(settled,waived,void)');
+          if (invoiceReadError) settleFailure = invoiceReadError.message;
           for (const inv of (openInvoices ?? []) as { id: string }[]) {
-            await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
+            if (settleFailure) break;
+            const { error: settleError } = await supabase.rpc('mark_invoice_paid', { p_invoice_id: inv.id });
+            if (settleError) settleFailure = settleError.message;
+          }
+          if (settleFailure) {
+            setActionError(`Marked paid, but their invoice could not be settled (${settleFailure}). They may still be blocked from acceptance. Settle it in Financials, under Invoices.`);
           }
         } catch {
-          setActionError('Marked paid, but their invoice could not be settled — they may still be blocked from acceptance. Settle it in Financials → Invoices.');
+          setActionError('Marked paid, but their invoice could not be settled. They may still be blocked from acceptance. Settle it in Financials, under Invoices.');
         }
 
         // Secondary effects, a failure here must NOT roll back the payment mark.
@@ -3363,17 +3404,26 @@ export default function ApplicationsPage() {
       // so the ledger tracks the payment mark in BOTH directions. Without this
       // the reverse inconsistency appears — an application reading unpaid while
       // its invoice still claims the money arrived.
+      // Same explicit checking as handleMarkPaid, and for the same reason: an
+      // RPC that fails on the server resolves here, so the catch is not enough.
       try {
-        const { data: settled } = await supabase
+        let reopenFailure: string | null = null;
+        const { data: settled, error: settledReadError } = await supabase
           .from('invoices')
           .select('id')
           .eq('application_id', app.id)
           .eq('status', 'settled');
+        if (settledReadError) reopenFailure = settledReadError.message;
         for (const inv of (settled ?? []) as { id: string }[]) {
-          await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
+          if (reopenFailure) break;
+          const { error: reopenError } = await supabase.rpc('mark_invoice_unpaid', { p_invoice_id: inv.id });
+          if (reopenError) reopenFailure = reopenError.message;
+        }
+        if (reopenFailure) {
+          setActionError(`Marked unpaid, but their invoice still shows as settled (${reopenFailure}). Reopen it in Financials, under Invoices.`);
         }
       } catch {
-        setActionError('Marked unpaid, but their invoice still shows as settled. Reopen it in Financials → Invoices.');
+        setActionError('Marked unpaid, but their invoice still shows as settled. Reopen it in Financials, under Invoices.');
       }
 
       try {

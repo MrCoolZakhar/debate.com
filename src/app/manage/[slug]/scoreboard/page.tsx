@@ -212,20 +212,10 @@ export default function ScoreboardPage() {
           {scopedCommittee ? committeeDisplayName(scopedCommittee.name, scopedCommittee.abbreviation) : 'Scoreboard'}
         </h1>
         <div style={{ display: 'flex', gap: 8, marginInlineStart: 'auto', flexWrap: 'wrap' }}>
-          {/* The awards desk is where this evidence ends up: the secretariat
-              ratifies each committee's slate against these numbers. */}
-          <Link
-            href={`/manage/${conference.slug}/awards`}
-            className="focus:outline-none"
-            style={{
-              fontFamily: OUTFIT, fontWeight: 700, fontSize: 12, color: NEU.forest, backgroundColor: NEU.surface,
-              border: `1px solid ${CARD_BORDER_COLOR}`, boxShadow: NEU.outSm, borderRadius: 10, padding: '8px 14px',
-              display: 'inline-flex', alignItems: 'center', gap: 7, textDecoration: 'none',
-            }}
-          >
-            <Trophy size={13} strokeWidth={2.5} />
-            AWARDS
-          </Link>
+          {/* An AWARDS button linked to /manage/[slug]/awards here. That desk is
+              retired for now (Settings → Awards is a coming-soon screen), so
+              the button would only lead to a holding page. Restore it with the
+              rest of the feature. */}
           {!loading && allRows.length > 0 && (
             <button
               onClick={exportCsv}

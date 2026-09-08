@@ -10,7 +10,7 @@ import { Pill, PillToggle } from '@/app/account/accountUi';
 import { useConfirmModal } from '@/components/ConfirmModal';
 import {
   type QuestionType, type FormBlock, type QuestionBlock, type TitleBlock, type SectionBlock,
-  isChoiceType, QUESTION_TYPE_LABELS,
+  isChoiceType, QUESTION_TYPE_LABELS, usableOptions,
 } from '@/lib/customQuestions';
 
 /** The seven types in the three groups Google uses: free text, choices, and
@@ -532,9 +532,7 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
               activeBlocks.map((block, idx) => {
                 const selected = selectedId === block.id;
                 const original = block.kind === 'question' ? originals.get(block.id) : undefined;
-                const validOptions = block.kind === 'question'
-                  ? (block.options ?? []).map(o => o.trim()).filter(Boolean)
-                  : [];
+                const validOptions = block.kind === 'question' ? usableOptions(block) : [];
                 const choice = block.kind === 'question' && isChoiceType(block.type);
                 const needsLabel = block.kind === 'question' && block.label.trim().length === 0;
                 const needsOptions = choice && validOptions.length < 2;
@@ -716,9 +714,15 @@ export default function QuestionBuilder({ value, onChange, hasApplications = fal
                               />
                             )}
 
+                            {/* Options are a BLOCKER, not a hint: a choice
+                                question with blank options can never be
+                                answered, so the form stops saving until it is
+                                fixed. Say so here, where the fix is. */}
                             {(needsLabel || needsOptions) && (
                               <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-                                {needsLabel ? 'A question needs a label.' : 'At least 2 options are required.'}
+                                {needsLabel && !needsOptions
+                                  ? 'A question needs a label.'
+                                  : 'At least 2 options are required. Nothing on this form is saved until you fill them in.'}
                               </p>
                             )}
                             {hasApplications && reworded && (

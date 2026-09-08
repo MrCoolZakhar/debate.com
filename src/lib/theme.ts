@@ -1,16 +1,18 @@
 /**
  * theme.ts — conference colour themes: the arithmetic, none of the wiring.
  *
- * An organizer picks five colours (background, main, accent, and a light and
- * a dark text colour) and everything else — a surface tint, a border, two
- * mid-tones of the main colour, a muted tone, and which of their two text
- * colours actually reads on a given surface — is derived here, once, so no
- * component ever repeats contrast maths inline.
+ * An organizer picks two colours, main and accent. Everything else —
+ * background, surface, border, two mid-tones of the main colour, a muted
+ * tone and both text colours — is Gavelling's own, fixed, and never derived
+ * from the organizer's picks. Backgrounds used to be theirs too; that broke
+ * on a dark background, because on-page text, the surface tint and the
+ * neumorphic highlight all assume a light page underneath them, so the
+ * organizer's canvas is no longer part of the input.
  *
  * Persisted as `conferences.theme` / `conferences.theme_draft` (jsonb,
- * default `{}`). An empty object, or any object missing a key, means "use
- * Gavelling's own palette for that key" — a partial theme is a legal theme,
- * not an error.
+ * default `{}`). An empty object, or an object missing `main` or `accent`,
+ * means "use Gavelling's own colour for that key" — a partial theme is a
+ * legal theme, not an error.
  *
  * WHY THE GAVELLING DEFAULTS BELOW ARE LITERAL, NOT DERIVED
  * It would be tempting to compute GAVELLING_THEME's surface/border/mid-tones
@@ -31,11 +33,8 @@
  */
 
 export interface ConferenceTheme {
-  background?: string;
   main?: string;
   accent?: string;
-  text_light?: string;
-  text_dark?: string;
 }
 
 export interface ResolvedTheme {
@@ -149,8 +148,10 @@ function isEmptyTheme(theme: ConferenceTheme | null | undefined): boolean {
 }
 
 /**
- * Fills in an organizer's partial theme with the Gavelling defaults, then
- * derives the five colours the organizer never picks directly.
+ * Fills in an organizer's missing `main` / `accent` with the Gavelling
+ * defaults, derives the two lighter steps of `main`, and returns Gavelling's
+ * own values for every other colour — the organizer's canvas is not theirs
+ * to set.
  *
  * The empty/missing case is an exact fast path: it returns `GAVELLING_THEME`
  * itself rather than running an equivalent object through the derivation
@@ -160,46 +161,24 @@ function isEmptyTheme(theme: ConferenceTheme | null | undefined): boolean {
 export function resolveTheme(theme: ConferenceTheme | null | undefined): ResolvedTheme {
   if (isEmptyTheme(theme)) return GAVELLING_THEME;
 
-  const background = theme!.background ?? GAVELLING_THEME.background;
   const main = theme!.main ?? GAVELLING_THEME.main;
   const accent = theme!.accent ?? GAVELLING_THEME.accent;
-  const textLight = theme!.text_light ?? GAVELLING_THEME.textLight;
-  const textDark = theme!.text_dark ?? GAVELLING_THEME.textDark;
-
-  // The readable one of the organizer's two text colours, on THIS background
-  // — used below for both the border tint and the muted tone.
-  const onBackground = pickTextColor(background, [textLight, textDark]);
-
-  // Card/panel surface, a step lighter than the background. A pure white
-  // background cannot be lightened any further, so cards would vanish into
-  // it; in that case tint toward `main` instead, just enough to stay visible.
-  const surface = relativeLuminance(background) < 0.85
-    ? mix(background, '#FFFFFF', 0.45)
-    : mix(background, main, 0.04);
-
-  // Hairline border/divider colour: the background nudged toward whichever
-  // text colour reads on it, just enough to be visible without competing.
-  const border = mix(background, onBackground, 0.18);
 
   // Two lighter steps of the main colour, for hover states and secondary fills.
   const mainMid = mix(main, '#FFFFFF', 0.18);
   const mainLight = mix(main, '#FFFFFF', 0.34);
 
-  // Secondary/caption text: the readable text colour pulled most of the way
-  // toward the background, so it recedes without disappearing.
-  const muted = mix(onBackground, background, 0.45);
-
   return {
-    background,
-    surface,
-    border,
+    background: GAVELLING_THEME.background,
+    surface: GAVELLING_THEME.surface,
+    border: GAVELLING_THEME.border,
     main,
     mainMid,
     mainLight,
     accent,
-    textLight,
-    textDark,
-    muted,
+    textLight: GAVELLING_THEME.textLight,
+    textDark: GAVELLING_THEME.textDark,
+    muted: GAVELLING_THEME.muted,
   };
 }
 
@@ -240,8 +219,8 @@ export function themeCssVars(theme: ConferenceTheme | null | undefined): React.C
 /**
  * Plain-English warnings for a live picker to show while an organizer is
  * building a theme. Checks exactly three things, nothing more: both text
- * colours failing against main, both failing against background, and the
- * accent nearly disappearing against the background.
+ * colours failing against main, the main colour washing out against the
+ * (fixed, Gavelling) page, and the accent doing the same.
  */
 export function themeWarnings(theme: ConferenceTheme | null | undefined): string[] {
   const t = resolveTheme(theme);
@@ -250,17 +229,15 @@ export function themeWarnings(theme: ConferenceTheme | null | undefined): string
   const lightOnMain = contrastRatio(t.textLight, t.main);
   const darkOnMain = contrastRatio(t.textDark, t.main);
   if (lightOnMain < 4.5 && darkOnMain < 4.5) {
-    warnings.push('Both your text colours are hard to read on your main colour.');
+    warnings.push('Text on your main colour will be hard to read.');
   }
 
-  const lightOnBg = contrastRatio(t.textLight, t.background);
-  const darkOnBg = contrastRatio(t.textDark, t.background);
-  if (lightOnBg < 4.5 && darkOnBg < 4.5) {
-    warnings.push('Both your text colours are hard to read on your background.');
+  if (contrastRatio(t.main, t.background) < 1.6) {
+    warnings.push('Your main colour barely shows against the page.');
   }
 
   if (contrastRatio(t.accent, t.background) < 1.6) {
-    warnings.push('Your accent colour barely shows against your background.');
+    warnings.push('Your accent colour barely shows against the page.');
   }
 
   return warnings;

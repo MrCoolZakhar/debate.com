@@ -8,7 +8,7 @@ import Link from 'next/link';
 import {
   Building2, Rocket, Mail, Gavel, UsersRound, UserPlus, Wallet, Palette,
   Inbox, Globe2, CheckCircle2, AlertCircle, ArrowRight,
-  Activity, UserRoundCheck, MapPin, RotateCcw, Trophy,
+  Activity, UserRoundCheck, MapPin, RotateCcw,
 } from 'lucide-react';
 import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -27,7 +27,6 @@ import ParticipantsChart, { toCumulativeSeries } from '@/components/conferences/
 import ApplicantsDial from '@/components/conferences/ApplicantsDial';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { hasExploredEmails } from '@/lib/emailsExplored';
-import { getAwardsConfig, chairDeadline } from '@/lib/awards';
 import { getConferenceIntent, intentRank } from '@/lib/conferenceIntent';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import VerifiedCheck, { minutesToCheckmarkLabel } from '@/components/VerifiedCheck';
@@ -803,7 +802,7 @@ function RevenueReadout({
 }
 
 // ── Verification strip: the road to the blue checkmark ───────────────────
-// The seven verification stages are the checklist minus delegate and awards.
+// The seven verification stages are the checklist minus the delegate row.
 // Minutes come from conference_setup_status() through the manage context;
 // these client estimates only fill the gap before that first answer lands.
 const VERIFICATION_MINUTES: Record<string, number> = {
@@ -917,10 +916,6 @@ const SETUP_DONE_NOTICE: Record<string, { title: string; body: string }> = {
   delegate: {
     title: 'Your first delegate applied',
     body: 'Review applications and start accepting people into committees.',
-  },
-  awards: {
-    title: 'Awards are set up',
-    body: 'Chairs can nominate delegates once the conference runs.',
   },
   publish: {
     title: 'Registrations are live',
@@ -1336,15 +1331,19 @@ export default function DashboardPage() {
     { key: 'paid', label: 'Paid', value: paidApps, href: `/manage/${slug}/applications?payment=paid` },
   ];
 
-  // ── Set-up priorities: 9 detection checks, in journey order ──────────────
+  // ── Set-up priorities: 8 detection checks, in journey order ──────────────
   // Base order = the natural build journey (page → committees → chairs → email →
-  // secretariat → financials → delegate → awards → launch). Done rows are
+  // secretariat → financials → delegate → launch). Done rows are
   // filtered out entirely rather than sorted to the bottom, and what is left is
   // then reordered around the organiser's stated intent — both in
   // `pendingChecklist` below, which is where the render order is decided.
-  const awardsCfg = getAwardsConfig(conference.awards_config);
-  const awardsDeadline = chairDeadline(awardsCfg, conference.end_date ?? null);
-  const awardsCategoryCount = awardsCfg.types.filter(t => t.enabled).length;
+  //
+  // "Set up awards" was the ninth row. Awards are behind a coming-soon screen
+  // in Settings, so nudging an organiser to configure them would be nudging
+  // them at a holding page. The same row was removed from the SQL twin
+  // `conference_setup_status()` (which drives the nudge emails and /admin) in
+  // the same change, so setup_total is 8 in both places. It was never a
+  // verification criterion, so the blue checkmark is untouched.
   const checklist = [
     {
       key: 'page',
@@ -1469,32 +1468,6 @@ export default function DashboardPage() {
         : () => setShowShareModal(true),
     },
     {
-      // Awards are configured in advance and decided at the end, so this row
-      // is a nudge, never a publish gate (handlePublishClick does not read it).
-      // The platform default (Best / Outstanding / Honourable Mention / Best
-      // Position Paper, secretariat ratifies) already works untouched, so the
-      // row also clears once the organiser has saved the setup once, or has
-      // switched awards off on purpose.
-      key: 'awards',
-      icon: Trophy,
-      emoji: 'Trophy',
-      gradient: NEU_GRADIENTS.gold,
-      title: 'Set up awards',
-      sub: !awardsCfg.enabled
-        ? 'Awards are off for this conference.'
-        : awardsCfg.configuredAt
-          ? [
-              `${awardsCategoryCount} categor${awardsCategoryCount === 1 ? 'y' : 'ies'}`,
-              awardsCfg.requireApproval ? 'secretariat approves' : 'no ratification',
-              awardsDeadline
-                ? `deadline ${awardsDeadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-                : 'no deadline yet',
-            ].join(' · ')
-          : 'Best Delegate, Outstanding, Honourable Mentions and Best Position Paper are on by default. Adjust categories and quotas.',
-      done: !awardsCfg.enabled || !!awardsCfg.configuredAt,
-      onClick: () => router.push(`/manage/${slug}/settings?tab=awards`),
-    },
-    {
       // Compact publish CTA lives here as the checklist's launch row, the
       // big accent quick-actions card was removed with the one-page layout.
       key: 'publish',
@@ -1509,7 +1482,7 @@ export default function DashboardPage() {
   ];
   const doneCount = checklist.filter(c => c.done).length;
   // Used only while the server's own estimate has not arrived yet: the
-  // verification stages are the checklist minus delegate and awards.
+  // verification stages are the checklist minus the delegate row.
   const fallbackMinutes = checklist
     .filter(c => !c.done && c.key in VERIFICATION_MINUTES)
     .reduce((sum, c) => sum + VERIFICATION_MINUTES[c.key], 0);

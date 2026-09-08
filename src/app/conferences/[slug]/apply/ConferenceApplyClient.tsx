@@ -18,6 +18,7 @@ import { creditPricing, extractFunctionErrorMessage } from '@/lib/payments';
 import { computeCheckout, activePhaseFee, type VoucherInput, type FeePhase } from '@/lib/finance';
 import { queueParticipantEventEmail } from '@/lib/emailEvents';
 import { reportBlocked } from '@/lib/reportCrash';
+import { themeCssVars, type ConferenceTheme } from '@/lib/theme';
 import {
   type ApplyDraftAnswers,
   loadApplyDraft, saveApplyDraft, discardApplyDraft,
@@ -73,6 +74,11 @@ interface Conference {
    *  falls back to a deterministic /public/onboarding photo. */
   banner_url: string | null;
   credits_sponsored: boolean;
+  /** The PUBLISHED colour theme. Empty object means "use Gavelling's own
+   *  palette" — see src/lib/theme.ts. */
+  theme: ConferenceTheme;
+  /** The unpublished draft; an organizer previewing sees this instead. */
+  theme_draft: ConferenceTheme;
 }
 
 interface RoleConfig {
@@ -284,7 +290,7 @@ function QuestionRecapRow({
         borderRadius: 10,
         border: 'none',
         cursor: 'pointer',
-        backgroundColor: hover ? 'rgba(27,56,40,0.06)' : 'transparent',
+        backgroundColor: hover ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
         transition: `background-color 180ms ${EASE}`,
       }}
     >
@@ -313,7 +319,7 @@ function QuestionRecapRow({
         className="flex-shrink-0 inline-flex items-center justify-center"
         style={{
           width: 26, height: 26, borderRadius: 999, marginTop: 1,
-          backgroundColor: hover ? 'rgba(27,56,40,0.10)' : 'transparent',
+          backgroundColor: hover ? 'color-mix(in srgb, var(--gv-main) 10%, transparent)' : 'transparent',
           color: hover ? NEU.forest : NEU.inkSoft,
           opacity: hover ? 1 : 0.55,
           transition: `opacity 180ms ${EASE}, background-color 180ms ${EASE}, color 180ms ${EASE}`,
@@ -427,7 +433,7 @@ function CreditInfoTip() {
         onFocus={openNow}
         onBlur={scheduleClose}
         className="flex items-center justify-center rounded-full focus:outline-none"
-        style={{ width: 24, height: 24, backgroundColor: 'rgba(27,56,40,0.08)', border: 'none', cursor: 'default' }}
+        style={{ width: 24, height: 24, backgroundColor: 'color-mix(in srgb, var(--gv-main) 8%, transparent)', border: 'none', cursor: 'default' }}
       >
         <Info size={13} strokeWidth={2.4} style={{ color: NEU.forest }} />
       </button>
@@ -438,14 +444,14 @@ function CreditInfoTip() {
             onMouseLeave={scheduleClose}
             style={{
               position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: 280,
-              backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', borderRadius: 14,
-              boxShadow: '0 10px 30px rgba(27,56,40,0.18)', padding: 14,
+              backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', borderRadius: 14,
+              boxShadow: '0 10px 30px color-mix(in srgb, var(--gv-main) 18%, transparent)', padding: 14,
             }}
           >
-            <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(28,20,16,0.8)', fontFamily: OUTFIT }}>
+            <p className="text-xs leading-relaxed mb-2" style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 80%, transparent)', fontFamily: OUTFIT }}>
               Credits are how Gavelling covers processing and platform automation. They&apos;re separate from what you pay the conference itself.
             </p>
-            <p className="text-xs leading-relaxed mb-2" style={{ color: 'rgba(28,20,16,0.8)', fontFamily: OUTFIT }}>
+            <p className="text-xs leading-relaxed mb-2" style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 80%, transparent)', fontFamily: OUTFIT }}>
               Credits can be bought individually or in bulk, and they&apos;re included with every subscription.
             </p>
             <p className="text-xs leading-relaxed font-semibold" style={{ color: NEU.forest, fontFamily: OUTFIT }}>
@@ -548,9 +554,9 @@ function CommitteeCard({
         padding: '16px 16px 15px',
         borderRadius: 20,
         backgroundColor: NEU.surface,
-        border: selected ? '1.5px solid rgba(182,135,31,0.55)' : '1.5px solid transparent',
+        border: selected ? '1.5px solid color-mix(in srgb, var(--gv-accent) 55%, transparent)' : '1.5px solid transparent',
         boxShadow: selected
-          ? `0 0 0 1px rgba(182,135,31,0.25), ${NEU.out}`
+          ? `0 0 0 1px color-mix(in srgb, var(--gv-accent) 25%, transparent), ${NEU.out}`
           : disabled ? NEU.inSm : hovered ? NEU.outHover : NEU.out,
         transform: `${!disabled && !reducedMotion && (hovered || selected) ? 'translateY(-2px)' : 'translateY(0)'}${pressed && !disabled && !reducedMotion ? ' scale(0.96)' : ''}`,
         opacity: disabled ? 0.6 : 1,
@@ -581,7 +587,7 @@ function CommitteeCard({
                 className="truncate"
                 style={{
                   maxWidth: 190, padding: '2.5px 8px', borderRadius: 999,
-                  backgroundColor: 'rgba(27,56,40,0.06)', color: 'rgba(28,20,16,0.7)',
+                  backgroundColor: 'color-mix(in srgb, var(--gv-main) 6%, transparent)', color: 'color-mix(in srgb, var(--gv-on-bg) 70%, transparent)',
                   fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5,
                 }}
               >
@@ -614,8 +620,8 @@ function CommitteeCard({
           className="flex items-center justify-center flex-shrink-0"
           style={{
             width: 28, height: 28, borderRadius: 999,
-            background: 'linear-gradient(150deg, #EED98A, #B6871F)',
-            boxShadow: '0 3px 8px rgba(182,135,31,0.4)',
+            background: 'linear-gradient(150deg, var(--gv-accent), var(--gv-accent))',
+            boxShadow: '0 3px 8px color-mix(in srgb, var(--gv-accent) 40%, transparent)',
             fontFamily: OUTFIT, fontWeight: 900, fontSize: 13, color: '#3A2A08',
             fontVariantNumeric: 'tabular-nums',
           }}
@@ -674,7 +680,7 @@ function CountryChip({
         borderRadius: 999,
         backgroundColor: selected ? NEU.forest : NEU.surface,
         border: selected ? '1.5px solid transparent' : taken ? '1.5px solid transparent' : '1.5px solid transparent',
-        boxShadow: taken ? NEU.inSm : selected ? `0 3px 8px rgba(27,56,40,0.28), ${NEU.outSm}` : hovered ? NEU.outSmHover : NEU.outSm,
+        boxShadow: taken ? NEU.inSm : selected ? `0 3px 8px color-mix(in srgb, var(--gv-main) 28%, transparent), ${NEU.outSm}` : hovered ? NEU.outSmHover : NEU.outSm,
         opacity: taken ? 0.5 : 1,
         cursor: taken ? 'not-allowed' : 'pointer',
         transform: `${!taken && !reducedMotion && hovered && !selected ? 'translateY(-1px)' : 'translateY(0)'}${pressed && !taken && !reducedMotion ? ' scale(0.96)' : ''}`,
@@ -688,7 +694,7 @@ function CountryChip({
           {name}
         </span>
         {committeeLabel && (
-          <span className="block truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 9.5, color: selected ? 'rgba(238,217,138,0.7)' : NEU.muted, maxWidth: 150 }}>
+          <span className="block truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 9.5, color: selected ? 'color-mix(in srgb, var(--gv-accent) 70%, transparent)' : NEU.muted, maxWidth: 150 }}>
             {committeeLabel}
           </span>
         )}
@@ -704,10 +710,21 @@ function CountryChip({
   );
 }
 
-/** A confirmed preference in the ranked list: drag handle + rank medallion +
- *  emblem/flag. Reorders by native HTML5 drag (the handle) or, when the
- *  handle has keyboard focus, ArrowUp/ArrowDown — dragging is never the
- *  only way to reorder. */
+/** A confirmed preference in the ranked list: rank medallion + emblem/flag +
+ *  a pair of up/down buttons.
+ *
+ *  This ranking is what allocation runs on, so reordering has to work for
+ *  everyone. It used to offer exactly two paths, native HTML5 drag and
+ *  ArrowUp/ArrowDown on the grip, and NEITHER reaches a phone: HTML5 drag
+ *  events do not fire on touch, and a delegate on a phone has no keyboard
+ *  focus ring to put on the grip. The only visible control was a 26px remove
+ *  button, so the whole workaround was "delete everything below this and add
+ *  it back in order".
+ *
+ *  The up/down buttons are therefore the primary control, at a 44px tap
+ *  target, on every viewport. Drag survives as a desktop accelerator (the row
+ *  is still `draggable` and the grip still takes ArrowUp/ArrowDown), but the
+ *  grip is hidden below `sm` where it can do nothing. */
 function RankedRow({
   index, total, committee, countryCode, countryName, onMove, onRemove, reducedMotion, isDragging,
   onDragStart, onDragOver, onDrop, onDragEnd,
@@ -735,16 +752,17 @@ function RankedRow({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className="flex items-center gap-3"
+      className="flex items-center gap-2"
       style={{
-        padding: '10px 12px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
+        padding: '6px 8px 6px 10px', borderRadius: 16, backgroundColor: NEU.surface, boxShadow: NEU.outSm,
         opacity: isDragging ? 0.5 : 1,
         cursor: 'grab',
         transition: reducedMotion ? 'none' : `opacity 160ms ${EASE}`,
       }}
     >
       {/* Drag handle, dotted grip — keyboard-focusable so ArrowUp/ArrowDown
-          reorder without a drag gesture. */}
+          reorder without a drag gesture. Desktop only: it is inert on touch,
+          and hiding it there gives the row the width the buttons need. */}
       <div
         role="button"
         tabIndex={0}
@@ -753,7 +771,7 @@ function RankedRow({
           if (e.key === 'ArrowUp') { e.preventDefault(); onMove(-1); }
           else if (e.key === 'ArrowDown') { e.preventDefault(); onMove(1); }
         }}
-        className="shrink-0 flex flex-col gap-[3px] px-1 py-2 focus:outline-none"
+        className="shrink-0 hidden sm:flex flex-col gap-[3px] px-1 py-2 focus:outline-none"
         style={{ cursor: 'grab' }}
       >
         {[0, 1, 2].map(r => (
@@ -767,9 +785,9 @@ function RankedRow({
         className="flex items-center justify-center flex-shrink-0"
         style={{
           width: 26, height: 26, borderRadius: 999,
-          background: 'linear-gradient(150deg, #EED98A, #B6871F)',
+          background: 'linear-gradient(150deg, var(--gv-accent), var(--gv-accent))',
           fontFamily: OUTFIT, fontWeight: 900, fontSize: 12.5, color: '#3A2A08',
-          fontVariantNumeric: 'tabular-nums', boxShadow: '0 2px 6px rgba(182,135,31,0.35)',
+          fontVariantNumeric: 'tabular-nums', boxShadow: '0 2px 6px color-mix(in srgb, var(--gv-accent) 35%, transparent)',
         }}
       >
         {index + 1}
@@ -779,23 +797,54 @@ function RankedRow({
       {countryCode ? <FlagImg code={resolved} size={22} /> : null}
 
       <div className="min-w-0 flex-1">
-        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, color: NEU.ink }}>
+        {/* Wraps to a second line rather than truncating: the reorder buttons
+            take real width on a phone, and a rank the delegate cannot read is
+            worse than a rank that takes two lines. */}
+        <p className="line-clamp-2" style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13, lineHeight: 1.25, color: NEU.ink, overflowWrap: 'anywhere' }}>
           {countryName || committee?.abbreviation || committee?.name || 'Preference'}
         </p>
-        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5, color: NEU.muted }}>
+        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5, color: NEU.inkSoft }}>
           {countryName && committee ? (committee.abbreviation || committee.name) : committee ? committee.name : ''}
         </p>
       </div>
 
-      <div className="flex items-center gap-0.5 flex-shrink-0">
+      <div className="flex items-center flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => onMove(-1)}
+          disabled={index === 0}
+          aria-label={`Move ${countryName || committee?.abbreviation || committee?.name || 'this preference'} up to rank ${index}`}
+          className="flex items-center justify-center rounded-lg focus:outline-none"
+          style={{
+            width: 44, height: 44, border: 'none', background: 'none',
+            color: index === 0 ? '#C5B9A8' : NEU.forest,
+            cursor: index === 0 ? 'default' : 'pointer',
+          }}
+        >
+          <ChevronUp size={18} strokeWidth={2.6} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onMove(1)}
+          disabled={index === total - 1}
+          aria-label={`Move ${countryName || committee?.abbreviation || committee?.name || 'this preference'} down to rank ${index + 2}`}
+          className="flex items-center justify-center rounded-lg focus:outline-none"
+          style={{
+            width: 44, height: 44, border: 'none', background: 'none',
+            color: index === total - 1 ? '#C5B9A8' : NEU.forest,
+            cursor: index === total - 1 ? 'default' : 'pointer',
+          }}
+        >
+          <ChevronDown size={18} strokeWidth={2.6} />
+        </button>
         <button
           type="button" onClick={onRemove} aria-label="Remove preference"
           className="flex items-center justify-center rounded-lg focus:outline-none"
-          style={{ width: 26, height: 26, color: NEU.muted }}
+          style={{ width: 36, height: 44, border: 'none', background: 'none', color: NEU.muted, cursor: 'pointer' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#8B2020'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
         >
-          <X size={15} strokeWidth={2.4} />
+          <X size={16} strokeWidth={2.4} />
         </button>
       </div>
     </div>
@@ -869,7 +918,7 @@ function UpgradePhotoCard({
             transition: `opacity 220ms ${EASE}, transform 220ms ${EASE}`,
           }}
         >
-          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 9.5, letterSpacing: '0.16em', color: '#EED98A', marginBottom: 2 }}>
+          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--gv-on-main)', marginBottom: 2 }}>
             {eyebrow}
           </p>
           <p style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 17, color: '#FAF8F3', lineHeight: 1.1, textShadow: '0 1px 6px rgba(16,28,21,0.5)' }}>
@@ -945,6 +994,9 @@ function ConferenceApplyInner() {
   // stranger, with canPreview still false, leaves this false and the page
   // behaves exactly as it does today, walls and all.
   const previewing = isPreview && canPreview;
+  // An organizer previewing sees their unpublished draft colours; everyone
+  // else sees the published ones. conference can be null before it loads.
+  const activeTheme: ConferenceTheme = previewing ? (conference?.theme_draft ?? {}) : (conference?.theme ?? {});
   // WizardShell's viewport cap needs to know about the banner's chrome too,
   // or a short window pushes the Continue pill below the fold in preview.
   const wizardExtraChrome = previewing ? PREVIEW_BANNER_H : 0;
@@ -1299,6 +1351,12 @@ function ConferenceApplyInner() {
 
   /** How long after the last keystroke the draft is written. */
   const DRAFT_DEBOUNCE_MS = 800;
+
+  /** The `applications` row this submit already created, if a later step then
+   *  failed and sent the applicant back to press Submit again. Pressing Submit
+   *  a second time must finish the same application, never file a duplicate.
+   *  Cleared only by leaving the page (a successful submit redirects). */
+  const submittedAppIdRef = useRef<string | null>(null);
 
   /** This tab's id, so the row records which tab last wrote it. Lazily
    *  initialised once — a new one per tab is exactly the point. */
@@ -1692,7 +1750,7 @@ function ConferenceApplyInner() {
 
     const { data: confData } = await supabase
       .from('conferences')
-      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, max_age, logo_url, banner_url, credits_sponsored')
+      .select('id, slug, full_name, acronym, fee_amount, fee_currency, start_date, min_age, max_age, logo_url, banner_url, credits_sponsored, theme, theme_draft')
       .eq('slug', slug)
       .single();
 
@@ -2223,22 +2281,40 @@ function ConferenceApplyInner() {
           societyId = selectedSocietyId;
         } else if (isInvoicingRole) {
           const normalized = societyInput.trim().toLowerCase();
-          const { data: existingSoc } = await supabase
+          // FATAL, both halves. supabase-js RESOLVES on a PostgREST/RLS error,
+          // so an unchecked result reads as success: the lookup would fall
+          // through to the insert and trip the unique index, and a failed
+          // insert would leave societyId null, filing a head delegate as an
+          // independent applicant with a delegation that does not exist and
+          // changing who gets invoiced. Neither may pass silently.
+          const { data: existingSoc, error: socLookupError } = await supabase
             .from('societies')
             .select('id')
             .eq('conference_id', conference!.id)
             .eq('name_normalized', normalized)
             .maybeSingle();
+          if (socLookupError) {
+            reportBlocked('resolve delegation', socLookupError, { conferenceSlug: slug, role });
+            throw new Error('We could not look up your delegation. Please try again.');
+          }
 
           if (existingSoc) {
             societyId = (existingSoc as { id: string }).id;
           } else {
-            const { data: newSoc } = await supabase
+            const { data: newSoc, error: socInsertError } = await supabase
               .from('societies')
               .insert({ conference_id: conference!.id, name: societyInput.trim(), name_normalized: normalized })
               .select('id')
               .single();
+            if (socInsertError) {
+              reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
+              throw new Error('We could not create your delegation. Please try again.');
+            }
             societyId = (newSoc as { id: string } | null)?.id ?? null;
+            if (!societyId) {
+              reportBlocked('create delegation', new Error('insert returned no row'), { conferenceSlug: slug, role });
+              throw new Error('We could not create your delegation. Please try again.');
+            }
           }
         }
       }
@@ -2325,17 +2401,31 @@ function ConferenceApplyInner() {
         insertPayload.experience_entries = experienceEntries;
       }
 
-      const { data: app, error: appError } = await supabase
-        .from('applications')
-        .insert(insertPayload)
-        .select('id')
-        .single();
+      // A previous attempt already filed this application and then failed on a
+      // later step (out of credits, the preference write below). Resume from
+      // that row rather than inserting a second application — the need_credit
+      // branch has always promised a retry "doesn't create a duplicate", and
+      // until now nothing enforced it. The society lookup and the credit RPC
+      // above/below are both safe to re-run; the voucher redemption is not,
+      // and is skipped on a resume.
+      const resumeAppId = submittedAppIdRef.current;
+      let newAppId: string;
+      if (resumeAppId) {
+        newAppId = resumeAppId;
+      } else {
+        const { data: app, error: appError } = await supabase
+          .from('applications')
+          .insert(insertPayload)
+          .select('id')
+          .single();
 
-      // A failed insert stops the applicant dead and never reaches an error
-      // boundary — the catch below turns it into a tidy inline message and
-      // nobody is ever told. Report it.
-      if (appError) { reportBlocked('submit application', appError, { conferenceSlug: slug, role }); throw appError; }
-      const newAppId = (app as { id: string }).id;
+        // A failed insert stops the applicant dead and never reaches an error
+        // boundary — the catch below turns it into a tidy inline message and
+        // nobody is ever told. Report it.
+        if (appError) { reportBlocked('submit application', appError, { conferenceSlug: slug, role }); throw appError; }
+        newAppId = (app as { id: string }).id;
+        submittedAppIdRef.current = newAppId;
+      }
 
       // Consume a Gavelling credit for this application. The Overview step
       // already gated submission on canApply, so need_credit here means the
@@ -2344,9 +2434,17 @@ function ConferenceApplyInner() {
       // surface it rather than silently sending an uncharged application
       // through, the application row stays as-is so a retry (after buying
       // credits) doesn't create a duplicate.
-      const { data: credit } = await supabase.rpc('consume_credit_for_application', {
+      //
+      // RECOVERABLE. A transport/RLS failure here is Gavelling's ledger, not
+      // the delegate's application, and the row is already in — stranding a
+      // valid application on an error screen over our own bookkeeping is the
+      // worse outcome. Report it and carry on. The business rule (need_credit)
+      // still blocks whenever the RPC actually answers. Without destructuring
+      // `error` at all, `data` came back null and need_credit could never fire.
+      const { data: credit, error: creditError } = await supabase.rpc('consume_credit_for_application', {
         p_application_id: newAppId,
       });
+      if (creditError) reportBlocked('consume application credit', creditError, { conferenceSlug: slug, role });
       const creditResult = credit as { ok?: boolean; consumed?: boolean; need_credit?: boolean } | null;
       if (creditResult?.need_credit) {
         setSubmitError("You're out of credits. Buy more or upgrade your subscription, then try submitting again.");
@@ -2359,12 +2457,15 @@ function ConferenceApplyInner() {
       // the voucher row, enforces active/expiry/limit, bumps redeemed_count).
       // Non-fatal: the application is already in, a failed redemption just
       // means the organizer sees the voucher columns without a redemption row.
-      if (appliedVoucher && breakdown.voucherDiscount > 0) {
-        await supabase.rpc('redeem_voucher', {
+      // RECOVERABLE, as the comment above already says — but it has to be
+      // observed to be known about, so report it.
+      if (!resumeAppId && appliedVoucher && breakdown.voucherDiscount > 0) {
+        const { error: voucherError } = await supabase.rpc('redeem_voucher', {
           p_voucher_id: appliedVoucher.voucherId,
           p_context: 'conference_signup',
           p_application_id: newAppId,
         });
+        if (voucherError) reportBlocked('redeem voucher', voucherError, { conferenceSlug: slug, role });
       }
 
       if (showPreferenceStep && preferences.length > 0) {
@@ -2378,7 +2479,19 @@ function ConferenceApplyInner() {
           country_code: p.countryCode || null,
           country_name: p.countryName || null,
         }));
-        await supabase.from('application_preferences').insert(prefRows);
+        // FATAL. This ranking is the input to allocation: an applicant whose
+        // preferences were dropped shows up on the assignment board with no
+        // preferences at all, and the delegate is never told. The result was
+        // completely unchecked, and supabase-js RESOLVES on a PostgREST/RLS
+        // error, so a try/catch would not have caught it either — it has to be
+        // destructured. Throwing here keeps the draft (discardDraft is below)
+        // so nothing the applicant typed is lost, and submittedAppIdRef makes
+        // the retry resume rather than file a second application.
+        const { error: prefInsertError } = await supabase.from('application_preferences').insert(prefRows);
+        if (prefInsertError) {
+          reportBlocked('save application preferences', prefInsertError, { conferenceSlug: slug, role });
+          throw new Error('Your application went through, but we could not save your committee ranking. Please press Submit again to save it.');
+        }
       }
 
       // Fire-and-forget: the confirmation redirect below must never wait on
@@ -2430,22 +2543,40 @@ function ConferenceApplyInner() {
           societyId = selectedSocietyId;
         } else if (isInvoicingRole) {
           const normalized = societyInput.trim().toLowerCase();
-          const { data: existingSoc } = await supabase
+          // FATAL, both halves. supabase-js RESOLVES on a PostgREST/RLS error,
+          // so an unchecked result reads as success: the lookup would fall
+          // through to the insert and trip the unique index, and a failed
+          // insert would leave societyId null, filing a head delegate as an
+          // independent applicant with a delegation that does not exist and
+          // changing who gets invoiced. Neither may pass silently.
+          const { data: existingSoc, error: socLookupError } = await supabase
             .from('societies')
             .select('id')
             .eq('conference_id', conference!.id)
             .eq('name_normalized', normalized)
             .maybeSingle();
+          if (socLookupError) {
+            reportBlocked('resolve delegation', socLookupError, { conferenceSlug: slug, role });
+            throw new Error('We could not look up your delegation. Please try again.');
+          }
 
           if (existingSoc) {
             societyId = (existingSoc as { id: string }).id;
           } else {
-            const { data: newSoc } = await supabase
+            const { data: newSoc, error: socInsertError } = await supabase
               .from('societies')
               .insert({ conference_id: conference!.id, name: societyInput.trim(), name_normalized: normalized })
               .select('id')
               .single();
+            if (socInsertError) {
+              reportBlocked('create delegation', socInsertError, { conferenceSlug: slug, role });
+              throw new Error('We could not create your delegation. Please try again.');
+            }
             societyId = (newSoc as { id: string } | null)?.id ?? null;
+            if (!societyId) {
+              reportBlocked('create delegation', new Error('insert returned no row'), { conferenceSlug: slug, role });
+              throw new Error('We could not create your delegation. Please try again.');
+            }
           }
         }
       }
@@ -2702,7 +2833,7 @@ function ConferenceApplyInner() {
 
         {/* Fee line, names the active fee phase when one applies */}
         <div style={{ ...summaryRow, marginBottom: 10 }}>
-          <span style={{ color: 'rgba(28,20,16,0.75)' }}>
+          <span style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 75%, transparent)' }}>
             Registration fee
             {currentPhase && (
               <span style={{ color: NEU.muted, fontWeight: 600 }}>: {currentPhase.label || 'Current phase'}</span>
@@ -2742,8 +2873,8 @@ function ConferenceApplyInner() {
               aria-label="Voucher code"
               className="flex-1 min-w-0 rounded-xl px-3.5 py-2 text-sm focus:outline-none"
               style={{
-                border: voucherError ? '1.5px solid #8B2020' : '1.5px solid #DDD4C0',
-                backgroundColor: '#FAF8F3', color: NEU.ink, fontFamily: OUTFIT,
+                border: voucherError ? '1.5px solid #8B2020' : '1.5px solid var(--gv-border)',
+                backgroundColor: 'var(--gv-surface)', color: NEU.ink, fontFamily: OUTFIT,
                 letterSpacing: '0.08em', textTransform: 'uppercase',
               }}
             />
@@ -2753,7 +2884,7 @@ function ConferenceApplyInner() {
               className="rounded-full px-4 text-xs font-extrabold focus:outline-none"
               style={{
                 border: 'none', fontFamily: OUTFIT, letterSpacing: '0.1em',
-                background: voucherChecking || !voucherCode.trim() ? 'rgba(27,56,40,0.14)' : NEU.forest,
+                background: voucherChecking || !voucherCode.trim() ? 'color-mix(in srgb, var(--gv-main) 14%, transparent)' : NEU.forest,
                 color: voucherChecking || !voucherCode.trim() ? NEU.muted : NEU.gold,
                 cursor: voucherChecking || !voucherCode.trim() ? 'default' : 'pointer',
                 boxShadow: NEU.outSm,
@@ -2771,7 +2902,7 @@ function ConferenceApplyInner() {
 
         {/* Conference fee, no service fee shown — payment happens later,
             direct to the conference, once the applicant is accepted. */}
-        <div style={{ borderTop: '1.5px solid rgba(27,56,40,0.14)', paddingTop: 12 }}>
+        <div style={{ borderTop: '1.5px solid color-mix(in srgb, var(--gv-main) 14%, transparent)', paddingTop: 12 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 11, letterSpacing: '0.18em', color: NEU.muted }}>CONFERENCE FEE</span>
             <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 28, color: NEU.ink, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
@@ -2838,15 +2969,15 @@ function ConferenceApplyInner() {
             {!isIndependent && invitedSocietyId && (
               <div
                 className="flex items-center gap-3 rounded-2xl p-4 mb-5"
-                style={{ background: 'linear-gradient(135deg, rgba(238,217,138,0.28), rgba(27,56,40,0.05))', border: '1.5px solid rgba(238,217,138,0.55)' }}
+                style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--gv-accent) 28%, transparent), color-mix(in srgb, var(--gv-main) 5%, transparent))', border: '1.5px solid color-mix(in srgb, var(--gv-accent) 55%, transparent)' }}
               >
                 <span
                   className="flex items-center justify-center flex-shrink-0"
-                  style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, #2A5A3C)' }}
+                  style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, var(--gv-main-mid))' }}
                 >
-                  <Users size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
+                  <Users size={17} strokeWidth={2.2} style={{ color: 'var(--gv-on-main)' }} />
                 </span>
-                <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT, lineHeight: 1.4 }}>
+                <p className="font-semibold text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT, lineHeight: 1.4 }}>
                   You&apos;ve been invited to join{' '}
                   <span className="font-bold">{inviteSocietyName ?? 'this delegation'}</span>.
                 </p>
@@ -2857,7 +2988,7 @@ function ConferenceApplyInner() {
             {!isIndependent && (
               <>
                 <div className="relative">
-                  <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                  <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
                     Society / High School Name
                   </label>
                   <input
@@ -2874,9 +3005,9 @@ function ConferenceApplyInner() {
                     placeholder="e.g. HultMUN, LSE MUN Society..."
                     className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
                     style={{
-                      border: societyError ? '1.5px solid #8B2020' : '1.5px solid #DDD4C0',
-                      backgroundColor: invitedSocietyId ? 'rgba(27,56,40,0.05)' : '#FAF8F3',
-                      color: '#1C1410',
+                      border: societyError ? '1.5px solid #8B2020' : '1.5px solid var(--gv-border)',
+                      backgroundColor: invitedSocietyId ? 'color-mix(in srgb, var(--gv-main) 5%, transparent)' : 'var(--gv-surface)',
+                      color: 'var(--gv-on-surface)',
                       fontFamily: "'Outfit', sans-serif",
                       cursor: invitedSocietyId ? 'not-allowed' : 'text',
                     }}
@@ -2884,7 +3015,7 @@ function ConferenceApplyInner() {
                   {!invitedSocietyId && societyDropdownOpen && societyInput.trim() && (
                     <div
                       className="absolute left-0 right-0 rounded-xl shadow-lg overflow-y-auto"
-                      style={{ top: 'calc(100% + 4px)', maxHeight: '200px', backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', zIndex: 20 }}
+                      style={{ top: 'calc(100% + 4px)', maxHeight: '200px', backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', zIndex: 20 }}
                     >
                       {societySuggestions.map(s => {
                         // A delegation that already has a head/advisor application
@@ -2896,12 +3027,12 @@ function ConferenceApplyInner() {
                             disabled={taken}
                             className="w-full flex items-center justify-between gap-2 text-left px-4 py-2.5 text-sm focus:outline-none"
                             style={{
-                              color: taken ? '#B4A992' : '#1C1410',
+                              color: taken ? '#B4A992' : 'var(--gv-on-surface)',
                               fontFamily: "'Outfit', sans-serif",
                               cursor: taken ? 'not-allowed' : 'pointer',
                               opacity: taken ? 0.7 : 1,
                             }}
-                            onMouseEnter={(e) => { if (!taken) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                            onMouseEnter={(e) => { if (!taken) (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                             onMouseDown={(e) => {
                               if (taken) {
@@ -2931,8 +3062,8 @@ function ConferenceApplyInner() {
                         !societySuggestions.some(s => s.name.toLowerCase() === societyInput.toLowerCase()) && (
                           <button
                             className="w-full text-left px-4 py-2.5 text-sm focus:outline-none"
-                            style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                            style={{ color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--gv-main) 5%, transparent)'; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                             onMouseDown={() => {
                               setSelectedSocietyId(null);
@@ -2947,7 +3078,7 @@ function ConferenceApplyInner() {
                         societySuggestions.length === 0 && (
                           <p
                             className="px-4 py-2.5 text-xs leading-relaxed"
-                            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
+                            style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
                           >
                             This delegation has not been created. Please ask your Head Delegate or Faculty Advisor to create it.
                           </p>
@@ -3009,7 +3140,7 @@ function ConferenceApplyInner() {
 
         {showSpots && (
           <div className="mb-6">
-            <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
               How many delegate spots will you pay for?
             </label>
             <input
@@ -3023,11 +3154,11 @@ function ConferenceApplyInner() {
                 setInvoicingError('');
               }}
               className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-              style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+              style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}
+              onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
+              onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
             />
-            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
               These spots stay with your delegation once purchased. If a delegate drops out, the spot remains and can be given to their replacement.
             </p>
           </div>
@@ -3036,7 +3167,7 @@ function ConferenceApplyInner() {
         {/* Parallel question, quieter treatment than the big yes/no above —
             same step, a second decision rather than a second full screen. */}
         <div className="pt-6 mb-2" style={{ borderTop: '1px solid #F0EDE6' }}>
-          <label className="flex items-center gap-2 font-semibold text-sm mb-3" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <label className="flex items-center gap-2 font-semibold text-sm mb-3" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
             <GraduationCap size={16} style={{ color: NEU.forest }} />
             Paying for advisor tickets?
           </label>
@@ -3046,8 +3177,8 @@ function ConferenceApplyInner() {
               onClick={() => { setWillPledgeAdvisors(true); setInvoicingError(''); }}
               className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
               style={{
-                border: willPledgeAdvisors === true ? `1.5px solid ${NEU.forest}` : '1.5px solid #DDD4C0',
-                backgroundColor: willPledgeAdvisors === true ? 'rgba(27,56,40,0.06)' : 'transparent',
+                border: willPledgeAdvisors === true ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
+                backgroundColor: willPledgeAdvisors === true ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
                 color: willPledgeAdvisors === true ? NEU.forest : '#6E5F4E',
                 fontFamily: "'Outfit', sans-serif",
               }}
@@ -3059,8 +3190,8 @@ function ConferenceApplyInner() {
               onClick={() => { setWillPledgeAdvisors(false); setInvoicingError(''); }}
               className="flex-1 rounded-xl py-2.5 text-sm font-bold focus:outline-none transition-colors"
               style={{
-                border: willPledgeAdvisors === false ? `1.5px solid ${NEU.forest}` : '1.5px solid #DDD4C0',
-                backgroundColor: willPledgeAdvisors === false ? 'rgba(27,56,40,0.06)' : 'transparent',
+                border: willPledgeAdvisors === false ? `1.5px solid ${NEU.forest}` : '1.5px solid var(--gv-border)',
+                backgroundColor: willPledgeAdvisors === false ? 'color-mix(in srgb, var(--gv-main) 6%, transparent)' : 'transparent',
                 color: willPledgeAdvisors === false ? NEU.forest : '#6E5F4E',
                 fontFamily: "'Outfit', sans-serif",
               }}
@@ -3071,7 +3202,7 @@ function ConferenceApplyInner() {
 
           {willPledgeAdvisors === true && (
             <div className="mt-4">
-              <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+              <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
                 How many advisor tickets will you pay for?
               </label>
               <input
@@ -3085,11 +3216,11 @@ function ConferenceApplyInner() {
                   setInvoicingError('');
                 }}
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                style={{ border: '1.5px solid #DDD4C0', backgroundColor: '#FAF8F3', color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}
-                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
-                onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                style={{ border: '1.5px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}
+                onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-main)'; }}
+                onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--gv-border)'; }}
               />
-              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
                 Tickets stay with your delegation once purchased, pooled the same way as delegate spots.
               </p>
             </div>
@@ -3180,14 +3311,16 @@ function ConferenceApplyInner() {
         <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10, letterSpacing: '0.2em', color: NEU.muted, marginBottom: 10, marginLeft: 2 }}>
           YOUR RANKING · {preferences.length}
         </p>
-        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.muted, marginBottom: 8, marginLeft: 2 }}>
-          Drag to reorder your preferences.
+        {/* Was "Drag to reorder your preferences." — which told a phone user to
+            do the one thing their device cannot do. Describe the buttons. */}
+        <p style={{ fontFamily: OUTFIT, fontSize: 11, color: NEU.inkSoft, marginBottom: 8, marginLeft: 2 }}>
+          Use the arrows to reorder. Rank 1 is your first choice.
         </p>
         <div className="flex flex-col gap-2">
           {preferences.map((p, i) => (
             <div key={`${p.committeeId}-${p.countryCode}`}>
               {prefDragOverIndex === i && prefDragOverIndex !== prefDragIndexRef.current && (
-                <div className="h-0.5 rounded-full mx-2 mb-2" style={{ backgroundColor: '#1B3828' }} />
+                <div className="h-0.5 rounded-full mx-2 mb-2" style={{ backgroundColor: 'var(--gv-main)' }} />
               )}
               <RankedRow
                 index={i}
@@ -3583,7 +3716,7 @@ function ConferenceApplyInner() {
                         style={{
                           width: 13, height: 13, borderRadius: 9999, margin: '0 auto',
                           background: on ? accent : NEU.surface,
-                          border: `2px solid ${on ? '#FAF8F3' : '#DDD4C0'}`,
+                          border: `2px solid ${on ? 'var(--gv-surface)' : 'var(--gv-border)'}`,
                           boxShadow: NEU.outSm,
                         }}
                       />
@@ -3598,7 +3731,7 @@ function ConferenceApplyInner() {
                     left: `${pct}%`, top: '50%', transform: 'translate(-50%, -50%)',
                     width: 30, height: 30, borderRadius: 9999,
                     background: `radial-gradient(120% 120% at 30% 25%, ${accent} 0%, ${accent}CC 70%)`,
-                    border: '3px solid #FAF8F3', boxShadow: `0 3px 9px ${accent}66, ${NEU.outSm}`,
+                    border: '3px solid var(--gv-surface)', boxShadow: `0 3px 9px ${accent}66, ${NEU.outSm}`,
                     transition: 'left 320ms cubic-bezier(0.22,1,0.36,1)',
                     pointerEvents: 'none',
                   }}
@@ -3617,7 +3750,7 @@ function ConferenceApplyInner() {
                     style={{
                       fontFamily: OUTFIT, fontSize: 10.5,
                       fontWeight: i === chosenIdx ? 800 : 600,
-                      color: i === chosenIdx ? accent : '#9A8A78',
+                      color: i === chosenIdx ? accent : 'var(--gv-muted)',
                       flex: '1 1 0',
                       textAlign: i === 0 ? 'left' : i === n - 1 ? 'right' : 'center',
                       background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
@@ -3648,7 +3781,7 @@ function ConferenceApplyInner() {
                   style={{
                     backgroundColor: NEU.surface,
                     boxShadow: cvRefreshing ? NEU.inSm : NEU.out,
-                    border: '1.5px solid rgba(182,135,31,0.4)',
+                    border: '1.5px solid color-mix(in srgb, var(--gv-accent) 40%, transparent)',
                     cursor: cvRefreshing ? 'default' : 'pointer',
                     transition: `box-shadow 220ms ${EASE}, transform 220ms ${EASE}`,
                   }}
@@ -3661,7 +3794,7 @@ function ConferenceApplyInner() {
                   </span>
                 </button>
                 {/* How many conferences the delegate already has on their CV. */}
-                <p className="text-center text-xs font-semibold mt-2.5" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+                <p className="text-center text-xs font-semibold mt-2.5" style={{ color: 'var(--gv-muted)', fontFamily: OUTFIT }}>
                   You have <span style={{ fontWeight: 800, color: NEU.ink, fontVariantNumeric: 'tabular-nums' }}>{cvEntryCount}</span> conference{cvEntryCount === 1 ? '' : 's'} on your MUN CV
                 </p>
               </div>
@@ -3829,14 +3962,14 @@ function ConferenceApplyInner() {
             color: NEU.forest,
             padding: sortedEntries.length > 0 ? '14px 20px' : '22px 20px',
             borderRadius: 18,
-            border: '2px dashed rgba(27,56,40,0.18)',
+            border: '2px dashed color-mix(in srgb, var(--gv-main) 18%, transparent)',
             backgroundColor: NEU.surface,
             boxShadow: NEU.outSm,
             cursor: 'pointer',
             transition: `all 200ms ${EASE}`,
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSmHover; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLElement).style.borderColor = NEU.forest; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(27,56,40,0.18)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = NEU.outSm; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--gv-main) 18%, transparent)'; }}
         >
           <Plus size={17} strokeWidth={2.6} />
           {sortedEntries.length > 0 ? 'Add another conference' : 'Add a conference'}
@@ -3851,7 +3984,7 @@ function ConferenceApplyInner() {
             style={{
               backgroundColor: NEU.surface,
               boxShadow: importDisabled ? NEU.inSm : NEU.outSm,
-              border: '1.5px solid rgba(182,135,31,0.4)',
+              border: '1.5px solid color-mix(in srgb, var(--gv-accent) 40%, transparent)',
               cursor: importDisabled ? 'default' : 'pointer',
               opacity: munCvRows === null ? 0.7 : 1,
               transition: `box-shadow 220ms ${EASE}`,
@@ -3881,9 +4014,9 @@ function ConferenceApplyInner() {
             disabled={saveDisabled}
             className="w-full flex items-center justify-center gap-2.5 rounded-2xl px-5 py-3 focus:outline-none"
             style={{
-              backgroundColor: cvSaveResult ? 'rgba(27,56,40,0.08)' : NEU.surface,
+              backgroundColor: cvSaveResult ? 'color-mix(in srgb, var(--gv-main) 8%, transparent)' : NEU.surface,
               boxShadow: saveDisabled ? NEU.inSm : NEU.outSm,
-              border: cvSaveResult ? '1.5px solid rgba(27,56,40,0.3)' : '1.5px solid #DDD4C0',
+              border: cvSaveResult ? '1.5px solid color-mix(in srgb, var(--gv-main) 30%, transparent)' : '1.5px solid var(--gv-border)',
               cursor: saveDisabled ? 'default' : 'pointer',
               transition: `box-shadow 220ms ${EASE}`,
             }}
@@ -4148,9 +4281,9 @@ function ConferenceApplyInner() {
           type="button"
           onClick={() => setRecapOpen(v => !v)}
           className="w-full flex items-center justify-between rounded-xl px-4 py-3 mb-2 focus:outline-none"
-          style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}
+          style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main) 5%, transparent)', border: '1.5px solid color-mix(in srgb, var(--gv-main) 14%, transparent)' }}
         >
-          <span className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+          <span className="font-bold text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>
             Your application
           </span>
           {recapOpen
@@ -4198,7 +4331,7 @@ function ConferenceApplyInner() {
               )}
 
               {questions.length > 0 && (
-                <div className="flex flex-col gap-1 pt-1" style={{ borderTop: '1px solid rgba(27,56,40,0.1)' }}>
+                <div className="flex flex-col gap-1 pt-1" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-main) 10%, transparent)' }}>
                   {/* Every recap answer is a way BACK to the question that
                       produced it: goToQuestion opens the Questions step on the
                       right section page, scrolls the card into view and puts
@@ -4231,21 +4364,21 @@ function ConferenceApplyInner() {
         {creditsSponsored ? (
           <div
             className="relative rounded-2xl p-5 mb-4 flex items-center gap-3"
-            style={{ background: 'linear-gradient(135deg, rgba(238,217,138,0.28), rgba(27,56,40,0.06))', border: '1.5px solid rgba(238,217,138,0.55)' }}
+            style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--gv-accent) 28%, transparent), color-mix(in srgb, var(--gv-main) 6%, transparent))', border: '1.5px solid color-mix(in srgb, var(--gv-accent) 55%, transparent)' }}
           >
             <span
               className="flex items-center justify-center flex-shrink-0"
-              style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, #2A5A3C)' }}
+              style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, var(--gv-main-mid))' }}
             >
-              <Sparkles size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
+              <Sparkles size={17} strokeWidth={2.2} style={{ color: 'var(--gv-on-main)' }} />
             </span>
-            <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+            <p className="font-bold text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>
               Credits for this conference have been sponsored by Gavelling!
             </p>
           </div>
         ) : (
           <>
-            <div className="relative rounded-2xl p-5 mb-4" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1.5px solid rgba(27,56,40,0.14)' }}>
+            <div className="relative rounded-2xl p-5 mb-4" style={{ backgroundColor: 'color-mix(in srgb, var(--gv-main) 5%, transparent)', border: '1.5px solid color-mix(in srgb, var(--gv-main) 14%, transparent)' }}>
               <div className="absolute top-3.5 right-3.5">
                 <CreditInfoTip />
               </div>
@@ -4253,11 +4386,11 @@ function ConferenceApplyInner() {
               <div className="flex items-center gap-3 mb-3 pr-8">
                 <span
                   className="flex items-center justify-center flex-shrink-0"
-                  style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, #2A5A3C)' }}
+                  style={{ width: 34, height: 34, borderRadius: 11, background: 'linear-gradient(150deg, #16301F, var(--gv-main-mid))' }}
                 >
-                  <Coins size={17} strokeWidth={2.2} style={{ color: '#EED98A' }} />
+                  <Coins size={17} strokeWidth={2.2} style={{ color: 'var(--gv-on-main)' }} />
                 </span>
-                <p className="font-bold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                <p className="font-bold text-sm" style={{ color: 'var(--gv-on-surface)', fontFamily: OUTFIT }}>
                   {costLabel}
                 </p>
               </div>
@@ -4269,7 +4402,7 @@ function ConferenceApplyInner() {
               )}
 
               {/* Subscription placard */}
-              <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid rgba(27,56,40,0.1)' }}>
+              <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-main) 10%, transparent)' }}>
                 <span style={{ fontFamily: OUTFIT, fontWeight: 700, fontSize: 11.5, color: NEU.muted }}>Your plan</span>
                 <Pill tone={hasUnlimited ? 'gold' : 'neutral'} icon={hasUnlimited ? <InfinityIcon size={12} strokeWidth={2.4} /> : undefined}>
                   {tierLabel}
@@ -4374,7 +4507,7 @@ function ConferenceApplyInner() {
                     disabled={buyingCredits}
                     className="w-full rounded-xl py-2.5 font-bold text-xs focus:outline-none"
                     style={{
-                      backgroundColor: buyingCredits ? 'rgba(27,56,40,0.14)' : NEU.forest,
+                      backgroundColor: buyingCredits ? 'color-mix(in srgb, var(--gv-main) 14%, transparent)' : NEU.forest,
                       color: buyingCredits ? NEU.muted : NEU.gold,
                       fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none',
                       boxShadow: NEU.outSm, cursor: buyingCredits ? 'default' : 'pointer',
@@ -4390,10 +4523,10 @@ function ConferenceApplyInner() {
                   eyebrow="GO UNLIMITED"
                   title="Gavelling Unlimited"
                   hoverText="Apply to unlimited conferences with no per-application credits — one subscription covers it all."
-                  accent="#B6871F"
+                  accent="var(--gv-accent)"
                 >
                   <div className="flex items-center gap-1.5 mb-3">
-                    <InfinityIcon size={15} strokeWidth={2.4} style={{ color: '#B6871F' }} />
+                    <InfinityIcon size={15} strokeWidth={2.4} style={{ color: 'var(--gv-accent)' }} />
                     <span className="text-xs" style={{ color: NEU.muted, fontFamily: OUTFIT, lineHeight: 1.4 }}>
                       Never spend a credit again.
                     </span>
@@ -4404,7 +4537,7 @@ function ConferenceApplyInner() {
                     disabled={upgradingUnlimited}
                     className="w-full rounded-xl py-2.5 font-bold text-xs focus:outline-none"
                     style={{
-                      background: upgradingUnlimited ? 'rgba(182,135,31,0.4)' : 'linear-gradient(135deg, #EED98A, #B6871F)',
+                      background: upgradingUnlimited ? 'color-mix(in srgb, var(--gv-accent) 40%, transparent)' : 'linear-gradient(135deg, var(--gv-accent), var(--gv-accent))',
                       color: '#3A2A08',
                       fontFamily: OUTFIT, letterSpacing: '0.06em', border: 'none',
                       boxShadow: NEU.outSm, cursor: upgradingUnlimited ? 'default' : 'pointer',
@@ -4446,7 +4579,7 @@ function ConferenceApplyInner() {
         {/* ── Withdraw application — secondary, destructive; only while the
             application is still pending ('submitted'). Two-step confirm. ── */}
         {isEditMode && !previewing && existingApp?.status === 'submitted' && (
-          <div className="mt-8 pt-6" style={{ borderTop: '1px solid rgba(27,56,40,0.12)' }}>
+          <div className="mt-8 pt-6" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-main) 12%, transparent)' }}>
             {!withdrawConfirm ? (
               <div className="text-center">
                 <button
@@ -4465,7 +4598,7 @@ function ConferenceApplyInner() {
                 <p className="font-bold text-sm mb-1" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
                   Withdraw this application?
                 </p>
-                <p className="text-xs mb-3" style={{ color: 'rgba(28,20,16,0.72)', fontFamily: OUTFIT, lineHeight: 1.6 }}>
+                <p className="text-xs mb-3" style={{ color: 'color-mix(in srgb, var(--gv-on-bg) 72%, transparent)', fontFamily: OUTFIT, lineHeight: 1.6 }}>
                   Your application to {conference?.acronym} will be cancelled and removed from your conferences. Any Gavelling credit you spent is refunded. This can&apos;t be undone — you&apos;d need to apply again.
                 </p>
                 {withdrawError && (
@@ -4505,7 +4638,7 @@ function ConferenceApplyInner() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <Loader size={72} label="Loading application" />
       </div>
     );
@@ -4513,14 +4646,14 @@ function ConferenceApplyInner() {
 
   if (notFound || !conference) {
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20 text-center">
           <div>
-            <p className="text-xs tracking-widest mb-3" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>404</p>
-            <h1 className="font-black text-2xl mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Not Found</h1>
-            <Link href="/conferences/explore" className="text-sm font-semibold" style={{ color: '#1B3828', textDecoration: 'none' }}>
+            <p className="text-xs tracking-widest mb-3" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>404</p>
+            <h1 className="font-black text-2xl mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>Conference Not Found</h1>
+            <Link href="/conferences/explore" className="text-sm font-semibold" style={{ color: 'var(--gv-main)', textDecoration: 'none' }}>
               Explore conferences →
             </Link>
           </div>
@@ -4545,21 +4678,21 @@ function ConferenceApplyInner() {
   // submitted application is never blocked by a second, unrelated role.
   if (!canEdit && !previewing && otherRoleApp) {
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
-          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
               You&apos;ve already applied
             </h2>
-            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
               You already have an active {otherRoleApp.role.replace(/-/g, ' ')} application to this conference. Withdraw it or contact the organizing team if you need to change roles.
             </p>
             <Link
               href={`/conferences/${slug}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
             >
               VIEW CONFERENCE →
             </Link>
@@ -4571,21 +4704,21 @@ function ConferenceApplyInner() {
 
   if (existingApp && !canEdit && !previewing) {
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
-          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
               You&apos;ve already applied
             </h2>
-            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
               Your application as {role.replace(/-/g, ' ')} is {existingApp.status}.
             </p>
             <Link
               href={`/conferences/${slug}`}
               className="inline-block rounded-xl py-2.5 px-6 font-bold text-sm focus:outline-none"
-              style={{ backgroundColor: '#1B3828', color: '#EED98A', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
             >
               VIEW CONFERENCE →
             </Link>
@@ -4605,21 +4738,21 @@ function ConferenceApplyInner() {
   // Safe with a null roleConfig: every other read of it is optional-chained.
   if (!previewing && (!roleConfig || !roleConfig.is_enabled) && !canEdit) {
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
-          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          <div className="rounded-2xl p-10 text-center max-w-sm w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
               Applications are not open
             </h2>
-            <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            <p className="text-sm mb-4" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
               Applications for {role.replace(/-/g, ' ')} are not currently open for this conference.
             </p>
             <Link
               href={`/conferences/${slug}`}
               className="text-sm font-semibold"
-              style={{ color: '#1B3828', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+              style={{ color: 'var(--gv-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
             >
               ← Back
             </Link>
@@ -4633,35 +4766,35 @@ function ConferenceApplyInner() {
 
   if ((underAge || overAge) && !previewing) {
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
-          <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+          <div className="rounded-2xl p-10 text-center max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <span
               className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
               style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.25)', color: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
             >
               AGE REQUIREMENT
             </span>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
               This conference requires delegates to be {ageRequirementText}
             </h2>
-            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
               Based on your date of birth, you will be {ageAtStart} when {conference.acronym} starts, so you can&apos;t apply this time. If your date of birth is wrong, you can update it in your profile.
             </p>
             <div className="flex items-center justify-center gap-4">
               <Link
                 href="/account/profile"
                 className="text-sm font-semibold"
-                style={{ color: '#1B3828', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: 'var(--gv-main)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
               >
                 Edit profile
               </Link>
               <Link
                 href={`/conferences/${slug}`}
                 className="text-sm font-semibold"
-                style={{ color: '#9A8A78', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
               >
                 ← Back to {conference.acronym}
               </Link>
@@ -4674,24 +4807,24 @@ function ConferenceApplyInner() {
 
   if (needsDob && !previewing) {
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#EDE7D8' }}>
+      <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
         <SiteNav />
         <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-20">
-          <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0' }}>
+          <div className="rounded-2xl p-10 max-w-md w-full" style={{ backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)' }}>
             <span
               className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
-              style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.35)', color: '#B6871F', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
             >
               {ageChipText} CONFERENCE
             </span>
-            <h2 className="font-semibold text-lg mb-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
               Add your date of birth to continue
             </h2>
-            <p className="text-sm mb-6" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
+            <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
               This conference requires delegates to be {ageRequirementText}, and your profile doesn&apos;t have a date of birth yet. It will be saved to your profile.
             </p>
-            <label className="block font-semibold text-sm mb-1.5" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+            <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
               Date of birth
             </label>
             <DatePicker
@@ -4711,14 +4844,14 @@ function ConferenceApplyInner() {
               disabled={dobSaving || !dobInput}
               className="w-full mt-4 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
               style={{
-                backgroundColor: (dobSaving || !dobInput) ? '#DDD4C0' : '#1B3828',
-                color: (dobSaving || !dobInput) ? '#9A8A78' : '#EED98A',
+                backgroundColor: (dobSaving || !dobInput) ? 'var(--gv-border)' : 'var(--gv-main)',
+                color: (dobSaving || !dobInput) ? 'var(--gv-muted)' : 'var(--gv-on-main)',
                 fontFamily: "'Outfit', sans-serif",
                 letterSpacing: '0.08em',
                 cursor: (dobSaving || !dobInput) ? 'default' : 'pointer',
               }}
-              onMouseEnter={(e) => { if (!dobSaving && dobInput) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-              onMouseLeave={(e) => { if (!dobSaving && dobInput) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+              onMouseEnter={(e) => { if (!dobSaving && dobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={(e) => { if (!dobSaving && dobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
             >
               {dobSaving ? 'SAVING...' : 'SAVE & CONTINUE'}
             </button>
@@ -4726,7 +4859,7 @@ function ConferenceApplyInner() {
               <Link
                 href={`/conferences/${slug}`}
                 className="text-sm font-semibold"
-                style={{ color: '#9A8A78', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
+                style={{ color: 'var(--gv-muted)', textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}
               >
                 ← Back to {conference.acronym}
               </Link>
@@ -4740,7 +4873,7 @@ function ConferenceApplyInner() {
   // ── Main form ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex flex-col relative" style={{ backgroundColor: '#EDE7D8' }}>
+    <div className="min-h-screen flex flex-col relative" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
       <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       <SiteNav />
 
@@ -4754,7 +4887,7 @@ function ConferenceApplyInner() {
         <div
           className="relative w-full text-center"
           style={{
-            backgroundColor: '#1B3828', color: '#EED98A', fontFamily: OUTFIT,
+            backgroundColor: 'var(--gv-main)', color: 'var(--gv-on-main)', fontFamily: OUTFIT,
             fontSize: 12, fontWeight: 800, letterSpacing: '0.08em',
             padding: '9px 16px', zIndex: 20,
           }}
@@ -4773,7 +4906,7 @@ function ConferenceApplyInner() {
           <Link
             href={`/conferences/${slug}`}
             className="text-xs"
-            style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", fontWeight: 600, letterSpacing: '0.06em', textDecoration: 'none' }}
+            style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", fontWeight: 600, letterSpacing: '0.06em', textDecoration: 'none' }}
           >
             ← {conference.acronym}
           </Link>
@@ -4850,7 +4983,7 @@ function ConferenceApplyInner() {
           <div className="flex justify-center mb-2">
             <div
               className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5"
-              style={{ backgroundColor: 'rgba(182,135,31,0.14)', border: '1px solid rgba(182,135,31,0.35)' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 14%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)' }}
             >
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: '#8A6614', fontFamily: "'Outfit', sans-serif" }}>
                 EDITING YOUR APPLICATION
@@ -4867,7 +5000,7 @@ function ConferenceApplyInner() {
           <div className="w-full mx-auto mb-4" style={{ maxWidth: 720 }}>
             <div
               className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-4 py-3"
-              style={{ backgroundColor: 'rgba(182,135,31,0.12)', border: '1px solid rgba(182,135,31,0.34)' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 34%, transparent)' }}
               role="status"
             >
               <span style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 13, color: '#6E5310', lineHeight: 1.45 }}>
@@ -4938,7 +5071,7 @@ export default function ConferenceApplyClient() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE7D8' }}>
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--gv-bg)' }}>
           <Loader size={72} label="Loading application" />
         </div>
       }

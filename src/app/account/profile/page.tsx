@@ -77,6 +77,7 @@ export default function ProfilePage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving]           = useState(false);
   const [saved, setSaved]             = useState(false);
+  const [saveError, setSaveError]     = useState('');
 
   // Avatar
   const [avatarUrl, setAvatarUrl]         = useState<string | null>(null);
@@ -283,10 +284,21 @@ export default function ProfilePage() {
         return;
       }
     }
+    setSaveError('');
+    // Guard BEFORE the spinner latches: returning after setSaving(true) would
+    // leave the button reading SAVING… with nothing left to clear it.
+    if (!session) {
+      setSaveError('Your session has expired. Please refresh the page and sign in again.');
+      return;
+    }
     setSaving(true);
-    if (!session) return;
     const supabase = getAuthedClient(session.access_token);
-    await supabase
+    // These are the fields every conference application reads back, so a
+    // silently dropped write (RLS, a constraint) is not something the delegate
+    // can be told "Saved" about. supabase-js RESOLVES on a PostgREST error, so
+    // the result has to be destructured and checked, exactly as the education
+    // and notification writes below do.
+    const { error } = await supabase
       .from('profiles')
       .update({
         display_name: displayName,
@@ -295,6 +307,10 @@ export default function ProfilePage() {
       })
       .eq('id', user.id);
     setSaving(false);
+    if (error) {
+      setSaveError('We could not save your profile. Please check your connection and try again.');
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -1043,9 +1059,14 @@ export default function ProfilePage() {
           >
             {saving ? 'SAVING...' : 'SAVE CHANGES'}
           </button>
-          {saved && (
+          {saved && !saveError && (
             <span className="text-sm font-semibold" style={{ color: '#3D7A52', fontFamily: OUTFIT }}>
               Saved ✓
+            </span>
+          )}
+          {saveError && (
+            <span className="text-sm font-semibold" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+              {saveError}
             </span>
           )}
         </div>

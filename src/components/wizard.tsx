@@ -543,6 +543,8 @@ export function CardSelect({
   searchable = false,
   columns = 3,
   size = 'default',
+  wrapText = false,
+  minColumnWidth,
 }: {
   /** Every option must carry an icon or image, never text-only. */
   options: WizardOption[];
@@ -560,6 +562,25 @@ export function CardSelect({
    * TwoTabPick (e.g. the experience-level question).
    */
   size?: 'default' | 'lg';
+  /**
+   * OPT-IN. Let the label and sub wrap onto as many lines as they need instead
+   * of truncating to one.
+   *
+   * Truncation is right for a list tile whose text is a country or a head-count
+   * range, and wrong for a card whose label is two or three words and whose sub
+   * is a short sentence — those simply disappeared mid-word. Off by default, so
+   * every pre-existing caller keeps the single-line tile exactly as it was.
+   */
+  wrapText?: boolean;
+  /**
+   * OPT-IN. Minimum column width in px. With it the grid becomes
+   * `auto-fit`/`minmax`, so the card count per row DROPS on a narrow screen
+   * instead of squeezing `columns` cards into 375px. On a wide screen the row
+   * fills to whatever the 720px shell fits, so pick a floor that lands on the
+   * column count you want there. Omit it (the default) and the grid is the
+   * fixed `repeat(columns, 1fr)` every existing caller already has.
+   */
+  minColumnWidth?: number;
 }) {
   const big = size === 'lg';
   const [query, setQuery] = useState('');
@@ -634,7 +655,11 @@ export function CardSelect({
         role={multiple ? 'group' : 'radiogroup'}
         className={big ? 'grid gap-5' : 'grid gap-4'}
         style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          gridTemplateColumns: minColumnWidth
+            // min(100%, …) so a card can still shrink below the floor on a
+            // phone narrower than the floor itself, rather than overflowing.
+            ? `repeat(auto-fit, minmax(min(100%, ${minColumnWidth}px), 1fr))`
+            : `repeat(${columns}, minmax(0, 1fr))`,
           maxHeight: searchable ? 360 : undefined,
           overflowY: searchable ? 'auto' : undefined,
           padding: '6px',
@@ -695,28 +720,36 @@ export function CardSelect({
                 </span>
               )}
               <span
-                className="truncate w-full"
+                className={wrapText ? 'w-full' : 'truncate w-full'}
                 style={{
                   fontFamily: OUTFIT,
                   fontWeight: big ? 800 : 700,
                   fontSize: big ? 20 : 14.5,
                   color: selected ? NEU.forest : NEU.ink,
                   padding: '0 10px',
+                  // `balance` so a two-word label breaks into two even lines
+                  // rather than one full line and an orphan.
+                  textWrap: wrapText ? 'balance' : undefined,
+                  lineHeight: wrapText ? 1.2 : undefined,
                 }}
               >
                 {opt.label}
               </span>
               {opt.sub && (
                 <span
-                  className="truncate w-full"
+                  className={wrapText ? 'w-full' : 'truncate w-full'}
                   style={{
                     fontFamily: OUTFIT,
                     fontSize: big ? 14.5 : 12,
                     fontWeight: 500,
-                    color: NEU.muted,
+                    // NEU.muted is a 2.71:1 wash. A wrapped sub is a sentence
+                    // the reader is meant to read, so it takes the readable ink.
+                    color: wrapText ? NEU.inkSoft : NEU.muted,
                     marginTop: big ? 7 : 4,
                     padding: '0 10px',
                     fontVariantNumeric: 'tabular-nums',
+                    textWrap: wrapText ? 'pretty' : undefined,
+                    lineHeight: wrapText ? 1.4 : undefined,
                   }}
                 >
                   {opt.sub}

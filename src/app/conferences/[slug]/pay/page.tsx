@@ -998,6 +998,7 @@ function AddonsModal({
             {addons.map(addon => {
               const sel = selections[addon.id] ?? { checked: false, quantity: 1 };
               const isPurchased = purchased.has(addon.id);
+              const inputId = `addon-${addon.id}`;
               return (
                 <div
                   key={addon.id}
@@ -1005,27 +1006,39 @@ function AddonsModal({
                   style={{ border: '1px solid var(--gv-border)', backgroundColor: sel.checked || isPurchased ? 'color-mix(in srgb, var(--gv-main) 3%, transparent)' : '#FFFFFF' }}
                 >
                   <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={sel.checked}
-                      disabled={isPurchased}
-                      onChange={() => toggleChecked(addon.id)}
-                      className="flex-shrink-0 mt-0.5"
-                      style={{ width: 16, height: 16, accentColor: 'var(--gv-main)', cursor: isPurchased ? 'default' : 'pointer' }}
-                    />
+                    {/* 44px tap target around the 18px box. The name/price/description
+                        below carry the <label htmlFor>, so tapping any of them toggles
+                        the add-on and the checkbox finally has an accessible name.
+                        The quantity stepper deliberately sits OUTSIDE that label —
+                        a button inside a label also fires the label's toggle. */}
+                    <span
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{ width: 44, height: 44, marginTop: -12, marginBottom: -12, marginLeft: -14, marginRight: -14 }}
+                    >
+                      <input
+                        id={inputId}
+                        type="checkbox"
+                        checked={sel.checked}
+                        disabled={isPurchased}
+                        onChange={() => toggleChecked(addon.id)}
+                        style={{ width: 18, height: 18, accentColor: 'var(--gv-main)', cursor: isPurchased ? 'default' : 'pointer' }}
+                      />
+                    </span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: 'var(--gv-on-surface)' }}>{addon.label}</p>
-                        <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: 'var(--gv-on-surface)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                          {centsToFee(addon.amount_cents, addon.currency)}
-                          <span style={{ color: 'var(--gv-muted)', fontWeight: 600 }}> ea.</span>
-                        </span>
-                      </div>
-                      {addon.description && (
-                        <p className="mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'var(--gv-muted)', lineHeight: 1.5 }}>
-                          {addon.description}
-                        </p>
-                      )}
+                      <label htmlFor={inputId} className="block" style={{ cursor: isPurchased ? 'default' : 'pointer' }}>
+                        <div className="flex items-center justify-between gap-2">
+                          <p style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 13.5, color: 'var(--gv-on-surface)' }}>{addon.label}</p>
+                          <span style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700, color: 'var(--gv-on-surface)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                            {centsToFee(addon.amount_cents, addon.currency)}
+                            <span style={{ color: 'var(--gv-muted)', fontWeight: 600 }}> ea.</span>
+                          </span>
+                        </div>
+                        {addon.description && (
+                          <p className="mt-0.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: 'var(--gv-muted)', lineHeight: 1.5 }}>
+                            {addon.description}
+                          </p>
+                        )}
+                      </label>
 
                       {isPurchased ? (
                         <p className="mt-2 inline-flex items-center gap-1" style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 800, color: '#2A5A3C' }}>
@@ -1036,26 +1049,34 @@ function AddonsModal({
                           <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 700, color: 'var(--gv-muted)', letterSpacing: '0.06em' }}>
                             QTY
                           </span>
-                          <div className="inline-flex items-center gap-2.5">
+                          {/* 44px tap targets: these were 24px, below the minimum for
+                              a finger, on the one flow that takes money. */}
+                          <div className="inline-flex items-center gap-1">
                             <button
                               type="button"
+                              aria-label={`Fewer ${addon.label}`}
                               onClick={() => setQuantity(addon.id, sel.quantity - 1)}
                               disabled={sel.quantity <= 1}
                               className="flex items-center justify-center rounded-full focus:outline-none"
-                              style={{ width: 24, height: 24, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: sel.quantity <= 1 ? 'var(--gv-border)' : 'var(--gv-main)', cursor: sel.quantity <= 1 ? 'default' : 'pointer' }}
+                              style={{ width: 44, height: 44, border: 'none', background: 'none', color: sel.quantity <= 1 ? 'var(--gv-border)' : 'var(--gv-main)', cursor: sel.quantity <= 1 ? 'default' : 'pointer' }}
                             >
-                              <Minus size={12} />
+                              <span className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)' }}>
+                                <Minus size={14} />
+                              </span>
                             </button>
-                            <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: 'var(--gv-on-surface)', minWidth: 16, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                            <span style={{ fontFamily: OUTFIT, fontSize: 14, fontWeight: 800, color: 'var(--gv-on-surface)', minWidth: 20, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
                               {sel.quantity}
                             </span>
                             <button
                               type="button"
+                              aria-label={`More ${addon.label}`}
                               onClick={() => setQuantity(addon.id, sel.quantity + 1)}
                               className="flex items-center justify-center rounded-full focus:outline-none"
-                              style={{ width: 24, height: 24, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-main)', cursor: 'pointer' }}
+                              style={{ width: 44, height: 44, border: 'none', background: 'none', color: 'var(--gv-main)', cursor: 'pointer' }}
                             >
-                              <Plus size={12} />
+                              <span className="flex items-center justify-center rounded-full" style={{ width: 28, height: 28, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)' }}>
+                                <Plus size={14} />
+                              </span>
                             </button>
                           </div>
                         </div>
@@ -1114,20 +1135,25 @@ function AddSpotsPanel({
   accessToken: string | undefined;
   onAdded: () => void;
 }) {
-  const [count, setCount] = useState(1);
+  // Held as '' while the field is momentarily empty. Clamping to 1 on every
+  // keystroke meant backspace-then-type produced "15" when the delegate meant
+  // "5": they cleared the field, it snapped back to 1, and their digit landed
+  // after it. Normalised on blur instead.
+  const [count, setCount] = useState<number | ''>(1);
+  const countNum = count === '' ? 0 : count;
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justAdded, setJustAdded] = useState<number | null>(null);
 
   async function handleAdd() {
-    if (adding || !accessToken || count < 1) return;
+    if (adding || !accessToken || countNum < 1) return;
     setAdding(true);
     setError(null);
     setJustAdded(null);
     const supabase = getAuthedClient(accessToken);
     const { data, error: rpcError } = await supabase.rpc('add_pledged_spots', {
       p_application_id: applicationId,
-      p_count: count,
+      p_count: countNum,
     });
     const result = data as { ok?: boolean; spots_pledged?: number; error?: string } | null;
     setAdding(false);
@@ -1135,7 +1161,7 @@ function AddSpotsPanel({
       setError(result?.error || rpcError?.message || 'Could not add spots. Please try again.');
       return;
     }
-    setJustAdded(count);
+    setJustAdded(countNum);
     setCount(1);
     onAdded();
   }
@@ -1154,19 +1180,27 @@ function AddSpotsPanel({
           type="number"
           min={1}
           value={count}
-          onChange={e => setCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
-          className="rounded-xl px-3 py-2 text-sm text-center focus:outline-none"
-          style={{ width: 64, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
+          onChange={e => {
+            const raw = e.target.value;
+            if (raw === '') { setCount(''); return; }
+            const n = parseInt(raw, 10);
+            setCount(Number.isNaN(n) ? '' : Math.max(1, n));
+          }}
+          onBlur={() => { if (count === '') setCount(1); }}
+          aria-label="Number of spots to pledge"
+          className="rounded-xl text-sm text-center focus:outline-none"
+          style={{ width: 64, height: 44, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
         />
         <button
           type="button"
           onClick={handleAdd}
-          disabled={adding}
-          className="flex-1 rounded-xl py-2.5 text-xs font-bold focus:outline-none"
+          disabled={adding || countNum < 1}
+          className="flex-1 rounded-xl text-xs font-bold focus:outline-none"
           style={{
-            border: 'none', backgroundColor: adding ? 'var(--gv-border)' : NEU.forest,
-            color: adding ? 'var(--gv-muted)' : NEU.gold,
-            fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding ? 'default' : 'pointer',
+            border: 'none', minHeight: 44,
+            backgroundColor: adding || countNum < 1 ? 'var(--gv-border)' : NEU.forest,
+            color: adding || countNum < 1 ? 'var(--gv-muted)' : NEU.gold,
+            fontFamily: OUTFIT, letterSpacing: '0.06em', cursor: adding || countNum < 1 ? 'default' : 'pointer',
           }}
         >
           {adding ? 'ADDING…' : 'ADD'}
@@ -1197,7 +1231,9 @@ function AdvisorTicketsModal({
   advisorRoleConfig: PayRoleConfig | null;
   onAdded: () => void;
 }) {
-  const [count, setCount] = useState(1);
+  // '' while the field is momentarily empty — see AddSpotsPanel above.
+  const [count, setCount] = useState<number | ''>(1);
+  const countNum = count === '' ? 0 : count;
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1219,13 +1255,13 @@ function AdvisorTicketsModal({
   });
 
   async function handleAdd() {
-    if (adding || !accessToken || count < 1) return;
+    if (adding || !accessToken || countNum < 1) return;
     setAdding(true);
     setError(null);
     const supabase = getAuthedClient(accessToken);
     const { data, error: rpcError } = await supabase.rpc('add_pledged_advisor_spots', {
       p_application_id: applicationId,
-      p_count: count,
+      p_count: countNum,
     });
     const result = data as { ok?: boolean; error?: string } | null;
     setAdding(false);
@@ -1276,35 +1312,48 @@ function AdvisorTicketsModal({
           <label className="block mb-1.5" style={{ fontSize: 11, fontWeight: 700, color: 'var(--gv-muted)', fontFamily: OUTFIT, letterSpacing: '0.06em' }}>
             HOW MANY TICKETS
           </label>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setCount(c => Math.max(1, c - 1))}
-              disabled={count <= 1}
+              aria-label="Fewer advisor tickets"
+              onClick={() => setCount(c => Math.max(1, (c === '' ? 1 : c) - 1))}
+              disabled={countNum <= 1}
               className="flex items-center justify-center rounded-full focus:outline-none"
-              style={{ width: 32, height: 32, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: count <= 1 ? 'var(--gv-border)' : 'var(--gv-main)', cursor: count <= 1 ? 'default' : 'pointer' }}
+              style={{ width: 44, height: 44, border: 'none', background: 'none', color: countNum <= 1 ? 'var(--gv-border)' : 'var(--gv-main)', cursor: countNum <= 1 ? 'default' : 'pointer' }}
             >
-              <Minus size={14} />
+              <span className="flex items-center justify-center rounded-full" style={{ width: 32, height: 32, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)' }}>
+                <Minus size={14} />
+              </span>
             </button>
             <input
               type="number"
               min={1}
               value={count}
-              onChange={e => setCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
-              className="rounded-xl px-3 py-2 text-sm text-center focus:outline-none"
-              style={{ width: 64, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
+              onChange={e => {
+                const raw = e.target.value;
+                if (raw === '') { setCount(''); return; }
+                const n = parseInt(raw, 10);
+                setCount(Number.isNaN(n) ? '' : Math.max(1, n));
+              }}
+              onBlur={() => { if (count === '') setCount(1); }}
+              aria-label="Number of advisor tickets"
+              className="rounded-xl text-sm text-center focus:outline-none"
+              style={{ width: 64, height: 44, border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT, fontWeight: 700 }}
             />
             <button
               type="button"
-              onClick={() => setCount(c => c + 1)}
+              aria-label="More advisor tickets"
+              onClick={() => setCount(c => (c === '' ? 1 : c + 1))}
               className="flex items-center justify-center rounded-full focus:outline-none"
-              style={{ width: 32, height: 32, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)', color: 'var(--gv-main)', cursor: 'pointer' }}
+              style={{ width: 44, height: 44, border: 'none', background: 'none', color: 'var(--gv-main)', cursor: 'pointer' }}
             >
-              <Plus size={14} />
+              <span className="flex items-center justify-center rounded-full" style={{ width: 32, height: 32, border: '1px solid var(--gv-border)', backgroundColor: 'var(--gv-surface)' }}>
+                <Plus size={14} />
+              </span>
             </button>
             {fee > 0 && (
               <span style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 800, color: NEU.ink, marginLeft: 'auto' }}>
-                {centsToFee(Math.round(fee * count * 100), currency)}
+                {centsToFee(Math.round(fee * countNum * 100), currency)}
               </span>
             )}
           </div>
@@ -2034,14 +2083,20 @@ function PayInvoiceAndActions({
                         <input
                           type="text"
                           value={voucherCode}
-                          onChange={e => setVoucherCode(e.target.value)}
+                          /* Uppercase the STATE, not just the pixels. apply_voucher
+                             matches `code = trim(p_code)`, which is case sensitive,
+                             and vouchers are stored uppercase — a CSS-only
+                             `uppercase` class showed the applicant EARLYBIRD10 and
+                             then sent "earlybird10", which is never a match.
+                             Same handling as /apply. */
+                          onChange={e => setVoucherCode(e.target.value.toUpperCase())}
                           placeholder="e.g. EARLYBIRD10"
                           className="flex-1 rounded-xl px-3.5 py-2.5 text-sm uppercase focus:outline-none"
                           style={{ border: 'none', backgroundColor: NEU.base, boxShadow: NEU.inSm, color: NEU.ink, fontFamily: OUTFIT }}
                         />
                         <button
                           type="button"
-                          onClick={() => applyVoucher(voucherCode.trim())}
+                          onClick={() => applyVoucher(voucherCode.trim().toUpperCase())}
                           disabled={voucherApplying || !voucherCode.trim()}
                           className="rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none"
                           style={{

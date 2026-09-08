@@ -13,7 +13,7 @@ import { useManage } from '@/app/manage/[slug]/layout';
 import { getAuthedClient, getFreshAuthedClient } from '@/lib/supabase-auth';
 import { PillToggle } from '@/app/account/accountUi';
 import QuestionBuilder from '@/components/QuestionBuilder';
-import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
+import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import { NEU, OUTFIT, NeuCard } from '@/components/neu';
 
 const inputStyle: React.CSSProperties = {
@@ -60,6 +60,7 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
   // Debounced, serialized write path for `blocks` — see handleBlocksChange /
   // persistBlocks below. Mirrors the pattern in settings.tsx's block editor,
   // minus the per-role Map since this editor only ever edits one form.
+  const [blocksProblem, setBlocksProblem] = useState<string | null>(null);
   const blocksPendingRef = useRef<FormBlock[] | null>(null);
   const blocksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blocksChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -112,6 +113,21 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
    *  rather than fired independently here. */
   function handleBlocksChange(next: FormBlock[]) {
     setBlocks(next);
+    // A required choice question with fewer than two real options can never be
+    // answered, so publishing one makes the aid form permanently unsubmittable.
+    // The applicant side is defended too (validateAnswers skips it and the
+    // renderers filter blanks), but this stops it being written in the first
+    // place. Local state still updates so typing stays responsive; only the
+    // WRITE is refused, and the pending snapshot is left alone so an earlier
+    // valid one can still land. Same rule as the applications form builder.
+    const blocked = unpublishableQuestions(next);
+    if (blocked.length > 0) {
+      const q = blocked[0];
+      setBlocksProblem(`"${q.label || 'This question'}" needs at least 2 options. Your aid form is not saved until you add them.`);
+      if (blocksTimerRef.current) { clearTimeout(blocksTimerRef.current); blocksTimerRef.current = null; }
+      return;
+    }
+    setBlocksProblem(null);
     blocksPendingRef.current = next;
     if (blocksTimerRef.current) clearTimeout(blocksTimerRef.current);
     blocksTimerRef.current = setTimeout(() => {
@@ -252,6 +268,9 @@ export default function AidFormEditor({ conferenceId, initialEnabled, initialInt
           <p className="block text-xs font-semibold mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
             Aid questions
           </p>
+          {blocksProblem && (
+            <p role="alert" className="text-xs mb-2" style={{ color: '#8B2020', fontFamily: OUTFIT }}>{blocksProblem}</p>
+          )}
           <QuestionBuilder value={blocks} onChange={handleBlocksChange} />
 
           <div className="flex justify-center pt-2">

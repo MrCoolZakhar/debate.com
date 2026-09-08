@@ -11,7 +11,7 @@
  */
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Globe2, CalendarCheck, KeyRound, MailCheck, RotateCw, Sparkles, Star } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import DecorativeBleed from '@/components/DecorativeBleed';
@@ -298,9 +298,31 @@ export function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Scrolls its element into view whenever `message` changes, and on mount.
+ *  Auth failures are announced at the TOP of the card while the submit button
+ *  is most of a phone screen below it, so without this a failed sign-up looks
+ *  like the button simply did nothing. Respects prefers-reduced-motion. */
+export function useAlertScroll<T extends HTMLElement>(message: string) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const reduce = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+  }, [message]);
+  return ref;
+}
+
 export function ErrorBanner({ children }: { children: React.ReactNode }) {
+  // Only a string message can be compared between renders; element children
+  // still scroll once, on mount, which is when they appear.
+  const ref = useAlertScroll<HTMLDivElement>(typeof children === 'string' ? children : '');
   return (
     <div
+      ref={ref}
+      role="alert"
+      aria-live="assertive"
       className="mb-4 px-4 py-3 rounded-xl text-sm text-center"
       style={{
         backgroundColor: 'rgba(139, 32, 32, 0.08)',

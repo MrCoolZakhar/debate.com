@@ -808,7 +808,8 @@ export default function DataTab() {
                 {int(m.conferences.setup_complete)} finished set-up, {int(m.conferences.setup_stalled)} stalled
               </p>
               <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft, marginTop: 2 }}>
-                Read from conference_setup_status(), the same seven steps the organiser dashboard shows them.
+                Read from conference_setup_status(), the same nine steps the organiser dashboard shows them,
+                and finished means all nine, publishing included.
                 This is the single biggest activation gap on the platform.
               </p>
             </div>

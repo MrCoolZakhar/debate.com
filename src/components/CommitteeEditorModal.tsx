@@ -190,18 +190,28 @@ export { ModalOverlay };
 /** Look up a minted session's code + chair suffix and return the header-carrying
  *  client that its RLS policies actually accept. Reads go through the organiser's
  *  client (committees.sess_select is `true`); only the WRITE needs the headers.
- *  Fetched once per save, not once per row. */
-async function sessionCommitteeClient(
+ *  Fetched once per save, not once per row.
+ *
+ *  `missing: true` distinguishes "the session row is already gone" from every
+ *  other failure. A caller that is DELETING the session treats that as work
+ *  already done; a caller that is UPDATING it treats it as an error like any
+ *  other. Do not collapse the two — the committees page would otherwise refuse
+ *  forever to delete a conference committee whose session row no longer exists.
+ *
+ *  Exported because the committees page deletes the live session and must use
+ *  the same lookup: there is exactly one place that knows how to build a client
+ *  RLS accepts, and a second copy would drift. */
+export async function sessionCommitteeClient(
   supabase: ReturnType<typeof getAuthedClient>,
   sessionId: string,
-): Promise<{ client: ReturnType<typeof sessionClient> } | { error: string }> {
+): Promise<{ client: ReturnType<typeof sessionClient> } | { error: string; missing?: boolean }> {
   const { data, error } = await supabase
     .from('committees')
     .select('code, settings')
     .eq('id', sessionId)
     .maybeSingle();
   if (error) return { error: `the live session could not be read (${error.message})` };
-  if (!data?.code) return { error: 'the live session row is missing' };
+  if (!data?.code) return { error: 'the live session row is missing', missing: true };
   const suffix = (data.settings as Record<string, unknown> | null)?.chairJoinSuffix;
   // The suffix is the only credential `is_session_chair` accepts. Without it
   // deletes and committees updates are rejected, so refuse rather than half-write.
@@ -303,10 +313,24 @@ export async function mintConferenceSession(
         onProblem?.(`the ${seats.length} seats could not be added to the live session (${dErr.message})`);
       }
     }
-    await supabase
+    // THE LINK IS THE WHOLE POINT OF THE MINT. Without `session_id` the live
+    // wall, the cross-committee scoreboard and awards can never find this room:
+    // they all join through conference_committees.session_id, not through the
+    // code. An unchecked update here hands the organiser a join code for a room
+    // nothing on the conference side is attached to — a session that is orphaned
+    // from birth. `.select('id')` because an RLS mismatch on an UPDATE reports
+    // zero rows changed, not an error.
+    const { data: linked, error: linkErr } = await supabase
       .from('conference_committees')
       .update({ session_id: sessionRow.id, session_code: code })
-      .eq('id', confCommitteeId);
+      .eq('id', confCommitteeId)
+      .select('id');
+    if (linkErr || !linked || linked.length === 0) {
+      console.error('Error linking minted session to conference committee:', linkErr);
+      onProblem?.(
+        `the session was created but not linked to the committee${linkErr ? ` (${linkErr.message})` : ''}, so the live wall, the scoreboard and awards cannot see it`,
+      );
+    }
     return code;
   }
   return null;

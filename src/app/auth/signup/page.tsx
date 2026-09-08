@@ -26,6 +26,7 @@ import {
   destinationAfterVerify,
   isValidEmail,
   safeNext,
+  useAlertScroll,
   withNext,
 } from '../authUi';
 
@@ -36,7 +37,9 @@ const TODAY_ISO = new Date().toISOString().slice(0, 10);
  * Date-of-birth field built on the shared friendly DatePicker.
  * `max` = today (nobody is born in the future) and the calendar seeds around
  * 2005 so the typical delegate isn't stranded on the current month; the year
- * <input> inside the picker lets them jump decades in one keystroke.
+ * dropdown inside the picker jumps decades in one tap. It used to be a number
+ * input that reverted every keystroke, which left phones with no way at all to
+ * set a birth year, so this field blocked mobile sign-up outright.
  */
 function DobField({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   return (
@@ -102,6 +105,9 @@ function SignUpInner() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
+  // Same problem as the banner: this one is validated in JS, so the browser
+  // never scrolls to it and on a phone the field is well above the button.
+  const emailErrorRef = useAlertScroll<HTMLParagraphElement>(emailError);
   const [loading, setLoading] = useState(false);
   // Latch: a second click starts a second PKCE flow and overwrites the
   // code_verifier cookie, which is what produced bad_code_verifier failures.
@@ -399,7 +405,7 @@ function SignUpInner() {
                 aria-describedby={emailError ? 'signup-email-error' : undefined}
               />
               {emailError && (
-                <p id="signup-email-error" role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
+                <p ref={emailErrorRef} id="signup-email-error" role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: OUTFIT }}>
                   {emailError}
                 </p>
               )}

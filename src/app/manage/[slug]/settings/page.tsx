@@ -7,7 +7,7 @@ import {
   SlidersHorizontal, Building2, Users2, ShieldCheck, X, Lock, Copy, AlertTriangle, Check,
   Plus, Crown, Mail as MailIcon, ChevronDown, Info, ArrowLeft,
   Settings2, Globe, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, Briefcase, Trophy,
-  ClipboardList, CreditCard, Megaphone, type LucideIcon,
+  ClipboardList, CreditCard, Megaphone, Star, type LucideIcon,
 } from 'lucide-react';
 import { useManage, type Conference } from '@/app/manage/[slug]/layout';
 
@@ -31,7 +31,7 @@ import {
   FINANCIALS_READONLY_KEY, TEAM_KEY, type BundleId, type PermissionMap,
 } from '@/lib/organizerPermissions';
 import { activeFeePhase, type FeePhase } from '@/lib/finance';
-import { currencyPickerGroups } from '@/lib/currencies';
+import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem, conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import {
@@ -39,9 +39,12 @@ import {
   CopyToRolesModal, SetupIntro, Segmented, STATUS_STYLE,
   type RoleStatus as RoleStatusKind,
 } from './applicationsUi';
-import { AwardsSettings } from './awardsUi';
+// Awards are behind a holding screen for now. `./awardsUi` (AwardsSettings) is
+// untouched on disk; swap this import and the render below back to it to
+// re-enable the real configuration UI. See awardsComingSoon.tsx.
+import { AwardsComingSoon } from './awardsComingSoon';
 import CustomizationCard from './CustomizationCard';
-import { type FormBlock, normalizeBlocks } from '@/lib/customQuestions';
+import { type FormBlock, normalizeBlocks, unpublishableQuestions } from '@/lib/customQuestions';
 import QuestionBuilder from '@/components/QuestionBuilder';
 import { conferencePaymentsReady, paymentGateBlocks, paymentGateMessage } from '@/lib/payments';
 import { INTENT_OPTIONS, getConferenceIntent, intentPayload } from '@/lib/conferenceIntent';
@@ -128,6 +131,11 @@ interface PartnerLink {
   company_name: string | null;
   company_logo_url: string | null;
   company_description: string | null;
+  /** Company rows only (partner_conference_id null): renders larger, first,
+   *  and with a star on the public page. A linked conference gets neither
+   *  control, its logo and page belong to the other team. */
+  featured: boolean;
+  company_url: string | null;
   conf: PartnerConf | null;
 }
 
@@ -195,10 +203,6 @@ const SWAP_MODE_OPTIONS: { value: string; label: string; desc: string }[] = [
 // ── Constants & helpers ────────────────────────────────────────────────────
 
 const ROLES = ROLE_ORDER;
-
-// Pinned USD/EUR/GBP + alphabetical rest, split once for every currency
-// picker in this page, mirrors the creation flow's symbol+code display.
-const CURRENCY_GROUPS = currencyPickerGroups();
 
 // License-safe banner presets shipped in /public/banners (see its README.md).
 const BANNER_PRESETS = [
@@ -586,6 +590,10 @@ export default function SettingsPage() {
   // leaves you after the last step.
   const [openStep, setOpenStep] = useState<number>(1);
   const [linkCopied, setLinkCopied] = useState(false);
+  // Conference tab: a separate "one open at a time" cursor, independent of
+  // the applications tab's openStep, so the two folds cannot fight.
+  const [openConfSection, setOpenConfSection] = useState<number>(1);
+  const [confLinkCopied, setConfLinkCopied] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -605,6 +613,18 @@ export default function SettingsPage() {
   const [logoError, setLogoError] = useState('');
   // Logo picked but not yet uploaded, the drag-to-fit crop modal is open.
   const [logoCropFile, setLogoCropFile] = useState<File | null>(null);
+
+  // Public-page visibility switches (conferences.show_committee_counts,
+  // show_taken_countries, show_committees). Not on the Conference type from
+  // useManage() — CONFERENCE_COLUMNS in the manage layout doesn't select
+  // them, so they're fetched directly by this page. All three default true.
+  const [showCommitteeCounts, setShowCommitteeCounts] = useState(true);
+  const [showTakenCountries, setShowTakenCountries] = useState(true);
+  const [showCommittees, setShowCommittees] = useState(true);
+  const [visibilityStatus, setVisibilityStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [visibilitySavingKey, setVisibilitySavingKey] = useState<string | null>(null);
+  const [visibilityError, setVisibilityError] = useState('');
+  const visibilitySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Conference details (identity + logistics, mirrors the creation form)
   const [fullName, setFullName] = useState('');
@@ -666,6 +686,9 @@ export default function SettingsPage() {
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [configVersion, setConfigVersion] = useState(0);
   const [roleConfigError, setRoleConfigError] = useState('');
+  /** Why the form builder is refusing to save. Sits beside the builder, not up
+   *  with roleConfigError, because the question that caused it is down here. */
+  const [blocksBlocked, setBlocksBlocked] = useState('');
   type SaveState = 'idle' | 'saving' | 'saved';
   const [stepSaveState, setStepSaveState] = useState<Record<number, SaveState>>({ 1: 'idle', 2: 'idle', 3: 'idle' });
   const savedTimersRef = useRef<Record<number, ReturnType<typeof setTimeout> | null>>({ 1: null, 2: null, 3: null });
@@ -831,6 +854,9 @@ export default function SettingsPage() {
   const [partnerResults, setPartnerResults] = useState<PartnerConf[]>([]);
   const [partnerBusy, setPartnerBusy] = useState<string | null>(null);
   const [partnerError, setPartnerError] = useState('');
+  // Keyed by partner link id: true while that row's website field shows the
+  // "must start with https://" note, cleared the moment they edit it again.
+  const [partnerUrlWarnings, setPartnerUrlWarnings] = useState<Record<string, boolean>>({});
   // Which kind of partner is being added. null = neither picked yet, so the
   // card shows the two-way chooser instead of either form. The conference
   // flow is unchanged behind 'conference'.
@@ -993,7 +1019,7 @@ export default function SettingsPage() {
     const supabase = getAuthedClient(accessToken);
     const { data: links } = await supabase
       .from('conference_partners')
-      .select('id, sort_order, approved, partner_conference_id, company_name, company_logo_url, company_description')
+      .select('id, sort_order, approved, partner_conference_id, company_name, company_logo_url, company_description, featured, company_url')
       .eq('conference_id', conference.id)
       .order('sort_order', { ascending: true });
     if (seq !== partnersSeq.current) return;
@@ -1117,6 +1143,29 @@ export default function SettingsPage() {
     setIntentKeys(hydratedIntent);
     intentBaseline.current = snap({ intentKeys: hydratedIntent });
   }, [conference?.id, loadRoleConfigs, loadRolesWithApplications, loadOrganizers, loadPendingInvites, loadLineage, loadPartners, loadIncomingPartnerClaims]);
+
+  // The three public-page visibility switches aren't part of the Conference
+  // type (see the state declarations above), so they get their own fetch
+  // rather than riding the hydration effect above.
+  useEffect(() => {
+    if (!conference?.id) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from('conferences')
+        .select('show_committee_counts, show_taken_countries, show_committees')
+        .eq('id', conference.id)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      const row = data as { show_committee_counts: boolean | null; show_taken_countries: boolean | null; show_committees: boolean | null };
+      setShowCommitteeCounts(row.show_committee_counts ?? true);
+      setShowTakenCountries(row.show_taken_countries ?? true);
+      setShowCommittees(row.show_committees ?? true);
+    })();
+    return () => { cancelled = true; };
+  }, [conference?.id]);
 
   // Partner typeahead: debounced authed search over public conferences,
   // excluding this conference and anything already linked.
@@ -1847,6 +1896,8 @@ export default function SettingsPage() {
       company_name: null,
       company_logo_url: null,
       company_description: null,
+      featured: false,
+      company_url: null,
       conf,
     }]);
     setPartnerQuery('');
@@ -1952,6 +2003,8 @@ export default function SettingsPage() {
       company_name: name,
       company_logo_url: companyLogoUrl,
       company_description: companyDescription.trim() || null,
+      featured: false,
+      company_url: null,
       conf: null,
     }]);
     resetCompanyDraft();
@@ -2027,6 +2080,64 @@ export default function SettingsPage() {
           arr.splice(Math.min(idx, arr.length), 0, link);
           return arr;
         });
+        setPartnerError(saveFailMessage(error));
+      }
+    })();
+  }
+
+  // Company rows only. Peter's guard_partner_approval trigger only inspects
+  // approved and partner_conference_id, so featured never trips it.
+  function handleToggleFeatured(link: PartnerLink) {
+    if (partnerBusy === link.id) return;
+    const next = !link.featured;
+    const previous = partners;
+    setPartners(prev => prev.map(p => (p.id === link.id ? { ...p, featured: next } : p)));
+    setPartnerBusy(link.id);
+    setPartnerError('');
+    void (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) {
+        setPartners(previous);
+        setPartnerBusy(null);
+        setPartnerError('Your session has expired, please refresh and sign in again.');
+        return;
+      }
+      const { data, error } = await supabase
+        .from('conference_partners')
+        .update({ featured: next })
+        .eq('id', link.id)
+        .select('id');
+      if (error || !data || data.length !== 1) {
+        setPartners(previous);
+        setPartnerError(saveFailMessage(error));
+      }
+      setPartnerBusy(null);
+    })();
+  }
+
+  // Saves on blur, only when the field is empty or starts with https://. The
+  // http:// case gets a friendly note instead of a failed save; the database
+  // CHECK constraint would reject anything else on its own.
+  function handleCompanyUrlBlur(link: PartnerLink) {
+    const raw = (link.company_url ?? '').trim();
+    if (raw.startsWith('http://')) {
+      setPartnerUrlWarnings(prev => ({ ...prev, [link.id]: true }));
+      return;
+    }
+    setPartnerUrlWarnings(prev => ({ ...prev, [link.id]: false }));
+    const value = raw === '' ? null : raw;
+    void (async () => {
+      const supabase = await getFreshAuthedClient();
+      if (!supabase) {
+        setPartnerError('Your session has expired, please refresh and sign in again.');
+        return;
+      }
+      const { data, error } = await supabase
+        .from('conference_partners')
+        .update({ company_url: value })
+        .eq('id', link.id)
+        .select('id');
+      if (error || !data || data.length !== 1) {
         setPartnerError(saveFailMessage(error));
       }
     })();
@@ -2144,6 +2255,65 @@ export default function SettingsPage() {
     );
   }
 
+  function handleCopyConferenceLink() {
+    if (!conference) return;
+    const url = `${window.location.origin}/conferences/${conference.slug}`;
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setConfLinkCopied(true);
+        window.setTimeout(() => setConfLinkCopied(false), 2000);
+      },
+      () => {},
+    );
+  }
+
+  // Same verified-write pattern as saveSwapMode: an error OR zero rows
+  // updated is a failure, never a silent false success. These three take
+  // effect immediately and are not part of the theme draft/publish flow.
+  async function saveVisibility(
+    column: 'show_committee_counts' | 'show_taken_countries' | 'show_committees',
+    value: boolean,
+    setter: (v: boolean) => void,
+  ) {
+    if (!conference) return;
+    if (visibilitySavedTimerRef.current) {
+      clearTimeout(visibilitySavedTimerRef.current);
+      visibilitySavedTimerRef.current = null;
+    }
+    setVisibilitySavingKey(column);
+    setVisibilityStatus('saving');
+    setVisibilityError('');
+
+    const supabase = await getFreshAuthedClient();
+    if (!supabase) {
+      setVisibilitySavingKey(null);
+      setVisibilityStatus('idle');
+      setVisibilityError('Your session has expired, please refresh and sign in again.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('conferences')
+      .update({ [column]: value })
+      .eq('id', conference.id)
+      .select('id');
+
+    if (error || !data || data.length !== 1) {
+      setVisibilitySavingKey(null);
+      setVisibilityStatus('idle');
+      setVisibilityError(saveFailMessage(error));
+      return;
+    }
+
+    setter(value);
+    setVisibilitySavingKey(null);
+    setVisibilityStatus('saved');
+    visibilitySavedTimerRef.current = setTimeout(() => {
+      setVisibilityStatus('idle');
+      visibilitySavedTimerRef.current = null;
+    }, 2000);
+  }
+
   /** Patch local state at once so typing stays responsive, then debounce the
    *  write. Do NOT route this through saveRoleConfig: that would delay its
    *  optimistic patch too, and typing would appear to do nothing. */
@@ -2151,6 +2321,25 @@ export default function SettingsPage() {
     const role = selectedRole;
     setRoleConfigs(prev => prev.map(rc => (rc.role === role ? { ...rc, custom_questions: next } : rc)));
     setRoleConfigError('');
+
+    // A required choice question whose options are blank can never be
+    // answered, so it makes the whole application unsubmittable. Refuse to
+    // write the form while one is on it: local state still shows the edit, but
+    // the last good version is what stays in the database. The pending write
+    // is deliberately left untouched, so a valid change made a moment ago
+    // still lands.
+    const broken = unpublishableQuestions(next);
+    if (broken.length > 0) {
+      const name = broken[0].label.trim();
+      setBlocksBlocked(
+        broken.length === 1
+          ? `${name ? `"${name}"` : 'One question'} needs at least 2 options. Your form is not saved until you add them.`
+          : `${broken.length} questions need at least 2 options. Your form is not saved until you add them.`
+      );
+      markStep(3, 'idle');
+      return;
+    }
+    setBlocksBlocked('');
     blocksPendingRef.current.set(role, next);
     markStep(3, 'saving');
     if (blocksTimerRef.current) clearTimeout(blocksTimerRef.current);
@@ -2210,6 +2399,10 @@ export default function SettingsPage() {
     const role = selectedRole;
     return () => { flushRef.current(role); };
   }, [selectedRole, activeTab]);
+
+  // The refusal names a question on the role being edited, so it must not
+  // follow the organiser to another role's form.
+  useEffect(() => { setBlocksBlocked(''); }, [selectedRole]);
 
   // Leaving the Form step. Its panel is about to collapse, so write now.
   useEffect(() => {
@@ -2618,7 +2811,7 @@ export default function SettingsPage() {
     { key: 'conference',   label: 'Conference',   hint: 'Identity, media & fee',      icon: Building2 },
     { key: 'organizers',   label: 'Organizers',   hint: 'Team & permissions',         icon: Users2 },
     { key: 'privacy',      label: 'Privacy',       hint: 'Publishing & lineage',       icon: ShieldCheck },
-    { key: 'awards',       label: 'Awards',        hint: 'Categories, quotas & ratification', icon: Trophy },
+    { key: 'awards',       label: 'Awards',        hint: 'Coming soon',                icon: Trophy },
   ];
   const activeSection = SECTIONS.find(s => s.key === activeTab) ?? SECTIONS[0];
 
@@ -3118,23 +3311,13 @@ export default function SettingsPage() {
                           <div>
                             <label className="block text-xs font-semibold mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Fee</label>
                             <div className="flex gap-2">
-                              <select
-                                defaultValue={config.fee_currency}
-                                onFocus={fgInput}
-                                onBlur={(e) => {
-                                  e.currentTarget.style.borderColor = '#DDD4C0';
-                                  saveRoleConfig(role, { fee_currency: e.target.value });
-                                }}
-                                style={{ ...inputStyle, width: '30%', cursor: 'pointer' }}
-                              >
-                                {CURRENCY_GROUPS.pinned.map(c => (
-                                  <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
-                                ))}
-                                <option disabled>──────────</option>
-                                {CURRENCY_GROUPS.rest.map(c => (
-                                  <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
-                                ))}
-                              </select>
+                              <CurrencyPicker
+                                value={config.fee_currency}
+                                onChange={(code) => saveRoleConfig(role, { fee_currency: code })}
+                                ariaLabel={`${roleLabel(role)} fee currency`}
+                                variant="bordered"
+                                style={{ width: 118, flexShrink: 0 }}
+                              />
                               <input
                                 type="number"
                                 min={0}
@@ -3146,7 +3329,7 @@ export default function SettingsPage() {
                                   e.currentTarget.style.borderColor = '#DDD4C0';
                                   saveRoleConfig(role, { fee_amount: parseFloat(e.target.value) || 0 });
                                 }}
-                                style={{ ...inputStyle, width: '70%' }}
+                                style={{ ...inputStyle, flex: 1, minWidth: 0 }}
                               />
                             </div>
                           </div>
@@ -3327,6 +3510,15 @@ export default function SettingsPage() {
                             </p>
                           )}
                         </div>
+                        {blocksBlocked && (
+                          <p
+                            role="alert"
+                            className="text-xs mb-3 rounded-lg px-3 py-2"
+                            style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.06)', border: '1px solid rgba(139,32,32,0.2)', fontFamily: "'Outfit', sans-serif" }}
+                          >
+                            {blocksBlocked}
+                          </p>
+                        )}
                         <QuestionBuilder key={selectedRole} value={currentBlocks} onChange={handleBlocksChange} hasApplications={selectedRoleHasApplications} />
                       </div>
                     )}
@@ -3402,19 +3594,163 @@ export default function SettingsPage() {
       {/* ── VISUAL TAB ── */}
       {activeTab === 'conference' && (
         <div>
-          <CustomizationCard
-            conferenceId={conference.id}
-            conferenceSlug={conference.slug}
-            initialDraft={conference.theme_draft ?? {}}
-            initialPublished={conference.theme ?? {}}
-            cardStyle={cardStyle}
-          />
+          {/* ── Persistent header bar. Never collapses: a preview link and a
+              copy-link button, the same visual language as the applications
+              tab's role header bar. ── */}
+          <div className="flex items-center gap-3 flex-wrap mb-5">
+            <div className="flex items-center gap-3 ml-auto">
+              <a
+                href={`/conferences/${conference.slug}?preview=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors"
+                style={{
+                  padding: '7px 12px',
+                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                  letterSpacing: '0.06em',
+                  color: '#1B3828', backgroundColor: 'transparent',
+                  border: '1.5px solid #DDD4C0', cursor: 'pointer',
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                <Eye size={13} strokeWidth={2.4} />
+                PREVIEW
+              </a>
+              <button
+                type="button"
+                onClick={handleCopyConferenceLink}
+                className="inline-flex items-center gap-1.5 rounded-[10px] focus:outline-none transition-colors gv-lift"
+                style={{
+                  padding: '7px 12px',
+                  fontFamily: "'Outfit', sans-serif", fontSize: '11px', fontWeight: 800,
+                  letterSpacing: '0.06em',
+                  color: '#1B3828', backgroundColor: 'transparent',
+                  border: '1.5px solid #DDD4C0', cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                {confLinkCopied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.4} />}
+                {confLinkCopied ? 'COPIED' : 'COPY LINK'}
+              </button>
+            </div>
+          </div>
+
+          {/* Section 1: Colours. CustomizationCard paints its own card chrome
+              (it receives cardStyle as a prop), so it renders flat inside this
+              section's body rather than as a second nested card. */}
+          <div style={cardStyle}>
+            <StepHeader
+              n={1} label="Colours" sub="Your main colour and accent, across the whole conference."
+              complete={true} open={openConfSection === 1}
+              onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
+            />
+            {openConfSection === 1 && (
+              <div className="mt-5">
+                <CustomizationCard
+                  conferenceId={conference.id}
+                  conferenceSlug={conference.slug}
+                  initialDraft={conference.theme_draft ?? {}}
+                  initialPublished={conference.theme ?? {}}
+                  cardStyle={{ padding: 0, margin: 0, border: 'none', boxShadow: 'none', backgroundColor: 'transparent', borderRadius: 0 }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: What people can see. Three switches on columns that
+              already exist and already default to true; each write takes
+              effect immediately and is not part of the theme draft/publish
+              flow. */}
+          <div style={cardStyle}>
+            <StepHeader
+              n={2} label="What people can see" sub="Choose what a visitor sees on your public page."
+              complete={true} open={openConfSection === 2} status={visibilityStatus}
+              onClick={() => setOpenConfSection(openConfSection === 2 ? 0 : 2)}
+            />
+            {openConfSection === 2 && (
+              <div className="mt-5 flex flex-col gap-3">
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show member counts</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>How many delegates are in each committee.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_committee_counts' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showCommitteeCounts}
+                      onChange={(v) => saveVisibility('show_committee_counts', v, setShowCommitteeCounts)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show taken countries</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Which country slots are already allocated.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_taken_countries' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showTakenCountries}
+                      onChange={(v) => saveVisibility('show_taken_countries', v, setShowTakenCountries)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl"
+                  style={{ backgroundColor: 'rgba(27,56,40,0.03)', border: '1px solid rgba(27,56,40,0.08)' }}
+                >
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Show the committee list</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Turn this off if your committees are not announced yet.</p>
+                  </div>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    {visibilitySavingKey === 'show_committees' && (
+                      <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} />
+                    )}
+                    <PillToggle
+                      value={showCommittees}
+                      onChange={(v) => saveVisibility('show_committees', v, setShowCommittees)}
+                      size="md"
+                      disabled={visibilitySavingKey !== null}
+                    />
+                  </span>
+                </div>
+                {visibilityError && (
+                  <p className="text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{visibilityError}</p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* ── Marketing first. The banner and the logo are the two things a
               visitor actually sees, and they were buried under six fields of
               logistics nobody opens twice. ── */}
           {/* Banner card */}
           <div style={cardStyle}>
+            <StepHeader
+              n={3} label="Conference banner" sub="The wide image at the top of your page."
+              complete={!!conference.banner_url} open={openConfSection === 3}
+              onClick={() => setOpenConfSection(openConfSection === 3 ? 0 : 3)}
+            />
+            {openConfSection === 3 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Banner</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Recommended: 1200x630px. JPG, PNG or WebP. Max 5MB.</p>
             <div
@@ -3499,10 +3835,19 @@ export default function SettingsPage() {
             {bannerError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{bannerError}</p>
             )}
+            </div>
+            )}
           </div>
 
           {/* Logo card */}
           <div style={cardStyle}>
+            <StepHeader
+              n={4} label="Conference logo" sub="The round mark beside your conference name."
+              complete={!!conference.logo_url} open={openConfSection === 4}
+              onClick={() => setOpenConfSection(openConfSection === 4 ? 0 : 4)}
+            />
+            {openConfSection === 4 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Logo</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Square, transparent PNG recommended. Shown on your public page, directory cards and search. Max 5MB.</p>
             <div className="flex items-center gap-5">
@@ -3553,10 +3898,20 @@ export default function SettingsPage() {
             {logoError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{logoError}</p>
             )}
+            </div>
+            )}
           </div>
 
           {/* Conference Details card */}
           <div style={cardStyle}>
+            <StepHeader
+              n={5} label="Conference details" sub="Name, dates, location and description."
+              complete={true} open={openConfSection === 5}
+              status={detailsSaving ? 'saving' : detailsSaved ? 'saved' : 'idle'}
+              onClick={() => setOpenConfSection(openConfSection === 5 ? 0 : 5)}
+            />
+            {openConfSection === 5 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>Conference Details</p>
             <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>Core information shown on your public conference page and directory listing.</p>
 
@@ -3785,6 +4140,8 @@ export default function SettingsPage() {
             {detailsError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{detailsError}</p>
             )}
+            </div>
+            )}
           </div>
 
           {/* ── What the selected role ranks. Only roles that can hold a
@@ -3793,6 +4150,13 @@ export default function SettingsPage() {
               version of it. ── */}
           {showPrefCard && (
             <div style={cardStyle}>
+              <StepHeader
+                n={6} label="Delegate or chair preferences" sub="What applicants get to rank."
+                complete={true} open={openConfSection === 6}
+                onClick={() => setOpenConfSection(openConfSection === 6 ? 0 : 6)}
+              />
+              {openConfSection === 6 && (
+              <div className="mt-5">
               <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
                 <Emoji3D name="Globe showing europe-africa" size={20} fallback={Globe} fallbackColor="#1B3828" />
                 {selectedRole === 'chair' ? 'Chair preferences' : 'Delegate preferences'}
@@ -3853,11 +4217,20 @@ export default function SettingsPage() {
               {prefModeError && (
                 <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{prefModeError}</p>
               )}
+              </div>
+              )}
             </div>
           )}
 
           {/* ── Swaps ── */}
           <div style={cardStyle}>
+            <StepHeader
+              n={7} label="Delegation allocation swaps" sub="Whether delegates may trade allocations."
+              complete={true} open={openConfSection === 7}
+              onClick={() => setOpenConfSection(openConfSection === 7 ? 0 : 7)}
+            />
+            {openConfSection === 7 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               <Emoji3D name="Counterclockwise arrows button" size={20} fallback={Users2} fallbackColor="#1B3828" />
               Delegation allocation swaps
@@ -3888,10 +4261,20 @@ export default function SettingsPage() {
             {swapModeError && (
               <p className="text-xs mt-2" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{swapModeError}</p>
             )}
+            </div>
+            )}
           </div>
 
           {/* ── Age range ── */}
           <div style={cardStyle}>
+            <StepHeader
+              n={8} label="Age of participants" sub="The age range this conference is open to."
+              complete={true} open={openConfSection === 8}
+              status={minAgeSaving ? 'saving' : minAgeSaved ? 'saved' : 'idle'}
+              onClick={() => setOpenConfSection(openConfSection === 8 ? 0 : 8)}
+            />
+            {openConfSection === 8 && (
+            <div className="mt-5">
             <p className="font-semibold text-base mb-1 flex items-center gap-2" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
               <Emoji3D name="Birthday cake" size={20} />
               Age of participants
@@ -3954,8 +4337,447 @@ export default function SettingsPage() {
                     : `Applicants must be no older than ${view.max_age} at the start of your conference.`}
               </p>
             )}
+            </div>
+            )}
           </div>
 
+
+          {/* Section 9: Partners and sponsors. Moved here from the Privacy
+              tab: partners are conference identity, not a privacy setting. */}
+          <div style={cardStyle}>
+            <StepHeader
+              n={9} label="Partners and sponsors" sub="Other conferences and companies shown on your page."
+              complete={true} open={openConfSection === 9}
+              onClick={() => setOpenConfSection(openConfSection === 9 ? 0 : 9)}
+            />
+            {openConfSection === 9 && (
+            <div className="mt-5">
+        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+          Partners
+        </p>
+        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+          Showcase partner conferences and sponsoring companies on your public page. A conference link only appears
+          once that conference&apos;s team approves it; a company you add yourself appears straight away.
+        </p>
+
+        {/* Kind chooser. Asked first because the two flows share nothing: one
+            searches Gavelling for a conference to link, the other takes a name,
+            a logo and a description typed here. */}
+        <div className="flex flex-wrap gap-2 mb-5">
+          {([
+            { key: 'conference' as const, label: 'CONFERENCE', icon: Building2, hint: 'Link another Gavelling conference' },
+            { key: 'company' as const, label: 'COMPANY', icon: Briefcase, hint: 'Add a sponsor or partner organisation' },
+          ]).map(({ key, label, icon: KindIcon, hint }) => {
+            const active = partnerKind === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                title={hint}
+                onClick={() => {
+                  // Re-clicking the open kind closes it, so the card can go
+                  // back to being just the list of partners.
+                  setPartnerKind(active ? null : key);
+                  setPartnerError('');
+                  setPartnerQuery('');
+                  setPartnerResults([]);
+                }}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
+                style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  backgroundColor: active ? '#1B3828' : 'transparent',
+                  color: active ? '#EED98A' : '#6E5F4E',
+                  border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
+                  cursor: 'pointer',
+                }}
+              >
+                <KindIcon size={13} strokeWidth={2.4} style={{ color: active ? '#EED98A' : '#B6871F' }} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Company form */}
+        {partnerKind === 'company' && (
+          <div
+            className="mb-6 rounded-xl p-4"
+            style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <PartnerDisc logoUrl={companyLogoUrl} acronym={companyName || '?'} size={44} />
+              <div className="flex-1 min-w-0">
+                <label
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold"
+                  style={{
+                    fontFamily: "'Outfit', sans-serif",
+                    letterSpacing: '0.06em',
+                    color: '#1B3828',
+                    border: '1.5px solid #DDD4C0',
+                    backgroundColor: '#FFFDF9',
+                    cursor: companyLogoUploading ? 'default' : 'pointer',
+                    opacity: companyLogoUploading ? 0.6 : 1,
+                  }}
+                >
+                  {companyLogoUploading ? 'UPLOADING…' : companyLogoUrl ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={companyLogoUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      // Clear the input so picking the same file twice still
+                      // fires a change event (a retry after a failed upload).
+                      e.target.value = '';
+                      if (file) void handleCompanyLogoUpload(file);
+                    }}
+                  />
+                </label>
+                <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                  PNG or JPG, under 5MB. Optional.
+                </p>
+              </div>
+            </div>
+
+            <input
+              type="text"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Company name"
+              maxLength={120}
+              style={{ ...inputStyle, marginBottom: '10px' }}
+              onFocus={fgInput}
+              onBlur={bgInput}
+            />
+            <textarea
+              value={companyDescription}
+              onChange={(e) => setCompanyDescription(e.target.value)}
+              placeholder="What do they do, and how are they involved? Shown when a visitor opens this partner."
+              rows={3}
+              maxLength={600}
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
+            />
+
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => void handleAddCompanyPartner()}
+                disabled={companySaving || companyLogoUploading || !companyName.trim()}
+                className="rounded-lg py-2 px-4 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                style={{
+                  backgroundColor: companySaving || !companyName.trim() ? '#DDD4C0' : '#1B3828',
+                  color: companySaving || !companyName.trim() ? '#9A8A78' : '#EED98A',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  border: 'none',
+                  cursor: companySaving || !companyName.trim() ? 'default' : 'pointer',
+                }}
+              >
+                {companySaving ? 'ADDING…' : 'ADD PARTNER'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { resetCompanyDraft(); setPartnerKind(null); setPartnerError(''); }}
+                disabled={companySaving}
+                className="rounded-lg py-2 px-3 font-bold text-[11px] focus:outline-none transition-colors"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: '#9A8A78',
+                  border: 'none',
+                  fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.08em',
+                  cursor: companySaving ? 'default' : 'pointer',
+                }}
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Typeahead add */}
+        {partnerKind === 'conference' && (
+        <div className="relative mb-6">
+          <input
+            type="text"
+            value={partnerQuery}
+            onChange={(e) => setPartnerQuery(e.target.value)}
+            placeholder="Search public conferences by acronym or name"
+            style={inputStyle}
+            onFocus={fgInput}
+            onBlur={bgInput}
+          />
+          {partnerResults.length > 0 && (
+            <div
+              className="absolute left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden"
+              style={{ backgroundColor: '#FFFDF9', border: '1.5px solid #DDD4C0', boxShadow: '0 12px 32px rgba(27,56,40,0.14)' }}
+            >
+              {partnerResults.map((c, idx) => (
+                <button
+                  key={c.id}
+                  onClick={() => handleAddPartner(c)}
+                  disabled={partnerBusy === c.id}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left focus:outline-none transition-colors"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderTop: idx === 0 ? 'none' : '1px solid #F0EDE6',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                >
+                  <PartnerDisc logoUrl={c.logo_url} acronym={c.acronym} size={32} />
+                  <span className="min-w-0">
+                    <span className="block font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                      {c.acronym}
+                    </span>
+                    <span className="block text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                      {[c.city, c.country].filter(Boolean).join(', ') || c.full_name}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        )}
+
+        {/* Linked partners */}
+        <p
+          className="text-xs font-bold mb-2"
+          style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+        >
+          Linked partners
+        </p>
+        {partners.length === 0 ? (
+          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+            No partners added yet.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {partners.map((link, idx) => {
+              const isLast = idx === partners.length - 1;
+              const conf = link.conf;
+              const isCompany = link.partner_conference_id === null;
+              const year = conf?.start_date ? new Date(conf.start_date + 'T00:00:00').getFullYear() : null;
+              // Second line: where the conference is, or what the company
+              // does. Companies have no city and conferences no description,
+              // so the two never compete for the row.
+              const subLine = isCompany
+                ? (link.company_description ?? '')
+                : (conf ? [conf.city, conf.country].filter(Boolean).join(', ') : '');
+              return (
+                <div
+                  key={link.id}
+                  className="py-3"
+                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
+                >
+                <div className="flex items-center gap-3">
+                  <PartnerDisc
+                    logoUrl={isCompany ? link.company_logo_url : (conf?.logo_url ?? null)}
+                    acronym={partnerLabel(link)}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="truncate"
+                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
+                    </p>
+                    {subLine && (
+                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        {subLine}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Featured only makes sense for a company: a linked
+                      conference's logo and page belong to the other team. */}
+                  {isCompany && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFeatured(link)}
+                      disabled={partnerBusy === link.id}
+                      title="Feature this partner"
+                      aria-label="Feature this partner"
+                      aria-pressed={link.featured}
+                      className="flex-shrink-0 focus:outline-none"
+                      style={{ background: 'transparent', border: 'none', padding: 2, lineHeight: 0, color: '#B6871F', cursor: partnerBusy === link.id ? 'default' : 'pointer', opacity: partnerBusy === link.id ? 0.4 : 1 }}
+                    >
+                      <Star size={16} strokeWidth={2.2} fill={link.featured ? '#B6871F' : 'none'} />
+                    </button>
+                  )}
+
+                  {/* A company has no counterparty team, so "pending approval"
+                      would be a lie — it is live the moment it is added. */}
+                  <span
+                    className="flex-shrink-0 rounded-full px-2.5 py-1 font-bold"
+                    style={{
+                      fontSize: '10px',
+                      letterSpacing: '0.08em',
+                      fontFamily: "'Outfit', sans-serif",
+                      backgroundColor: isCompany
+                        ? 'rgba(182,135,31,0.14)'
+                        : link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
+                      color: isCompany ? '#8A6614' : link.approved ? '#2A5A3C' : '#8A6614',
+                    }}
+                  >
+                    {isCompany ? 'COMPANY' : link.approved ? 'APPROVED' : 'PENDING APPROVAL'}
+                  </span>
+
+                  <div className="flex items-center flex-shrink-0">
+                    <button
+                      onClick={() => handleMovePartner(idx, -1)}
+                      disabled={idx === 0}
+                      aria-label="Move partner up"
+                      className="text-xs focus:outline-none px-1 transition-colors"
+                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+                      onMouseEnter={(e) => { if (idx !== 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      onClick={() => handleMovePartner(idx, 1)}
+                      disabled={idx === partners.length - 1}
+                      aria-label="Move partner down"
+                      className="text-xs focus:outline-none px-1 transition-colors"
+                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
+                      onMouseEnter={(e) => { if (idx !== partners.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
+                    >
+                      ▼
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => handleRemovePartner(link)}
+                    disabled={partnerBusy === link.id}
+                    aria-label={`Remove ${partnerLabel(link)}`}
+                    className="text-sm font-semibold focus:outline-none flex-shrink-0 px-1 transition-colors"
+                    style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: 'pointer', opacity: partnerBusy === link.id ? 0.4 : 1 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {isCompany && (
+                  <div className="mt-2" style={{ paddingLeft: '52px' }}>
+                    <label className="block text-[10px] font-bold mb-1" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                      Website
+                    </label>
+                    <input
+                      type="text"
+                      value={link.company_url ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setPartners(prev => prev.map(p => (p.id === link.id ? { ...p, company_url: v } : p)));
+                        if (partnerUrlWarnings[link.id]) setPartnerUrlWarnings(prev => ({ ...prev, [link.id]: false }));
+                      }}
+                      onBlur={() => handleCompanyUrlBlur(link)}
+                      placeholder="https://"
+                      style={{ ...inputStyle, padding: '6px 10px', fontSize: '12px', maxWidth: 320 }}
+                      onFocus={fgInput}
+                    />
+                    {partnerUrlWarnings[link.id] && (
+                      <p className="text-[10.5px] mt-1" style={{ color: '#B8844A', fontFamily: "'Outfit', sans-serif" }}>
+                        Links must start with https:// to be secure.
+                      </p>
+                    )}
+                  </div>
+                )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Incoming partner requests */}
+        {incomingPartnerClaims.length > 0 && (
+          <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
+            <p
+              className="text-xs font-bold mb-2"
+              style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+            >
+              Incoming partner requests
+            </p>
+            <div className="flex flex-col">
+              {incomingPartnerClaims.map((claim, idx) => {
+                const isLast = idx === incomingPartnerClaims.length - 1;
+                const year = claim.requester_start_date ? new Date(claim.requester_start_date + 'T00:00:00').getFullYear() : null;
+                const cityLine = [claim.requester_city, claim.requester_country].filter(Boolean).join(', ');
+                const busy = partnerBusy === claim.link_id;
+                return (
+                  <div
+                    key={claim.link_id}
+                    className="flex items-center gap-3 py-3"
+                    style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
+                  >
+                    <PartnerDisc logoUrl={claim.requester_logo_url} acronym={claim.requester_acronym} />
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
+                        {claim.requester_acronym}{year ? ' · ' + year : ''}
+                      </p>
+                      <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
+                        {claim.requester_full_name}
+                      </p>
+                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
+                        {cityLine ? cityLine + ', ' : ''}wants to list {view.acronym} as a partner conference
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handlePartnerClaimDecision(claim.link_id, true)}
+                        disabled={busy}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                        style={{
+                          backgroundColor: busy ? '#DDD4C0' : '#1B3828',
+                          color: busy ? '#9A8A78' : '#EED98A',
+                          fontFamily: "'Outfit', sans-serif",
+                          letterSpacing: '0.06em',
+                        }}
+                        onMouseEnter={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
+                        onMouseLeave={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
+                      >
+                        APPROVE
+                      </button>
+                      <button
+                        onClick={() => handlePartnerClaimDecision(claim.link_id, false)}
+                        disabled={busy}
+                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: '#8B2020',
+                          border: '1px solid rgba(139,32,32,0.3)',
+                          fontFamily: "'Outfit', sans-serif",
+                          letterSpacing: '0.06em',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                      >
+                        DECLINE
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {partnerError && (
+          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+            {partnerError}
+          </p>
+        )}
+            </div>
+            )}
+          </div>
 
           {/* Description + socials card */}
           <div style={cardStyle}>
@@ -4843,387 +5665,8 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* ── Partners card ── */}
-      <div style={cardStyle}>
-        <p className="font-semibold text-base mb-1" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-          Partners
-        </p>
-        <p className="text-sm mb-5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-          Showcase partner conferences and sponsoring companies on your public page. A conference link only appears
-          once that conference&apos;s team approves it; a company you add yourself appears straight away.
-        </p>
-
-        {/* Kind chooser. Asked first because the two flows share nothing: one
-            searches Gavelling for a conference to link, the other takes a name,
-            a logo and a description typed here. */}
-        <div className="flex flex-wrap gap-2 mb-5">
-          {([
-            { key: 'conference' as const, label: 'CONFERENCE', icon: Building2, hint: 'Link another Gavelling conference' },
-            { key: 'company' as const, label: 'COMPANY', icon: Briefcase, hint: 'Add a sponsor or partner organisation' },
-          ]).map(({ key, label, icon: KindIcon, hint }) => {
-            const active = partnerKind === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                title={hint}
-                onClick={() => {
-                  // Re-clicking the open kind closes it, so the card can go
-                  // back to being just the list of partners.
-                  setPartnerKind(active ? null : key);
-                  setPartnerError('');
-                  setPartnerQuery('');
-                  setPartnerResults([]);
-                }}
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-bold focus:outline-none transition-colors gv-lift"
-                style={{
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.08em',
-                  backgroundColor: active ? '#1B3828' : 'transparent',
-                  color: active ? '#EED98A' : '#6E5F4E',
-                  border: active ? '1.5px solid #1B3828' : '1.5px solid #DDD4C0',
-                  cursor: 'pointer',
-                }}
-              >
-                <KindIcon size={13} strokeWidth={2.4} style={{ color: active ? '#EED98A' : '#B6871F' }} />
-                {label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Company form */}
-        {partnerKind === 'company' && (
-          <div
-            className="mb-6 rounded-xl p-4"
-            style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0' }}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <PartnerDisc logoUrl={companyLogoUrl} acronym={companyName || '?'} size={44} />
-              <div className="flex-1 min-w-0">
-                <label
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold"
-                  style={{
-                    fontFamily: "'Outfit', sans-serif",
-                    letterSpacing: '0.06em',
-                    color: '#1B3828',
-                    border: '1.5px solid #DDD4C0',
-                    backgroundColor: '#FFFDF9',
-                    cursor: companyLogoUploading ? 'default' : 'pointer',
-                    opacity: companyLogoUploading ? 0.6 : 1,
-                  }}
-                >
-                  {companyLogoUploading ? 'UPLOADING…' : companyLogoUrl ? 'REPLACE LOGO' : 'UPLOAD LOGO'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={companyLogoUploading}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      // Clear the input so picking the same file twice still
-                      // fires a change event (a retry after a failed upload).
-                      e.target.value = '';
-                      if (file) void handleCompanyLogoUpload(file);
-                    }}
-                  />
-                </label>
-                <p className="text-xs mt-1.5" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                  PNG or JPG, under 5MB. Optional.
-                </p>
-              </div>
-            </div>
-
-            <input
-              type="text"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Company name"
-              maxLength={120}
-              style={{ ...inputStyle, marginBottom: '10px' }}
-              onFocus={fgInput}
-              onBlur={bgInput}
-            />
-            <textarea
-              value={companyDescription}
-              onChange={(e) => setCompanyDescription(e.target.value)}
-              placeholder="What do they do, and how are they involved? Shown when a visitor opens this partner."
-              rows={3}
-              maxLength={600}
-              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#1B3828'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#DDD4C0'; }}
-            />
-
-            <div className="flex items-center gap-2 mt-3">
-              <button
-                type="button"
-                onClick={() => void handleAddCompanyPartner()}
-                disabled={companySaving || companyLogoUploading || !companyName.trim()}
-                className="rounded-lg py-2 px-4 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                style={{
-                  backgroundColor: companySaving || !companyName.trim() ? '#DDD4C0' : '#1B3828',
-                  color: companySaving || !companyName.trim() ? '#9A8A78' : '#EED98A',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.08em',
-                  border: 'none',
-                  cursor: companySaving || !companyName.trim() ? 'default' : 'pointer',
-                }}
-              >
-                {companySaving ? 'ADDING…' : 'ADD PARTNER'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { resetCompanyDraft(); setPartnerKind(null); setPartnerError(''); }}
-                disabled={companySaving}
-                className="rounded-lg py-2 px-3 font-bold text-[11px] focus:outline-none transition-colors"
-                style={{
-                  backgroundColor: 'transparent',
-                  color: '#9A8A78',
-                  border: 'none',
-                  fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.08em',
-                  cursor: companySaving ? 'default' : 'pointer',
-                }}
-              >
-                CANCEL
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Typeahead add */}
-        {partnerKind === 'conference' && (
-        <div className="relative mb-6">
-          <input
-            type="text"
-            value={partnerQuery}
-            onChange={(e) => setPartnerQuery(e.target.value)}
-            placeholder="Search public conferences by acronym or name"
-            style={inputStyle}
-            onFocus={fgInput}
-            onBlur={bgInput}
-          />
-          {partnerResults.length > 0 && (
-            <div
-              className="absolute left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden"
-              style={{ backgroundColor: '#FFFDF9', border: '1.5px solid #DDD4C0', boxShadow: '0 12px 32px rgba(27,56,40,0.14)' }}
-            >
-              {partnerResults.map((c, idx) => (
-                <button
-                  key={c.id}
-                  onClick={() => handleAddPartner(c)}
-                  disabled={partnerBusy === c.id}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left focus:outline-none transition-colors"
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    borderTop: idx === 0 ? 'none' : '1px solid #F0EDE6',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.05)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                >
-                  <PartnerDisc logoUrl={c.logo_url} acronym={c.acronym} size={32} />
-                  <span className="min-w-0">
-                    <span className="block font-bold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                      {c.acronym}
-                    </span>
-                    <span className="block text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                      {[c.city, c.country].filter(Boolean).join(', ') || c.full_name}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        )}
-
-        {/* Linked partners */}
-        <p
-          className="text-xs font-bold mb-2"
-          style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
-        >
-          Linked partners
-        </p>
-        {partners.length === 0 ? (
-          <p className="text-sm" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-            No partners added yet.
-          </p>
-        ) : (
-          <div className="flex flex-col">
-            {partners.map((link, idx) => {
-              const isLast = idx === partners.length - 1;
-              const conf = link.conf;
-              const isCompany = link.partner_conference_id === null;
-              const year = conf?.start_date ? new Date(conf.start_date + 'T00:00:00').getFullYear() : null;
-              // Second line: where the conference is, or what the company
-              // does. Companies have no city and conferences no description,
-              // so the two never compete for the row.
-              const subLine = isCompany
-                ? (link.company_description ?? '')
-                : (conf ? [conf.city, conf.country].filter(Boolean).join(', ') : '');
-              return (
-                <div
-                  key={link.id}
-                  className="flex items-center gap-3 py-3"
-                  style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
-                >
-                  <PartnerDisc
-                    logoUrl={isCompany ? link.company_logo_url : (conf?.logo_url ?? null)}
-                    acronym={partnerLabel(link)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className="truncate"
-                      style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '14px', fontVariantNumeric: 'tabular-nums' }}
-                    >
-                      {partnerLabel(link)}{!isCompany && year ? ` ${year}` : ''}
-                    </p>
-                    {subLine && (
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        {subLine}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* A company has no counterparty team, so "pending approval"
-                      would be a lie — it is live the moment it is added. */}
-                  <span
-                    className="flex-shrink-0 rounded-full px-2.5 py-1 font-bold"
-                    style={{
-                      fontSize: '10px',
-                      letterSpacing: '0.08em',
-                      fontFamily: "'Outfit', sans-serif",
-                      backgroundColor: isCompany
-                        ? 'rgba(182,135,31,0.14)'
-                        : link.approved ? 'rgba(61,122,82,0.13)' : 'rgba(238,217,138,0.35)',
-                      color: isCompany ? '#8A6614' : link.approved ? '#2A5A3C' : '#8A6614',
-                    }}
-                  >
-                    {isCompany ? 'COMPANY' : link.approved ? 'APPROVED' : 'PENDING APPROVAL'}
-                  </span>
-
-                  <div className="flex items-center flex-shrink-0">
-                    <button
-                      onClick={() => handleMovePartner(idx, -1)}
-                      disabled={idx === 0}
-                      aria-label="Move partner up"
-                      className="text-xs focus:outline-none px-1 transition-colors"
-                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
-                      onMouseEnter={(e) => { if (idx !== 0) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => handleMovePartner(idx, 1)}
-                      disabled={idx === partners.length - 1}
-                      aria-label="Move partner down"
-                      className="text-xs focus:outline-none px-1 transition-colors"
-                      style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: idx === partners.length - 1 ? 'default' : 'pointer', opacity: idx === partners.length - 1 ? 0.3 : 1 }}
-                      onMouseEnter={(e) => { if (idx !== partners.length - 1) (e.currentTarget as HTMLElement).style.color = '#1B3828'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#9A8A78'; }}
-                    >
-                      ▼
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => handleRemovePartner(link)}
-                    disabled={partnerBusy === link.id}
-                    aria-label={`Remove ${partnerLabel(link)}`}
-                    className="text-sm font-semibold focus:outline-none flex-shrink-0 px-1 transition-colors"
-                    style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif", background: 'transparent', border: 'none', cursor: 'pointer', opacity: partnerBusy === link.id ? 0.4 : 1 }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Incoming partner requests */}
-        {incomingPartnerClaims.length > 0 && (
-          <div className="mt-6 pt-6" style={{ borderTop: '1px solid #F0EDE6' }}>
-            <p
-              className="text-xs font-bold mb-2"
-              style={{ color: '#6E5F4E', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
-            >
-              Incoming partner requests
-            </p>
-            <div className="flex flex-col">
-              {incomingPartnerClaims.map((claim, idx) => {
-                const isLast = idx === incomingPartnerClaims.length - 1;
-                const year = claim.requester_start_date ? new Date(claim.requester_start_date + 'T00:00:00').getFullYear() : null;
-                const cityLine = [claim.requester_city, claim.requester_country].filter(Boolean).join(', ');
-                const busy = partnerBusy === claim.link_id;
-                return (
-                  <div
-                    key={claim.link_id}
-                    className="flex items-center gap-3 py-3"
-                    style={{ borderBottom: isLast ? 'none' : '1px solid #F0EDE6' }}
-                  >
-                    <PartnerDisc logoUrl={claim.requester_logo_url} acronym={claim.requester_acronym} />
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 10, color: '#B6871F', fontFamily: "'Outfit', sans-serif", fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums' }}>
-                        {claim.requester_acronym}{year ? ' · ' + year : ''}
-                      </p>
-                      <p className="font-semibold text-sm truncate" style={{ color: '#1C1410', fontFamily: "'Outfit', sans-serif" }}>
-                        {claim.requester_full_name}
-                      </p>
-                      <p className="text-xs truncate" style={{ color: '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
-                        {cityLine ? cityLine + ', ' : ''}wants to list {view.acronym} as a partner conference
-                      </p>
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => handlePartnerClaimDecision(claim.link_id, true)}
-                        disabled={busy}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: busy ? '#DDD4C0' : '#1B3828',
-                          color: busy ? '#9A8A78' : '#EED98A',
-                          fontFamily: "'Outfit', sans-serif",
-                          letterSpacing: '0.06em',
-                        }}
-                        onMouseEnter={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-                        onMouseLeave={(e) => { if (!busy) (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}
-                      >
-                        APPROVE
-                      </button>
-                      <button
-                        onClick={() => handlePartnerClaimDecision(claim.link_id, false)}
-                        disabled={busy}
-                        className="rounded-lg py-1.5 px-3 font-bold text-[11px] focus:outline-none transition-colors gv-lift"
-                        style={{
-                          backgroundColor: 'transparent',
-                          color: '#8B2020',
-                          border: '1px solid rgba(139,32,32,0.3)',
-                          fontFamily: "'Outfit', sans-serif",
-                          letterSpacing: '0.06em',
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(139,32,32,0.05)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        DECLINE
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {partnerError && (
-          <p className="text-xs mt-3" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-            {partnerError}
-          </p>
-        )}
-      </div>
+      {/* Partners moved to the Conference tab (Section 9): partners are
+          conference identity, not a privacy setting. */}
 
       {/* Data import moved to the sidebar nav (Manage → Import); the launch
           card that used to sit here has been removed. The import page itself
@@ -5964,10 +6407,13 @@ export default function SettingsPage() {
         );
       })()}
 
-      {/* Awards lives in its own module (settings/awardsUi.tsx): categories,
-          quotas, points, ratification and the chair deadline, all autosaved
-          into conferences.awards_config. */}
-      {activeTab === 'awards' && <AwardsSettings conference={conference} />}
+      {/* Awards: holding screen while the feature is finished. The real UI
+          (categories, quotas, points, ratification, chair deadline, all
+          autosaved into conferences.awards_config) is still on disk in
+          settings/awardsUi.tsx. To re-enable it, change the import at the top
+          of this file back to `import { AwardsSettings } from './awardsUi'`
+          and render `<AwardsSettings conference={conference} />` here. */}
+      {activeTab === 'awards' && <AwardsComingSoon />}
 
       {confirmModal}
     </div>

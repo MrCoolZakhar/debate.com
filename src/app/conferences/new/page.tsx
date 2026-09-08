@@ -5,8 +5,7 @@
  *
  * One question per screen, built on the shared wizard kit
  * (src/components/wizard.tsx). The submit logic writes exactly the same
- * columns as the old two-step form, asks one last question once the row is
- * real (INTENT_STEP), and redirects to /manage/{slug}.
+ * columns as the old two-step form and redirects to /manage/{slug}.
  * Description, socials and banner are collected in their own skippable steps;
  * the remaining optional fields (visibility, previous editions) are deferred
  * to Settings after creation.
@@ -16,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, X, ClipboardList, CreditCard, Building2, Megaphone, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Mail, Pencil, Upload, Check, ImagePlus, Camera, ThumbsUp, Music2, MessageCircle, Globe, Plus, X, ClipboardList, CreditCard, Building2, Megaphone, Trash2, type LucideIcon } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import Loader from '@/components/Loader';
 import { useAuth } from '@/components/AuthProvider';
@@ -29,13 +28,20 @@ import { NEU, NEU_GRADIENTS, OUTFIT, EASE, NeuButton, NeuInset, Emoji3D } from '
 import { DatePicker } from '@/components/DatePicker';
 import { LogoCropModal } from '@/components/LogoCropModal';
 import { uploadConferenceAsset } from '@/lib/conferenceAssets';
-import { currencyPickerGroups } from '@/lib/currencies';
+import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { normalizeSocialUrl } from '@/lib/socialLinks';
 import { acronymProblem } from '@/lib/conferenceLabels';
 import { committeeDisplayName, deriveCommitteeAcronym, matchPresetEmblem } from '@/lib/presetNames';
 import { INTENT_OPTIONS, intentPayload } from '@/lib/conferenceIntent';
+// Pure presentation from the committee editor (the medallion fallback and the
+// canonical type labels) and the account pages' rank insignia, so a committee
+// card here draws exactly what /manage/[slug]/committees draws. Nothing
+// imported from these touches the database.
+import {
+  MonogramMedallion, medallionTone, COMMITTEE_TYPE_LABEL, type CommitteeType,
+} from '@/components/CommitteeEditorModal';
+import { LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
 
-const CURRENCY_GROUPS = currencyPickerGroups();
 
 // Mirrors settings' ensureRoleConfigs default set (source of truth there) —
 // seeded here too so a freshly created conference already has per-role fee
@@ -44,36 +50,38 @@ const ROLE_DEFAULTS = ['delegate', 'chair', 'head-delegate', 'faculty-advisor', 
 
 // ── Step model ─────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 12;
+const TOTAL_STEPS = 13;
 const REVIEW_STEP = TOTAL_STEPS;
-// 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates (skippable)
+// 1 name+acronym · 2 format · 3 level · 4 where · 5 when · 6 delegates (REQUIRED)
 // · 7 committees (REQUIRED) · 8 fee · 9 logo (skippable) · 10 banner (skippable)
-// · 11 description + socials (skippable) · 12 review. Every skippable step's
-// "Do this later" leaves it exactly as editable from Settings afterwards as it
-// already was.
+// · 11 description + socials (skippable) · 12 what they will use Gavelling for
+// (REQUIRED) · 13 review. Every skippable step's "Do this later" leaves it
+// exactly as editable from Settings afterwards as it already was.
 //
 // WHY COMMITTEES SIT AT 7. A conference with no committees cannot receive a
 // meaningful application, and the wizard used to let organisers leave without
 // one: 76 of 169 conferences never added a single committee, and the setup
 // checklist's committee item is the first and biggest funnel cliff (169 → 83).
-// So the step is REQUIRED — it is the only non-skippable answer after step 5.
-// It goes here, straight after the head count, because "how many delegates"
-// and "which rooms do they sit in" are one thought, and because everything
-// from 9 on is presentation and skippable: a mandatory step must not land
-// AFTER a run of skippable ones, where the organiser has already built up
-// "skip everything" momentum. Seats and countries are deliberately NOT asked
-// here — they belong to the full editor at /manage/[slug]/committees, and the
-// step says so.
+// So the step is REQUIRED. It goes here, straight after the head count, because
+// "how many delegates" and "which rooms do they sit in" are one thought, and
+// because everything from 9 to 11 is presentation and skippable: a mandatory
+// step must not land AFTER a run of skippable ones, where the organiser has
+// already built up "skip everything" momentum. Seats and countries are
+// deliberately NOT asked here — they belong to the full editor at
+// /manage/[slug]/committees, and the step says so.
 
-// "What will you use Gavelling for?", asked ONCE and deliberately NOT counted
-// as a wizard step (hence TOTAL_STEPS + 1, and a rail that reads 12 of 12).
+// STEP 12, "What will you use Gavelling for?", is asked BEFORE the insert and
+// is REQUIRED.
 //
-// It is asked AFTER the conferences row exists, not before: the organiser has
-// already got the thing they came for, so the question cannot add a single
-// second of friction in front of the CREATE CONFERENCE button, and a failed or
-// slow write costs them nothing. Continue and "Do this later" both land on the
-// dashboard, always — see finishIntent.
-const INTENT_STEP = TOTAL_STEPS + 1;
+// It used to be a bonus screen shown after the row was already real, recorded
+// by a follow-up UPDATE that raced a timeout. Now the answer travels inside the
+// insert itself (`intent: intentPayload(intentKeys)`), so there is no second
+// write to fail, nothing to time out, and no way to reach the dashboard with an
+// unanswered `intent`. It sits last before the review because it is the one
+// question about the organiser rather than about the conference. That does put
+// it after the three skippable steps, which the note above warns against — but
+// that warning is about a step an organiser can walk PAST. This one has no skip
+// link and a disabled Continue, so there is no momentum to carry them over it.
 
 // Lucide stand-in per intent option, handed to Emoji3D so a card can never be
 // left with an empty icon well when a Fluent asset does not resolve. The case
@@ -116,26 +124,40 @@ const DELEGATE_RANGES = [
 // emblem from matchPresetEmblem, the same resolver the full committee editor
 // auto-assigns with. Nothing is duplicated here, so a preset that gains a
 // better acronym or emblem upstream gains it here too.
-const QUICK_COMMITTEES: string[] = [
-  'UN Security Council',
-  'UN General Assembly',
-  'Disarmament and International Security Committee',
-  'Social, Humanitarian and Cultural Committee',
-  'Economic and Social Council',
-  'UN Human Rights Council',
-  'World Health Organization',
-  'Crisis Committee',
+const QUICK_COMMITTEES: { name: string; type: CommitteeType }[] = [
+  { name: 'UN Security Council', type: 'specialised' },
+  { name: 'UN General Assembly', type: 'general-assembly' },
+  { name: 'Disarmament and International Security Committee', type: 'general-assembly' },
+  { name: 'Social, Humanitarian and Cultural Committee', type: 'general-assembly' },
+  { name: 'Economic and Social Council', type: 'specialised' },
+  { name: 'UN Human Rights Council', type: 'specialised' },
+  { name: 'World Health Organization', type: 'specialised' },
+  { name: 'Crisis Committee', type: 'crisis' },
 ];
 
-/** A committee as collected by the wizard — name plus an optional acronym, and
- *  nothing else. Countries, seats, topics and difficulty are the full editor's
- *  job at /manage/[slug]/committees. */
+const DIFFICULTIES = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
+type Difficulty = (typeof DIFFICULTIES)[number];
+
+// Declared in the order the full committee editor offers them, rather than read
+// off COMMITTEE_TYPE_LABEL's key order, so the pills cannot silently reshuffle.
+const COMMITTEE_TYPES: CommitteeType[] = ['general-assembly', 'specialised', 'crisis', 'custom'];
+
+/** A committee as collected by the wizard: the four things the organiser's own
+ *  committees page shows on a card, and nothing else. Countries, seats, topics
+ *  and chairs are the full editor's job at /manage/[slug]/committees.
+ *
+ *  EVERY field here is persisted by handleCreate's conference_committees
+ *  insert. If you add one, add it there too. */
 interface DraftCommittee {
   /** Local list key only. The DB mints the real id. */
   key: string;
   name: string;
   /** '' when the organiser gave none and none could be derived. */
   abbreviation: string;
+  /** conference_committees.committee_type. */
+  type: CommitteeType;
+  /** conference_committees.difficulty. */
+  difficulty: Difficulty;
 }
 
 /** Case/space-insensitive identity, so "unsc " and "UNSC" are one committee. */
@@ -143,12 +165,19 @@ function committeeKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function makeDraftCommittee(name: string, abbreviation?: string): DraftCommittee {
+function makeDraftCommittee(
+  name: string,
+  abbreviation?: string,
+  type: CommitteeType = 'general-assembly',
+  difficulty: Difficulty = 'intermediate',
+): DraftCommittee {
   const trimmed = name.trim();
   return {
     key: crypto.randomUUID(),
     name: trimmed,
     abbreviation: (abbreviation ?? '').trim() || deriveCommitteeAcronym(trimmed),
+    type,
+    difficulty,
   };
 }
 
@@ -249,74 +278,328 @@ function SkipLink({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-/** One committee already on the list (step 7). Shows the emblem the full editor
- *  would auto-assign, the AGENTS.md UI-rule label (acronym big, full name small
- *  beneath when they differ), and a remove control. */
-function DraftCommitteeRow({ committee, onRemove }: { committee: DraftCommittee; onRemove: () => void }) {
-  const [hovered, setHovered] = useState(false);
+/** The committee's picture, exactly what /manage/[slug]/committees draws: the
+ *  emblem matchPresetEmblem resolves from the name, and the gradient monogram
+ *  medallion when there is none. */
+function CommitteeEmblem({ committee, size }: { committee: DraftCommittee; size: number }) {
   const emblem = matchPresetEmblem(committee.name, committee.abbreviation);
-  const primary = committeeDisplayName(committee.name, committee.abbreviation);
-  const secondary = primary !== committee.name ? committee.name : null;
+  if (emblem) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={emblem}
+        alt=""
+        style={{
+          width: size, height: size, objectFit: 'contain', flexShrink: 0,
+          filter: 'drop-shadow(0 6px 12px color-mix(in srgb, var(--gv-main) 24%, transparent))',
+        }}
+      />
+    );
+  }
   return (
-    <div
-      className="flex items-center gap-3"
+    <MonogramMedallion
+      text={committee.abbreviation || committee.name}
+      tone={medallionTone(committee.type)}
+      size={size}
+    />
+  );
+}
+
+/** The rank insignia with its level named underneath, the corner stamp from the
+ *  organiser's committee card. */
+function DifficultyStamp({ level }: { level: Difficulty }) {
+  const accent = LEVEL_ACCENT[level] ?? NEU.muted;
+  return (
+    <span className="inline-flex flex-col items-center flex-shrink-0" style={{ gap: 4 }}>
+      <span
+        className="inline-flex items-center justify-center flex-shrink-0"
+        style={{
+          width: 30, height: 30, borderRadius: 9999,
+          background: `linear-gradient(150deg, ${accent}26, ${accent}12)`,
+          border: `1px solid ${accent}55`,
+        }}
+      >
+        <LevelInsignia level={level} size={21} />
+      </span>
+      <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: NEU.ink, lineHeight: '13px' }}>
+        {level.charAt(0).toUpperCase() + level.slice(1)}
+      </span>
+    </span>
+  );
+}
+
+/** One committee on the wizard's list (step 7), drawn as the card an organiser
+ *  will see on /manage/[slug]/committees once the conference exists: difficulty
+ *  stamp in the corner, emblem, acronym eyebrow, full name, type. Edit and
+ *  remove sit in the footer. */
+function DraftCommitteeCard({
+  committee, onEdit, onRemove,
+}: { committee: DraftCommittee; onEdit: () => void; onRemove: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  const [removeHover, setRemoveHover] = useState(false);
+  const [editHover, setEditHover] = useState(false);
+  return (
+    <article
+      className="flex flex-col"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '11px 12px 11px 14px',
-        borderRadius: 14,
         backgroundColor: NEU.surface,
-        boxShadow: NEU.outSm,
+        borderRadius: 22,
+        boxShadow: hovered ? NEU.outHover : NEU.out,
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: `transform 300ms ${EASE}, box-shadow 300ms ${EASE}`,
       }}
     >
-      <span
-        aria-hidden
-        className="flex items-center justify-center flex-shrink-0"
-        style={{
-          width: 34, height: 34, borderRadius: 999,
-          backgroundColor: NEU.base, boxShadow: NEU.inSm, overflow: 'hidden',
-        }}
-      >
-        {emblem ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={emblem} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
-        ) : (
-          <Emoji3D name="Classical building" size={20} />
-        )}
-      </span>
-      <span className="flex-1 min-w-0">
-        <span
-          className="block truncate"
-          style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 700, color: NEU.ink }}
-        >
-          {primary}
-        </span>
-        {secondary && (
-          <span
-            className="block truncate"
-            style={{ fontFamily: OUTFIT, fontSize: 11.5, fontWeight: 500, color: NEU.inkSoft, marginTop: 1 }}
+      <div className="flex flex-col items-center px-3.5 pt-2 flex-1">
+        <div className="w-full flex justify-end" style={{ minHeight: 47 }}>
+          <DifficultyStamp level={committee.difficulty} />
+        </div>
+
+        <CommitteeEmblem committee={committee} size={56} />
+
+        {/* Acronym eyebrow. #7A5A10, the manage layout's own gold ink: the
+            brighter #B6871F fails contrast at this size. */}
+        {committee.abbreviation && (
+          <p
+            style={{
+              margin: '9px 0 0 0', fontFamily: OUTFIT, fontSize: 9.5, fontWeight: 700,
+              letterSpacing: '0.18em', color: '#7A5A10', fontVariantNumeric: 'tabular-nums',
+            }}
           >
-            {secondary}
-          </span>
+            {committee.abbreviation.toUpperCase()}
+          </p>
         )}
-      </span>
-      <button
-        type="button"
-        onClick={onRemove}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        aria-label={`Remove ${committee.name}`}
-        className="flex items-center justify-center flex-shrink-0 focus:outline-none"
-        style={{
-          width: 30, height: 30, borderRadius: 999, border: 'none',
-          backgroundColor: NEU.base,
-          boxShadow: hovered ? NEU.outSmHover : NEU.outSm,
-          color: hovered ? '#8B2020' : NEU.muted,
-          cursor: 'pointer',
-          transition: `color 200ms ${EASE}, box-shadow 200ms ${EASE}`,
-        }}
-      >
-        <X size={15} strokeWidth={2.6} />
-      </button>
-    </div>
+
+        {/* `balance` so a two-line name breaks evenly instead of leaving an orphan. */}
+        <h3
+          className="text-center font-bold"
+          style={{
+            color: NEU.ink, fontFamily: OUTFIT, fontSize: 13, lineHeight: 1.35,
+            margin: committee.abbreviation ? '3px 0 0 0' : '10px 0 0 0',
+            minHeight: '2.4em', textWrap: 'balance',
+          }}
+        >
+          {committee.name}
+        </h3>
+
+        <span
+          style={{
+            marginTop: 4, fontFamily: OUTFIT, fontSize: 11, fontWeight: 600, color: NEU.inkSoft,
+          }}
+        >
+          {COMMITTEE_TYPE_LABEL[committee.type] ?? committee.type}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-center gap-2" style={{ padding: '12px 12px 14px' }}>
+        <button
+          type="button"
+          onClick={onEdit}
+          onMouseEnter={() => setEditHover(true)}
+          onMouseLeave={() => setEditHover(false)}
+          className="flex items-center gap-1.5 focus:outline-none"
+          style={{
+            padding: '7px 14px', borderRadius: 9999, border: 'none',
+            backgroundColor: NEU.base,
+            boxShadow: editHover ? NEU.outSmHover : NEU.outSm,
+            color: NEU.forest, fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 800,
+            letterSpacing: '0.08em', cursor: 'pointer',
+            transition: `box-shadow 200ms ${EASE}`,
+          }}
+        >
+          <Pencil size={12} strokeWidth={2.6} />
+          EDIT
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          onMouseEnter={() => setRemoveHover(true)}
+          onMouseLeave={() => setRemoveHover(false)}
+          aria-label={`Remove ${committee.name}`}
+          className="flex items-center justify-center focus:outline-none"
+          style={{
+            width: 32, height: 32, borderRadius: 9999, border: 'none',
+            backgroundColor: NEU.base,
+            boxShadow: removeHover ? NEU.outSmHover : NEU.outSm,
+            color: '#8B2020', cursor: 'pointer',
+            transition: `box-shadow 200ms ${EASE}`,
+          }}
+        >
+          <Trash2 size={14} strokeWidth={2.4} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+/** The wizard's stand-in for CommitteeEditorModal.
+ *
+ *  It CANNOT be that modal: at this point in the wizard there is no conference
+ *  row, and every save path in the real editor writes to the database. So this
+ *  collects the same four card-facing fields into local state and hands them
+ *  back; handleCreate writes them with the conference_committees insert.
+ *
+ *  Inline rather than a modal on purpose — a dialog over a wizard step is one
+ *  layer too many, and an inline panel can never be clipped. */
+function CommitteeEditor({
+  draft, isEdit, onChange, onSave, onCancel, error,
+}: {
+  draft: DraftCommittee;
+  /** Editing a committee already on the list, rather than adding a new one. */
+  isEdit: boolean;
+  onChange: (next: DraftCommittee) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  error: string;
+}) {
+  return (
+    <NeuInset style={{ padding: '18px 20px', borderRadius: 20 }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+        <p style={{ fontFamily: OUTFIT, fontSize: 14.5, fontWeight: 800, color: NEU.ink }}>
+          {isEdit ? 'Edit committee' : 'New committee'}
+        </p>
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Close the committee editor"
+          className="focus:outline-none"
+          style={{ background: 'none', border: 'none', color: NEU.muted, cursor: 'pointer' }}
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="flex items-start gap-4">
+        <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 min-w-0">
+              <FieldLabel>Committee name</FieldLabel>
+              <input
+                type="text"
+                value={draft.name}
+                autoFocus
+                onChange={(e) => onChange({ ...draft, name: e.target.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSave(); } }}
+                placeholder="e.g. UN Human Rights Council"
+                style={{ ...bigInputStyle, backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
+                onFocus={focusForest}
+                onBlur={blurClear}
+              />
+            </div>
+            <div style={{ width: 120, flexShrink: 0 }}>
+              <FieldLabel>Short name</FieldLabel>
+              <input
+                type="text"
+                value={draft.abbreviation}
+                onChange={(e) => onChange({ ...draft, abbreviation: e.target.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSave(); } }}
+                aria-label="Committee short name"
+                placeholder="UNHRC"
+                style={{ ...bigInputStyle, backgroundColor: NEU.surface, boxShadow: NEU.outSm, letterSpacing: '0.06em' }}
+                onFocus={focusForest}
+                onBlur={blurClear}
+              />
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel>Type</FieldLabel>
+            <div className="flex flex-wrap gap-2">
+              {COMMITTEE_TYPES.map((t) => {
+                const active = draft.type === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => onChange({ ...draft, type: t })}
+                    aria-pressed={active}
+                    className="focus:outline-none"
+                    style={{
+                      padding: '8px 14px', borderRadius: 9999,
+                      border: active ? `1.5px solid ${NEU.forest}` : '1.5px solid rgba(27,56,40,0.14)',
+                      backgroundColor: active ? NEU.surface : 'transparent',
+                      boxShadow: active ? NEU.outSm : 'none',
+                      color: active ? NEU.forest : NEU.inkSoft,
+                      fontFamily: OUTFIT, fontSize: 12, fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, border-color 200ms ${EASE}`,
+                    }}
+                  >
+                    {COMMITTEE_TYPE_LABEL[t]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel>Difficulty</FieldLabel>
+            {/* The same MUN-level insignia the committee editor and the account
+                pages rank with, so the level means one thing everywhere. */}
+            <div className="flex gap-2">
+              {DIFFICULTIES.map((lvl) => {
+                const active = draft.difficulty === lvl;
+                const accent = LEVEL_ACCENT[lvl] ?? NEU.muted;
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => onChange({ ...draft, difficulty: lvl })}
+                    aria-pressed={active}
+                    className="flex-1 flex flex-col items-center gap-1 focus:outline-none"
+                    style={{
+                      padding: '9px 4px', borderRadius: 14,
+                      border: active ? `1.5px solid ${accent}` : '1.5px solid rgba(27,56,40,0.12)',
+                      backgroundColor: active ? `${accent}14` : 'transparent',
+                      cursor: 'pointer',
+                      transition: `background-color 200ms ${EASE}, border-color 200ms ${EASE}`,
+                    }}
+                  >
+                    <span
+                      className="flex items-center justify-center"
+                      style={{
+                        width: 26, height: 26, borderRadius: 9999,
+                        background: `linear-gradient(150deg, ${accent}22, ${accent}12)`,
+                        border: `1px solid ${accent}55`,
+                      }}
+                    >
+                      <LevelInsignia level={lvl} size={16} />
+                    </span>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 11, fontWeight: 700, color: active ? accent : NEU.inkSoft }}>
+                      {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Live emblem preview, the same one the card and the full editor show. */}
+        <div className="hidden sm:flex flex-col items-center gap-2" style={{ width: 96, flexShrink: 0 }}>
+          <FieldLabel>Emblem</FieldLabel>
+          <CommitteeEmblem committee={draft} size={64} />
+          <span style={{ fontFamily: OUTFIT, fontSize: 10.5, fontWeight: 600, color: NEU.inkSoft, textAlign: 'center', lineHeight: 1.35 }}>
+            Picked from the name
+          </span>
+        </div>
+      </div>
+
+      {error && <ErrorNote>{error}</ErrorNote>}
+
+      <div className="flex items-center justify-end gap-3" style={{ marginTop: 16 }}>
+        <SkipLink label="Cancel" onClick={onCancel} />
+        <NeuButton
+          onClick={onSave}
+          disabled={!draft.name.trim()}
+          icon={Check}
+          style={{ padding: '11px 22px', fontSize: 12.5 }}
+        >
+          {isEdit ? 'SAVE' : 'ADD COMMITTEE'}
+        </NeuButton>
+      </div>
+    </NeuInset>
   );
 }
 
@@ -414,9 +697,16 @@ function suggestAcronym(fullName: string): string {
   const initials = fullName
     .split(/[\s-]+/)
     .filter((w) => w && !STOP_WORDS.has(w.toLowerCase()))
-    .map((w) => w[0].toUpperCase())
+    // The first LETTER OR DIGIT of the word, not its first character.
+    // "Model UN (Bangalore)" used to suggest "MU(", which fails
+    // ACRONYM_ALLOWED and disabled Continue with a red error under a field the
+    // organiser had never touched. A word with nothing usable in it drops out.
+    .map((w) => w.match(/[\p{L}\p{N}]/u)?.[0].toUpperCase() ?? '')
     .join('');
-  if (!initials) return '';
+  // Never suggest a value the organiser would then have to repair. Anything
+  // acronymProblem() rejects (under 2 characters, over 40) becomes an empty
+  // field, which reads as "please fill this in" and never as an error.
+  if (acronymProblem(initials)) return '';
   // Conferences do NOT need 'MUN' in their acronym. Only suggest a …MUN acronym
   // when the full name actually ends with "Model United Nations" (or a variant:
   // "Model UN" / "MUN") — those already yield …MUN from the initials anyway.
@@ -471,9 +761,14 @@ export default function NewConferencePage() {
   // Committees (step 7). At least one is REQUIRED to create — see the step
   // model note at the top of this file. Written to conference_committees by
   // handleCreate, right after the conferences row.
+  //
+  // `editing` is the open inline editor: a draft plus the key it will replace
+  // (null key = a new committee). Everything the editor collects is a field of
+  // DraftCommittee, so nothing typed here can be dropped on the way to the
+  // insert.
   const [committees, setCommittees] = useState<DraftCommittee[]>([]);
-  const [committeeName, setCommitteeName] = useState('');
-  const [committeeAbbr, setCommitteeAbbr] = useState('');
+  const [editing, setEditing] = useState<{ draft: DraftCommittee; replacing: string | null } | null>(null);
+  const [editorError, setEditorError] = useState('');
   const [feeKind, setFeeKind] = useState<'free' | 'paid' | ''>('');
   const [feeAmount, setFeeAmount] = useState('');
   const [feeCurrency, setFeeCurrency] = useState('GBP');
@@ -497,12 +792,9 @@ export default function NewConferencePage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  // What they came here to do (INTENT_STEP). `createdRef` is set the moment the
-  // conference is real, so the intent screen always knows which row to write to
-  // and where to send them next, whatever happens to that write.
-  const createdRef = useRef<{ id: string; slug: string } | null>(null);
+  // What they came here to do (step 12). Required, and written as part of the
+  // conferences insert — there is no second write and nothing to fail.
   const [intentKeys, setIntentKeys] = useState<string[]>([]);
-  const [intentSaving, setIntentSaving] = useState(false);
 
   // Description + social links (all skippable). Stored raw here; each social
   // value is passed through normalizeSocialUrl at insert time so bare handles
@@ -546,36 +838,68 @@ export default function NewConferencePage() {
     [committees],
   );
 
-  function addCommittee(name: string, abbreviation?: string) {
-    const trimmed = name.trim();
-    if (!trimmed) { setStepError('Give the committee a name.'); return; }
-    if (committeeKeys.has(committeeKey(trimmed))) { setStepError(`${trimmed} is already on your list.`); return; }
-    setCommittees((prev) => [...prev, makeDraftCommittee(trimmed, abbreviation)]);
-    setStepError('');
-  }
-
   function removeCommittee(key: string) {
     setCommittees((prev) => prev.filter((c) => c.key !== key));
+    setStepError('');
+    // Removing the committee whose editor is open would leave that editor
+    // pointing at a row that no longer exists, and saving it would resurrect it.
+    setEditing((cur) => (cur?.replacing === key ? null : cur));
   }
 
-  /** One-tap preset card: adds it, or takes it back off if it is already on. */
-  function toggleQuickCommittee(name: string) {
+  /** One-tap preset: adds it with the type the preset actually is, or takes it
+   *  back off if it is already on the list. */
+  function toggleQuickCommittee(name: string, type: CommitteeType) {
     const k = committeeKey(name);
     if (committeeKeys.has(k)) {
       setCommittees((prev) => prev.filter((c) => committeeKey(c.name) !== k));
       setStepError('');
       return;
     }
-    addCommittee(name);
+    setCommittees((prev) => [...prev, makeDraftCommittee(name, undefined, type)]);
+    setStepError('');
   }
 
-  function addTypedCommittee() {
-    const trimmed = committeeName.trim();
-    if (!trimmed) { setStepError('Give the committee a name.'); return; }
-    if (committeeKeys.has(committeeKey(trimmed))) { setStepError(`${trimmed} is already on your list.`); return; }
-    addCommittee(trimmed, committeeAbbr);
-    setCommitteeName('');
-    setCommitteeAbbr('');
+  function openNewCommittee() {
+    setEditorError('');
+    setStepError('');
+    setEditing({ draft: makeDraftCommittee(''), replacing: null });
+  }
+
+  function openEditCommittee(c: DraftCommittee) {
+    setEditorError('');
+    setStepError('');
+    setEditing({ draft: { ...c }, replacing: c.key });
+  }
+
+  /**
+   * Commits the open editor. Returns false when it refused, so Continue can
+   * stop rather than silently throwing away what is on screen.
+   *
+   * The acronym is only derived when the organiser left the field empty, so a
+   * short name they typed is never overwritten.
+   */
+  function saveEditingCommittee(): boolean {
+    if (!editing) return true;
+    const name = editing.draft.name.trim();
+    if (!name) { setEditorError('Give the committee a name.'); return false; }
+    const clash = committees.some(
+      (c) => committeeKey(c.name) === committeeKey(name) && c.key !== editing.replacing,
+    );
+    if (clash) { setEditorError(`${name} is already on your list.`); return false; }
+    const saved: DraftCommittee = {
+      ...editing.draft,
+      name,
+      abbreviation: editing.draft.abbreviation.trim() || deriveCommitteeAcronym(name),
+    };
+    setCommittees((prev) =>
+      editing.replacing
+        ? prev.map((c) => (c.key === editing.replacing ? saved : c))
+        : [...prev, saved],
+    );
+    setEditing(null);
+    setEditorError('');
+    setStepError('');
+    return true;
   }
 
   function goTo(next: number) {
@@ -681,14 +1005,20 @@ export default function NewConferencePage() {
             country,
             city,
             format,
-            // 0, never null: the column is `integer NOT NULL` with no default, so a
-            // skipped step 6 used to fail the whole insert with a 23502 after the
-            // organiser had filled in all twelve steps. 0 is the sentinel the rest of
-            // the product already reads as "no expectation set" — conference_setup_status()
-            // does `coalesce(expected_delegates, 0)` and passes the committees checklist
-            // row on `v_expected = 0`, the dashboard guards on `expectedDelegates > 0`
-            // and offers SET AN EXPECTED HEAD COUNT, and admin's isShortOnSeats() skips it.
+            // Step 6 has no skip any more, so this always carries a real number.
+            // The 0 fallback stays as a belt-and-braces default: the column is
+            // `integer NOT NULL` with no default, and writing null used to fail
+            // the WHOLE insert with a 23502 after the organiser had filled in
+            // every step. 0 is the sentinel the rest of the product already
+            // reads as "no expectation set" — conference_setup_status() does
+            // `coalesce(expected_delegates, 0)` and passes the committees
+            // checklist row on `v_expected = 0`, the dashboard guards on
+            // `expectedDelegates > 0` and offers SET AN EXPECTED HEAD COUNT,
+            // and admin's isShortOnSeats() skips it.
             expected_delegates: expectedDelegates ? parseInt(expectedDelegates) : 0,
+            // What they came here to do, step 12. Part of the insert, so it can
+            // never be a follow-up write that fails after the conference is real.
+            intent: intentPayload(intentKeys),
             fee_amount: feeKind === 'paid' ? parseFloat(feeAmount) || 0 : 0,
             fee_currency: feeCurrency,
             description: description.trim() || null,
@@ -756,12 +1086,13 @@ export default function NewConferencePage() {
       // cannot be written before the conference (conference_id is a FK), so a
       // failure is undone rather than shrugged off.
       //
-      // Only name + abbreviation come from the wizard. difficulty,
-      // committee_type and delegation_size take their column defaults
-      // ('intermediate', 'general-assembly', 1); `topics` stays empty, which
-      // the 1..3 CHECK permits (array_length of an empty array is NULL, and a
-      // third of production rows already sit this way). The emblem is resolved
-      // by the same matcher CommitteeEditorModal auto-assigns with.
+      // Name, abbreviation, type and difficulty all come from the wizard's own
+      // committee editor — every field DraftCommittee carries is written here,
+      // so nothing the organiser typed on step 7 is dropped. delegation_size
+      // takes its column default (1); `topics` stays empty, which the 1..3
+      // CHECK permits (array_length of an empty array is NULL, and a third of
+      // production rows already sit this way). The emblem is resolved by the
+      // same matcher CommitteeEditorModal auto-assigns with.
       //
       // total_slots is a PLACEHOLDER 1, not a claim. The truthful value here is
       // 0 — no roster has been picked yet — but the column carries a
@@ -777,6 +1108,8 @@ export default function NewConferencePage() {
           conference_id: conferenceId,
           name: c.name,
           abbreviation: c.abbreviation || null,
+          committee_type: c.type,
+          difficulty: c.difficulty,
           topics: [],
           total_slots: 1,
           logo_url: matchPresetEmblem(c.name, c.abbreviation),
@@ -808,11 +1141,10 @@ export default function NewConferencePage() {
         return;
       }
 
-      setSubmitting(false);
-      // Created. One last question before the dashboard — see INTENT_STEP.
-      // Nothing below this point can fail the creation any more.
-      createdRef.current = { id: conferenceId, slug };
-      goTo(INTENT_STEP);
+      // Created, intent and all. Straight to the dashboard — `submitting` stays
+      // true through the navigation so the button cannot fire a second time
+      // while the route loads.
+      router.push('/manage/' + slug);
     } catch (err) {
       setSubmitting(false);
       setError('Unexpected error: ' + (err instanceof Error ? err.message : String(err)));
@@ -823,39 +1155,12 @@ export default function NewConferencePage() {
     setIntentKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   }
 
-  /**
-   * Records the answer and ALWAYS lands them on their dashboard.
-   *
-   * The conference already exists, so this write is a bonus: it races a 4s
-   * timeout and the navigation happens either way, which means a slow network,
-   * an expired token or any error at all can never trap someone on this screen
-   * or make them think their conference did not save. A client-side push does
-   * not tear down the request, so a merely slow write still completes.
-   *
-   * Skipping writes the payload too (intentPayload sets `skipped: true` for an
-   * empty selection): "asked and declined" has to stay distinguishable from
-   * "never asked", because the follow-up email reads exactly that difference.
-   */
-  async function finishIntent(keys: string[]) {
-    if (intentSaving) return;
-    const created = createdRef.current;
-    // Unreachable — this screen only renders after createdRef is set — but a
-    // dead Continue button is the one outcome that is never acceptable here.
-    if (!created) { router.push('/my-conferences'); return; }
-    setIntentSaving(true);
-    try {
-      const result = await Promise.race([
-        getAuthedClient()
-          .from('conferences')
-          .update({ intent: intentPayload(keys) })
-          .eq('id', created.id),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
-      ]);
-      if (result?.error) console.error('Failed to record conference intent:', result.error.message);
-    } catch (err) {
-      console.error('Failed to record conference intent:', err);
-    }
-    router.push('/manage/' + created.slug);
+  const allIntentsPicked = intentKeys.length === INTENT_OPTIONS.length;
+
+  /** Tick to take everything, untick to clear it. Rebuilt in INTENT_OPTIONS
+   *  order so the stored array is stable whichever way it was filled. */
+  function toggleAllIntents() {
+    setIntentKeys(allIntentsPicked ? [] : INTENT_OPTIONS.map((o) => o.key));
   }
 
   // ── Per-step validation before advancing ─────────────────────────────────
@@ -885,16 +1190,17 @@ export default function NewConferencePage() {
   }
 
   function continueStep7() {
-    // The one hard gate in the wizard. A committee typed but not yet added
-    // counts — nobody should lose a room to an unpressed Add button.
-    if (committeeName.trim() && !committeeKeys.has(committeeKey(committeeName))) {
-      addCommittee(committeeName, committeeAbbr);
-      setCommitteeName('');
-      setCommitteeAbbr('');
-      advance(7);
-      return;
+    // A committee half-typed in the open editor counts — nobody should lose a
+    // room to an unpressed Save button. A named draft is committed here; an
+    // untouched one is simply closed.
+    if (editing) {
+      if (editing.draft.name.trim()) {
+        if (!saveEditingCommittee()) return;
+      } else {
+        setEditing(null);
+      }
     }
-    if (committees.length === 0) { setStepError('Add at least one committee — delegates apply to a committee, not to a conference.'); return; }
+    if (committees.length === 0) { setStepError('Add at least one committee. Delegates apply to a committee, not to a conference.'); return; }
     advance(7);
   }
 
@@ -913,6 +1219,12 @@ export default function NewConferencePage() {
     ? committees.map((c) => committeeDisplayName(c.name, c.abbreviation)).join(', ')
     : 'None yet';
 
+  // Titles rather than the admin's SHOUTING short codes: this row sits beside
+  // "Committees" and "Fee" in a sentence-case list.
+  const intentSummary = intentKeys.length
+    ? INTENT_OPTIONS.filter((o) => intentKeys.includes(o.key)).map((o) => o.label).join(', ')
+    : 'Not answered';
+
   const socialsSummary = [
     instagram.trim() && 'Instagram',
     facebook.trim() && 'Facebook',
@@ -921,16 +1233,19 @@ export default function NewConferencePage() {
     website.trim() && 'Website',
   ].filter(Boolean).join(', ');
 
-  // Logo and expected delegates are both skippable now (their steps carry a
-  // "Do this later" escape hatch) — neither gates creation. A non-empty
-  // expected-delegates value still has to be a real positive number, it's
-  // only the empty (skipped) case that's tolerated. Committees DO gate it:
-  // one is the minimum a conference needs to be applied to at all.
+  // The logo, banner, description and socials steps are skippable and none of
+  // them gates creation. Everything else does: the head count is a real
+  // positive number, at least one committee exists (one is the minimum a
+  // conference needs to be applied to at all), and the intent question has an
+  // answer. Each of those three has a step with no skip link, so a review
+  // screen that could not submit would mean an editable row is empty — hence a
+  // ReviewRow for every one of them.
   const readyToCreate =
     fullName.trim() && acronym.trim() && !acronymProblem(acronym) && contactEmail.trim() &&
     studentLevel && country && city.trim() && format &&
-    (!expectedDelegates || parseInt(expectedDelegates) > 0) &&
+    parseInt(expectedDelegates) > 0 &&
     committees.length > 0 &&
+    intentKeys.length > 0 &&
     (feeKind === 'free' || (feeKind === 'paid' && parseFloat(feeAmount) > 0));
 
   // Loading / auth spinner
@@ -1168,7 +1483,7 @@ export default function NewConferencePage() {
               <WizardShell
                 step={6} total={TOTAL_STEPS}
                 title="How many delegates do you expect?"
-                sub="A rough number is fine, you can refine it later."
+                sub="A rough number is fine, you can change it any time in Settings."
                 onBack={back}
               >
                 <CardSelect
@@ -1196,113 +1511,182 @@ export default function NewConferencePage() {
                   />
                 </div>
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                {/* No skip. A conference with no expected head count cannot be
+                    sized: the dashboard's seat coverage, the committees
+                    checklist row and admin's short-on-seats check all read
+                    `expected_delegates`, and 0 makes every one of them shrug.
+                    A rough number is enough and it is editable in Settings. */}
                 <ContinueButton onClick={continueStep6} disabled={!expectedDelegates || parseInt(expectedDelegates) < 1} />
-                <div className="flex justify-center" style={{ marginTop: 12 }}>
-                  <SkipLink onClick={() => { setExpectedDelegates(''); setDelegateRange(''); advance(6); }} label="Do this later" />
-                </div>
               </WizardShell>
             )}
 
             {/* ── Step 7, committees (REQUIRED, no skip) ─────────────── */}
+            {/* Deliberately shaped like /manage/[slug]/committees, the page the
+                organiser will run this conference from: a list of committee
+                cards you add to, edit and remove. It cannot BE that page's
+                editor — CommitteeEditorModal writes straight to the database
+                and there is no conference row yet — so the same four card
+                fields are collected locally and written with the
+                conference_committees insert in handleCreate. */}
             {step === 7 && (
               <WizardShell
                 step={7} total={TOTAL_STEPS}
-                title="Which committees will you run?"
-                sub="Delegates apply to a committee, so you need at least one. Tap the ones you're running, or type your own — the rest can wait."
+                title="Set up your committees"
+                sub="Delegates apply to a committee, so you need at least one. Add as many as you like, you can add more any time."
                 onBack={back}
               >
-                <CardSelect
-                  options={QUICK_COMMITTEES.map((name) => {
-                    const acr = deriveCommitteeAcronym(name);
-                    const emblem = matchPresetEmblem(name, acr);
-                    return {
-                      key: name,
-                      label: committeeDisplayName(name, acr),
-                      sub: committeeDisplayName(name, acr) === name ? undefined : name,
-                      icon: emblem ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={emblem} alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} />
-                      ) : (
-                        <Emoji3D name="Classical building" size={40} />
-                      ),
-                    };
-                  })}
-                  value={committees.map((c) => c.name)}
-                  onChange={toggleQuickCommittee}
-                  multiple
-                  columns={4}
-                />
+                {/* Header row, the committees page's own: a count on the left,
+                    the single add action on the right. */}
+                <div className="flex items-center justify-between gap-3" style={{ marginBottom: 14 }}>
+                  <p
+                    style={{
+                      fontFamily: OUTFIT, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em',
+                      color: NEU.muted, textTransform: 'uppercase', fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {committees.length === 0
+                      ? 'Your committees'
+                      : `${committees.length} committee${committees.length === 1 ? '' : 's'}`}
+                  </p>
+                  <NeuButton
+                    onClick={openNewCommittee}
+                    icon={Plus}
+                    style={{ padding: '10px 18px', fontSize: 12 }}
+                  >
+                    ADD COMMITTEE
+                  </NeuButton>
+                </div>
 
-                {/* Free text, for every committee no preset covers. Deliberately
-                    NOT a typeahead: the presets are already on screen as cards,
-                    so there is no floating layer here to clip. */}
-                <div style={{ marginTop: 18 }}>
-                  <FieldLabel>Or add your own</FieldLabel>
-                  {/* One row on desktop; on a phone the name takes the full
-                      width and the short name + Add share the line below it,
-                      so the name field never shrinks to a stub. */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={committeeName}
-                      onChange={(e) => { setCommitteeName(e.target.value); setStepError(''); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTypedCommittee(); } }}
-                      placeholder="e.g. Historical Crisis: Cuban Missile Crisis"
-                      style={{ ...bigInputStyle, flex: 1, minWidth: 0 }}
-                      onFocus={focusForest}
-                      onBlur={blurClear}
+                {editing && (
+                  <div style={{ marginBottom: 16 }}>
+                    <CommitteeEditor
+                      draft={editing.draft}
+                      onChange={(next) => { setEditing({ ...editing, draft: next }); setEditorError(''); }}
+                      onSave={saveEditingCommittee}
+                      onCancel={() => { setEditing(null); setEditorError(''); }}
+                      isEdit={!!editing.replacing}
+                      error={editorError}
                     />
-                    <div className="flex gap-3">
-                      <input
-                        type="text"
-                        value={committeeAbbr}
-                        onChange={(e) => setCommitteeAbbr(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTypedCommittee(); } }}
-                        aria-label="Committee abbreviation (optional)"
-                        placeholder="Short"
-                        style={{ ...bigInputStyle, width: 108, flexShrink: 0, letterSpacing: '0.06em' }}
-                        onFocus={focusForest}
-                        onBlur={blurClear}
-                      />
-                      <NeuButton
-                        onClick={addTypedCommittee}
-                        disabled={!committeeName.trim()}
-                        icon={Plus}
-                        style={{ padding: '13px 22px', fontSize: 13, flex: 1 }}
-                      >
-                        ADD
+                  </div>
+                )}
+
+                {committees.length === 0 && !editing ? (
+                  /* Empty state, matching the one on the committees page. It
+                     stands down while the editor is open — the editor is then
+                     the thing to fill in, and two calls to action would fight. */
+                  <div
+                    className="flex flex-col items-center text-center"
+                    style={{
+                      padding: '38px 24px', borderRadius: 20,
+                      border: '1.5px dashed rgba(27,56,40,0.24)',
+                      backgroundColor: 'color-mix(in srgb, var(--gv-surface) 60%, transparent)',
+                    }}
+                  >
+                    <span
+                      className="flex items-center justify-center"
+                      style={{
+                        width: 56, height: 56, borderRadius: 9999, marginBottom: 14,
+                        background: 'linear-gradient(150deg, color-mix(in srgb, var(--gv-main) 12%, transparent), color-mix(in srgb, var(--gv-main) 5%, transparent))',
+                        border: '1.5px solid color-mix(in srgb, var(--gv-main) 18%, transparent)',
+                      }}
+                    >
+                      <Building2 size={24} style={{ color: NEU.forest }} />
+                    </span>
+                    <p style={{ fontFamily: OUTFIT, fontSize: 17, fontWeight: 800, color: NEU.ink }}>
+                      No committees yet
+                    </p>
+                    <p
+                      style={{
+                        fontFamily: OUTFIT, fontSize: 13.5, color: NEU.inkSoft,
+                        lineHeight: 1.55, marginTop: 6, maxWidth: 340,
+                      }}
+                    >
+                      Committees are where delegates debate. Add your first one, or tap a common committee below.
+                    </p>
+                    <div style={{ marginTop: 16 }}>
+                      <NeuButton onClick={openNewCommittee} icon={Plus} style={{ padding: '11px 22px', fontSize: 12.5 }}>
+                        ADD YOUR FIRST COMMITTEE
                       </NeuButton>
                     </div>
                   </div>
-                </div>
-
-                {committees.length > 0 && (
-                  <NeuInset style={{ padding: '16px 18px', borderRadius: 20, marginTop: 18 }}>
-                    <FieldLabel>
-                      {committees.length} committee{committees.length === 1 ? '' : 's'}
-                    </FieldLabel>
-                    <div className="flex flex-col gap-2.5" style={{ marginTop: 4 }}>
-                      {committees.map((c) => (
-                        <DraftCommitteeRow key={c.key} committee={c} onRemove={() => removeCommittee(c.key)} />
-                      ))}
-                    </div>
-                  </NeuInset>
+                ) : (
+                  <div
+                    className="grid gap-3.5 items-stretch"
+                    // Floor picked so the row is two cards wide on a 375px
+                    // phone and four wide in the 720px shell.
+                    style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 152px), 1fr))' }}
+                  >
+                    {committees.map((c) => (
+                      <DraftCommitteeCard
+                        key={c.key}
+                        committee={c}
+                        onEdit={() => openEditCommittee(c)}
+                        onRemove={() => removeCommittee(c.key)}
+                      />
+                    ))}
+                  </div>
                 )}
+
+                {/* One-tap common committees. Secondary to the cards now: they
+                    are a shortcut to a first committee, not the step itself.
+                    Tapping one already on the list takes it back off. */}
+                <div style={{ marginTop: 20 }}>
+                  <FieldLabel>Quick add</FieldLabel>
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_COMMITTEES.map(({ name, type }) => {
+                      const acr = deriveCommitteeAcronym(name);
+                      const on = committeeKeys.has(committeeKey(name));
+                      const emblem = matchPresetEmblem(name, acr);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => toggleQuickCommittee(name, type)}
+                          aria-pressed={on}
+                          title={name}
+                          className="flex items-center gap-2 focus:outline-none"
+                          style={{
+                            padding: '8px 14px 8px 10px', borderRadius: 9999,
+                            border: on ? `1.5px solid ${NEU.forest}` : '1.5px solid rgba(27,56,40,0.14)',
+                            backgroundColor: on ? NEU.surface : 'transparent',
+                            boxShadow: on ? NEU.outSm : 'none',
+                            color: on ? NEU.forest : NEU.inkSoft,
+                            fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: `box-shadow 200ms ${EASE}, color 200ms ${EASE}, border-color 200ms ${EASE}`,
+                          }}
+                        >
+                          <span className="flex items-center justify-center flex-shrink-0" style={{ width: 20, height: 20 }}>
+                            {on ? (
+                              <Check size={14} strokeWidth={3} style={{ color: NEU.forest }} />
+                            ) : emblem ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={emblem} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+                            ) : (
+                              <Building2 size={14} strokeWidth={2.4} />
+                            )}
+                          </span>
+                          {committeeDisplayName(name, acr)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <p
                   style={{
                     fontFamily: OUTFIT, fontSize: 12.5, lineHeight: 1.6, color: NEU.inkSoft,
-                    textAlign: 'center', marginTop: 16, padding: '0 8px',
+                    textAlign: 'center', marginTop: 18, padding: '0 8px',
                   }}
                 >
-                  Just the names for now — countries, seats, topics and chairs come later
-                  in Manage&nbsp;→&nbsp;Committees, and you can add more committees any time.
+                  Countries, seats, topics and chairs come later in
+                  Manage&nbsp;→&nbsp;Committees, where this same list is waiting for you.
                 </p>
 
                 {stepError && <ErrorNote>{stepError}</ErrorNote>}
                 <ContinueButton
                   onClick={continueStep7}
-                  disabled={committees.length === 0 && !committeeName.trim()}
+                  disabled={committees.length === 0 && !editing?.draft.name.trim()}
                 />
               </WizardShell>
             )}
@@ -1332,26 +1716,15 @@ export default function NewConferencePage() {
                       deadlines) and separate fees for <strong style={{ color: NEU.ink }}>delegations</strong> and
                       <strong style={{ color: NEU.ink }}> faculty advisors</strong>.
                     </p>
-                    <div className="flex gap-3">
-                      <select
+                    {/* items-stretch so the amount input matches the picker's
+                        44px trigger height rather than sitting shorter than it. */}
+                    <div className="flex items-stretch gap-3">
+                      <CurrencyPicker
                         value={feeCurrency}
-                        onChange={(e) => setFeeCurrency(e.target.value)}
-                        style={{ ...bigInputStyle, width: 132, cursor: 'pointer', backgroundColor: NEU.surface, boxShadow: NEU.outSm }}
-                        onFocus={focusForest}
-                        onBlur={blurClear}
-                      >
-                        {CURRENCY_GROUPS.pinned.map((c) => (
-                          <option key={c.code} value={c.code} title={c.name}>
-                            {c.symbol} {c.code}
-                          </option>
-                        ))}
-                        <option disabled>──────────</option>
-                        {CURRENCY_GROUPS.rest.map((c) => (
-                          <option key={c.code} value={c.code} title={c.name}>
-                            {c.symbol} {c.code}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setFeeCurrency}
+                        ariaLabel="Base delegate fee currency"
+                        style={{ width: 132, flexShrink: 0 }}
+                      />
                       <input
                         type="number"
                         min={0}
@@ -1539,7 +1912,7 @@ export default function NewConferencePage() {
                   </NeuInset>
                 </div>
 
-                <ContinueButton label="Continue to review" onClick={() => advance(11)} />
+                <ContinueButton onClick={() => advance(11)} />
                 <div className="flex justify-center" style={{ marginTop: 12 }}>
                   <SkipLink
                     onClick={() => {
@@ -1553,7 +1926,84 @@ export default function NewConferencePage() {
               </WizardShell>
             )}
 
-            {/* ── Step 11, review + create ───────────────────────────── */}
+            {/* ── Step 12, what they will use Gavelling for (REQUIRED) ── */}
+            {step === 12 && (
+              <WizardShell
+                step={12} total={TOTAL_STEPS}
+                title="What will you use Gavelling for?"
+                sub="Pick everything that applies. Your dashboard will put those first. Nothing is switched off by this."
+                onBack={back}
+              >
+                <CardSelect
+                  options={INTENT_OPTIONS.map((o) => ({
+                    key: o.key,
+                    label: o.label,
+                    sub: o.sub,
+                    icon: (
+                      <Emoji3D
+                        name={o.emoji}
+                        size={56}
+                        fallback={INTENT_FALLBACK_ICONS[o.key]}
+                        fallbackColor={NEU.forest}
+                      />
+                    ),
+                  }))}
+                  value={intentKeys}
+                  onChange={toggleIntent}
+                  multiple
+                  columns={3}
+                  size="lg"
+                  // Short headings, so the big cards can carry them — and both
+                  // opt-ins are on: the labels wrap instead of truncating, and
+                  // the grid drops to fewer columns rather than squeezing three
+                  // big cards into a phone. This replaced a scoped CSS override
+                  // that un-truncated the shared component from the outside.
+                  wrapText
+                  minColumnWidth={190}
+                />
+
+                {/* Select all. Secondary to the cards on purpose: a tick, not a
+                    seventh card. Ticked once all six are on, however they got
+                    there, and unticking clears them. */}
+                <div className="flex justify-center" style={{ marginTop: 18 }}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={allIntentsPicked}
+                    onClick={toggleAllIntents}
+                    className="flex items-center gap-2.5 focus:outline-none"
+                    style={{
+                      padding: '9px 16px', borderRadius: 999, border: 'none',
+                      background: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    <span
+                      className="flex items-center justify-center flex-shrink-0"
+                      style={{
+                        width: 20, height: 20, borderRadius: 6,
+                        border: `1.5px solid ${allIntentsPicked ? NEU.forest : 'rgba(27,56,40,0.28)'}`,
+                        backgroundColor: allIntentsPicked ? NEU.forest : 'transparent',
+                        transition: `background-color 180ms ${EASE}, border-color 180ms ${EASE}`,
+                      }}
+                    >
+                      {allIntentsPicked && <Check size={13} strokeWidth={3} style={{ color: NEU.gold }} />}
+                    </span>
+                    <span style={{ fontFamily: OUTFIT, fontSize: 13.5, fontWeight: 700, color: NEU.inkSoft }}>
+                      Select all
+                    </span>
+                  </button>
+                </div>
+
+                {stepError && <ErrorNote>{stepError}</ErrorNote>}
+                <ContinueButton
+                  label="Continue to review"
+                  disabled={intentKeys.length === 0}
+                  onClick={() => (intentKeys.length > 0 ? advance(12) : setStepError('Pick at least one.'))}
+                />
+              </WizardShell>
+            )}
+
+            {/* ── Step 13, review + create ───────────────────────────── */}
             {step === REVIEW_STEP && (
               <WizardShell
                 step={REVIEW_STEP} total={TOTAL_STEPS}
@@ -1567,7 +2017,7 @@ export default function NewConferencePage() {
                   <ReviewRow label="Level" value={studentLevel === 'school' ? 'High school' : studentLevel === 'university' ? 'University' : 'Both'} onEdit={() => editFromReview(3)} />
                   <ReviewRow label="Location" value={`${city}, ${country}`} onEdit={() => editFromReview(4)} />
                   <ReviewRow label="Dates" value={datesTbd ? 'To be decided' : formatDateRange(startDate, endDate)} onEdit={() => editFromReview(5)} />
-                  <ReviewRow label="Expected delegates" value={expectedDelegates || 'Skipped'} onEdit={() => editFromReview(6)} />
+                  <ReviewRow label="Expected delegates" value={expectedDelegates || 'Not set'} onEdit={() => editFromReview(6)} />
                   <ReviewRow
                     label={`Committees (${committees.length})`}
                     value={committeesSummary}
@@ -1582,6 +2032,7 @@ export default function NewConferencePage() {
                   <ReviewRow label="Banner" value={bannerUrl ? 'Added' : 'Skipped'} onEdit={() => editFromReview(10)} />
                   <ReviewRow label="Description" value={description.trim() ? 'Added' : 'Skipped'} onEdit={() => editFromReview(11)} />
                   <ReviewRow label="Social links" value={socialsSummary || 'Skipped'} onEdit={() => editFromReview(11)} />
+                  <ReviewRow label="Using Gavelling for" value={intentSummary} onEdit={() => editFromReview(12)} />
                 </div>
 
                 {/* Contact email, required by the directory, prefilled from your profile */}
@@ -1636,53 +2087,6 @@ export default function NewConferencePage() {
                   >
                     {submitting ? 'CREATING…' : 'CREATE CONFERENCE'}
                   </NeuButton>
-                </div>
-              </WizardShell>
-            )}
-
-            {/* ── After creation, what they will use Gavelling for ────── */}
-            {step === INTENT_STEP && (
-              <WizardShell
-                // 12 of 12: the wizard is finished, the conference exists. This
-                // question is a bonus, so it never adds a dot to the rail, and
-                // there is no back arrow — there is nothing left to go back to.
-                step={TOTAL_STEPS} total={TOTAL_STEPS}
-                title="What will you use Gavelling for?"
-                sub={`${acronym.trim() || fullName} is created. Pick everything that applies and your dashboard will put it first.`}
-              >
-                {/* CardSelect truncates its label and sub to one line each,
-                    which is right for a country or a head-count range and wrong
-                    for a full sentence. Scoped to this wrapper only, so the
-                    shared component is untouched and no other step changes. */}
-                <div className="gv-intent-cards">
-                  <style>{'.gv-intent-cards .truncate { white-space: normal; overflow: visible; text-overflow: clip; }'}</style>
-                  <CardSelect
-                    options={INTENT_OPTIONS.map((o) => ({
-                      key: o.key,
-                      label: o.label,
-                      sub: o.sub,
-                      icon: (
-                        <Emoji3D
-                          name={o.emoji}
-                          size={48}
-                          fallback={INTENT_FALLBACK_ICONS[o.key]}
-                          fallbackColor={NEU.forest}
-                        />
-                      ),
-                    }))}
-                    value={intentKeys}
-                    onChange={toggleIntent}
-                    multiple
-                    columns={3}
-                  />
-                </div>
-                <ContinueButton
-                  label={intentSaving ? 'Saving…' : 'Continue to your dashboard'}
-                  disabled={intentKeys.length === 0 || intentSaving}
-                  onClick={() => finishIntent(intentKeys)}
-                />
-                <div className="flex justify-center" style={{ marginTop: 12 }}>
-                  <SkipLink onClick={() => finishIntent([])} label="Do this later" />
                 </div>
               </WizardShell>
             )}
