@@ -516,7 +516,10 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
       <div className="px-4 py-3 flex flex-col gap-2">
         {chairs === null ? (
           <div className="flex justify-center py-4"><div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: '#1B3828', borderTopColor: 'transparent' }} /></div>
-        ) : chairs.length === 0 ? (
+        ) : chairs.length === 0 && invites.length === 0 ? (
+          /* Guarded on BOTH lists. On `chairs` alone this printed "No chairs
+             seated yet" directly above the pending invitee rendered a few
+             lines below, so a dais with an invite out read as empty. */
           <p className="text-[11px]" style={{ color: '#9A8A78', fontFamily: OUTFIT, lineHeight: 1.45 }}>No chairs seated yet.</p>
         ) : (
           chairs.map((c, i) => (

@@ -121,11 +121,22 @@ export async function fetchPendingChairInvites(
   supabase: ReturnType<typeof getAuthedClient>,
   conferenceId: string
 ): Promise<PendingChairInvite[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('conference_chair_invites')
     .select('id, committee_id, email, invited_name, profiles (display_name, avatar_url)')
     .eq('conference_id', conferenceId)
     .eq('status', 'pending');
+  // A failed read is NOT "no pending invites": an RLS refusal, an expired token
+  // or a PostgREST blip renders every committee as though nobody had been
+  // invited, which is indistinguishable from a chairless dais.
+  //
+  // It still returns [] rather than throwing, deliberately. The one caller
+  // (manage/[slug]/committees) awaits this inside a Promise.all alongside the
+  // committees query itself, with no catch, so throwing would turn a missing
+  // row of faces into a committees page that renders nothing at all. Trading a
+  // display bug for a page outage is the wrong trade. The log is what makes it
+  // findable; give this a UI state only when the caller can hold one.
+  if (error) console.error('fetchPendingChairInvites failed:', error.message);
   return (data ?? []) as unknown as PendingChairInvite[];
 }
 
