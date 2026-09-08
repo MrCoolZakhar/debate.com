@@ -3643,7 +3643,7 @@ export default function SettingsPage() {
               section's body rather than as a second nested card. */}
           <div style={cardStyle}>
             <StepHeader
-              n={1} label="Colours" sub="Your palette across the whole conference."
+              n={1} label="Colours" sub="Your main colour and accent, across the whole conference."
               complete={true} open={openConfSection === 1}
               onClick={() => setOpenConfSection(openConfSection === 1 ? 0 : 1)}
             />

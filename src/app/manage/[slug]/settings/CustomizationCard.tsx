@@ -13,13 +13,13 @@
  * organizer can experiment freely without ever risking what a visitor
  * currently sees.
  *
- * TEXT COLOUR IS CHOSEN, NOT LABELLED
- * The two text rows are called "Light text" and "Dark text" for the
- * organizer's own bookkeeping, but nothing here, or anywhere theme.ts is
- * read, ever trusts those labels. pickTextColor() always measures actual
- * WCAG contrast against whatever surface the colour would sit on and
- * returns the better of the two candidates. Two dark colours in means the
- * card still shows the better of the two, never guaranteed-unreadable text.
+ * MAIN AND ACCENT ONLY
+ * An organizer picks exactly two colours here: main and accent. Background,
+ * surface, borders and both text colours are Gavelling's own and are never
+ * editable from this card. `theme.ts`'s `pickTextColor()` still measures
+ * real WCAG contrast to choose which of Gavelling's two text colours reads
+ * on the organizer's main and accent, so a poor choice degrades gracefully
+ * instead of guaranteeing unreadable text.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -35,7 +35,7 @@ import {
 
 const OUTFIT = "'Outfit', sans-serif";
 
-type ThemeKey = 'background' | 'main' | 'accent' | 'text_light' | 'text_dark';
+type ThemeKey = 'main' | 'accent';
 
 interface Preset {
   hex: string;
@@ -50,21 +50,6 @@ interface Row {
 }
 
 const ROWS: Row[] = [
-  {
-    key: 'background',
-    label: 'Background',
-    helper: 'The page behind everything.',
-    presets: [
-      { hex: '#EDE7D8', name: 'Ivory' },
-      { hex: '#FFFFFF', name: 'White' },
-      { hex: '#F2F0EB', name: 'Warm grey' },
-      { hex: '#F1F3F5', name: 'Cool grey' },
-      { hex: '#F5EFE2', name: 'Sand' },
-      { hex: '#12211A', name: 'Deep forest' },
-      { hex: '#14161A', name: 'Near black' },
-      { hex: '#0F1A2E', name: 'Deep navy' },
-    ],
-  },
   {
     key: 'main',
     label: 'Main colour',
@@ -95,41 +80,16 @@ const ROWS: Row[] = [
       { hex: '#B8B8B8', name: 'Platinum' },
     ],
   },
-  {
-    key: 'text_light',
-    label: 'Light text',
-    helper: 'Used wherever the background behind it is dark.',
-    presets: [
-      { hex: '#FFFFFF', name: 'White' },
-      { hex: '#EED98A', name: 'Gold' },
-      { hex: '#F2EFE6', name: 'Warm white' },
-      { hex: '#E8EDF2', name: 'Cool white' },
-    ],
-  },
-  {
-    key: 'text_dark',
-    label: 'Dark text',
-    helper: 'Used wherever the background behind it is light.',
-    presets: [
-      { hex: '#1C1410', name: 'Ink' },
-      { hex: '#000000', name: 'Black' },
-      { hex: '#22201C', name: 'Charcoal' },
-      { hex: '#14284B', name: 'Navy' },
-    ],
-  },
 ];
 
-const THEME_KEYS: ThemeKey[] = ['background', 'main', 'accent', 'text_light', 'text_dark'];
+const THEME_KEYS: ThemeKey[] = ['main', 'accent'];
 
 /** The Gavelling default for one theme key, keyed off the same object every
  *  unset field falls back to. */
 function fieldDefault(key: ThemeKey): string {
   switch (key) {
-    case 'background': return GAVELLING_THEME.background;
     case 'main': return GAVELLING_THEME.main;
     case 'accent': return GAVELLING_THEME.accent;
-    case 'text_light': return GAVELLING_THEME.textLight;
-    case 'text_dark': return GAVELLING_THEME.textDark;
   }
 }
 
@@ -143,7 +103,7 @@ function buildHexInputs(theme: ConferenceTheme): Record<ThemeKey, string> {
   return out;
 }
 
-/** Two themes are equal when all five keys agree, missing and undefined
+/** Two themes are equal when both keys agree, missing and undefined
  *  treated the same — never a raw JSON.stringify, which would care about key
  *  order and about a key being absent vs explicitly undefined. */
 function themesEqual(a: ConferenceTheme, b: ConferenceTheme): boolean {
@@ -344,7 +304,7 @@ export default function CustomizationCard({
         )}
       </div>
       <p className="text-sm mb-4" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-        Pick five colours. We derive the rest and choose every text colour for contrast.
+        Pick your main colour and an accent. Gavelling handles the rest, including text contrast.
       </p>
 
       {draftError && (
