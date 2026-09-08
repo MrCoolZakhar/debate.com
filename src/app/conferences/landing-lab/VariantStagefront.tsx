@@ -127,6 +127,22 @@ function landingConfTitle(c: Pick<LabConference, 'acronym' | 'full_name' | 'star
   return base;
 }
 
+/** The conferences the front page leads with, in order.
+ *
+ *  Manual by design. Change this array to change the hero rail; nothing else
+ *  needs touching. A slug that is not public, not found, or already concluded
+ *  is skipped and the rail tops itself up (see upcomingTrio).
+ *
+ *  This list does NOT affect the SEO nav at the bottom of `/`, which still
+ *  links every public conference. That list exists as the crawl path that got
+ *  conference pages indexed in the first place, so curating it would orphan
+ *  the ones left out. */
+const FEATURED_SLUGS = [
+  'harvard-worldmun-2027-2h45a',                                  // WorldMUN 2027
+  'stonehill-international-school-model-united-nations-ydkzm',    // SISMUN 2026
+  'model-united-nations-karachi-qd7tz',                           // MUNKR 2026
+];
+
 export default function VariantStagefront({
   conferences,
   stats,
@@ -175,19 +191,35 @@ export default function VariantStagefront({
     return () => { cancelled = true; };
   }, [authLoading, user, session]);
 
-  // The hero's "up next" rail shows the three BIGGEST upcoming conferences
-  // (by expected delegate count), with Harvard WorldMUN always pinned to the
-  // top slot when it is live.
+  // The hero's "up next" rail is CURATED. Edit this list to change what the
+  // front page leads with; order here is the order on screen.
+  //
+  // It used to pick the three biggest upcoming conferences by expected
+  // delegate count, which put whoever typed the largest number on the front
+  // page whether or not they had set their conference up.
+  //
+  // Slugs, not acronyms: two live conferences share the acronym SIMUN, and a
+  // slug is the one identifier that cannot collide.
   const upcomingTrio = useMemo(() => {
     const active = conferences.filter(c => !isConcluded(c));
-    const isWorldMun = (c: LabConference) =>
-      (c.acronym ?? '').toUpperCase() === 'WORLDMUN' || /worldmun/i.test(c.full_name);
-    const worldMun = active.find(isWorldMun);
-    const rest = active
-      .filter(c => !(worldMun && c.id === worldMun.id))
+    const bySlug = new Map(active.map(c => [c.slug, c]));
+
+    const picked = FEATURED_SLUGS
+      .map(slug => bySlug.get(slug))
+      .filter((c): c is LabConference => !!c);
+
+    // Top up from the old heuristic rather than render a short or empty rail.
+    // This is not decoration: `isConcluded` drops a conference the day after
+    // it ends, so a hand-written list empties itself as its conferences run.
+    // Two of the three below finish this month. When that happens the rail
+    // quietly falls back to the biggest upcoming conferences instead of going
+    // blank, and the fix is to edit FEATURED_SLUGS.
+    if (picked.length >= 3) return picked.slice(0, 3);
+    const pickedIds = new Set(picked.map(c => c.id));
+    const filler = active
+      .filter(c => !pickedIds.has(c.id))
       .sort((a, b) => (b.expected_delegates || 0) - (a.expected_delegates || 0));
-    const ordered = worldMun ? [worldMun, ...rest] : rest;
-    return ordered.slice(0, 3);
+    return [...picked, ...filler].slice(0, 3);
   }, [conferences]);
 
   // ── Geolocation ────────────────────────────────────────────────────────────
