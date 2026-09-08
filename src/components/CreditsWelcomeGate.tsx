@@ -20,6 +20,7 @@ function isExcludedPath(pathname: string | null): boolean {
 // WelcomeTokenModal trigger so a fresh signup is greeted wherever
 // postOnboardingDest sends them, not only if they happen to visit /account/profile.
 export default function CreditsWelcomeGate() {
+  const [preRegistered, setPreRegistered] = useState(false);
   const pathname = usePathname();
   const { user, session, loading: authLoading } = useAuth();
   const [seen, setSeen] = useState<boolean | null>(null);
@@ -35,12 +36,16 @@ export default function CreditsWelcomeGate() {
     const supabase = getAuthedClient(session.access_token);
     supabase
       .from('profiles')
-      .select('welcome_token_seen')
+      .select('welcome_token_seen, pre_registered')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
         if (handledRef.current) return;
-        const flag = (data as { welcome_token_seen?: boolean } | null)?.welcome_token_seen ?? null;
+        const row = data as { welcome_token_seen?: boolean; pre_registered?: boolean } | null;
+        const flag = row?.welcome_token_seen ?? null;
+        // Only new signups see this modal at all, so nobody who already has
+        // an account gets an in-app nudge about the pre-registration credits.
+        setPreRegistered(!!row?.pre_registered);
         setSeen(flag);
         if (flag === false) {
           handledRef.current = true;
@@ -63,5 +68,5 @@ export default function CreditsWelcomeGate() {
   if (seen === null || seen === true) return null;
   if (!showWelcome) return null;
 
-  return <CreditsWelcomeModal onClose={dismissWelcome} />;
+  return <CreditsWelcomeModal onClose={dismissWelcome} preRegistered={preRegistered} />;
 }

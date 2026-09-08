@@ -24,7 +24,16 @@ interface Rect { top: number; left: number; width: number; height: number; }
 // Richer successor to the old one-time welcome-token pop-up, mounted globally
 // (see CreditsWelcomeGate) rather than only on the profile page, so it can
 // greet a fresh signup wherever postOnboardingDest sends them.
-export default function CreditsWelcomeModal({ onClose }: { onClose: () => void }) {
+export default function CreditsWelcomeModal({
+  onClose,
+  /** Signed up with an address that had pre-registered. handle_new_user grants
+   *  those accounts two credits instead of one and stamps
+   *  profiles.pre_registered, so the modal can say the right number and thank
+   *  them for it. Only ever true for a NEW signup, which is why nobody with an
+   *  existing account gets an in-app nudge about the pre-registration credits:
+   *  they are being emailed instead. */
+  preRegistered = false,
+}: { onClose: () => void; preRegistered?: boolean }) {
   // Spotlight hole over the navbar credits chip (data-credits-chip in
   // SiteNav.tsx), so it stays crisp and unblurred while the rest of the page
   // dims. Null when the chip isn't in the DOM, or is hidden below the
@@ -161,8 +170,17 @@ export default function CreditsWelcomeModal({ onClose }: { onClose: () => void }
           </div>
 
           <p style={{ fontFamily: OUTFIT, fontSize: 13.5, marginBottom: 20 }}>
-            <span style={{ fontWeight: 800, color: NEU.ink }}>The first credit is on us.</span>{' '}
-            <span style={{ fontWeight: 700, color: NEU.deepGold }}>Apply to a conference today!</span>
+            {preRegistered ? (
+              <>
+                <span style={{ fontWeight: 800, color: NEU.ink }}>Thank you for pre-registering. Your first two credits are on us.</span>{' '}
+                <span style={{ fontWeight: 700, color: NEU.deepGold }}>Apply to a conference today!</span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontWeight: 800, color: NEU.ink }}>The first credit is on us.</span>{' '}
+                <span style={{ fontWeight: 700, color: NEU.deepGold }}>Apply to a conference today!</span>
+              </>
+            )}
           </p>
 
           <Link
