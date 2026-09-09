@@ -62,34 +62,13 @@ Last swept: 9 Sep 2026.
 
 ## Deliberately not done, with reasons
 
-Recorded rather than dropped. Overrule any of these.
+Nothing currently. The three items that lived here (pending chairs on the live
+wall and the public committee card, the calendar link in the confirmation
+email, and the draft reminder's doubled heading) were all overruled and are
+done.
 
-- [ ] **Pending chairs on the LIVE committee card and the public committee
-      card.** The committees page, the committee editor and the assignment
-      board all now show invitees inline in the dais, greyed, with a PENDING
-      badge. Two surfaces do not:
-      - `live/CommitteeCard.tsx` — the live wall is operational, and its copy
-        is built on whether chairs hold the SESSION CODE ("Chairs have the
-        code" vs "No chair assigned yet", `cardModel.ts:552`). A pending
-        invitee has no code, so threading them in makes that headline wrong on
-        the surface that matters most while rooms are running. Doing it
-        properly means changing the card model, not the render.
-      - The public committee card — a delegate deciding whether to apply
-        should see who is confirmed to chair, not who was asked.
-- [ ] **"Add to calendar" in the confirmation email.** It is in the
-      confirmation PAGE and works. It is not in the email because
-      `ButtonDestination` is a closed union, `custom` takes a literal URL, and
-      button URLs are never token-resolved, so a per-conference Google Calendar
-      URL is not expressible. Enabling it means widening the union, branching
-      `resolveButtonUrl`, widening `ButtonUrlConference` beyond `slug` to carry
-      dates and location, and mirroring the same URL into
-      `gavelling_email_html` for the SQL senders. Written up in
-      `emailBlocks.ts`.
-- [ ] **`render_draft_reminder`'s fallback prints its heading twice.** That SQL
-      path writes only a plain `body`, and `email_outbox_fill_body_html` then
-      builds the card using the SUBJECT as the H1 — so the new heading block
-      shows again as the first body line. Matching the TS default exactly was
-      the instruction and this is a faithful mirror of it. The clean fix is for
-      that function to return a `body_html` built with `gavelling_email_html`
-      and for both callers to insert it, which is a behaviour change beyond
-      the ask.
+One judgement was kept inside the work rather than reversed: the PUBLIC
+committee card shows that a chair is coming without naming them, because an
+invitee may decline and publishing their name against a conference they never
+agreed to chair is not ours to do. Say the word if it should name them; it is
+a one-line change.
