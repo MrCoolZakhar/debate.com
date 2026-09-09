@@ -33,6 +33,7 @@ import { CVSummaryRow } from '@/components/CVSummaryRow';
 import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { DatePicker } from '@/components/DatePicker';
+import { CountryField } from '@/components/CountryField';
 import ApplicationQuestionsStage, { ConferencePlate, SectionStrip, MissingSummary, countQuestions } from '@/components/ApplicationQuestionsStage';
 import { focusQuestion } from '@/components/ApplicationQuestionCard';
 import { buildQuestionPages, leadTitleBlock } from '@/lib/applyQuestionPages';
@@ -1002,11 +1003,19 @@ function ConferenceApplyInner() {
   // or a short window pushes the Continue pill below the fold in preview.
   const wizardExtraChrome = previewing ? PREVIEW_BANNER_H : 0;
 
-  // ── Age gate (conference.min_age), DOB comes from the user's profile
+  // ── Basics wall (nationality + date of birth), both read from the profile.
+  // Nationality drives allocation, date of birth drives every age check a
+  // conference runs. A Google sign-up never passes through the e-mail sign-up
+  // form that asks for them, so those accounts arrive here with both blank —
+  // and this wall used to ask only for the date of birth, and only when the
+  // conference had an age gate, so an applicant could get all the way to
+  // submitted with neither field set.
+  const [myNationality, setMyNationality] = useState<string | null>(null);
   const [myDob, setMyDob] = useState<string | null>(null);
+  const [natInput, setNatInput] = useState('');
   const [dobInput, setDobInput] = useState('');
-  const [dobSaving, setDobSaving] = useState(false);
-  const [dobError, setDobError] = useState('');
+  const [basicsSaving, setBasicsSaving] = useState(false);
+  const [basicsError, setBasicsError] = useState('');
 
   // ── Step
   const [step, setStep] = useState(1);
@@ -1190,7 +1199,13 @@ function ConferenceApplyInner() {
   const ageAtStart = hasAgeGate && myDob && conference ? ageAt(myDob, conference.start_date) : null;
   const underAge = minAgeLimit != null && ageAtStart !== null && ageAtStart < minAgeLimit;
   const overAge = maxAgeLimit != null && ageAtStart !== null && ageAtStart > maxAgeLimit;
-  const needsDob = hasAgeGate && !myDob;
+  // The basics wall fires whenever EITHER field is missing, age gate or not.
+  // It sits in front of the age screens, so the age gate keeps working on top
+  // of it: with no date of birth `ageAtStart` is null and underAge/overAge are
+  // both false, so the applicant fills the wall in first and the age screen
+  // then judges them on a date of birth that actually exists. Preview never
+  // shows it and never writes.
+  const needsBasics = !previewing && (!myNationality || !myDob);
   /** One sentence stating the requirement, whichever bounds are set. */
   const ageRequirementText =
     minAgeLimit != null && maxAgeLimit != null
@@ -1810,7 +1825,7 @@ function ConferenceApplyInner() {
         .limit(1),
       supabase
         .from('profiles')
-        .select('date_of_birth, is_ambassador, unlimited_conferences_remaining, mun_experience_level')
+        .select('nationality, date_of_birth, is_ambassador, unlimited_conferences_remaining, mun_experience_level')
         .eq('id', user!.id)
         .maybeSingle(),
       // Personal Gavelling Unlimited subscription: owner_user_id = the
@@ -1846,9 +1861,14 @@ function ConferenceApplyInner() {
     setSocieties(societiesData);
     setExistingApp(appData);
     setOtherRoleApp(otherAppData);
-    const prof = profileRes.data as { date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number; mun_experience_level: string | null } | null;
+    const prof = profileRes.data as { nationality: string | null; date_of_birth: string | null; is_ambassador: boolean; unlimited_conferences_remaining: number; mun_experience_level: string | null } | null;
     const sub = subRes.data as { plan: string; status: string; current_period_end: string | null } | null;
+    setMyNationality(prof?.nationality ?? null);
     setMyDob(prof?.date_of_birth ?? null);
+    // Prefill the wall with whichever half they already have, so someone who
+    // is only missing one field is never asked to retype the other.
+    setNatInput(prof?.nationality ?? '');
+    setDobInput(prof?.date_of_birth ?? '');
     setFinanceProfile({
       is_ambassador: prof?.is_ambassador ?? false,
       unlimited_conferences_remaining: prof?.unlimited_conferences_remaining ?? 0,
@@ -2037,25 +2057,42 @@ function ConferenceApplyInner() {
     setPrefDataLoaded(true);
   }
 
-  async function handleSaveDob() {
-    // Unreachable in preview today (the needsDob wall it's called from is
-    // skipped when previewing), but never writes even if that changes.
+  async function handleSaveBasics() {
+    // Unreachable in preview today (the wall it's called from is skipped when
+    // previewing), but never writes even if that changes.
     if (previewing) return;
     if (!session || !user) return;
-    setDobError('');
+    setBasicsError('');
+    // Same validation as the onboarding basics screen, deliberately: a typed
+    // country that is not a real country is refused rather than stored.
+    const country = getCountryByName(natInput);
+    if (!country) { setBasicsError('Please choose your nationality from the list.'); return; }
+    if (!dobInput) { setBasicsError('Please enter your date of birth.'); return; }
     const age = ageAt(dobInput);
     if (age === null || age < 0 || age > 120) {
-      setDobError('That date of birth doesn’t look right. Please double-check it.');
+      setBasicsError('That date of birth doesn’t look right. Please double-check it.');
       return;
     }
-    setDobSaving(true);
+    if (age < 13) { setBasicsError('You need to be at least 13 to use Gavelling.'); return; }
+    setBasicsSaving(true);
     const supabase = getAuthedClient(session.access_token);
-    const { error } = await supabase.from('profiles').update({ date_of_birth: dobInput }).eq('id', user.id);
-    setDobSaving(false);
-    if (error) {
-      setDobError('Your date of birth could not be saved. Please try again.');
+    // Both fields in one update, and `.select('id')` is load-bearing: an
+    // update matching zero rows comes back with error === null, so without
+    // the row check a save that changed nothing would let the applicant
+    // through with the fields still blank, which is the exact state this
+    // wall exists to prevent.
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ nationality: country.name, date_of_birth: dobInput })
+      .eq('id', user.id)
+      .select('id');
+    setBasicsSaving(false);
+    if (error || !data || data.length === 0) {
+      setBasicsError('Your details could not be saved. Please refresh and try again.');
       return;
     }
+    setMyNationality(country.name);
+    setNatInput(country.name);
     setMyDob(dobInput);
   }
 
@@ -2254,7 +2291,11 @@ function ConferenceApplyInner() {
       goToQuestion(questionCheck.missingIds[0]);
       return;
     }
-    if (needsDob || underAge || overAge) {
+    if (needsBasics) {
+      setSubmitError('Please add your nationality and date of birth before you submit.');
+      return;
+    }
+    if (underAge || overAge) {
       setSubmitError(
         hasAgeGate
           ? `This conference requires delegates to be ${ageRequirementText}.`
@@ -4808,7 +4849,8 @@ function ConferenceApplyInner() {
     );
   }
 
-  if (needsDob && !previewing) {
+  if (needsBasics) {
+    const basicsIncomplete = basicsSaving || !natInput.trim() || !dobInput;
     return (
       <div className="min-h-screen flex flex-col" style={{ ...themeCssVars(activeTheme), backgroundColor: 'var(--gv-bg)' }}>
         <div className="pointer-events-none fixed inset-0 z-[1]" style={{ backgroundImage: GRAIN, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
@@ -4819,15 +4861,36 @@ function ConferenceApplyInner() {
               className="inline-flex items-center rounded-full px-3 py-1 mb-4 text-[11px] font-bold"
               style={{ backgroundColor: 'color-mix(in srgb, var(--gv-accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--gv-accent) 35%, transparent)', color: 'var(--gv-accent)', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.08em' }}
             >
-              {ageChipText} CONFERENCE
+              {hasAgeGate ? `${ageChipText} CONFERENCE` : 'BEFORE YOU APPLY'}
             </span>
             <h2 className="font-semibold text-lg mb-2" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
-              Add your date of birth to continue
+              Two things before you apply
             </h2>
             <p className="text-sm mb-6" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}>
-              This conference requires delegates to be {ageRequirementText}, and your profile doesn&apos;t have a date of birth yet. It will be saved to your profile.
+              Your profile is missing your nationality or your date of birth. Allocation places delegates by country, and conferences set age limits on who can apply.
+              {hasAgeGate ? ` ${conferenceAcronymLabel(conference)} requires delegates to be ${ageRequirementText}.` : ''} Both are saved to your profile, and only your age is ever shown to a conference, never the date.
             </p>
+
             <label className="block font-semibold text-sm mb-1.5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
+              Nationality
+            </label>
+            <CountryField
+              value={natInput}
+              onChange={(v) => { setNatInput(v); setBasicsError(''); }}
+              placeholder="Start typing a country..."
+              inputStyle={{
+                backgroundColor: 'var(--gv-bg)',
+                border: '1px solid var(--gv-border)',
+                borderRadius: 12,
+                color: 'var(--gv-on-surface)',
+                fontFamily: "'Outfit', sans-serif",
+                fontSize: 14,
+                paddingTop: 12,
+                paddingBottom: 12,
+              }}
+            />
+
+            <label className="block font-semibold text-sm mb-1.5 mt-5" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif" }}>
               Date of birth
             </label>
             <DatePicker
@@ -4835,28 +4898,31 @@ function ConferenceApplyInner() {
               max={new Date().toISOString().slice(0, 10)}
               initialView="2005-06-15"
               placeholder="Select your date of birth"
-              onChange={(iso) => { setDobInput(iso); setDobError(''); }}
+              onChange={(iso) => { setDobInput(iso); setBasicsError(''); }}
             />
-            {dobError && (
-              <p className="mt-1.5 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-                {dobError}
+            <p className="mt-1.5 text-xs" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif" }}>
+              You must be at least 13 to use Gavelling.
+            </p>
+            {basicsError && (
+              <p role="alert" className="mt-2 text-xs" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
+                {basicsError}
               </p>
             )}
             <button
-              onClick={handleSaveDob}
-              disabled={dobSaving || !dobInput}
+              onClick={handleSaveBasics}
+              disabled={basicsIncomplete}
               className="w-full mt-4 rounded-xl py-3 font-bold text-sm focus:outline-none transition-colors"
               style={{
-                backgroundColor: (dobSaving || !dobInput) ? 'var(--gv-border)' : 'var(--gv-main)',
-                color: (dobSaving || !dobInput) ? 'var(--gv-muted)' : 'var(--gv-on-main)',
+                backgroundColor: basicsIncomplete ? 'var(--gv-border)' : 'var(--gv-main)',
+                color: basicsIncomplete ? 'var(--gv-muted)' : 'var(--gv-on-main)',
                 fontFamily: "'Outfit', sans-serif",
                 letterSpacing: '0.08em',
-                cursor: (dobSaving || !dobInput) ? 'default' : 'pointer',
+                cursor: basicsSaving ? 'wait' : basicsIncomplete ? 'default' : 'pointer',
               }}
-              onMouseEnter={(e) => { if (!dobSaving && dobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
-              onMouseLeave={(e) => { if (!dobSaving && dobInput) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
+              onMouseEnter={(e) => { if (!basicsIncomplete) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main-mid)'; }}
+              onMouseLeave={(e) => { if (!basicsIncomplete) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--gv-main)'; }}
             >
-              {dobSaving ? 'SAVING...' : 'SAVE & CONTINUE'}
+              {basicsSaving ? 'SAVING...' : 'SAVE & CONTINUE'}
             </button>
             <div className="text-center mt-4">
               <Link

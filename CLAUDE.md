@@ -217,6 +217,21 @@ src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, Scoreboard
 
 **Email:** nothing sends inline. Every email is an `email_outbox` row (rendered by a DB trigger, delivered by the `send-emails` edge function via Resend). Add an event to `EVENT_REGISTRY` in `emailEvents.ts` and TypeScript forces a category and a default body.
 
+**Emailing "everyone" reaches people who have never registered, and that is
+deliberate.** A recipient's address is `profiles.email ?? invited_email`, so an
+imported or invited applicant who never made an account still gets the email.
+They also pass every consent check: `recipientAllowsCategory` returns true when
+there is no `profiles` row (`emailEvents.ts:211`), because there are no
+preferences to honour yet. Roughly 157 unclaimed applicants are in that state.
+
+Know what that means before writing a broadcast. These people never chose to
+hear from the platform; an organiser uploaded their address. Their only
+protection is the global unsubscribe list, which the `email_outbox` trigger
+checks (`email_is_opted_out` suppresses the row before it is rendered), so the
+unsubscribe link in the footer is doing real work and must never be removed
+from a broadcast. Treat "everyone" as including strangers, and write it
+accordingly.
+
 ---
 
 ## 7. Sessions runtime in one screen
