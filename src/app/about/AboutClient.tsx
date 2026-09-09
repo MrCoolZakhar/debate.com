@@ -65,15 +65,12 @@ const AMBASSADORS = [
   // ── Joined since the last update ──────────────────────────────────────────
   // `photo: null` is deliberate and not a placeholder to fill in blindly: it
   // means we have the person but not a picture of them, and the card renders
-  // their initials instead. Six of the twelve below are in that state. Adding
+  // their initials instead. Two of the eight below are in that state. Adding
   // a photo is just swapping the null for a path.
   // Europe
   { name: 'Marsia Qurku',            country: 'Albania',        initials: 'MQ', photo: '/ambassador-photos/marsia_ambassador.webp', photoPosition: '51% 55%', photoScale: 1.5 },
   { name: 'Ahmet Mert Çıragöz',      country: 'Türkiye',        initials: 'AÇ', photo: '/ambassador-photos/ahmet_ambassador.webp', photoPosition: '52% 30%', photoScale: 1.4 },
   { name: 'Jan Beblavy',             country: 'Slovakia',       initials: 'JB', photo: '/ambassador-photos/jan_ambassador.webp', photoPosition: '45% 42%', photoScale: 1.15 },
-  { name: 'Nazan El Hadidi',         country: 'Germany',        initials: 'NE', photo: null },
-  { name: 'Ilan Pato',               country: 'Portugal',       initials: 'IP', photo: null },
-  { name: 'David Auberger',          country: 'Netherlands',    initials: 'DA', photo: null },
   // Asia
   { name: 'Sarth Agrawal',           country: 'Jordan',         initials: 'SA', photo: '/ambassador-photos/sarth_ambassador.webp', photoPosition: '45% 20%', photoScale: 1.8 },
   { name: 'Nadia Seranity',          country: 'Sri Lanka',      initials: 'NS', photo: '/ambassador-photos/nadia_ambassador.webp', photoPosition: '48% 38%', photoScale: 1.3 },
@@ -81,7 +78,6 @@ const AMBASSADORS = [
   { name: 'Arun Kaloo',              country: 'Malaysia',       initials: 'AK', photo: null },
   // North America
   { name: 'Nolan Taarea',            country: 'United States',  initials: 'NT', photo: '/ambassador-photos/nolan_ambassador.webp', photoPosition: '52% 22%', photoScale: 1.35 },
-  { name: 'Mikele Mancuso',          country: 'United States',  initials: 'MM', photo: null },
 ];
 
 const inputStyle: React.CSSProperties = {
