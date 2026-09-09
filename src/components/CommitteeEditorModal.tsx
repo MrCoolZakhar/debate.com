@@ -534,11 +534,14 @@ function ChairsDock({ conferenceId, committeeId, committeeName }: {
           ))
         )}
 
-        {/* Pending invites — visibly not-yet-seated, with the two actions an
-            organiser has left: send the email again, or take it back. */}
+        {/* Invitees sit IN the chair list, not under a divider below it. An
+            invited chair is already part of this dais as far as the
+            secretariat is concerned, just not confirmed, and separating them
+            made a committee with an invite out look chairless. Greyed, with
+            the badge carrying the reason, and both actions kept: send the
+            email again, or take it back. */}
         {invites.length > 0 && (
-          <div className="flex flex-col gap-2 pt-2 mt-1" style={{ borderTop: '1px solid #EDE7D8' }}>
-            <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: '#7A5A10' }}>INVITED</p>
+          <div className="flex flex-col gap-2">
             {invites.map((inv) => {
               const label = pendingInviteName(inv);
               const busy = inviteBusyId === inv.id;

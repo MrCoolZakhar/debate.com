@@ -41,12 +41,21 @@ Last swept: 9 Sep 2026.
       "Set-up" filter group are all still set-up-based, and no `VerifiedCheck`
       appears on a row. Done = the row reads verified, with set-up kept only
       where it still earns its place.
-- [ ] **Pending chairs, remaining surfaces.** The committees page merges
-      invitees into the dais correctly. The assignment board
-      (`No chairs assigned yet.`), the live committee card
-      (`No chair assigned`) and the public committee card still show them in a
-      detached block or not at all. Done = an invitee appears inline in the
-      chair list, greyed, on all of them.
+- [ ] **Pending chairs on the LIVE committee card and the public committee
+      card.** The committees page, the committee editor and the assignment
+      board now all show invitees inline in the dais, greyed, with a PENDING
+      badge. Two surfaces deliberately do not, and this is a judgement call
+      Peter should overrule if he disagrees:
+      - `live/CommitteeCard.tsx` — the live status wall is operational, used
+        while rooms are running. Its copy is built on whether chairs have the
+        SESSION CODE (`cardModel.ts:552`, "Chairs have the code" vs "No chair
+        assigned yet"). A pending invitee has no code, so threading them in
+        makes that headline wrong on the surface that matters most when it is
+        being watched. Doing it properly means changing the card model, not
+        just the render.
+      - The public committee card on `ConferenceDetailClient` — a delegate
+        deciding whether to apply should see who is actually confirmed to
+        chair, not who was asked.
 - [ ] **Eight emails still bury facts in prose:** `award_received`,
       `delegation_swap`, `session_join_invite`, `chair_assigned`,
       `session_chair_invite`, `fee_waived`, `spot_received`, `spot_lost`.
