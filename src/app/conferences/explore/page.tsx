@@ -50,20 +50,41 @@ async function ConferenceDirectory() {
       aria-label="All conferences on Gavelling"
       style={{ backgroundColor: '#EDE7D8', borderTop: '1px solid rgba(221,212,192,0.9)' }}
     >
-      <div className="mx-auto max-w-6xl px-6 py-12">
-        <h2
-          style={{
-            fontFamily: "'Outfit', sans-serif",
-            fontWeight: 800,
-            fontSize: 11,
-            letterSpacing: '0.14em',
-            color: '#9A8A78',
-            textTransform: 'uppercase',
-            margin: 0,
-          }}
-        >
-          Every conference on Gavelling
-        </h2>
+      <div className="mx-auto max-w-6xl px-6 py-8">
+        {/* COLLAPSED, NOT REMOVED, and the distinction is the whole point.
+            This wall of names is the crawl path: the browse UI above renders
+            client-side, so without these <a href>s the conference pages have
+            no server-rendered route in from anywhere, which is what had
+            Search Console reporting them as "Discovered, currently not
+            indexed".
+
+            <details> keeps every link in the delivered HTML and keeps it one
+            hop from this page. Google indexes content inside an accordion
+            normally and has said so repeatedly; it is NOT the `display:none`
+            case the original comment warned about, because that one hides
+            content the markup still asserts is visible. Here the markup says
+            "this is a disclosure widget", which is honest, and it is what
+            <details> is for.
+
+            So the SEO is untouched and the page stops being a directory
+            nobody asked for. It also stops getting worse: at 54 conferences
+            it was a screenful, at 500 it would be a wall. */}
+        <details>
+          <summary
+            className="focus:outline-none"
+            style={{
+              fontFamily: "'Outfit', sans-serif",
+              fontWeight: 800,
+              fontSize: 11,
+              letterSpacing: '0.14em',
+              color: '#9A8A78',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              listStyle: 'none',
+            }}
+          >
+            Every conference on Gavelling ({confs.length})
+          </summary>
         <ul
           className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2.5"
           style={{ listStyle: 'none', margin: 0, padding: 0 }}
@@ -93,6 +114,7 @@ async function ConferenceDirectory() {
             );
           })}
         </ul>
+        </details>
       </div>
     </section>
   );

@@ -38,7 +38,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
-import { compareStartDate } from '@/lib/conferenceDates';
+import { compareStartDate, hasConcluded } from '@/lib/conferenceDates';
 import { User, FileText, FileClock, CalendarDays, Sparkles, Coins, LogOut, ArrowRight, Ticket, Plus } from 'lucide-react';
 import Portal from '@/components/Portal';
 import { useDraftCount, draftResumeHref } from '@/hooks/useDraftCount';
@@ -52,6 +52,9 @@ interface NavConference {
   acronym: string;
   logo_url: string | null;
   start_date: string;
+  /** Carried only so hasConcluded() can drop finished conferences. Nullable
+   *  because a dates-TBD conference has neither date. */
+  end_date: string | null;
   role: 'DELEGATE' | 'CHAIR' | 'ORGANIZER';
 }
 
@@ -173,7 +176,8 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
 
     const userId = user.id;
     const supabase = getAuthedClient(session.access_token);
-    const CONF = 'id, slug, acronym, logo_url, start_date';
+    // end_date is fetched only so finished conferences can be dropped below.
+  const CONF = 'id, slug, acronym, logo_url, start_date, end_date';
 
     (async () => {
       try {
@@ -193,7 +197,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             .eq('organizer_id', userId),
         ]);
 
-        type ConfRow = { id: string; slug: string; acronym: string; logo_url: string | null; start_date: string };
+        type ConfRow = { id: string; slug: string; acronym: string; logo_url: string | null; start_date: string; end_date: string | null };
         const byId = new Map<string, NavConference>();
         const add = (conf: ConfRow | null, role: NavConference['role']) => {
           if (!conf) return;
@@ -203,7 +207,7 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
             if (role === 'ORGANIZER') existing.role = 'ORGANIZER';
             return;
           }
-          byId.set(conf.id, { id: conf.id, slug: conf.slug, acronym: conf.acronym, logo_url: conf.logo_url, start_date: conf.start_date, role });
+          byId.set(conf.id, { id: conf.id, slug: conf.slug, acronym: conf.acronym, logo_url: conf.logo_url, start_date: conf.start_date, end_date: conf.end_date, role });
         };
 
         for (const row of (appsRes.data ?? []) as { role: string; conferences: ConfRow | ConfRow[] | null }[]) {
@@ -216,7 +220,18 @@ export default function ProfileDropdown({ trigger, panelStyle }: ProfileDropdown
           add(conf, 'ORGANIZER');
         }
 
-        const list = Array.from(byId.values()).sort((a, b) => compareStartDate(a.start_date, b.start_date));
+        // Finished conferences leave the menu. This is a "where am I going
+        // next" list, and a season of concluded ones pushes the live ones off
+        // the bottom (it renders only the first five).
+        //
+        // hasConcluded, not a start_date test: a conference is over the day
+        // AFTER its last day, so a start_date comparison would hide one that
+        // is running right now, which is exactly when someone opens this menu
+        // to find it. It also falls back to start_date when end_date is null,
+        // and treats a dates-TBD conference as still to come rather than past.
+        const list = Array.from(byId.values())
+          .filter(c => !hasConcluded(c))
+          .sort((a, b) => compareStartDate(a.start_date, b.start_date));
         setMyConfs(list);
       } catch {
         setMyConfs([]);
