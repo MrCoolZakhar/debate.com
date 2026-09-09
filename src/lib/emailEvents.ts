@@ -340,6 +340,11 @@ interface ConferenceRow {
   full_name: string;
   start_date: string | null;
   end_date: string | null;
+  // The add_to_calendar button destination is built from these three plus the
+  // dates above; without them a receipt would carry a dateless calendar link.
+  dates_tbd: boolean | null;
+  city: string | null;
+  country: string | null;
   fee_amount: number;
   fee_currency: string;
   banner_url: string | null;
@@ -419,7 +424,7 @@ export async function queueEventEmail(
   const [{ data: confData }, { data: recipientsData }, { data: roleConfigsData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, end_date, dates_tbd, city, country, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -471,6 +476,10 @@ export async function queueEventEmail(
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
     start_date: conference?.start_date ?? null,
+    end_date: conference?.end_date ?? null,
+    dates_tbd: conference?.dates_tbd ?? null,
+    city: conference?.city ?? null,
+    country: conference?.country ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
@@ -603,7 +612,7 @@ export async function queueChairInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, end_date, dates_tbd, city, country, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -624,6 +633,10 @@ export async function queueChairInviteEmail(
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
     start_date: conference?.start_date ?? null,
+    end_date: conference?.end_date ?? null,
+    dates_tbd: conference?.dates_tbd ?? null,
+    city: conference?.city ?? null,
+    country: conference?.country ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
@@ -691,7 +704,7 @@ export async function queueOrganizerInviteEmail(
   const [{ data: confData }, { data: templateData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, end_date, dates_tbd, city, country, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -712,6 +725,10 @@ export async function queueOrganizerInviteEmail(
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
     start_date: conference?.start_date ?? null,
+    end_date: conference?.end_date ?? null,
+    dates_tbd: conference?.dates_tbd ?? null,
+    city: conference?.city ?? null,
+    country: conference?.country ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
@@ -817,7 +834,7 @@ export async function queueImportJoinInviteEmails(
   const [{ data: confData }, { data: templateData }, { data: claimData }, { data: allocData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, end_date, dates_tbd, city, country, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -851,6 +868,10 @@ export async function queueImportJoinInviteEmails(
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
     start_date: conference?.start_date ?? null,
+    end_date: conference?.end_date ?? null,
+    dates_tbd: conference?.dates_tbd ?? null,
+    city: conference?.city ?? null,
+    country: conference?.country ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,
@@ -982,7 +1003,7 @@ export async function queueRequestReceivedEmail(
   const [{ data: confData }, { data: templateData }, { data: organizerData }] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
+      .select('slug, acronym, full_name, start_date, end_date, dates_tbd, city, country, banner_url, logo_url, contact_email, email_theme, instagram_url, facebook_url, tiktok_url, whatsapp_url, website_url')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -1009,6 +1030,10 @@ export async function queueRequestReceivedEmail(
     logo_url: conference?.logo_url ?? null,
     contact_email: conference?.contact_email ?? '',
     start_date: conference?.start_date ?? null,
+    end_date: conference?.end_date ?? null,
+    dates_tbd: conference?.dates_tbd ?? null,
+    city: conference?.city ?? null,
+    country: conference?.country ?? null,
     instagram_url: conference?.instagram_url ?? null,
     facebook_url: conference?.facebook_url ?? null,
     tiktok_url: conference?.tiktok_url ?? null,

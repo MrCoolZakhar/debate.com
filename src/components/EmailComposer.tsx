@@ -44,7 +44,7 @@ import {
 } from '@/lib/emailTokens';
 import {
   type EmailBlock, type ButtonBlock, type ButtonDestination, type ImageBlock, type ParagraphVariant,
-  BUTTON_DESTINATION_LABELS, flattenBlocksToPlainText,
+  BUTTON_DESTINATION_LABELS, flattenBlocksToPlainText, calendarUrlFor,
 } from '@/lib/emailBlocks';
 import { renderEmailHtml, resolveEmailTheme, type EmailRenderConference } from '@/lib/emailHtml';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
@@ -1866,7 +1866,14 @@ export default function EmailComposer({
       )}
 
       {selected?.type === 'button' && (
-        <ButtonProperties block={selected} onPatch={p => patchButton(selected._id, p)} />
+        <ButtonProperties
+          block={selected}
+          onPatch={p => patchButton(selected._id, p)}
+          /* An add_to_calendar button renders NOTHING at a conference with no
+             confirmed dates, in the preview and in the real send alike. Say so
+             here rather than let the organiser watch it silently vanish. */
+          calendarUnavailable={!calendarUrlFor(conference)}
+        />
       )}
 
       {selected?.type === 'image' && (
@@ -2453,7 +2460,7 @@ function ButtonBlockCanvas({
 
 // ── Property editors ─────────────────────────────────────────────────────────
 
-function ButtonProperties({ block, onPatch }: { block: ButtonBlock; onPatch: (patch: Partial<ButtonBlock>) => void }) {
+function ButtonProperties({ block, onPatch, calendarUnavailable }: { block: ButtonBlock; onPatch: (patch: Partial<ButtonBlock>) => void; calendarUnavailable: boolean }) {
   return (
     <>
       <PanelTitle hint="One button, one place to go. The colour comes from your email theme.">BUTTON</PanelTitle>
@@ -2490,6 +2497,12 @@ function ButtonProperties({ block, onPatch }: { block: ButtonBlock; onPatch: (pa
           <FieldLabel>THE LINK</FieldLabel>
           <input value={block.url ?? ''} onChange={e => onPatch({ url: e.target.value })} placeholder="https://…" style={FIELD_STYLE} className="mb-3" />
         </>
+      )}
+      {block.destination === 'add_to_calendar' && calendarUnavailable && (
+        <p className="flex items-start gap-1.5 mb-2" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: AMBER_INK, lineHeight: 1.5, textWrap: 'pretty' }}>
+          <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 2 }} />
+          This conference has no confirmed dates yet, so this button will not appear in the email at all. Set your dates in Settings and it comes back on its own.
+        </p>
       )}
       {!block.label.trim() && (
         <p className="flex items-start gap-1.5" style={{ fontFamily: OUTFIT, fontSize: 11.5, color: AMBER_INK, lineHeight: 1.5, textWrap: 'pretty' }}>

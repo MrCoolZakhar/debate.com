@@ -8,18 +8,22 @@
  * run through the token resolver — resolveButtonUrl works from the conference
  * row and the per-recipient tokens below, not from EmailTokenContext.
  *
- * That is why the payment receipt has no "Add to calendar" link. A Google
- * Calendar template URL is
+ * `add_to_calendar` is the one destination built from conference DATA rather
+ * than from a route: a Google Calendar template URL
  * https://calendar.google.com/calendar/render?action=TEMPLATE&text=…&dates=…&location=…
- * built from this conference's name, start and end dates and location, so it
- * is per-conference data that neither a literal `url` nor any existing
- * destination can express. Adding it means a new destination here plus a
- * branch in resolveButtonUrl with access to the conference's dates and
- * location (ButtonUrlConference currently carries only the slug), and the
- * same URL mirrored into gavelling_email_html for the SQL send paths. That is
- * a deliberate piece of work, not something to smuggle into a copy change.
+ * assembled from this conference's name, dates and location. That is why
+ * ButtonUrlConference carries the whole date/location set and not just the
+ * slug, and why every caller has to supply them. The same URL is mirrored on
+ * the SQL side by `gavelling_calendar_url()`, which `gavelling_email_html`
+ * resolves from the literal CTA url 'add_to_calendar'.
+ *
+ * It is also the one destination that can legitimately fail to produce a URL
+ * (dates to be confirmed, or no start date on record). resolveButtonUrl
+ * returns '' there, and BOTH renderers drop the whole button rather than
+ * emit a dateless calendar entry — see renderBlock in emailHtml.ts and
+ * flattenBlocksToPlainText below.
  */
-export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept' | 'organizer_invite_accept' | 'signup_page' | 'import_claim';
+export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept' | 'organizer_invite_accept' | 'signup_page' | 'import_claim' | 'add_to_calendar';
 
 /** Fixed size presets only — never a free-form font size. A numeric size
  *  control would let a single template break the 600px table layout and
@@ -162,10 +166,25 @@ export const BUTTON_DESTINATION_LABELS: Record<ButtonDestination, string> = {
   organizer_invite_accept: 'Accept organizer invite link',
   signup_page: 'Gavelling sign-up page (returns to this conference)',
   import_claim: 'Imported delegate claim link',
+  add_to_calendar: 'Add to calendar (Google)',
 };
 
+/**
+ * Everything a button URL can be built from. Deliberately NOT just the slug:
+ * `add_to_calendar` needs the name, the dates and the location, and every
+ * field here is required-but-nullable so a new send path cannot quietly omit
+ * one and ship a dateless calendar link. A caller that genuinely has no value
+ * passes null and the calendar button is dropped, which is the honest outcome.
+ */
 export interface ButtonUrlConference {
   slug: string;
+  full_name: string;
+  start_date: string | null;
+  end_date: string | null;
+  /** Organiser said "dates to be confirmed". Never put a guess in a calendar. */
+  dates_tbd: boolean | null;
+  city: string | null;
+  country: string | null;
 }
 
 /** Per-recipient values a button URL may need beyond the conference — the
@@ -196,9 +215,55 @@ export function absolutizeUrl(url: string | null | undefined, siteUrl: string): 
   return `${siteUrl}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 }
 
+/**
+ * YYYYMMDD/YYYYMMDD for a Google Calendar all-day event, or null when there is
+ * no usable start date.
+ *
+ * THE END IS EXCLUSIVE in Google Calendar: a conference running 19 to 21 Feb
+ * 2027 must pass 20270219/20270222, or it lands in the diary a day short. A
+ * missing end date falls back to the start, so a one-day event still spans one
+ * day rather than none.
+ *
+ * Shared with the registration confirmation page (RegistrationConfirmation.tsx
+ * imports this) so the page and the email can never drift apart.
+ */
+export function googleCalendarDates(start: string | null | undefined, end: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec((start ?? '').trim());
+  if (!m) return null;
+  const e = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec((end ?? '').trim()) ?? m;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const startStamp = `${m[1]}${pad(+m[2])}${pad(+m[3])}`;
+  // +1 day, in UTC so no local timezone can roll it backwards.
+  const exclusive = new Date(Date.UTC(+e[1], +e[2] - 1, +e[3] + 1));
+  const endStamp = `${exclusive.getUTCFullYear()}${pad(exclusive.getUTCMonth() + 1)}${pad(exclusive.getUTCDate())}`;
+  return `${startStamp}/${endStamp}`;
+}
+
+/** The Google Calendar template URL for this conference, or '' when it cannot
+ *  honestly be built (dates to be confirmed, or no start date on record).
+ *  Callers treat '' as "drop the button". */
+export function calendarUrlFor(conference: ButtonUrlConference): string {
+  if (conference.dates_tbd) return '';
+  const dates = googleCalendarDates(conference.start_date, conference.end_date);
+  if (!dates) return '';
+  const siteUrl = getSiteUrl();
+  const title = (conference.full_name ?? '').trim() || 'Conference';
+  const place = [conference.city, conference.country].map(s => (s ?? '').trim()).filter(Boolean).join(', ');
+  const details = `Your place at ${title}. Details: ${siteUrl}/conferences/${conference.slug}`;
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+    + `&text=${encodeURIComponent(title)}`
+    + `&dates=${dates}`
+    + (place ? `&location=${encodeURIComponent(place)}` : '')
+    + `&details=${encodeURIComponent(details)}`;
+}
+
+/** Returns '' for an `add_to_calendar` button that cannot be built. Every
+ *  renderer must drop a button whose URL is empty. */
 export function resolveButtonUrl(block: ButtonBlock, conference: ButtonUrlConference, extra?: ButtonUrlExtra): string {
   const siteUrl = getSiteUrl();
   switch (block.destination) {
+    case 'add_to_calendar':
+      return calendarUrlFor(conference);
     case 'conference_page':
       return `${siteUrl}/conferences/${conference.slug}`;
     case 'documents':
@@ -229,7 +294,14 @@ export function flattenBlocksToPlainText(blocks: EmailBlock[], conference: Butto
   return blocks
     .map(b => {
       if (b.type === 'paragraph') return stripInlineMarks(b.content);
-      if (b.type === 'button') return `${b.label}: ${resolveButtonUrl(b, conference, extra)}`;
+      if (b.type === 'button') {
+        const url = resolveButtonUrl(b, conference, extra);
+        // No URL means the button does not exist in this email (a calendar
+        // link for a conference with no dates). Contributing "Label: " to the
+        // plain-text mirror would print a promise with nothing behind it.
+        if (!url) return '';
+        return `${b.label}: ${url}`;
+      }
       // The text/plain alternative matters more here than anywhere else: these
       // ARE the facts, so a client rendering only text must still get them.
       if (b.type === 'facts') {

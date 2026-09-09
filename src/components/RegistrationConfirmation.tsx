@@ -36,6 +36,10 @@ import { NEU } from '@/components/neu';
 import { formatFee } from '@/lib/finance';
 import { conferenceAcronymLabel, conferenceFullNameLabel } from '@/lib/conferenceLabels';
 import { formatConferenceDates } from '@/lib/conferenceDates';
+// The SAME date maths the emails use. It lived here as a private copy; the
+// add_to_calendar email button needs it too, and two copies of an exclusive
+// end date is exactly the bug that would only show up in somebody's diary.
+import { googleCalendarDates } from '@/lib/emailBlocks';
 
 const OUTFIT = "'Outfit', sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
@@ -100,20 +104,6 @@ const ROLE_REGISTRATION_LABEL: Record<string, string> = {
 function registrationLabel(role: string): string {
   return ROLE_REGISTRATION_LABEL[role]
     ?? `${role.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase())} registration`;
-}
-
-/** YYYYMMDD/YYYYMMDD for a Google Calendar all-day event. The end is
- *  EXCLUSIVE there, so a 19 to 21 Feb conference ends 20270222. */
-function googleCalendarDates(start: string | null, end: string | null): string | null {
-  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec((start ?? '').trim());
-  if (!m) return null;
-  const e = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec((end ?? '').trim()) ?? m;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const startStamp = `${m[1]}${pad(+m[2])}${pad(+m[3])}`;
-  // +1 day, in UTC so no local timezone can roll it backwards.
-  const exclusive = new Date(Date.UTC(+e[1], +e[2] - 1, +e[3] + 1));
-  const endStamp = `${exclusive.getUTCFullYear()}${pad(exclusive.getUTCMonth() + 1)}${pad(exclusive.getUTCDate())}`;
-  return `${startStamp}/${endStamp}`;
 }
 
 export default function RegistrationConfirmation({

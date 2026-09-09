@@ -38,6 +38,11 @@ export interface DefaultEventEmail {
 
 const VIEW_CONFERENCE_BUTTON: EmailBlock = { type: 'button', label: 'View my conference', destination: 'documents' };
 
+/** The receipt is the email a delegate keeps, and the next thing they need
+ *  from it is the dates in their diary. Renders nothing at all when the
+ *  conference has no confirmed dates — see `add_to_calendar` in emailBlocks.ts. */
+const ADD_TO_CALENDAR_BUTTON: EmailBlock = { type: 'button', label: 'Add the dates to my calendar', destination: 'add_to_calendar' };
+
 export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   application_received: {
     subject: "We've received your application to {{conference_name}}",
@@ -125,6 +130,7 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
         { label: 'Amount paid', value: '{{fee}}' },
       ] },
       VIEW_CONFERENCE_BUTTON,
+      ADD_TO_CALENDAR_BUTTON,
       { type: 'paragraph', variant: 'small', content: 'Keep this email as your confirmation of payment.' },
     ],
   },
