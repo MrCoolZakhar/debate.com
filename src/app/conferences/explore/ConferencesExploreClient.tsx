@@ -43,7 +43,9 @@ const CONTINENT_LABELS: Record<string, string> = {
   'oceania': 'Oceania',
 };
 
-const CONTINENT_KEYS = ['north-america', 'south-america', 'europe', 'africa', 'asia', 'oceania'] as const;
+// The rail no longer lists continents, but /conferences/map still deep-links
+// here with ?continent=<key>, so the filter itself stays alive and the rail
+// surfaces whichever continent arrived in the URL as one clearable row.
 
 // User-facing labels for student_level DB values ('school' stays 'school' in the DB).
 const LEVEL_LABELS: Record<string, string> = {
@@ -57,6 +59,49 @@ const FORMAT_LABELS: Record<string, string> = {
   'online': 'Online',
   'hybrid': 'Hybrid',
 };
+
+// The rail offers two formats and two levels, because that is how people
+// actually choose: can I get there in person, or do I attend from my room?
+// A hybrid conference is genuinely both, so it answers to BOTH filters. Same
+// for a 'both' student level. Row chips still print the real DB value
+// ("Hybrid", "HS & Uni") — only the FILTER collapses the third value.
+type FormatFilter = 'in-person' | 'online' | '';
+type LevelFilter = 'school' | 'university' | '';
+
+function matchesFormat(format: string, filter: FormatFilter): boolean {
+  if (!filter) return true;
+  return format === filter || format === 'hybrid';
+}
+
+function matchesLevel(level: string, filter: LevelFilter): boolean {
+  if (!filter) return true;
+  return level === filter || level === 'both';
+}
+
+// ── Country facets ─────────────────────────────────────────────────────────
+// The rail's country list is derived from the conferences on the page, so it
+// can never offer a country with nothing behind it. Countries are keyed by ISO
+// identity so "Turkey" and "Türkiye" are one row, not two.
+
+interface CountryFacet {
+  /** countryIdentity() — ISO code where we know the country, folded name otherwise. */
+  id: string;
+  /** Canonical display name (Türkiye, not Turkey). */
+  name: string;
+  /** ISO alpha-2, when the name resolves. Missing → no flag, still filterable. */
+  code?: string;
+  count: number;
+}
+
+/** region === '' | 'country' (near you) | 'country:<identity>' | a continent key. */
+const COUNTRY_PREFIX = 'country:';
+
+/** A conference is "worth travelling for" at this size. */
+const BIG_CONFERENCE_DELEGATES = 500;
+const BIG_CONFERENCE_LIMIT = 4;
+
+/** How many countries the rail shows before the "Show all" expander. */
+const COUNTRY_VISIBLE_CAP = 9;
 
 // Small lucide icons that showcase HOW a conference happens, so a row reads at
 // a glance: format (where it meets) and student level (who it is for).
@@ -169,8 +214,47 @@ function ViewToggle({ view, onChange }: { view: ExploreView; onChange: (v: Explo
 }
 
 // ── Date sort toggle (soonest ↔ latest) ───────────────────────────────────
+// Sorting is a property of the RESULTS, not of the filters, so it sits at the
+// top of the results column beside the view toggle rather than at the bottom
+// of the rail where it used to be buried.
 
 type DateSort = 'asc' | 'desc';
+
+function DateSortToggle({ sort, onChange }: { sort: DateSort; onChange: (v: DateSort) => void }) {
+  const Icon = sort === 'asc' ? CalendarArrowUp : CalendarArrowDown;
+  const label = sort === 'asc' ? 'Soonest first' : 'Latest first';
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(sort === 'asc' ? 'desc' : 'asc')}
+      title="Sort by date"
+      aria-label={`Sorted by date, ${label}. Click to flip.`}
+      className="inline-flex items-center flex-shrink-0 focus:outline-none"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        height: '42px',
+        padding: '0 15px',
+        gap: '7px',
+        borderRadius: 9999,
+        backgroundColor: hover ? 'rgba(27,56,40,0.08)' : 'rgba(237,231,216,0.5)',
+        border: '1px solid rgba(221,212,192,0.9)',
+        color: hover ? '#1B3828' : '#4A4238',
+        fontFamily: "'Outfit', sans-serif",
+        fontWeight: 700,
+        fontSize: '12px',
+        letterSpacing: '0.03em',
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        transition: 'background-color 140ms ease, color 140ms ease',
+      }}
+    >
+      <Icon size={15} strokeWidth={2.25} style={{ color: '#2A5A3C', flexShrink: 0 }} />
+      {label}
+    </button>
+  );
+}
 
 // ── List row (myMUN-style directory row) ──────────────────────────────────
 
@@ -427,7 +511,7 @@ function RailHeading({ children }: { children: React.ReactNode }) {
 /** One filter row. Reads as a list item, not a pill: full width, a check
  *  gutter on the left so the ticked and unticked rows stay optically aligned. */
 function RailOption({
-  label, active, onClick, icon: Icon, flagCode, note,
+  label, active, onClick, icon: Icon, flagCode, note, count,
 }: {
   label: string;
   active: boolean;
@@ -435,6 +519,8 @@ function RailOption({
   icon?: RowIcon;
   flagCode?: string;
   note?: string;
+  /** How many conferences sit behind this option. */
+  count?: number;
 }) {
   return (
     <button
@@ -482,26 +568,59 @@ function RailOption({
           {note}
         </span>
       )}
+      {typeof count === 'number' && (
+        <span
+          style={{
+            fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+            color: active ? 'rgba(238,217,138,0.8)' : '#9A8A78', flexShrink: 0,
+          }}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }
 
 function FilterRail({
   searchQuery, onSearch,
-  region, userCountry, onRegion,
+  region, userCountry, userCountryCount, countries, continentLabel, onRegion,
   formatFilter, onFormat,
   levelFilter, onLevel,
-  dateSort, onDateSort,
   hasActiveFilters, onClear,
 }: {
   searchQuery: string; onSearch: (v: string) => void;
-  region: string; userCountry: string | null; onRegion: (r: string) => void;
-  formatFilter: string; onFormat: (v: 'in-person' | 'online' | 'hybrid' | '') => void;
-  levelFilter: string; onLevel: (v: 'school' | 'university' | 'both' | '') => void;
-  dateSort: DateSort; onDateSort: (v: DateSort) => void;
+  region: string;
+  userCountry: string | null;
+  /** How many conferences currently sit in the visitor's own country. */
+  userCountryCount: number;
+  /** Countries present in the results, already sorted and deduped. */
+  countries: CountryFacet[];
+  /** Label of a continent that arrived via ?continent=, so it can be cleared. */
+  continentLabel: string | null;
+  onRegion: (r: string) => void;
+  formatFilter: FormatFilter; onFormat: (v: FormatFilter) => void;
+  levelFilter: LevelFilter; onLevel: (v: LevelFilter) => void;
   hasActiveFilters: boolean; onClear: () => void;
 }) {
   const userCode = userCountry ? getCountryByName(userCountry)?.code : undefined;
+  const [showAllCountries, setShowAllCountries] = useState(false);
+
+  const selectedCountryId = region.startsWith(COUNTRY_PREFIX) ? region.slice(COUNTRY_PREFIX.length) : null;
+
+  // Capped list, but never hide the country that is currently selected: a
+  // filter you cannot see is a filter you cannot turn off.
+  const visibleCountries = useMemo(() => {
+    if (showAllCountries) return countries;
+    const head = countries.slice(0, COUNTRY_VISIBLE_CAP);
+    if (selectedCountryId && !head.some(c => c.id === selectedCountryId)) {
+      const pinned = countries.find(c => c.id === selectedCountryId);
+      if (pinned) head.push(pinned);
+    }
+    return head;
+  }, [countries, showAllCountries, selectedCountryId]);
+
+  const hiddenCount = countries.length - Math.min(countries.length, COUNTRY_VISIBLE_CAP);
 
   const group: React.CSSProperties = {
     paddingBottom: '16px',
@@ -545,9 +664,10 @@ function FilterRail({
         </div>
       </div>
 
-      {/* Region */}
-      <div style={group} role="listbox" aria-label="Region">
-        <RailHeading>Region</RailHeading>
+      {/* Country — derived from the conferences on the page, so every row here
+          has something behind it. Sorted by count, then alphabetically. */}
+      <div style={group} role="listbox" aria-label="Country">
+        <RailHeading>Country</RailHeading>
         {userCountry && (
           <RailOption
             label={userCountry}
@@ -555,49 +675,70 @@ function FilterRail({
             onClick={() => onRegion(region === 'country' ? '' : 'country')}
             flagCode={userCode}
             note="NEAR YOU"
+            count={userCountryCount}
           />
         )}
         <RailOption
-          label="All regions"
+          label="All countries"
           active={region === ''}
           onClick={() => onRegion('')}
           icon={Globe}
         />
-        {CONTINENT_KEYS.map(key => (
+        {/* A continent can still arrive from the world map's deep link. It is
+            not offered here, but while it is on it has to be visible and it
+            has to be clearable. */}
+        {continentLabel && (
           <RailOption
-            key={key}
-            label={CONTINENT_LABELS[key]}
-            active={region === key}
-            onClick={() => onRegion(region === key ? '' : key)}
+            label={continentLabel}
+            active
+            onClick={() => onRegion('')}
+            icon={Globe}
           />
-        ))}
+        )}
+        {visibleCountries.map(c => {
+          const key = COUNTRY_PREFIX + c.id;
+          return (
+            <RailOption
+              key={c.id}
+              label={c.name}
+              active={region === key}
+              onClick={() => onRegion(region === key ? '' : key)}
+              flagCode={c.code}
+              count={c.count}
+            />
+          );
+        })}
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAllCountries(v => !v)}
+            className="w-full text-left focus:outline-none"
+            style={{
+              marginTop: '4px', padding: '7px 10px', borderRadius: '10px',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px',
+              letterSpacing: '0.04em', color: '#B6871F',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(27,56,40,0.06)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+          >
+            {showAllCountries ? 'Show fewer' : `Show all ${countries.length} countries`}
+          </button>
+        )}
       </div>
 
-      {/* Format */}
+      {/* Format. Hybrid is not a third choice, it answers to both. */}
       <div style={group} role="listbox" aria-label="Format">
         <RailHeading>Format</RailHeading>
         <RailOption label="In person" active={formatFilter === 'in-person'} onClick={() => onFormat(formatFilter === 'in-person' ? '' : 'in-person')} icon={MapPin} />
         <RailOption label="Online"    active={formatFilter === 'online'}    onClick={() => onFormat(formatFilter === 'online' ? '' : 'online')}    icon={Monitor} />
-        <RailOption label="Hybrid"    active={formatFilter === 'hybrid'}    onClick={() => onFormat(formatFilter === 'hybrid' ? '' : 'hybrid')}    icon={Globe} />
       </div>
 
-      {/* Level */}
-      <div style={group} role="listbox" aria-label="Student level">
+      {/* Level. A conference open to both answers to either. */}
+      <div style={{ ...group, borderBottom: hasActiveFilters ? group.borderBottom : 'none', marginBottom: hasActiveFilters ? 16 : 0, paddingBottom: hasActiveFilters ? 16 : 0 }} role="listbox" aria-label="Student level">
         <RailHeading>Level</RailHeading>
         <RailOption label="High school" active={levelFilter === 'school'}     onClick={() => onLevel(levelFilter === 'school' ? '' : 'school')}         icon={School} />
         <RailOption label="University"  active={levelFilter === 'university'} onClick={() => onLevel(levelFilter === 'university' ? '' : 'university')} icon={GraduationCap} />
-        <RailOption label="Both"        active={levelFilter === 'both'}       onClick={() => onLevel(levelFilter === 'both' ? '' : 'both')} />
-      </div>
-
-      {/* Sort + applications */}
-      <div style={{ ...group, borderBottom: hasActiveFilters ? group.borderBottom : 'none', marginBottom: hasActiveFilters ? 16 : 0, paddingBottom: hasActiveFilters ? 16 : 0 }}>
-        <RailHeading>Sort</RailHeading>
-        <RailOption
-          label={dateSort === 'asc' ? 'Soonest first' : 'Latest first'}
-          active={false}
-          onClick={() => onDateSort(dateSort === 'asc' ? 'desc' : 'asc')}
-          icon={dateSort === 'asc' ? CalendarArrowUp : CalendarArrowDown}
-        />
       </div>
 
       {hasActiveFilters && (
@@ -646,14 +787,24 @@ export default function ConferencesExploreClient() {
   // The on-page search box then owns the value as usual.
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') ?? '');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [formatFilter, setFormatFilter] = useState<'in-person' | 'online' | 'hybrid' | ''>('');
-  const [levelFilter, setLevelFilter] = useState<'school' | 'university' | 'both' | ''>('');
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>('');
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>('');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  // Region: '' = all regions, 'country' = visitor's own country, else a continent key.
-  // A ?continent= URL param wins over the geo default.
-  const [region, setRegion] = useState<string>(() => searchParams.get('continent') ?? '');
-  const [regionTouched, setRegionTouched] = useState<boolean>(() => !!searchParams.get('continent'));
+  // Region: '' = everywhere, 'country' = the visitor's own country, 'country:<id>'
+  // = a country picked in the rail, else a continent key (only reachable from
+  // the world map's ?continent= deep link, which still has to work).
+  // A ?continent= or ?country= URL param wins over the geo default.
+  const [region, setRegion] = useState<string>(() => {
+    const continent = searchParams.get('continent');
+    if (continent) return continent;
+    const country = searchParams.get('country');
+    if (country) return COUNTRY_PREFIX + countryIdentity(country);
+    return '';
+  });
+  const [regionTouched, setRegionTouched] = useState<boolean>(
+    () => !!searchParams.get('continent') || !!searchParams.get('country'),
+  );
   // Set when geo defaults us into a whole-directory "around you" view because
   // the visitor's own country has too few conferences to lead with.
   const [aroundYouDefault, setAroundYouDefault] = useState(false);
@@ -783,6 +934,9 @@ export default function ConferencesExploreClient() {
   const isMember = (c: Conference) =>
     memberIds.has(c.id) || (!!user && c.organizer_id === user.id);
 
+  const selectedCountryId = region.startsWith(COUNTRY_PREFIX) ? region.slice(COUNTRY_PREFIX.length) : null;
+  const continentKey = region && region !== 'country' && !selectedCountryId ? region : null;
+  const continentLabel = continentKey ? (CONTINENT_LABELS[continentKey] ?? null) : null;
   const countryMode = region === 'country' && !!userCountry;
   // Whole-directory fallback we auto-selected on first load, shown under the
   // "Conferences around you" heading. Clears the moment the visitor picks a region.
@@ -817,7 +971,11 @@ export default function ConferencesExploreClient() {
     return out;
   }, []);
 
-  const filtered = useMemo(() => conferences.filter(c => {
+  // Everything EXCEPT the country/continent filter. The country list and its
+  // counts are built from this, so the rail reflects what picking a country
+  // would actually give you under the search and chips already applied, and
+  // never offers a country that would land on an empty page.
+  const preRegion = useMemo(() => conferences.filter(c => {
     // Finished conferences are dropped from the directory — nobody browsing for
     // one to attend wants last year's. Their pages stay live, linkable and in
     // the sitemap, so a direct link and Google search still reach them; this
@@ -841,22 +999,63 @@ export default function ConferencesExploreClient() {
         !countryHit
       ) return false;
     }
-    if (formatFilter && c.format !== formatFilter) return false;
-    if (levelFilter && c.student_level !== levelFilter) return false;
+    // 'hybrid' answers to both format filters; 'both' to either level filter.
+    if (!matchesFormat(c.format, formatFilter)) return false;
+    if (!matchesLevel(c.student_level, levelFilter)) return false;
+    return true;
+  }), [conferences, searchQuery, formatFilter, levelFilter]);
+
+  // Countries actually represented in the results. Keyed by ISO identity so a
+  // row saved as "Turkey" and one saved as "Türkiye" are one country, labelled
+  // with the canonical name. Sorted by count desc, then alphabetically, so the
+  // list stays useful as the directory grows past today's 21 countries.
+  const countryFacets = useMemo<CountryFacet[]>(() => {
+    const byId = new Map<string, CountryFacet>();
+    for (const c of preRegion) {
+      if (!c.country) continue;
+      const id = countryIdentity(c.country);
+      const hit = byId.get(id);
+      if (hit) { hit.count += 1; continue; }
+      const known = getCountryByName(c.country);
+      byId.set(id, { id, name: known?.name ?? c.country, code: known?.code, count: 1 });
+    }
+    return [...byId.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [preRegion]);
+
+  const userCountryId = userCountry ? countryIdentity(userCountry) : null;
+  const userCountryCount = useMemo(
+    () => (userCountryId ? countryFacets.find(c => c.id === userCountryId)?.count ?? 0 : 0),
+    [countryFacets, userCountryId],
+  );
+
+  const selectedCountry = selectedCountryId
+    ? countryFacets.find(c => c.id === selectedCountryId) ?? null
+    : null;
+
+  // The visitor's own country already has its own "near you" row at the top of
+  // the rail, so it is not repeated in the list below it.
+  const railCountries = useMemo(
+    () => (userCountryId ? countryFacets.filter(c => c.id !== userCountryId) : countryFacets),
+    [countryFacets, userCountryId],
+  );
+
+  const filtered = useMemo(() => preRegion.filter(c => {
     if (countryMode) {
       // Compared by ISO identity, not by string: a row saved under an older
       // spelling ("Turkey", "Czechia", "Holland") must still count as local.
-      if (countryIdentity(c.country) !== countryIdentity(userCountry!)) return false;
-    } else if (region && region !== 'country') {
+      return countryIdentity(c.country) === countryIdentity(userCountry!);
+    }
+    if (selectedCountryId) return countryIdentity(c.country) === selectedCountryId;
+    if (continentKey) {
       // CONTINENT_COUNTRIES is hand-written and uses several non-canonical
       // names ("Ivory Coast", "Cape Verde", "East Timor", "Democratic Republic
       // of the Congo"), so a raw `.includes(c.country)` dropped those rows out
       // of their own continent. Both sides go through countryIdentity.
-      const codes = continentIdentities[region];
-      if (!codes || !codes.has(countryIdentity(c.country))) return false;
+      const codes = continentIdentities[continentKey];
+      return !!codes && codes.has(countryIdentity(c.country));
     }
     return true;
-  }), [conferences, searchQuery, formatFilter, levelFilter, region, countryMode, userCountry, continentIdentities]);
+  }), [preRegion, countryMode, userCountry, selectedCountryId, continentKey, continentIdentities]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
@@ -868,6 +1067,24 @@ export default function ConferencesExploreClient() {
 
   // Country tab shows up to 4 local conferences prominently.
   const displayed = countryMode ? sorted.slice(0, 4) : sorted;
+
+  // When a country filter has narrowed the page down, the end of the list is
+  // the honest moment to say: there are much bigger rooms elsewhere. Upcoming
+  // only, 500+ expected delegates, and never something already in the list
+  // above. Soonest first, capped, and the block simply does not exist when
+  // nothing qualifies.
+  const countryFilterActive = countryMode || !!selectedCountryId;
+  const bigElsewhere = useMemo(() => {
+    if (!countryFilterActive) return [];
+    const shown = new Set(sorted.map(c => c.id));
+    return conferences
+      .filter(c => !shown.has(c.id) && !hasConcluded(c) && (c.expected_delegates ?? 0) >= BIG_CONFERENCE_DELEGATES)
+      .sort((a, b) => compareStartDate(a.start_date, b.start_date, 'asc'))
+      .slice(0, BIG_CONFERENCE_LIMIT);
+  }, [conferences, sorted, countryFilterActive]);
+  // Only when the filter is genuinely narrowing: never under the full directory.
+  const showBigElsewhere =
+    !loading && countryFilterActive && bigElsewhere.length > 0 && sorted.length < upcomingCount;
 
   function clearFilters() {
     setFormatFilter('');
@@ -1008,10 +1225,14 @@ export default function ConferencesExploreClient() {
           >
             <FilterRail
               searchQuery={searchQuery} onSearch={setSearchQuery}
-              region={region} userCountry={userCountry} onRegion={changeRegion}
+              region={region}
+              userCountry={userCountry}
+              userCountryCount={userCountryCount}
+              countries={railCountries}
+              continentLabel={continentLabel}
+              onRegion={changeRegion}
               formatFilter={formatFilter} onFormat={setFormatFilter}
               levelFilter={levelFilter} onLevel={setLevelFilter}
-              dateSort={dateSort} onDateSort={setDateSort}
               hasActiveFilters={hasActiveFilters} onClear={clearFilters}
             />
           </aside>
@@ -1021,7 +1242,7 @@ export default function ConferencesExploreClient() {
                 that belongs to the results rather than the filters. The rule's
                 LABEL depends on there being results; the view toggle does not,
                 so it stays put while you filter down to nothing and back. */}
-            <div className="flex items-center gap-4 mb-6">
+            <div className="flex items-center gap-3 mb-6 flex-wrap">
               {!loading && displayed.length > 0 ? (
                 <span className="inline-flex items-center gap-2" style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '11.5px', letterSpacing: '0.13em', color: '#9A8A78', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                   {aroundYouMode ? (
@@ -1034,6 +1255,11 @@ export default function ConferencesExploreClient() {
                       {userCode && <FlagImg code={userCode} size={17} />}
                       CONFERENCES IN {userCountry!.toUpperCase()}
                       {displayed.length < sorted.length ? ` · ${displayed.length} OF ${sorted.length}` : ''}
+                    </>
+                  ) : selectedCountry ? (
+                    <>
+                      {selectedCountry.code && <FlagImg code={selectedCountry.code} size={17} />}
+                      CONFERENCES IN {selectedCountry.name.toUpperCase()} · {sorted.length}
                     </>
                   ) : (
                     <>
@@ -1051,8 +1277,14 @@ export default function ConferencesExploreClient() {
                   {loading ? 'LOADING…' : 'NO MATCHES'}
                 </span>
               )}
-              <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)' }} />
-              <ViewToggle view={view} onChange={changeView} />
+              <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(221,212,192,0.8)', minWidth: '12px' }} />
+              {/* Sort and view: the two controls that belong to the results.
+                  Kept as one group so they wrap together on a phone rather
+                  than splitting across two lines. */}
+              <div className="flex items-center gap-2 flex-shrink-0" style={{ marginLeft: 'auto' }}>
+                <DateSortToggle sort={dateSort} onChange={setDateSort} />
+                <ViewToggle view={view} onChange={changeView} />
+              </div>
             </div>
 
           {loading ? (
@@ -1150,6 +1382,54 @@ export default function ConferencesExploreClient() {
                 />
               ))}
             </div>
+          )}
+
+          {/* The list has ended and a country filter is what ended it. Rather
+              than stopping at a short list, name the handful of big rooms
+              elsewhere and say plainly what they are: far away, and large. */}
+          {showBigElsewhere && (
+            <section
+              aria-label="Bigger conferences elsewhere"
+              className="mt-12"
+              style={{
+                borderTop: '1px solid rgba(221,212,192,0.9)',
+                paddingTop: '26px',
+              }}
+            >
+              <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-5">
+                <h2
+                  style={{
+                    fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: '17px',
+                    color: '#1C1410', margin: 0, letterSpacing: '0.004em',
+                  }}
+                >
+                  Bigger conferences worth travelling for
+                </h2>
+                <p
+                  style={{
+                    fontFamily: "'Outfit', sans-serif", fontWeight: 500, fontSize: '13px',
+                    color: '#8A7D6C', margin: 0,
+                  }}
+                >
+                  Outside your filter, {BIG_CONFERENCE_DELEGATES}+ delegates expected.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style={{ gap: '20px' }}>
+                {bigElsewhere.map(conf => (
+                  <ConferenceCard
+                    key={conf.id}
+                    conf={conf}
+                    compact
+                    applied={appliedIds.has(conf.id)}
+                    member={isMember(conf)}
+                    hovered={hoveredId === conf.id}
+                    onHover={() => setHoveredId(conf.id)}
+                    onLeave={() => setHoveredId(null)}
+                    onClick={() => router.push(`/conferences/${conf.slug}`)}
+                  />
+                ))}
+              </div>
+            </section>
           )}
 
           {/* Country tab, subtle reset to the worldwide directory */}
