@@ -771,6 +771,20 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   // Per committee, country_code -> seats_taken (1 or 2) — a double country
   // can be half-filled, so this needs the count, not just membership.
   const [committeeOccupied, setCommitteeOccupied] = useState<Record<string, Record<string, number>>>({});
+  // Per committee, HOW MANY chair invites are still unanswered — never who.
+  // `display_chairs` only ever carries chairs who accepted, so a committee that
+  // has invited its whole dais and is waiting on a reply used to render with no
+  // dais at all, reading as though nobody had been asked.
+  //
+  // A COUNT is the whole payload on purpose. An invitee may decline, and has
+  // not agreed to be listed publicly against this conference, so this page
+  // renders an unnamed "Chair to be confirmed" placeholder from it and never a
+  // name. anon cannot read `conference_chair_invites` (its only SELECT policies
+  // are invitee-reads-own and organizers-manage) and that is left exactly as it
+  // is: `get_committee_pending_chair_counts` is a SECURITY DEFINER count that
+  // returns no name, no email and no user id, gated on the same
+  // `conferences.is_public` test as the committee row itself.
+  const [committeePendingChairs, setCommitteePendingChairs] = useState<Record<string, number>>({});
   const [expandedRoster, setExpandedRoster] = useState<string | null>(null);
   // The committee roster modal is a modal — freeze the conference page behind it.
   useScrollLock(!!expandedRoster);
@@ -1081,13 +1095,14 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     // Public committee extras: full rosters, live occupancy
     const ccIds = ((committeesRes.data as Committee[]) ?? []).map(c => c.id);
     if (ccIds.length > 0) {
-      const [slotsRes, occRes] = await Promise.all([
+      const [slotsRes, occRes, pendingChairsRes] = await Promise.all([
         supabase
           .from('committee_country_slots')
           .select('conference_committee_id, country_code, country_name, delegation_size, logo_url, group_id')
           .in('conference_committee_id', ccIds)
           .order('country_name', { ascending: true }),
         supabase.rpc('get_committee_occupancy', { p_committee_ids: ccIds }),
+        supabase.rpc('get_committee_pending_chair_counts', { p_committee_ids: ccIds }),
       ]);
       const slotsMap: Record<string, CommitteeSlot[]> = {};
       for (const row of ((slotsRes.data ?? []) as (CommitteeSlot & { conference_committee_id: string })[])) {
@@ -1097,8 +1112,15 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
       for (const row of ((occRes.data ?? []) as { conference_committee_id: string; country_code: string; seats_taken: number }[])) {
         (occMap[row.conference_committee_id] ??= {})[row.country_code] = row.seats_taken;
       }
+      const pendingChairMap: Record<string, number> = {};
+      for (const row of ((pendingChairsRes.data ?? []) as { conference_committee_id: string; pending_chairs: number }[])) {
+        pendingChairMap[row.conference_committee_id] = row.pending_chairs;
+      }
       setCommitteeSlots(slotsMap);
       setCommitteeOccupied(occMap);
+      // A failed read leaves this empty, which is the card's behaviour before
+      // today: no placeholder rather than a wrong one.
+      setCommitteePendingChairs(pendingChairMap);
     }
 
     if (user && session) {
@@ -2866,6 +2888,13 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                             // same order from the sync trigger); mismatched ⇒ don't link, to
                             // avoid ever pointing at the wrong person's CV.
                             const chairsLinkable = chairIds.length === chairs.length;
+                            // Outstanding chair invites, as a COUNT. Deliberately
+                            // never a name: someone who has been asked and has
+                            // not answered may decline, and has not agreed to be
+                            // listed publicly against this conference. The count
+                            // is enough to stop an already-spoken-for dais
+                            // reading as empty, which is all this needs to do.
+                            const pendingChairCount = committeePendingChairs[c.id] ?? 0;
                             const { countryCapacity, countriesTaken, seatCapacity, seatsTaken, pct, hasDoubles } = committeeStats(c);
 
                             return (
@@ -2970,7 +2999,10 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     </div>
                                   )}
 
-                                  {/* Dais, pinned to the card bottom — shown only when chairs are assigned */}
+                                  {/* Dais, pinned to the card bottom — shown when
+                                      chairs are assigned, or when the committee
+                                      has an unanswered invite out (unnamed
+                                      placeholder, see below) */}
                                   <div className="w-full mt-auto">
                                   {chairs.length > 0 && (
                                   <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 55%, transparent)' }}>
@@ -3024,6 +3056,52 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                           </div>
                                         );
                                       })}
+                                    </div>
+                                    {/* A dais that is part seated, part invited.
+                                        The seated chairs are named above; this
+                                        line accounts for the rest without
+                                        naming anyone who has not accepted. */}
+                                    {pendingChairCount > 0 && (
+                                      <p
+                                        className="text-center text-[10.5px] font-semibold mt-2.5"
+                                        style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
+                                      >
+                                        {pendingChairCount === 1
+                                          ? '1 more chair to be confirmed'
+                                          : `${pendingChairCount} more chairs to be confirmed`}
+                                      </p>
+                                    )}
+                                  </div>
+                                  )}
+
+                                  {/* No chair has accepted, but one or more have
+                                      been invited. An unnamed placeholder, on
+                                      purpose: an invitee may decline, and has
+                                      not agreed to appear publicly against this
+                                      conference, so this page shows THAT the
+                                      dais is being filled and never WHO. The
+                                      organiser surfaces (committees, assignment,
+                                      the live wall) are where the names live. */}
+                                  {chairs.length === 0 && pendingChairCount > 0 && (
+                                  <div className="w-full mt-4 pt-4" style={{ borderTop: '1px solid color-mix(in srgb, var(--gv-border) 55%, transparent)' }}>
+                                    <div className="flex flex-col items-center text-center">
+                                      <span
+                                        className="flex items-center justify-center"
+                                        style={{
+                                          width: '52px', height: '52px', borderRadius: '9999px',
+                                          border: '1.5px dashed color-mix(in srgb, var(--gv-accent) 70%, transparent)',
+                                          backgroundColor: 'color-mix(in srgb, var(--gv-accent) 10%, transparent)',
+                                          color: '#8A6614',
+                                        }}
+                                      >
+                                        <UserRound size={22} strokeWidth={1.75} />
+                                      </span>
+                                      <span
+                                        className="text-[11.5px] font-semibold mt-2 leading-tight"
+                                        style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}
+                                      >
+                                        {pendingChairCount === 1 ? 'Chair to be confirmed' : 'Chairs to be confirmed'}
+                                      </span>
                                     </div>
                                   </div>
                                   )}

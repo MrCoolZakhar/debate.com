@@ -16,9 +16,10 @@ import type { ScoringConfig } from '@/lib/settingsStore';
 import { loadConferenceScoreboard, type ConferenceScoreboard } from '@/lib/conferenceScoreboard';
 import { getAwardsConfig } from '@/lib/awards';
 import {
-  type LiveCommittee, type ChairPerson, type CaucusJson,
+  type LiveCommittee, type ChairPerson, type PendingChairPerson, type CaucusJson,
   presence, RecapModal, RosterModal, type DocFilter,
 } from './LiveModals';
+import { fetchPendingChairInvites, pendingInviteName } from '@/lib/chairInvites';
 import {
   BroadcastComposer, RecentBroadcasts, broadcastTargets, groupBroadcasts,
   mapBroadcastRow, deleteBroadcastGroup, BROADCAST_COLUMNS,
@@ -146,15 +147,41 @@ export default function LiveStatusPage() {
       // so it is the fallback whenever a chair's profile row is not readable
       // under the organiser's RLS (a chair who never applied to this conference).
       const chairIds = Array.from(new Set(confRows.flatMap((c) => (c.chair_user_ids as string[] | null) ?? [])));
+
+      // Chairs who were INVITED and have not accepted. They are not in
+      // `chair_user_ids` and never reach `display_chairs`, so without this read
+      // a committee whose invite is out reads as "No chair assigned" — the
+      // thing this page exists to make an organiser act on.
+      //
+      // Kept in its own list all the way to the card (`conf.pendingChairs`),
+      // never merged into `conf.chairs`: `nowPlaying` says "Chairs have the
+      // code" off that length, and an invitee does not have the code.
+      //
+      // Not in the `failures` roll-call above, because it cannot produce a
+      // WRONG floor: `fetchPendingChairInvites` logs and returns [] on a failed
+      // read, which degrades this card to exactly what it printed before today.
+      // Every read in that roll-call can instead render a live room as empty.
+      //
+      // Issued ALONGSIDE the chair-profiles read, not after it. This page polls
+      // every 10 seconds; a second serialised round trip on that clock is a real
+      // cost, and the two reads have nothing to say to each other.
+      const [chairInvites, profsRes] = await Promise.all([
+        fetchPendingChairInvites(authed, conference.id),
+        chairIds.length > 0
+          ? authed.from('profiles').select('id, display_name, avatar_url').in('id', chairIds)
+          : Promise.resolve({ data: [] as { id: string; display_name: string; avatar_url: string | null }[] }),
+      ]);
+
+      const invitesByCommittee = new Map<string, PendingChairPerson[]>();
+      for (const inv of chairInvites) {
+        const list = invitesByCommittee.get(inv.committee_id) ?? [];
+        list.push({ id: inv.id, name: pendingInviteName(inv), avatarUrl: inv.profiles?.avatar_url ?? null });
+        invitesByCommittee.set(inv.committee_id, list);
+      }
+
       const chairProfiles = new Map<string, { display_name: string; avatar_url: string | null }>();
-      if (chairIds.length > 0) {
-        const { data: profs } = await authed
-          .from('profiles')
-          .select('id, display_name, avatar_url')
-          .in('id', chairIds);
-        for (const p of (profs ?? []) as { id: string; display_name: string; avatar_url: string | null }[]) {
-          chairProfiles.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
-        }
+      for (const p of ((profsRes.data ?? []) as { id: string; display_name: string; avatar_url: string | null }[])) {
+        chairProfiles.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
       }
 
       // Batched anon reads, live session tables carry public RLS.
@@ -385,6 +412,7 @@ export default function LiveStatusPage() {
             delegationSize: (c.delegation_size as number | null) ?? 1,
             chairUserIds,
             chairs,
+            pendingChairs: invitesByCommittee.get(c.id as string) ?? [],
           },
           session: sRow
             ? {
