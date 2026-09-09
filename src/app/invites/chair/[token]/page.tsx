@@ -19,6 +19,7 @@ import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, NeuButton, NeuIconDisc } from '@/components/neu';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 
 interface InviteData {
   ok: boolean;
@@ -27,6 +28,9 @@ interface InviteData {
   email?: string;
   conference_name?: string;
   acronym?: string;
+  /** Edition year source. A chair may be invited to three editions of the same
+   *  series, so a bare acronym is ambiguous — see conferenceAcronymLabel. */
+  start_date?: string | null;
   slug?: string;
   committee_name?: string;
 }
@@ -122,6 +126,9 @@ export default function ChairInvitePage() {
 
   const failed = !invite || !invite.ok;
   const resolvedCopy = invite?.status && invite.status !== 'pending' ? STATUS_COPY[invite.status] : null;
+  // The acronym with its edition year. A chair invited to LIMUN needs to know
+  // WHICH LIMUN; the bare acronym is the same string every year.
+  const acronymLabel = conferenceAcronymLabel({ acronym: invite?.acronym ?? null, start_date: invite?.start_date ?? null });
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
@@ -153,7 +160,7 @@ export default function ChairInvitePage() {
             <>
               <MonogramMedallion text={invite!.acronym || invite!.conference_name || '?'} isCrisis={false} size={52} />
               <div className="mt-5">
-                <Eyebrow>{invite!.acronym}</Eyebrow>
+                <Eyebrow>{acronymLabel || invite!.acronym}</Eyebrow>
                 <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                   {resolvedCopy.title}
                 </h1>
@@ -169,7 +176,7 @@ export default function ChairInvitePage() {
             <>
               <MonogramMedallion text={invite!.acronym || invite!.conference_name || '?'} isCrisis={false} size={52} />
               <div className="mt-5">
-                <Eyebrow>{invite!.acronym}</Eyebrow>
+                <Eyebrow>{acronymLabel || invite!.acronym}</Eyebrow>
                 <h1 className="font-black text-xl mt-2 mb-1.5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                   Chair {invite!.committee_name}
                 </h1>

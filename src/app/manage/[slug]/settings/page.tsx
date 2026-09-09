@@ -552,7 +552,7 @@ function AutoSaveStatus({ saving, saved }: { saving: boolean; saved: boolean }) 
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { conference, refreshConferenceQuiet } = useManage();
+  const { conference, refreshConferenceQuiet, refreshVerification } = useManage();
   const { user, session, profile } = useAuth();
   /** The stable half of `session`. AuthProvider replaces the session OBJECT on
    *  every auth event (token refresh, tab focus), so a loader that depends on
@@ -879,6 +879,44 @@ export default function SettingsPage() {
   const [swapModeSaving, setSwapModeSaving] = useState(false);
   const [publicToggleSaving, setPublicToggleSaving] = useState(false);
   const [withdrawingClaim, setWithdrawingClaim] = useState(false);
+  const [soloSaving, setSoloSaving] = useState(false);
+
+  /**
+   * "I'm running this conference on my own", and the way back out of it.
+   *
+   * The `secretariat` verification stage wants a second organiser. A great many
+   * conferences are genuinely one person, and for them that stage was
+   * unpassable, so the blue checkmark was out of reach no matter how ready the
+   * rest of the conference was. Stamping this column satisfies the stage
+   * instead. Inviting someone later still works and still ticks it: in
+   * conference_setup_status() the three routes are a UNION.
+   *
+   * Reversible on purpose. This is a statement about how the conference is run,
+   * not a one-way door, and it is the only place it can be un-said.
+   */
+  async function setSoloSecretariat(on: boolean) {
+    if (!conference || !accessToken || soloSaving) return;
+    setSoloSaving(true);
+    setOrganizersError('');
+    const supabase = getAuthedClient(accessToken);
+    // .select() so a zero-row write is caught: supabase-js resolves with a null
+    // error when an update matches nothing.
+    const { data, error } = await supabase
+      .from('conferences')
+      .update({ solo_secretariat_ack_at: on ? new Date().toISOString() : null })
+      .eq('id', conference.id)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      setSoloSaving(false);
+      setOrganizersError('Could not save that. Try again in a moment.');
+      return;
+    }
+    await refreshConferenceQuiet();
+    // The manage rail prints "About N minutes to your checkmark" off this, and
+    // the stage it names just changed.
+    void refreshVerification();
+    setSoloSaving(false);
+  }
 
   // Autosave baselines for the three manual-input sections below (details,
   // visual, min age). Each baseline is the last-persisted raw input
@@ -5342,6 +5380,35 @@ export default function SettingsPage() {
             <p className="text-xs mt-4 rounded-lg px-3 py-2" style={{ color: '#1B3828', backgroundColor: 'rgba(27,56,40,0.07)', fontFamily: OUTFIT }}>
               {inviteNotice}
             </p>
+          )}
+
+          {/* Running it alone. Offered only to a team that IS one person, and
+              only to someone who could invite if they wanted to: it is the
+              alternative to the invite button above, never a shortcut past it.
+              Once ticked it stays visible so it can be un-ticked, which is the
+              only place that is possible. */}
+          {canManageTeam && ((organizers.length <= 1 && pendingInvites.length === 0) || !!conference?.solo_secretariat_ack_at) && (
+            <div className="mt-6 rounded-2xl px-4 py-3.5" style={{ backgroundColor: NEU.base, boxShadow: NEU.inSm }}>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!conference?.solo_secretariat_ack_at}
+                  disabled={soloSaving}
+                  onChange={(e) => { void setSoloSecretariat(e.target.checked); }}
+                  style={{ marginTop: 2, width: 16, height: 16, accentColor: '#1B3828', cursor: soloSaving ? 'default' : 'pointer', flexShrink: 0 }}
+                />
+                <span>
+                  <span className="block font-semibold text-sm" style={{ color: '#1C1410', fontFamily: OUTFIT }}>
+                    I&apos;m running this conference on my own
+                  </span>
+                  <span className="block text-xs mt-1" style={{ color: NEU.inkSoft, fontFamily: OUTFIT, lineHeight: 1.55, textWrap: 'pretty' }}>
+                    Plenty of conferences are a one person job. Ticking this counts the
+                    secretariat step as done toward your blue checkmark. You can still
+                    invite people later, and untick it any time.
+                  </span>
+                </span>
+              </label>
+            </div>
           )}
 
           {/* Honest footnote. Section access is a navigation gate; the two
