@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, Loader2, PartyPopper, Clock, ScrollText, CreditCard } from 'lucide-react';
+import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landmark, ChevronDown, ChevronLeft, ChevronRight, Check, X, Plus, ArrowUp, ArrowDown, ArrowUpDown, Star, LayoutDashboard, ArrowRight, UserRound, Gavel, Eye, ScrollText, CreditCard } from 'lucide-react';
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import Portal from '@/components/Portal';
@@ -30,7 +30,9 @@ import { conferenceAcronymLabel, conferenceFullNameLabel, conferenceLabels } fro
 import ConferencePartners, { type PartnerEntry } from '@/components/ConferencePartners';
 import { formatConferenceDates } from '@/lib/conferenceDates';
 import ParticipantView from '@/app/conferences/[slug]/participant/ParticipantView';
+import { effectiveReleaseTime } from '@/app/conferences/[slug]/participant/shared';
 import type { ParticipantAllocation } from '@/app/conferences/[slug]/participant/types';
+import RegistrationConfirmation from '@/components/RegistrationConfirmation';
 import { NEU, NEU_GRADIENTS, NeuIconDisc } from '@/components/neu';
 import { SidebarCardSkeleton } from '@/components/Skeleton';
 import Loader from '@/components/Loader';
@@ -744,6 +746,26 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentReturn, authLoading, loading, user, session, conference]);
+  // The delegation name on the confirmation pass. `applications` only carries
+  // society_id, so the name is one extra read, and only ever when the moment
+  // is actually on screen.
+  const [confirmationDelegation, setConfirmationDelegation] = useState<string | null>(null);
+  useEffect(() => {
+    if (paymentReturn !== 'success' || !session) return;
+    const app = myApplications.find(a => a.role === activeRole) ?? myApplications[0] ?? null;
+    const societyId = app?.society_id ?? null;
+    if (!societyId) { setConfirmationDelegation(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await getAuthedClient(session.access_token)
+        .from('societies')
+        .select('name')
+        .eq('id', societyId)
+        .maybeSingle();
+      if (!cancelled) setConfirmationDelegation((data as { name?: string } | null)?.name ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [paymentReturn, session, myApplications, activeRole]);
   // Committee roster / occupancy (public reads)
   const [committeeSlots, setCommitteeSlots] = useState<Record<string, CommitteeSlot[]>>({});
   // Per committee, country_code -> seats_taken (1 or 2) — a double country
@@ -1397,6 +1419,43 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
   const showTakenCountries = !asVisitor || conference.show_taken_countries !== false;
 
   const myApp = myApplications[0] ?? null;
+
+  /* ── The confirmation moment, arrival 2: back from Stripe ─────────────
+     The webhook is still the only authority on payment state (the poll above
+     is untouched). This block only decides what the pass SHOWS:
+       - `state` comes straight off application.payment_status
+       - while the poll is still running, or has timed out without the row
+         changing, `processing` shows the reassurance line and holds the Pay
+         CTA back rather than pretending the charge landed.
+     It takes over the participant pane until "Go to my conference" dismisses
+     it, which is the same setPaymentReturn(null) the old banner's X did. */
+  const confirmationApp = myApplications.find(a => a.role === activeRole) ?? myApplications[0] ?? null;
+  const showPaymentConfirmation =
+    paymentReturn === 'success' && !authLoading && !participantDataLoading && !!confirmationApp;
+  const confirmationRoleConfig = confirmationApp
+    ? roleConfigs.find(rc => rc.role === confirmationApp.role) ?? null
+    : null;
+  const confirmationFee = activePhaseFee({
+    fee_amount: confirmationRoleConfig?.fee_amount ?? conference.fee_amount ?? 0,
+    fee_phases: confirmationRoleConfig?.fee_phases ?? null,
+  }).amount;
+  const confirmationCurrency =
+    confirmationRoleConfig?.fee_currency || conference.fee_currency || 'USD';
+  const confirmationPaid = confirmationApp?.payment_status === 'paid';
+  const confirmationAmount = confirmationPaid
+    ? Number(confirmationApp?.amount_paid ?? 0)
+    : Math.max(0, (Number(confirmationFee) || 0) - Number(confirmationApp?.amount_paid ?? 0));
+  // Only a RELEASED allocation names a committee; anything else reads
+  // "Not allocated yet", and no date is promised either way.
+  const confirmationReleaseMs = effectiveReleaseTime(
+    myAllocation?.conference_committees?.released_to_delegates_at ?? null,
+    conference.start_date,
+  );
+  const confirmationCommittee =
+    confirmationReleaseMs !== null && confirmationReleaseMs <= Date.now()
+      ? myAllocation?.conference_committees?.name ?? null
+      : null;
+
   const attended = myApplications.some(a => a.status === 'assigned' || a.status === 'checked-in') || !!myAllocation;
   const myReview = user ? reviews.find(r => r.user_id === user.id) : undefined;
   const canReview = !!user && attended && !myReview;
@@ -2021,46 +2080,23 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
               {/* Person tab, participant view */}
               {activeTab === 'participant' && (
                 <>
-                  {paymentReturn === 'success' && (
-                    <SectionCard className="!py-4 !px-5 mb-6">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="flex items-center justify-center flex-shrink-0"
-                          style={{
-                            width: 38, height: 38, borderRadius: '9999px',
-                            backgroundColor: paymentConfirmed ? 'color-mix(in srgb, var(--gv-main-light) 13%, transparent)' : 'rgba(184,132,74,0.14)',
-                          }}
-                        >
-                          {paymentConfirmed ? (
-                            <PartyPopper size={17} style={{ color: 'var(--gv-main-mid)' }} />
-                          ) : paymentTimedOut ? (
-                            <Clock size={17} style={{ color: '#B8844A' }} />
-                          ) : (
-                            <Loader2 size={17} className={paymentConfirming ? 'animate-spin' : ''} style={{ color: '#B8844A' }} />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold" style={{ color: 'var(--gv-on-surface)', fontFamily: "'Outfit', sans-serif", margin: 0 }}>
-                            {paymentConfirmed ? 'Payment received!' : paymentTimedOut ? 'Your payment is processing' : 'Payment received — confirming...'}
-                          </p>
-                          <p className="text-[12.5px] mt-0.5" style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", lineHeight: 1.5 }}>
-                            {paymentConfirmed
-                              ? 'Your registration is up to date.'
-                              : paymentTimedOut
-                                ? 'This page will reflect it shortly — no need to try again.'
-                                : 'Stripe confirmed your checkout, waiting for it to land here.'}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => setPaymentReturn(null)}
-                          className="flex-shrink-0 focus:outline-none"
-                          style={{ color: 'var(--gv-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
-                          aria-label="Dismiss"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    </SectionCard>
+                  {showPaymentConfirmation && confirmationApp && (
+                    <div className="py-6 mb-2">
+                      <RegistrationConfirmation
+                        conference={conference}
+                        state={confirmationPaid ? 'paid' : 'due'}
+                        role={confirmationApp.role}
+                        delegation={confirmationDelegation}
+                        committee={confirmationCommittee}
+                        amount={confirmationAmount}
+                        currency={confirmationCurrency}
+                        // True while the webhook has not landed yet, and after
+                        // the poll gives up without the row changing.
+                        processing={!confirmationPaid && (paymentConfirming || paymentTimedOut || !paymentConfirmed)}
+                        onContinue={() => setPaymentReturn(null)}
+                        payHref={`/conferences/${conference.slug}/pay`}
+                      />
+                    </div>
                   )}
                   {paymentReturn === 'cancelled' && (
                     <SectionCard className="!py-3 !px-5 mb-6">
@@ -2079,6 +2115,9 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                       </div>
                     </SectionCard>
                   )}
+                {/* The confirmation moment owns the pane until it is
+                    dismissed. Everything below it is one click away. */}
+                <div style={showPaymentConfirmation ? { display: 'none' } : undefined}>
                 <ParticipantView
                   conferenceId={conference.id}
                   conferenceSlug={conference.slug}
@@ -2102,6 +2141,7 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                   participantDataLoading={authLoading || participantDataLoading}
                   justClaimedCount={justClaimedCount}
                 />
+                </div>
                 </>
               )}
 
