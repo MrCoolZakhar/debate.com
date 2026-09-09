@@ -97,28 +97,51 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
       VIEW_CONFERENCE_BUTTON,
     ],
   },
+  // The approved receipt design: banner and conference identity come from
+  // renderEmailHtml itself, then heading (in the conference accent), a short
+  // body, the pass-style panel, the primary button and the footnote.
+  //
+  // The panel is deliberately a PASS, not just a receipt line: Dates, Role,
+  // Committee, Delegation and Amount paid are the five things a delegate,
+  // a parent or a school finance office looks for, and they are the same
+  // five a delegate wants again on the morning of the conference. A row whose
+  // token has no value (unallocated at payment time, no delegation) is
+  // dropped by the renderer rather than printed as an unresolved marker.
+  //
+  // NO "Add to calendar" link. The block model cannot express one: button
+  // URLs are never token-resolved and ButtonDestination is a closed union, so
+  // a Google Calendar template URL built from this conference's name, dates
+  // and location has nowhere to come from. See the note in emailBlocks.ts.
   payment_received: {
     subject: 'Payment received — {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Payment received' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour registration for {{conference_name}} is fully settled — thank you." },
-      // A receipt should read like one. These are the fields someone forwards
-      // to a parent or a school finance office.
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour registration for {{conference_name}} is fully settled. Thank you.' },
       { type: 'facts', items: [
+        { label: 'Dates', value: '{{conference_dates}}' },
+        { label: 'Role', value: '{{role}}' },
+        { label: 'Committee', value: '{{committee}}' },
+        { label: 'Delegation', value: '{{delegation_name}}' },
         { label: 'Amount paid', value: '{{fee}}' },
-        { label: 'Registered as', value: '{{role}}' },
-        { label: 'Conference', value: '{{conference_name}}' },
       ] },
-      { type: 'paragraph', variant: 'small', content: 'Keep this email as your confirmation.' },
       VIEW_CONFERENCE_BUTTON,
+      { type: 'paragraph', variant: 'small', content: 'Keep this email as your confirmation of payment.' },
     ],
   },
   fee_waived: {
     subject: 'Your {{conference_name}} fee has been waived',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your fee has been waived' },
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe organizing team has waived your registration fee for {{conference_name}}. There is nothing further for you to pay, and your place is unaffected.\n\nWe look forward to seeing you there.' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe organizing team has waived your registration fee for {{conference_name}}. Your place is unaffected, and we look forward to seeing you there.' },
+      // A money event with no money row was the odd one out beside
+      // payment_available and payment_received. "Nothing further to pay" is
+      // the fact, and it belongs where a reader looks for the amount.
+      { type: 'facts', items: [
+        { label: 'Amount due', value: 'Nothing further to pay' },
+        { label: 'Registered as', value: '{{role}}' },
+      ] },
       VIEW_CONFERENCE_BUTTON,
+      { type: 'paragraph', variant: 'small', content: 'Keep this email as your confirmation. If your conference view still shows a balance in a day or two, reply and ask the team to check.' },
     ],
   },
   aid_approved: {
@@ -202,15 +225,32 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: "You've been given a paid spot — {{conference_name}}",
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your spot is paid for' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nA paid delegation spot for {{conference_name}} has been transferred to you, so your registration is now covered. There's nothing further for you to pay." },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nA paid delegation spot for {{conference_name}} has been transferred to you, so your registration is now covered.' },
+      // Who is covering it, and that nothing is owed, are the two facts this
+      // email exists to state. Both were inside the sentence.
+      { type: 'facts', items: [
+        { label: 'Amount due', value: 'Nothing further to pay' },
+        { label: 'Covered by', value: '{{delegation_name}}' },
+        { label: 'Registered as', value: '{{role}}' },
+      ] },
       VIEW_CONFERENCE_BUTTON,
+      { type: 'paragraph', variant: 'small', content: 'Delegations can move a paid spot between members. If yours is moved again, we will email you.' },
     ],
   },
   spot_lost: {
     subject: 'A change to your paid spot — {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your paid spot has moved' },
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe paid delegation spot that was covering your registration at {{conference_name}} has been transferred to another delegate, so your registration now shows as unpaid.\n\nYour place is not cancelled. Speak to your head delegate, faculty advisor, or the organizing team about how payment will be settled.' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe paid delegation spot that was covering your registration at {{conference_name}} has been transferred to another delegate.\n\nYour place is not cancelled. Speak to your head delegate, faculty advisor, or the organizing team about how payment will be settled.' },
+      // No {{fee}} row here on purpose: the amount now owed depends on how
+      // the delegation settles it, and printing a headline price beside
+      // "unpaid" would answer a question this email cannot actually answer.
+      { type: 'facts', items: [
+        { label: 'Registration now', value: 'Unpaid' },
+        { label: 'Delegation', value: '{{delegation_name}}' },
+        { label: 'Registered as', value: '{{role}}' },
+      ] },
+      VIEW_CONFERENCE_BUTTON,
     ],
   },
   not_attending: {
@@ -239,8 +279,16 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
   chair_assigned: {
     subject: "You've been assigned as a chair — {{conference_name}}",
     blocks: [
-      { type: 'paragraph', variant: 'heading', content: "You're chairing {{committee}}" },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been assigned as a chair of **{{committee}}** at {{conference_name}}.\n\nYour session tools — roll call, speakers list, motions, documents, and voting — appear under this committee, and your session code arrives closer to the conference." },
+      { type: 'paragraph', variant: 'heading', content: "You're on the dais" },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYou've been assigned as a chair at {{conference_name}}." },
+      // No iconFrom here: a chair's application almost never carries an
+      // assigned committee or country (46 of 376 in production), so a
+      // committee emblem would resolve to nothing for most chairs.
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}' },
+        { label: 'Your role', value: '{{role}}' },
+      ] },
+      { type: 'paragraph', content: 'Your session tools, roll call, speakers list, motions, documents and voting, appear under this committee. Your session code arrives closer to the conference.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -266,7 +314,14 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Your session details for {{committee}} — {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: '{{conference_name}} is live' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour session code and chair code for **{{committee}}** are ready in your chair dashboard. Use them to open your committee room when it's time to gavel in.\n\nDelegates join with the session code; the chair code is what gives you the dais." },
+      { type: 'paragraph', content: "Hi {{delegate_name}},\n\nYour session code and chair code are ready in your chair dashboard. Use them to open your committee room when it's time to gavel in." },
+      // Same reason as chair_assigned: no emblem, a chair application rarely
+      // has an assigned committee to draw one from.
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}' },
+        { label: 'Your role', value: '{{role}}' },
+      ] },
+      { type: 'paragraph', content: 'Delegates join with the session code. The chair code is what gives you the dais.' },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -274,7 +329,14 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Join your live committee — {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your committee is open' },
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} is live. Your session code for **{{committee}}** is **{{session_code}}**.\n\nUse it to join your committee room — see you on the floor.' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} is live. Join your committee room with the code below. See you on the floor.' },
+      // The session code is the whole point of this email and it was mid
+      // sentence, where a delegate cannot find it again on the morning of
+      // the conference.
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}' },
+        { label: 'Session code', value: '{{session_code}}' },
+      ] },
       VIEW_CONFERENCE_BUTTON,
     ],
   },
@@ -304,7 +366,13 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Your committee allocation has been swapped — {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'Your allocation has been swapped' },
-      { type: 'paragraph', content: "Hi {{delegate_name}},\n\n{{delegation_name}} has swapped allocations within its delegation, and yours has changed as part of it. You're now in **{{committee}}**, representing **{{country}}**, at {{conference_name}}." },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{delegation_name}} has swapped allocations within its delegation at {{conference_name}}, and yours has changed as part of it. You are now in:' },
+      // Same panel as allocation_changed, which this email is a variant of.
+      // The emblem and the flag resolve per recipient from their own seat.
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
+      ] },
       VIEW_CONFERENCE_BUTTON,
       { type: 'paragraph', variant: 'small', content: 'Any research or position paper you had started applies to your old committee — check it against the new one before you continue.' },
     ],
@@ -334,12 +402,150 @@ export const DEFAULT_EVENT_EMAILS: Record<string, DefaultEventEmail> = {
     subject: 'Congratulations: {{award}} at {{conference_name}}',
     blocks: [
       { type: 'paragraph', variant: 'heading', content: 'You have won an award' },
-      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe dais of **{{committee}}** and the secretariat of {{conference_name}} have named you **{{award}}** for your work representing **{{country}}**.\n\nIt is now on your MUN CV as a verified Gavelling entry, so you can share it with any conference you apply to next.' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThe dais and the secretariat of {{conference_name}} have recognised your work this conference.' },
+      // All three facts were in one sentence. This is the email a delegate
+      // screenshots, and the one they come back to when they are writing an
+      // application a year later, so it should read like the certificate.
+      // The emblem and the flag resolve from the recipient's own seat, the
+      // same way allocation_assigned does.
+      { type: 'facts', items: [
+        { label: 'Award', value: '{{award}}' },
+        { label: 'Committee', value: '{{committee}}', iconFrom: 'committee' },
+        { label: 'Representing', value: '{{country}}', iconFrom: 'country' },
+      ] },
+      { type: 'paragraph', content: 'It is now on your MUN CV as a verified Gavelling entry, so you can share it with any conference you apply to next.' },
       // 'conference_page' rather than a custom URL: button URLs are not token
       // resolved, so the slug cannot be interpolated. The honour roll lives at
       // /conferences/<slug>/awards, one tap from the conference page.
       { type: 'button', label: 'See the honour roll', destination: 'conference_page' },
       { type: 'button', label: 'Open my MUN CV', destination: 'custom', url: '/account/cv' },
+    ],
+  },
+
+  // ── Invite reminders ───────────────────────────────────────────────────────
+  // Three follow-ups per audience, at day 3, day 10 and day 21, for someone who
+  // was invited and never made an account. Queued by the `queue_invite_reminders`
+  // SQL RPC, which carries a mirror of this copy the way send_draft_reminder /
+  // render_draft_reminder mirrors draft_reminder: THESE ARE THE TWO PLACES, and
+  // a change to one is a change to both.
+  //
+  // Every reminder ends. The third says so in its own words, because a person
+  // who is never going to accept deserves to know the emails have stopped
+  // rather than to keep bracing for the next one.
+  chair_invite_reminder_1: {
+    subject: 'Your chair invite to {{conference_name}} is still open',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Your chair invite is waiting' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} invited you to chair **{{committee}}** and the invite is still open. Accepting creates your free Gavelling account and opens your chair tools.' },
+      { type: 'facts', items: [
+        { label: 'Conference', value: '{{conference_name}}' },
+        { label: 'Committee', value: '{{committee}}' },
+        { label: 'Dates', value: '{{conference_dates}}' },
+        { label: 'Invited by', value: '{{invited_by}}' },
+      ] },
+      { type: 'button', label: 'Accept and chair', destination: 'chair_invite_accept' },
+      { type: 'paragraph', variant: 'small', content: 'Not able to chair this one? You can decline from the same link and the secretariat will know.' },
+    ],
+  },
+  chair_invite_reminder_2: {
+    subject: '{{conference_name}} is still holding a dais seat for you',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Still holding a seat for you' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour seat on the {{conference_name}} dais has not been claimed yet. Chairing on Gavelling means a live committee room: roll call, the speakers list, motions, documents and voting, all from one screen. There is nothing to install and nothing to pay.' },
+      { type: 'facts', items: [
+        { label: 'Committee', value: '{{committee}}' },
+        { label: 'Dates', value: '{{conference_dates}}' },
+        { label: 'Your fee', value: 'Waived, chairs never pay' },
+      ] },
+      { type: 'button', label: 'Accept and chair', destination: 'chair_invite_accept' },
+      { type: 'paragraph', variant: 'small', content: 'If someone else should chair instead, forward this email to them and they can accept with their own address.' },
+    ],
+  },
+  chair_invite_reminder_3: {
+    subject: 'Last reminder: your chair invite to {{conference_name}}',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Last reminder about your chair invite' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThis is the final reminder about chairing **{{committee}}** at {{conference_name}}. The invite stays valid, but we will stop emailing you about it after this.' },
+      { type: 'button', label: 'Accept and chair', destination: 'chair_invite_accept' },
+      { type: 'paragraph', variant: 'small', content: 'No reply needed if you are not interested. The secretariat can see the invite is still open and will plan around it.' },
+    ],
+  },
+  organizer_invite_reminder_1: {
+    subject: 'Your invite to the {{conference_name}} team is still open',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Your team invite is waiting' },
+      { type: 'paragraph', content: 'Hi,\n\n{{invited_by}} invited you to help organise **{{conference_name}}** and the invite has not been opened yet. Accepting gives you the management dashboard: applications, committees, allocations, finances and communications.' },
+      { type: 'facts', items: [
+        { label: 'Conference', value: '{{conference_name}}' },
+        { label: 'Invited by', value: '{{invited_by}}' },
+        { label: 'Role', value: 'Organiser' },
+      ] },
+      { type: 'button', label: 'Create an account and accept', destination: 'organizer_invite_accept' },
+      // The address line is the same fact queueOrganizerInviteEmail appends to
+      // the invite itself: respond_organizer_invite refuses unless the signed
+      // in account matches, and most of these invitees are signed in as
+      // someone else. The RPC fills the actual address in.
+      { type: 'paragraph', variant: 'small', content: 'This invitation is tied to the address it was sent to. Sign in with that address to accept it, or create a free account with it.' },
+    ],
+  },
+  organizer_invite_reminder_2: {
+    subject: 'The {{conference_name}} team seat is still open',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'The team seat is still open' },
+      { type: 'paragraph', content: 'Hi,\n\nYour place on the {{conference_name}} organising team has not been claimed yet. The dashboard handles applications, committees, allocations, finances and communications in one place, and organisers are never charged to use it.' },
+      { type: 'facts', items: [
+        { label: 'Conference', value: '{{conference_name}}' },
+        { label: 'Invited by', value: '{{invited_by}}' },
+        { label: 'Role', value: 'Organiser' },
+      ] },
+      { type: 'button', label: 'Create an account and accept', destination: 'organizer_invite_accept' },
+      { type: 'paragraph', variant: 'small', content: 'This invitation is tied to the address it was sent to. Sign in with that address to accept it, or create a free account with it.' },
+    ],
+  },
+  organizer_invite_reminder_3: {
+    subject: 'Last reminder: the {{conference_name}} team invite',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Last reminder about the team invite' },
+      { type: 'paragraph', content: 'Hi,\n\nThis is the final reminder that {{conference_name}} invited you onto its organising team. The invite stays valid, and we will stop emailing about it after this.' },
+      { type: 'button', label: 'Create an account and accept', destination: 'organizer_invite_accept' },
+      { type: 'paragraph', variant: 'small', content: 'No reply needed. The team can see the invite is still open and will plan around it.' },
+    ],
+  },
+  import_claim_reminder_1: {
+    subject: 'Your {{conference_name}} registration is waiting for you',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Your registration is waiting for you' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\n{{conference_name}} has already registered you as a **{{role}}**. Create your free account with this address and your registration attaches automatically, along with anything the secretariat has allocated you.' },
+      { type: 'facts', items: [
+        { label: 'Conference', value: '{{conference_name}}' },
+        { label: 'Role', value: '{{role}}' },
+        { label: 'Delegation', value: '{{delegation_name}}' },
+      ] },
+      { type: 'button', label: 'Claim my registration', destination: 'import_claim' },
+      { type: 'paragraph', variant: 'small', content: 'You do not need to apply again. Your place is already held, this only connects it to an account you control.' },
+    ],
+  },
+  import_claim_reminder_2: {
+    subject: 'Your {{conference_name}} place is still unclaimed',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Your place is still unclaimed' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nYour registration at {{conference_name}} is still waiting to be connected to an account. Once it is, you can see your committee and country, read the study guides as your chairs publish them, and follow your committee live on the day.' },
+      { type: 'facts', items: [
+        { label: 'Conference', value: '{{conference_name}}' },
+        { label: 'Role', value: '{{role}}' },
+        { label: 'Dates', value: '{{conference_dates}}' },
+      ] },
+      { type: 'button', label: 'Claim my registration', destination: 'import_claim' },
+      { type: 'paragraph', variant: 'small', content: 'It takes a minute and costs nothing. Claiming does not change your registration, it only puts it in your hands.' },
+    ],
+  },
+  import_claim_reminder_3: {
+    subject: 'Last reminder: your {{conference_name}} registration',
+    blocks: [
+      { type: 'paragraph', variant: 'heading', content: 'Last reminder about your registration' },
+      { type: 'paragraph', content: 'Hi {{delegate_name}},\n\nThis is the final reminder that {{conference_name}} is holding a registration for you on Gavelling. Your place is unaffected either way, and we will stop emailing you about it after this.' },
+      { type: 'button', label: 'Claim my registration', destination: 'import_claim' },
+      { type: 'paragraph', variant: 'small', content: 'If someone else handles your registration, forward this to them and they can claim it with their own address.' },
     ],
   },
 };

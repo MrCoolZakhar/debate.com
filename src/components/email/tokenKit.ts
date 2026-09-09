@@ -62,6 +62,7 @@ export const TOKEN_IDENTITY: Record<EmailTokenKey, TokenIdentity> = {
   request_body: { emoji: 'Speech balloon', glyph: '💬', icon: MessageSquare, short: 'Their message', family: 'thread', becomes: 'The message you are replying to, quoted back.' },
   draft_link: { emoji: 'Link', glyph: '🔗', icon: Link2, short: 'Draft link', family: 'link', becomes: 'A private link back to their unfinished application.' },
   draft_stop_link: { emoji: 'Stop sign', glyph: '🛑', icon: Ban, short: 'Stop link', family: 'link', becomes: 'A one-click way for them to turn these reminders off.' },
+  invited_by: { emoji: 'Bust in silhouette', glyph: '🧑', icon: UserRound, short: 'Who invited', family: 'person', becomes: 'The organizer who sent the invitation.' },
 };
 
 export const TOKEN_FAMILY_LABEL: Record<TokenFamily, string> = {

@@ -43,7 +43,7 @@
 //  * Dark mode: `color-scheme: light dark` + a `prefers-color-scheme` override
 //    block + `[data-ogsc]` for Outlook. See DARK MODE below.
 
-import { resolveTokens, splitResolvedText, type EmailTokenContext } from './emailTokens';
+import { resolveTokens, splitResolvedText, UNRESOLVED_MARKER_PATTERN, type EmailTokenContext } from './emailTokens';
 import { companyLegalLines } from './companyDetails';
 import { conferenceAcronymLabel } from './conferenceLabels';
 import {
@@ -750,9 +750,19 @@ function renderBlock(
       return null;
     };
 
+    /* A row whose value resolves to NOTHING BUT unresolved-token markers is
+       dropped, not printed. A facts panel is a list of answers, and
+       "Committee: ⚠committee⚠" is not an answer — it is the absence of one,
+       shouted. This matters most on the payment receipt, which legitimately
+       goes out before a delegate is allocated or when they have no delegation.
+       Only an all-marker value is dropped: any real text beside a marker still
+       renders, marker included, so a half-filled row stays visible and a
+       template author still sees what is missing. Paragraph copy is untouched
+       — there the marker is the only signal an organizer gets, and the
+       composer's own editor highlights them through splitResolvedText. */
     const items = block.items
       .map(i => ({ label: i.label.trim(), value: resolveTokens(i.value, ctx).trim(), icon: iconFor(i.iconFrom) }))
-      .filter(i => i.label && i.value);
+      .filter(i => i.label && i.value && i.value.replace(UNRESOLVED_MARKER_PATTERN, '').trim() !== '');
     if (!items.length) return '';
 
     /* A panel of labelled rows, not a sentence. This is the mymun idea: their

@@ -3,6 +3,22 @@
 // mirror so the older resolver/preview/history code paths (which only know
 // about plain text) keep working unchanged.
 
+/**
+ * CLOSED union. `custom` carries a literal `url`, and a button URL is never
+ * run through the token resolver — resolveButtonUrl works from the conference
+ * row and the per-recipient tokens below, not from EmailTokenContext.
+ *
+ * That is why the payment receipt has no "Add to calendar" link. A Google
+ * Calendar template URL is
+ * https://calendar.google.com/calendar/render?action=TEMPLATE&text=…&dates=…&location=…
+ * built from this conference's name, start and end dates and location, so it
+ * is per-conference data that neither a literal `url` nor any existing
+ * destination can express. Adding it means a new destination here plus a
+ * branch in resolveButtonUrl with access to the conference's dates and
+ * location (ButtonUrlConference currently carries only the slug), and the
+ * same URL mirrored into gavelling_email_html for the SQL send paths. That is
+ * a deliberate piece of work, not something to smuggle into a copy change.
+ */
 export type ButtonDestination = 'conference_page' | 'apply_page' | 'documents' | 'custom' | 'chair_invite_accept' | 'organizer_invite_accept' | 'signup_page' | 'import_claim';
 
 /** Fixed size presets only — never a free-form font size. A numeric size

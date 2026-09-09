@@ -595,6 +595,16 @@ const EVENT_STAGE: Record<EventKey, Stage> = {
   organizer_invite: 'Team & questions',
   request_reply: 'Team & questions',
   request_received: 'Team & questions',
+  // The reminders sit with the invite they chase.
+  chair_invite_reminder_1: 'Team & questions',
+  chair_invite_reminder_2: 'Team & questions',
+  chair_invite_reminder_3: 'Team & questions',
+  organizer_invite_reminder_1: 'Team & questions',
+  organizer_invite_reminder_2: 'Team & questions',
+  organizer_invite_reminder_3: 'Team & questions',
+  import_claim_reminder_1: 'Applying',
+  import_claim_reminder_2: 'Applying',
+  import_claim_reminder_3: 'Applying',
 };
 
 /** What each stage IS, said in one line, plus the art that carries it.

@@ -60,6 +60,28 @@ export const EVENT_REGISTRY = [
   { key: 'import_join_invite', label: 'Import: join Gavelling', description: 'Sent to imported applicants asking them to create a Gavelling account so their registration attaches automatically. Always sends, clicking INVITE is the consent, using your draft if enabled, otherwise our default.', defaultDelivery: 'immediate', functional: true },
   { key: 'awards_open', label: 'Awards open for chairs', description: "Sent to a committee's chairs when the secretariat opens award nominations, pointing them to their committee page to nominate.", defaultDelivery: 'manual' },
   { key: 'award_received', label: 'Award received', description: 'Sent to a delegate when the conference publishes their award. Names the award, committee and delegation, and points to their MUN CV.', defaultDelivery: 'immediate' },
+  // ── Invite reminders ──────────────────────────────────────────────────────
+  // Three follow-ups on an invitation that was sent and never acted on, at
+  // day 3, day 10 and day 21. Queued by the `queue_invite_reminders` SQL RPC
+  // (see the DB), NOT by queueEventEmail: the recipients have no account and
+  // no application row, so there is nothing on the TypeScript side to resolve
+  // them from. That RPC carries a SQL mirror of the copy below — if you change
+  // a default here, change it there too, the way draft_reminder works.
+  //
+  // Functional, like committee_chair_invite / organizer_invite / import_join_invite:
+  // these chase a functional invite the recipient's own organizer sent them,
+  // so they follow the same always-send rule and show no toggle. A person who
+  // makes an account, accepts, declines, or is revoked stops receiving them,
+  // and nobody ever gets the same stage twice.
+  { key: 'chair_invite_reminder_1', label: 'Chair invite reminder 1', description: 'Sent 3 days after a chair invite when it is still pending and the invitee has not made a Gavelling account. Always sends, the invite is the consent.', defaultDelivery: 'immediate', functional: true },
+  { key: 'chair_invite_reminder_2', label: 'Chair invite reminder 2', description: 'Sent about a week after the first reminder, still only while the chair invite is pending and unclaimed. Says what chairing on Gavelling actually involves.', defaultDelivery: 'immediate', functional: true },
+  { key: 'chair_invite_reminder_3', label: 'Chair invite reminder 3 (final)', description: 'The last reminder about a pending chair invite, around day 21. Says plainly that it is the last one, so the silence afterwards is not a mystery.', defaultDelivery: 'immediate', functional: true },
+  { key: 'organizer_invite_reminder_1', label: 'Organizer invite reminder 1', description: 'Sent 3 days after an organizing-team invite when it is still pending and the invitee has not made a Gavelling account. Names the address the invite is tied to.', defaultDelivery: 'immediate', functional: true },
+  { key: 'organizer_invite_reminder_2', label: 'Organizer invite reminder 2', description: 'Sent about a week after the first reminder, still only while the organizing-team invite is pending and unclaimed.', defaultDelivery: 'immediate', functional: true },
+  { key: 'organizer_invite_reminder_3', label: 'Organizer invite reminder 3 (final)', description: 'The last reminder about a pending organizing-team invite, around day 21.', defaultDelivery: 'immediate', functional: true },
+  { key: 'import_claim_reminder_1', label: 'Imported registration reminder 1', description: 'Sent 3 days after an imported applicant is invited to claim their registration, while it is still unclaimed and they have no Gavelling account.', defaultDelivery: 'immediate', functional: true },
+  { key: 'import_claim_reminder_2', label: 'Imported registration reminder 2', description: 'Sent about a week after the first reminder, still only while the imported registration is unclaimed.', defaultDelivery: 'immediate', functional: true },
+  { key: 'import_claim_reminder_3', label: 'Imported registration reminder 3 (final)', description: 'The last reminder about an unclaimed imported registration, around day 21.', defaultDelivery: 'immediate', functional: true },
 ] as const satisfies readonly EventDef[];
 
 /** Union of every valid event key, derived from the registry itself so
@@ -124,6 +146,18 @@ export const NOTIFICATION_CATEGORY: Record<EventKey, NotificationCategory> = {
   // A delegate's own honour is the answer to their whole application; it sits
   // with the other application-side milestones, not with marketing.
   award_received: 'applications',
+  // Invite reminders are chases on a functional invite. ALWAYS_SEND_EVENTS
+  // below bypasses the category check for them, exactly as it does for the
+  // invites themselves; the category is here because the map is exhaustive.
+  chair_invite_reminder_1: 'applications',
+  chair_invite_reminder_2: 'applications',
+  chair_invite_reminder_3: 'applications',
+  organizer_invite_reminder_1: 'applications',
+  organizer_invite_reminder_2: 'applications',
+  organizer_invite_reminder_3: 'applications',
+  import_claim_reminder_1: 'applications',
+  import_claim_reminder_2: 'applications',
+  import_claim_reminder_3: 'applications',
 };
 
 /** The profiles column each category is gated on. 'requests' reuses the
@@ -152,7 +186,16 @@ export type PreferenceRow = Partial<Record<PreferenceField, boolean | null>>;
 // the product: clicking INVITE (chair/import) is itself the consent, and a
 // reply to a question the participant asked themselves isn't a marketing
 // choice, it's the answer they're waiting on.
-const ALWAYS_SEND_EVENTS = new Set(['committee_chair_invite', 'organizer_invite', 'import_join_invite', 'request_reply']);
+// The nine invite reminders join them for the same reason: they chase an
+// invitation the recipient's own organizer sent, they stop the moment that
+// invitation is answered or an account exists, and they stop for good after
+// the third. Their real opt-out is answering the invite.
+const ALWAYS_SEND_EVENTS = new Set([
+  'committee_chair_invite', 'organizer_invite', 'import_join_invite', 'request_reply',
+  'chair_invite_reminder_1', 'chair_invite_reminder_2', 'chair_invite_reminder_3',
+  'organizer_invite_reminder_1', 'organizer_invite_reminder_2', 'organizer_invite_reminder_3',
+  'import_claim_reminder_1', 'import_claim_reminder_2', 'import_claim_reminder_3',
+]);
 
 /** True if this recipient should receive an email in `category` given their
  *  notification preferences. THE one place a notify_email_* column is read at
