@@ -3893,13 +3893,25 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       )}
                       <h2 className="text-5xl font-black mb-3 text-center" style={{ color: '#1B3828' }}>{t('gsl_no_current_speaker')}</h2>
                       <p className="mb-4 text-center text-sm" style={{ color: '#9A8A78' }}>{t('gsl_add_call_first')}</p>
-                      {committee.speakersList.length === 1 && (
+                      {/* Only when the chair has opted into "require next speaker". By
+                          default the GSL is allowed to run down to its last delegate
+                          and elapse, so a single name on the list is not a problem
+                          to warn about. */}
+                      {gslRequireNextSpeaker && committee.speakersList.length === 1 && (
                         <div className="mb-4 px-4 py-2 bg-[#B6871F]/10 border border-[#B6871F]/30 rounded-lg text-[#B6871F] text-xs text-center">
                           {t('gsl_one_delegate_warning')}
                         </div>
                       )}
+                      {/* This button used to require TWO delegates unconditionally,
+                          ignoring the setting entirely: with one name on the GSL the
+                          chair could not call anyone up, so the timer could never
+                          start. The Start button beside a live speaker was already
+                          gated on gslRequireNextSpeaker; this one now follows the
+                          same rule. Off (the default): one delegate is enough.
+                          On: keep one in reserve so the list never empties. */}
                       {!sessionEnded && !isViewOnly && (
-                        <button data-tutorial="call-first-speaker" onClick={handleNextSpeaker} disabled={committee.speakersList.length < 2}
+                        <button data-tutorial="call-first-speaker" onClick={handleNextSpeaker}
+                          disabled={gslRequireNextSpeaker ? committee.speakersList.length < 2 : committee.speakersList.length === 0}
                           className="bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none gv-lift">
                           {t('gsl_call_first')}
                         </button>

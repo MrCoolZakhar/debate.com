@@ -99,7 +99,7 @@
 - currentSpeaker can NEVER be re-added to speakersList
 - If delegate goes absent, remove them from speakersList AND caucusQueue (but NOT during pre-session roll call)
 - GSL is NEVER wiped when entering a caucus
-- The "isLastGSLSpeaker" guard prevents starting timer when only 1 delegate is on list (to ensure queue never empties mid-session)
+- **The GSL may elapse by default.** `gslRequireNextSpeaker` defaults to **false**, and with it off a chair can call and time the last delegate on the list and let the GSL run dry. Only when a chair turns the setting ON does `isLastGSLSpeaker` block the Start button and the call-first button require two names, so the queue never empties mid-session. Both buttons read the same setting: the call-first button used to require two delegates unconditionally, which blocked a one-name GSL from ever starting and is what "chairs cannot start the timer" was.
 - Extra time (+⏱) adds seconds to speakerTimeRemaining only — no DB write until pause/next
 - Right of Reply is a fully INDEPENDENT fixed overlay with its own `rtrTimeRemaining` state (`chair/[code]/page.tsx:1284-1288, 3148-3206`). It NEVER writes `speakersList` — it does not insert the delegate into the GSL, and it does not touch `currentSpeaker`. It logs a `right-of-reply` scoring event (`:3174`) and nothing else. (This line previously claimed RTR inserted at the top of speakersList with a time override; that was verified false against the code.)
 - speakersList display in main view prepends currentSpeaker as position 1 (gslDisplayList)
@@ -391,7 +391,7 @@ There is **no** custom-session-ID control, **no** multi-chair toggle and **no** 
 | `requireDocApproval` | chair must approve a WP/DR before it can be introduced | `DocumentsModal.tsx:856` |
 | `documentNames` | renameable WP/DR labels (singular + plural) | via `docName()` — see FEATURE: DOCUMENTS |
 | `wpSubmissionLimit` / `drSubmissionLimit` | legacy, no UI writes them | `DocumentsModal.tsx:469` |
-| `gslRequireNextSpeaker` | blocks Next while only one delegate remains on the GSL, so the queue never empties mid-session | `chair/[code]/page.tsx:1820, 2659, 2674` |
+| `gslRequireNextSpeaker` | **default false** (the GSL may elapse). When ON: the Start button is disabled while the current speaker is the last on the list, and the call-first button needs two delegates, so the queue never empties mid-session | `chair/[code]/page.tsx` (Start button + call-first button, both gated on the setting) |
 | `chairJoinSuffix` | 4-digit chair code AND the RLS write credential | join page + `sessionClient` |
 | `requireChairApproval` | delegates must be approved by a chair before joining the floor | `delegate/[code]/page.tsx:931, 995, 1068` (via `getCommitteeFlags`) |
 | `sponsorLabel` | overrides the visible word "Sponsors" ('' → translated default) | `sponsorLabel()` in `committeeFlags.ts`, used by delegate/voting/DocumentsModal |
