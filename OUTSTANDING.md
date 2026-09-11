@@ -13,7 +13,7 @@ summary. Nothing tracked them.
 - When an item is finished, delete it. This is a to-do list, not a changelog;
   the commit messages are the changelog.
 
-Last swept: 9 Sep 2026.
+Last swept: 11 Sep 2026.
 
 ---
 
@@ -50,15 +50,17 @@ Last swept: 9 Sep 2026.
 
 ## Needs a human's eyes
 
-- [ ] **No admin surface has been verified visually** — the Users tab, the
-      Pending tab, or the new verified seal and sort on the conferences tab.
-      `/admin` is gated on a platform-admin account and I will not sign in as
-      one. Blocked on: Peter looking.
-- [ ] **The Stripe-return confirmation moment is unverified end to end.** It
-      needs an authed user with a paid application and `?payment=success`. The
-      apply-completion arrival IS verified live against SISMUN 2026. The
-      polling logic is byte-identical to what it replaced, so the risk is
-      presentational, but it deserves one real payment before it ships.
+- [ ] **No admin surface has been verified visually, and it is now LIVE.**
+      The Users tab, the Pending tab, and the verified seal and sort on the
+      conferences tab shipped to production on 11 Sep (`c912c90`) without anyone
+      having seen them. `/admin` is gated on a platform-admin account and I will
+      not sign in as one. Blocked on: Peter looking.
+- [ ] **The Stripe-return confirmation moment is unverified end to end, and
+      it is now LIVE** (shipped 11 Sep, `c912c90`). It needs an authed user with
+      a paid application and `?payment=success`. The apply-completion arrival IS
+      verified against SISMUN 2026, and the polling logic is byte-identical to
+      what it replaced, so the risk is presentational. The first real card
+      payment on production is now the test; worth watching the next one.
 
 ## Deliberately not done, with reasons
 
