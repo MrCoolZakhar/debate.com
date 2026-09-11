@@ -9,7 +9,8 @@ import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
 import { useAuth } from '@/components/AuthProvider';
-import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { verifyConferenceAccess, type ConferenceAccess } from '@/lib/conferenceAccess';
+import { getSessionJoinRules, getSeatAvailability, peekSeatToken, seatKey, type SeatAvailability } from '@/lib/seatClaims';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { getCountryDisplayName } from '@/lib/countries';
@@ -71,6 +72,17 @@ function JoinPageInner() {
   // True while we determine whether a found committee is a conference-linked session.
   // Suppresses the standalone role cards so they don't flash before the conference check resolves.
   const [checkingConference, setCheckingConference] = useState(false);
+  // Per-SEAT gating (src/lib/seatClaims.ts). `reservedCountries` are the seats this
+  // conference allocated or invited someone to: those still need a signed-in, allocated
+  // account. Every other seat is open to anyone holding the code, and `chairsOpen` says
+  // the dais has no assigned or invited chair, so the chair code alone admits a chair.
+  // A standalone session has nothing reserved and an open dais.
+  const [chairsOpen, setChairsOpen] = useState(false);
+  const [reservedCountries, setReservedCountries] = useState<string[]>([]);
+  // Which seats are full, and which one this device or account already holds.
+  const [seatAvail, setSeatAvail] = useState<SeatAvailability>({});
+  // The role the conference records give this signed-in user here, if any.
+  const [verifiedKind, setVerifiedKind] = useState<ConferenceAccess['kind'] | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -87,6 +99,7 @@ function JoinPageInner() {
     if (!isConferenceSession) {
       setAllocatedCountry(null);
       setAllocationError('');
+      setVerifiedKind(null);
       return;
     }
 
@@ -94,6 +107,7 @@ function JoinPageInner() {
     if (!user || !session) {
       setAllocatedCountry(null);
       setAllocationError('__signin__');
+      setVerifiedKind(null);
       return;
     }
 
@@ -105,6 +119,7 @@ function JoinPageInner() {
       // user's allocation on the authed client, so it works for PRIVATE conferences too (via the
       // "associated users read their committee" policy), not just public ones.
       const access = await verifyConferenceAccess(code.trim().toUpperCase(), session!.access_token, user!.id);
+      setVerifiedKind(access.kind === 'delegate' || access.kind === 'chair' || access.kind === 'advisor' || access.kind === 'organizer' ? access.kind : null);
 
       // Conference sessions: role is authoritative (allocation / chair record) and the
       // manual role selector is hidden, so derive mode from the verified access.
@@ -129,8 +144,23 @@ function JoinPageInner() {
     }
 
     checkAllocation();
+    // Not keyed on `mode`: this effect only ever SETS the mode from the verified role, and
+    // re-verifying on every role-card tap flickered the open-seat picker.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConferenceSession, code, user?.id, mode]);
+  }, [isConferenceSession, code, user?.id]);
+
+  // Seat availability: greys out seats someone already holds and recognises the one this
+  // device or account holds. Re-read when the account changes, so "Your seat" follows a
+  // sign-in. Advisory only: /delegate claims the seat and is the authority for races.
+  useEffect(() => {
+    const c = foundCommittee?.code;
+    if (!c) { setSeatAvail({}); return; }
+    let cancelled = false;
+    getSeatAvailability(c, { token: peekSeatToken(c), accessToken: session?.access_token ?? null })
+      .then((a) => { if (!cancelled && a) setSeatAvail(a); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foundCommittee?.code, user?.id]);
 
   // Subscribe to chair presence channel to detect if a chair is already active
   useEffect(() => {
@@ -169,11 +199,15 @@ function JoinPageInner() {
     setPasswordError('');
     setActiveChairNames(new Set());
 
-    async function checkConferenceSession() {
+    async function checkConferenceSession(found: Committee) {
       setCheckingConference(true);
-      // Detect via committees.session_origin (anon-readable) so PRIVATE conferences are gated too —
-      // anon cannot read conference_committees for a private conference.
-      const isConf = await detectConferenceSession(upper);
+      // session_join_rules is anon-callable and privacy-agnostic, so PRIVATE conferences are
+      // handled too. If it cannot be read, fail CLOSED: treat a conference session as every
+      // seat reserved and the dais gated, which is exactly the old behaviour.
+      const rules = await getSessionJoinRules(upper);
+      const isConf = rules ? rules.isConference : found.sessionOrigin === 'conference';
+      setChairsOpen(rules ? rules.chairsOpen : !isConf);
+      setReservedCountries(rules ? rules.reservedCountries : (isConf ? found.delegates.map((d) => d.country) : []));
       if (isConf) {
         setIsConferenceSession(true);
         // Best-effort display info: resolves for public conferences; null for private (the gate
@@ -198,7 +232,7 @@ function JoinPageInner() {
     const local = Object.values(committees).find((c) => c.code === upper);
     if (local) {
       setFoundCommittee(local);
-      checkConferenceSession();
+      checkConferenceSession(local);
       setLookingUp(false);
       return;
     }
@@ -207,7 +241,7 @@ function JoinPageInner() {
     getCommitteeByCode(upper).then(async (remote) => {
       if (remote) {
         setFoundCommittee(remote);
-        await checkConferenceSession();
+        await checkConferenceSession(remote);
       } else {
         setFoundCommittee(null);
         setConferenceCommittee(null);
@@ -231,6 +265,10 @@ function JoinPageInner() {
     setAllocatedCountry(null);
     setAllocationError('');
     setCheckingConference(false);
+    setChairsOpen(false);
+    setReservedCountries([]);
+    setSeatAvail({});
+    setVerifiedKind(null);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -240,9 +278,42 @@ function JoinPageInner() {
     }
   };
 
-  const handleJoin = () => {
+  // ── Per-seat gating ─────────────────────────────────────────────────────────
+  const reservedSet = new Set(reservedCountries.map(seatKey));
+  const isReservedSeat = (c: string) => isConferenceSession && reservedSet.has(seatKey(c));
+  // An ended session is read-only, so a full seat never stops anyone looking at it.
+  const seatsEnforced = !foundCommittee?.endedAt;
+  const seatState = (c: string) => seatAvail[seatKey(c)];
+  const seatBlocked = (c: string) => {
+    if (isReservedSeat(c)) return true;
+    const st = seatState(c);
+    return seatsEnforced && !!st && st.full && !st.mine;
+  };
+  const openSeatCount = foundCommittee ? foundCommittee.delegates.filter((d) => !isReservedSeat(d.country)).length : 0;
+  const hasVerifiedRole = verifiedKind === 'delegate' || verifiedKind === 'chair' || verifiedKind === 'advisor' || verifiedKind === 'organizer';
+  // The OPEN PATH: a conference code, no role for this person in the conference records
+  // (or nobody signed in), and something here that needs no role. It is the standalone
+  // flow limited to open seats, plus the chair code when the dais is open. A signed-in
+  // user with no allocation gets this instead of the "not linked to your account" dead
+  // end; an allocated user never takes it and still goes straight to their locked seat.
+  const openPath = isConferenceSession && !checkingConference && !authLoading && !allocationLoading
+    && !hasVerifiedRole && (openSeatCount > 0 || chairsOpen);
+
+  // The open path offers only the roles that are actually open, so snap the mode onto one
+  // of them. The advisor view stays with the conference's own advisors and organisers.
+  useEffect(() => {
+    if (!openPath) return;
+    if (mode === 'advisor' || (mode === 'delegate' && openSeatCount === 0) || (mode === 'chair' && !chairsOpen)) {
+      setMode(openSeatCount > 0 ? 'delegate' : 'chair');
+      setCountry('');
+    }
+  }, [openPath, mode, openSeatCount, chairsOpen]);
+
+  const handleJoin = async () => {
     // ── Conference-linked session fork ──
-    if (isConferenceSession) {
+    // Only for people the conference records know, or when nothing here is open to them.
+    // Everyone else on a conference code takes the open path: the anonymous flow below.
+    if (isConferenceSession && !openPath) {
       if (!user) {
         router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code + '&mode=' + mode));
         return;
@@ -301,6 +372,18 @@ function JoinPageInner() {
       return;
     }
     // delegate
+    if (!country) return;
+    if (isReservedSeat(country)) { setError(t('join_seat_reserved_note')); return; }
+    // Re-read just before routing, so a seat taken a moment ago is caught here rather than
+    // on the delegate page (which still re-checks: its claim is the authority).
+    if (seatsEnforced) {
+      const fresh = await getSeatAvailability(foundCommittee.code, { token: peekSeatToken(foundCommittee.code), accessToken: session?.access_token ?? null });
+      if (fresh) {
+        setSeatAvail(fresh);
+        const st = fresh[seatKey(country)];
+        if (st && st.full && !st.mine) { setError(t('join_seat_now_taken')); return; }
+      }
+    }
     const encoded = encodeURIComponent(country);
     router.push(`/delegate/${foundCommittee.code}?country=${encoded}`);
   };
@@ -447,7 +530,7 @@ function JoinPageInner() {
                 <p className="text-xs mt-0.5" style={{ color: 'rgba(238,217,138,0.6)', fontFamily: "'DM Mono', monospace" }}>
                   {conferenceCommittee
                     ? `${conferenceCommittee.conferences ? conferenceAcronymLabel(conferenceCommittee.conferences) : ''} · ${conferenceCommittee.name}`
-                    : 'Sign in to verify your allocation'}
+                    : (openPath ? '' : 'Sign in to verify your allocation')}
                 </p>
               </div>
 
@@ -485,7 +568,7 @@ function JoinPageInner() {
                   </div>
                 </div>
               ) : null}
-                {allocationError === '__signin__' && (
+                {allocationError === '__signin__' && (!openPath || openSeatCount === 0) && (
                   <div style={{ border: '1px solid #DDD4C0', borderRadius: 12, padding: 16, backgroundColor: '#FAF8F3', marginTop: 12 }}>
                     <p style={{ fontSize: 13, fontWeight: 700, color: '#1C1410', fontFamily: "'Outfit', sans-serif", marginBottom: 6 }}>
                       Sign in to join this session
@@ -513,7 +596,7 @@ function JoinPageInner() {
                     that click; a chair who reads "signed in as
                     personal@gmail.com" immediately knows why their school
                     address is not recognised. */}
-                {(allocationError === '__not_associated__' || allocationError === '__wrong_role__') && (
+                {!openPath && (allocationError === '__not_associated__' || allocationError === '__wrong_role__') && (
                   <div style={{ border: '1px solid rgba(139,32,32,0.2)', borderRadius: 12, padding: 16, backgroundColor: 'rgba(139,32,32,0.04)', marginTop: 12 }}>
                     <p style={{ fontSize: 13, fontWeight: 700, color: '#8B2020', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>
                       {allocationError === '__wrong_role__' ? 'Allocation mismatch' : 'This code is not linked to your account'}
@@ -556,14 +639,20 @@ function JoinPageInner() {
           )}
 
           {/* Role cards */}
-          {!isConferenceSession && !checkingConference && (() => {
-            const roleCards: { key: JoinMode; label: string; desc: string }[] = [
+          {(!isConferenceSession || openPath) && !checkingConference && (() => {
+            const allCards: { key: JoinMode; label: string; desc: string }[] = [
               { key: 'delegate', label: t('join_role_delegate'), desc: t('join_role_delegate_desc') },
               { key: 'chair', label: t('join_role_chair'), desc: t('join_role_chair_desc') },
               { key: 'advisor', label: t('join_role_advisor'), desc: t('join_role_advisor_desc') },
             ];
+            // Open path: only what needs no conference role. Delegate when an open seat
+            // exists, chair when the dais is open. The advisor view is not offered.
+            const roleCards = openPath
+              ? allCards.filter((c) => (c.key === 'delegate' && openSeatCount > 0) || (c.key === 'chair' && chairsOpen))
+              : allCards;
+            const cols = roleCards.length >= 3 ? 'grid-cols-3' : roleCards.length === 2 ? 'grid-cols-2' : 'grid-cols-1';
             return (
-              <div className="grid grid-cols-3 gap-4 mb-5">
+              <div className={`grid ${cols} gap-4 mb-5`}>
                 {roleCards.map(({ key, label, desc }) => {
                   const enabled = true;
                   const isActive = mode === key && enabled;
@@ -596,28 +685,59 @@ function JoinPageInner() {
             );
           })()}
 
-          {/* Delegate country select */}
-          {!isConferenceSession && foundCommittee && mode === 'delegate' && (() => {
+          {/* Delegate country select. Seats someone already holds are disabled as Taken
+              (your own reads Your seat); on a conference code, seats that belong to
+              allocated or invited delegates are disabled as Reserved. */}
+          {(!isConferenceSession || openPath) && foundCommittee && mode === 'delegate' && (() => {
+            const anyTaken = seatsEnforced && foundCommittee.delegates.some((d) => {
+              const st = seatState(d.country);
+              return !isReservedSeat(d.country) && !!st && st.full && !st.mine;
+            });
+            const anyReserved = isConferenceSession && reservedSet.size > 0;
             return (
               <div className="mb-4">
                 <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>{t('join_country_label')}</label>
                 <select
                   value={country}
-                  onChange={(e) => setCountry(e.target.value)}
+                  onChange={(e) => { setCountry(e.target.value); setError(''); }}
                   className="w-full rounded-xl px-4 py-3 focus:outline-none transition-colors"
                   style={{ backgroundColor: '#FAF8F3', border: '1.5px solid #DDD4C0', color: '#1C1410' }}
                 >
                   <option value="">{t('join_country_placeholder')}</option>
-                  {foundCommittee.delegates.map((d) => (
-                    <option key={d.country} value={d.country}>{getCountryDisplayName(d.country, language)}</option>
-                  ))}
+                  {foundCommittee.delegates.map((d) => {
+                    const st = seatState(d.country);
+                    const reserved = isReservedSeat(d.country);
+                    const taken = !reserved && seatsEnforced && !!st && st.full && !st.mine;
+                    const tag = reserved ? t('join_seat_reserved') : taken ? t('join_seat_taken') : st?.mine ? t('join_seat_yours') : '';
+                    return (
+                      <option key={d.country} value={d.country} disabled={reserved || taken}>
+                        {getCountryDisplayName(d.country, language)}{tag ? ` · ${tag}` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
+                {anyTaken && (
+                  <p className="text-xs mt-2 leading-snug" style={{ color: '#6E6456' }}>{t('join_seat_taken_note')}</p>
+                )}
+                {anyReserved && !user && (
+                  <div className="mt-2 flex items-center gap-3">
+                    <p className="text-xs leading-snug flex-1 min-w-0" style={{ color: '#6E6456' }}>{t('join_seat_reserved_note')}</p>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code + '&mode=delegate'))}
+                      className="shrink-0 px-3 py-2 rounded-xl text-xs font-bold focus:outline-none gv-lift"
+                      style={{ backgroundColor: '#1B3828', color: '#EED98A', letterSpacing: '0.06em' }}
+                    >
+                      {t('join_seat_signin')}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })()}
 
           {/* Conference chair: use their profile name (no manual entry). */}
-          {foundCommittee && mode === 'chair' && isConferenceSession && (
+          {foundCommittee && mode === 'chair' && isConferenceSession && !openPath && (
             <div className="mb-4 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(27,56,40,0.05)', border: '1px solid rgba(27,56,40,0.15)' }}>
               <p className="text-sm" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>
                 Joining as <span style={{ fontWeight: 700 }}>{profile?.display_name ?? user?.email ?? 'you'}</span>, chair of this committee.
@@ -625,7 +745,7 @@ function JoinPageInner() {
             </div>
           )}
           {/* Chair name selection (standalone sessions only) */}
-          {foundCommittee && mode === 'chair' && !isConferenceSession && (
+          {foundCommittee && mode === 'chair' && (!isConferenceSession || openPath) && (
             <div className="mb-4">
               <label className="block text-sm font-semibold mb-2" style={{ color: '#1C1410' }}>{t('join_chair_label')}</label>
               {foundCommittee.chairNames.length > 0 && (
@@ -705,7 +825,7 @@ function JoinPageInner() {
             </div>
           )}
 
-          {foundCommittee && mode === 'chair' && !isConferenceSession && (() => {
+          {foundCommittee && mode === 'chair' && (!isConferenceSession || openPath) && (() => {
             const requiresPassword = !!(foundCommittee.dbChairJoinSuffix ?? getSettings(foundCommittee.code).chairJoinSuffix);
             if (!requiresPassword) return null;
             return (
@@ -729,12 +849,12 @@ function JoinPageInner() {
           <button
             onClick={handleJoin}
             disabled={
-              isConferenceSession
+              isConferenceSession && !openPath
                 ? (!foundCommittee || !user || allocationLoading || allocationError !== '' ||
                    (mode === 'delegate' && !allocatedCountry))
                 : (
                   mode === 'delegate'
-                    ? (!foundCommittee || !country)
+                    ? (!foundCommittee || !country || seatBlocked(country))
                     : mode === 'chair'
                     ? (!foundCommittee ||
                         (chairNameMode === 'select' ? !chairName : !newChairName.trim()) ||
@@ -755,7 +875,7 @@ function JoinPageInner() {
               }
             }}
           >
-            {isConferenceSession
+            {isConferenceSession && !openPath
               ? (allocatedCountry ? `JOIN AS ${allocatedCountry.name.toUpperCase()} →` : 'JOIN SESSION →')
               : mode === 'delegate'
               ? (foundCommittee?.endedAt ? t('join_btn_delegate_ended') : t('join_btn_delegate'))

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import CreditsWelcomeModal from '@/components/CreditsWelcomeModal';
+import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 
 // The anonymous, code-based committee-session product (chair/delegate/advisor/
 // voting screens, the /join code entry) and the auth flow itself never render
@@ -23,6 +24,9 @@ export default function CreditsWelcomeGate() {
   const [preRegistered, setPreRegistered] = useState(false);
   const pathname = usePathname();
   const { user, session, loading: authLoading } = useAuth();
+  // CompleteBasicsGate (nationality + date of birth) goes first. The welcome
+  // waits while it is checking or open, then shows as normal.
+  const basicsBlocking = useBasicsGateBlocking();
   const [seen, setSeen] = useState<boolean | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   // Guards against the modal re-opening from a token refresh re-running the
@@ -67,6 +71,7 @@ export default function CreditsWelcomeGate() {
   if (!user || !session) return null;
   if (seen === null || seen === true) return null;
   if (!showWelcome) return null;
+  if (basicsBlocking) return null;
 
   return <CreditsWelcomeModal onClose={dismissWelcome} preRegistered={preRegistered} />;
 }

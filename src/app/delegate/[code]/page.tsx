@@ -44,7 +44,7 @@ import {
   setDelegateStatus as setDelegateStatusInDB,
 } from '@/lib/committeeService';
 import { useAuth } from '@/components/AuthProvider';
-import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { claimDelegateSeat, seatKey } from '@/lib/seatClaims';
 import { safeStorageKey } from '@/lib/storageKey';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -91,6 +91,38 @@ function GavelLoader() {
         <circle cx="56" cy="56" r="3" fill="#1B3828" opacity="0.5" />
       </svg>
       <p className="text-[#9A8A78] text-sm font-mono tracking-widest">LOADING…</p>
+    </div>
+  );
+}
+
+/** Full-screen stop for the seat guard: taken, reserved, sign in, or could not check.
+ *  Mobile-first like the rest of this page, with one primary action and a way back. */
+function SeatGateScreen({ title, body, primaryLabel, onPrimary, backLabel, onBack }: {
+  title: string;
+  body: string;
+  primaryLabel: string;
+  onPrimary: () => void;
+  backLabel?: string;
+  onBack?: () => void;
+}) {
+  return (
+    <div className="min-h-dvh flex items-center justify-center px-6" style={{ background: DG.ivory }}>
+      <DelegateStyles />
+      <Panel className="dgv-rise w-full max-w-sm text-center">
+        <h1 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, color: DG.forest }}>{title}</h1>
+        <p style={{ margin: '10px 0 20px', fontFamily: OUTFIT, fontSize: 14, lineHeight: 1.55, color: DG.body }}>{body}</p>
+        <ChunkyButton onClick={onPrimary}>{primaryLabel}</ChunkyButton>
+        {backLabel && onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="focus:outline-none"
+            style={{ display: 'block', margin: '14px auto 0', padding: '8px 12px', background: 'none', border: 'none', fontFamily: OUTFIT, fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', color: DG.forest, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}
+          >
+            {backLabel}
+          </button>
+        )}
+      </Panel>
     </div>
   );
 }
@@ -758,10 +790,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const searchParams = useSearchParams();
   const country = searchParams.get('country') || '';
 
-  const { user, session, loading: authLoading } = useAuth();
-  // Conference-session access guard. 'checking' until verified. Standalone sessions resolve to
-  // 'allowed' immediately (anonymous by design); conference sessions require a matching allocation.
-  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin'>('checking');
+  const { user, session, loading: authLoading, signOut } = useAuth();
+  // Seat guard state, 'checking' until claim_delegate_seat answers (see the effect below).
+  // 'taken' = someone else holds this seat; 'denied' = a reserved seat this account is not
+  // allocated to; 'signin' = a reserved seat and nobody signed in; 'error' = could not ask.
+  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin' | 'taken' | 'error'>('checking');
+  const [seatRetry, setSeatRetry] = useState(0);
+  // The last claim answered 'no_seat' (this country is not on the roster yet). When the
+  // chair adds it, the re-verify effect claims it at once instead of up to 30 s later.
+  const [seatNoSeat, setSeatNoSeat] = useState(false);
+  // The re-verify reads the CURRENT token through this ref, so an hourly token refresh
+  // neither restarts its interval nor leaves it sending a stale token.
+  const seatAccessTokenRef = useRef<string | null>(null);
+  useEffect(() => { seatAccessTokenRef.current = session?.access_token ?? null; }, [session?.access_token]);
 
   const [committee, setCommittee] = useState<Committee | null>(null);
   /* Latest committee, for callbacks that fire on a delay. The delayed denial
@@ -975,30 +1016,79 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     return () => unsubscribe?.();
   }, [code, onRealtimeStatus]);
 
-  // Conference-session access guard. Runs independently of the committee load. For a standalone
-  // session this resolves to 'allowed' (anonymous). For a conference session it requires a
-  // signed-in user whose allocation matches the requested country, so a crafted
-  // /delegate/CODE?country=... URL can no longer drop someone into a seat that is not theirs.
+  // Seat guard. Runs independently of the committee load. claim_delegate_seat is the one
+  // authority for who may sit here (src/lib/seatClaims.ts):
+  //   • one person per seat (two on a double delegation): a second phone gets 'taken';
+  //   • a RESERVED conference seat (someone was allocated or invited to it) needs the
+  //     signed-in allocated account, re-checked on the server, so a crafted
+  //     /delegate/CODE?country=... URL gets no further than the join page would;
+  //   • every other seat, standalone or conference, needs only the code. The holder is
+  //     then this device's random token, so a reload keeps the seat.
+  // Keyed on the user id, not the access token: an hourly token refresh must not re-run
+  // the claim and flash the loader over a live session.
   useEffect(() => {
     let cancelled = false;
     async function guard() {
       if (authLoading) return; // stays 'checking' (loader) until auth resolves
-      const isConf = await detectConferenceSession(code);
+      const res = await claimDelegateSeat(code, country, session?.access_token ?? null);
       if (cancelled) return;
-      if (!isConf) { setAccessState('allowed'); return; }
-      if (!session || !user) { setAccessState('signin'); return; }
-      const access = await verifyConferenceAccess(code, session.access_token, user.id);
-      if (cancelled) return;
-      if (access.kind === 'delegate' && access.country.name === country) {
-        setAccessState('allowed');
-      } else {
-        setAccessState('denied');
-      }
+      setSeatNoSeat(res.reason === 'no_seat');
+      // no_seat / not_found: there is nothing to hold. The page itself shows "not found"
+      // or the absent state, and every write still needs a real delegates row. A RESERVED
+      // country that is not on the roster yet never gets here: the server answers
+      // signin / reserved for it before it looks at the roster.
+      if (res.ok || res.reason === 'no_seat' || res.reason === 'not_found') setAccessState('allowed');
+      else if (res.reason === 'taken') setAccessState('taken');
+      else if (res.reason === 'signin') setAccessState('signin');
+      else if (res.reason === 'reserved') setAccessState('denied');
+      else setAccessState('error');
     }
-    setAccessState('checking');
+    // A re-check (sign-in, Try again) keeps a live session on screen rather than
+    // blanking it behind the loader.
+    setAccessState((prev) => (prev === 'allowed' ? prev : 'checking'));
     guard();
     return () => { cancelled = true; };
-  }, [code, country, authLoading, session?.access_token, user?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, country, authLoading, user?.id, seatRetry]);
+
+  // Seat re-verify. A claim checked only on load let the wrong device keep a working page
+  // after the chair freed the seat and the right person took it. So while the page is in,
+  // ask claim_delegate_seat again every 30 s and whenever the tab becomes visible: one
+  // RPC, idempotent for your own seat, and it re-takes a seat that was freed and is still
+  // free. Only the server's explicit answer that the seat is someone else's ('taken') or
+  // reserved ('reserved', or 'signin' when nobody is signed in) stops the page. A network
+  // error never ejects a delegate who was already in; the next tick simply asks again.
+  // Nothing here writes committee state (AGENTS.md rules 3 and 4), and there is no
+  // per-second work.
+  const seatAllowed = accessState === 'allowed';
+  const hasMySeatRow = !!committee?.delegates.some((d) => seatKey(d.country) === seatKey(country));
+  useEffect(() => {
+    if (!seatAllowed || sessionEnded || authLoading || !country) return;
+    let alive = true;
+    let busy = false;
+    const check = async () => {
+      if (busy) return;
+      busy = true;
+      const res = await claimDelegateSeat(code, country, seatAccessTokenRef.current);
+      busy = false;
+      if (!alive) return;
+      if (res.reason === 'taken') setAccessState('taken');
+      else if (res.reason === 'reserved') setAccessState('denied');
+      else if (res.reason === 'signin') setAccessState('signin');
+      else if (res.ok || res.reason === 'no_seat') setSeatNoSeat(res.reason === 'no_seat');
+      // 'error' and anything else: keep the page, ask again next time.
+    };
+    // This delegation's row just appeared after we loaded on 'no_seat': claim it now.
+    if (hasMySeatRow && seatNoSeat) check();
+    const id = setInterval(check, 30_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [seatAllowed, sessionEnded, authLoading, code, country, hasMySeatRow, seatNoSeat]);
 
   // Browser title abbreviation
   useEffect(() => {
@@ -1239,31 +1329,53 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   if (loading || authLoading || accessState === 'checking') return <GavelLoader />;
 
+  // Seat guard screens (see the claim effect above). Every one of them has a way back.
+  const backToJoin = () => router.push('/join?code=' + encodeURIComponent(code.toUpperCase()));
+  const signInThenJoin = () => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code.toUpperCase()));
+  const retrySeat = () => setSeatRetry((n) => n + 1);
+  // Signed in with the wrong account: "Sign in" would bounce straight back here, so
+  // sign out first and then sign in.
+  const switchAccountThenJoin = () => { void signOut().finally(signInThenJoin); };
+
   if (accessState === 'signin') {
     return (
-      <div className="min-h-dvh flex items-center justify-center px-6" style={{ background: DG.ivory }}>
-        <DelegateStyles />
-        <Panel className="dgv-rise w-full max-w-sm text-center">
-          <h1 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, color: DG.forest }}>Sign in to join this session</h1>
-          <p style={{ margin: '10px 0 20px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>This is a conference session. Sign in to verify your allocation.</p>
-          <ChunkyButton onClick={() => router.push('/auth/signin?next=' + encodeURIComponent('/join?code=' + code))}>
-            SIGN IN
-          </ChunkyButton>
-        </Panel>
-      </div>
+      <SeatGateScreen
+        title={t('delegate_seat_signin_title')} body={t('delegate_seat_signin_body')}
+        primaryLabel={t('join_seat_signin')} onPrimary={signInThenJoin}
+        backLabel={t('delegate_seat_back')} onBack={backToJoin}
+      />
     );
   }
 
   if (accessState === 'denied') {
     return (
-      <div className="min-h-dvh flex items-center justify-center px-6" style={{ background: DG.ivory }}>
-        <DelegateStyles />
-        <Panel className="dgv-rise w-full max-w-sm text-center">
-          <h1 style={{ margin: 0, fontFamily: OUTFIT, fontSize: 24, fontWeight: 900, color: DG.forest }}>Allocation does not match account</h1>
-          <p style={{ margin: '10px 0 20px', fontFamily: OUTFIT, fontSize: 14, color: DG.body }}>This session allocation is not associated with your account. Please try again, or contact your conference organisers.</p>
-          <ChunkyButton onClick={() => router.push('/sessions')}>BACK TO HOME</ChunkyButton>
-        </Panel>
-      </div>
+      <SeatGateScreen
+        title={t('delegate_seat_reserved_title')} body={t('delegate_seat_reserved_body')}
+        primaryLabel={user ? t('delegate_seat_switch_account') : t('join_seat_signin')}
+        onPrimary={user ? switchAccountThenJoin : signInThenJoin}
+        backLabel={t('delegate_seat_back')} onBack={backToJoin}
+      />
+    );
+  }
+
+  if (accessState === 'taken') {
+    return (
+      <SeatGateScreen
+        title={t('delegate_seat_taken_title')}
+        body={t('delegate_seat_taken_body', { country: country ? getCountryDisplayName(country, language) : '' })}
+        primaryLabel={t('delegate_seat_retry')} onPrimary={retrySeat}
+        backLabel={t('delegate_seat_back')} onBack={backToJoin}
+      />
+    );
+  }
+
+  if (accessState === 'error') {
+    return (
+      <SeatGateScreen
+        title={t('delegate_seat_error_title')} body={t('delegate_seat_error_body')}
+        primaryLabel={t('delegate_seat_retry')} onPrimary={retrySeat}
+        backLabel={t('delegate_seat_back')} onBack={backToJoin}
+      />
     );
   }
 

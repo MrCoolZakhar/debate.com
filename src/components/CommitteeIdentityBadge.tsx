@@ -58,7 +58,14 @@ export default function CommitteeIdentityBadge({
   secondary,
   topic,
   topicLabel,
+  onTopicClick,
+  topicActionTitle,
 }: {
+  /** When set, the topic line becomes a button (the Moderator switching the agenda on a
+   *  conference committee with 2+ topics). Omitted, it renders exactly as before. */
+  onTopicClick?: () => void;
+  /** Tooltip for the topic button. */
+  topicActionTitle?: string;
   /** Resolved emblem URL, or null for the monogram fallback. */
   logoSrc: string | null;
   /** Big label — the acronym for a long name, otherwise the name itself. */
@@ -144,7 +151,7 @@ export default function CommitteeIdentityBadge({
               {secondary}
             </p>
           )}
-          {topic && (
+          {topic && !onTopicClick && (
             <p
               className="line-clamp-2"
               title={topic}
@@ -161,6 +168,30 @@ export default function CommitteeIdentityBadge({
               )}
               {topic}
             </p>
+          )}
+          {topic && onTopicClick && (
+            // Same typography as the plain line; only a hover wash and a focus ring say it
+            // can be clicked (the Moderator switching the agenda).
+            <button
+              type="button"
+              onClick={onTopicClick}
+              title={topicActionTitle ? `${topicActionTitle}: ${topic}` : topic}
+              className="line-clamp-2 w-full text-start rounded-md cursor-pointer transition-colors hover:bg-[rgba(238,217,138,0.10)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EED98A]/60"
+              style={{
+                fontFamily: OUTFIT,
+                fontSize: 10.5,
+                lineHeight: 1.3,
+                color: 'rgba(238,217,138,0.55)',
+                margin: '2px 0 0',
+                padding: '1px 3px',
+                marginInlineStart: -3,
+              }}
+            >
+              {topicLabel && (
+                <span style={{ fontWeight: 700, color: 'rgba(238,217,138,0.72)' }}>{topicLabel} </span>
+              )}
+              <span className="underline decoration-dotted decoration-[rgba(238,217,138,0.45)] underline-offset-2">{topic}</span>
+            </button>
           )}
         </div>
       </div>

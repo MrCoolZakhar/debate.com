@@ -1192,17 +1192,68 @@ export async function updateCommitteeChairSuffixInDB(committeeId: string, chairJ
 // Stored in settings so every device derives view-only status from it instead of a
 // presence join-order race. null/unset → the committee creator (chair_names[0]) is head.
 export async function updateCommitteeHeadChairInDB(committeeId: string, headChair: string, code: string, chairSuffix?: string): Promise<void> {
-  const { data: existing } = await supabase
+  const { data: existing, error: readErr } = await supabase
     .from('committees')
     .select('settings')
     .eq('id', committeeId)
     .single();
-  const currentSettings = (existing?.settings as Record<string, unknown>) ?? {};
+  // Refuse rather than write `{ headChair }` alone: an unread blob would be replaced
+  // wholesale, wiping `chairJoinSuffix`, the only write credential every chair holds.
+  if (readErr || !existing || !existing.settings || typeof existing.settings !== 'object') {
+    console.error('Error setting head chair: could not read settings first', readErr);
+    return;
+  }
+  const currentSettings = existing.settings as Record<string, unknown>;
   const { error } = await sessionClient(code, chairSuffix)
     .from('committees')
     .update({ settings: { ...currentSettings, headChair } })
     .eq('id', committeeId);
   if (error) console.error('Error setting head chair:', error);
+}
+
+// ============================================================
+// AGENDA  (conference sessions whose committee has 2-3 topics)
+// ============================================================
+// The dais chooses which of the conference committee's topics opens debate, and can move
+// to the next one later. ONE update writes both halves, so they can never disagree:
+//   • `topic` becomes the chosen text, so every surface that already reads committees.topic
+//     (chair header, delegate phones, the organiser live wall) shows it with no new code.
+//   • `settings.agendaTopicIndex` (0-based number) records the choice. It is a CONTRACT:
+//     absent = never chosen. The organiser-side re-sync in CommitteeEditorModal reads it so
+//     editing the conference committee does not overwrite the dais's choice.
+// Read-merged so only this key changes (chairJoinSuffix and headChair survive).
+// Returns true ONLY when a row was really updated. supabase-js resolves with error null on
+// an RLS-rejected zero-row update, so `.select('id')` plus a row count is the only proof.
+export async function updateCommitteeAgendaInDB(
+  committeeId: string,
+  topicIndex: number,
+  topic: string,
+  code: string,
+  chairSuffix?: string,
+): Promise<boolean> {
+  const { data: existing, error: readErr } = await supabase
+    .from('committees')
+    .select('settings')
+    .eq('id', committeeId)
+    .maybeSingle();
+  // Without the current blob there is nothing safe to merge into: writing
+  // `{ agendaTopicIndex }` alone would wipe chairJoinSuffix, the only write credential,
+  // and lock every chair out of a live committee. Refuse instead.
+  if (readErr || !existing) {
+    console.error('Error reading committee settings for agenda:', readErr);
+    return false;
+  }
+  const currentSettings = (existing.settings as Record<string, unknown>) ?? {};
+  const { data, error } = await sessionClient(code, chairSuffix)
+    .from('committees')
+    .update({ topic, settings: { ...currentSettings, agendaTopicIndex: topicIndex } })
+    .eq('id', committeeId)
+    .select('id');
+  if (error) {
+    console.error('Error setting agenda:', error);
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
 }
 
 // Persist the scoring config into the committee settings jsonb so it reaches

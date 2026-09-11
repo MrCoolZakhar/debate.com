@@ -143,6 +143,18 @@ One seal, the one social media uses (`src/components/VerifiedCheck.tsx`). Blue m
 
 Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes from its checkmark" email per organiser per conference, a follow-up after two weeks, and a congratulations when the mark lands, all through `email_outbox` and paced 48h from the organiser drip. `SetupReminderGate` (root layout) shows the same list once a day when an organiser with an unverified conference enters the site, via `my_incomplete_conferences()`.
 
+`CompleteBasicsGate` (root layout, 11 Sep 2026) is the backstop for accounts with no
+nationality or date of birth. Google sign-up creates the account before anything can be
+asked, and a user who closes the onboarding tab used to stay blank forever (1,777 of 2,627
+profiles had no nationality). On the next visit a signed-in user missing either field gets a
+modal that cannot be dismissed (Sign out is the only exit). Nationality is prefilled from
+`/api/geo` (Vercel's IP-country header, never a third-party lookup) and shown as a guess the
+user confirms with one tap, because location is not nationality. Nothing is ever written
+without that tap, and nobody was backfilled. It stays off `/auth/*`, legal pages, apply
+paths, `/account/profile` and every live-session route (a chair must never get a modal over
+a running committee). It publishes its state through `src/lib/basicsGateState.ts` so
+`CreditsWelcomeGate` and `SetupReminderGate` never open on top of it.
+
 ## 5c. Custom (parliamentary) committees
 
 `committee_type = 'custom'` is the fourth type: seats are members of groups (political groups, parties, benches) rather than countries. Groups live in `conference_committees.groups` (jsonb), a seat's group in `committee_country_slots.group_id`, and a seat or a group can carry a crest (`logo_url`). `src/lib/slotGroups.ts` is the contract: `effectiveSlotArt` decides what a seat draws (own crest, group crest, national flag, fallback), `loadSlotArtIndex` serves surfaces that render many seats, and `PARLIAMENT_PRESETS` seeds the usual chambers. Every flag renderer that matters goes through `FlagImg` or the assignment board's `CountryFlag`, both of which accept `logoUrl`. Debate, allocation and sessions are unchanged; only the seat's identity and picture differ.
@@ -243,6 +255,9 @@ accordingly.
 - Timers are **clock-anchored**: persist `started_at` + duration once, every client derives the remaining time locally. There is no per-second write and there must never be one.
 - `speakers_list.position` reorders happen in place (parallel `position` updates), never delete-and-reinsert, because a DELETE event flashes an empty list on delegate phones.
 - Tables: `committees`, `delegates`, `speakers_list` (`list_type` gsl | caucus), `current_speaker`, `motions`, `documents`, `messages` (chat + the `__system__`/`__log__` scoring ledger), `feedback`, `session_broadcasts`.
+- **Agenda (conference rooms with 2 or 3 topics).** Before roll call the Moderator picks the topic with big 1/2/3 numerals (`src/components/AgendaPicker.tsx`); it writes `committees.topic` and `settings.agendaTopicIndex`. Presence of the index means "chosen". The organiser editor's re-sync keeps the room's current topic text when it still exists. Single-topic and standalone rooms are unchanged.
+- **Gavel knock.** `gavelSoundEnabled` / `gavelSoundAtSeconds` (default on, 15 s). A synthesised double knock (`src/lib/gavelSound.ts`, no audio file) plays once when a running countdown crosses the mark, on the Moderator's laptop only. `useGavelCue` is a read-only side effect of the timer values: rules 3 and 4 still hold.
+- **Seats.** Conference rooms gate per seat: a seat with an allocation or invite is reserved for that person, every other seat is open to anyone with the code, and chairs use the chair code when nobody was invited to chair (organisers see it on the committees page only then). One person per seat through `delegate_seat_claims` and its RPCs. This stops honest collisions, not a hostile user: session writes still check only the session code. Details and limits in AGENTS.md.
 
 Everything else, with line numbers and the reasons behind each rule, is in `AGENTS.md`.
 

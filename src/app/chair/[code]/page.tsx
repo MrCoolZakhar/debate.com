@@ -34,6 +34,8 @@ import SidebarResizer from '@/components/SidebarResizer';
 import { SIDEBAR_DEFAULT_WIDTH, loadSidebarWidth, saveSidebarWidth } from '@/lib/sidebarWidth';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import TutorialOverlay from '@/components/TutorialOverlay';
+import { useAgendaPicker } from '@/components/AgendaPicker';
+import { useGavelCue, type GavelCue } from '@/lib/useGavelCue';
 import NotificationStack, { type NotificationExtra } from '@/components/notifications/NotificationStack';
 import {
   notify,
@@ -586,7 +588,7 @@ function CaucusAddSpeakerInput({ committee, spokenCountries, onAdd, onAddFirst, 
 }
 
 // ── Unmoderated Caucus View ───────────────────────────────────────────────────
-function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: { committee: Committee; setCommittee: CommitteeSetter; isViewOnly?: boolean }) {
+function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, gavelCue }: { committee: Committee; setCommittee: CommitteeSetter; isViewOnly?: boolean; gavelCue?: GavelCue }) {
   const t = useT();
   const { language } = useLanguage();
   const unmoderatedName = language === 'ar' ? 'حوار حر' : language === 'fr' ? 'Caucus non modéré' : language === 'es' ? 'Cáucus No Moderado' : 'Unmoderated Caucus';
@@ -635,6 +637,8 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false }: 
     }
     return () => { if (cowIntervalRef.current) { clearInterval(cowIntervalRef.current); cowIntervalRef.current = null; } };
   }, [cowActive]);
+  // Gavel knock for the CoW timer: a read-only side effect of its own state (RULES 3 and 4).
+  useGavelCue(cowRemaining, cowActive, gavelCue);
 
   // CoW open-floor speaker tracking — set who holds the floor by tapping a flag.
   const cowSpeakerStartRef = useRef<number>(Date.now());
@@ -1592,8 +1596,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // CommitteeSettings field, it goes stale the instant another chair takes the gavel,
           // and SettingsPanel's `upd` posts the whole store blob back — a hydrated copy would
           // silently revert the gavel to whoever held it at page load.
-          const { chairJoinSuffix: _cjs, separateChairCode: _scc, headChair: _hc, ...rest } = found.dbSettings as Record<string, unknown>;
-          void _cjs; void _scc; void _hc;
+          // `agendaTopicIndex` likewise: only the agenda picker writes it, and a hydrated copy
+          // would revert a later choice made on another device.
+          const { chairJoinSuffix: _cjs, separateChairCode: _scc, headChair: _hc, agendaTopicIndex: _ati, ...rest } = found.dbSettings as Record<string, unknown>;
+          void _cjs; void _scc; void _hc; void _ati;
           hydrateSettings(found.code, rest as Partial<CommitteeSettings>);
         }
         if (found.dbChairJoinSuffix) {
@@ -1866,6 +1872,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setRoleFlip({ lost: next, at: Date.now() });
   }, [committee?.dbHeadChair, committee?.chairNames, committee?.id, myChairName]);
 
+  // Agenda: a conference committee with 2+ topics opens on the topic the Moderator picks
+  // (src/components/AgendaPicker.tsx). Inert for standalone sessions and 0/1 topics.
+  const applyAgendaLocal = useCallback((u: (c: Committee) => Committee) => updateLocal(setCommittee, u), []);
+  const agenda = useAgendaPicker({ committee, isViewOnly, sessionEnded, sessionSuspended, applyLocal: applyAgendaLocal });
+
   // ── ROLE TRANSITION (A1) ────────────────────────────────────────────────────
   // Flipping isViewOnly changes what this device OWNS, so it must also drop what it was
   // holding on to as the acting chair. Without this the demoted chair's chrome went
@@ -2119,6 +2130,38 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     }
     return () => { if (rtrIntervalRef.current) { clearInterval(rtrIntervalRef.current); rtrIntervalRef.current = null; } };
   }, [rtrTimerActive]);
+
+  // ── Gavel knock when time is nearly up ──────────────────────────────────────
+  // A pure READ of the timer values above (RULES 3 and 4): no setCommittee, no
+  // updateLocal, no localUpdateTime, no DB write. Moderator's device only, so one laptop
+  // knocks per room. The role and the ended/suspended state are derived from the row
+  // itself as well as from state, because both states lag the first loaded commit.
+  // The store is hydrated from the DB once, at load, so a change made on ANOTHER chair's
+  // laptop (then a gavel handover) would otherwise leave this device knocking at the old
+  // mark. Copy the two gavel keys across whenever the realtime row carries new values.
+  // A change made HERE lands in the store first and the echo writes the same value back.
+  const dbGavelOn = committee?.dbSettings?.gavelSoundEnabled;
+  const dbGavelAt = committee?.dbSettings?.gavelSoundAtSeconds;
+  const gavelCode = committee?.code;
+  useEffect(() => {
+    if (!gavelCode) return;
+    if (typeof dbGavelOn === 'boolean') updateSetting(gavelCode, 'gavelSoundEnabled', dbGavelOn);
+    if (typeof dbGavelAt === 'number') updateSetting(gavelCode, 'gavelSoundAtSeconds', dbGavelAt);
+  }, [gavelCode, dbGavelOn, dbGavelAt, updateSetting]);
+  const gavelSettings = committee ? getSettings(committee.code) : null;
+  const gavelHead = committee?.dbHeadChair || committee?.chairNames?.[0] || myChairName || null;
+  const gavelCue: GavelCue = {
+    armed: !!committee && gavelSettings?.gavelSoundEnabled !== false
+      && !isViewOnly && !(!!myChairName && !!gavelHead && gavelHead !== myChairName)
+      && !sessionEnded && !sessionSuspended && !committee.endedAt && committee.phase !== 'adjourned',
+    atSeconds: gavelSettings?.gavelSoundAtSeconds ?? 15,
+  };
+  // One speaker clock serves the GSL, the moderated caucus and Tour de Table.
+  useGavelCue(speakerTimeRemaining, timerRunning, gavelCue);
+  // The unmoderated / Consultation total. The moderated caucus total is left out on
+  // purpose: its speakers already knock, and two knocks at once would say nothing.
+  useGavelCue(caucusSeconds, committee?.caucus?.type === 'unmoderated' && !!caucusAnchor, gavelCue);
+  useGavelCue(rtrTimeRemaining, rtrTimerActive, gavelCue);
 
   // Keep delegateStatusRef in sync with DB truth (realtime events, initial load).
   // Cycles update the ref immediately; this effect reconciles external changes.
@@ -3293,6 +3336,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
               <span style={{ position: 'absolute', bottom: '4px', left: '12px', right: '12px', height: '2px', backgroundColor: '#B6871F', transform: showChat ? 'scaleX(1)' : 'scaleX(0)', transformOrigin: 'left', transition: 'transform 200ms ease', borderRadius: '2px' }} />
             </button>
           </div>
+        ) : agenda.canSwitch ? (
+          <button type="button" onClick={agenda.openPicker} title={t('agenda_change_title')}
+            className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1 min-w-0 text-start rounded cursor-pointer transition-colors hover:text-[#1B3828] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6871F]/60">
+            {getCommitteeDisplayName(committee.name, language)}: <span className="underline decoration-dotted underline-offset-2">{committee.topic}</span>
+          </button>
         ) : (
           <span className="text-[#9A8A78] text-xs hidden sm:block truncate flex-1">{getCommitteeDisplayName(committee.name, language)}: {committee.topic}</span>
         )}
@@ -3577,6 +3625,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                       secondary={secondary}
                       topic={committee.topic}
                       topicLabel={t('rollcall_topic')}
+                      onTopicClick={agenda.canSwitch ? agenda.openPicker : undefined}
+                      topicActionTitle={t('agenda_change_title')}
                     />
                   );
                 })()}
@@ -3776,7 +3826,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                     </div>
                   </div>
                 ) : (
-                  <UnmoderatedCaucusView committee={committee} setCommittee={setCommittee} isViewOnly={isViewOnly} />
+                  <UnmoderatedCaucusView committee={committee} setCommittee={setCommittee} isViewOnly={isViewOnly} gavelCue={gavelCue} />
                 )
               )}
 
@@ -4062,6 +4112,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           affect the layout of the GSL centre column in any way. */}
       {/* Exactly ONE per surface — this host owns the interval that advances every
           notification's TTL, so a second mount would halve every countdown. */}
+      {agenda.picker}
       <NotificationStack extras={broadcastExtras} />
       {showTutorial && committee && (
         <TutorialOverlay

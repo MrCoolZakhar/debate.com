@@ -6,6 +6,7 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import DemoGate from '@/components/DemoGate';
 import CreditsWelcomeGate from '@/components/CreditsWelcomeGate';
 import SetupReminderGate from '@/components/SetupReminderGate';
+import CompleteBasicsGate from '@/components/CompleteBasicsGate';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gavelling.com'),
@@ -129,6 +130,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <LanguageProvider>
             {children}
             <DemoGate />
+            {/* CompleteBasicsGate takes precedence: the two gates after it stay
+                closed while it is checking or open (src/lib/basicsGateState.ts). */}
+            <CompleteBasicsGate />
             <CreditsWelcomeGate />
             <SetupReminderGate />
           </LanguageProvider>

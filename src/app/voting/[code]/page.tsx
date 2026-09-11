@@ -692,8 +692,11 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           // DB answer into localStorage for anyone who merely opened this URL,
           // unlocking the gate on their next page load. The access-granted effect
           // above puts it back once the viewer has proved they chair this session.
-          const { headChair: _hc, separateChairCode: _scc, chairJoinSuffix: _cjs, ...rest } = stored;
-          void _hc; void _scc; void _cjs;
+          // `agendaTopicIndex` is stripped for the same reason as `headChair`: it is written
+          // only by the chair's agenda picker (updateCommitteeAgendaInDB), and a copy
+          // captured here would revert a later choice made on another device.
+          const { headChair: _hc, separateChairCode: _scc, chairJoinSuffix: _cjs, agendaTopicIndex: _ati, ...rest } = stored;
+          void _hc; void _scc; void _cjs; void _ati;
           // Key on found.code, not the URL param: getCommitteeByCode uppercases
           // before querying, and every read below goes through committee.code.
           // A lowercase URL would otherwise hydrate a key nothing ever reads.

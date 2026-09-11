@@ -18,7 +18,7 @@ import {
 import { mergeMessagesById } from '@/lib/chatConversations';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
 import { useAuth } from '@/components/AuthProvider';
-import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
+import { isConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
 import { getCommitteeFlags, motionNames } from '@/lib/committeeFlags';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 import { Committee } from '@/lib/types';
@@ -290,11 +290,14 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
 
   // Conference-session access guard (#8 / #4). Standalone sessions stay anonymous; a
   // conference session requires an advisor/observer or organizer (conference-wide).
+  // Gated on session_origin, NOT on detectConferenceSession(): that one now answers "is
+  // the dais gated", and an open dais must not open this view (it can nudge delegates)
+  // to anyone holding the session code. isConferenceSession fails closed.
   useEffect(() => {
     let cancelled = false;
     async function guard() {
       if (authLoading) return;
-      const isConf = await detectConferenceSession(code);
+      const isConf = await isConferenceSession(code);
       if (cancelled) return;
       if (!isConf) { setAccessState('allowed'); return; }
       if (!session || !user) { setAccessState('signin'); return; }

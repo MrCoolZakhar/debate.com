@@ -7,6 +7,8 @@ import { Globe, MessageCircle, Music, Users, GraduationCap, Monitor, Mail, Landm
 import SiteNav from '@/components/SiteNav';
 import FooterLegal from '@/components/FooterLegal';
 import Portal from '@/components/Portal';
+import { DifficultyTile, levelAccent } from '@/components/DifficultyTile';
+import { TruncatedTopic } from '@/components/TruncatedTopic';
 import DecorativeBleed from '@/components/DecorativeBleed';
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
@@ -240,12 +242,18 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-const DIFFICULTY_STYLES: Record<string, { bg: string; color: string }> = {
-  beginner:     { bg: 'color-mix(in srgb, var(--gv-main-light) 13%, transparent)',   color: 'var(--gv-main-mid)' },
-  intermediate: { bg: 'rgba(238,217,138,0.35)', color: '#8A6614' },
-  advanced:     { bg: 'rgba(184,132,74,0.16)',  color: '#B8844A' },
-  expert:       { bg: 'rgba(139,32,32,0.1)',    color: '#8B2020' },
-};
+// The committee card's shadow. The first layer is the one the card always had,
+// tinted by the conference theme. A committee with a level gets a second, much
+// fainter layer in that level's own hue (the accent of its level marker), so a
+// beginner card and an advanced card differ only when seen side by side.
+// Layered rather than swapped, so a custom theme still tints every card.
+const COMMITTEE_CARD_SHADOW = '0 10px 30px color-mix(in srgb, var(--gv-main) 8%, transparent)';
+function committeeCardShadow(level: string | null | undefined): string {
+  const accent = levelAccent(level);
+  return accent
+    ? `${COMMITTEE_CARD_SHADOW}, 0 6px 18px color-mix(in srgb, ${accent} 10%, transparent)`
+    : COMMITTEE_CARD_SHADOW;
+}
 
 const ROLE_LABELS: Record<string, string> = {
   delegate: 'Delegate',
@@ -2877,8 +2885,6 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                           }}
                         >
                           {sortedCommittees.map(c => {
-                            const diff = c.difficulty?.toLowerCase() ?? '';
-                            const diffStyle = DIFFICULTY_STYLES[diff] ?? DIFFICULTY_STYLES.intermediate;
                             const isCrisis = c.committee_type === 'crisis';
                             const monogram = (c.abbreviation || c.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase();
                             const chairs = c.display_chairs ?? [];
@@ -2908,16 +2914,33 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                   backdropFilter: 'blur(12px)',
                                   WebkitBackdropFilter: 'blur(12px)',
                                   border: '1px solid color-mix(in srgb, var(--gv-border) 95%, transparent)',
-                                  boxShadow: '0 10px 30px color-mix(in srgb, var(--gv-main) 8%, transparent)',
+                                  boxShadow: committeeCardShadow(c.difficulty),
                                 }}
                               >
+                                {/* The pencil sits top-LEFT: top-right is the
+                                    level marker's corner, below. */}
                                 {isOrganizerViewer && (
                                   <OrganizerPencil
                                     variant="corner"
                                     ariaLabel={`Edit ${c.abbreviation ?? c.name}`}
                                     onClick={() => openCommitteeEditor(c.id)}
-                                    style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}
+                                    style={{ position: 'absolute', top: 12, left: 12, zIndex: 10 }}
                                   />
+                                )}
+                                {/* LEVEL MARKER, TOP-RIGHT: the same DifficultyTile
+                                    the organiser committees page stamps on its
+                                    cards. Absolutely positioned, unlike there,
+                                    because this card has the room: it is 298px
+                                    wide with a 104px centred emblem, which leaves
+                                    77px either side of the emblem, and the widest
+                                    tile ("Intermediate") needs about 75. At
+                                    right 16 it clears the emblem by a few pixels
+                                    and adds no height to the card. */}
+                                {c.difficulty && (
+                                  <div className="absolute" style={{ top: 16, right: 16 }}>
+                                    <span className="sr-only">Difficulty: </span>
+                                    <DifficultyTile level={c.difficulty} size="sm" />
+                                  </div>
                                 )}
                                 <div className="flex flex-col items-center px-5 pt-7 flex-1">
                                   {/* Emblem, free-floating */}
@@ -2956,17 +2979,11 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                     {c.name}
                                   </h3>
 
-                                  {/* Meta row */}
+                                  {/* Meta row. Difficulty is no longer here: it is
+                                      the level marker in the card's top-right
+                                      corner (DifficultyTile, below the pencil
+                                      block), so this row leads with the seats. */}
                                   <div className="flex items-center gap-2 mt-1.5">
-                                    {c.difficulty && (
-                                      <span
-                                        className="px-2.5 py-0.5 rounded-full"
-                                        style={{ ...diffStyle, fontSize: '10px', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.06em', fontWeight: 700 }}
-                                      >
-                                        {capitalize(diff)}
-                                      </span>
-                                    )}
-                                    <span aria-hidden style={{ color: 'color-mix(in srgb, var(--gv-accent) 55%, transparent)', fontSize: '7px' }}>◆</span>
                                     <span className="text-[12px] font-semibold" style={{ color: '#6B5F52', fontFamily: "'Outfit', sans-serif" }}>
                                       {!isCrisis && c.delegation_size >= 2 ? `${countryCapacity} countries · 2 delegates each` : `${countryCapacity} ${isCrisis ? 'roles' : 'seats'}`}
                                     </span>
@@ -2992,7 +3009,8 @@ export default function ConferenceDetailClient({ initialView, initialRole = null
                                             {ROMAN[ti] ?? String(ti + 1)}.
                                           </span>
                                           <span className="text-[12.5px] font-medium" style={{ color: '#2E2820', fontFamily: "'Outfit', sans-serif", lineHeight: 1.55 }}>
-                                            {topic}
+                                            {/* First 75 characters, cut at a word, with an in-place Show more. */}
+                                            <TruncatedTopic text={topic} max={75} />
                                           </span>
                                         </div>
                                       ))}

@@ -13,6 +13,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { monogramFor } from '@/app/account/accountUi';
 import { useModalEscape } from '@/components/ModalOverlay';
 import { useScrollLock } from '@/hooks/useScrollLock';
+import { useBasicsGateBlocking } from '@/lib/basicsGateState';
 
 // ── "Finish your conference set-up" entry reminder ───────────────────────────
 //
@@ -27,6 +28,8 @@ import { useScrollLock } from '@/hooks/useScrollLock';
 //   • profiles.welcome_token_seen is true, so it can never stack on the
 //     credits welcome modal (CreditsWelcomeGate owns the first visit)
 //   • profiles.setup_reminder_seen_at is null or older than 24 hours
+//   • CompleteBasicsGate is not checking or open (useBasicsGateBlocking), so
+//     it never stacks on the nationality / date of birth gate either
 //   • my_incomplete_conferences() returns at least one conference
 //
 // Every dismissal (Later, X, Escape, Finish set-up, a step row) stamps
@@ -84,6 +87,7 @@ function stepMinutes(minutes: number): string {
 export default function SetupReminderGate() {
   const pathname = usePathname();
   const { user, session, loading: authLoading } = useAuth();
+  const basicsBlocking = useBasicsGateBlocking();
   const [conferences, setConferences] = useState<IncompleteConference[] | null>(null);
   const [open, setOpen] = useState(false);
   // Once we have decided (shown, or found nothing to show) a token refresh
@@ -133,6 +137,7 @@ export default function SetupReminderGate() {
   if (isExcludedPath(pathname)) return null;
   if (!user || !session) return null;
   if (!open || !conferences || conferences.length === 0) return null;
+  if (basicsBlocking) return null;
 
   return <SetupReminderModal conferences={conferences} onClose={dismiss} />;
 }

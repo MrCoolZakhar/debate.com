@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SiteNav from '@/components/SiteNav';
@@ -38,6 +38,12 @@ import ApplicationQuestionsStage, { ConferencePlate, SectionStrip, MissingSummar
 import { focusQuestion } from '@/components/ApplicationQuestionCard';
 import { buildQuestionPages, leadTitleBlock } from '@/lib/applyQuestionPages';
 import Loader from '@/components/Loader';
+import ApplyCommitteeCard from './ApplyCommitteeCard';
+import { rankSocieties, isSameSocietyName, societyDedupeKey, MAX_SOCIETY_NAME_CHARS } from './societyMatch';
+import {
+  NoDelegationMatch, CreateDelegationButton, CreateDelegationRow, CreateDelegationDialog, RoleSwitchedNotice,
+  type DelegationSwitchRole,
+} from './CreateDelegationPrompt';
 import { type CustomAnswers, normalizeBlocks, questionsOf, validateAnswers, answerIsEmpty, displayAnswer } from '@/lib/customQuestions';
 import {
   Gavel, Users, Sprout,
@@ -511,144 +517,6 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
   );
 }
 
-/**
- * Rich, image-forward committee card. The committee emblem (logo_url via
- * LogoDisc, monogram fallback) leads; abbreviation, difficulty, topics and a
- * live availability meter follow. Tactile neumorphic press; a gold rank
- * medallion or check marks selection.
- */
-function CommitteeCard({
-  committee, openCount, totalCount, rank, active, disabled, showAvailability, onClick, reducedMotion,
-}: {
-  committee: CommitteeOption;
-  openCount: number;
-  totalCount: number;
-  rank: number | null;
-  active: boolean;
-  disabled: boolean;
-  showAvailability: boolean;
-  onClick: () => void;
-  reducedMotion: boolean;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const [pressed, setPressed] = useState(false);
-  const selected = rank != null || active;
-  const monogram = (committee.abbreviation || committee.name).slice(0, 3).toUpperCase();
-  const pct = totalCount > 0 ? Math.max(0, Math.min(1, openCount / totalCount)) : 0;
-  const meterColor = openCount <= 0 ? '#8B2020' : openCount <= 2 ? '#B8844A' : NEU.green;
-
-  return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      aria-pressed={selected}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
-      className="relative w-full text-left focus:outline-none"
-      style={{
-        display: 'flex',
-        gap: 14,
-        alignItems: 'flex-start',
-        padding: '16px 16px 15px',
-        borderRadius: 20,
-        backgroundColor: NEU.surface,
-        border: selected ? '1.5px solid color-mix(in srgb, var(--gv-accent) 55%, transparent)' : '1.5px solid transparent',
-        boxShadow: selected
-          ? `0 0 0 1px color-mix(in srgb, var(--gv-accent) 25%, transparent), ${NEU.out}`
-          : disabled ? NEU.inSm : hovered ? NEU.outHover : NEU.out,
-        transform: `${!disabled && !reducedMotion && (hovered || selected) ? 'translateY(-2px)' : 'translateY(0)'}${pressed && !disabled && !reducedMotion ? ' scale(0.96)' : ''}`,
-        opacity: disabled ? 0.6 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: reducedMotion ? 'none' : `box-shadow 240ms ${EASE}, transform 240ms ${EASE}, border-color 200ms ${EASE}`,
-      }}
-    >
-      <LogoDisc src={committee.logo_url} alt={committee.name} size={54} fallbackText={monogram} />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 3 }}>
-          {committee.abbreviation && (
-            <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 15, color: NEU.ink, letterSpacing: '0.01em' }}>
-              {committee.abbreviation}
-            </span>
-          )}
-          <DifficultyBadge difficulty={committee.difficulty} />
-        </div>
-        <p className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 600, fontSize: 12.5, color: NEU.muted, marginBottom: committee.topics?.length ? 8 : 0 }}>
-          {committee.name}
-        </p>
-
-        {committee.topics?.length > 0 && (
-          <div className="flex flex-wrap gap-1.5" style={{ marginBottom: showAvailability ? 10 : 0 }}>
-            {committee.topics.slice(0, 2).map((t, i) => (
-              <span
-                key={i}
-                className="truncate"
-                style={{
-                  maxWidth: 190, padding: '2.5px 8px', borderRadius: 999,
-                  backgroundColor: 'color-mix(in srgb, var(--gv-main) 6%, transparent)', color: 'color-mix(in srgb, var(--gv-on-bg) 70%, transparent)',
-                  fontFamily: OUTFIT, fontWeight: 600, fontSize: 10.5,
-                }}
-              >
-                {t}
-              </span>
-            ))}
-            {committee.topics.length > 2 && (
-              <span style={{ padding: '2.5px 6px', fontFamily: OUTFIT, fontWeight: 700, fontSize: 10.5, color: NEU.muted }}>
-                +{committee.topics.length - 2}
-              </span>
-            )}
-          </div>
-        )}
-
-        {showAvailability && (
-          <div className="flex items-center gap-2.5">
-            <div style={{ flex: 1, height: 6, borderRadius: 999, backgroundColor: NEU.base, boxShadow: NEU.inSm, overflow: 'hidden', maxWidth: 150 }}>
-              <div style={{ width: `${pct * 100}%`, height: '100%', borderRadius: 999, background: meterColor, transition: reducedMotion ? 'none' : `width 500ms ${EASE}` }} />
-            </div>
-            <span style={{ fontFamily: OUTFIT, fontWeight: 800, fontSize: 10.5, color: meterColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-              {openCount <= 0 ? 'FULL' : `${openCount} of ${totalCount} open`}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Selection insignia: gold rank medallion (committees_only) or a check. */}
-      {rank != null ? (
-        <span
-          className="flex items-center justify-center flex-shrink-0"
-          style={{
-            width: 28, height: 28, borderRadius: 999,
-            background: 'linear-gradient(150deg, var(--gv-accent), var(--gv-accent))',
-            boxShadow: '0 3px 8px color-mix(in srgb, var(--gv-accent) 40%, transparent)',
-            fontFamily: OUTFIT, fontWeight: 900, fontSize: 13, color: '#3A2A08',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {rank}
-        </span>
-      ) : active ? (
-        <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: NEU.forest }}>
-          <Check size={16} strokeWidth={3} style={{ color: NEU.gold }} />
-        </span>
-      ) : disabled ? (
-        <span className="flex items-center justify-center flex-shrink-0" style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: 'rgba(139,32,32,0.1)' }}>
-          <Lock size={13} strokeWidth={2.4} style={{ color: '#8B2020' }} />
-        </span>
-      ) : (
-        <ChevronDown
-          size={20}
-          strokeWidth={2.4}
-          style={{ color: NEU.muted, flexShrink: 0, transform: active ? 'rotate(180deg)' : 'none', transition: reducedMotion ? 'none' : `transform 200ms ${EASE}` }}
-        />
-      )}
-    </button>
-  );
-}
-
 /** Country slot as a flag chip. Taken → greyed + lock; selectable → tactile. */
 function CountryChip({
   code, name, committeeLabel, taken, selected, onClick, reducedMotion,
@@ -1045,6 +913,19 @@ function ConferenceApplyInner() {
   // applicant was explicitly invited to join it.
   const [invitedSocietyId, setInvitedSocietyId] = useState<string | null>(null);
   const [inviteSocietyName, setInviteSocietyName] = useState<string | null>(null);
+  // "Create this delegation": a delegate whose delegation does not exist yet
+  // can switch to Head Delegate / Faculty Advisor, the roles that create one.
+  // See switchToDelegationRole and ./CreateDelegationPrompt.tsx.
+  const [createDelegationOpen, setCreateDelegationOpen] = useState(false);
+  /** `focus`: move focus to the notice once, right after the switch. */
+  const [roleSwitchNotice, setRoleSwitchNotice] = useState<{ role: DelegationSwitchRole; name: string; focus: boolean } | null>(null);
+  /** Set by switchToDelegationRole until the new role's config has loaded;
+   *  the effect after fetchAll then tidies what no longer applies. */
+  const roleSwitchRef = useRef<{ to: string; prefMode: PreferenceMode } | null>(null);
+  // The delegation name field and its suggestion list, so focus moving
+  // between them does not close the list (keyboard users can reach the rows).
+  const societyFieldRef = useRef<HTMLInputElement | null>(null);
+  const societyListRef = useRef<HTMLDivElement | null>(null);
 
   // ── Step, Invoicing (head-delegate / faculty-advisor only). A pledge is
   // ONLY about paying for delegation spots, everyone's own fee flows through
@@ -1992,11 +1873,161 @@ function ConferenceApplyInner() {
       setSocietyDropdownOpen(false);
       return;
     }
-    const q = societyInput.toLowerCase();
-    const filtered = societies.filter(s => s.name.toLowerCase().includes(q));
-    setSocietySuggestions(filtered);
-    setSocietyDropdownOpen(true);
+    // Fuzzy, best first (./societyMatch.ts): case, accents, punctuation, word
+    // order, "School" / "MUN" / "Society", acronyms and small typos no longer
+    // hide a delegation that exists. Everything the old substring filter
+    // found is still found.
+    setSocietySuggestions(rankSocieties(societyInput, societies, { limit: 8 }).map(m => m.society));
+    // Only while the applicant is in the field. Picking a row sets the input
+    // too, and a restored draft sets it on load; neither should pop the list
+    // open over the page.
+    setSocietyDropdownOpen(typeof document !== 'undefined' && document.activeElement === societyFieldRef.current);
   }, [societyInput, societies]);
+
+  // ── What the typed delegation name resolves to (./societyMatch.ts).
+  // strictSocietyMatches: the existing delegations the name IS, by the strict
+  // key (case, accents, punctuation, "and", a leading "The", a MUN phrase at
+  // either end; nothing else). Exactly one = Continue adopts it, and the step
+  // says so on screen before they press it. Keys are precomputed per list.
+  const societyKeyIndex = useMemo(
+    () => societies.map(s => ({ society: s, key: societyDedupeKey(s.name) })),
+    [societies],
+  );
+  const typedSocietyName = societyInput.trim();
+  const strictSocietyMatches = useMemo(() => {
+    if (!typedSocietyName || selectedSocietyId) return [];
+    const key = societyDedupeKey(typedSocietyName);
+    return key ? societyKeyIndex.filter(x => x.key === key).map(x => x.society) : [];
+  }, [typedSocietyName, selectedSocietyId, societyKeyIndex]);
+  const adoptableSociety = strictSocietyMatches.length === 1 ? strictSocietyMatches[0] : null;
+  // "Create this delegation" (delegates only, ./CreateDelegationPrompt.tsx):
+  // offered whenever the typed name is not a pick of an existing delegation,
+  // from 3 characters so it does not flash on a 2-letter prefix. Never when
+  // the name IS one that exists (or two): creating it would be a duplicate.
+  const canOfferCreate = role === 'delegate' && !isEditMode && !invitedSocietyId && !selectedSocietyId
+    && typedSocietyName.length >= 3 && strictSocietyMatches.length === 0;
+
+  /**
+   * Delegate → Head Delegate / Faculty Advisor, from "Create this delegation"
+   * (./CreateDelegationPrompt.tsx asks; this does it). Resolves null on
+   * success, or a sentence for the dialog to show.
+   *
+   * WHAT IT DOES NOT TOUCH. It runs on the society step, before Submit, so
+   * there is no `applications` row and no credit consumed yet. Both roles are
+   * charged exactly like a delegate (CREDIT_CHARGED_ROLES), and
+   * consume_credit_for_application is 'already_held' for a second call at the
+   * same conference anyway, so the switch can never charge twice. The one
+   * thing that could be left half-created is a DELEGATE application that a
+   * failed submit already filed (submittedAppIdRef), and that case refuses.
+   *
+   * THE DRAFT. Drafts are keyed by (conference, user, role), so the delegate
+   * draft is discarded (it would otherwise keep sending reminder emails about
+   * an application they abandoned) and autosave re-points at the new role.
+   * If the discard fails, nothing switches. A draft they already had for the
+   * new role is adopted by revision and overwritten with what is on screen
+   * now, which is what they just chose to carry over.
+   *
+   * THE STATE. `role` comes from the URL and the component is not keyed on
+   * it, so router.replace keeps every answer in React state; fetchAll then
+   * loads the new role's config, and the effect below drops only what no
+   * longer applies (questions the new role does not ask, a ranking in a
+   * different preference mode). The typed name stays in societyInput with no
+   * society selected, which is exactly the Head Delegate path that creates
+   * the delegation at submit (handleSubmit, `isInvoicingRole`).
+   */
+  async function switchToDelegationRole(next: DelegationSwitchRole): Promise<string | null> {
+    if (role !== 'delegate' || isEditMode) return 'You cannot switch roles from here.';
+    if (submittedAppIdRef.current) {
+      return 'You already sent this application as a delegate. Finish it, or withdraw it, before you switch.';
+    }
+    const name = societyInput.trim();
+    if (!name) return 'Type the name of your delegation first.';
+
+    if (!previewing) {
+      if (!session || !conference || !user) return 'Your session has expired. Refresh the page and sign in again.';
+      // Stop autosave, and let a save already on the wire land first, or it
+      // could recreate the delegate draft right after we delete it.
+      draftOffRef.current = true;
+      for (let i = 0; i < 50 && draftInFlightRef.current; i++) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+      if (draftInFlightRef.current) {
+        draftOffRef.current = false;
+        return 'Your answers are still saving. Wait a moment and try again.';
+      }
+      const client = getAuthedClient(session.access_token);
+      let discarded = false;
+      try {
+        discarded = await discardApplyDraft(client, {
+          conferenceId: conference.id, userId: user.id, role, token: draftTokenRef.current,
+        });
+      } catch { discarded = false; }
+      if (!discarded) {
+        draftOffRef.current = false;
+        return 'We could not switch your application. Nothing changed. Please try again.';
+      }
+      notifyDraftsChanged();
+      const target = await loadApplyDraft(client, conference.id, user.id, next);
+      draftTokenRef.current = target?.discardToken ?? null;
+      draftRevisionRef.current = target?.revision ?? 0;
+      draftExistsRef.current = !!target;
+      setHasDraft(!!target);
+      draftFingerprintRef.current = null;
+      draftRevisionUnknownRef.current = false;
+    }
+
+    roleSwitchRef.current = { to: next, prefMode };
+    setIsIndependent(false);
+    setSelectedSocietyId(null);
+    setSocietyError('');
+    setSocietyDropdownOpen(false);
+    setStep(1);
+    setRoleSwitchNotice({ role: next, name, focus: true });
+    setCreateDelegationOpen(false);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('role', next);
+    params.delete('delegationInvite');
+    params.delete('edit');
+    router.replace(`/conferences/${slug}/apply?${params.toString()}`, { scroll: false });
+    return null;
+  }
+
+  // The URL's role moved again while a switch was still waiting for its
+  // config (browser Back or Forward straight after switching). Without this
+  // the pending switch never matched `role`, so it never cleared and autosave
+  // stayed off for the rest of the visit. Re-aim it at the role we are on now:
+  // the effect below then tidies against THAT role's config and turns
+  // autosave back on. The draft refs still describe the role we left, so drop
+  // the token (a discard must look up this role's row, never delete that
+  // one) and make the next save re-read this role's revision first.
+  useEffect(() => {
+    const sw = roleSwitchRef.current;
+    if (!sw || sw.to === role) return;
+    roleSwitchRef.current = { to: role, prefMode: sw.prefMode };
+    draftTokenRef.current = null;
+    draftFingerprintRef.current = null;
+    draftRevisionUnknownRef.current = true;
+  }, [role]);
+
+  // After a role switch, once the NEW role's config is in (roleConfig.role is
+  // the tell: on the first render after the URL changes it is still the old
+  // one), drop what no longer applies and turn autosave back on under the new
+  // role.
+  useEffect(() => {
+    const sw = roleSwitchRef.current;
+    if (!sw || sw.to !== role || loading || !roleConfig || roleConfig.role !== role) return;
+    roleSwitchRef.current = null;
+    const askedNow = new Set(questionsOf(normalizeBlocks(roleConfig.custom_questions ?? [])).map(q => q.id));
+    setCustomAnswers(prev => {
+      const kept = Object.fromEntries(Object.entries(prev).filter(([id]) => askedNow.has(id))) as CustomAnswers;
+      return Object.keys(kept).length === Object.keys(prev).length ? prev : kept;
+    });
+    setCustomMissingIds([]);
+    if ((roleConfig.preference_mode ?? 'none') !== sw.prefMode) setPreferences([]);
+    draftOffRef.current = false;
+    void saveDraftNow();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, loading, roleConfig]);
 
   // Re-anchor the viewport after a preference add/remove so the picker doesn't
   // jump. Only fires when a mutating handler set the anchor (edit-mode prefill,
@@ -2213,23 +2244,40 @@ function ConferenceApplyInner() {
         setSocietyError('Please enter your society name.');
         return;
       }
-      if (!isObserver && !isIndependent && !isInvoicingRole && societyInput.trim() && !selectedSocietyId) {
-        setSocietyError('Please select an existing delegation from the list.');
+      // A typed name that IS one existing delegation by the strict key
+      // ("lse mun" for "LSE MUN": case, accents, punctuation, "and", a leading
+      // "The", a MUN phrase at either end) counts as picking it, for every
+      // role, and the step has already said so under the field (the "Matched
+      // to" line in renderStep2). The key is deliberately narrow: "Government
+      // Model High School" never lands on "Government High School". Two such
+      // matches is ambiguous: pick from the list.
+      const adopted = !isObserver && !isIndependent ? adoptableSociety : null;
+      if (!isObserver && !isIndependent && !isInvoicingRole && typedSocietyName && !selectedSocietyId && !adopted) {
+        // Only mention creating when the create control is actually on screen.
+        const createShown = canOfferCreate && !submittedAppIdRef.current;
+        setSocietyError(
+          strictSocietyMatches.length > 1
+            ? 'More than one delegation has this name. Pick yours from the list.'
+            : societySuggestions.length > 0
+            ? (createShown ? 'Pick your delegation from the list, or create it below.' : 'Pick your delegation from the list.')
+            : (createShown ? 'We could not find this delegation. Check the spelling, or create it below.' : 'We could not find this delegation. Check the spelling.'),
+        );
         return;
       }
       // Block delegations that have already applied to this conference (unless
       // this applicant was explicitly invited to that one). Resolve the id the
-      // application would attach to — an explicit selection, or an exact
-      // name match for invoicing roles that type a name.
+      // application would attach to: an explicit selection, or the one
+      // delegation the typed name is unmistakably the same as.
       if (!isObserver && !isIndependent) {
-        const matchedByName = societies.find(
-          s => s.name.toLowerCase() === societyInput.trim().toLowerCase(),
-        );
-        const resolvedId = selectedSocietyId ?? matchedByName?.id ?? null;
+        const resolvedId = selectedSocietyId ?? adopted?.id ?? null;
         if (resolvedId && resolvedId !== invitedSocietyId && takenSocietyIds.has(resolvedId)) {
-          setSocietyError('This delegation has already applied — ask its head delegate or faculty advisor to invite you.');
+          setSocietyError('This delegation has already applied. Ask its head delegate or faculty advisor to invite you.');
           return;
         }
+      }
+      if (adopted) {
+        setSelectedSocietyId(adopted.id);
+        setSocietyInput(adopted.name);
       }
       setSocietyError('');
       advanceStep();
@@ -2961,7 +3009,31 @@ function ConferenceApplyInner() {
 
   function renderStep2() {
     const showSociety = !isObserver;
-    const takenMsg = 'This delegation has already applied — ask its head delegate or faculty advisor to invite you.';
+    const takenMsg = 'This delegation has already applied. Ask its head delegate or faculty advisor to invite you.';
+    // "Create this delegation" (canOfferCreate, computed with the hooks):
+    // a card under the field when nothing matches, a plain button under the
+    // field when the suggestions are not theirs, plus a pinned row at the
+    // foot of the open list for the mouse. Refused, with the reason on
+    // screen, once a failed submit has already filed a delegate application
+    // (switchToDelegationRole refuses that case too).
+    const typedName = typedSocietyName;
+    const createBlocked = submittedAppIdRef.current
+      ? 'You already sent this application as a delegate, so you cannot switch roles now.'
+      : null;
+    const openCreate = () => { setSocietyDropdownOpen(false); setCreateDelegationOpen(true); };
+    // The existing delegation Continue will attach this application to, shown
+    // under the field so the adoption is never silent. Not when it has
+    // already applied (Continue refuses that with its own message).
+    const adoptionShown = !invitedSocietyId && adoptableSociety
+      && !(takenSocietyIds.has(adoptableSociety.id) && adoptableSociety.id !== invitedSocietyId)
+      ? adoptableSociety
+      : null;
+    const pickSociety = (s: Society) => {
+      setSocietyInput(s.name);
+      setSelectedSocietyId(s.id);
+      setSocietyError('');
+      setSocietyDropdownOpen(false);
+    };
     return (
       <WizardShell
         step={step}
@@ -2981,6 +3053,24 @@ function ConferenceApplyInner() {
       >
         {showSociety && (
           <>
+            {roleSwitchNotice && roleSwitchNotice.role === role && (
+              <RoleSwitchedNotice
+                role={roleSwitchNotice.role}
+                name={
+                  (selectedSocietyId ? societies.find(s => s.id === selectedSocietyId)?.name : null)
+                  ?? adoptableSociety?.name ?? (typedName || roleSwitchNotice.name)
+                }
+                existing={!!selectedSocietyId || !!adoptableSociety}
+                autoFocus={roleSwitchNotice.focus}
+                onFocused={() => setRoleSwitchNotice(n => (n && n.focus ? { ...n, focus: false } : n))}
+                onDismiss={() => {
+                  setRoleSwitchNotice(null);
+                  // The notice held focus; hand it to the field it was about.
+                  societyFieldRef.current?.focus({ preventScroll: true });
+                }}
+              />
+            )}
+
             {/* ── Big two-card choice (onboarding wizard parity): Independent vs
                 Delegation. The image cards return here — the same podium /
                 handshake photography the onboarding wizard uses. Invoicing roles
@@ -3034,16 +3124,23 @@ function ConferenceApplyInner() {
                     Society / High School Name
                   </label>
                   <input
+                    ref={societyFieldRef}
                     type="text"
                     value={societyInput}
+                    maxLength={MAX_SOCIETY_NAME_CHARS}
                     disabled={!!invitedSocietyId}
                     onChange={(e) => {
                       setSocietyInput(e.target.value);
                       setSelectedSocietyId(null);
                       setSocietyError('');
                     }}
-                    onFocus={() => { if (societySuggestions.length > 0) setSocietyDropdownOpen(true); }}
-                    onBlur={() => setTimeout(() => setSocietyDropdownOpen(false), 150)}
+                    onFocus={() => { if (societySuggestions.length > 0 && !selectedSocietyId) setSocietyDropdownOpen(true); }}
+                    onBlur={(e) => {
+                      // Tabbing into the list keeps it open; anywhere else closes it.
+                      const next = e.relatedTarget as Node | null;
+                      if (next && societyListRef.current?.contains(next)) return;
+                      setTimeout(() => setSocietyDropdownOpen(false), 150);
+                    }}
                     placeholder="e.g. HultMUN, LSE MUN Society..."
                     className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
                     style={{
@@ -3054,10 +3151,16 @@ function ConferenceApplyInner() {
                       cursor: invitedSocietyId ? 'not-allowed' : 'text',
                     }}
                   />
-                  {!invitedSocietyId && societyDropdownOpen && societyInput.trim() && (
+                  {!invitedSocietyId && societyDropdownOpen && societyInput.trim() && (isInvoicingRole || societySuggestions.length > 0) && (
                     <div
+                      ref={societyListRef}
                       className="absolute left-0 right-0 rounded-xl shadow-lg overflow-y-auto"
                       style={{ top: 'calc(100% + 4px)', maxHeight: '200px', backgroundColor: 'var(--gv-surface)', border: '1px solid var(--gv-border)', zIndex: 20 }}
+                      onBlur={(e) => {
+                        const next = e.relatedTarget as Node | null;
+                        if (next && (e.currentTarget.contains(next) || next === societyFieldRef.current)) return;
+                        setSocietyDropdownOpen(false);
+                      }}
                     >
                       {societySuggestions.map(s => {
                         // A delegation that already has a head/advisor application
@@ -3066,8 +3169,9 @@ function ConferenceApplyInner() {
                         return (
                           <button
                             key={s.id}
+                            type="button"
                             disabled={taken}
-                            className="w-full flex items-center justify-between gap-2 text-left px-4 py-2.5 text-sm focus:outline-none"
+                            className="w-full flex items-center justify-between gap-2 text-left px-4 py-2.5 text-sm focus:outline-none focus-visible:bg-[color-mix(in_srgb,var(--gv-main)_8%,transparent)]"
                             style={{
                               color: taken ? '#B4A992' : 'var(--gv-on-surface)',
                               fontFamily: "'Outfit', sans-serif",
@@ -3082,13 +3186,17 @@ function ConferenceApplyInner() {
                                 setSocietyError(takenMsg);
                                 return;
                               }
-                              setSocietyInput(s.name);
-                              setSelectedSocietyId(s.id);
-                              setSocietyError('');
-                              setSocietyDropdownOpen(false);
+                              pickSociety(s);
+                            }}
+                            // Keyboard (Enter / Space). A mouse pick already
+                            // happened on mousedown and unmounted the list.
+                            onClick={(e) => {
+                              if (e.detail !== 0 || taken) return;
+                              pickSociety(s);
+                              requestAnimationFrame(() => societyFieldRef.current?.focus({ preventScroll: true }));
                             }}
                           >
-                            <span className="truncate">{s.name}</span>
+                            <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>{s.name}</span>
                             {taken && (
                               <span
                                 className="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
@@ -3101,7 +3209,7 @@ function ConferenceApplyInner() {
                         );
                       })}
                       {isInvoicingRole ? (
-                        !societySuggestions.some(s => s.name.toLowerCase() === societyInput.toLowerCase()) && (
+                        !societySuggestions.some(s => isSameSocietyName(s.name, societyInput)) && (
                           <button
                             className="w-full text-left px-4 py-2.5 text-sm focus:outline-none"
                             style={{ color: 'var(--gv-main)', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
@@ -3117,13 +3225,8 @@ function ConferenceApplyInner() {
                           </button>
                         )
                       ) : (
-                        societySuggestions.length === 0 && (
-                          <p
-                            className="px-4 py-2.5 text-xs leading-relaxed"
-                            style={{ color: 'var(--gv-muted)', fontFamily: "'Outfit', sans-serif", borderTop: '1px solid #F0EDE6' }}
-                          >
-                            This delegation has not been created. Please ask your Head Delegate or Faculty Advisor to create it.
-                          </p>
+                        canOfferCreate && !createBlocked && (
+                          <CreateDelegationRow name={typedName} onCreate={openCreate} />
                         )
                       )}
                     </div>
@@ -3134,9 +3237,49 @@ function ConferenceApplyInner() {
                     {societyError}
                   </p>
                 )}
+                {adoptionShown && (
+                  <p
+                    role="status"
+                    className="mt-2 flex items-start gap-2"
+                    style={{ fontFamily: OUTFIT, fontWeight: 500, fontSize: 12.5, lineHeight: 1.45, color: NEU.inkSoft }}
+                  >
+                    <Check size={14} strokeWidth={2.8} style={{ color: NEU.green, flexShrink: 0, marginTop: 2 }} />
+                    <span className="min-w-0" style={{ overflowWrap: 'anywhere' }}>
+                      Matched to <span style={{ fontWeight: 800, color: NEU.ink }}>&quot;{adoptionShown.name}&quot;</span>,
+                      a delegation already registered here. Continue uses it.
+                    </span>
+                  </p>
+                )}
+                {canOfferCreate && (
+                  societySuggestions.length === 0
+                    ? <NoDelegationMatch name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
+                    : <CreateDelegationButton name={typedName} onCreate={openCreate} blockedReason={createBlocked} />
+                )}
               </>
             )}
           </>
+        )}
+
+        {conference && user && session && (
+          <CreateDelegationDialog
+            open={createDelegationOpen}
+            name={typedName}
+            conferenceId={conference.id}
+            conferenceLabel={conferenceAcronymLabel(conference)}
+            userId={user.id}
+            accessToken={session.access_token}
+            previewing={previewing}
+            themeStyle={themeCssVars(activeTheme)}
+            reducedMotion={reducedMotion}
+            onClose={() => setCreateDelegationOpen(false)}
+            onSwitch={switchToDelegationRole}
+            onApplyIndependently={() => {
+              setCreateDelegationOpen(false);
+              setIsIndependent(true);
+              setSelectedSocietyId(null);
+              setSocietyError('');
+            }}
+          />
         )}
 
         <WizardFooter onNext={handleContinue} nextLabel="Continue" primary />
@@ -3454,9 +3597,10 @@ function ConferenceApplyInner() {
             {committees.map(c => {
               const info = committeeSlotInfo(c.id);
               return (
-                <CommitteeCard
+                <ApplyCommitteeCard
                   key={c.id}
                   committee={c}
+                  badge={<DifficultyBadge difficulty={c.difficulty} />}
                   openCount={info.openCount}
                   totalCount={info.total}
                   rank={committeeRank(c.id)}
@@ -3516,8 +3660,9 @@ function ConferenceApplyInner() {
               const chosenHere = preferences.filter(p => p.committeeId === c.id).length;
               return (
                 <div key={c.id}>
-                  <CommitteeCard
+                  <ApplyCommitteeCard
                     committee={c}
+                    badge={<DifficultyBadge difficulty={c.difficulty} />}
                     openCount={info.openCount}
                     totalCount={info.total}
                     rank={null}

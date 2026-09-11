@@ -18,11 +18,13 @@ import { queueEventEmail, notifyIfNeeded, turnOnDefaultEmail } from '@/lib/email
 import { useDraftNotices, DraftNoticeList } from '@/components/DraftNotice';
 import { notifyErr, notifyOk, clearErr, clearOk } from '@/lib/appNotify';
 import { useConfirmModal } from '@/components/ConfirmModal';
-import { PillToggle, LevelInsignia, LEVEL_ACCENT } from '@/app/account/accountUi';
+import { PillToggle } from '@/app/account/accountUi';
+import { DifficultyTile } from '@/components/DifficultyTile';
 import { DatePicker } from '@/components/DatePicker';
 import { NEU, NEU_GRADIENTS, OUTFIT, NeuButton, NeuCard, NeuInset, NeuPill } from '@/components/neu';
 import ProfileLink from '@/components/ProfileLink';
 import Portal from '@/components/Portal';
+import { ChairCodeChip, loadOpenDaisChairCodes } from './ChairCodeChip';
 import {
   CommitteeEditorModal,
   MonogramMedallion,
@@ -111,45 +113,9 @@ function SortButton({ label, dir, onClick }: { label: string; dir: 'asc' | 'desc
   );
 }
 
-// The canonical rank insignia (same glyph the CV + profile use), in a plain
-// accent-tinted circle with the level named underneath.
-//
-// It used to sit inside a neu tile (surface fill + NEU.outSm) laid out
-// horizontally, which made a 20px glyph the small half of a wide pill. The
-// bubble is gone: the insignia IS the marker, so it gets the size (20 → 30 at
-// `sm`, 23 → 34 at `md`, glyph 14 → 21 and 16 → 24, holding the ~0.7
-// glyph-to-disc ratio) and the label drops beneath it at the same font size it
-// always had. Stacking also makes the tile NARROWER — "Intermediate" used to
-// need ~105px on one line, the column needs ~75 — which is why the card can
-// afford the extra height. See the card call site for that height budget.
-function DifficultyTile({ level, size = 'md' }: { level: string; size?: 'sm' | 'md' }) {
-  const key = (level ?? '').toLowerCase();
-  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : '';
-  if (!label) return null;
-  const accent = LEVEL_ACCENT[key] ?? NEU.muted;
-  const disc = size === 'sm' ? 30 : 34;
-  const glyph = size === 'sm' ? 21 : 24;
-  return (
-    <span
-      className="inline-flex flex-col items-center flex-shrink-0"
-      style={{ gap: 4 }}
-    >
-      <span
-        className="inline-flex items-center justify-center flex-shrink-0"
-        style={{
-          width: disc, height: disc, borderRadius: 9999,
-          background: `linear-gradient(150deg, ${accent}26, ${accent}12)`,
-          border: `1px solid ${accent}55`,
-        }}
-      >
-        <LevelInsignia level={key} size={glyph} />
-      </span>
-      <span style={{ fontFamily: OUTFIT, fontSize: size === 'sm' ? 11 : 11.5, fontWeight: 700, color: NEU.ink, letterSpacing: '0.01em', lineHeight: '13px' }}>
-        {label}
-      </span>
-    </span>
-  );
-}
+// DifficultyTile (the level marker on each card) lives in
+// src/components/DifficultyTile.tsx, shared with the public conference page.
+// See the card call site below for the height budget it costs here.
 
 // Segmented cards / list view switch — an inset track holding two pill options,
 // the active one lifting on the neu surface (concentric radii, soft shadows).
@@ -1005,6 +971,8 @@ export default function CommitteesPage() {
   const [editTarget, setEditTarget] = useState<Committee | null>(null);
   const [addChairTarget, setAddChairTarget] = useState<Committee | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  // Chair codes keyed by committee id, present ONLY for an open dais (ChairCodeChip.tsx).
+  const [openDaisCodes, setOpenDaisCodes] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<CommitteeRow | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   // Cards (default) vs compact list view for the overview grid, remembered locally.
@@ -1083,6 +1051,7 @@ export default function CommitteesPage() {
     const rows = (data ?? []) as CommitteeRow[];
     setChairInvites(invites);
 
+    const chairCodesPromise = loadOpenDaisChairCodes(supabase, rows); // runs beside the seat counts, never throws
     const slotCounts = await Promise.all(
       rows.map(async c => {
         const { count } = await supabase
@@ -1092,9 +1061,11 @@ export default function CommitteesPage() {
         return count ?? 0;
       })
     );
+    const chairCodes = await chairCodesPromise;
     if (seq !== loadSeq.current) return; // stale
 
     setCommittees(rows.map((c, i) => ({ ...c, slotCount: slotCounts[i] })));
+    setOpenDaisCodes(chairCodes);
     setLoading(false);
     // Depends on the TOKEN, not on the session object.
     //
@@ -1706,6 +1677,10 @@ export default function CommitteesPage() {
     list.push(inv);
     invitesByCommittee.set(inv.committee_id, list);
   }
+  // The server said open at load; a chair or invite added since closes it here
+  // at once, without waiting for the refetch. Never opens what the server gated.
+  const chairCodeFor = (c: { id: string; chair_user_ids: string[] | null }) =>
+    (c.chair_user_ids?.length ?? 0) === 0 && !invitesByCommittee.has(c.id) ? openDaisCodes[c.id] ?? null : null;
 
   let sortedCommittees = committees;
   if (sortKey) {
@@ -2097,6 +2072,7 @@ export default function CommitteesPage() {
                         {minting ? 'GENERATING…' : 'GENERATE CODE'}
                       </button>
                     )}
+                    <ChairCodeChip layout="row" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
 
                     {/* Release actions */}
                     <div className="flex items-center gap-2.5 flex-shrink-0">
@@ -2385,6 +2361,7 @@ export default function CommitteesPage() {
                               {busyIds.has(`mint-${c.id}`) ? 'GENERATING…' : 'GENERATE CODE'}
                             </button>
                           )}
+                          <ChairCodeChip layout="card" code={chairCodeFor(c)} copiedCode={copiedCode} onCopy={handleCopyCode} />
 
                           {/* Release affordances, side by side */}
                           <div className="mt-2 pt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5" style={{ borderTop: '1px solid rgba(27,56,40,0.08)' }}>

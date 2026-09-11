@@ -366,6 +366,10 @@ export async function resyncDraftRevision(
  * token the reminder emails' one-click discard link carries) and additionally
  * requires ownership, so a leaked token destroys nothing. When the token isn't
  * already in hand we look it up first.
+ *
+ * Returns true when the draft is gone: deleted now, or the lookup found no
+ * row. Returns false when it may still exist: the lookup errored, the RPC
+ * errored, or the RPC refused.
  */
 export async function discardApplyDraft(
   client: SupabaseClient,
@@ -373,16 +377,20 @@ export async function discardApplyDraft(
 ): Promise<boolean> {
   let token = args.token ?? null;
   if (!token) {
-    const { data } = await client
+    const { data, error } = await client
       .from('application_drafts')
       .select('discard_token')
       .eq('conference_id', args.conferenceId)
       .eq('user_id', args.userId)
       .eq('role', args.role)
       .maybeSingle();
+    // "Could not check" is not "nothing there". Reporting success here let a
+    // caller act as if the draft were gone while it survived and kept the
+    // reminder emails coming.
+    if (error) return false;
     token = (data as { discard_token: string } | null)?.discard_token ?? null;
   }
-  if (!token) return true; // nothing to discard
+  if (!token) return true; // looked, and there is nothing to discard
   const { data, error } = await client.rpc('discard_application_draft', { p_token: token });
   if (error) return false;
   return !!(data as { ok?: boolean } | null)?.ok;

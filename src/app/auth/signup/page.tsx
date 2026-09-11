@@ -8,6 +8,7 @@ import { ageAt } from '@/lib/age';
 import { DatePicker } from '@/components/DatePicker';
 import { CountryField } from '@/components/CountryField';
 import { getCountryByName } from '@/lib/countries';
+import { GeoGuessNote, useNationalityPrefill } from '@/components/GeoCountryGuess';
 import Loader from '@/components/Loader';
 import {
   AuthLayout,
@@ -64,7 +65,7 @@ function DobField({ value, onChange }: { value: string; onChange: (iso: string) 
  * by delegation and several enforce nationality/age eligibility — a blank
  * profile silently blocks the applicant at the point of allocation instead.
  */
-function NationalityField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function NationalityField({ value, onChange, guessed }: { value: string; onChange: (v: string) => void; guessed?: string | null }) {
   return (
     <div>
       <FieldLabel>Nationality</FieldLabel>
@@ -74,9 +75,13 @@ function NationalityField({ value, onChange }: { value: string; onChange: (v: st
         placeholder="Start typing a country..."
         inputStyle={{ ...inputStyle, borderRadius: '12px', paddingTop: '12px', paddingBottom: '12px', fontSize: '14px' }}
       />
-      <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
-        Pick from the list. Conferences use this for delegation allocation.
-      </p>
+      {guessed ? (
+        <GeoGuessNote countryName={guessed} />
+      ) : (
+        <p className="text-xs mt-1" style={{ color: '#9A8A78', fontFamily: OUTFIT }}>
+          Pick from the list. Conferences use this for delegation allocation.
+        </p>
+      )}
     </div>
   );
 }
@@ -102,6 +107,10 @@ function SignUpInner() {
   // Nationality is mandatory: conferences allocate by it and several run
   // age/nationality eligibility rules, so an empty profile blocks them.
   const [nationality, setNationality] = useState('');
+  // An empty field is prefilled from /api/geo only (no third-party lookup).
+  // Location is not nationality, so the note under the field calls it a
+  // guess for as long as the field still holds it; submitting confirms it.
+  const guessedNationality = useNationalityPrefill(nationality, setNationality);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -410,7 +419,7 @@ function SignUpInner() {
                 </p>
               )}
             </div>
-            <NationalityField value={nationality} onChange={setNationality} />
+            <NationalityField value={nationality} onChange={setNationality} guessed={guessedNationality} />
             <DobField value={dob} onChange={setDob} />
             <PasswordField
               label="Password"

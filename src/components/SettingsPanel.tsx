@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Portal from '@/components/Portal';
 import { portalFrame } from '@/components/chat/chatTokens';
-import { Globe } from 'lucide-react';
+import { Globe, Volume2 } from 'lucide-react';
+import { clampGavelSeconds, primeGavelAudio, playGavelKnock, GAVEL_MIN_SECONDS, GAVEL_MAX_SECONDS, GAVEL_DEFAULT_SECONDS } from '@/lib/gavelSound';
 import { useSettingsStore, CommitteeSettings, MotionNames, DEFAULT_SCORING, DEFAULT_MOTION_NAMES, DEFAULT_DOCUMENT_NAMES, type DocumentNames, type ScoringConfig, type ScoreSource, type RankingFactor } from '@/lib/settingsStore';
 import { Committee } from '@/lib/types';
 import { updateCommitteeChairSuffixInDB, saveCommitteeSettings, updateCommitteeScoringInDB } from '@/lib/committeeService';
@@ -1133,6 +1134,64 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                 value={s.gslRequireNextSpeaker}
                 onChange={(v) => upd('gslRequireNextSpeaker', v)}
               />
+
+              {/* Gavel knock near the end of every chair countdown. Played only on the
+                  Moderator's device by src/lib/useGavelCue.ts. The Test button is a user
+                  gesture, so it also unlocks audio for the timer-driven knocks. */}
+              <SectionLabel>{t('settings_section_timer_sound')}</SectionLabel>
+              <Toggle
+                label={t('settings_gavel_sound_label')}
+                note={t('settings_gavel_sound_note')}
+                value={s.gavelSoundEnabled !== false}
+                onChange={(v) => upd('gavelSoundEnabled', v)}
+              />
+              {s.gavelSoundEnabled !== false && (() => {
+                const gavelAt = clampGavelSeconds(s.gavelSoundAtSeconds ?? GAVEL_DEFAULT_SECONDS);
+                return (
+                  <div className="flex items-start justify-between gap-4 py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold" style={{ color: '#1C1410' }}>{t('settings_gavel_at_label')}</div>
+                      <div className="text-xs mt-0.5 leading-snug" style={{ color: '#9A8A78' }}>{t('settings_gavel_at_note')}</div>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {[5, 10, 15, 30, 60].map((secs) => {
+                          const active = gavelAt === secs;
+                          return (
+                            <button
+                              key={secs}
+                              onClick={() => upd('gavelSoundAtSeconds', secs)}
+                              className="px-2 py-1 rounded-lg text-[11px] font-bold transition-colors focus:outline-none"
+                              style={{
+                                backgroundColor: active ? '#1B3828' : '#FAF8F3',
+                                border: `1px solid ${active ? '#1B3828' : '#DDD4C0'}`,
+                                color: active ? '#EED98A' : '#6A5A4A',
+                              }}
+                            >
+                              {t('settings_gavel_pick', { n: String(secs) })}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={() => { primeGavelAudio(); playGavelKnock(); }}
+                        className="inline-flex items-center gap-1.5 mt-2.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors focus:outline-none"
+                        style={{ backgroundColor: '#FAF8F3', border: '1px solid #DDD4C0', color: '#1B3828' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#1B3828'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; }}
+                      >
+                        <Volume2 size={13} strokeWidth={2.25} />
+                        {t('settings_gavel_test')}
+                      </button>
+                    </div>
+                    <NumberField
+                      value={gavelAt}
+                      min={GAVEL_MIN_SECONDS}
+                      max={GAVEL_MAX_SECONDS}
+                      suffix={t('motions_sec')}
+                      onCommit={(v) => upd('gavelSoundAtSeconds', clampGavelSeconds(v ?? GAVEL_DEFAULT_SECONDS))}
+                    />
+                  </div>
+                );
+              })()}
               </ReadOnlyRegion>
             </div>
           )}

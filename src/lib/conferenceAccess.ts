@@ -2,6 +2,7 @@
 // Standalone sessions are anonymous by design and never gated here.
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { supabase as anonSupabase } from '@/lib/supabase';
+import { getSessionJoinRules } from '@/lib/seatClaims';
 
 export interface ConferenceCommitteeInfo {
   id: string;
@@ -20,18 +21,49 @@ export type ConferenceAccess =
   | { kind: 'advisor'; committee: ConferenceCommitteeInfo }
   | { kind: 'organizer'; committee: ConferenceCommitteeInfo };
 
-// Privacy-agnostic detection: committees.session_origin is anon-readable, so this works
-// for private conferences too (unlike reading conference_committees as anon).
+// Is this session's DAIS gated by conference records? The chair, voting and advisor
+// pages treat `false` as a standalone session (anonymous, chair code), so this is the one
+// switch that decides whether they gate.
+//
+// True only for a conference session whose conference committee has an assigned chair, a
+// pending chair invite or an unclaimed imported chair. A conference that never set up its
+// dais (organisers who ran applications elsewhere and only share the session code) is
+// open: its chairs join with the 4-digit chair code exactly like a standalone session.
+//
+// Delegate seats are NOT decided here. They are gated per seat by claim_delegate_seat
+// (src/lib/seatClaims.ts): reserved seats need the allocated account, every other seat
+// needs only the code. The name is historical; the chair and voting pages still call it.
+// The advisor page does NOT: it gates on isConferenceSession() below, whatever the dais.
+//
+// session_join_rules is anon-callable, so private conferences are covered. It FAILS CLOSED:
+// if the RPC cannot be read it falls back to isConferenceSession() (the old rule, every
+// conference session gated), and if that cannot be read either the answer is true.
 export async function detectConferenceSession(code: string): Promise<boolean> {
+  const rules = await getSessionJoinRules(code);
+  if (rules) return rules.found && rules.isConference && !rules.chairsOpen;
+  return isConferenceSession(code);
+}
+
+// Is this a conference-linked session at all (`committees.session_origin = 'conference'`)?
+// Independent of the dais. The advisor view gates on this: an advisor can nudge delegates,
+// and that view belongs to the conference's own advisors and organisers even when its
+// dais is open to the chair code. `committees` is anon-readable, so private conferences
+// are covered.
+//
+// FAILS CLOSED. supabase-js resolves with `error` instead of throwing, so the error is
+// checked explicitly: a read error or a throw answers true (gated). Only a definite answer
+// ("no such session", or a row that is not a conference session) answers false.
+export async function isConferenceSession(code: string): Promise<boolean> {
   try {
-    const { data } = await anonSupabase
+    const { data, error } = await anonSupabase
       .from('committees')
       .select('session_origin')
       .eq('code', code.toUpperCase())
       .maybeSingle();
+    if (error) return true;
     return (data as { session_origin?: string } | null)?.session_origin === 'conference';
   } catch {
-    return false;
+    return true;
   }
 }
 

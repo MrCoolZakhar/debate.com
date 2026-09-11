@@ -10,7 +10,8 @@ import {
   setDelegateObserver as setDelegateObserverInDB,
 } from '@/lib/committeeService';
 import { liveCaucus } from '@/components/FeedbackLogPanel';
-import { Megaphone } from 'lucide-react';
+import { Megaphone, Smartphone } from 'lucide-react';
+import { getSeatAvailability, releaseDelegateSeat, seatKey, type SeatAvailability } from '@/lib/seatClaims';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
@@ -357,6 +358,58 @@ function RollCallPanelInner({
   const pendingStatusRef = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
   const [reconcileTick, setReconcileTick] = useState(0);
 
+  // ── Seat claims (one person per seat) ─────────────────────────────────────
+  // Which seats a device has joined on, so a chair can free one when a phone dies or
+  // the wrong person took it. Booleans only: the RPC never says WHO holds a seat.
+  // Fetched only where the control can show: never for a view-only Commenter, never
+  // on an ended session.
+  const canFreeSeats = !isReadOnly && !isViewOnly && !committee.endedAt;
+  const [seatAvail, setSeatAvail] = useState<SeatAvailability>({});
+  const [freeArmed, setFreeArmed] = useState<string | null>(null);
+  const [freeBusy, setFreeBusy] = useState<string | null>(null);
+  const [freeError, setFreeError] = useState(false);
+
+  // Which seats exist, as one stable string. `committee.delegates` is a new array on every
+  // roll-call tap and every realtime echo; keying the fetch on it refetched and reset the
+  // poll on each tap. A seat being added or removed is what actually needs a re-read.
+  const seatRosterKey = committee.delegates.map((d) => seatKey(d.country)).sort().join('|');
+
+  useEffect(() => {
+    if (!canFreeSeats) { setSeatAvail({}); return; }
+    let cancelled = false;
+    const load = () => {
+      getSeatAvailability(committee.code).then((a) => { if (!cancelled && a) setSeatAvail(a); });
+    };
+    load();
+    // The claims table is private, so no realtime event announces a new claim. A change
+    // to the set of seats re-reads at once, and a gentle poll covers new claims.
+    const id = setInterval(load, 20_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [canFreeSeats, committee.code, seatRosterKey]);
+
+  // Two taps to free: the first arms, the second releases. Disarms on its own.
+  useEffect(() => {
+    if (!freeArmed) return;
+    const id = setTimeout(() => setFreeArmed(null), 4000);
+    return () => clearTimeout(id);
+  }, [freeArmed]);
+
+  const freeSeat = async (country: string) => {
+    const k = seatKey(country);
+    if (freeBusy) return;
+    if (freeArmed !== k) { setFreeArmed(k); setFreeError(false); return; }
+    setFreeArmed(null);
+    setFreeBusy(k);
+    const ok = await releaseDelegateSeat(committee.code, country, committee.dbChairJoinSuffix ?? undefined);
+    setFreeBusy(null);
+    if (!ok) { setFreeError(true); return; }
+    setFreeError(false);
+    setSeatAvail((prev) => {
+      const s = prev[k];
+      return s ? { ...prev, [k]: { ...s, claimed: false, full: false, mine: false } } : prev;
+    });
+  };
+
   useEffect(() => {
     pendingStatusRef.current = {};
     setLocalStatuses({});
@@ -583,6 +636,9 @@ function RollCallPanelInner({
             caucus?.currentSpeaker === d.country
           );
           const isUpNext = listView === 'queue' && isCurrentSpeakerInPanel;
+          const seatK = seatKey(d.country);
+          const seatClaimed = canFreeSeats && seatAvail[seatK]?.claimed === true;
+          const seatArmed = freeArmed === seatK;
 
           const handleRowClick = () => {
             if (isViewOnly) return;
@@ -700,6 +756,26 @@ function RollCallPanelInner({
                     <Megaphone size={15} />
                   </button>
                 )}
+                {/* Someone has joined on this seat. Tap twice to free it (a dead phone,
+                    the wrong person). Chair only: canFreeSeats hides it for a view-only
+                    Commenter and once the session has ended. */}
+                {seatClaimed && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); freeSeat(d.country); }}
+                    disabled={freeBusy === seatK}
+                    title={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_claimed_title')}
+                    aria-label={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_free')}
+                    className="shrink-0 flex items-center gap-1 px-1.5 py-1 rounded-md transition-all active:scale-90 focus:outline-none disabled:opacity-40"
+                    style={{
+                      color: seatArmed ? '#F4A0A0' : 'rgba(237,231,216,0.45)',
+                      backgroundColor: seatArmed ? 'rgba(139,32,32,0.25)' : 'transparent',
+                      border: seatArmed ? '1px solid rgba(139,32,32,0.4)' : '1px solid transparent',
+                    }}
+                  >
+                    <Smartphone size={14} />
+                    {seatArmed && <span className="text-[10px] font-bold uppercase tracking-wide whitespace-nowrap">{t('rollcall_seat_free')}</span>}
+                  </button>
+                )}
                 {isAbsent && !(isRollCallPhase || showStatusSliders) && (
                   <span className="text-[10px] shrink-0 font-mono ms-auto uppercase tracking-wide" style={{ color: 'rgba(237,231,216,0.35)' }}>{t('rollcall_absent')}</span>
                 )}
@@ -715,6 +791,9 @@ function RollCallPanelInner({
       </div>
 
       <div className="px-3 py-3 space-y-2 shrink-0 overflow-visible relative z-10" style={{ borderTop: '1px solid rgba(61,122,82,0.3)' }}>
+        {freeError && (
+          <p className="text-[11px] font-semibold px-1" role="alert" style={{ color: '#F4A0A0' }}>{t('rollcall_seat_free_failed')}</p>
+        )}
         <AddCountryInput committee={committee} onAdd={handleAddDelegate} onQueryChange={setSearch} />
         {(committee.phase === 'pre-session' || committee.phase === 'roll-call') && (
           <button

@@ -1,7 +1,11 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
-**Last updated after:** qualitative scoring, notes and the score blend — 2026-09-07 (EN/ES/FR/AR; ar = RTL; **1000 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 10 keys so the SUBJECTIVE half of the scoreboard is finally visible and a chair note carries its context: `sb_matrix_quality`, `sb_matrix_legend`, `sb_stat_quality`, `sb_title_quality`, `sb_quality_unrated`, `sb_comment_level_speech`, `sb_comment_level_session`, `sb_comment_level_conference`, `sb_comment_written`, `fb_tag_tour`. Two existing tooltips were rewritten (`sb_matrix_manual_title`, `sb_matrix_points_title`). See "Recent changes" at the bottom.  
+**Last updated after:** seat gating review fixes — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1041 keys per locale**). Added 1 key, `delegate_seat_switch_account`, the reserved-seat screen's button when the wrong account is signed in. See "Recent changes" at the bottom.  
+**Previously:** open conference seats and one person per seat — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1040 keys per locale**). Added 21 keys: 7 `join_seat_*` for the join-page seat picker, 10 `delegate_seat_*` for the delegate page's seat-guard screens, 4 `rollcall_seat_*` for the chair's Free seat control. See "Recent changes" at the bottom.  
+**Previously:** gavel knock timer sound — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1019 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 7 keys for the Settings → Access → Timer sound group (`settings_section_timer_sound`, `settings_gavel_*`). See "Recent changes" at the bottom.  
+**Previously:** setting the agenda — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1012 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 10 `agenda_*` keys for the chair's agenda picker on conference committees with 2 or 3 topics (`src/components/AgendaPicker.tsx`). Note: the file held 1002 keys before this change, not 1000. See "Recent changes" at the bottom.  
+**Previously:** qualitative scoring, notes and the score blend — 2026-09-07 (EN/ES/FR/AR; ar = RTL; **1000 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 10 keys so the SUBJECTIVE half of the scoreboard is finally visible and a chair note carries its context: `sb_matrix_quality`, `sb_matrix_legend`, `sb_stat_quality`, `sb_title_quality`, `sb_quality_unrated`, `sb_comment_level_speech`, `sb_comment_level_session`, `sb_comment_level_conference`, `sb_comment_written`, `fb_tag_tour`. Two existing tooltips were rewritten (`sb_matrix_manual_title`, `sb_matrix_points_title`). See "Recent changes" at the bottom.  
 **Previously:** conference awards signposts — 2026-09-05 (EN/ES/FR/AR; ar = RTL; **990 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 4 keys for the award signposts on the chair session (`sb_awards_link`, `chair_ended_awards_title`, `chair_ended_awards_body`, `chair_ended_awards_cta`), all rendered ONLY when `committee.sessionOrigin === 'conference'`. Note: the file already held 986 keys before this change; the 875 figure below was stale. See "Recent changes" at the bottom.  
 **Previously:** delegate rail micro-labels — 2026-08-13 (EN/ES/FR/AR; ar = RTL; **875 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 5 `delegate_*` micro-label keys for the narrow rail beside the flag: the roll-call and queue captions plus the two-line variants of the three stat labels. See "Recent changes" at the bottom.  
 **Previously:** redesigned delegate view — 2026-08-13 (870 keys). Added 17 `delegate_*` keys for the rebuilt delegate Session view: queue-position header, speakers-ahead / ETA lines, the 3-tile stat strip, the YOU / SPEAKING chips, and the two bottom-sheet titles.  
@@ -32,7 +36,7 @@
 
 | File | Purpose |
 |------|---------|
-| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (990 keys per locale). New language block goes here. `Language` type is also here. |
+| `src/lib/translations.ts` | Full EN/ES/FR/AR dictionary (1041 keys per locale). New language block goes here. `Language` type is also here. |
 | `src/lib/delegateTips.ts` | `selectDelegateTips()` — picks which `delegate_tip_*` keys a delegate sees, and fills their `{wp}` / `{dr}` / `{mod}` / `{unmod}` / `{tour}` / `{end}` / `{source}` vars. The ONLY consumer of that corpus. |
 | `src/contexts/LanguageContext.tsx` | `LanguageProvider`, `useLanguage()`, `useT()` hooks, localStorage persistence. |
 | `src/app/layout.tsx` | Wrapped in `LanguageProvider`. |
@@ -399,6 +403,45 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 ---
 
 ## RECENT CHANGES
+
+### 2026-09-11 — seat gating review fixes (`feature/conferences-auth`) — 1040 → 1041 keys
+
+**Added, 1 key × 4 locales**, directly after `delegate_seat_back` in every locale:
+- `delegate_seat_switch_account` (EN *SWITCH ACCOUNT*, ES *CAMBIAR DE CUENTA*, FR *CHANGER DE COMPTE*, AR *تبديل الحساب*). The primary button of the reserved-seat screen in `src/app/delegate/[code]/page.tsx` when someone is ALREADY signed in with an account that is not allocated to the seat: it signs out, then opens sign-in. With nobody signed in the same screen keeps `join_seat_signin`. Uppercase like the other `delegate_seat_*` buttons. No em dashes.
+
+### 2026-09-11 — open conference seats and one person per seat (`feature/conferences-auth`) — 1019 → 1040 keys
+
+**Added, 21 keys × 4 locales**, directly after `join_create_link` in every locale (one block, even though three prefixes are in it, so the whole feature reads in one place):
+- `join_seat_taken`, `join_seat_yours`, `join_seat_reserved` are TAGS appended to a country in the join page's native `<select>` as `France · Taken`. Keep them one or two words: they share a line with the country name on a phone.
+- `join_seat_taken_note`, `join_seat_reserved_note`, `join_seat_now_taken`, `join_seat_signin` sit under that picker. `join_seat_signin` is also the primary button on two delegate-page screens.
+- `delegate_seat_*` are the full-screen stops in `src/app/delegate/[code]/page.tsx` (`SeatGateScreen`): taken, reserved, sign in, and could not check. `delegate_seat_taken_body` takes `{country}` (the localized display name). These replace two hardcoded English screens ("Sign in to join this session", "Allocation does not match account").
+- `rollcall_seat_*` are the chair's two-tap Free seat control in `src/components/RollCallPanel.tsx`; `rollcall_seat_claimed_title` is its hover title.
+- Terminology: the chair asked to free a seat is the word each locale already uses for "chair" on the join page: ES *director* (`join_create_link` *¿Director?*), FR *président*, AR *الرئيس*. Seat = ES *puesto*, FR *siège*, AR *مقعد*.
+- No em dashes, no directional marks in AR, `\'` escapes in FR as elsewhere in the file.
+
+### 2026-09-11 — gavel knock timer sound (`feature/conferences-auth`) — 1012 → 1019 keys
+
+**Added, 7 keys × 4 locales**, directly after `settings_gsl_require_next_note`: `settings_section_timer_sound`, `settings_gavel_sound_label`, `settings_gavel_sound_note`, `settings_gavel_at_label`, `settings_gavel_at_note`, `settings_gavel_pick`, `settings_gavel_test`.
+
+- **Where they render.** Only `src/components/SettingsPanel.tsx`, Access tab, the "Timer sound" group: the on/off toggle, the second-mark quick picks plus a number field, and the Test sound button. The sound itself has no copy.
+- **`settings_gavel_pick` takes `{n}`** (a number of seconds) and is the quick-pick chip label: EN `{n}s`, ES/FR `{n} s`, AR `{n} ث` (the same unit as `motions_sec`). The number field's suffix reuses `motions_sec`; no new key.
+- Terminology follows the glossary and the gavel keys: Right of Reply = ES *derecho de réplica*, FR *droit de réponse*, AR *حق الرد* (as `gsl_right_to_reply`); Moderator = ES *moderador*, FR *modérateur*, AR *المشرف*; gavel = ES *mazo*, FR *maillet*, AR *المطرقة*.
+- No em dashes, no `{s}` suffix, no duplicated placeholder. The AR strings carry no directional marks.
+
+**Verified:** 1019 keys in all four locales, 0 missing / 0 extra, `npx tsc --noEmit` clean for the touched files.
+
+### 2026-09-11 — setting the agenda (`feature/conferences-auth`) — 1002 → 1012 keys
+
+**Added, 10 keys × 4 locales**, directly after `session_suspended_banner`: `agenda_eyebrow`, `agenda_title`, `agenda_subtitle_first`, `agenda_subtitle_switch`, `agenda_hint`, `agenda_current`, `agenda_keep`, `agenda_topic_aria`, `agenda_failed`, `agenda_change_title`.
+
+- **Where they render.** `src/components/AgendaPicker.tsx` (the full-screen picker) and two chair-page tooltips (`agenda_change_title` on the header topic button and on the sidebar masthead's topic button via `CommitteeIdentityBadge` `topicActionTitle`). The picker exists only on conference sessions whose committee has 2 or 3 topics; nothing here reaches a standalone session.
+- **`agenda_topic_aria` takes `{n}` and `{topic}`** and is the button's accessible name. `{topic}` is the organiser's text from the DB, shown verbatim in every locale (rule 1: the DB stores what the organiser typed).
+- **`agenda_subtitle_first` names roll call** with the same word as `tab_roll_call` in each locale (ES *asistencia*, FR *l'appel*, AR *تدقيق الحضور*).
+- Terminology: agenda = ES *agenda*, FR *ordre du jour*, AR *جدول الأعمال*; topic reuses `rollcall_topic` (ES *tema*, FR *sujet*, AR *الموضوع*).
+- No em dashes, no `{s}` suffix, no duplicated placeholder. The AR strings carry no directional marks.
+- The running count had drifted again: the dictionary held 1002 keys before this change, not the 1000 recorded above.
+
+**Verified:** 1012 keys in all four locales, 0 missing / 0 extra, section A script clean, `npx tsc --noEmit` clean for the touched files.
 
 ### 2026-09-07 — qualitative scoring, notes and the score blend (`feature/conferences-auth`) — 990 → 1000 keys
 

@@ -57,21 +57,24 @@ const inputStyle: React.CSSProperties = {
   fontFamily: "'Outfit', sans-serif",
 };
 
-// Topics are capped at 120 characters. The cap applies per topic entry, not to
+// Topics are capped at 150 characters. The cap applies per topic entry, not to
 // the topics array as a whole. It is enforced in the app only — a large share
 // of the topic entries already in the database are longer than this, so a CHECK
 // constraint would reject those rows on their next write. Legacy topics are
-// grandfathered via baselineTopics below.
+// grandfathered via baselineTopics below. This is the ONLY topic cap in the
+// app: nothing else (the creation wizard, the import page, the database)
+// limits topic length, so a change here is the whole change.
 //
-// 120, not 60: a perfectly ordinary MUN topic runs past 60 without trying
-// ("Addressing the Rise of Non-State Actors and Transnational Organized Crime"
-// is 73), so the tighter cap fired on normal titles rather than on the runaway
-// ones it exists to catch — the longest in the database is over a thousand
-// characters.
-const TOPIC_MAX_LENGTH = 120;
+// 150, not 60 or 120: a perfectly ordinary MUN topic runs past 60 without
+// trying ("Addressing the Rise of Non-State Actors and Transnational Organized
+// Crime" is 73), and 120 still clipped real two-clause agenda items. The cap
+// exists to catch the runaway ones (the longest in the database is over a
+// thousand characters), not normal titles. The public page shows the first 75
+// characters of a topic and expands the rest in place (TruncatedTopic).
+const TOPIC_MAX_LENGTH = 150;
 // Point at which the remaining-characters hint appears, so the limit is visible
 // before it is hit rather than only after.
-const TOPIC_HINT_AT = 95;
+const TOPIC_HINT_AT = 125;
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
@@ -204,21 +207,24 @@ export { ModalOverlay };
 export async function sessionCommitteeClient(
   supabase: ReturnType<typeof getAuthedClient>,
   sessionId: string,
-): Promise<{ client: ReturnType<typeof sessionClient> } | { error: string; missing?: boolean }> {
+): Promise<{ client: ReturnType<typeof sessionClient>; settings: Record<string, unknown>; topic: string | null } | { error: string; missing?: boolean }> {
   const { data, error } = await supabase
     .from('committees')
-    .select('code, settings')
+    .select('code, settings, topic')
     .eq('id', sessionId)
     .maybeSingle();
   if (error) return { error: `the live session could not be read (${error.message})` };
   if (!data?.code) return { error: 'the live session row is missing', missing: true };
-  const suffix = (data.settings as Record<string, unknown> | null)?.chairJoinSuffix;
+  const settings = (data.settings as Record<string, unknown> | null) ?? {};
+  const suffix = settings.chairJoinSuffix;
   // The suffix is the only credential `is_session_chair` accepts. Without it
   // deletes and committees updates are rejected, so refuse rather than half-write.
   if (typeof suffix !== 'string' || !suffix) {
     return { error: 'the live session has no chair code, so it cannot be updated' };
   }
-  return { client: sessionClient(data.code as string, suffix) };
+  // `settings` and `topic` ride along because the organiser re-sync needs the
+  // chair's agenda choice from them. Read-only; never write settings back.
+  return { client: sessionClient(data.code as string, suffix), settings, topic: (data.topic as string | null) ?? null };
 }
 
 // One seat handed to the minter. `name` is what `delegates.country` stores, the
@@ -972,10 +978,12 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
     // organiser sees it instead of the modal closing on a half-applied change.
     const sessErrors: string[] = [];
     let sessDb: ReturnType<typeof sessionClient> | null = null;
+    let sessSettings: Record<string, unknown> = {};
+    let sessTopic: string | null = null;
     if (ex.session_id) {
       const res = await sessionCommitteeClient(supabase, ex.session_id);
       if ('error' in res) sessErrors.push(res.error);
-      else sessDb = res.client;
+      else { sessDb = res.client; sessSettings = res.settings; sessTopic = res.topic; }
     }
     const noteSess = (what: string, message: string) => sessErrors.push(`${what} (${message})`);
 
@@ -1150,7 +1158,9 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       }
     }
 
-    await supabase.from('conference_committees').update({
+    // Checked: an RLS-rejected update resolves with error null and zero rows, and
+    // this one used to report success regardless.
+    const { data: ccUpd, error: ccErr } = await supabase.from('conference_committees').update({
       name: name.trim(),
       abbreviation: abbreviation.trim() || null,
       topics,
@@ -1158,14 +1168,47 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
       total_slots: roster.length,
       logo_url: logoUrl,
       groups: isCustom ? groups : [],
-    }).eq('id', ex.id);
+    }).eq('id', ex.id).select('id');
+    if (ccErr || !ccUpd || ccUpd.length !== 1) {
+      setError(`Could not save the committee${ccErr ? ` (${ccErr.message})` : ''}. Please try again.`);
+      return 'fail';
+    }
     // `committees` UPDATE is gated on is_session_chair too — same client, same
     // reason. This was the third silently-dropped write in this function.
+    //
+    // The topic written is the one the CHAIR chose to debate, not blindly
+    // topics[0]; resetting it to topic 1 on every organiser edit would silently
+    // undo that choice. In order:
+    //   1. the room's current topic text, if it is still one of the topics
+    //      (survives a rename of the committee or a reorder of its topics);
+    //   2. `committees.settings.agendaTopicIndex`, the chair's 0-based pick, if
+    //      it still fits (covers the organiser rewording the chosen topic);
+    //   3. topics[0].
+    // Settings are only READ here; the chair page owns that key.
+    //
+    // `.select('id')` because an RLS-rejected update resolves with error null
+    // and zero rows, which would otherwise pass for success.
     if (sessDb) {
-      const { error: e } = await sessDb.from('committees')
-        .update({ name: name.trim(), topic: topics[0] ?? 'TBD' })
-        .eq('id', ex.session_id!);
+      const rawIdx = sessSettings.agendaTopicIndex;
+      const agendaIdx = typeof rawIdx === 'number' && Number.isInteger(rawIdx) && rawIdx >= 0 && rawIdx < topics.length
+        ? rawIdx
+        : 0;
+      const textIdx = sessTopic ? topics.indexOf(sessTopic) : -1;
+      const resolvedIdx = textIdx >= 0 ? textIdx : agendaIdx;
+      const sessionTopic = topics[resolvedIdx] ?? 'TBD';
+      // When the chair has chosen, keep their stored index pointing at the topic the
+      // room actually shows, or a later reword would follow a stale index to the wrong
+      // topic. Merged into the blob read moments ago (chairJoinSuffix / headChair ride
+      // along untouched). Never ADDED when absent: that would suppress the chair's picker.
+      const chairChose = typeof rawIdx === 'number' && Number.isInteger(rawIdx);
+      const sessPatch: Record<string, unknown> = { name: name.trim(), topic: sessionTopic };
+      if (chairChose && rawIdx !== resolvedIdx) sessPatch.settings = { ...sessSettings, agendaTopicIndex: resolvedIdx };
+      const { data: sessUpd, error: e } = await sessDb.from('committees')
+        .update(sessPatch)
+        .eq('id', ex.session_id!)
+        .select('id');
       if (e) noteSess('the live session kept its old name and topic', e.message);
+      else if (!sessUpd || sessUpd.length === 0) noteSess('the live session kept its old name and topic', 'the update was not accepted');
     }
 
     if (sessErrors.length > 0) {
@@ -1407,7 +1450,7 @@ function CommitteeEditor({ conferenceId, committeeType, existing, initialRoster,
               <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>{topicError}</p>
             ) : topicOverBy > 0 ? (
               <p role="alert" className="text-xs mt-1.5" style={{ color: '#8B2020', fontFamily: "'Outfit', sans-serif" }}>
-                {topicOverBy} character{topicOverBy === 1 ? '' : 's'} over the {TOPIC_MAX_LENGTH}-character limit — shorten it to add this topic.
+                {topicOverBy} character{topicOverBy === 1 ? '' : 's'} over the {TOPIC_MAX_LENGTH}-character limit. Shorten it to add this topic.
               </p>
             ) : topicLength >= TOPIC_HINT_AT ? (
               <p className="text-xs mt-1.5" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>

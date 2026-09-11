@@ -23,6 +23,7 @@ import { UN_COUNTRIES, getCountryByName } from '@/lib/countries';
 import { CountryField } from '@/components/CountryField';
 import { DatePicker } from '@/components/DatePicker';
 import { ageAt } from '@/lib/age';
+import { GeoGuessNote, useNationalityPrefill } from '@/components/GeoCountryGuess';
 
 const TOTAL_STEPS = 4;
 
@@ -66,6 +67,10 @@ export default function OnboardingPage() {
   const [basicsDob, setBasicsDob] = useState('');
   const [basicsError, setBasicsError] = useState('');
   const [basicsSaving, setBasicsSaving] = useState(false);
+  // Prefill an EMPTY nationality from /api/geo, only once the basics screen is
+  // showing (so the loaded value is already in place), and label it a guess.
+  // Nothing is written until the person presses Continue.
+  const basicsGuess = useNationalityPrefill(basicsNationality, setBasicsNationality, basicsNeeded === true);
   const [education, setEducation] = useState<string | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [level, setLevel] = useState<string | null>(null);
@@ -300,6 +305,7 @@ export default function OnboardingPage() {
                   color: NEU.ink, fontFamily: OUTFIT, fontSize: 14, paddingTop: 12, paddingBottom: 12,
                 }}
               />
+              {basicsGuess && <GeoGuessNote countryName={basicsGuess} />}
 
               <label className="block text-sm font-semibold mb-1.5 mt-5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                 Date of birth

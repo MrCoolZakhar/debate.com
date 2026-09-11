@@ -95,6 +95,11 @@ export interface CommitteeSettings {
   documentNames: DocumentNames;      // chair-renameable labels for the two document types
   // GSL behaviour
   gslRequireNextSpeaker: boolean;
+  // Timer sound: a gavel knock on the Moderator's device when a running countdown
+  // reaches `gavelSoundAtSeconds` (1..600). Played by src/lib/useGavelCue.ts, a pure
+  // reader of the timer values: no DB write, no committee update (RULES 3 and 4).
+  gavelSoundEnabled: boolean;    // default true
+  gavelSoundAtSeconds: number;   // default 15
   // Scoring & ranking
   scoring: ScoringConfig;
   // Tab 3 — Access & Identity
@@ -147,6 +152,8 @@ export const DEFAULT_SETTINGS: CommitteeSettings = {
   chairJoinSuffix: '',
   requireChairApproval: false,
   gslRequireNextSpeaker: false,
+  gavelSoundEnabled: true,
+  gavelSoundAtSeconds: 15,
   scoring: DEFAULT_SCORING,
   sponsorLabel: '',
   lockDelegateRollCall: false,
