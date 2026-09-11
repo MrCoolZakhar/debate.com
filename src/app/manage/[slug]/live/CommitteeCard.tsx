@@ -44,7 +44,7 @@ import ProfileLink from '@/components/ProfileLink';
 import { NEU, NEU_GRADIENTS, OUTFIT, EASE } from '@/components/neu';
 import { type LiveCommittee, type ChairPerson, flagCodeFor } from './LiveModals';
 import {
-  roomStatus, STATUS_META, nowPlaying, cardWarnings, cardFacts,
+  roomStatus, STATUS_META, nowPlaying, cardWarnings, cardFacts, firstName,
   type NowPlaying, type NowGlyph, type CommitteeIdentity,
 } from './cardModel';
 import {
@@ -1012,6 +1012,15 @@ export function CommitteeCard({
     ? data.conf.chairs
     : (data.session?.chairNames ?? []).map((name) => ({ id: null, name, avatarUrl: null }));
 
+  // Invited, not accepted. A SEPARATE list, never folded into `chairPeople`:
+  // these people are not on `chair_user_ids`, have no conference access and
+  // have not been given the session code, so counting them as chairs would
+  // make the panel's "Chairs have the code" headline lie. They are here
+  // because the alternative — printing "No chair assigned" over a committee
+  // whose invite went out yesterday — sends an organiser chasing a problem
+  // they already solved.
+  const pendingChairs = data.conf.pendingChairs;
+
   // This room's crests, flattened to the same {country, logoUrl} shape a live
   // session's `delegates` have, then handed to the SHARED `SeatArtProvider`. So
   // a delegation's mark on this wall is resolved by the very same function that
@@ -1181,14 +1190,15 @@ export function CommitteeCard({
                 chair is exactly the person an organiser walking the floor is
                 trying to find. */}
             <div className="flex flex-col items-end" style={{ marginBlockStart: 5, gap: 3, width: '100%' }}>
-              {chairPeople.length === 0 ? (
+              {chairPeople.length === 0 && pendingChairs.length === 0 && (
                 <span
                   className="font-semibold text-right"
                   style={{ color: AMBER_INK, fontFamily: OUTFIT, fontSize: 12, lineHeight: 1.25 }}
                 >
                   No chair assigned
                 </span>
-              ) : (
+              )}
+              {
                 chairPeople.map((c, i) => {
                   const label = facts.chairs[i] ?? c.name;
                   const row = (
@@ -1236,7 +1246,48 @@ export function CommitteeCard({
                     </span>
                   );
                 })
-              )}
+              }
+
+              {/* Pending invitees, AFTER the seated dais and visibly quieter:
+                  0.72 opacity, a gold PENDING pill and gold-brown ink, the same
+                  language the committees page and the assignment board already
+                  use for an unaccepted invite. No profile link — an invitee is
+                  not on this dais yet, so nothing here points at a CV as though
+                  they were. */}
+              {pendingChairs.map((p) => (
+                <span
+                  key={p.id}
+                  className="flex items-center gap-1.5 justify-end"
+                  style={{ maxWidth: '100%', opacity: 0.72 }}
+                  title={`${p.name} has been invited to chair and has not accepted yet`}
+                >
+                  <span
+                    className="rounded-full flex-shrink-0"
+                    style={{
+                      fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800,
+                      letterSpacing: '0.06em', padding: '2px 6px', lineHeight: 1.4,
+                      backgroundColor: 'rgba(238,217,138,0.4)', color: '#8A6614',
+                    }}
+                  >
+                    PENDING
+                  </span>
+                  <span
+                    className="font-semibold text-right min-w-0"
+                    style={{
+                      color: '#7A5A10', fontFamily: OUTFIT, fontSize: 12,
+                      lineHeight: 1.25, overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {firstName(p.name) || p.name}
+                  </span>
+                  <span
+                    className="inline-flex rounded-full flex-shrink-0"
+                    style={{ boxShadow: `0 0 0 1.5px ${NEU.surface}, ${NEU.outSm}`, borderRadius: '50%' }}
+                  >
+                    <Avatar url={p.avatarUrl} name={p.name} size={18} rounded />
+                  </span>
+                </span>
+              ))}
             </div>
           </div>
         </div>

@@ -34,6 +34,7 @@ import { LogoDisc } from '@/components/LogoDisc';
 import { FlagImg } from '@/components/FlagImg';
 import { getCountryByName } from '@/lib/countries';
 import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
+import VerifiedCheck from '@/components/VerifiedCheck';
 import {
   INTENT_OPTIONS, getConferenceIntent, intentAnswered, intentLabels,
   type ConferenceIntent,
@@ -493,12 +494,16 @@ function OrganizerAvatar({ name, email, avatar, size = 20 }: {
 
 // ── Sort menu, portaled + edge-flipped ──────────────────────────────────────
 
-type SortKey = 'newest' | 'oldest' | 'updated' | 'setup' | 'apps' | 'name';
+type SortKey = 'newest' | 'oldest' | 'updated' | 'setup' | 'verified' | 'apps' | 'name';
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'newest',  label: 'Newest listed' },
   { key: 'oldest',  label: 'Oldest listed' },
   { key: 'updated', label: 'Recently touched' },
   { key: 'setup',   label: 'Least set up' },
+  // Verification, not set-up, is what the row now leads with, so it gets its
+  // own axis. Unverified first (that is the queue worth working), and within
+  // each group the one closest to its checkmark rises.
+  { key: 'verified', label: 'Not verified first' },
   { key: 'apps',    label: 'Most applications' },
   { key: 'name',    label: 'Name A→Z' },
 ];
@@ -733,6 +738,14 @@ export default function ConferencesTab({
         case 'oldest':  return ts(a.created_at) - ts(b.created_at);
         case 'updated': return ts(b.updated_at) - ts(a.updated_at);
         case 'setup':   return (a.setup_done / Math.max(a.setup_total, 1)) - (b.setup_done / Math.max(b.setup_total, 1))
+                            || ts(b.created_at) - ts(a.created_at);
+        // Unverified above verified; then the FURTHEST ALONG unverified first,
+        // because those are the ones a nudge actually converts. Verified rows
+        // fall back to most recently verified.
+        case 'verified': return Number(a.is_verified) - Number(b.is_verified)
+                            || (a.is_verified
+                                  ? ts(b.verified_at) - ts(a.verified_at)
+                                  : (b.setup_done / Math.max(b.setup_total, 1)) - (a.setup_done / Math.max(a.setup_total, 1)))
                             || ts(b.created_at) - ts(a.created_at);
         case 'apps':    return b.applications - a.applications || ts(b.created_at) - ts(a.created_at);
         case 'name':    return (a.acronym || a.full_name).localeCompare(b.acronym || b.full_name);
@@ -1003,6 +1016,16 @@ function ConferenceRow({
   // same series among them, so the acronym carries its year.
   const acronym = conferenceAcronymLabel(r);
   const showFullNameBeneath = !!acronym && acronym.toLowerCase() !== r.full_name.trim().toLowerCase();
+  // The checkmark, and what it would take to earn it. SETUP_STEPS is exactly
+  // the seven verification criteria (see the note there: 'delegate' and
+  // 'awards' were both removed from conference_setup_status), so `pending` IS
+  // the outstanding-criteria list and the ring IS distance from the seal.
+  const verifiedOn = answeredOn(r.verified_at);
+  const sealTitle = r.is_verified
+    ? `Verified${verifiedOn ? ` on ${verifiedOn}` : ''}`
+    : pending.length === 0
+      ? 'Every criterion is met. The mark lands on the next refresh.'
+      : `Not verified yet. Outstanding: ${pending.map(s => s.label).join(', ')}`;
 
   return (
     // Peter #7, revised: the row is a REAL LINK, and a plain click opens the
@@ -1081,6 +1104,10 @@ function ConferenceRow({
             <span className="truncate" style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 16.5, color: NEU.ink, letterSpacing: '-0.01em' }}>
               {acronym || r.full_name}
             </span>
+            {/* The primary signal, read where the eye already is. Grey rather
+                than absent: on staff screens the missing mark IS the news, and
+                the title says what is standing in the way. */}
+            <VerifiedCheck verified={r.is_verified} showUnverified size={15} title={sealTitle} />
             {/* Tier-2, loud, only for things a staff member must act on. */}
             {short && (
               <LoudChip icon={CircleAlert} gradient={DANGER} title={`Committees seat ${r.seat_capacity}, ${r.expected_delegates} delegates expected`}>
@@ -1230,60 +1257,101 @@ function ConferenceRow({
           </div>
         </NeuInset>
 
-        {/* ── Set-up ring (#6) ── */}
-        <HoverPop
-          width={252}
-          // Nine steps rather than seven, so a fully-empty conference's panel is
-          // now taller than the 200 default and a row near the bottom of the
-          // list would open downward and run off the viewport.
-          estimatedHeight={64 + pending.length * 21}
-          label={`Set-up ${done} of ${r.setup_total}${pending.length ? `; outstanding: ${pending.map(p => p.label).join(', ')}` : ''}`}
-          panel={
-            <div>
-              <div className="flex items-center gap-2 mb-2.5">
-                <NeuIconDisc gradient={r.setup_complete ? NEU_GRADIENTS.green : NEU_GRADIENTS.gold} icon={r.setup_complete ? Check : Clock} size={24} />
-                <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink }}>
-                  Set-up {done}/{r.setup_total}
+        {/* ── Verification (#6) ──
+            The row leads with the checkmark now, so this slot answers whichever
+            question is still open.
+
+            SETUP_STEPS is EXACTLY the seven verification criteria (see the note
+            on that array: 'delegate' and 'awards' were both removed from
+            conference_setup_status). So on a verified row the ring reads 7/7,
+            always, on every verified row: a column of the same number with an
+            empty outstanding list behind it. It earns nothing there, and it is
+            dropped. On an unverified row the same ring is the most useful thing
+            on the screen, because it is literally distance from the seal, and
+            the hover names what is missing. Both are kept, one each. */}
+        {r.is_verified ? (
+          <HoverPop
+            width={230}
+            estimatedHeight={112}
+            label={sealTitle}
+            panel={
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <VerifiedCheck verified size={18} title={sealTitle} />
+                  <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink }}>Verified</p>
+                </div>
+                <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.inkSoft, lineHeight: 1.45 }}>
+                  {verifiedOn
+                    ? `The checkmark landed on ${verifiedOn}. Every stage was done by then.`
+                    : 'The checkmark has landed. Every stage is done.'}
                 </p>
               </div>
-              {pending.length === 0 ? (
-                <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.green, fontWeight: 700 }}>
-                  Every set-up step is done.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>
-                    Still outstanding
-                  </p>
-                  {pending.map(s => {
-                    const Icon = s.icon;
-                    return (
-                      <span key={s.key} className="inline-flex items-center gap-2">
-                        <Icon size={13} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
-                        <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>{s.label}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-              {/* No separate "Not published yet" footnote: `Published` is now
-                  one of the nine steps and appears in the list above whenever
-                  it is outstanding, so a footnote would say it twice. */}
-            </div>
-          }
-        >
-          <NeuRing
-            value={done}
-            max={r.setup_total}
-            size={58}
-            strokeWidth={9}
-            gradient={r.setup_complete ? NEU_GRADIENTS.green : NEU_GRADIENTS.gold}
+            }
           >
-            <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 15, color: NEU.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-              {done}/{r.setup_total}
+            {/* Same 58px footprint as the ring, so the column stays aligned
+                however the list is filtered. */}
+            <span className="flex flex-col items-center justify-center" style={{ width: 58, height: 58, gap: 3 }}>
+              <VerifiedCheck verified size={28} title={sealTitle} />
+              <span style={{ fontFamily: OUTFIT, fontSize: 8, fontWeight: 900, letterSpacing: '0.1em', color: NEU.muted }}>
+                VERIFIED
+              </span>
             </span>
-          </NeuRing>
-        </HoverPop>
+          </HoverPop>
+        ) : (
+          <HoverPop
+            width={252}
+            // A fully-empty conference lists every outstanding step, which is
+            // taller than the 200 default, and a row near the bottom of the
+            // list would otherwise open downward and run off the viewport.
+            estimatedHeight={64 + pending.length * 21}
+            label={`Set-up ${done} of ${r.setup_total}${pending.length ? `; outstanding: ${pending.map(p => p.label).join(', ')}` : ''}`}
+            panel={
+              <div>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <NeuIconDisc gradient={r.setup_complete ? NEU_GRADIENTS.green : NEU_GRADIENTS.gold} icon={r.setup_complete ? Check : Clock} size={24} />
+                  <p style={{ fontFamily: OUTFIT, fontSize: 12.5, fontWeight: 900, color: NEU.ink }}>
+                    Set-up {done}/{r.setup_total}
+                  </p>
+                </div>
+                {pending.length === 0 ? (
+                  <p style={{ fontFamily: OUTFIT, fontSize: 12, color: NEU.green, fontWeight: 700 }}>
+                    Every set-up step is done.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <p style={{ fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', color: NEU.muted, textTransform: 'uppercase' }}>
+                      Still outstanding
+                    </p>
+                    {pending.map(s => {
+                      const Icon = s.icon;
+                      return (
+                        <span key={s.key} className="inline-flex items-center gap-2">
+                          <Icon size={13} strokeWidth={2.4} style={{ color: NEU.deepGold, flexShrink: 0 }} />
+                          <span style={{ fontFamily: OUTFIT, fontSize: 12, fontWeight: 700, color: NEU.ink }}>{s.label}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* No separate "Not published yet" footnote: `Published` is now
+                    one of the nine steps and appears in the list above whenever
+                    it is outstanding, so a footnote would say it twice. */}
+              </div>
+            }
+          >
+            <NeuRing
+              value={done}
+              max={r.setup_total}
+              size={58}
+              strokeWidth={9}
+              gradient={r.setup_complete ? NEU_GRADIENTS.green : NEU_GRADIENTS.gold}
+            >
+              <span style={{ fontFamily: OUTFIT, fontWeight: 900, fontSize: 15, color: NEU.ink, lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                {done}/{r.setup_total}
+              </span>
+            </NeuRing>
+          </HoverPop>
+        )}
 
         {/* Affordance that the whole row is the link (#7). */}
         <ArrowUpRight

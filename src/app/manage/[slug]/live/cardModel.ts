@@ -331,6 +331,14 @@ export function chairFirstNames(lc: LiveCommittee): string[] {
   return out;
 }
 
+// PENDING INVITEES DO NOT GET AN EQUIVALENT OF THE ABOVE, deliberately. This
+// list is DEDUPLICATED, so its indices do not line up with `conf.chairs` and it
+// is only ever positionally safe because the card already falls back to the
+// person's own name. Pending invitees are rendered straight from
+// `conf.pendingChairs` with `firstName(p.name)` per row instead — no second
+// array to fall out of step, and no dedup that could swallow a real second
+// invitee who happens to share a first name with someone already on the dais.
+
 // ── The now-playing panel ────────────────────────────────────────────────────
 //
 // ONE panel, ONE fixed footprint, on every card in every state — including the
@@ -547,9 +555,19 @@ export function nowPlaying(lc: LiveCommittee, now: number): NowPlaying {
 
   // ── Never opened ──
   if (base === 'no-session' || base === 'not-started') {
+    // Three states, not two. "Chairs have the code" is only ever true of an
+    // ACCEPTED chair — a pending invitee is not on `chair_user_ids`, has no
+    // access to the conference and has not been given the session code — so
+    // pending chairs get their own honest headline rather than being counted
+    // into `conf.chairs`. See LiveModals' `pendingChairs`.
+    const pending = lc.conf.pendingChairs.length;
     return {
       kind: 'not-started', context: 'Not opened yet', contextTopic: null,
-      headline: lc.conf.chairs.length > 0 ? 'Chairs have the code' : 'No chair assigned yet',
+      headline: lc.conf.chairs.length > 0
+        ? 'Chairs have the code'
+        : pending > 0
+          ? `Invite${pending === 1 ? '' : 's'} not accepted yet`
+          : 'No chair assigned yet',
       flag: null, glyph: 'dormant', tone: 'off', dim: true, pct: null,
       left: 'never opened',
       right: lc.conf.sessionCode ? `code ${lc.conf.sessionCode}` : 'no session code',

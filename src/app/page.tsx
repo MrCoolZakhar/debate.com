@@ -104,12 +104,29 @@ export default async function HomePage() {
           aria-label="All conferences on Gavelling"
           style={{ borderTop: '1px solid rgba(221,212,192,0.7)', backgroundColor: '#FAF8F3' }}
         >
-          <div className="mx-auto w-full max-w-6xl px-5 py-10">
-            {/* No visible heading: the label read as SEO furniture. The nav's
-                aria-label still names the section for assistive tech, and the
-                LINKS — the actual crawl path to every conference page — are
-                untouched. */}
-            <ul className="flex flex-wrap gap-x-4 gap-y-2" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          <div className="mx-auto w-full max-w-6xl px-5 py-7">
+            {/* Collapsed behind a disclosure, not removed. These links ARE the
+                crawl path: everything above renders client-side, so without
+                them the conference pages have no server-rendered route in.
+                <details> keeps every one of them in the delivered HTML, one
+                hop from the homepage, and Google indexes accordion content
+                normally — this is not the `display:none` cloaking case the
+                earlier note warned about, because the markup honestly
+                declares itself a disclosure widget.
+                It also stops the homepage ending in a wall of names that
+                only grows. */}
+            <details>
+              <summary
+                className="focus:outline-none"
+                style={{
+                  fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 700,
+                  letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9A8A78',
+                  cursor: 'pointer', listStyle: 'none',
+                }}
+              >
+                Browse all {conferences.length} conferences
+              </summary>
+            <ul className="flex flex-wrap gap-x-4 gap-y-2 mt-4" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {conferences.map(c => (
                 <li key={c.slug}>
                   <Link
@@ -121,6 +138,7 @@ export default async function HomePage() {
                 </li>
               ))}
             </ul>
+            </details>
             <Link
               href="/conferences/explore"
               className="inline-block mt-5"

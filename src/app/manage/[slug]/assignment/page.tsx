@@ -3252,7 +3252,9 @@ function ChairBoardPanel({
       {/* Dais */}
       <div className="mt-3.5">
         <p style={{ fontSize: 10, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 700, marginBottom: 6 }}>DAIS</p>
-        {dais.length === 0 ? (
+        {dais.length === 0 && invites.length === 0 ? (
+          /* Counts BOTH. A committee with an invite out is not chairless, and
+             saying so above the invitee rendered directly below was the bug. */
           <p style={{ fontSize: 11, color: NEU.muted, fontFamily: OUTFIT }}>No chairs assigned yet.</p>
         ) : (
           <div className="flex flex-col gap-1.5 pr-0.5">
@@ -3285,22 +3287,23 @@ function ChairBoardPanel({
             })}
           </div>
         )}
-      </div>
 
-      {/* Pending invites */}
-      {invites.length > 0 && (
-        <div className="mt-3.5">
-          <p style={{ fontSize: 10, color: NEU.deepGold, fontFamily: MONO, letterSpacing: '0.12em', fontWeight: 700, marginBottom: 6 }}>PENDING</p>
-          <div className="flex flex-col gap-1.5">
+        {/* Invitees sit IN the dais, not in a section of their own further
+            down. Someone who has been invited is already part of this
+            committee as far as the secretariat is concerned; they are just
+            not confirmed. Greyed, with the badge saying why. The gavel count
+            in the header deliberately still counts only accepted chairs. */}
+        {invites.length > 0 && (
+          <div className="flex flex-col gap-1.5 pr-0.5" style={{ marginTop: dais.length ? 6 : 0 }}>
             {invites.map(inv => (
-              <NeuInset key={inv.id} small className="flex items-center gap-2 px-2.5 py-1.5">
+              <NeuInset key={inv.id} small className="flex items-center gap-2 px-2.5 py-1.5" style={{ opacity: 0.72 }}>
                 <span
                   className="px-2 py-0.5 rounded-full flex-shrink-0"
                   style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', fontFamily: MONO, backgroundColor: 'rgba(238,217,138,0.4)', color: '#8A6614' }}
                 >
-                  INVITED
+                  PENDING
                 </span>
-                <span className="truncate flex-1" style={{ fontSize: 12, color: NEU.ink, fontFamily: OUTFIT }}>
+                <span className="truncate flex-1" style={{ fontSize: 12, color: '#7A5A10', fontFamily: OUTFIT, fontWeight: 600 }}>
                   {inv.profiles?.display_name ?? inv.invited_name ?? inv.email}
                 </span>
                 <button
@@ -3316,8 +3319,8 @@ function ChairBoardPanel({
               </NeuInset>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Invite */}
       <button

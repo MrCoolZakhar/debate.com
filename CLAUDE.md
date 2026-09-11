@@ -138,7 +138,7 @@ Rules:
 
 One seal, the one social media uses (`src/components/VerifiedCheck.tsx`). Blue means verified, grey means not yet. Two things carry it:
 
-- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. "Get your first delegate" is on the checklist but is not a criterion. ("Set up awards" was the other non-criterion; it was removed from the checklist entirely when awards went behind the coming-soon screen, which changed nothing about verification.) The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
+- **A conference** is verified automatically once every set-up stage is done: page, committees with enough seats, chairs, emails explored, secretariat, a payment method, published. The **secretariat** stage is a union of three routes: a second organiser, a pending co-organizer invite, or `conferences.solo_secretariat_ack_at` being set. That third route exists because the stage used to require a second person, which made the checkmark unreachable for the 167 conferences genuinely run by one organiser. It is stamped only when the organiser says so, from the dashboard checklist row or the Settings → Organizers tick, and it is reversible from Settings. "Get your first delegate" is on the checklist but is not a criterion. ("Set up awards" was the other non-criterion; it was removed from the checklist entirely when awards went behind the coming-soon screen, which changed nothing about verification.) The truth is `conference_setup_status()` in the database (`scratch-setup-status.sql` is a reference copy), which also reports minutes per stage and `verification_minutes_left`. `refresh_conference_verification()` stores the mark (dashboard calls it; cron sweeps hourly); a guard trigger rejects any direct write to `conferences.is_verified`. Public surfaces show the seal only when verified. The organiser's own screens (manage rail, dashboard) always show it, grey with "About N minutes to your checkmark" until earned.
 - **An MUN CV entry** is blue when `source = 'gavelling_verified'` (written by the awards pipeline), grey when self-reported.
 
 Reminders: `queue_checkmark_emails()` (cron 10:30 daily) sends one "N minutes from its checkmark" email per organiser per conference, a follow-up after two weeks, and a congratulations when the mark lands, all through `email_outbox` and paced 48h from the organiser drip. `SetupReminderGate` (root layout) shows the same list once a day when an organiser with an unverified conference enters the site, via `my_incomplete_conferences()`.
@@ -216,6 +216,21 @@ src/components/ neu.tsx (design tokens), DatePicker, Portal, SiteNav, Scoreboard
 **Database:** there is **no `supabase/` directory and no migrations in git**. The schema lives only in the remote project; the loose `scratch-*.sql` files at the root are drafts, not truth. Inspect with the Supabase MCP tools before assuming a column exists. RLS is the security boundary everywhere; `isViewOnly`, section permissions and hidden buttons are not.
 
 **Email:** nothing sends inline. Every email is an `email_outbox` row (rendered by a DB trigger, delivered by the `send-emails` edge function via Resend). Add an event to `EVENT_REGISTRY` in `emailEvents.ts` and TypeScript forces a category and a default body.
+
+**Emailing "everyone" reaches people who have never registered, and that is
+deliberate.** A recipient's address is `profiles.email ?? invited_email`, so an
+imported or invited applicant who never made an account still gets the email.
+They also pass every consent check: `recipientAllowsCategory` returns true when
+there is no `profiles` row (`emailEvents.ts:211`), because there are no
+preferences to honour yet. Roughly 157 unclaimed applicants are in that state.
+
+Know what that means before writing a broadcast. These people never chose to
+hear from the platform; an organiser uploaded their address. Their only
+protection is the global unsubscribe list, which the `email_outbox` trigger
+checks (`email_is_opted_out` suppresses the row before it is rendered), so the
+unsubscribe link in the footer is doing real work and must never be removed
+from a broadcast. Treat "everyone" as including strangers, and write it
+accordingly.
 
 ---
 

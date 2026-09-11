@@ -21,6 +21,7 @@ import Loader from '@/components/Loader';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, NeuButton, NeuIconDisc } from '@/components/neu';
 import { MonogramMedallion } from '@/components/CommitteeEditorModal';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 
 interface InviteData {
   ok: boolean;
@@ -29,6 +30,8 @@ interface InviteData {
   email?: string;
   conference_name?: string;
   acronym?: string;
+  /** Edition year source, so the acronym carries its year. */
+  start_date?: string | null;
   slug?: string;
 }
 
@@ -211,6 +214,9 @@ export default function OrganizerInvitePage() {
 
   const failed = !invite || !invite.ok;
   const resolvedCopy = invite?.status && invite.status !== 'pending' ? STATUS_COPY[invite.status] : null;
+  // Acronym plus edition year: an organiser may run the same series annually,
+  // and the invite has to say which edition it is for.
+  const acronymLabel = conferenceAcronymLabel({ acronym: invite?.acronym ?? null, start_date: invite?.start_date ?? null });
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: NEU.base }}>
@@ -242,7 +248,7 @@ export default function OrganizerInvitePage() {
             <>
               <MonogramMedallion text={invite!.acronym || invite!.conference_name || '?'} isCrisis={false} size={52} />
               <div className="mt-5">
-                <Eyebrow>{invite!.acronym}</Eyebrow>
+                <Eyebrow>{acronymLabel || invite!.acronym}</Eyebrow>
                 <h1 className="font-black text-xl mt-2 mb-2" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                   {resolvedCopy.title}
                 </h1>
@@ -258,7 +264,7 @@ export default function OrganizerInvitePage() {
             <>
               <MonogramMedallion text={invite!.acronym || invite!.conference_name || '?'} isCrisis={false} size={52} />
               <div className="mt-5">
-                <Eyebrow>{invite!.acronym}</Eyebrow>
+                <Eyebrow>{acronymLabel || invite!.acronym}</Eyebrow>
                 <h1 className="font-black text-xl mt-2 mb-1.5" style={{ color: NEU.ink, fontFamily: OUTFIT }}>
                   Join the organizing team
                 </h1>

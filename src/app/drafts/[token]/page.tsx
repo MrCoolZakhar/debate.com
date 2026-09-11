@@ -40,6 +40,7 @@ import SiteNav from '@/components/SiteNav';
 import { Eyebrow, OUTFIT } from '@/app/account/accountUi';
 import { NEU, NEU_GRADIENTS, NeuIconDisc, NeuButton } from '@/components/neu';
 import { committeeDisplayName } from '@/lib/presetNames';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 
 const DANGER = '#8B2020';
 
@@ -47,6 +48,8 @@ interface DraftConference {
   acronym: string;
   slug: string;
   full_name: string;
+  /** Edition year source, so the acronym carries its year. */
+  start_date: string | null;
 }
 
 interface DraftPeek {
@@ -217,7 +220,10 @@ function DraftLandingInner() {
   }
 
   const conf = draft!.conference!;
-  const primaryName = committeeDisplayName(conf.full_name, conf.acronym) || conf.acronym || conf.full_name;
+  // The acronym carries its edition year, so someone who applied to two years
+  // of the same conference can tell which draft this reminder is about.
+  // committeeDisplayName stays the fallback for a conference with no acronym.
+  const primaryName = conferenceAcronymLabel(conf) || committeeDisplayName(conf.full_name, conf.acronym) || conf.full_name;
   const showFullName = primaryName !== conf.full_name && !!conf.full_name;
   const edited = formatEdited(draft!.updated_at);
   const role = draft!.role ?? 'delegate';

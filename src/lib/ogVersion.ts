@@ -148,3 +148,15 @@ export function versionToken(segment: string): string {
 export function homeOgImageUrl(origin = 'https://gavelling.com', now: Date = new Date()): string {
   return `${origin}/api/og/home/${utcToday(now)}.jpg`;
 }
+
+/**
+ * The /conferences/new card's URL.
+ *
+ * Dated like the homepage card, and for the same reason: a scraper holds a
+ * URL's bytes effectively forever, so a card that can never change its URL can
+ * never change. Nothing on this card is live, so the date is doing version
+ * control rather than reporting anything.
+ */
+export function listConferenceOgImageUrl(origin = 'https://gavelling.com', now: Date = new Date()): string {
+  return `${origin}/api/og/list/${utcToday(now)}.jpg`;
+}

@@ -24,6 +24,11 @@ export const EMAIL_TOKEN_KEYS = [
   'draft_stop_link',
   // Awards only (award_received). The award's label, e.g. "Best Delegate".
   'award',
+  // Invite reminders only (chair_invite_reminder_*, organizer_invite_reminder_*).
+  // The display name of the organizer who sent the invite. Substituted by the
+  // queue_invite_reminders RPC, which is the only thing that reads
+  // conference_chair_invites.invited_by / conference_organizer_invites.invited_by.
+  'invited_by',
 ] as const;
 
 export type EmailTokenKey = (typeof EMAIL_TOKEN_KEYS)[number];
@@ -44,6 +49,7 @@ export const EMAIL_TOKEN_LABELS: Record<EmailTokenKey, string> = {
   draft_link: 'Draft Link',
   draft_stop_link: 'Stop Reminders Link',
   award: 'Award',
+  invited_by: 'Invited By',
 };
 
 export type EmailTokenContext = Partial<Record<EmailTokenKey, string | null>>;

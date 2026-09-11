@@ -292,6 +292,32 @@ export default function ProfilePage() {
       setSaveError('Your session has expired. Please refresh the page and sign in again.');
       return;
     }
+    // Nationality and date of birth are REQUIRED here, not merely accepted.
+    // Sign-up asks for both, the OAuth callback walls anyone missing them, and
+    // an application now refuses to proceed without them, because allocation
+    // places delegates by country and conferences enforce age limits. This
+    // form used to write `value || null`, so it was the one door that could
+    // put an account back into the broken state those three guards exist to
+    // prevent. It can still CHANGE them; it can no longer empty them.
+    const country = getCountryByName(nationality);
+    if (!country) {
+      setSaveError('Please choose your nationality from the list.');
+      return;
+    }
+    if (!dateOfBirth) {
+      setSaveError('Please enter your date of birth.');
+      return;
+    }
+    const age = ageAt(dateOfBirth);
+    if (age === null || age < 0 || age > 120) {
+      setSaveError('That date of birth does not look right.');
+      return;
+    }
+    if (age < 13) {
+      setSaveError('You need to be at least 13 to use Gavelling.');
+      return;
+    }
+
     setSaving(true);
     const supabase = getAuthedClient(session.access_token);
     // These are the fields every conference application reads back, so a
@@ -299,16 +325,21 @@ export default function ProfilePage() {
     // can be told "Saved" about. supabase-js RESOLVES on a PostgREST error, so
     // the result has to be destructured and checked, exactly as the education
     // and notification writes below do.
-    const { error } = await supabase
+    //
+    // `.select('id')` for the second half of that: an update matching ZERO
+    // rows comes back with error === null, so without it a write that changed
+    // nothing would still show "Saved".
+    const { data, error } = await supabase
       .from('profiles')
       .update({
         display_name: displayName,
-        nationality:  nationality || null,
-        date_of_birth: dateOfBirth || null,
+        nationality:  country.name,
+        date_of_birth: dateOfBirth,
       })
-      .eq('id', user.id);
+      .eq('id', user.id)
+      .select('id');
     setSaving(false);
-    if (error) {
+    if (error || !data || data.length === 0) {
       setSaveError('We could not save your profile. Please check your connection and try again.');
       return;
     }

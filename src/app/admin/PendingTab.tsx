@@ -164,7 +164,6 @@ export default function PendingTab() {
   }, [authLoading, fetchPage]);
 
   const loadedAll = !!rows && rows.length >= total;
-  const withAccount = useMemo(() => (rows ?? []).filter(r => r.has_account).length, [rows]);
 
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
@@ -218,7 +217,6 @@ export default function PendingTab() {
         {rows && (
           <span className="ml-auto" style={{ fontFamily: MONO, fontSize: 11, color: NEU.inkSoft, ...NUM }}>
             {int(rows.length)} of {int(total)}
-            {withAccount > 0 && ` · ${int(withAccount)} loaded already have an account`}
           </span>
         )}
       </div>
@@ -327,9 +325,9 @@ export default function PendingTab() {
           ))}
         </div>
         <p style={{ fontFamily: OUTFIT, fontSize: 11.5, color: NEU.inkSoft, lineHeight: 1.55, marginTop: 12 }}>
-          A row marked HAS ACCOUNT is somebody who signed up under that email on their own and never
-          claimed the invite. That is a different problem from somebody who has not arrived at all, so
-          the row stays on the list and says so.
+          Everyone here is unregistered. Somebody who has since signed up under the same address
+          leaves the list, and so do seeded conferences and example.com addresses, so the number is
+          people you could actually chase.
         </p>
       </NeuCard>
     </div>

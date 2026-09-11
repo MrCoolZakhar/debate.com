@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { notifyOk } from '@/lib/appNotify';
+import { notifyErr, notifyOk } from '@/lib/appNotify';
 import { notify } from '@/lib/sessionNotifications';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -906,8 +906,12 @@ const SETUP_DONE_NOTICE: Record<string, { title: string; body: string }> = {
     body: 'You have seen what goes out to applicants automatically.',
   },
   secretariat: {
-    title: 'Your secretariat is on board',
-    body: 'Co-organizers can now help you run the conference.',
+    // True whichever way the stage was cleared: a co-organizer invited, or the
+    // organiser saying they are running this one on their own. This card is
+    // raised by SetupCompletionNotices the moment the row flips, so the solo
+    // path deliberately does not raise a second one of its own.
+    title: 'Your secretariat is settled',
+    body: 'That stage is done. You can invite co-organizers whenever you want the help.',
   },
   financials: {
     title: 'Financial information is set',
@@ -989,8 +993,9 @@ function SetupCompletionNotices({
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { conference, refreshConferenceQuiet, verification } = useManage();
+  const { conference, refreshConferenceQuiet, verification, refreshVerification } = useManage();
   const { session } = useAuth();
+  const [soloSaving, setSoloSaving] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [publishBlockMsg, setPublishBlockMsg] = useState('');
@@ -1296,6 +1301,43 @@ export default function DashboardPage() {
   }
 
   const slug = conference.slug;
+  // The organiser has said they are running this alone. It satisfies the
+  // secretariat stage on its own; see handleSoloSecretariat.
+  const soloSecretariat = !!conference.solo_secretariat_ack_at;
+
+  /**
+   * "I'm running this one on my own."
+   *
+   * The `secretariat` verification stage used to demand a SECOND organiser, so
+   * a conference genuinely run by one person could never be verified however
+   * ready everything else was. This is the other way to satisfy it: the
+   * organiser says so, once, and we stamp when they said it. It is never set
+   * for anybody automatically, and inviting someone later still works — the
+   * stage is a UNION, not a switch.
+   */
+  async function handleSoloSecretariat() {
+    if (!conference || !session || soloSaving) return;
+    setSoloSaving(true);
+    const supabase = getAuthedClient(session.access_token);
+    // .select() so a zero-row write (RLS refusing us) is visible. supabase-js
+    // resolves with error null on a write that matched nothing, so counting
+    // the returned rows is the only honest confirmation.
+    const { data, error } = await supabase
+      .from('conferences')
+      .update({ solo_secretariat_ack_at: new Date().toISOString() })
+      .eq('id', conference.id)
+      .select('id');
+    setSoloSaving(false);
+    if (error || !data || data.length === 0) {
+      notifyErr('Could not save that. Try again in a moment.', 'solo-secretariat');
+      return;
+    }
+    await refreshConferenceQuiet();
+    void refreshVerification();
+    // No success toast here: the checklist row flips to done on the refreshed
+    // conference and SetupCompletionNotices raises the card. Two would be noise.
+  }
+
   const confYear = conference.start_date ? new Date(conference.start_date + 'T00:00:00').getFullYear() : null;
 
   // ── Derived numbers ──────────────────────────────────────────────────────
@@ -1466,11 +1508,35 @@ export default function DashboardPage() {
         ? `${dash.organizerCount} organizers on the team.`
         : dash.pendingOrganizerInvites > 0
           ? 'Invite sent — waiting for them to accept.'
-          : 'Invite co-organizers and grant them access.',
+          : soloSecretariat
+            ? 'You are running this one on your own.'
+            : 'Invite co-organizers and grant them access.',
       // One invite out is enough: the organiser has done the part they control,
-      // and accepting is not theirs to do.
-      done: dash.organizerCount > 1 || dash.pendingOrganizerInvites > 0,
+      // and accepting is not theirs to do. A solo organiser who has said so is
+      // the third way through: this stage gates the blue checkmark, and there
+      // was no honest answer here for a conference that really is one person.
+      done: dash.organizerCount > 1 || dash.pendingOrganizerInvites > 0 || soloSecretariat,
       onClick: () => router.push(`/manage/${slug}/settings?tab=organizers`),
+      // Secondary, and quiet on purpose. The row's own click still goes to the
+      // invite screen, which stays the thing we suggest; this is only here so
+      // someone with nobody to invite is not stuck. Muted rather than gold,
+      // and it never nags.
+      action: (
+        <button
+          onClick={(e) => { e.stopPropagation(); void handleSoloSecretariat(); }}
+          disabled={soloSaving}
+          title="Marks this stage done so a one-person secretariat can still earn the checkmark. You can invite people any time."
+          className="focus:outline-none"
+          style={{
+            fontFamily: OUTFIT, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+            color: NEU.muted, background: 'none', border: 'none',
+            cursor: soloSaving ? 'default' : 'pointer', padding: '2px 4px',
+            opacity: soloSaving ? 0.5 : 1, whiteSpace: 'nowrap',
+          }}
+        >
+          {soloSaving ? 'SAVING…' : "I'M ON MY OWN"}
+        </button>
+      ),
     },
     {
       key: 'financials',

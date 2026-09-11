@@ -59,6 +59,19 @@ export interface ChairPerson {
   avatarUrl: string | null;
 }
 
+/** A chair who has been invited and has not accepted. Deliberately NOT a
+ *  `ChairPerson`: there is no `id`, so nothing can link an unaccepted invitee
+ *  to a public CV, and no accidental `[...chairs, ...pendingChairs]` typechecks
+ *  its way past the distinction the two lists exist to keep. */
+export interface PendingChairPerson {
+  /** `conference_chair_invites.id` — the React key, nothing more. */
+  id: string;
+  /** Their account name, else the name the organiser typed, else their email
+   *  (`pendingInviteName`). Organiser-only: this is never rendered publicly. */
+  name: string;
+  avatarUrl: string | null;
+}
+
 /** One `feedback` row. All five extra columns beyond the original
  *  country/chair/content triple are real: `level` ('speech' today), the
  *  per-factor ratings blob, and the speech the note was attached to. */
@@ -111,8 +124,20 @@ export interface LiveCommittee {
     delegationSize: number;
     chairUserIds: string[];
     /** chair_user_ids resolved against profiles, falling back to the
-     *  trigger-maintained display_chairs entry at the same index. */
+     *  trigger-maintained display_chairs entry at the same index.
+     *
+     *  ACCEPTED CHAIRS ONLY. This list means "people who are on the dais and
+     *  can get into the room", and `nowPlaying` reads its length to say
+     *  "Chairs have the code". A pending invitee has no code, so folding one
+     *  in here would make an operational headline lie. Pending invites are
+     *  `pendingChairs` below, and the two are never merged. */
     chairs: ChairPerson[];
+    /** Chairs who have been INVITED and have not accepted:
+     *  `conference_chair_invites` rows with status 'pending'. They are NOT in
+     *  `chair_user_ids` and never reach `display_chairs` — see
+     *  `src/lib/chairInvites.ts`. Organiser-only, like every other surface that
+     *  shows them; the public conference page must never print these names. */
+    pendingChairs: PendingChairPerson[];
   };
   session: {
     id: string;
@@ -1471,8 +1496,18 @@ function ChairAvatar({ name, size = 30 }: { name: string; size?: number }) {
  *  Prefers the conference dais (real profile pictures) and falls back to the
  *  names that actually joined the session, which may include a chair with no
  *  Gavelling account. Names stay visible here: this is a detail surface, unlike
- *  the card corner where the stack is deliberately name-free. */
-function ChairStrip({ chairs, chairNames }: { chairs: ChairPerson[]; chairNames: string[] }) {
+ *  the card corner where the stack is deliberately name-free.
+ *
+ *  `pending` is the invited-but-not-accepted list, drawn after the seated dais
+ *  and visibly quieter. It is a THIRD list, not a fallback for the other two:
+ *  an invitee has neither joined the session nor taken a seat on the dais, and
+ *  "No chairs joined yet" over a committee whose invite is out is the reading
+ *  this strip exists to correct. */
+function ChairStrip({ chairs, chairNames, pending }: {
+  chairs: ChairPerson[];
+  chairNames: string[];
+  pending: PendingChairPerson[];
+}) {
   const people: ChairPerson[] = chairs.length > 0
     ? chairs
     : chairNames.map((name) => ({ id: null, name, avatarUrl: null }));
@@ -1480,11 +1515,12 @@ function ChairStrip({ chairs, chairNames }: { chairs: ChairPerson[]; chairNames:
     <div>
       <Eyebrow>Chairs</Eyebrow>
       <div className="flex items-center gap-2 mt-2 flex-wrap">
-        {people.length === 0 ? (
+        {people.length === 0 && pending.length === 0 && (
           <span className="inline-flex items-center gap-2 text-sm" style={{ color: SOFT, fontFamily: OUTFIT }}>
             <Gavel size={14} /> No chairs joined yet
           </span>
-        ) : (
+        )}
+        {
           people.map((p, i) => (
             /* Not `nested`: this strip sits inside the modal body, which has no
                click target of its own. A chair carried only as a name string
@@ -1501,7 +1537,32 @@ function ChairStrip({ chairs, chairNames }: { chairs: ChairPerson[]; chairNames:
               </span>
             </ProfileLink>
           ))
-        )}
+        }
+        {/* No ProfileLink: an invitee has not taken this seat, so nothing here
+            points at a CV as though they had. */}
+        {pending.map((p) => (
+          <span
+            key={p.id}
+            className="inline-flex items-center gap-2 rounded-full pl-1.5 pr-3 py-1.5"
+            style={{ backgroundColor: NEU.surface, boxShadow: NEU.outSm, opacity: 0.72 }}
+            title={`${p.name} has been invited to chair and has not accepted yet`}
+          >
+            {p.avatarUrl
+              ? <Avatar url={p.avatarUrl} name={p.name} size={26} rounded />
+              : <ChairAvatar name={p.name} size={26} />}
+            <span className="text-xs font-bold truncate" style={{ color: '#7A5A10', fontFamily: OUTFIT, maxWidth: 140 }}>{p.name}</span>
+            <span
+              className="rounded-full flex-shrink-0"
+              style={{
+                fontFamily: OUTFIT, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.06em',
+                padding: '2px 6px', lineHeight: 1.4,
+                backgroundColor: 'rgba(238,217,138,0.4)', color: '#8A6614',
+              }}
+            >
+              PENDING
+            </span>
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -1578,7 +1639,7 @@ export function RosterBody({ data }: { data: LiveCommittee }) {
 
       {/* Chairs — names + small avatars (shown with the detail per spec) */}
       <div className="mb-5">
-        <ChairStrip chairs={data.conf.chairs} chairNames={chairNames} />
+        <ChairStrip chairs={data.conf.chairs} chairNames={chairNames} pending={data.conf.pendingChairs} />
       </div>
 
       {/* Roster list — click a delegate to expand full detail */}

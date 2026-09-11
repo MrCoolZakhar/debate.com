@@ -34,6 +34,7 @@ import {
 import { useAuth } from '@/components/AuthProvider';
 import { getAuthedClient } from '@/lib/supabase-auth';
 import { FlagImg } from '@/components/FlagImg';
+import { conferenceAcronymLabel } from '@/lib/conferenceLabels';
 import { LogoDisc } from '@/components/LogoDisc';
 import Portal from '@/components/Portal';
 import { getCountryByCode, getCountryByName } from '@/lib/countries';
@@ -92,6 +93,9 @@ interface LiveRow {
   conference_country: string | null;
   committee_abbreviation: string | null;
   committee_logo_url: string | null;
+  /** Edition year source: the board spans every live room on the platform, so
+   *  two editions of the same series would otherwise render the same acronym. */
+  conference_start_date: string | null;
 }
 
 type Status = 'live' | 'idle' | 'suspended';
@@ -415,7 +419,7 @@ function CommitteeRow({ r }: { r: LiveRow }) {
                   title={[r.conference_name, [r.conference_city, r.conference_country].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
                 >
                   <Building2 size={10} style={{ flexShrink: 0 }} />
-                  <span className="truncate">{r.conference_acronym || r.conference_name}</span>
+                  <span className="truncate">{conferenceAcronymLabel({ acronym: r.conference_acronym, start_date: r.conference_start_date }) || r.conference_name}</span>
                   <ExternalLink size={9} style={{ flexShrink: 0, opacity: 0.7 }} />
                 </Link>
               ) : (

@@ -43,12 +43,13 @@
 //  * Dark mode: `color-scheme: light dark` + a `prefers-color-scheme` override
 //    block + `[data-ogsc]` for Outlook. See DARK MODE below.
 
-import { resolveTokens, splitResolvedText, type EmailTokenContext } from './emailTokens';
+import { resolveTokens, splitResolvedText, UNRESOLVED_MARKER_PATTERN, type EmailTokenContext } from './emailTokens';
 import { companyLegalLines } from './companyDetails';
 import { conferenceAcronymLabel } from './conferenceLabels';
 import {
   type EmailBlock,
   type ButtonDestination,
+  type ButtonUrlConference,
   type ParagraphVariant,
   resolveButtonUrl,
   absolutizeUrl,
@@ -89,9 +90,10 @@ export function resolveEmailTheme(theme?: EmailTheme | null): Required<EmailThem
   return { ...DEFAULT_EMAIL_THEME, ...(theme ?? {}) };
 }
 
-export interface EmailRenderConference {
-  slug: string;
-  full_name: string;
+/* Extends ButtonUrlConference rather than repeating its fields, so a send path
+   physically cannot render a button without the data that button may need.
+   `start_date` also feeds the edition year in the masthead ("SISMUN 2026"). */
+export interface EmailRenderConference extends ButtonUrlConference {
   acronym: string;
   banner_url: string | null;
   logo_url: string | null;
@@ -106,8 +108,6 @@ export interface EmailRenderConference {
   tiktok_url?: string | null;
   facebook_url?: string | null;
   whatsapp_url?: string | null;
-  /** Only for the edition year in the masthead ("SISMUN 2026"). */
-  start_date?: string | null;
 }
 
 export interface RenderEmailHtmlArgs {
@@ -667,6 +667,7 @@ const BUTTON_FALLBACK_LABEL: Record<ButtonDestination, string> = {
   organizer_invite_accept: 'Accept the invitation',
   signup_page: 'Create my account',
   import_claim: 'View my invitation',
+  add_to_calendar: 'Add to my calendar',
 };
 
 function renderBlock(
@@ -750,9 +751,19 @@ function renderBlock(
       return null;
     };
 
+    /* A row whose value resolves to NOTHING BUT unresolved-token markers is
+       dropped, not printed. A facts panel is a list of answers, and
+       "Committee: ⚠committee⚠" is not an answer — it is the absence of one,
+       shouted. This matters most on the payment receipt, which legitimately
+       goes out before a delegate is allocated or when they have no delegation.
+       Only an all-marker value is dropped: any real text beside a marker still
+       renders, marker included, so a half-filled row stays visible and a
+       template author still sees what is missing. Paragraph copy is untouched
+       — there the marker is the only signal an organizer gets, and the
+       composer's own editor highlights them through splitResolvedText. */
     const items = block.items
       .map(i => ({ label: i.label.trim(), value: resolveTokens(i.value, ctx).trim(), icon: iconFor(i.iconFrom) }))
-      .filter(i => i.label && i.value);
+      .filter(i => i.label && i.value && i.value.replace(UNRESOLVED_MARKER_PATTERN, '').trim() !== '');
     if (!items.length) return '';
 
     /* A panel of labelled rows, not a sentence. This is the mymun idea: their
@@ -791,6 +802,11 @@ function renderBlock(
   }
 
   const url = resolveButtonUrl(block, conference, { chairInviteToken, organizerInviteToken, importClaimToken });
+  // An empty URL means the destination could not be built for THIS conference
+  // — today only `add_to_calendar`, for dates_tbd or a missing start date. Drop
+  // the whole button: a calendar CTA that opens an empty event is worse than
+  // no CTA, and there is nothing sensible to link it to instead.
+  if (!url) return '';
   const label = block.label?.trim() || BUTTON_FALLBACK_LABEL[block.destination] || 'Open link';
   const btnBg = theme.buttonColor;
   const btnInk = inkOn(btnBg);

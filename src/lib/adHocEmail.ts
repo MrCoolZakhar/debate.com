@@ -34,6 +34,11 @@ interface ConferenceRow {
   full_name: string;
   start_date: string | null;
   end_date: string | null;
+  // The add_to_calendar button destination is built from these three plus the
+  // dates above; without them a receipt would carry a dateless calendar link.
+  dates_tbd: boolean | null;
+  city: string | null;
+  country: string | null;
   fee_amount: number;
   fee_currency: string;
   banner_url: string | null;
@@ -155,7 +160,7 @@ export async function queueAdHocEmail(
   const [confRes, recipientsRes, roleConfigsRes] = await Promise.all([
     supabase
       .from('conferences')
-      .select('slug, acronym, full_name, start_date, end_date, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme')
+      .select('slug, acronym, full_name, start_date, end_date, dates_tbd, city, country, fee_amount, fee_currency, banner_url, logo_url, contact_email, email_theme')
       .eq('id', conferenceId)
       .single(),
     supabase
@@ -212,8 +217,13 @@ export async function queueAdHocEmail(
     logo_url: conference.logo_url,
     contact_email: conference.contact_email,
     email_theme: conference.email_theme,
-    // Feeds the edition year in the masthead and the footer.
+    // Feeds the edition year in the masthead and the footer, and the
+    // add_to_calendar button destination.
     start_date: conference.start_date,
+    end_date: conference.end_date,
+    dates_tbd: conference.dates_tbd,
+    city: conference.city,
+    country: conference.country,
   };
   const flatBody = flattenBlocksToPlainText(blocks, renderConf);
 

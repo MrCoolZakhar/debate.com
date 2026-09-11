@@ -97,6 +97,13 @@ export interface Conference {
   /** Stamped once by the communications page on first visit: the server-side
    *  twin of the localStorage "Explore emails" tick (src/lib/emailsExplored.ts). */
   emails_explored_at: string | null;
+  /** Stamped when the organiser says they are running this conference on their
+   *  own. It satisfies the `secretariat` verification stage in place of a
+   *  second organiser — see conference_setup_status(). Plenty of conferences
+   *  really are a one-person job, and before this column existed those could
+   *  never earn the blue checkmark however ready they were. Never set for
+   *  anyone automatically: it is a statement the organiser makes. */
+  solo_secretariat_ack_at: string | null;
 }
 
 /** What is left before the checkmark, from `conference_setup_status()`. */
@@ -153,7 +160,7 @@ const CONFERENCE_COLUMNS = [
   'financial_aid_enabled', 'aid_questions', 'aid_intro',
   'awards_config', 'awards_published_at', 'intent',
   'theme', 'theme_draft',
-  'is_verified', 'verified_at', 'emails_explored_at',
+  'is_verified', 'verified_at', 'emails_explored_at', 'solo_secretariat_ack_at',
 ].join(', ');
 
 // ── Nav definition ─────────────────────────────────────────────────────────
