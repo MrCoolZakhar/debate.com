@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { Committee } from '@/lib/types';
 import { getCountryDisplayName, compareCountryNames } from '@/lib/countries';
 import { sendMessage as sendMessageToDB } from '@/lib/committeeService';
@@ -13,6 +13,8 @@ import {
   useOutbox, addOutbox, markOutboxFailed, markOutboxSending,
   reconcileOutbox, newOutboxId, type OutboxMsg,
 } from '@/lib/chatOutbox';
+import { setViewingChatConversation, clearViewingChatConversation } from '@/lib/chatViewing';
+import { dismissWhere, notifyKey } from '@/lib/sessionNotifications';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { NEU } from '@/components/neu';
 import ChatConversationList, { type ConvSummary } from './chat/ChatConversationList';
@@ -22,6 +24,18 @@ import NewDmPicker from './chat/NewDmPicker';
 import { CHAT } from './chat/chatTokens';
 
 const LOCALES: Record<string, string> = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', ar: 'ar' };
+
+/* Tailwind's `sm` breakpoint. At and above it the list and the thread are side by side, so
+   the active thread is on screen whether or not `showThread` is set; below it only one pane
+   shows at a time. Must match the `sm:` classes in the render below. */
+const WIDE_QUERY = '(min-width: 640px)';
+function subscribeWide(cb: () => void): () => void {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+  const mq = window.matchMedia(WIDE_QUERY);
+  mq.addEventListener('change', cb);
+  return () => mq.removeEventListener('change', cb);
+}
+const getWide = () => (typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(WIDE_QUERY).matches);
 
 interface Conversation extends ConvSummary {
   key: ChatConvKey;
@@ -104,6 +118,14 @@ export default function ChatPanel({
     if ((conversations.find((c) => c.key === draftConv)?.messages.length ?? 0) > 0) setDraftConv(null);
   }, [conversations, draftConv]);
 
+  // ── Is the active thread actually on screen? ─────────────────────────────
+  // On a phone (the delegate sheet, a narrow chair window) the panel mounts on the LIST, with
+  // `activeConv` still defaulting to 'everyone'. Treating that as "reading Everyone" marked the
+  // thread read the instant the sheet opened and hid its badge, while the user was looking at
+  // the list. Read-state and banner suppression both key off this instead of `activeConv`.
+  const isWide = useSyncExternalStore(subscribeWide, getWide, () => true);
+  const threadVisible = isWide || showThread;
+
   // ── Read state ────────────────────────────────────────────────────────────
   const markRead = useCallback((key: ChatConvKey, conv?: Conversation) => {
     if (!onReadCountsChange) return;
@@ -113,10 +135,26 @@ export default function ChatPanel({
     onReadCountsChange((prev) => (prev[key] === incoming ? prev : { ...prev, [key]: incoming }));
   }, [conversations, onReadCountsChange, senderName]);
 
+  // Re-marks on EVERY change to the visible thread's incoming count, not only on open, so a
+  // message that lands while the user is reading it never leaves a badge behind. Keyed on
+  // the incoming count rather than `messages.length` so it also re-runs when the thread is
+  // replaced by one of equal length (a merge that swaps a row).
+  const activeIncoming = activeConvObj ? chatIncomingCount({ key: activeConvObj.key, messages: activeConvObj.messages }, senderName) : 0;
   useEffect(() => {
-    if (activeConvObj) markRead(activeConv, activeConvObj);
+    if (!threadVisible || !activeConvObj) return;
+    markRead(activeConvObj.key, activeConvObj);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConv, activeConvObj?.messages.length]);
+  }, [activeConvObj?.key, activeIncoming, threadVisible]);
+
+  // ── Tell the notification producers which thread is on screen ────────────
+  // Page effects read this to skip banners for the visible conversation; any banner already
+  // raised for it is cleared the moment it comes into view. See src/lib/chatViewing.ts.
+  const visibleKey = threadVisible ? activeKey : null;
+  useEffect(() => {
+    setViewingChatConversation(committee.id, visibleKey);
+    if (visibleKey != null) dismissWhere(notifyKey.chatConversation(String(visibleKey)));
+  }, [committee.id, visibleKey, activeIncoming]);
+  useEffect(() => () => clearViewingChatConversation(committee.id), [committee.id]);
 
   // Anchor the unread divider for whichever thread is open on mount.
   const anchoredRef = useRef(false);
@@ -215,7 +253,9 @@ export default function ChatPanel({
       <div className={`relative z-10 h-full ${showThread ? 'hidden sm:block' : 'block'} ${showThread ? '' : 'w-full sm:w-auto'}`}>
         <ChatConversationList
           conversations={conversations}
-          activeConv={activeConv}
+          /* On a phone the list and the thread never show together, so no row is "active"
+             while the list is up — its badge must stay visible. */
+          activeConv={threadVisible ? activeKey : ''}
           readCounts={readCounts}
           senderName={senderName}
           chairNames={chairNames}

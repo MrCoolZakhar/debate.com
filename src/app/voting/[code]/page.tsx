@@ -695,8 +695,9 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
           // `agendaTopicIndex` is stripped for the same reason as `headChair`: it is written
           // only by the chair's agenda picker (updateCommitteeAgendaInDB), and a copy
           // captured here would revert a later choice made on another device.
-          const { headChair: _hc, separateChairCode: _scc, chairJoinSuffix: _cjs, agendaTopicIndex: _ati, ...rest } = stored;
-          void _hc; void _scc; void _cjs; void _ati;
+          // `headChairDevice` (src/lib/gavelDevice.ts) is the gavel's device half: same reason.
+          const { headChair: _hc, headChairDevice: _hcd, separateChairCode: _scc, chairJoinSuffix: _cjs, agendaTopicIndex: _ati, ...rest } = stored;
+          void _hc; void _hcd; void _scc; void _cjs; void _ati;
           // Key on found.code, not the URL param: getCommitteeByCode uppercases
           // before querying, and every read below goes through committee.code.
           // A lowercase URL would otherwise hydrate a key nothing ever reads.
@@ -1062,6 +1063,7 @@ export default function VotingPage({ params }: { params: Promise<{ code: string 
       next as CommitteeSettings & { headChair?: string };
     void _cjs;
     delete (payload as { headChair?: string }).headChair;
+    delete (payload as { headChairDevice?: string }).headChairDevice;
     saveCommitteeSettings(committee.id, payload, committee.code, committee.dbChairJoinSuffix ?? undefined);
     // Result already on screen: the verdict can flip, so the DR's stored status
     // has to follow it rather than keeping the value from the first evaluation.

@@ -249,6 +249,16 @@ export const NOTIFY_TTL = {
 
 export const notifyKey = {
   gsl: (motionId: string) => `gsl:${motionId}`,
-  chat: (sender: string) => `chat:${sender}`,
+  /**
+   * One card per (conversation, sender). Scoped by CONVERSATION so opening a thread can
+   * clear exactly its own cards (`dismissWhere(notifyKey.chatConversation(key))`) and a
+   * banner can be matched against the thread on screen. It used to be `chat:<sender>`,
+   * which could not tell a delegate's public message from their DM to the dais.
+   * Both parts are URI-encoded so a name containing ':' cannot fake another prefix.
+   */
+  chat: (convKey: string, sender: string) =>
+    `chat:${encodeURIComponent(convKey)}:${encodeURIComponent(sender)}`,
+  /** Prefix matching every chat card for one conversation. */
+  chatConversation: (convKey: string) => `chat:${encodeURIComponent(convKey)}:`,
   broadcast: (id: string) => `broadcast:${id}`,
 } as const;

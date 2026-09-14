@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCommitteeStore } from '@/lib/store';
 import { getCommitteeByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
+import { getGavelDeviceId } from '@/lib/gavelDevice';
 import { Committee } from '@/lib/types';
 import { useSettingsStore } from '@/lib/settingsStore';
 import { Emoji } from '@/components/Emoji';
@@ -327,7 +328,7 @@ function JoinPageInner() {
         // Claim-at-will Moderator works for conference sessions too; no password required —
         // access was already verified against the conference chair/organizer records.
         if (chairRole === 'head') {
-          updateCommitteeHeadChairInDB(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined).finally(goChair);
+          updateCommitteeHeadChairInDB(foundCommittee!.id, chairDisplayName, foundCommittee!.code, foundCommittee!.dbChairJoinSuffix ?? undefined, getGavelDeviceId(foundCommittee!.code)).finally(goChair);
         } else {
           goChair();
         }
@@ -361,7 +362,7 @@ function JoinPageInner() {
       const go = () => router.push(`/chair/${foundCommittee.code}?chairName=${encodeURIComponent(name)}`);
       // Claim-at-will: joining as Moderator takes the gavel; a Commenter joins view-only.
       if (chairRole === 'head') {
-        updateCommitteeHeadChairInDB(foundCommittee.id, name, foundCommittee.code, foundCommittee.dbChairJoinSuffix ?? undefined).finally(go);
+        updateCommitteeHeadChairInDB(foundCommittee.id, name, foundCommittee.code, foundCommittee.dbChairJoinSuffix ?? undefined, getGavelDeviceId(foundCommittee.code)).finally(go);
       } else {
         go();
       }

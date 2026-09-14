@@ -17,6 +17,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { NEU } from '@/components/neu';
 import Portal from '@/components/Portal';
+import { GLASS, glassFallbackCss } from '@/components/notifications/glass';
 
 const OUTFIT = "'Outfit', sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
@@ -110,25 +111,36 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: (id: numbe
       aria-live="polite"
       onMouseEnter={disarm}
       onMouseLeave={arm}
-      className="flex items-center gap-2.5 pointer-events-auto"
+      className="gv-toast flex items-center gap-2.5 pointer-events-auto"
       style={{
         minWidth: 240,
         maxWidth: 'min(92vw, 380px)',
-        padding: '11px 12px 11px 14px',
-        borderRadius: 16,
-        // Matte glass: a semi-opaque ivory surface over a soft blur, so the
-        // toast reads as its own frosted pane floating above the board.
-        backgroundColor: 'rgba(240,235,221,0.72)',
-        backdropFilter: 'blur(10px) saturate(1.35)',
-        WebkitBackdropFilter: 'blur(10px) saturate(1.35)',
-        boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.5), ${NEU.out}, 0 16px 34px rgba(27,56,40,0.18)`,
-        borderLeft: `3px solid ${accent}`,
+        padding: '9px 12px 9px 9px',
+        // The session notification glass (notifications/glass.ts), so a conferences toast
+        // and a session banner are the same material. Opaque enough to read without blur.
+        // `GLASS.fill` is a color-mix(); the `.gv-toast` rules in ToastHost restore a plain
+        // fill where that is unsupported, and a solid one where blur is.
+        borderRadius: GLASS.radius,
+        background: GLASS.fill,
+        backdropFilter: GLASS.blur,
+        WebkitBackdropFilter: GLASS.blur,
+        border: GLASS.border,
+        boxShadow: GLASS.shadow,
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateX(0)' : 'translateX(18px)',
         transition: `opacity ${ANIM_MS}ms ${EASE}, transform ${ANIM_MS}ms ${EASE}`,
       }}
     >
-      <Icon size={17} strokeWidth={2.4} style={{ color: accent, flexShrink: 0 }} />
+      <span
+        aria-hidden="true"
+        style={{
+          width: 28, height: 28, borderRadius: 8, flexShrink: 0, display: 'grid', placeItems: 'center',
+          background: accent, color: '#FAF8F3',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.24), 0 1px 3px rgba(27,56,40,0.2)',
+        }}
+      >
+        <Icon size={15} strokeWidth={2.4} />
+      </span>
       <span
         className="flex-1 min-w-0"
         style={{ fontFamily: OUTFIT, fontSize: 13, fontWeight: 600, color: NEU.ink, lineHeight: 1.35 }}
@@ -139,9 +151,9 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: (id: numbe
         onClick={beginLeave}
         aria-label="Dismiss notification"
         className="focus:outline-none flex-shrink-0"
-        style={{ color: NEU.muted, lineHeight: 0, background: 'none', border: 'none', cursor: 'pointer' }}
+        style={{ color: NEU.inkSoft, lineHeight: 0, background: 'none', border: 'none', cursor: 'pointer' }}
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = NEU.ink; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = NEU.muted; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = NEU.inkSoft; }}
       >
         <X size={14} />
       </button>
@@ -157,6 +169,7 @@ export function ToastHost() {
   if (items.length === 0) return null;
   return (
     <Portal>
+      <style>{glassFallbackCss('.gv-toast')}</style>
       <div
         className="fixed flex flex-col gap-2 pointer-events-none"
         style={{ top: 20, right: 20, zIndex: 9999, alignItems: 'flex-end' }}

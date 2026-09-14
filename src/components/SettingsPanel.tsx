@@ -721,10 +721,11 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
       // `headChair` is not a CommitteeSettings field, but it rides along in the
       // dbSettings blob the chair/voting loaders hydrate into the store. Writing
       // it back would silently revert the gavel to whoever held it at page load
-      // (AGENTS.md rule 12), so it never leaves this component.
-      const { headChair: _headChair, ...rest } =
+      // (AGENTS.md rule 12), so it never leaves this component. `headChairDevice` is the
+      // gavel's device half (src/lib/gavelDevice.ts) and is excluded for the same reason.
+      const { headChair: _headChair, headChairDevice: _headChairDevice, ...rest } =
         { ...getSettings(committee.code), ...settingsPatch } as Record<string, unknown>;
-      void _headChair;
+      void _headChair; void _headChairDevice;
       saveCommitteeSettings(committee.id, rest, committee.code, suffix);
     }
     if (scoringPatch) updateCommitteeScoringInDB(committee.id, scoringPatch, committee.code, suffix);
@@ -903,7 +904,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
               </svg>
               <div className="text-xs leading-snug">
                 <span className="font-black">{t('settings_view_only')}</span>
-                {headChairName ? <> &middot; {t('settings_view_only_chairing', { name: headChairName })}</> : null}
+                {headChairName ? <> &middot; {headChairName === myChairName ? t('gavel_device_elsewhere') : t('settings_view_only_chairing', { name: headChairName })}</> : null}
                 <div className="mt-0.5 font-semibold" style={{ opacity: 0.85 }}>
                   {t('settings_view_only_note')}
                 </div>
@@ -1078,7 +1079,8 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
                   OUTSIDE the view-only gate below so a Commenter can still read it. */}
               {(() => {
                 const headChair = committee.dbHeadChair || committee.chairNames?.[0] || '';
-                const isHead = !myChairName || headChair === myChairName;
+                // A same-name chair on another device is not "(you)" here: that device is view-only.
+                const isHead = !myChairName || (headChair === myChairName && !isViewOnly);
                 return (
                   <div className="py-3" style={{ borderBottom: '1px solid #DDD4C0' }}>
                     <div className="text-xs mb-1.5" style={{ color: '#9A8A78' }}>{t('settings_head_chair_label')}</div>

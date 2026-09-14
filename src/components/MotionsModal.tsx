@@ -23,6 +23,7 @@ import {
   endDebate as endDebateInDB,
   clearCurrentSpeakerIfUnchanged,
   logEvent,
+  caucusQueueCapacity,
 } from '@/lib/committeeService';
 
 type ModalView = 'list' | 'raise' | 'vote';
@@ -415,7 +416,10 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
   const speakingTime = parseInt(speakingTimeStr, 10) || 0;
   const totalTime = totalMins * 60 + totalSecs;
 
-  const speakerCount = (totalTime > 0 && speakingTime > 0) ? Math.floor(totalTime / speakingTime) : null;
+  // Any time left over is one more (shorter) speaker, not unused time: the chair can queue a
+  // delegate whenever committed time is below the remaining total, and that last speaker's
+  // clock is capped to what is left. Same rule as caucusQueueCapacity on the chair page.
+  const speakerCount = (totalTime > 0 && speakingTime > 0) ? caucusQueueCapacity(totalTime, speakingTime, 0, 0) : null;
   const unusedSecs = (totalTime > 0 && speakingTime > 0) ? totalTime % speakingTime : 0;
 
   const numClass = 'bg-transparent text-[#1C1410] text-xl font-bold text-center focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
@@ -691,7 +695,7 @@ function RaiseMotionForm({ committee, typeMeta, onBack, onRaised, editingMotion,
                         <span className="font-black text-xl leading-tight" style={{ color: '#1B3828' }}>{speakerCount}</span>
                         <span className="text-sm font-semibold" style={{ color: '#6A5A4A' }}>{speakerCount === 1 ? t('motions_delegate_speak').replace('{s}', t('motions_delegate_singular')) : t('motions_delegate_speak').replace('{s}', t('motions_delegate_plural'))}</span>
                         {unusedSecs > 0 && (
-                          <span className="text-xs font-semibold ms-1" style={{ color: '#B8844A' }}>{t('motions_unused_secs').replace('{n}', String(unusedSecs))}</span>
+                          <span className="text-xs font-semibold ms-1" style={{ color: '#B8844A' }}>{t('motions_last_speaker_secs').replace('{n}', String(unusedSecs))}</span>
                         )}
                       </div>
                     )}
@@ -899,7 +903,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
                 {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
                   <p className="text-sm" style={{ color: '#1C1410' }}>
                     <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
-                    <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                    <span className="font-black">{caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0)} {caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
                   </p>
                 )}
               </>
@@ -920,7 +924,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
                 {m.type === 'moderated' && m.speakingTime > 0 && m.totalTime > 0 && (
                   <p className="text-xs" style={{ color: '#1C1410' }}>
                     <span className="font-semibold" style={{ color: '#1B3828' }}>{t('motions_total_speakers_display')} </span>
-                    <span className="font-black">{Math.floor(m.totalTime / m.speakingTime)} {Math.floor(m.totalTime / m.speakingTime) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
+                    <span className="font-black">{caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0)} {caucusQueueCapacity(m.totalTime, m.speakingTime, 0, 0) === 1 ? t('motions_speaker_singular') : t('motions_speaker_plural')}{m.totalTime % m.speakingTime !== 0 ? ' ⚠' : ''}</span>
                   </p>
                 )}
               </>

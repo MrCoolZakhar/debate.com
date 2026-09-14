@@ -82,6 +82,32 @@ export function buildChatConversations(
   return convs;
 }
 
+// Which conversation ONE message lands in, from this reader's point of view. Mirrors the
+// routing in buildChatConversations above exactly (keep the two in step), so a notification
+// can be matched against the thread that is on screen. Null = the message belongs to no
+// thread this reader can see (system logs, or a DM between two other people).
+export function chatConvKeyForMessage(
+  m: ChatMessage,
+  senderName: string,
+  isChair: boolean,
+  chairNames: string[],
+): ChatConvKey | null {
+  if (isSystemLog(m.content)) return null;
+  if (!m.isPrivate) return 'everyone';
+  if (isChair) {
+    if (m.recipient === 'Chairs' && !chairNames.includes(m.sender)) return m.sender;
+    if (chairNames.includes(m.sender) && m.recipient && !chairNames.includes(m.recipient) && m.recipient !== 'Chairs') return m.recipient;
+    if (chairNames.includes(m.sender) && m.sender !== senderName && m.recipient === senderName) return m.sender;
+    if (m.sender === senderName && m.recipient && m.recipient !== 'Chairs' && chairNames.includes(m.recipient)) return m.recipient;
+    return null;
+  }
+  if (m.sender === senderName && m.recipient === 'Chairs') return 'chairs';
+  if (chairNames.includes(m.sender) && m.recipient === senderName) return 'chairs';
+  if (m.sender === senderName && m.recipient && m.recipient !== 'Chairs') return m.recipient;
+  if (m.recipient === senderName && !chairNames.includes(m.sender)) return m.sender;
+  return null;
+}
+
 // ─── Monotonic message merge (RC2) ──────────────────────────────────────────
 // Realtime fetches are async and unsequenced: an earlier request can resolve last and
 // clobber `messages` with a stale snapshot, deleting a just-arrived message from every

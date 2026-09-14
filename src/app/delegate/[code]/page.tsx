@@ -32,6 +32,7 @@ import {
   // Explicitly sanctioned on this surface: a pure reader over the committee row,
   // no store, no localStorage (see its comment banner in committeeService).
   caucusRemainingNow,
+  moderatedCaucusRemainingNow,
   subscribeToCommittee,
   getCurrentSpeakerRow,
   getDelegatesList,
@@ -793,8 +794,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   const { user, session, loading: authLoading, signOut } = useAuth();
   // Seat guard state, 'checking' until claim_delegate_seat answers (see the effect below).
   // 'taken' = someone else holds this seat; 'denied' = a reserved seat this account is not
-  // allocated to; 'signin' = a reserved seat and nobody signed in; 'error' = could not ask.
-  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin' | 'taken' | 'error'>('checking');
+  // allocated to; 'signin' = a reserved seat and nobody signed in; 'error' = could not ask;
+  // 'elsewhere' = this ACCOUNT holds the seat on another device, which opened it more
+  // recently (one account, one device: see the re-verify effect below).
+  const [accessState, setAccessState] = useState<'checking' | 'allowed' | 'denied' | 'signin' | 'taken' | 'elsewhere' | 'error'>('checking');
   const [seatRetry, setSeatRetry] = useState(0);
   // The last claim answered 'no_seat' (this country is not on the roster yet). When the
   // chair adds it, the re-verify effect claims it at once instead of up to 30 s later.
@@ -1026,11 +1029,16 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   //     then this device's random token, so a reload keeps the seat.
   // Keyed on the user id, not the access token: an hourly token refresh must not re-run
   // the claim and flash the loader over a live session.
+  // One account, one device: this claim runs with takeover, because opening the page (or
+  // tapping Try again / "Use this device instead", which re-run it) is a deliberate choice
+  // to sit here. A signed-in account's claim moves to THIS device, and the device that had
+  // it sees 'other_device' on its next re-verify. A reload of the device that already holds
+  // it answers 'mine' and changes nothing. Takeover never touches another account's claim.
   useEffect(() => {
     let cancelled = false;
     async function guard() {
       if (authLoading) return; // stays 'checking' (loader) until auth resolves
-      const res = await claimDelegateSeat(code, country, session?.access_token ?? null);
+      const res = await claimDelegateSeat(code, country, session?.access_token ?? null, { takeover: true });
       if (cancelled) return;
       setSeatNoSeat(res.reason === 'no_seat');
       // no_seat / not_found: there is nothing to hold. The page itself shows "not found"
@@ -1039,6 +1047,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       // signin / reserved for it before it looks at the roster.
       if (res.ok || res.reason === 'no_seat' || res.reason === 'not_found') setAccessState('allowed');
       else if (res.reason === 'taken') setAccessState('taken');
+      else if (res.reason === 'other_device') setAccessState('elsewhere');
       else if (res.reason === 'signin') setAccessState('signin');
       else if (res.reason === 'reserved') setAccessState('denied');
       else setAccessState('error');
@@ -1058,6 +1067,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // free. Only the server's explicit answer that the seat is someone else's ('taken') or
   // reserved ('reserved', or 'signin' when nobody is signed in) stops the page. A network
   // error never ejects a delegate who was already in; the next tick simply asks again.
+  // The re-verify NEVER takes over: when the same account opened this seat on another
+  // device since, the answer is 'other_device' and this page stops (and stops asking), so
+  // two devices cannot ping-pong the seat. Only the explicit "Use this device instead" tap
+  // takes it back.
   // Nothing here writes committee state (AGENTS.md rules 3 and 4), and there is no
   // per-second work.
   const seatAllowed = accessState === 'allowed';
@@ -1066,21 +1079,24 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
     if (!seatAllowed || sessionEnded || authLoading || !country) return;
     let alive = true;
     let busy = false;
-    const check = async () => {
+    const check = async (takeover = false) => {
       if (busy) return;
       busy = true;
-      const res = await claimDelegateSeat(code, country, seatAccessTokenRef.current);
+      const res = await claimDelegateSeat(code, country, seatAccessTokenRef.current, { takeover });
       busy = false;
       if (!alive) return;
       if (res.reason === 'taken') setAccessState('taken');
+      else if (res.reason === 'other_device') setAccessState('elsewhere');
       else if (res.reason === 'reserved') setAccessState('denied');
       else if (res.reason === 'signin') setAccessState('signin');
       else if (res.ok || res.reason === 'no_seat') setSeatNoSeat(res.reason === 'no_seat');
       // 'error' and anything else: keep the page, ask again next time.
     };
     // This delegation's row just appeared after we loaded on 'no_seat': claim it now.
-    if (hasMySeatRow && seatNoSeat) check();
-    const id = setInterval(check, 30_000);
+    // This counts as the page's first real claim (the load returned 'no_seat' before the
+    // server reached the takeover step), so it takes over like a fresh open would.
+    if (hasMySeatRow && seatNoSeat) check(true);
+    const id = setInterval(() => check(), 30_000);
     const onVisible = () => { if (document.visibilityState === 'visible') check(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
@@ -1264,17 +1280,26 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // realtime debounce for every device in the committee).
   const caucusAnchor = committee?.caucus?.totalStartedAt ?? null;
   const caucusAnchoredRemaining = committee?.caucus?.remainingTime ?? null;
+  // A moderated caucus total is speaking time: it stops when the speaker's clock reaches
+  // zero, read from the same current_speaker anchor (moderatedCaucusRemainingNow), so this
+  // phone stops with the chair even before the chair's re-anchor write arrives.
+  const caucusIsModerated = committee?.phase === 'moderated-caucus';
+  const caucusSpeakerBase = committee?.speakerTimeRemaining ?? 0;
+  const caucusSpeakerStartedAt = committee?.speakerStartedAt ?? null;
   useEffect(() => {
-    const read = () => caucusRemainingNow(
-      caucusAnchoredRemaining === null
+    const read = () => {
+      const pair = caucusAnchoredRemaining === null
         ? null
-        : ({ remainingTime: caucusAnchoredRemaining, totalStartedAt: caucusAnchor } as CaucusState),
-    );
+        : ({ remainingTime: caucusAnchoredRemaining, totalStartedAt: caucusAnchor } as CaucusState);
+      return caucusIsModerated
+        ? moderatedCaucusRemainingNow(pair, caucusSpeakerBase, caucusSpeakerStartedAt)
+        : caucusRemainingNow(pair);
+    };
     setCaucusSeconds(read());
     if (!caucusAnchor) return;
     const id = setInterval(() => setCaucusSeconds(read()), 1000);
     return () => clearInterval(id);
-  }, [caucusAnchor, caucusAnchoredRemaining]);
+  }, [caucusAnchor, caucusAnchoredRemaining, caucusIsModerated, caucusSpeakerBase, caucusSpeakerStartedAt]);
 
   /* ── Board sizing ───────────────────────────────────────────────────────
      Declared above the early returns: hooks must run in the same order on
@@ -1364,6 +1389,19 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
         title={t('delegate_seat_taken_title')}
         body={t('delegate_seat_taken_body', { country: country ? getCountryDisplayName(country, language) : '' })}
         primaryLabel={t('delegate_seat_retry')} onPrimary={retrySeat}
+        backLabel={t('delegate_seat_back')} onBack={backToJoin}
+      />
+    );
+  }
+
+  // The same account opened this seat on another device more recently. Nothing here moves
+  // the seat by itself; the button re-runs the claim with takeover (see the guard effect).
+  if (accessState === 'elsewhere') {
+    return (
+      <SeatGateScreen
+        title={t('delegate_seat_elsewhere_title')}
+        body={t('delegate_seat_elsewhere_body', { country: country ? getCountryDisplayName(country, language) : '' })}
+        primaryLabel={t('delegate_seat_use_here')} onPrimary={retrySeat}
         backLabel={t('delegate_seat_back')} onBack={backToJoin}
       />
     );

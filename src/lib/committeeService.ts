@@ -82,6 +82,60 @@ export function speakerRemainingNow(
   return Math.max(0, base - elapsed);
 }
 
+/** Wall-clock ms at which a RUNNING speaker clock reaches zero, or null when it is paused
+ *  (no anchor) or unparseable. */
+export function speakerClockEndsAt(speakerTimeRemaining: number, speakerStartedAt: string | null | undefined): number | null {
+  if (!speakerStartedAt) return null;
+  const startedMs = new Date(speakerStartedAt).getTime();
+  if (!Number.isFinite(startedMs)) return null;
+  const base = Number.isFinite(speakerTimeRemaining) ? Math.max(0, speakerTimeRemaining) : 0;
+  return startedMs + base * 1000;
+}
+
+/** Live TOTAL of a MODERATED caucus (or Tour de Table), which is speaking time: it only
+ *  runs while a speaker's clock runs. When the speaker clock has already reached zero the
+ *  total is read AT that instant, so it stops with the speaker on every surface even
+ *  before the Moderator's device re-anchors it (a sleeping laptop, a slow write). Pass the
+ *  current_speaker anchor; with no running speaker it is exactly caucusRemainingNow. */
+export function moderatedCaucusRemainingNow(
+  caucus: CaucusState | null | undefined,
+  speakerTimeRemaining: number,
+  speakerStartedAt: string | null | undefined,
+  now: number = Date.now(),
+): number {
+  const end = speakerClockEndsAt(speakerTimeRemaining, speakerStartedAt);
+  return caucusRemainingNow(caucus, end === null ? now : Math.min(now, end));
+}
+
+/** How many delegates a moderated caucus queue can hold right now.
+ *
+ *  The rule (Peter, 14 Sep 2026): if ANY time is left beyond what is already committed,
+ *  one more delegate fits, even if their slot is only ten seconds. Committed time is the
+ *  current speaker's live remaining clock plus a full speaking time for everyone queued.
+ *  So a delegate fits whenever committed < remaining; the last one's clock is capped to
+ *  the time actually left when they are called (see capSpeakerSlot). The old rule,
+ *  floor(remainingTime / speakingTime), also ignored who was already queued and read the
+ *  stale anchor value, so it said "full" with minutes on the clock. */
+export function caucusQueueCapacity(
+  remainingTotal: number,
+  speakingTime: number,
+  queueLength: number,
+  currentSpeakerRemaining: number,
+): number {
+  const speak = speakingTime > 0 ? speakingTime : 1;
+  const committed = Math.max(0, currentSpeakerRemaining) + queueLength * speak;
+  const spare = Math.max(0, remainingTotal) - committed;
+  return queueLength + (spare > 0 ? Math.ceil(spare / speak) : 0);
+}
+
+/** A speaker's clock when called in a moderated caucus: the motion's speaking time, or
+ *  whatever is left of the caucus if that is less. Never below 1 while time remains. */
+export function capSpeakerSlot(speakingTime: number, remainingTotal: number): number {
+  const speak = Math.max(0, Math.round(speakingTime));
+  const left = Math.max(0, Math.round(remainingTotal));
+  return left > 0 ? Math.max(1, Math.min(speak, left)) : speak;
+}
+
 /** Stamp the total-clock anchor onto a caucus. `running` false → paused (anchor cleared,
  *  remainingTime is the literal truth). Always pass the LIVE remaining, not the stale one. */
 export function anchorCaucusClock(caucus: CaucusState, liveRemaining: number, running: boolean): CaucusState {
@@ -134,6 +188,7 @@ function rowToCommittee(
     resumingChair: (row.resuming_chair as string | null) ?? null,
     dbChairJoinSuffix: ((row.settings as Record<string, unknown>)?.chairJoinSuffix as string) ?? null,
     dbHeadChair: ((row.settings as Record<string, unknown>)?.headChair as string) ?? null,
+    dbHeadChairDevice: ((row.settings as Record<string, unknown>)?.headChairDevice as string) || null,
     dbSeparateChairCode: ((row.settings as Record<string, unknown>)?.separateChairCode as boolean) ?? false,
     dbSettings: (row.settings as Record<string, unknown>) ?? null,
     dbScoring: ((row.settings as Record<string, unknown>)?.scoring as Committee['dbScoring']) ?? null,
@@ -209,8 +264,14 @@ export async function getCommitteeByCode(code: string): Promise<Committee | null
     { data: messageRows },
   ] = await Promise.all([
     supabase.from('delegates').select('*').eq('committee_id', committeeRow.id).order('country', { ascending: true }),
-    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'gsl').order('position', { ascending: true }),
-    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'caucus').order('position', { ascending: true }),
+    // position, then created_at, then id: `position` alone is not a total order if two rows
+    // ever share one (rows written before speakers_list_add existed still can), and an
+    // undefined order is a queue that reshuffles on every refetch. Every queue reader uses
+    // this same three-key order so all devices agree.
+    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'gsl')
+      .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
+    supabase.from('speakers_list').select('*').eq('committee_id', committeeRow.id).eq('list_type', 'caucus')
+      .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true }),
     supabase.from('current_speaker').select('*').eq('committee_id', committeeRow.id).maybeSingle(),
     // Include ALL pending motions, incl. the gsl-request / join-request pseudo-motions: the
     // chair's request panels and the delegate's pending-state UI read them from here. The main
@@ -333,13 +394,67 @@ export async function batchSetDelegateStatuses(
 // Never touched by caucuses or motions
 // ============================================================
 
-export async function addToSpeakersList(committeeId: string, delegateId: string, country: string, code: string, chairSuffix?: string, position?: number): Promise<void> {
-  const pos = position !== undefined ? position : Date.now();
-  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').insert({
-    committee_id: committeeId, delegate_id: delegateId, country,
-    position: pos, list_type: 'gsl',
+// ── Queue positions: ONE scheme, assigned by the database ─────────────────────
+// Positions used to come from three incompatible sources: `queue.length + 1` from the
+// chair's caucus add paths, `Date.now()` as the default here, and 1..n from a reorder.
+// A removal or a Next leaves a gap, so `length + 1` landed ON an existing position
+// (production, QKUHGA, 14 Sep 2026: two caucus rows at 4 and two at 5), and two rows
+// with the same position have no defined order — every refetch could shuffle them on
+// every device. `speakers_list_add` computes max+1 (or min-1 for "add first") under a
+// per-list advisory lock, so two devices appending at once can never collide.
+// It is SECURITY INVOKER: the unchanged RLS on speakers_list still decides who may write.
+export type SpeakerListType = 'gsl' | 'caucus';
+
+// ── Ordered fire-and-forget writes ────────────────────────────────────────────
+// Writes that share a key reach the server in the order they were ISSUED: each waits for
+// the previous one to settle. Used per list (an add then a drag must not reorder before
+// the insert exists) and per committee for current_speaker (a late stop-at-zero must not
+// land after the Next that followed it). The chain swallows and logs errors, so a
+// fire-and-forget caller never sees an unhandled rejection and one failed write never
+// blocks the next.
+const writeChains = new Map<string, Promise<void>>();
+async function chained(key: string, fn: () => Promise<void>): Promise<void> {
+  const prev = writeChains.get(key) ?? Promise.resolve();
+  const run = prev.then(fn).catch((err) => { console.error(`Queued write failed (${key}):`, err); });
+  writeChains.set(key, run);
+  try { await run; } finally { if (writeChains.get(key) === run) writeChains.delete(key); }
+}
+const listChainKey = (committeeId: string, listType: SpeakerListType) => `${committeeId}:list:${listType}`;
+const currentSpeakerChainKey = (committeeId: string) => `${committeeId}:current_speaker`;
+
+async function addToQueue(
+  committeeId: string, delegateId: string, country: string, listType: SpeakerListType,
+  at: 'start' | 'end', code: string, chairSuffix?: string,
+): Promise<void> {
+  await chained(listChainKey(committeeId, listType), () => addToQueueNow(committeeId, delegateId, country, listType, at, code, chairSuffix));
+}
+
+async function addToQueueNow(
+  committeeId: string, delegateId: string, country: string, listType: SpeakerListType,
+  at: 'start' | 'end', code: string, chairSuffix?: string,
+): Promise<void> {
+  const client = sessionClient(code, chairSuffix);
+  const { error } = await client.rpc('speakers_list_add', {
+    p_committee: committeeId, p_delegate: delegateId, p_country: country,
+    p_list_type: listType, p_at: at,
   });
-  if (error) console.error('Error adding to GSL:', error);
+  if (!error) return;
+  // Fallback only if the RPC itself is unavailable. Date.now() is still monotonic enough
+  // to append after a 1..n reorder; its negative prepends.
+  if (error.code === 'PGRST202' || error.code === '42883') {
+    const { error: insErr } = await client.from('speakers_list').insert({
+      committee_id: committeeId, delegate_id: delegateId, country,
+      position: at === 'start' ? -Date.now() : Date.now(), list_type: listType,
+    });
+    if (insErr) console.error(`Error adding to ${listType} list:`, insErr);
+    return;
+  }
+  console.error(`Error adding to ${listType} list:`, error);
+}
+
+/** Append to the GSL (`at: 'end'`, the default) or put a delegate first (`'start'`). */
+export async function addToSpeakersList(committeeId: string, delegateId: string, country: string, code: string, chairSuffix?: string, at: 'start' | 'end' = 'end'): Promise<void> {
+  await addToQueue(committeeId, delegateId, country, 'gsl', at, code, chairSuffix);
 }
 
 export async function removeFromSpeakersList(committeeId: string, delegateId: string, code: string, chairSuffix?: string): Promise<void> {
@@ -353,13 +468,9 @@ export async function removeFromSpeakersList(committeeId: string, delegateId: st
 // Temporary — per-motion, wiped when caucus ends, GSL untouched
 // ============================================================
 
-export async function addToCaucusList(committeeId: string, delegateId: string, country: string, code: string, chairSuffix?: string, position?: number): Promise<void> {
-  const pos = position !== undefined ? position : Date.now();
-  const { error } = await sessionClient(code, chairSuffix).from('speakers_list').insert({
-    committee_id: committeeId, delegate_id: delegateId, country,
-    position: pos, list_type: 'caucus',
-  });
-  if (error) console.error('Error adding to caucus list:', error);
+/** Append to the caucus queue (`at: 'end'`, the default) or put a delegate first. */
+export async function addToCaucusList(committeeId: string, delegateId: string, country: string, code: string, chairSuffix?: string, at: 'start' | 'end' = 'end'): Promise<void> {
+  await addToQueue(committeeId, delegateId, country, 'caucus', at, code, chairSuffix);
 }
 
 // Batch insert entire caucus list at once — avoids sequential await rate limits
@@ -401,18 +512,34 @@ export async function reorderSpeakersList(
   listType: 'gsl' | 'caucus' = 'gsl',
 ): Promise<void> {
   if (entries.length === 0) return;
-  // Parallel in-place position updates — avoids DELETE+INSERT which fires a
-  // DELETE realtime event causing the delegate view to briefly flash an empty list.
-  const client = sessionClient(code, chairSuffix);
-  await Promise.all(
-    entries.map((e, i) =>
-      client.from('speakers_list')
-        .update({ position: i + 1 })
-        .eq('committee_id', committeeId)
-        .eq('delegate_id', e.delegateId)
-        .eq('list_type', listType),
-    ),
-  );
+  // In place, never DELETE + INSERT (a DELETE realtime event flashes an empty list on
+  // delegate phones). It used to be N parallel single-row updates: a refetch landing
+  // mid-batch read half-old/half-new positions, and two quick drags interleaved into
+  // DUPLICATE positions that then shuffled on every refetch. `speakers_list_reorder` is
+  // one statement under the same per-list lock as the add, and rows this device did not
+  // know about keep their order after the listed ones, so no two rows can share a position.
+  //
+  // Chained per list, on the SAME chain as the add: two drags fired back to back must reach
+  // the server in the order the chair made them (or the OLDER order could land last and
+  // stick), and a drag right after an add must not run before the insert exists.
+  await chained(listChainKey(committeeId, listType), async () => {
+    const client = sessionClient(code, chairSuffix);
+    const ids = entries.map((e) => e.delegateId).filter((id) => UUID_RE.test(id));
+    if (ids.length === 0) return;
+    const { error } = await client.rpc('speakers_list_reorder', {
+      p_committee: committeeId, p_delegate_ids: ids, p_list_type: listType,
+    });
+    if (!error) return;
+    if (error.code === 'PGRST202' || error.code === '42883') {
+      // RPC unavailable: sequential (not parallel) updates, so at least no interleaving.
+      for (let i = 0; i < ids.length; i++) {
+        await client.from('speakers_list').update({ position: i + 1 })
+          .eq('committee_id', committeeId).eq('delegate_id', ids[i]).eq('list_type', listType);
+      }
+      return;
+    }
+    console.error('Error reordering speakers list:', error);
+  });
 }
 
 // ============================================================
@@ -451,34 +578,62 @@ export async function nextSpeaker(
   // unordered fire-and-forget writes to the same row, last one wins, and a late clear
   // wipes the caucus speaker. This guard removes the concurrency entirely — any clear
   // already issued is drained before we seat anyone.
-  if (currentSpeakerClearInFlight) {
-    try { await currentSpeakerClearInFlight; } catch { /* a failed clear must not block the advance */ }
-  }
-  const client = sessionClient(code, chairSuffix);
-  await Promise.all([
-    removeDelegateId
-      ? client.from('speakers_list').delete()
-          .eq('committee_id', committeeId)
-          .eq('delegate_id', removeDelegateId)
-          .eq('list_type', 'gsl')
-      : Promise.resolve(),
-    client.from('current_speaker')
-      .update({
-        delegate_id: nextDelegateId,
-        country: nextCountry,
-        time_remaining: speakerTimeLimit,
-        started_at: null,
-      })
-      .eq('committee_id', committeeId),
-  ]);
+  // Also ORDERED against every other current_speaker write this device issued (start,
+  // stop, sync, the stop-at-zero): they share one chain, so a write issued before this
+  // Next can never land after it and park the new speaker's clock.
+  await chained(currentSpeakerChainKey(committeeId), async () => {
+    if (currentSpeakerClearInFlight) {
+      try { await currentSpeakerClearInFlight; } catch { /* a failed clear must not block the advance */ }
+    }
+    const client = sessionClient(code, chairSuffix);
+    await Promise.all([
+      removeDelegateId
+        ? client.from('speakers_list').delete()
+            .eq('committee_id', committeeId)
+            .eq('delegate_id', removeDelegateId)
+            .eq('list_type', 'gsl')
+        : Promise.resolve(),
+      client.from('current_speaker')
+        .update({
+          delegate_id: nextDelegateId,
+          country: nextCountry,
+          time_remaining: speakerTimeLimit,
+          started_at: null,
+        })
+        .eq('committee_id', committeeId),
+    ]);
+  });
 }
 
 // Sync time_remaining to DB at structural moments (pause, expire).
 // tickSpeakerTimer removed — per-second DB writes caused excessive realtime events.
 export async function syncSpeakerTime(committeeId: string, timeRemaining: number, code: string, chairSuffix?: string): Promise<void> {
-  await sessionClient(code, chairSuffix).from('current_speaker')
-    .update({ time_remaining: timeRemaining })
-    .eq('committee_id', committeeId);
+  await chained(currentSpeakerChainKey(committeeId), async () => {
+    await sessionClient(code, chairSuffix).from('current_speaker')
+      .update({ time_remaining: timeRemaining })
+      .eq('committee_id', committeeId);
+  });
+}
+
+/** A speaker's clock ran out: park current_speaker at a literal 0 (started_at null,
+ *  time_remaining 0) ONLY IF the row still holds that speaker. One statement, on the
+ *  current_speaker chain, so it cannot land after a Next issued later, and if a Next landed
+ *  first the identity predicate matches nothing. */
+export async function stopSpeakerAtZeroIfUnchanged(
+  committeeId: string, expectedDelegateId: string | null, expectedCountry: string | null,
+  code: string, chairSuffix?: string,
+): Promise<void> {
+  if (!expectedDelegateId && !expectedCountry) return;
+  await chained(currentSpeakerChainKey(committeeId), async () => {
+    let q = sessionClient(code, chairSuffix).from('current_speaker')
+      .update({ started_at: null, time_remaining: 0 })
+      .eq('committee_id', committeeId);
+    if (expectedDelegateId && UUID_RE.test(expectedDelegateId)) q = q.eq('delegate_id', expectedDelegateId);
+    else if (expectedCountry) q = q.eq('country', expectedCountry);
+    else return;
+    const { error } = await q;
+    if (error) console.error('Error stopping speaker at zero:', error);
+  });
 }
 
 /** Arm the speaker clock.
@@ -498,15 +653,19 @@ export async function startSpeakerTimer(
 ): Promise<void> {
   const patch: Record<string, unknown> = { started_at: startedAt };
   if (typeof timeRemaining === 'number') patch.time_remaining = Math.max(0, Math.round(timeRemaining));
-  await sessionClient(code, chairSuffix).from('current_speaker')
-    .update(patch)
-    .eq('committee_id', committeeId);
+  await chained(currentSpeakerChainKey(committeeId), async () => {
+    await sessionClient(code, chairSuffix).from('current_speaker')
+      .update(patch)
+      .eq('committee_id', committeeId);
+  });
 }
 
 export async function stopSpeakerTimer(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
-  await sessionClient(code, chairSuffix).from('current_speaker')
-    .update({ started_at: null })
-    .eq('committee_id', committeeId);
+  await chained(currentSpeakerChainKey(committeeId), async () => {
+    await sessionClient(code, chairSuffix).from('current_speaker')
+      .update({ started_at: null })
+      .eq('committee_id', committeeId);
+  });
 }
 
 export async function clearCurrentSpeaker(committeeId: string, code: string, chairSuffix?: string): Promise<void> {
@@ -608,7 +767,9 @@ export async function getDelegatesList(committeeId: string): Promise<Delegate[]>
 export async function getSpeakersLists(committeeId: string): Promise<{ speakersList: SpeakerEntry[]; caucusQueue: SpeakerEntry[] }> {
   const { data, error } = await supabase.from('speakers_list')
     .select('delegate_id, country, list_type, position')
-    .eq('committee_id', committeeId).order('position', { ascending: true });
+    .eq('committee_id', committeeId)
+    // Same three-key order as getCommitteeByCode, so delegates and chairs never disagree on ties.
+    .order('position', { ascending: true }).order('created_at', { ascending: true }).order('id', { ascending: true });
   if (error) { console.error('Error fetching speakers lists:', error); return { speakersList: [], caucusQueue: [] }; }
   const rows = (data ?? []) as DbRow[];
   const toEntry = (s: DbRow): SpeakerEntry => ({ delegateId: s.delegate_id as string, country: s.country as string });
@@ -700,6 +861,25 @@ export async function clearPendingMotions(committeeId: string, code: string, cha
 export async function updateCaucus(committeeId: string, caucus: CaucusState | null, code: string, chairSuffix?: string): Promise<void> {
   const { error } = await sessionClient(code, chairSuffix).from('committees').update({ caucus }).eq('id', committeeId);
   if (error) console.error('Error updating caucus:', error);
+}
+
+/** Write the caucus ONLY IF the stored caucus still names `expected.currentSpeaker` and
+ *  still carries the total-clock anchor `expected.totalStartedAt` (JSONB path filters, one
+ *  statement). Used by the stop-at-zero re-anchor: a Next, a pause, an end or a restart all
+ *  change one of the two, so a late re-anchor becomes a no-op instead of reverting them. */
+export async function updateCaucusIfUnchanged(
+  committeeId: string, caucus: CaucusState,
+  expected: { currentSpeaker: string | null; totalStartedAt: string },
+  code: string, chairSuffix?: string,
+): Promise<void> {
+  let q = sessionClient(code, chairSuffix).from('committees').update({ caucus })
+    .eq('id', committeeId)
+    .eq('caucus->>totalStartedAt', expected.totalStartedAt);
+  q = expected.currentSpeaker === null
+    ? q.is('caucus->>currentSpeaker', null)
+    : q.eq('caucus->>currentSpeaker', expected.currentSpeaker);
+  const { error } = await q;
+  if (error) console.error('Error updating caucus (conditional):', error);
 }
 
 // ============================================================
@@ -848,6 +1028,25 @@ export async function approveJoinRequest(
   await setDelegateStatus(delegateId, desiredStatus, code, chairSuffix);
   const { error } = await sessionClient(code, chairSuffix).from('motions').delete().eq('id', motionId);
   if (error) console.error('Error approving join request:', error);
+}
+
+/**
+ * A chair recognised an absent delegate from the side panel (clicked them onto a speakers
+ * list). The status write itself is already fired optimistically by the chair page; this
+ * repeats it and AWAITS it, then deletes any pending join-request from that country, so the
+ * delegate's phone never observes the request disappearing while it still reads absent
+ * (the delegate page treats exactly that as "denied"). Same order as approveJoinRequest.
+ * Fire-and-forget from the caller. The repeated status write is idempotent.
+ */
+export async function resolveJoinRequestsOnAdmit(
+  committeeId: string, delegateId: string, country: string, status: DelegateStatus,
+  code: string, chairSuffix?: string,
+): Promise<void> {
+  const ok = await setDelegateStatus(delegateId, status, code, chairSuffix);
+  if (!ok) return;
+  const { error } = await sessionClient(code, chairSuffix).from('motions').delete()
+    .eq('committee_id', committeeId).eq('type', 'join-request').eq('proposed_by', country);
+  if (error) console.error('Error resolving join request on admit:', error);
 }
 
 export async function denyJoinRequest(motionId: string, code: string, chairSuffix?: string): Promise<void> {
@@ -1191,7 +1390,10 @@ export async function updateCommitteeChairSuffixInDB(committeeId: string, chairJ
 // Sets who holds the gavel. Any chair may claim it — from Settings or when joining as chair.
 // Stored in settings so every device derives view-only status from it instead of a
 // presence join-order race. null/unset → the committee creator (chair_names[0]) is head.
-export async function updateCommitteeHeadChairInDB(committeeId: string, headChair: string, code: string, chairSuffix?: string): Promise<void> {
+// `headChairDevice` (src/lib/gavelDevice.ts) is written in the SAME update: the taking
+// device's id, or null when the gavel is handed to another name (that chair's device claims
+// it on arrival). Omitting it therefore clears it, which is the safe reading of a name change.
+export async function updateCommitteeHeadChairInDB(committeeId: string, headChair: string, code: string, chairSuffix?: string, headChairDevice: string | null = null): Promise<void> {
   const { data: existing, error: readErr } = await supabase
     .from('committees')
     .select('settings')
@@ -1206,7 +1408,7 @@ export async function updateCommitteeHeadChairInDB(committeeId: string, headChai
   const currentSettings = existing.settings as Record<string, unknown>;
   const { error } = await sessionClient(code, chairSuffix)
     .from('committees')
-    .update({ settings: { ...currentSettings, headChair } })
+    .update({ settings: { ...currentSettings, headChair, headChairDevice: headChairDevice || null } })
     .eq('id', committeeId);
   if (error) console.error('Error setting head chair:', error);
 }

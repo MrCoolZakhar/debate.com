@@ -17,60 +17,22 @@
  *
  * Node runtime for the same reason as the conference card — `sharp`.
  */
-import { hasConcluded } from '@/lib/conferenceDates';
-import { supabase } from '@/lib/supabase';
 import { versionToken } from '@/lib/ogVersion';
 import { CardShell, type CardChip, renderCard } from '../../_shared/card';
+import { loadListingCounts, plural } from '../../_shared/counts';
 
 export const runtime = 'nodejs';
 
-interface Counts {
-  conferences: number;
-  countries: number;
-}
-
-/**
- * The counts as a visitor would meet them: public, and not already finished.
- *
- * That "not finished" clause matters — it is the same rule the browse surfaces
- * apply (`hasConcluded`), so the card cannot advertise a bigger catalogue than
- * `/conferences/explore` actually shows. Counting is done here rather than in
- * SQL because supabase-js has no `count(distinct …)`; the table is small
- * enough (low hundreds of rows, two short columns) that this is a cheaper
- * round trip than adding an RPC.
- */
-async function loadCounts(): Promise<Counts | null> {
-  try {
-    const { data } = await supabase
-      .from('conferences')
-      .select('country, start_date, end_date')
-      .eq('is_public', true);
-    if (!data) return null;
-
-    const live = (data as Array<{ country: string | null; start_date: string | null; end_date: string | null }>)
-      .filter((row) => !hasConcluded(row));
-
-    const countries = new Set(
-      live.map((row) => (row.country ?? '').trim().toLowerCase()).filter(Boolean),
-    );
-
-    return { conferences: live.length, countries: countries.size };
-  } catch {
-    return null;
-  }
-}
-
-/** Pluralise without dragging in Intl for two words. Explicit plural form
- *  rather than a suffix rule — "country" is exactly the case a naive `+ 's'`
- *  gets wrong. */
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+// The counts (public, not yet finished, with a timeout and a warm-instance
+// memo) live in `_shared/counts.ts`, shared with the explore card so the two
+// can never disagree about the size of the catalogue.
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ v: string }> },
 ): Promise<Response> {
   const { v } = await params;
-  const counts = await loadCounts();
+  const counts = await loadListingCounts();
 
   // No counts is not a failure worth showing: the card falls back to the plain
   // wordmark line rather than printing "0 conferences", which would be both

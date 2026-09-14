@@ -8,10 +8,11 @@ import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
   setPhase as setPhaseInDB,
   setDelegateObserver as setDelegateObserverInDB,
+  resolveJoinRequestsOnAdmit,
 } from '@/lib/committeeService';
 import { liveCaucus } from '@/components/FeedbackLogPanel';
-import { Megaphone, Smartphone } from 'lucide-react';
-import { getSeatAvailability, releaseDelegateSeat, seatKey, type SeatAvailability } from '@/lib/seatClaims';
+import { Megaphone, UserX } from 'lucide-react';
+import { releaseDelegateSeat, seatKey } from '@/lib/seatClaims';
 import { useLanguage, useT } from '@/contexts/LanguageContext';
 
 // ── FlagCircle ────────────────────────────────────────────────────────────────
@@ -75,27 +76,22 @@ function StatusSlider({ status, onCycle, isObserver = false }: { status: Delegat
   );
 }
 
-// ── A-Z / QUEUE view toggle slider ────────────────────────────────────────────
-function ViewToggle({ view, onChange }: { view: 'az' | 'queue'; onChange: (v: 'az' | 'queue') => void }) {
-  const t = useT();
-  const isQueue = view === 'queue';
-  return (
-    <button
-      data-tutorial="sidebar-view-toggle"
-      data-current-view={view}
-      onClick={() => onChange(isQueue ? 'az' : 'queue')}
-      className="relative w-[104px] h-[28px] rounded-full cursor-pointer select-none shrink-0"
-      style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
-      title="Toggle A-Z / Queue view"
-    >
-      <div className="absolute top-[1px] w-[51px] h-[26px] rounded-full transition-all duration-200"
-        style={{ insetInlineStart: isQueue ? '51px' : '1px', backgroundColor: 'rgba(255,255,255,0.22)' }} />
-      <div className="absolute inset-0 flex items-center pointer-events-none z-10">
-        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${!isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_az')}</span>
-        <span className={`w-[52px] text-[10px] font-bold text-center leading-none ${isQueue ? 'text-white' : 'text-white/40'}`}>{t('rollcall_queue')}</span>
-      </div>
-    </button>
+// ── Recognising an absent delegate ───────────────────────────────────────────
+// The status a recognised delegate gets: the one their waiting-room request asked for,
+// never Present-and-Voting for an observer, Present otherwise. Shared by this panel's row
+// click and the chair page's typed add bars, so both paths answer a request identically.
+export function recognisedStatus(
+  pendingMotions: Committee['pendingMotions'] | undefined,
+  country: string,
+  isObserver: boolean,
+): DelegateStatus {
+  if (isObserver) return 'present';
+  const joinReq = (pendingMotions ?? []).find(
+    (m) => (m.type as string) === 'join-request' && m.proposedBy === country,
   );
+  if (!joinReq) return 'present';
+  try { if (JSON.parse(joinReq.topic)?.desiredStatus === 'present-voting') return 'present-voting'; } catch { /* keep present */ }
+  return 'present';
 }
 
 // ── Add country input ─────────────────────────────────────────────────────────
@@ -295,14 +291,14 @@ function RollCallPanelInner({
   isRollCallPhase = false,
   showStatusSliders = false,
   showBulkActions = false,
-  showViewToggle = true,
   isReadOnly = false,
   isViewOnly = false,
   isTdT = false,
   isRoomOrderTdT = false,
   hideIdentity = false,
-  listView: listViewProp,
-  onListViewChange,
+  speechRunning = false,
+  onJoinRequestResolved,
+  canAddToList,
 }: {
   committee: Committee;
   onAddToList?: (delegateId: string) => void;
@@ -323,7 +319,6 @@ function RollCallPanelInner({
   isRollCallPhase?: boolean;
   showStatusSliders?: boolean;
   showBulkActions?: boolean;
-  showViewToggle?: boolean;
   isReadOnly?: boolean;
   isViewOnly?: boolean;
   isTdT?: boolean;
@@ -337,15 +332,29 @@ function RollCallPanelInner({
    * above it and keeps the heading (the default).
    */
   hideIdentity?: boolean;
-  listView?: 'az' | 'queue';
-  onListViewChange?: (v: 'az' | 'queue') => void;
+  /**
+   * The chair's speaker clock is running (`timerRunning`). A state flip on press, never a
+   * per-second value. Together with the speaker at the top of the queue it is the signal
+   * that a speech started, which scrolls the list back to the top.
+   */
+  speechRunning?: boolean;
+  /**
+   * An absent delegate was recognised from this panel (clicked onto a list). The parent
+   * drops that country's pending join-request motions from local state; the DB delete is
+   * done here, after the status write lands (see handleRowClick).
+   */
+  onJoinRequestResolved?: (country: string) => void;
+  /**
+   * Asked BEFORE an absent delegate is recognised: can the list take them right now? The
+   * caucus queue answers with caucusQueueCapacity and shows `caucus_queue_no_time` itself
+   * when it cannot. Without it a click marked the delegate Present and then the add was
+   * silently refused. Omitted = the list always has room (the GSL).
+   */
+  canAddToList?: (delegateId: string) => boolean;
 }) {
   const { language } = useLanguage();
   const t = useT();
   const [search, setSearch] = useState('');
-  const [listViewInternal, setListViewInternal] = useState<'az' | 'queue'>('az');
-  const listView = listViewProp !== undefined ? listViewProp : listViewInternal;
-  const setListView = (v: 'az' | 'queue') => { setListViewInternal(v); onListViewChange?.(v); };
   const [showFullList, setShowFullList] = useState(false);
   const [localStatuses, setLocalStatuses] = useState<Record<string, DelegateStatus>>({});
   const [localObservers, setLocalObservers] = useState<Record<string, boolean>>({});
@@ -358,34 +367,16 @@ function RollCallPanelInner({
   const pendingStatusRef = useRef<Record<string, { value: DelegateStatus; at: number }>>({});
   const [reconcileTick, setReconcileTick] = useState(0);
 
-  // ── Seat claims (one person per seat) ─────────────────────────────────────
-  // Which seats a device has joined on, so a chair can free one when a phone dies or
-  // the wrong person took it. Booleans only: the RPC never says WHO holds a seat.
-  // Fetched only where the control can show: never for a view-only Commenter, never
-  // on an ended session.
+  // ── Free seat (one person per seat) ───────────────────────────────────────
+  // A chair can free a seat when a phone dies or the wrong person took it. The panel no
+  // longer knows WHICH seats are claimed (the phone icon and its 20 s availability poll
+  // were removed), so the control sits on every row, revealed on hover like the observer
+  // placard. Releasing an unclaimed seat is a harmless no-op in release_delegate_seat.
+  // Moderator only: hidden for a view-only Commenter and once the session has ended.
   const canFreeSeats = !isReadOnly && !isViewOnly && !committee.endedAt;
-  const [seatAvail, setSeatAvail] = useState<SeatAvailability>({});
   const [freeArmed, setFreeArmed] = useState<string | null>(null);
   const [freeBusy, setFreeBusy] = useState<string | null>(null);
   const [freeError, setFreeError] = useState(false);
-
-  // Which seats exist, as one stable string. `committee.delegates` is a new array on every
-  // roll-call tap and every realtime echo; keying the fetch on it refetched and reset the
-  // poll on each tap. A seat being added or removed is what actually needs a re-read.
-  const seatRosterKey = committee.delegates.map((d) => seatKey(d.country)).sort().join('|');
-
-  useEffect(() => {
-    if (!canFreeSeats) { setSeatAvail({}); return; }
-    let cancelled = false;
-    const load = () => {
-      getSeatAvailability(committee.code).then((a) => { if (!cancelled && a) setSeatAvail(a); });
-    };
-    load();
-    // The claims table is private, so no realtime event announces a new claim. A change
-    // to the set of seats re-reads at once, and a gentle poll covers new claims.
-    const id = setInterval(load, 20_000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [canFreeSeats, committee.code, seatRosterKey]);
 
   // Two taps to free: the first arms, the second releases. Disarms on its own.
   useEffect(() => {
@@ -402,12 +393,7 @@ function RollCallPanelInner({
     setFreeBusy(k);
     const ok = await releaseDelegateSeat(committee.code, country, committee.dbChairJoinSuffix ?? undefined);
     setFreeBusy(null);
-    if (!ok) { setFreeError(true); return; }
-    setFreeError(false);
-    setSeatAvail((prev) => {
-      const s = prev[k];
-      return s ? { ...prev, [k]: { ...s, claimed: false, full: false, mine: false } } : prev;
-    });
+    setFreeError(!ok);
   };
 
   useEffect(() => {
@@ -538,20 +524,19 @@ function RollCallPanelInner({
     onDelegateAdd?.(country);
   };
 
-  // A-Z view: pure alphabetical, no status separation
+  // ONE ordering, no toggle. The A-Z / QUEUE switch was removed: chairs left the A-Z
+  // roll-call sort on for whole sessions and the queue was unreadable.
+  // - Roll call (isRollCallPhase: pre-session and the resume roll call) and the
+  //   mid-session Roll Call tab (showStatusSliders): plain A-Z.
+  // - Everywhere else: the speaker holding the floor (#1), then the list in order, then
+  //   every delegate NOT on the list, A-Z (absent ones included, in their A-Z place).
   const alphabetical = [...committee.delegates].sort((a, b) => compareCountryNames(a.country, b.country, language));
-  // allAlpha shared base for queueOrdered (alphabetical among non-queue delegates)
-  const allAlpha = alphabetical;
 
-  // Queue view: GSL delegates first (in order), then present/PV alphabetically, then absent
   const inQueue = (committee.speakersList ?? [])
     .map((s) => committee.delegates.find((d) => d.id === s.delegateId))
     .filter(Boolean) as typeof committee.delegates;
   const inQueueIds = new Set(inQueue.map((d) => d.id));
-  const notInQueue = allAlpha.filter((d) => !inQueueIds.has(d.id));
-  const notInQueuePresent = notInQueue.filter((d) => d.status !== 'absent');
-  const notInQueueAbsent = notInQueue.filter((d) => d.status === 'absent');
-  const queueOrdered = [...inQueue, ...notInQueuePresent, ...notInQueueAbsent];
+  const queueOrdered = [...inQueue, ...alphabetical.filter((d) => !inQueueIds.has(d.id))];
 
   const currentSpeakerDelegate = committee.currentSpeaker?.delegateId
     ? committee.delegates.find((d) => d.id === committee.currentSpeaker!.delegateId) ?? null
@@ -564,9 +549,34 @@ function RollCallPanelInner({
     ? [speakerAtTop, ...queueOrdered.filter((d) => d.id !== speakerAtTop.id)]
     : queueOrdered;
 
-  const baseList = listView === 'queue' ? finalQueueOrdered : alphabetical;
+  // The mid-session Roll Call tab (showStatusSliders) is taking roll too, so it reads A-Z
+  // exactly like pre-session. Any speech start closes that tab on the chair page, which
+  // switches this back to the queue and the effect below scrolls to the top.
+  const isQueueView = !isRollCallPhase && !showStatusSliders;
   // When searching: show all, but grey out non-matches so the filter is visible
-  const filtered = baseList;
+  const filtered = isQueueView ? finalQueueOrdered : alphabetical;
+
+  // A speech started → back to the top of the list, where the speaker now sits as #1.
+  // The signal is the speaker at the top (GSL Next / call first speaker, moderated caucus
+  // and Tour de Table advance) plus the clock being started (Start, including a resume
+  // after a pause). Both change on a press only, never per second, and this effect only
+  // scrolls a DOM node: no committee state, no updateLocal, no localUpdateTime (RULES 3/4).
+  // Right of Reply is not a queue speech and touches neither value.
+  const speechSignal = isQueueView ? `${speakerAtTop?.id ?? ''}|${speechRunning ? 1 : 0}` : null;
+  const prevSpeechSignalRef = useRef(speechSignal);
+  useEffect(() => {
+    const prev = prevSpeechSignalRef.current;
+    prevSpeechSignalRef.current = speechSignal;
+    if (speechSignal === null || prev === speechSignal) return;
+    // Coming back from the A-Z Roll Call tab: the order just changed wholesale, so start
+    // at the top (the speaker, if any, is #1 there).
+    if (prev === null) { listRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    const [id, running] = speechSignal.split('|');
+    const [prevId, prevRunning] = (prev ?? '|0').split('|');
+    const newSpeaker = id !== '' && id !== prevId;
+    const clockStarted = running === '1' && prevRunning !== '1' && id !== '';
+    if (newSpeaker || clockStarted) listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [speechSignal]);
 
   // Auto-scroll to first match when search changes
   useEffect(() => {
@@ -610,7 +620,6 @@ function RollCallPanelInner({
             <MajorityPie arcFill={2 / 3} color="#B6871F" label={`${Math.ceil(present * 2 / 3)}`} />
             <MajorityPie arcFill={0.5} color="#8A7A6A" label={`${Math.floor(present / 2) + 1}`} />
           </div>
-          {showViewToggle && <ViewToggle view={listView} onChange={setListView} />}
         </div>
         {showBulkActions && (
           <div className="flex gap-1.5 mt-2">
@@ -629,23 +638,49 @@ function RollCallPanelInner({
           const isObserver = (localObservers[d.id] ?? d.isObserver) === true;
           const queuePos = queuePositionMap.get(d.id) ?? null;
           const matchesSearch = !search || matchesCountryQuery(d.country, search, language);
-          const isDraggable = listView === 'queue' && !isRollCallPhase && queuePositionMap.has(d.id);
+          const isDraggable = isQueueView && queuePositionMap.has(d.id);
           const isCurrentSpeaker = committee.currentSpeaker?.delegateId === d.id;
           const isCurrentSpeakerInPanel = queuePos === 1 && (
             committee.currentSpeaker?.delegateId === d.id ||
             caucus?.currentSpeaker === d.country
           );
-          const isUpNext = listView === 'queue' && isCurrentSpeakerInPanel;
+          const isUpNext = isQueueView && isCurrentSpeakerInPanel;
           const seatK = seatKey(d.country);
-          const seatClaimed = canFreeSeats && seatAvail[seatK]?.claimed === true;
           const seatArmed = freeArmed === seatK;
+          // Recognising an absent delegate: clicking them onto a list marks them Present
+          // in the same action. Not in roll call and not in the mid-session Roll Call tab
+          // (showStatusSliders): the slider owns status there, so an absent row is a status
+          // row only and never lands on a list. Not when read-only or ended.
+          const canRecognise = !!onAddToList && !isRollCallPhase && !showStatusSliders && !isReadOnly && !committee.endedAt;
 
           const handleRowClick = () => {
             if (isViewOnly) return;
-            if (onAddToList && !isAbsent) {
+            if (!onAddToList) return;
+            if (!isAbsent) {
               if (!isOnList) onAddToList(d.id);
               else if (onRemoveFromList) onRemoveFromList(d.id);
+              return;
             }
+            if (!canRecognise) return;
+            // Room first, status second: if the list cannot take them (a caucus with no
+            // time left), leave the status alone. canAddToList shows the reason.
+            if (!isOnList && canAddToList && !canAddToList(d.id)) return;
+            // A waiting-room request from this delegation is answered by this click, the
+            // same way Approve answers it: the status they asked for (never PV for an
+            // observer), then the motion goes. Best effort on reading the desired status,
+            // since this panel can hold a slightly older pendingMotions snapshot.
+            const desired = recognisedStatus(committee.pendingMotions, d.country, isObserver);
+            // 1) Status, optimistic: localStatuses here, updateLocal + setDelegateStatusInDB
+            //    in the parent's onStatusChange. Must precede the add, because the parent's
+            //    absent handling strips absent delegates from both lists.
+            applyStatus(d.id, desired);
+            // 2) The list add, optimistic then fire-and-forget, owned by the parent.
+            if (!isOnList) onAddToList(d.id);
+            // 3) Any pending join-request for this country: dropped locally now, deleted in
+            //    the DB only AFTER a status write lands, so the delegate's phone never sees
+            //    the request vanish while it still reads absent (it would show "denied").
+            onJoinRequestResolved?.(d.country);
+            resolveJoinRequestsOnAdmit(committee.id, d.id, d.country, desired, committee.code, committee.dbChairJoinSuffix ?? undefined);
           };
 
           return (
@@ -658,7 +693,7 @@ function RollCallPanelInner({
                 onClick={handleRowClick}
                 draggable={isDraggable}
                 onDragStart={() => { if (isDraggable) dragIndexRef.current = idx; }}
-                onDragOver={(e) => { e.preventDefault(); if (listView === 'queue' && !isRollCallPhase) setDragOverIndex(idx); }}
+                onDragOver={(e) => { e.preventDefault(); if (isQueueView) setDragOverIndex(idx); }}
                 onDrop={() => {
                   const from = dragIndexRef.current;
                   const to = idx;
@@ -688,7 +723,7 @@ function RollCallPanelInner({
                     ? 'border'
                     : 'border'
                 } ${
-                  (!isRollCallPhase && !showStatusSliders && onAddToList && !isAbsent) || isRollCallPhase || showStatusSliders
+                  (!isRollCallPhase && !showStatusSliders && onAddToList && (!isAbsent || (canRecognise && !isViewOnly))) || isRollCallPhase || showStatusSliders
                     ? 'cursor-pointer'
                     : isAbsent && !isRollCallPhase && !showStatusSliders
                     ? 'cursor-not-allowed'
@@ -756,23 +791,26 @@ function RollCallPanelInner({
                     <Megaphone size={15} />
                   </button>
                 )}
-                {/* Someone has joined on this seat. Tap twice to free it (a dead phone,
-                    the wrong person). Chair only: canFreeSeats hides it for a view-only
-                    Commenter and once the session has ended. */}
-                {seatClaimed && (
+                {/* Free seat: tap twice to release whoever joined on this seat (a dead
+                    phone, the wrong person). Revealed on hover/focus like the observer
+                    placard, and stays visible while armed. Moderator only: canFreeSeats
+                    hides it for a view-only Commenter and once the session has ended. */}
+                {canFreeSeats && (
                   <button
                     onClick={(e) => { e.stopPropagation(); freeSeat(d.country); }}
                     disabled={freeBusy === seatK}
-                    title={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_claimed_title')}
+                    title={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_free')}
                     aria-label={seatArmed ? t('rollcall_seat_free_confirm') : t('rollcall_seat_free')}
-                    className="shrink-0 flex items-center gap-1 px-1.5 py-1 rounded-md transition-all active:scale-90 focus:outline-none disabled:opacity-40"
+                    className={`shrink-0 flex items-center gap-1 px-1.5 py-1 rounded-md transition-all active:scale-90 focus:outline-none disabled:opacity-40 ${
+                      seatArmed || freeBusy === seatK ? '' : 'opacity-0 group-hover/seat:opacity-100 focus-visible:opacity-100'
+                    }`}
                     style={{
-                      color: seatArmed ? '#F4A0A0' : 'rgba(237,231,216,0.45)',
+                      color: seatArmed ? '#F4A0A0' : 'rgba(237,231,216,0.4)',
                       backgroundColor: seatArmed ? 'rgba(139,32,32,0.25)' : 'transparent',
                       border: seatArmed ? '1px solid rgba(139,32,32,0.4)' : '1px solid transparent',
                     }}
                   >
-                    <Smartphone size={14} />
+                    <UserX size={14} />
                     {seatArmed && <span className="text-[10px] font-bold uppercase tracking-wide whitespace-nowrap">{t('rollcall_seat_free')}</span>}
                   </button>
                 )}
@@ -827,16 +865,20 @@ const RollCallPanel = React.memo(RollCallPanelInner, (prev, next) => {
     prev.committee.phase === next.committee.phase &&
     prev.committee.currentSpeaker === next.committee.currentSpeaker &&
     prev.committee.caucusQueue === next.committee.caucusQueue &&
+    // The caucus speaker at #1 and the join requests an absent-row click resolves.
+    prev.committee.caucus?.currentSpeaker === next.committee.caucus?.currentSpeaker &&
+    prev.committee.pendingMotions === next.committee.pendingMotions &&
+    prev.committee.endedAt === next.committee.endedAt &&
     prev.isRollCallPhase === next.isRollCallPhase &&
     prev.showStatusSliders === next.showStatusSliders &&
     prev.showBulkActions === next.showBulkActions &&
-    prev.showViewToggle === next.showViewToggle &&
+    prev.speechRunning === next.speechRunning &&
+    prev.canAddToList === next.canAddToList &&
     prev.isReadOnly === next.isReadOnly &&
     prev.isViewOnly === next.isViewOnly &&
     prev.isTdT === next.isTdT &&
     prev.isRoomOrderTdT === next.isRoomOrderTdT &&
     prev.onListIds === next.onListIds &&
-    prev.listView === next.listView &&
     prev.onReorderList === next.onReorderList
   );
 });

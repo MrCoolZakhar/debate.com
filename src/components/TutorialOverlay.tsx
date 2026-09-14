@@ -82,21 +82,6 @@ function getSteps(language: string, docs: DocLabels): TutorialStep[] {
       }),
     },
     {
-      id: 'sidebar-view-toggle', kind: 'action',
-      otterImage: '/Otter.Tutorial.webp',
-      spotlightTargets: ['sidebar-view-toggle'], spotlightRadius: 99,
-      bubbleText: pick(language, {
-        ar: <>للوحة الجانبية عرضان: {G('أ-ي')} و{G('القائمة')}. بدّل إلى <strong>القائمة</strong> لرؤية ترتيب المتحدثين.</>,
-        fr: <>Le panneau latéral a deux vues : {G('A-Z')} et {G('LISTE')}. Passez sur <strong>LISTE</strong> pour voir l&apos;ordre des orateurs.</>,
-        es: <>El panel lateral tiene dos opciones: {G('A-Z')} y {G('FILA')}. Cambia a <strong>FILA</strong> para ver el orden de oradores.</>,
-        en: <>The sidebar has two views: {G('A-Z')} and {G('QUEUE')}. Switch to <strong>QUEUE</strong> to see the speaking order.</>,
-      }),
-      domActionDone: () => {
-        const el = document.querySelector('[data-tutorial="sidebar-view-toggle"]');
-        return el?.getAttribute('data-current-view') === 'queue';
-      },
-    },
-    {
       id: 'speakers-action', kind: 'action',
       otterImage: '/Otter.Tutorial.webp',
       spotlightTargets: ['speakers-bottom-bar', 'speakers-sidebar', 'speakers-autocomplete'],

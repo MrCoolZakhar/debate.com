@@ -14,6 +14,7 @@ import {
   getDocumentsList,
   getPendingMotionsList,
   caucusRemainingNow,
+  moderatedCaucusRemainingNow,
 } from '@/lib/committeeService';
 import { mergeMessagesById } from '@/lib/chatConversations';
 import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
@@ -271,17 +272,24 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
   const [caucusSeconds, setCaucusSeconds] = useState(0);
   const advisorCaucusAnchor = committee?.caucus?.totalStartedAt ?? null;
   const advisorCaucusBase = committee?.caucus?.remainingTime ?? null;
+  // Moderated caucus: the total stops with the speaker clock (moderatedCaucusRemainingNow).
+  const advisorIsModerated = committee?.phase === 'moderated-caucus';
+  const advisorSpeakerBase = committee?.speakerTimeRemaining ?? 0;
+  const advisorSpeakerStartedAt = committee?.speakerStartedAt ?? null;
   useEffect(() => {
-    const read = () => caucusRemainingNow(
-      advisorCaucusBase === null
+    const read = () => {
+      const pair = advisorCaucusBase === null
         ? null
-        : ({ remainingTime: advisorCaucusBase, totalStartedAt: advisorCaucusAnchor } as Committee['caucus']),
-    );
+        : ({ remainingTime: advisorCaucusBase, totalStartedAt: advisorCaucusAnchor } as Committee['caucus']);
+      return advisorIsModerated
+        ? moderatedCaucusRemainingNow(pair, advisorSpeakerBase, advisorSpeakerStartedAt)
+        : caucusRemainingNow(pair);
+    };
     setCaucusSeconds(read());
     if (!advisorCaucusAnchor) return;   // null anchor IS the paused signal
     const id = setInterval(() => setCaucusSeconds(read()), 1000);
     return () => clearInterval(id);
-  }, [advisorCaucusAnchor, advisorCaucusBase]);
+  }, [advisorCaucusAnchor, advisorCaucusBase, advisorIsModerated, advisorSpeakerBase, advisorSpeakerStartedAt]);
 
   // Realtime does not replay events missed while the socket was down. Catch chat up on
   // reconnect, tab-visible and back-online.

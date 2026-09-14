@@ -1,6 +1,7 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
+**Removed 14 Sep 2026 (side panel):** 3 keys × 4 locales, `rollcall_az`, `rollcall_queue` (the A-Z / QUEUE toggle is gone; the panel is always the queue, plain A-Z only during roll call) and `rollcall_seat_claimed_title` (the claimed-seat phone icon is gone). The tutorial step `sidebar-view-toggle` and its four hand-written locale bubbles in `TutorialOverlay.tsx` went with the toggle. Counted after this removal and a concurrent seat change that added 3 `delegate_seat_*` keys: **1041 keys per locale**, identical in all four.  
 **Last updated after:** seat gating review fixes — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1041 keys per locale**). Added 1 key, `delegate_seat_switch_account`, the reserved-seat screen's button when the wrong account is signed in. See "Recent changes" at the bottom.  
 **Previously:** open conference seats and one person per seat — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1040 keys per locale**). Added 21 keys: 7 `join_seat_*` for the join-page seat picker, 10 `delegate_seat_*` for the delegate page's seat-guard screens, 4 `rollcall_seat_*` for the chair's Free seat control. See "Recent changes" at the bottom.  
 **Previously:** gavel knock timer sound — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1019 keys per locale**, verified identical key sets, 0 missing / 0 extra). Added 7 keys for the Settings → Access → Timer sound group (`settings_section_timer_sound`, `settings_gavel_*`). See "Recent changes" at the bottom.  
@@ -404,6 +405,28 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 
 ## RECENT CHANGES
 
+### 2026-09-14 — extra time capped to the caucus (`feature/conferences-auth`) — +1 key
+
+**Added, 1 key × 4 locales**, directly after `caucus_queue_no_time` in every locale (count the file before quoting a total: other changes landed the same day):
+- `caucus_extra_time_capped` takes `{n}` (seconds) (EN *Only {n}s left in this caucus.*, ES *Solo quedan {n} s en este cáucus.*, FR *Il ne reste que {n} s dans ce caucus.*, AR *تبقّى {n} ث فقط في هذا الحوار.*): the 6 s notice in the chair sidebar when +time for a moderated-caucus or Tour de Table speaker is cut down to what the caucus total has left. Caucus = ES *cáucus*, AR *الحوار*, as in `caucus_queue_no_time`.
+
+### 2026-09-14 — one device holds the gavel (`feature/conferences-auth`) — +3 keys
+
+**Added, 3 keys × 4 locales**, directly after `gavel_another_chair` in every locale (count the file before quoting a total: other changes landed the same day):
+- `gavel_device_elsewhere` (EN *The gavel is open on another device.*, ES *El mazo está abierto en otro dispositivo.*, FR *Le maillet est ouvert sur un autre appareil.*, AR *المطرقة مفتوحة على جهاز آخر.*): the persistent banner on a chair device whose name holds the gavel on ANOTHER device (`src/components/GavelDeviceBanner.tsx`), the handover toast in that case, and the SettingsPanel view-only notice.
+- `gavel_device_elsewhere_short` (EN *Moderating on another device*): the GavelChip label in the same state. One line in the chip, keep it short.
+- `gavel_use_this_device` (EN *Use this device*, ES *Usar este dispositivo*, FR *Utiliser cet appareil*, AR *استخدم هذا الجهاز*): the take-back button, in the banner and on the chair's own row in the GavelChip menu.
+- Terminology held: ES *mazo*, FR *maillet*, AR *المطرقة*, as in the other `gavel_*` keys. Device = ES *dispositivo*, FR *appareil*, AR *جهاز*.
+- The typed add bars' "absent" tag reuses `rollcall_absent`; no new key.
+
+### 2026-09-14 — glass session notifications (`feature/conferences-auth`) — +3 keys
+
+**Added, 3 keys × 4 locales**, directly after `notif_broadcast_end_now` in every locale (count the file before quoting a total: other changes landed the same day):
+- `notif_dismiss` (EN *Dismiss*, ES *Descartar*, FR *Ignorer*, AR *إغلاق*): accessible name and tooltip of the x on every card in `src/components/notifications/NotificationStack.tsx`. Previously hardcoded English.
+- `notif_more_count` takes `{n}` (EN *+{n} more*, ES *+{n} más*, FR *+{n} de plus*, AR *+{n} أخرى*): the capsule under a collapsed notification deck, and the overflow line when expanded. Previously hardcoded English.
+- `notif_show_less` (EN *Show less*, ES *Ver menos*, FR *Afficher moins*, AR *عرض أقل*): folds an expanded deck back.
+- **Not keyed on purpose:** the card timestamp ("now", "2 min ago") comes from `Intl.RelativeTimeFormat` in the viewer's locale, so it needs no strings.
+
 ### 2026-09-11 — seat gating review fixes (`feature/conferences-auth`) — 1040 → 1041 keys
 
 **Added, 1 key × 4 locales**, directly after `delegate_seat_back` in every locale:
@@ -414,8 +437,8 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 **Added, 21 keys × 4 locales**, directly after `join_create_link` in every locale (one block, even though three prefixes are in it, so the whole feature reads in one place):
 - `join_seat_taken`, `join_seat_yours`, `join_seat_reserved` are TAGS appended to a country in the join page's native `<select>` as `France · Taken`. Keep them one or two words: they share a line with the country name on a phone.
 - `join_seat_taken_note`, `join_seat_reserved_note`, `join_seat_now_taken`, `join_seat_signin` sit under that picker. `join_seat_signin` is also the primary button on two delegate-page screens.
-- `delegate_seat_*` are the full-screen stops in `src/app/delegate/[code]/page.tsx` (`SeatGateScreen`): taken, reserved, sign in, and could not check. `delegate_seat_taken_body` takes `{country}` (the localized display name). These replace two hardcoded English screens ("Sign in to join this session", "Allocation does not match account").
-- `rollcall_seat_*` are the chair's two-tap Free seat control in `src/components/RollCallPanel.tsx`; `rollcall_seat_claimed_title` is its hover title.
+- `delegate_seat_*` are the full-screen stops in `src/app/delegate/[code]/page.tsx` (`SeatGateScreen`): taken, reserved, sign in, open on another device, and could not check. `delegate_seat_taken_body` and `delegate_seat_elsewhere_body` take `{country}` (the localized display name). `delegate_seat_elsewhere_title` / `_body` / `delegate_seat_use_here` are the one-account-one-device stop (`other_device` from `claim_delegate_seat`); the button re-claims with takeover. These replace two hardcoded English screens ("Sign in to join this session", "Allocation does not match account").
+- `rollcall_seat_*` are the chair's two-tap Free seat control in `src/components/RollCallPanel.tsx` (`rollcall_seat_free` doubles as its hover title). `rollcall_seat_claimed_title` was REMOVED on 14 Sep 2026 together with the claimed-seat phone icon it described; the control is now on every row, revealed on hover.
 - Terminology: the chair asked to free a seat is the word each locale already uses for "chair" on the join page: ES *director* (`join_create_link` *¿Director?*), FR *président*, AR *الرئيس*. Seat = ES *puesto*, FR *siège*, AR *مقعد*.
 - No em dashes, no directional marks in AR, `\'` escapes in FR as elsewhere in the file.
 
@@ -478,7 +501,7 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 - **These are the two-line variants of the existing one-word stat labels**, not new concepts. Each keeps the root noun of its short sibling so the two sets read as the same thing: `delegate_stat_time_spoken` keeps ES *TIEMPO* / FR *PAROLE* / AR *الوقت*→*وقت*, `delegate_stat_speeches_given` keeps ES *DISCURSOS* / FR *DISCOURS* / AR *الخطابات*, `delegate_stat_messages_sent` keeps ES *MENSAJES* / FR *MESSAGES* / AR *الرسائل*. Never translate one of a pair without the other.
 - **Extreme width budget.** These render at 6.5–9px in a narrow rail beside the flag. The three `delegate_stat_*` labels get a ~78–100px column and may wrap to two short lines; `delegate_roll_call_label` and `delegate_in_the_queue` must hold **one line** in ~58–70px. Brevity outranks literalness here — do not "improve" any of these into a fuller phrase.
 - **Roll call, per locale, consistent with the rest of the app.** FR **APPEL** and AR **تدقيق الحضور** are exactly what `tab_roll_call` / `feature_rollcall` already use. ES is the deliberate compromise: the full term *lista de asistencia* / *pase de lista* cannot hold one line at this width, so it ships as **ASISTENCIA** — the same short form `tab_roll_call` already uses on the narrow chair tab, so the shortening is not new to the app.
-- **`delegate_in_the_queue` is a caption drawn over the delegate's own flag**, under a large ordinal number. Because the ordinal carries the meaning, the caption is abbreviated hard and each locale reuses its existing queue word: ES **EN LA FILA** (matches `rollcall_queue` *FILA* and `delegate_no_speakers` *en fila*), FR **EN LISTE** (matches `rollcall_queue` *LISTE* and *en liste*), AR **في القائمة** (matches `rollcall_queue` *القائمة*).
+- **`delegate_in_the_queue` is a caption drawn over the delegate's own flag**, under a large ordinal number. Because the ordinal carries the meaning, the caption is abbreviated hard and each locale reuses its existing queue word: ES **EN LA FILA** (matches the former `rollcall_queue` *FILA* and `delegate_no_speakers` *en fila*), FR **EN LISTE** (matches the former `rollcall_queue` *LISTE* and *en liste*), AR **في القائمة** (matches the former `rollcall_queue` *القائمة*). `rollcall_queue` itself was removed on 14 Sep 2026 with the A-Z / QUEUE toggle.
 - **MUN register held on the stat labels:** FR *TEMPS DE PAROLE* and *DISCOURS PRONONCÉS* are the standard parliamentary forms; ES *TIEMPO DE PALABRA* and *DISCURSOS PRONUNCIADOS* likewise. ES *DISCURSOS PRONUNCIADOS* is the widest string added (12-char longest word) and was kept only because it wraps to two lines inside the ~78px column.
 - No placeholders and **no `{s}` suffix** in any of the five — nothing here is counted or interpolated.
 - Uppercase held in the Latin-script locales; AR has no case distinction and uses the normal form. No directional marks or trailing punctuation in the AR strings, so nothing flips under RTL.

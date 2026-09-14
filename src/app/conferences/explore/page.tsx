@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/seo';
+import { exploreOgImageUrl } from '@/lib/ogVersion';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -15,8 +16,15 @@ export const metadata: Metadata = pageMetadata({
   description:
     'Browse Model UN conferences around the world by country, date, fee, and level. See committees, deadlines, and fees, then apply as a delegate, chair, or advisor in minutes.',
   path: '/conferences/explore',
+  ogTitle: 'Find your next Model UN conference',
   ogDescription:
-    'Browse Model UN conferences around the world by country, date, fee, and level. Apply as a delegate, chair, or advisor in minutes.',
+    'Browse Model UN conferences worldwide by country, date and fee. Apply as a delegate, chair or advisor in minutes.',
+  // Its own card, not the site-wide one: this page is where delegates find a
+  // conference, and the card says so, centred for WhatsApp's square crop.
+  // Dated URL; the page revalidates hourly, so the token rolls daily.
+  image: exploreOgImageUrl(),
+  imageAlt: 'Find your next Model UN conference on Gavelling.',
+  imageSize: { width: 1200, height: 630 },
 });
 
 interface DirectoryConf {

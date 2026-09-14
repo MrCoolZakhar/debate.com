@@ -185,6 +185,7 @@ export interface Committee {
   resumingChair?: string | null;
   dbChairJoinSuffix?: string | null;
   dbHeadChair?: string | null;   // persisted head-chair name (claim-at-will); null → creator (chairNames[0]) is head
+  dbHeadChairDevice?: string | null;   // settings.headChairDevice: which device holds the gavel for that name (src/lib/gavelDevice.ts)
   dbSeparateChairCode?: boolean;
   dbSettings?: Record<string, unknown> | null;
   dbScoring?: ScoringConfig | null;
