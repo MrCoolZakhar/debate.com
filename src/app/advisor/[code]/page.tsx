@@ -6,18 +6,13 @@ import CowDelegationBoard from '@/components/CowDelegationBoard';
 import Link from 'next/link';
 import {
   getCommitteeByCode,
-  subscribeToCommittee,
   sendMessage as sendMessageDB,
-  getCurrentSpeakerRow,
-  getDelegatesList,
-  getSpeakersLists,
-  getDocumentsList,
-  getPendingMotionsList,
   caucusRemainingNow,
   moderatedCaucusRemainingNow,
 } from '@/lib/committeeService';
 import { mergeMessagesById } from '@/lib/chatConversations';
-import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
+import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
+import ConnectionPill from '@/components/ConnectionPill';
 import { useAuth } from '@/components/AuthProvider';
 import { isConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
 import { getCommitteeFlags, motionNames } from '@/lib/committeeFlags';
@@ -291,10 +286,8 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     return () => clearInterval(id);
   }, [advisorCaucusAnchor, advisorCaucusBase, advisorIsModerated, advisorSpeakerBase, advisorSpeakerStartedAt]);
 
-  // Realtime does not replay events missed while the socket was down. Catch chat up on
-  // reconnect, tab-visible and back-online.
-  const onRealtimeStatus = useReSubscribeCatchUp(setCommittee);
-  useChatCatchUp(committee?.id, setCommittee);
+  // Live / Reconnecting / Offline, fed by the session sync below (R-4).
+  const [connection, setConnection] = useState<ConnectionState>('reconnecting');
 
   // Conference-session access guard (#8 / #4). Standalone sessions stay anonymous; a
   // conference session requires an advisor/observer or organizer (conference-wide).
@@ -322,80 +315,53 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     const upperCode = code.toUpperCase();
     let unsub: (() => void) | null = null;
 
+    let cancelled = false;
     getCommitteeByCode(upperCode).then((c) => {
+      if (cancelled) return;
       setLoading(false);
       if (!c) return;
       setCommittee(c);
-      const cid = c.id;
-      unsub = subscribeToCommittee(cid, async (table) => {
-        // Patch only the changed slice instead of re-pulling the whole committee on every
-        // event. Session-state lives on the `committees` table, so that one keeps the full
-        // refetch; every other table can be patched in place. Mirrors the delegate view.
-        if (table === 'current_speaker') {
-          const cs = await getCurrentSpeakerRow(cid);
-          if (!cs) return;
+      // One pipeline for every event (src/lib/sessionSync.ts): each event refetches ONLY its
+      // own slice, coalesced, with a sequence counter per slice, so a burst of writes (a
+      // caucus accept, All Present) is one small fetch per slice instead of a cancelled pile
+      // of full refetches. Messages land straight from the realtime payload. This view
+      // renders neither chair notes nor organiser broadcasts, so it does not subscribe to
+      // `feedback` / `session_broadcasts` at all (PERF-1). Wake, reconnect and back-online
+      // refetch every slice (R-4).
+      const sync = startSessionSync({
+        committeeId: c.id,
+        tables: ['committees', 'delegates', 'speakers_list', 'current_speaker', 'motions', 'documents', 'messages'],
+        slices: ['row', 'delegates', 'lists', 'currentSpeaker', 'motions', 'documents', 'messages'],
+        onConnection: setConnection,
+        onMessage: (m) => setCommittee((prev) => {
+          if (!prev) return prev;
+          const merged = mergeMessagesById(prev.messages, [m]);
+          return merged === prev.messages ? prev : { ...prev, messages: merged };
+        }),
+        apply: (slice, data) => {
           setCommittee((prev) => {
             if (!prev) return prev;
-            const patched: Committee = {
-              ...prev,
-              currentSpeaker: cs.currentSpeaker,
-              speakerTimeRemaining: cs.speakerTimeRemaining,
-              speakerStartedAt: cs.speakerStartedAt,
-              speakersList: cs.currentSpeaker
-                ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                : prev.speakersList,
-            };
-            if (prev.caucus && prev.caucus.type === 'moderated') {
-              patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
-              patched.caucusQueue = cs.currentSpeaker
-                ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                : prev.caucusQueue;
+            switch (slice) {
+              case 'row': return { ...prev, ...rowFields(data as Committee) };
+              case 'delegates': return { ...prev, delegates: data as Committee['delegates'] };
+              case 'lists': return withLists(prev, data as Parameters<typeof withLists>[1]);
+              case 'currentSpeaker': return withCurrentSpeaker(prev, data as Parameters<typeof withCurrentSpeaker>[1], { includeRemaining: true });
+              case 'motions': return { ...prev, pendingMotions: data as Committee['pendingMotions'] };
+              case 'documents': return { ...prev, documents: data as Committee['documents'] };
+              case 'messages': {
+                const merged = mergeMessagesById(prev.messages, data as Committee['messages']);
+                return merged === prev.messages ? prev : { ...prev, messages: merged };
+              }
+              default: return prev;
             }
-            return patched;
           });
-          return;
-        }
-        if (table === 'speakers_list') {
-          const { speakersList, caucusQueue } = await getSpeakersLists(cid);
-          setCommittee((prev) => prev ? {
-            ...prev,
-            speakersList: prev.currentSpeaker
-              ? speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
-              : speakersList,
-            caucusQueue,
-          } : prev);
-          return;
-        }
-        if (table === 'delegates') {
-          const delegates = await getDelegatesList(cid);
-          setCommittee((prev) => prev ? { ...prev, delegates } : prev);
-          return;
-        }
-        if (table === 'messages') {
-          await catchUpMessages(cid, setCommittee);
-          return;
-        }
-        if (table === 'documents') {
-          const documents = await getDocumentsList(cid);
-          setCommittee((prev) => prev ? { ...prev, documents } : prev);
-          return;
-        }
-        if (table === 'motions') {
-          const pendingMotions = await getPendingMotionsList(cid);
-          setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
-          return;
-        }
-        const updated = await getCommitteeByCode(upperCode);
-        // Messages are append-only: merge rather than replace so this full refetch can never
-        // drop a message the scoped messages handler already delivered.
-        if (updated) setCommittee((prev) => prev
-          ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages) }
-          : updated);
-      }, (status) => onRealtimeStatus(cid, status));
+        },
+      });
+      unsub = sync.stop;
     });
 
-    return () => { unsub?.(); };
-  }, [code, onRealtimeStatus]);
+    return () => { cancelled = true; unsub?.(); };
+  }, [code]);
 
   if (accessState === 'signin') {
     return (
@@ -510,6 +476,7 @@ export default function AdvisorPage({ params }: { params: Promise<{ code: string
     <FitToScreen>
     <SeatArtProvider delegates={committee.delegates}>
     <div className="h-full w-full flex flex-col overflow-hidden" style={{ backgroundColor: '#EDE7D8' }}>
+      <ConnectionPill state={connection} />
       <div className="pointer-events-none fixed inset-0 z-0" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23grain)' opacity='1'/%3E%3C/svg%3E")`, backgroundRepeat: 'repeat', backgroundSize: '300px 300px', mixBlendMode: 'multiply', opacity: 0.18 }} />
       {/* Header */}
       <header className="border-b border-[#DDD4C0] bg-[#FAF8F3] px-4 h-11 flex items-center gap-3 shrink-0 relative z-[2]">

@@ -92,6 +92,7 @@ import {
   type NotificationKind, type NotificationLevel, type NotificationTone,
 } from '@/lib/sessionNotifications';
 import { GLASS, GLASS_SAFE, glassFallbackCss, SPRING_BEZIER, SPRING_LINEAR } from './glass';
+import { serverNow } from '@/lib/serverClock';
 
 const OUTFIT = "'Outfit', sans-serif";
 const EASE = 'cubic-bezier(0.22,1,0.36,1)';
@@ -454,7 +455,7 @@ function NotificationCard({ n, extra, behind, onTap, entrance, index, rtf, dismi
   /* Recomputed on the same 250ms tick that advances the TTLs — no second
      interval, and no re-notify (which would restart the TTL every second). */
   const remainingMs = extra?.countdownTo
-    ? new Date(extra.countdownTo).getTime() - Date.now()
+    ? new Date(extra.countdownTo).getTime() - serverNow()   // a DB timestamp: database clock (T-1)
     : null;
   const counting = remainingMs != null && remainingMs > 0 && !!extra?.countdownTemplate;
   const noteLine = counting

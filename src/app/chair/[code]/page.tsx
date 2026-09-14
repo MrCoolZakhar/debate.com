@@ -10,6 +10,8 @@ import Link from 'next/link';
 import { CaucusState, Committee, Delegate, DelegateStatus } from '@/lib/types';
 import RollCallPanel, { FlagCircle, recognisedStatus } from '@/components/RollCallPanel';
 import MotionsModal from '@/components/MotionsModal';
+import MotionFlightNotice from '@/components/MotionFlightNotice';
+import { logFloorSpeech, logTimedSpeech, cowTurnKey } from '@/lib/floorSpeech';
 import DocumentsModal from '@/components/DocumentsModal';
 import { getCountryByName, getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { SeatFlag, SeatArtProvider } from '@/components/SeatFlag';
@@ -20,7 +22,7 @@ import { SettingsPanel } from '@/components/SettingsPanel';
 import ScoreboardPanel from '@/components/ScoreboardPanel';
 import FeedbackLogPanel, { liveCaucus } from '@/components/FeedbackLogPanel';
 import CowDelegationBoard from '@/components/CowDelegationBoard';
-import { useSettingsStore, type CommitteeSettings } from '@/lib/settingsStore';
+import { useSettingsStore, stripNonHydratedSettings } from '@/lib/settingsStore';
 import { useAuth } from '@/components/AuthProvider';
 import { detectConferenceSession, verifyConferenceAccess } from '@/lib/conferenceAccess';
 import { resolveChairAwardsHref } from '@/lib/sessionAwardsLink';
@@ -33,9 +35,13 @@ import { isViewingChatConversation } from '@/lib/chatViewing';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
 import SidebarResizer from '@/components/SidebarResizer';
 import { SIDEBAR_DEFAULT_WIDTH, loadSidebarWidth, saveSidebarWidth } from '@/lib/sidebarWidth';
-import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
+import { startSessionSync, rowFields, withCurrentSpeaker, withLists, ALL_SYNC_SLICES, COALESCE_MS, type ConnectionState, type SessionSync, type FetchMeta } from '@/lib/sessionSync';
+import { endModeratedCaucusIfAnchorUnchanged } from '@/lib/caucusExpiryWrite';
+import ConnectionPill from '@/components/ConnectionPill';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import { useAgendaPicker } from '@/components/AgendaPicker';
+import { useSettingsSync } from '@/lib/useSettingsSync';
+import { VotingInProgressCard } from '@/components/VotingInProgressCard';
 import { useGavelCue, type GavelCue } from '@/lib/useGavelCue';
 import NotificationStack, { type NotificationExtra } from '@/components/notifications/NotificationStack';
 import GlassToast from '@/components/notifications/GlassToast';
@@ -52,11 +58,10 @@ import {
 } from '@/lib/sessionNotifications';
 import {
   getCommitteeByCode,
-  subscribeToCommittee,
-  getCurrentSpeakerRow,
   logEvent,
   setPhase as setPhaseInDB,
   setDelegateStatus as setDelegateStatusInDB,
+  setDelegateStatusesBulk as setDelegateStatusesBulkInDB,
   addToSpeakersList as addToSpeakersListInDB,
   removeFromSpeakersList as removeFromSpeakersListInDB,
   addToCaucusList as addToCaucusListInDB,
@@ -80,7 +85,6 @@ import {
   denyJoinRequest,
   approveGslRequest,
   denyGslRequest,
-  logSpeakingTime,
   resumeSession as resumeSessionInDB,
   claimResumeSession as claimResumeSessionInDB,
   resolveJoinRequestsOnAdmit,
@@ -93,8 +97,16 @@ import {
   getActiveBroadcasts,
   suspendDebate as suspendDebateInDB,
   endDebate as endDebateInDB,
+  setPhaseAndCaucus as setPhaseAndCaucusInDB,
+  pauseSpeakerTimer as pauseSpeakerTimerInDB,
+  grantSpeakerTime as grantSpeakerTimeInDB,
+  phaseForCaucus,
+  freezeCaucusForBreak,
   type SessionBroadcast,
 } from '@/lib/committeeService';
+import { serverNow, serverNowIso } from '@/lib/serverClock';
+import SaveStatusToast from '@/components/notifications/SaveStatusToast';
+import ClockSkewHint from '@/components/ClockSkewHint';
 
 /** Who holds the floor, as a stable key (delegate id, or the country for a Room-Order
  *  placeholder). Two different keys = the floor changed hands. */
@@ -174,6 +186,13 @@ function abbrevCountry(name: string): string {
 type CommitteeSetter = React.Dispatch<React.SetStateAction<Committee | null>>;
 
 const localUpdateTime = { current: 0 };
+// R-1: bumped by EVERY optimistic local write (updateLocal, structural or not). Timer ticks
+// never call updateLocal (RULE 3), so ticks never move it. The session sync stamps its value
+// on each refetch; a refetch that returns after a local write it predates is a snapshot from
+// BEFORE the click, so it is not applied over the chair's own state (it is fetched again).
+// Before this, a delegate's event within ~1 s of Next brought the previous speaker back and
+// a second Next logged their speech twice.
+const localWriteSeq = { current: 0 };
 
 // How long a locally-written delegate status stays pinned against an incoming refetch before
 // we hand control back to the DB row. Deliberately the same number as OPTIMISTIC_TTL_MS in
@@ -220,8 +239,20 @@ const BROADCAST_LATE_FIRE_GRACE_MS = 5 * 60 * 1000;
 // further out than ~24 days is simply not armed on this mount; a later reload will arm it.
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
+/** A one-off full resync (gavel handover, resume) with the R-1 local-write guard the session
+ *  sync applies to every slice: `stale` is true when an optimistic local write happened
+ *  while the fetch was in flight, so the snapshot predates the chair's own click and must not
+ *  be merged over it. Callers still read server FACTS from it (is it suspended, who holds the
+ *  latch) but hand the state merge to a forced catch-up instead. */
+async function fetchCommitteeGuarded(code: string): Promise<{ fresh: Committee | null; stale: boolean }> {
+  const seqAtStart = localWriteSeq.current;
+  const fresh = await getCommitteeByCode(code);
+  return { fresh, stale: localWriteSeq.current !== seqAtStart };
+}
+
 function updateLocal(setCommittee: CommitteeSetter, updater: (c: Committee) => Committee, structural = false) {
   if (structural) localUpdateTime.current = Date.now();
+  localWriteSeq.current++;
   setCommittee((prev) => prev ? updater(prev) : prev);
 }
 
@@ -649,8 +680,6 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
   // (measured: chair frozen at 9:27 while delegates and the DB read 8:07) with nothing to
   // pull the two back together.
   const [liveTotal, setLiveTotal] = useState(() => caucusRemainingNow(caucus));
-  const remainingRef = useRef(liveTotal);
-  remainingRef.current = liveTotal;
   const [showExtendUnmod, setShowExtendUnmod] = useState(false);
   const [extendMinsUnmod, setExtendMinsUnmod] = useState(5);
 
@@ -685,20 +714,46 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
   useGavelCue(cowRemaining, cowActive, gavelCue);
 
   // CoW open-floor speaker tracking — set who holds the floor by tapping a flag.
-  const cowSpeakerStartRef = useRef<number>(Date.now());
+  // Database clock (T-1), and the start doubles as the turn key: one log per floor holder
+  // even if a tap and End Caucus race (src/lib/floorSpeech.ts).
+  //
+  // The floor holder's start is PERSISTED as `caucus.floorSince` (written with the tap), so a
+  // reload or a gavel handover keeps the real start instead of restarting the holder's time
+  // at mount. A caucus from before that field falls back to the last CoW speech logged in
+  // this caucus (a tap logs the previous holder at the instant the floor changed hands), and
+  // only then to this device's mount time.
+  const cowSpeakerStartRef = useRef<number | null>(null);
+  const [cowMountedAt] = useState(() => serverNow());
+  const cowFloorStart = (): number => {
+    const persisted = caucus.floorSince ? new Date(caucus.floorSince).getTime() : NaN;
+    if (Number.isFinite(persisted)) return persisted;
+    if (cowSpeakerStartRef.current !== null) return cowSpeakerStartRef.current;
+    let last = NaN;
+    for (const m of committee.messages ?? []) {
+      if (m.sender !== '__system__' || m.recipient !== '__log__' || !m.content.includes('|cow:')) continue;
+      try {
+        const e = JSON.parse(m.content.slice('__log__:'.length)) as { type?: string; context?: string; topic?: string; timestamp?: string };
+        if (e.type !== 'speech' || e.context !== 'unmoderated-caucus' || e.topic !== (caucus.purpose ?? committee.topic)) continue;
+        const at = e.timestamp ? new Date(e.timestamp).getTime() : NaN;
+        if (Number.isFinite(at) && !(at <= last)) last = at;
+      } catch { /* not a log row */ }
+    }
+    return Number.isFinite(last) ? last : cowMountedAt;
+  };
   const handleCowTap = (countryName: string) => {
     const prev = caucus.currentSpeaker;
     if (prev === countryName) return;
-    const now = Date.now();
+    const now = serverNow();
     if (prev) {
-      const secs = Math.max(0, Math.round((now - cowSpeakerStartRef.current) / 1000));
-      if (secs > 0) logEvent(committee.id, { country: prev, type: 'speech', context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, seconds: secs }, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      const since = cowFloorStart();
+      const secs = Math.max(0, Math.round((now - since) / 1000));
+      void logTimedSpeech(committee, { country: prev, seconds: secs, context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, turnKey: cowTurnKey(committee.id, prev, since) });
     }
     cowSpeakerStartRef.current = now;
     const spoken = prev && !(caucus.spokenCountries ?? []).includes(prev)
       ? [...(caucus.spokenCountries ?? []), prev]
       : (caucus.spokenCountries ?? []);
-    const updated = { ...caucus, currentSpeaker: countryName, spokenCountries: spoken };
+    const updated = { ...caucus, currentSpeaker: countryName, spokenCountries: spoken, floorSince: new Date(now).toISOString() };
     updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: updated } : c), true);
     updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
     if (cowEnabled) { setCowRemaining(cowDefaultSecs); setCowActive(true); }
@@ -714,6 +769,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     const read = () => caucusRemainingNow(
       unmodBase === null ? null : ({ remainingTime: unmodBase, totalStartedAt: unmodAnchor } as CaucusState),
     );
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the anchor just changed (a press on any chair device, via realtime); the clock must re-derive from it at once, not a second later on the first tick.
     setLiveTotal(read());
     if (!unmodAnchor) return;   // null anchor IS the paused signal
     const tick = () => {
@@ -728,6 +784,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
   // Keep the button in step with the persisted anchor, so a Commenter pressing play/pause (or
   // this chair reloading) is reflected here rather than leaving a PAUSE label over a stopped
   // clock.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- `running` is also flipped locally by the press itself (before the write echoes), so it cannot simply be derived from the anchor during render.
   useEffect(() => { setRunning(!isViewOnly && !!unmodAnchor); }, [unmodAnchor, isViewOnly]);
 
   // ── H2 — ANCHOR the total clock ────────────────────────────────────────────
@@ -745,7 +802,7 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     const nowRunning = !running;
     setRunning(nowRunning);
     if (!committee.caucus) return;
-    const anchored = anchorCaucusClock(committee.caucus, remainingRef.current, nowRunning);
+    const anchored = anchorCaucusClock(committee.caucus, caucusRemainingNow(committee.caucus), nowRunning);   // live, read at the press
     updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), false);
     updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
@@ -754,11 +811,11 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
   // restamped to now so the elapsed time already burnt is not charged twice.
   const handleExtendUnmod = (addSecs: number) => {
     if (addSecs <= 0 || !committee.caucus) return;
-    // remainingRef is the LIVE derived value, so the elapsed time is already subtracted —
+    // caucusRemainingNow is the LIVE derived value, so the elapsed time is already subtracted:
     // never use committee.caucus.remainingTime here, which is the value at the anchor and
     // would hand back every second the caucus had already burnt.
     const extended = { ...committee.caucus, totalTime: committee.caucus.totalTime + addSecs };
-    const anchored = anchorCaucusClock(extended, remainingRef.current + addSecs, running);
+    const anchored = anchorCaucusClock(extended, caucusRemainingNow(committee.caucus) + addSecs, running);
     updateLocal(setCommittee, (c) => (c.caucus ? { ...c, caucus: anchored } : c), true);
     updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
     setShowExtendUnmod(false);
@@ -770,8 +827,9 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
     // Only a flag tap used to log, so the last holder's time was dropped. Same clock
     // handleCowTap uses (time since the floor last changed on this device).
     if (caucus.isConsultation && caucus.currentSpeaker) {
-      const secs = Math.max(0, Math.round((Date.now() - cowSpeakerStartRef.current) / 1000));
-      if (secs > 0) logEvent(committee.id, { country: caucus.currentSpeaker, type: 'speech', context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, seconds: secs }, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      const since = cowFloorStart();
+      const secs = Math.max(0, Math.round((serverNow() - since) / 1000));
+      void logTimedSpeech(committee, { country: caucus.currentSpeaker, seconds: secs, context: 'unmoderated-caucus', topic: caucus.purpose ?? committee.topic, turnKey: cowTurnKey(committee.id, caucus.currentSpeaker, since) });
     }
     // H4 — clear the current_speaker DB ROW, not just local state. getCommitteeByCode loads
     // current_speaker unconditionally, so a stale row resurrects the caucus speaker as the
@@ -784,8 +842,8 @@ function UnmoderatedCaucusView({ committee, setCommittee, isViewOnly = false, ga
         committee.code, committee.dbChairJoinSuffix ?? undefined,
       );
     }
-    setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    updateCaucusInDB(committee.id, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    // Phase and caucus in ONE update (R-7): no reader sees the GSL with a caucus clock.
+    setPhaseAndCaucusInDB(committee.id, 'speakers-list', null, committee.code, committee.dbChairJoinSuffix ?? undefined);
     updateLocal(setCommittee, (c) => {
       // Ending a caucus never touches the GSL — the speakers list is returned exactly as it
       // was before the caucus. (Previously prepended currentSpeaker into the GSL; harmless in
@@ -1549,11 +1607,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const [extraTimeCapMsg, setExtraTimeCapMsg] = useState<number | null>(null);
   const timerRunningRef = useRef(false);
   const isViewOnlyRef = useRef(false);
-  // Serialises concurrent getCommitteeByCode results inside the realtime subscription.
-  // Two rapid writes produce two echoes and two in-flight refetches; without this an OLDER
-  // snapshot resolving last would overwrite the newer one with stale rows. Each fetch takes
-  // a ticket and only applies if it is still the newest.
-  const fetchSeq = useRef(0);
+  // The realtime → state pipeline (src/lib/sessionSync.ts): per-slice fetches, one counter
+  // PER SLICE, coalesced, catch-up on wake / reconnect / online. Held in a ref so automatic
+  // Moderator writes can ask whether local state is fresh first (R-6).
+  const syncRef = useRef<SessionSync | null>(null);
+  const [connection, setConnection] = useState<ConnectionState>('reconnecting');
+  // Bumped when a catch-up's fetches have all returned, so the automatic-write effects that
+  // stood down while it ran get to run again against the fresh state (R-6).
+  const [catchUpTick, setCatchUpTick] = useState(0);
   // Delegate statuses this chair has written but not yet seen confirmed by a DB refetch.
   // A refetch whose snapshot predates our write would otherwise repaint the roll-call
   // slider with the pre-click status. Pinned until DB truth agrees, or the TTL expires
@@ -1632,10 +1693,6 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     });
   };
 
-  // Realtime does not replay events missed while the socket was down. The chair's outbox now
-  // outlives chat closing, so it needs the same catch-up as the delegate view.
-  const onRealtimeStatus = useReSubscribeCatchUp(setCommittee);
-  useChatCatchUp(committee?.id, setCommittee);
 
   useEffect(() => {
     if (committee) document.title = `${abbreviateCommitteeName(committee.name)} - Gavelling Session`;
@@ -1644,8 +1701,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+    // S6: an unmount (or a code / seatSpeakerClock change) while the load is in flight must
+    // start nothing: no state writes, no sync, no heartbeat, no listeners, no channel.
+    let cancelled = false;
     async function load() {
       const found = await getCommitteeByCode(code);
+      if (cancelled) return;
       if (found) {
         if (found.suspendedAt) {
           setSessionSuspended(true);
@@ -1694,9 +1755,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           // `agendaTopicIndex` likewise: only the agenda picker writes it, and a hydrated copy
           // would revert a later choice made on another device.
           // `headChairDevice` is the gavel's device half (src/lib/gavelDevice.ts): same reason.
-          const { chairJoinSuffix: _cjs, separateChairCode: _scc, headChair: _hc, headChairDevice: _hcd, agendaTopicIndex: _ati, ...rest } = found.dbSettings as Record<string, unknown>;
-          void _cjs; void _scc; void _hc; void _hcd; void _ati;
-          hydrateSettings(found.code, rest as Partial<CommitteeSettings>);
+          // `votingReturnPhase` too. The one list of these keys is NON_HYDRATED_SETTING_KEYS.
+          hydrateSettings(found.code, stripNonHydratedSettings(found.dbSettings));
         }
         if (found.dbChairJoinSuffix) {
           updateSetting(found.code, 'chairJoinSuffix', found.dbChairJoinSuffix);
@@ -1713,195 +1773,195 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         }
       }
       setLoading(false);
+      if (cancelled) return;
       if (found) {
         // A chair who joins late, or reloads mid-session, still gets any live organiser
         // broadcast — realtime only ever delivers what arrives AFTER the socket opens.
         // Fire-and-forget: nothing about the session waits on an announcement.
-        getActiveBroadcasts(found.id).then(setBroadcasts);
-        unsubscribe = subscribeToCommittee(found.id, async (table) => {
-          // Broadcasts first, and outside the debounce entirely. They are organiser-owned:
-          // this device never writes the table, so there is no optimistic state to protect,
-          // and swallowing one because the chair happened to press Next three seconds ago
-          // would drop the message that pauses the committee.
-          if (table === 'session_broadcasts') {
-            setBroadcasts(await getActiveBroadcasts(found.id));
-            return;
-          }
+        getActiveBroadcasts(found.id).then((b) => { if (!cancelled) setBroadcasts(b); });
+        const cid = found.id;
+        // Milliseconds left in RULE 4's debounce window. A Commenter owns no session state and
+        // writes none, so it never debounces: doing so would silently drop phase/caucus changes
+        // it can only learn remotely, leaving it (and its feedback dock) on a caucus the
+        // committee has already left.
+        const debounceLeft = () => (isViewOnlyRef.current ? 0 : Math.max(0, 3000 - (Date.now() - localUpdateTime.current)));
+        // R-1: an optimistic local write happened AFTER this fetch started, so the snapshot
+        // predates the chair's own click. Never apply it over that click; fetch again.
+        const wroteSince = (meta: FetchMeta) => localWriteSeq.current !== meta.localWriteSeqAtStart;
+        // R-3: what the window swallows is fetched once more when the window closes.
+        const afterWindow = () => Math.max(250, debounceLeft() + 50);
+        const STALE_RETRY_MS = 250;
 
-          // Chair notes + factor ratings, also outside the debounce. This device may well
-          // have written the row, but `feedback` is not optimistic speaker/timer/caucus
-          // state, so RULE 4 does not apply and swallowing the echo would only make a
-          // second chair's note invisible until a remount. We bump a counter rather than
-          // refetch here: the two readers (the comment dock and the scoreboard) each own
-          // their own query and neither is always mounted, so a fetch here would usually
-          // be thrown away.
-          if (table === 'feedback') {
-            setFeedbackVersion((v) => v + 1);
-            return;
-          }
-
-          // The Moderator owns current_speaker (writes it on start/pause/next) — it must
-          // ignore its own echoes. But co-chairs (view-only) don't own it, so they DO need
-          // these events to show the current speaker promptly. Patch with a lightweight
-          // single-row fetch instead of the full committee refetch.
-          if (table === 'current_speaker') {
-            if (!isViewOnlyRef.current) return;
-            // Two rapid Next clicks by the Moderator race two of these fetches on this
-            // device; ticket them so an older row can never land last (same seq as the
-            // committee refetches — any newer fetch supersedes this one).
-            const seq = ++fetchSeq.current;
-            const cs = await getCurrentSpeakerRow(found.id);
-            if (seq !== fetchSeq.current) return;
-            if (!cs) return;
-            setCommittee((prev) => {
-              if (!prev) return prev;
-              const patched: Committee = {
-                ...prev,
-                currentSpeaker: cs.currentSpeaker,
-                speakerStartedAt: cs.speakerStartedAt,
-                // Drop the new speaker from the local GSL list to avoid a transient duplicate
-                // before the speakers_list delete event arrives.
-                speakersList: cs.currentSpeaker
-                  ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                  : prev.speakersList,
-              };
-              // In a moderated caucus (incl. Tour de Table) the visible speaker comes from
-              // caucus.currentSpeaker (a country string), advanced via the same nextSpeaker
-              // write. Patch it here too so the caucus view updates on this lightweight event
-              // instead of waiting for the heavier committees refetch.
-              if (prev.caucus && prev.caucus.type === 'moderated') {
-                patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
-                patched.caucusQueue = cs.currentSpeaker
-                  ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                  : prev.caucusQueue;
-              }
-              return patched;
-            });
-            // Anchor base is the row's own time_remaining, NOT the committee speaker limit:
-            // a moderated-caucus speaker is seated with the CAUCUS speaking time, and a
-            // paused-then-resumed speaker carries their true remainder (H5).
-            seatSpeakerClock(cs.speakerTimeRemaining, cs.speakerStartedAt);
-            return;
-          }
-
-          // Chat + speech-log rows are append-only and belong to no optimistic state. Patch
-          // them with one scoped query instead of the 8-query getCommitteeByCode, and merge by
-          // id so two unsequenced refetches can only ADD rows, never drop one.
-          if (table === 'messages') {
-            await catchUpMessages(found.id, setCommittee);
-            return;
-          }
-
-          // The debounce protects the ACTING chair's optimistic state from its own realtime
-          // echo. A Commenter owns no session state and writes none, so it must never
-          // debounce: doing so silently drops phase/caucus changes it can only learn remotely
-          // (e.g. the Moderator ending a caucus), leaving the Commenter — and the feedback dock
-          // it renders — stuck on a caucus the committee has already left.
-          const withinDebounce = !isViewOnlyRef.current && Date.now() - localUpdateTime.current < 3000;
-
-          // Within debounce: speakers_list is skipped outright — the chair just wrote it and
-          // its optimistic state is truth (RULE 4). `delegates` is NOT skipped: delegates and
-          // Commenters write that table too (roster membership and status), and it feeds the
-          // present count, the quorum gate and the majority pie — dropping those events leaves
-          // this device with a silently wrong count and no way back from its own traffic.
-          // Instead the refetch is ticketed (an older snapshot resolving last is discarded) and
-          // every row this chair has just written stays pinned to the optimistic value until DB
-          // truth confirms it — otherwise a snapshot predating the write repaints the roll-call
-          // slider with the pre-click status.
-          // Anything else here is a motion/session/document event another actor may have written.
-          if (withinDebounce) {
-            if (table === 'speakers_list') return;
-            if (table === 'delegates') {
-              const seq = ++fetchSeq.current;
-              const updated = await getCommitteeByCode(code);
-              if (!updated || seq !== fetchSeq.current) return;   // a newer refetch already applied
-              setCommittee((prev) => prev ? { ...prev, delegates: applyPinnedStatuses(updated.delegates) } : prev);
-              return;
+        const sync = startSessionSync({
+          committeeId: cid,
+          tables: ['committees', 'delegates', 'speakers_list', 'current_speaker', 'motions', 'documents', 'messages', 'feedback', 'session_broadcasts'],
+          slices: ALL_SYNC_SLICES,
+          getLocalWriteSeq: () => localWriteSeq.current,
+          onConnection: setConnection,
+          onCatchUp: (phase) => { if (phase === 'done') setCatchUpTick((n) => n + 1); },
+          onEvent: (table) => {
+            // Broadcasts first, and outside the debounce entirely. They are organiser-owned:
+            // this device never writes the table, so there is no optimistic state to protect,
+            // and swallowing one because the chair happened to press Next three seconds ago
+            // would drop the message that pauses the committee.
+            if (table === 'session_broadcasts') {
+              getActiveBroadcasts(cid).then(setBroadcasts);
+              return true;
             }
-            const seq = ++fetchSeq.current;
-            const updated = await getCommitteeByCode(code);
-            if (!updated || seq !== fetchSeq.current) return;   // a newer refetch already applied
-            setCommittee((prev) => {
-              if (!prev) return prev;
-              // messages (speech log + chat) are append-only and NOT part of the optimistic
-              // speaker/timer/caucus state, so refresh them even inside the debounce — otherwise
-              // the acting chair's own just-logged speech is missing from scoring/scoreboard/stats.
-              // The gavel arrives as exactly ONE `committees` event and is never re-delivered.
-              // Dropping it inside the debounce meant that if the acting chair had made any
-              // structural write in the preceding 3s, the handover was silently discarded and
-              // this device kept acting as Moderator forever. Neither field is optimistic
-              // speaker/timer/caucus state, so merging them does not weaken RULE 4.
-              let next = {
-                ...prev,
-                pendingMotions: updated.pendingMotions,
-                messages: mergeMessagesById(prev.messages, updated.messages),
-                dbHeadChair: updated.dbHeadChair,
-                dbHeadChairDevice: updated.dbHeadChairDevice,
-                chairNames: updated.chairNames,
-                // The resume latch is DB-owned, never optimistic speaker/timer/caucus state,
-                // so merging it here does not weaken RULE 4. Previously it rode along only
-                // when suspendedAt changed, which meant a chair who lost the resume race
-                // inside the debounce window never learned who was resuming.
-                resumingChair: updated.resumingChair,
-              };
-              if (updated.endedAt) next = { ...next, endedAt: updated.endedAt, expiresAt: updated.expiresAt };
-              if (updated.suspendedAt !== prev.suspendedAt) next = { ...next, suspendedAt: updated.suspendedAt, resumingChair: updated.resumingChair, phase: updated.phase };
-              return next;
-            });
-            if (updated.endedAt) { setSessionEnded(true); setSessionSuspended(false); }
-            else if (updated.suspendedAt) { setSessionSuspended(true); }
-            else { setSessionSuspended(false); }
-            return;
-          }
-
-          // Outside debounce: full update — another actor (delegate, Commenter) changed something.
-          const seq = ++fetchSeq.current;
-          const updated = await getCommitteeByCode(code);
-          if (!updated || seq !== fetchSeq.current) return;   // a newer refetch already applied
-          if (updated.endedAt) {
-            setSessionEnded(true);
-          } else if (updated.suspendedAt) {
-            setSessionSuspended(true);
-          } else {
-            setSessionEnded(false);
-            setSessionSuspended(false);
-          }
-          // A foreign event (delegate GSL request, Commenter write) must never disturb the
-          // live speaker/timer/caucus state owned by the running chair. Merge non-timer fields
-          // and preserve the live ones while the timer is running. A Commenter owns
-          // none of this — pinning phase/caucus there would freeze it on a stale caucus — so
-          // it always takes the fresh row.
-          if (timerRunningRef.current && !isViewOnlyRef.current) {
-            setCommittee((prev) => prev ? {
-              ...updated,
-              currentSpeaker: prev.currentSpeaker,
-              speakerStartedAt: prev.speakerStartedAt,
-              speakerTimeLimit: prev.speakerTimeLimit,
-              speakerTimeRemaining: prev.speakerTimeRemaining,
-              caucus: prev.caucus,
-              phase: prev.phase,
-              messages: mergeMessagesById(prev.messages, updated.messages),
-              delegates: applyPinnedStatuses(updated.delegates),
-            } : updated);
-          } else {
-            // The unmoderated countdown no longer needs carrying across a refetch. It used
-            // to: the clock lived only in local state, so a fresh row would rewind it, and
-            // `caucusClockRunning` pinned the local value to stop that. Now the clock IS the
-            // persisted anchor — the fresh row carries it — and pinning would be actively
-            // wrong, holding a stale base over a co-chair's extend.
-            setCommittee((prev) => prev
-              ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
-              : updated);
-            // Sync isolated timer atom only when local timer is not running. Anchor base is
-            // current_speaker.time_remaining, not the committee limit — see H5 above.
-            seatSpeakerClock(updated.speakerTimeRemaining, updated.speakerStartedAt);
-          }
-        }, (status) => onRealtimeStatus(found.id, status));
+            // Chair notes + factor ratings, also outside the debounce. `feedback` is not
+            // optimistic speaker/timer/caucus state, so RULE 4 does not apply and swallowing
+            // the echo would only make a second chair's note invisible until a remount. We bump
+            // a counter rather than refetch: the two readers (the comment dock and the
+            // scoreboard) each own their own query and neither is always mounted.
+            if (table === 'feedback') {
+              setFeedbackVersion((v) => v + 1);
+              return true;
+            }
+            return false;
+          },
+          // RULE 6: the Moderator owns current_speaker (writes it on start/pause/next) and
+          // ignores its echoes. A Commenter does not own it and needs every change.
+          wants: (table) => table !== 'current_speaker' || isViewOnlyRef.current,
+          // Inside the window a speakers_list event cannot be applied anyway (the chair just
+          // wrote the list and its optimistic state is truth), so do not even fetch it until
+          // the window closes. Every other slice is fetched promptly.
+          delayFor: (slice) => (slice === 'lists' && debounceLeft() > 0 ? afterWindow() : COALESCE_MS),
+          // Chat + speech-log rows are append-only and belong to no optimistic state: merge
+          // the realtime row by id, no refetch.
+          onMessage: (m) => setCommittee((prev) => {
+            if (!prev) return prev;
+            const merged = mergeMessagesById(prev.messages, [m]);
+            return merged === prev.messages ? prev : { ...prev, messages: merged };
+          }),
+          apply: (slice, data, meta) => {
+            const stale = wroteSince(meta);
+            const inWindow = debounceLeft() > 0;
+            switch (slice) {
+              case 'row': {
+                const updated = data as Committee;
+                if (stale) {
+                  // Only what no click on this device can have changed: the roster of chair
+                  // names, and the end of the session (endedAt is permanent). The gavel,
+                  // the resume latch, phase and caucus all wait for the fresh fetch.
+                  setCommittee((prev) => prev ? {
+                    ...prev,
+                    chairNames: updated.chairNames,
+                    ...(updated.endedAt ? { endedAt: updated.endedAt, expiresAt: updated.expiresAt } : {}),
+                  } : prev);
+                  if (updated.endedAt) { setSessionEnded(true); setSessionSuspended(false); }
+                  return STALE_RETRY_MS;
+                }
+                if (inWindow) {
+                  setCommittee((prev) => {
+                    if (!prev) return prev;
+                    // The gavel arrives as exactly ONE `committees` event and is never
+                    // re-delivered. Dropping it inside the debounce meant a handover made
+                    // within 3 s of this chair's last write was silently discarded. Neither
+                    // it nor the resume latch is optimistic speaker/timer/caucus state, so
+                    // merging them here does not weaken RULE 4.
+                    let next: Committee = {
+                      ...prev,
+                      dbHeadChair: updated.dbHeadChair,
+                      dbHeadChairDevice: updated.dbHeadChairDevice,
+                      chairNames: updated.chairNames,
+                      resumingChair: updated.resumingChair,
+                    };
+                    if (updated.endedAt) next = { ...next, endedAt: updated.endedAt, expiresAt: updated.expiresAt };
+                    if (updated.suspendedAt !== prev.suspendedAt) next = { ...next, suspendedAt: updated.suspendedAt, resumingChair: updated.resumingChair, phase: updated.phase };
+                    return next;
+                  });
+                  if (updated.endedAt) { setSessionEnded(true); setSessionSuspended(false); }
+                  else if (updated.suspendedAt) { setSessionSuspended(true); }
+                  else { setSessionSuspended(false); }
+                  // phase / caucus / topic / settings: once more when the window closes (R-3).
+                  return afterWindow();
+                }
+                if (updated.endedAt) {
+                  setSessionEnded(true);
+                } else if (updated.suspendedAt) {
+                  setSessionSuspended(true);
+                } else {
+                  setSessionEnded(false);
+                  setSessionSuspended(false);
+                }
+                // A foreign event must never disturb the live speaker/caucus state owned by
+                // the running chair: while this Moderator's speaker clock runs, keep phase,
+                // caucus and the speaker limit. A Commenter always takes the fresh row.
+                // (The unmoderated countdown needs no pin: its clock IS the persisted anchor.)
+                if (timerRunningRef.current && !isViewOnlyRef.current) {
+                  setCommittee((prev) => prev ? {
+                    ...prev, ...rowFields(updated),
+                    caucus: prev.caucus, phase: prev.phase, speakerTimeLimit: prev.speakerTimeLimit,
+                  } : prev);
+                } else {
+                  setCommittee((prev) => prev ? { ...prev, ...rowFields(updated) } : prev);
+                }
+                return;
+              }
+              case 'lists': {
+                // RULE 4: within the window the chair's optimistic queue is truth.
+                if (stale || inWindow) return afterWindow();
+                setCommittee((prev) => prev ? withLists(prev, data as Parameters<typeof withLists>[1]) : prev);
+                return;
+              }
+              case 'currentSpeaker': {
+                const cs = data as Parameters<typeof withCurrentSpeaker>[1];
+                if (isViewOnlyRef.current) {
+                  if (stale) return STALE_RETRY_MS;
+                  setCommittee((prev) => prev ? withCurrentSpeaker(prev, cs, { includeRemaining: false }) : prev);
+                  // Anchor base is the row's own time_remaining, NOT the committee speaker
+                  // limit: a moderated-caucus speaker is seated with the CAUCUS speaking time,
+                  // and a paused-then-resumed speaker carries their true remainder (H5).
+                  seatSpeakerClock(cs.speakerTimeRemaining, cs.speakerStartedAt);
+                  return;
+                }
+                // The Moderator owns this row (RULE 6). It only reads it back on a catch-up
+                // (wake / reconnect), never over its own window or a running clock.
+                if (!meta.catchUp) return;
+                if (stale || inWindow) return afterWindow();
+                if (timerRunningRef.current) return;
+                setCommittee((prev) => prev ? withCurrentSpeaker(prev, cs, { includeRemaining: true }) : prev);
+                seatSpeakerClock(cs.speakerTimeRemaining, cs.speakerStartedAt);
+                return;
+              }
+              case 'delegates': {
+                // Not held for the window: delegates and Commenters write this table too, and
+                // it feeds the present count and the quorum gate. Every status this chair has
+                // just written stays pinned until DB truth confirms it.
+                if (stale) return STALE_RETRY_MS;
+                setCommittee((prev) => prev ? { ...prev, delegates: applyPinnedStatuses(data as Committee['delegates']) } : prev);
+                return;
+              }
+              case 'motions': {
+                if (stale) return STALE_RETRY_MS;
+                setCommittee((prev) => prev ? { ...prev, pendingMotions: data as Committee['pendingMotions'] } : prev);
+                return;
+              }
+              case 'documents': {
+                // Merged inside the window too (R-3): a delegate's new paper is not this
+                // chair's optimistic state.
+                if (stale) return STALE_RETRY_MS;
+                setCommittee((prev) => prev ? { ...prev, documents: data as Committee['documents'] } : prev);
+                return;
+              }
+              case 'messages': {
+                setCommittee((prev) => {
+                  if (!prev) return prev;
+                  const merged = mergeMessagesById(prev.messages, data as Committee['messages']);
+                  return merged === prev.messages ? prev : { ...prev, messages: merged };
+                });
+                return;
+              }
+            }
+          },
+        });
+        syncRef.current = sync;
+        unsubscribe = () => { sync.stop(); if (syncRef.current === sync) syncRef.current = null; };
       }
     }
     load();
-    return () => unsubscribe?.();
-  }, [code, onRealtimeStatus, seatSpeakerClock]);
+    return () => { cancelled = true; unsubscribe?.(); };
+  }, [code, seatSpeakerClock]);
 
   useEffect(() => {
     if (!committee?.id || !myChairName) return;
@@ -2013,6 +2073,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // (src/components/AgendaPicker.tsx). Inert for standalone sessions and 0/1 topics.
   const applyAgendaLocal = useCallback((u: (c: Committee) => Committee) => updateLocal(setCommittee, u), []);
   const agenda = useAgendaPicker({ committee, isViewOnly, sessionEnded, sessionSuspended, applyLocal: applyAgendaLocal });
+  // D-1: re-hydrate the settings store whenever ANOTHER chair's write changes
+  // committee.dbSettings (the loader above hydrates only once), and say so on screen.
+  const settingsSync = useSettingsSync(committee);
 
   // ── ROLE TRANSITION (A1) ────────────────────────────────────────────────────
   // Flipping isViewOnly changes what this device OWNS, so it must also drop what it was
@@ -2051,8 +2114,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // the way the initial load path does — so the new chair inherits a live countdown.
     let cancelled = false;
     (async () => {
-      const fresh = await getCommitteeByCode(code);
+      const { fresh, stale } = await fetchCommitteeGuarded(code);
       if (cancelled || !fresh) return;
+      // R-1: this device wrote something while the resync was in flight (a Start pressed the
+      // moment the gavel arrived). The snapshot predates it: let the guarded session sync
+      // land the fresh slices instead of replacing the committee wholesale.
+      if (stale) { syncRef.current?.catchUp(undefined, { force: true }); return; }
       // Keep the gavel value we already hold. On the GAINING side it is our optimistic
       // claim, and this fetch can easily outrun the settings write — taking fresh here would
       // bounce the role back and re-fire the whole transition. On the LOSING side prev
@@ -2229,13 +2296,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // so the caucus expires the moment they finish. Room-Order placeholders are never logged.
   const logFloorSpeechOnCaucusEnd = (c: Committee | null) => {
     if (!c?.caucus || c.phase !== 'moderated-caucus' || !c.currentSpeaker) return;
-    if (c.caucus.purpose?.includes('Room Order')) return;
-    const slot = c.caucus.speakerTimeRemaining > 0 ? c.caucus.speakerTimeRemaining : c.caucus.speakingTime;
-    const live = speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt);
-    const spent = Math.max(0, (slot + extraTimeAddedSecsRef.current) - live);
+    // The one speech logger (src/lib/floorSpeech.ts): persisted anchor first (T-3), local
+    // slot + extra time as the fallback, idempotent per turn, Room Order skipped. Called
+    // synchronously BEFORE the caller's conditional clear, so the anchor read is queued
+    // ahead of it on the current_speaker chain.
+    void logFloorSpeech(c, {
+      base: speakerAnchorRef.current.base,
+      startedAt: speakerAnchorRef.current.startedAt,
+      extraSecs: extraTimeAddedSecsRef.current,
+    });
     extraTimeAddedSecsRef.current = 0;
-    if (spent <= 0) return;
-    logSpeakingTime(c.id, c.currentSpeaker.country, spent, 'moderated-caucus', c.caucus.purpose ?? c.topic, c.code, c.dbChairJoinSuffix ?? undefined);
   };
   const caucusExpiredRef = useRef(false);
   useEffect(() => {
@@ -2269,35 +2339,46 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // Capped at the speaker clock's zero: a laptop that slept past BOTH the speaker's end
     // and the uncapped total must not end a caucus that really stopped with time left.
     if (moderatedCaucusRemainingNow(committee.caucus, speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt) > 0) return;
+    // R-6: a laptop that just woke (or is mid catch-up) holds a row that may be minutes
+    // old. Refetch first; this effect runs again on `catchUpTick` against the fresh row.
+    if (syncRef.current && !syncRef.current.isFresh()) return;
     caucusExpiredRef.current = true;
     setTimerRunning(false);
     logFloorSpeechOnCaucusEnd(committee);
     // This IS a structural write (unlike the tick that used to live here), so it arms the
-    // debounce itself: the two separate DB updates below must not flicker back in.
+    // debounce itself: the DB updates below must not flicker back in.
     localUpdateTime.current = Date.now();
+    // The DB writes are issued HERE, once, from the row this effect checked. They used to
+    // sit inside the setCommittee updater, which React may run twice (StrictMode), so every
+    // expiry could issue its clear and its phase write twice.
+    // H4 — clear the current_speaker DB ROW as well as local state. Without this the row
+    // still holds the caucus speaker (with started_at set), so the next chair refresh
+    // resurrects them as the GSL current speaker, and the following "Next" logs their
+    // speaking time a second time. Conditional and serialised against nextSpeaker(), so it
+    // is not the blind clear MUST NEVER HAPPEN #5 forbids.
+    if (committee.currentSpeaker) {
+      clearCurrentSpeakerIfUnchanged(
+        committee.id, committee.currentSpeaker.delegateId, committee.currentSpeaker.country,
+        committee.code, committee.dbChairJoinSuffix ?? undefined,
+      );
+    }
+    // One update (R-7), and CONDITIONAL (R-6): it lands only while the stored row is still
+    // this caucus (same phase, same total-clock anchor; the guard above guarantees there is
+    // one). If another device has meanwhile started a new caucus, paused, extended or ended
+    // this one, nothing is written (a skip, not reported). A real failure is retried and
+    // reported by writeStatus. Either way a non-landing drops the window and refetches, so
+    // the local optimistic end is replaced by the truth.
+    void endModeratedCaucusIfAnchorUnchanged(committee.id, committee.caucus.totalStartedAt, committee.code, committee.dbChairJoinSuffix ?? undefined)
+      .then((landed) => { if (!landed) { localUpdateTime.current = 0; syncRef.current?.catchUp(undefined, { force: true }); } });
     updateLocal(setCommittee, (prev) => {
       if (!prev?.caucus || prev.phase !== 'moderated-caucus') return prev;
-      // H4 — clear the current_speaker DB ROW as well as local state. Without this the row
-      // still holds the caucus speaker (with started_at set), so the next chair refresh
-      // resurrects them as the GSL current speaker — a delegate who was never on the GSL —
-      // and the following "Next" logs their speaking time a second time. Conditional and
-      // serialised against nextSpeaker(), so it is not the blind clear MUST NEVER HAPPEN
-      // #5 forbids.
-      if (prev.currentSpeaker) {
-        clearCurrentSpeakerIfUnchanged(
-          prev.id, prev.currentSpeaker.delegateId, prev.currentSpeaker.country,
-          prev.code, prev.dbChairJoinSuffix ?? undefined,
-        );
-      }
-      updateCaucusInDB(prev.id, null, prev.code, prev.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(prev.id, 'speakers-list', prev.code, prev.dbChairJoinSuffix ?? undefined);
       // Auto-expiry must mirror the manual End button: clear the caucus and its speaker but
       // NEVER prepend the current caucus speaker (or a Room-Order "Speaker N" placeholder)
       // into the permanent GSL. The GSL is returned exactly as it was before the caucus.
       return { ...prev, caucus: null, phase: 'speakers-list' as const, caucusQueue: [], currentSpeaker: null, speakersList: prev.speakersList };
     }, false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caucusSeconds, committee?.phase, isViewOnly]);
+  }, [caucusSeconds, committee?.phase, isViewOnly, catchUpTick]);
 
   // ── A speaker's clock ran out → the moderated-caucus TOTAL stops with it ─────
   // The total is time spent speaking. Before this, the speaker tick stopped only its own
@@ -2341,6 +2422,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (timerRunning) { speakerExpiredRef.current = null; return; }
     const expired = speakerExpiredRef.current;
     if (!expired) return;
+    // R-6: the zero may be the first tick after a wake. Keep the flag and refetch first;
+    // this effect runs again on `catchUpTick`, where the turn check below sees the fresh row.
+    if (syncRef.current && !syncRef.current.isFresh()) return;
     speakerExpiredRef.current = null;
     if (!committee || sessionEnded || sessionSuspended) return;
     // The floor changed hands between the zero and this effect: nothing to re-anchor.
@@ -2348,7 +2432,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const { base, startedAt } = speakerAnchorRef.current;
     reanchorCaucusAtSpeakerZero(committee, base, startedAt);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timerRunning]);
+  }, [timerRunning, catchUpTick]);
 
   // The same re-anchor when NO Moderator was watching the zero: the speaker's clock ran
   // out during a reload or while the gavel was changing hands, so the tick above never
@@ -2363,7 +2447,27 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     zeroReanchorCheckedRef.current = committee.id;
     if (timerRunningRef.current) return;
     const { base, startedAt } = speakerAnchorRef.current;
-    if (!startedAt || speakerRemainingNow(base, startedAt) > 0) return;
+    if (!startedAt) {
+      // LEGACY: a moderated total left armed with NO speaker clock running (written before
+      // the total stopped with its speaker). It drained on every device while nobody spoke.
+      // Pause it once, at its live value capped to the caucus's own total, conditional on
+      // the anchor and floor we read, so a newer press on another device wins.
+      const c = committee;
+      if (c.phase !== 'moderated-caucus' || !c.caucus?.totalStartedAt || c.endedAt || c.suspendedAt) return;
+      if (!gavelRoleOf(c).isModerator) return;
+      const total = Number.isFinite(c.caucus.totalTime) && c.caucus.totalTime > 0 ? c.caucus.totalTime : Infinity;
+      const live = Math.min(caucusRemainingNow(c.caucus), total);
+      if (live <= 0) return;   // out of time: the expiry effect ends it
+      const expected = { currentSpeaker: c.caucus.currentSpeaker ?? null, totalStartedAt: c.caucus.totalStartedAt };
+      const anchored = anchorCaucusClock(c.caucus, live, false);
+      updateLocal(setCommittee, (x) => (
+        x.caucus && x.phase === 'moderated-caucus' && x.caucus.totalStartedAt === expected.totalStartedAt
+          ? { ...x, caucus: anchored } : x
+      ), false);
+      updateCaucusIfUnchangedInDB(c.id, anchored, expected, c.code, c.dbChairJoinSuffix ?? undefined);
+      return;
+    }
+    if (speakerRemainingNow(base, startedAt) > 0) return;
     reanchorCaucusAtSpeakerZero(committee, base, startedAt);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id, accessState]);
@@ -2543,13 +2647,61 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         caucusQueue: (c.caucusQueue ?? []).filter((s) => s.delegateId !== delegateId),
       } : {}),
     }), true);
-    setDelegateStatusInDB(delegateId, status, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    void setDelegateStatusInDB(delegateId, status, committee.code, committee.dbChairJoinSuffix ?? undefined).then((ok) => {
+      if (ok) return;
+      // Refused (or failed): unpin and read the roster back, so the slider shows the truth.
+      if (pendingStatusWrites.current[delegateId]?.value === status) delete pendingStatusWrites.current[delegateId];
+      syncRef.current?.mark('delegates', 0);
+    });
     if (status === 'absent' && committee.phase !== 'pre-session') {
       removeFromSpeakersListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
       removeFromCaucusListInDB(committee.id, delegateId, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committee?.id, committee?.phase]);
+
+  // Roll call "All present / All present+voting / Clear" (PERF-2): ONE optimistic update and
+  // ONE statement (set_delegate_statuses) instead of one UPDATE, one realtime event and one
+  // refetch per delegate. Every row is pinned exactly like a single status change. The bulk
+  // buttons exist only in pre-session, so no list removal is needed; if one is ever offered
+  // mid-session, going absent still drops the delegates from both lists. Only when the RPC
+  // does not exist (PGRST202) does it fall back to per-row writes; a refusal unpins the rows
+  // and reads the roster back.
+  const handleBulkStatusChange = useCallback((status: DelegateStatus, ids: string[]) => {
+    if (!committee || ids.length === 0) return;
+    const at = Date.now();
+    const idSet = new Set(ids);
+    ids.forEach((id) => { pendingStatusWrites.current[id] = { value: status, at }; });
+    const dropFromLists = status === 'absent' && committee.phase !== 'pre-session';
+    updateLocal(setCommittee, (c) => ({
+      ...c,
+      delegates: c.delegates.map((d) => idSet.has(d.id) ? { ...d, status } : d),
+      ...(dropFromLists ? {
+        speakersList: c.speakersList.filter((s) => !idSet.has(s.delegateId)),
+        caucusQueue: (c.caucusQueue ?? []).filter((s) => !idSet.has(s.delegateId)),
+      } : {}),
+    }), true);
+    const suffix = committee.dbChairJoinSuffix ?? undefined;
+    const allIds = committee.delegates.length === ids.length && committee.delegates.every((d) => idSet.has(d.id));
+    void setDelegateStatusesBulkInDB(committee.id, status, allIds ? null : ids, committee.code, suffix).then((n) => {
+      if (typeof n === 'number') return;
+      if (n === 'unavailable') {
+        ids.forEach((id) => setDelegateStatusInDB(id, status, committee.code, suffix));
+        return;
+      }
+      // Refused or failed: unpin and read the roster back rather than showing a roll call
+      // that never landed.
+      ids.forEach((id) => { if (pendingStatusWrites.current[id]?.at === at) delete pendingStatusWrites.current[id]; });
+      syncRef.current?.mark('delegates', 0);
+    });
+    if (dropFromLists) {
+      ids.forEach((id) => {
+        removeFromSpeakersListInDB(committee.id, id, committee.code, suffix);
+        removeFromCaucusListInDB(committee.id, id, committee.code, suffix);
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committee?.id, committee?.phase, committee?.delegates, committee?.code, committee?.dbChairJoinSuffix]);
 
   // RollCallPanel recognised an absent delegate (clicked onto a list): drop that country's
   // waiting-room request from local state. The panel deletes the motion row itself, after
@@ -2634,20 +2786,43 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     return () => window.removeEventListener('keydown', handler);
   }, [sessionEnded, sessionSuspended, router]);
 
+  // Previous lifecycle stamps, so a stamp that goes BACK to null (MotionsModal rolling back a
+  // Suspend / End whose write failed, R-5) also drops the overlay. Only that transition
+  // clears it: a legacy 'adjourned' row that never carried suspended_at is left alone.
+  const prevLifecycleRef = useRef<{ endedAt: string | null; suspendedAt: string | null }>({ endedAt: null, suspendedAt: null });
   useEffect(() => {
-    if (committee?.endedAt) {
+    const prev = prevLifecycleRef.current;
+    const endedAt = committee?.endedAt ?? null;
+    const suspendedAt = committee?.suspendedAt ?? null;
+    prevLifecycleRef.current = { endedAt, suspendedAt };
+    if (endedAt) {
       setSessionEnded(true);
       setSessionSuspended(false);
       localStorage.removeItem('gavelling-rejoin');
-    } else if (committee?.suspendedAt) {
+    } else if (suspendedAt) {
       setSessionSuspended(true);
       setSessionEnded(false);
+    } else {
+      if (prev.endedAt) setSessionEnded(false);
+      if (prev.suspendedAt) setSessionSuspended(false);
     }
   }, [committee?.endedAt, committee?.suspendedAt]);
 
   useEffect(() => {
     if (sessionSuspended) setSuspendTab('suspend');
   }, [sessionSuspended]);
+
+  // C-1 / G-4 (local half): a suspended or ended session owns no running clock. suspendDebate
+  // and endDebate freeze the DB anchors; this stops this device's tick at the live value so
+  // it cannot run on under the overlay and fire a stop-at-zero write mid-break. A read-only
+  // side effect (RULES 3 and 4): no setCommittee, no debounce, no DB write.
+  useEffect(() => {
+    if (!sessionSuspended && !sessionEnded) return;
+    setTimerRunning(false);
+    const { base, startedAt } = speakerAnchorRef.current;
+    if (startedAt) seatSpeakerClock(speakerRemainingNow(base, startedAt), null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionSuspended, sessionEnded]);
 
   const caucusLoadingFiredRef = useRef(false);
   const prevCaucusKeyRef = useRef<string | null>(null);
@@ -2696,7 +2871,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   useEffect(() => {
     if (!committee?.expiresAt) { setHoursRemaining(null); return; }
     function calc() {
-      const ms = new Date(committee!.expiresAt!).getTime() - Date.now();
+      const ms = new Date(committee!.expiresAt!).getTime() - serverNow();
       setHoursRemaining(Math.max(1, Math.ceil(ms / (1000 * 60 * 60))));
     }
     calc();
@@ -2908,7 +3083,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     if (isViewOnlyRef.current) return;                    // a Commenter only watches
     if (!committee) return;
     // Expired between arming and firing — the organiser's window has closed.
-    if (b.expiresAt && new Date(b.expiresAt).getTime() <= Date.now()) return;
+    if (b.expiresAt && new Date(b.expiresAt).getTime() <= serverNow()) return;
     // AGENTS.md FEATURE: END DEBATE — `ended_at` is permanent and starts the 1h deletion
     // clock. Never re-write it, and never suspend a committee that has already ended.
     if (committee.endedAt) return;
@@ -2919,18 +3094,54 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     const suffix = committee.dbChairJoinSuffix ?? undefined;
     // Optimistic first, DB write fire-and-forget (RULE 5) — exactly the shape MotionsModal
     // uses for the same two transitions, so the two paths cannot drift.
+    // The speaker holding the floor spoke too (G-1): log it before the clocks freeze.
+    void logFloorSpeech(committee, {
+      base: speakerAnchorRef.current.base,
+      startedAt: speakerAnchorRef.current.startedAt,
+      extraSecs: extraTimeAddedSecsRef.current,
+    });
+    extraTimeAddedSecsRef.current = 0;
+    // ...and then LEAVES the floor, exactly like the Suspend / End motion path. Without this
+    // the current_speaker row kept them through the break, and the first Next after a resume
+    // logged the same turn again (hours later, so no duplicate window could catch it).
+    // Issued after the log so its anchor read is queued ahead of the clear. Conditional and
+    // chained: not the blind clear MUST NEVER HAPPEN #5 forbids. Not rolled back with the
+    // lifecycle below: the speech is logged and the turn is over either way.
+    const floor = committee.currentSpeaker;
+    if (floor) {
+      updateLocal(setCommittee, (c) => ({ ...c, currentSpeaker: null }), true);
+      clearCurrentSpeakerIfUnchanged(committee.id, floor.delegateId, floor.country, code, suffix);
+    }
+    // Remembered, so a write that still fails after its retries can be rolled back (R-5):
+    // otherwise this laptop sits on a suspended / ended screen while the room carries on.
+    const before = {
+      phase: committee.phase, suspendedAt: committee.suspendedAt ?? null,
+      endedAt: committee.endedAt ?? null, expiresAt: committee.expiresAt ?? null,
+    };
+    const rollback = () => {
+      updateLocal(setCommittee, (c) => ({ ...c, ...before }), true);
+      setSessionEnded(!!before.endedAt);
+      setSessionSuspended(!!before.suspendedAt && !before.endedAt);
+      firedBroadcastsRef.current.delete(b.id);
+    };
     if (b.action === 'pause') {
-      updateLocal(setCommittee, (c) => ({ ...c, suspendedAt: new Date().toISOString(), phase: 'adjourned' as const }), true);
+      // S4: the caucus keeps its queue but nobody is on its floor (the speaker just left it).
+      updateLocal(setCommittee, (c) => ({
+        ...c, suspendedAt: serverNowIso(), phase: 'adjourned' as const,
+        caucus: c.caucus?.currentSpeaker ? { ...c.caucus, currentSpeaker: null } : c.caucus,
+      }), true);
       setSessionSuspended(true);
-      suspendDebateInDB(committee.id, code, suffix);
+      // suspendDebate freezes the caucus total and the speaker clock at live values (C-1)
+      // and resolves false when it could not suspend (write failed, or already ended).
+      void suspendDebateInDB(committee.id, code, suffix).then((ok) => { if (!ok) rollback(); });
     } else {
-      const now = new Date();
+      const nowMs = serverNow();   // database clock (T-1)
       // Mirrors endDebate()'s own +1h. If one is ever changed, change both.
-      const expires = new Date(now.getTime() + 1 * 60 * 60 * 1000);
-      updateLocal(setCommittee, (c) => ({ ...c, endedAt: now.toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }), true);
+      const expires = new Date(nowMs + 1 * 60 * 60 * 1000);
+      updateLocal(setCommittee, (c) => ({ ...c, endedAt: new Date(nowMs).toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }), true);
       setSessionEnded(true);
       setSessionSuspended(false);
-      endDebateInDB(committee.id, code, suffix);
+      void endDebateInDB(committee.id, code, suffix).then((ok) => { if (!ok) rollback(); });
     }
     markBroadcastSeen(code, b.id);
     dismissNotification(notifyKey.broadcast(b.id));
@@ -2946,7 +3157,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   useEffect(() => {
     if (!committeeCode) return;
     const seen = loadSeenBroadcasts(committeeCode);
-    const now = Date.now();
+    const now = serverNow();   // compared with DB timestamps (T-1)
     const liveKeys = new Set<string>();
 
     for (const b of broadcasts) {
@@ -2996,7 +3207,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   // between arming and firing still leaves exactly one executor.
   useEffect(() => {
     const timers: NodeJS.Timeout[] = [];
-    const now = Date.now();
+    // `action_at` is a database timestamp: measure the delay on the database clock (T-1), or
+    // a laptop 40 s fast pauses the room 40 s early.
+    const now = serverNow();
     for (const b of broadcasts) {
       if (b.kind !== 'actionable' || !b.action) continue;
       if (!b.actionAt) continue;                  // fires on acknowledgement instead
@@ -3134,21 +3347,22 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const handleNextSpeaker = async () => {
     setTimerRunning(false);
-    stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
+    // G-3: pause in ONE write, at the live value, so the anchor read below sees where the
+    // clock really stopped.
+    const liveAtNext = speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt);
+    pauseSpeakerTimerInDB(committeeIdRef.current, liveAtNext, committeeCodeRef.current, chairSuffixRef.current);
     setExtraTimeAdded(false);
 
     if (committee.currentSpeaker) {
-      // Count elapsed time against the EXTENDED limit (base + any +time granted) so a speaker
-      // given extra time who yields early still logs their real speech instead of underflowing
-      // to a negative value that gets silently dropped from scoring/stats.
-      const secondsSpoken = Math.max(0, (committee.speakerTimeLimit + extraTimeAddedSecsRef.current) - speakerTimeRemaining);
-      if (secondsSpoken > 0) {
-        const ctx = committee.phase === 'moderated-caucus' ? 'moderated-caucus' : 'speakers-list';
-        const topic = committee.phase === 'moderated-caucus'
-          ? (committee.caucus?.purpose ?? committee.topic)
-          : committee.topic;
-        logSpeakingTime(committee.id, committee.currentSpeaker.country, secondsSpoken, ctx, topic, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      }
+      // T-3: the one speech logger (src/lib/floorSpeech.ts), from the persisted anchor
+      // (time_granted - live), which survives a reload and a gavel handover; the extended
+      // limit is only the fallback for legacy rows. The clock passed is the anchor BEFORE the
+      // pause above (it names this turn); the read is queued between the pause and the Next.
+      void logFloorSpeech(committee, {
+        base: speakerAnchorRef.current.base,
+        startedAt: speakerAnchorRef.current.startedAt,
+        extraSecs: extraTimeAddedSecsRef.current,
+      });
     }
     extraTimeAddedSecsRef.current = 0;
 
@@ -3162,9 +3376,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
     localUpdateTime.current = Date.now();
 
+    // S7: the seat nonce, identical in local state and in the row, names this floor turn.
+    const seatedAt = serverNowIso();
     updateLocal(setCommittee, (c) => ({
       ...c,
       currentSpeaker: next ?? null,
+      speakerSeatedAt: next ? seatedAt : null,
       speakersList: rest,
       speakerTimeRemaining: timeToUse,
     }));
@@ -3177,7 +3394,31 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       removeDelegateId,
       committee.code,
       committee.dbChairJoinSuffix ?? undefined,
+      seatedAt,
     );
+    localUpdateTime.current = Date.now();
+  };
+
+  // G-1: "Finish" for the last GSL speaker. Next is disabled on an empty list, so the last
+  // speech of a GSL that runs dry was never logged. This logs it from the anchor (shared,
+  // idempotent helper in src/lib/floorSpeech.ts) and leaves the floor empty, exactly like
+  // Next with nobody behind them. The log read joins the current_speaker chain before the
+  // Next write, so it sees this speaker's clock, not the cleared row.
+  const handleYieldFloor = async () => {
+    if (!committee?.currentSpeaker) return;
+    setTimerRunning(false);
+    setExtraTimeAdded(false);
+    void logFloorSpeech(committee, {
+      base: speakerAnchorRef.current.base,
+      startedAt: speakerAnchorRef.current.startedAt,
+      extraSecs: extraTimeAddedSecsRef.current,
+    });
+    extraTimeAddedSecsRef.current = 0;
+    const timeToUse = speakerTimeLimit;
+    seatSpeakerClock(timeToUse, null);
+    localUpdateTime.current = Date.now();
+    updateLocal(setCommittee, (c) => ({ ...c, currentSpeaker: null, speakerSeatedAt: null, speakerTimeRemaining: timeToUse }));
+    await nextSpeakerInDB(committee.id, timeToUse, null, null, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
     localUpdateTime.current = Date.now();
   };
 
@@ -3222,16 +3463,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       updateCaucusInDB(committee.id, anchored, committee.code, committee.dbChairJoinSuffix ?? undefined);
     }
     const base = live + grant;
-    const startedAt = running ? new Date().toISOString() : null;
+    const startedAt = running ? serverNowIso() : null;   // database clock (T-1)
     seatSpeakerClock(base, startedAt);
     extraTimeAddedSecsRef.current += grant;
     setExtraTimeAdded(true);
     // Optimistic-first, fire-and-forget (RULE 5). One write per press, never per second.
-    if (running) {
-      startSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current, startedAt!, base);
-    } else {
-      syncSpeakerTimeInDB(committeeIdRef.current, base, committeeCodeRef.current, chairSuffixRef.current);
-    }
+    // The grant is persisted with the anchor (current_speaker.time_granted), so the speech
+    // is logged with its extra time even after a reload (T-3).
+    grantSpeakerTimeInDB(committeeIdRef.current, grant, base, startedAt, committeeCodeRef.current, chairSuffixRef.current);
   };
 
   const handleToggleTimer = () => {
@@ -3257,14 +3496,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       // is written alongside it. Stamping only `started_at` (as this used to) left the base
       // at whatever a previous sync happened to store, so the chair and its readers started
       // from two different numbers.
-      const startedAt = new Date().toISOString();
+      const startedAt = serverNowIso();   // database clock (T-1)
       seatSpeakerClock(live, startedAt);
       startSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current, startedAt, live);
     } else {
-      // Sync current remaining time to DB on pause (S2 — no per-second writes)
+      // Pause = ONE write of { started_at: null, time_remaining: live } (G-3). As two writes
+      // phones briefly saw the old base, and a failed second write refunded the speaker.
       seatSpeakerClock(live, null);
-      stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
-      syncSpeakerTimeInDB(committeeIdRef.current, live, committeeCodeRef.current, chairSuffixRef.current);
+      pauseSpeakerTimerInDB(committeeIdRef.current, live, committeeCodeRef.current, chairSuffixRef.current);
     }
     // H2 — in a moderated caucus the TOTAL clock advances in lockstep with the speaker
     // clock, so play/pause is also the total clock's anchor point. One write per press,
@@ -3283,7 +3522,8 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
 
   const handleRestartTime = () => {
     setTimerRunning(false);
-    stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
+    // ONE current_speaker write per restart: the syncs below carry started_at null with the
+    // fresh base and grant (`stop`), instead of a stop followed by a separate sync.
     setExtraTimeAdded(false);
     const extraBeforeRestart = extraTimeAddedSecsRef.current;
     extraTimeAddedSecsRef.current = 0;
@@ -3301,7 +3541,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       const newRemainingTime = moderatedCaucusRemainingNow(committee.caucus, anchorBase, anchorStarted) + spentSeconds;
       const speakTime = capSpeakerSlot(committee.caucus.speakingTime, newRemainingTime);
       seatSpeakerClock(speakTime, null);
-      syncSpeakerTimeInDB(committee.id, speakTime, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      syncSpeakerTimeInDB(committee.id, speakTime, committee.code, committee.dbChairJoinSuffix ?? undefined, speakTime, true);   // fresh slot = fresh grant (T-3), clock stopped, one write
       // Ensure current speaker is in spokenCountries so a realtime echo cannot re-add them to the queue
       const currentCountry = committee.currentSpeaker?.country ?? null;
       const prevSpoken = committee.caucus.spokenCountries ?? [];
@@ -3315,14 +3555,20 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       updateCaucusInDB(committee.id, updated, committee.code, committee.dbChairJoinSuffix ?? undefined);
     } else {
       seatSpeakerClock(speakerTimeLimit, null);
-      syncSpeakerTimeInDB(committee.id, speakerTimeLimit, committee.code, committee.dbChairJoinSuffix ?? undefined);
+      syncSpeakerTimeInDB(committee.id, speakerTimeLimit, committee.code, committee.dbChairJoinSuffix ?? undefined, speakerTimeLimit, true);   // fresh grant (T-3), clock stopped, one write
     }
   };
 
   const handleNextCaucusSpeaker = async () => {
     if (!committee.caucus) return;
     setTimerRunning(false);
-    stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
+    // G-3 / T-3: pause at the live value in one write, so the anchor read that logs this
+    // speech (queued next on the same chain) sees where the clock stopped.
+    pauseSpeakerTimerInDB(
+      committeeIdRef.current,
+      speakerRemainingNow(speakerAnchorRef.current.base, speakerAnchorRef.current.startedAt),
+      committeeCodeRef.current, chairSuffixRef.current,
+    );
     setExtraTimeAdded(false);
 
     // Compute everything from current snapshot BEFORE any state updates
@@ -3332,10 +3578,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // Count against the EXTENDED slot the current speaker was actually given (caucus.
     // speakerTimeRemaining, capped for a last speaker) plus any +time, so extra time never
     // underflows the log and a capped speaker is not credited the motion's full time.
-    const currentSlot = committee.caucus.speakerTimeRemaining > 0 ? committee.caucus.speakerTimeRemaining : committee.caucus.speakingTime;
     const { base: anchorBase, startedAt: anchorStarted } = speakerAnchorRef.current;
-    const liveSpeaker = speakerRemainingNow(anchorBase, anchorStarted);
-    const spentOnCurrent = Math.max(0, (currentSlot + extraTimeAddedSecsRef.current) - liveSpeaker);
     // The LIVE total, derived from the anchor — `caucus.remainingTime` is only the value at
     // the anchor instant, so re-anchoring off it here would silently refund the whole
     // speech to the caucus.
@@ -3354,17 +3597,11 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // Room-Order Tour de Table speakers are anonymous "Speaker N" placeholders, not real
     // delegations — logging their time would credit a nonexistent country, so skip logging
     // entirely for Room Order (do not log to anyone).
-    const isRoomOrder = committee.caucus.purpose?.includes('Room Order') ?? false;
-    if (prevCountry && spentOnCurrent > 0 && !isRoomOrder) {
-      logSpeakingTime(
-        committee.id,
-        prevCountry,
-        spentOnCurrent,
-        'moderated-caucus',
-        committee.caucus.purpose ?? committee.topic,
-        committee.code,
-        committee.dbChairJoinSuffix ?? undefined,
-      );
+    // T-3: the one speech logger (src/lib/floorSpeech.ts) skips Room Order itself, reads the
+    // persisted anchor, and falls back to the extended slot (caucus.speakerTimeRemaining, capped
+    // for a last speaker, plus any +time) only for legacy rows.
+    if (prevCountry) {
+      void logFloorSpeech(committee, { base: anchorBase, startedAt: anchorStarted, extraSecs: extraTimeAddedSecsRef.current });
     }
     extraTimeAddedSecsRef.current = 0;
 
@@ -3381,8 +3618,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
         currentSpeaker: null,
         speakerTimeRemaining: speakTime,
       }), true);
-      updateCaucusInDB(committee.id, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'speakers-list', null, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       await nextSpeakerInDB(committee.id, speakTime, null, null, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
       localUpdateTime.current = Date.now();
       return;
@@ -3400,12 +3636,15 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       totalStartedAt: null,
     };
 
+    // S7: one seat nonce for local state and the row.
+    const seatedAt = serverNowIso();
     // Pure state update — no DB calls inside
     updateLocal(setCommittee, (c) => ({
       ...c,
       caucusQueue: rest,
       caucus: updatedCaucus,
       currentSpeaker: next ?? null,
+      speakerSeatedAt: next ? seatedAt : null,
       speakerTimeRemaining: speakTime,
     }), true);
 
@@ -3424,6 +3663,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       null,
       committee.code,
       committee.dbChairJoinSuffix ?? undefined,
+      seatedAt,
     );
     localUpdateTime.current = Date.now();
   };
@@ -3446,8 +3686,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     } else {
       stopSpeakerTimerInDB(committeeIdRef.current, committeeCodeRef.current, chairSuffixRef.current);
     }
-    setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    updateCaucusInDB(committee.id, null, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    setPhaseAndCaucusInDB(committee.id, 'speakers-list', null, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
     updateLocal(setCommittee, (c) => ({
       ...c,
       caucus: null,
@@ -3463,7 +3702,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     setSpeakerTimeLimitLocal(seconds);
     setSpeakerTimeLimitInput(String(seconds));
     seatSpeakerClock(seconds, null);
-    syncSpeakerTimeInDB(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    syncSpeakerTimeInDB(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined, seconds);   // fresh grant (T-3)
     updateLocal(setCommittee, (c) => ({ ...c, speakerTimeLimit: seconds, speakerTimeRemaining: seconds }));
     updateSpeakerTimeLimit(committee.id, seconds, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
@@ -3486,8 +3725,31 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
     // instead of leaving the chair on a phantom roll call for a still-suspended committee.
     updateLocal(setCommittee, (c) => ({ ...c, phase: 'pre-session', suspendedAt: null, resumingChair: null }));
     setSessionSuspended(false);
-    const started = await startResumeRollCallInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    // S-1: conditional on the committee still being suspended AND the latch still naming us.
+    const started = await startResumeRollCallInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined, claimedName);
     if (started) { clearResumeClaim(committee.code); setResumeError(null); return true; }
+    // False can mean "another device already resumed" (or took the latch over). Look before
+    // rolling back: a committee that is no longer suspended must not be thrown back into
+    // the suspended overlay, and must not be told its resume failed.
+    const { fresh, stale } = await fetchCommitteeGuarded(committee.code);
+    const resync = () => syncRef.current?.catchUp(undefined, { force: true });
+    if (fresh && !fresh.suspendedAt) {
+      clearResumeClaim(committee.code);
+      if (stale) resync();
+      else setCommittee((prev) => prev ? { ...prev, phase: fresh.phase, suspendedAt: null, resumingChair: fresh.resumingChair, caucus: fresh.caucus } : prev);
+      setSessionSuspended(false);
+      setResumeError(null);
+      return true;
+    }
+    if (fresh && fresh.resumingChair && fresh.resumingChair !== claimedName) {
+      // Someone took the latch over: show "{name} is resuming…" off the real row.
+      clearResumeClaim(committee.code);
+      if (stale) resync();
+      else updateLocal(setCommittee, (c) => ({ ...c, phase: fresh.phase, suspendedAt: fresh.suspendedAt, resumingChair: fresh.resumingChair }));
+      setSessionSuspended(true);
+      setResumeError(t('session_resume_lost'));
+      return false;
+    }
     // Roll the optimistic state back and hand the latch back so this chair (or another) can
     // retry. releaseResumeClaim is a compare-and-swap on our own name, so it cannot stomp a
     // claim someone else has since taken.
@@ -3520,12 +3782,14 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       if (!claimed) {
         // Lost the race (or the latch is stale). Pull the real row so the button stops being
         // a silent no-op and the chair actually sees who is resuming.
-        const fresh = await getCommitteeByCode(committee.code);
+        const { fresh, stale } = await fetchCommitteeGuarded(committee.code);
         if (!fresh) {
           setResumeError(t('session_resume_retry'));
           return;
         }
-        setCommittee((prev) => prev ? { ...prev, resumingChair: fresh.resumingChair, suspendedAt: fresh.suspendedAt, phase: fresh.phase } : prev);
+        // R-1: never merge a snapshot that predates a local write; the forced catch-up lands it.
+        if (stale) syncRef.current?.catchUp(undefined, { force: true });
+        else setCommittee((prev) => prev ? { ...prev, resumingChair: fresh.resumingChair, suspendedAt: fresh.suspendedAt, phase: fresh.phase } : prev);
         // The winner already finished: the committee is out of suspension, nothing to report.
         if (!fresh.suspendedAt) { setSessionSuspended(false); return; }
         // The latch turns out to be ours after all (our own claim landed but the response was
@@ -3557,8 +3821,9 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       const claimedName = myChairName || committee.chairNames[0] || 'Chair';
       const took = await takeOverResumeClaimInDB(committee.id, stale, claimedName, committee.code, committee.dbChairJoinSuffix ?? undefined);
       if (!took) {
-        const fresh = await getCommitteeByCode(committee.code);
-        if (fresh) setCommittee((prev) => prev ? { ...prev, resumingChair: fresh.resumingChair, suspendedAt: fresh.suspendedAt, phase: fresh.phase } : prev);
+        const { fresh, stale } = await fetchCommitteeGuarded(committee.code);
+        if (fresh && stale) syncRef.current?.catchUp(undefined, { force: true });
+        else if (fresh) setCommittee((prev) => prev ? { ...prev, resumingChair: fresh.resumingChair, suspendedAt: fresh.suspendedAt, phase: fresh.phase } : prev);
         if (fresh && !fresh.suspendedAt) { setSessionSuspended(false); return; }
         setResumeError(t('session_resume_lost'));
         return;
@@ -3573,6 +3838,17 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
   const handlePhaseChange = (phase: string) => {
     updateLocal(setCommittee, (c) => {
       let updated = { ...c, phase: phase as Committee['phase'] };
+      // Begin Session after a resume: a caucus the suspension paused comes back as its own
+      // phase, still paused; with none the GSL opens and no caucus data survives into it.
+      // Mirrors beginSessionAfterRollCall (committeeService), which RollCallPanel writes.
+      if (phase === 'speakers-list' && c.phase === 'pre-session') {
+        const kept = c.caucus ? freezeCaucusForBreak(c.caucus, 0, null) : c.caucus;
+        if (kept && kept.remainingTime > 0) {
+          updated = { ...updated, phase: phaseForCaucus(kept), caucus: kept };
+        } else {
+          updated = { ...updated, caucus: null, caucusQueue: [] };
+        }
+      }
       if (phase === 'speakers-list' && c.phase === 'pre-session') {
         const absentIds = new Set(c.delegates.filter((d) => d.status === 'absent').map((d) => d.id));
         const toRemove = c.speakersList.filter((s) => absentIds.has(s.delegateId));
@@ -3801,6 +4077,12 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {!sessionEnded && gavelElsewhere && (
         <GavelDeviceBanner onUseThisDevice={() => committee && claimGavelForThisDevice(committee, headChairName || myChairName)} />
       )}
+      {/* R-5: one deduplicated "Not saved" notice for every session write on this device.
+          T-1: a hint when this device's clock is more than 5 s off the database. */}
+      <SaveStatusToast />
+      <ClockSkewHint />
+      {/* R-4: Live / Reconnecting / Offline for this device's realtime connection. */}
+      <ConnectionPill state={connection} placement="bottom-end" />
       {gavelToast && (
         <GlassToast
           tone={gavelToast.tone}
@@ -3972,6 +4254,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 onListIds={gslListIds}
                 onCycleStatus={handleCycleStatus}
                 onStatusChange={handleStatusChange}
+                onBulkStatusChange={handleBulkStatusChange}
                 onPhaseChange={handlePhaseChange}
                 onDelegateAdd={handleDelegateAdd}
                 isRollCallPhase={true}
@@ -4232,6 +4515,10 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                 )
               )}
 
+{committee.phase === 'voting' && (
+                <VotingInProgressCard committee={committee} isViewOnly={isViewOnly} chairName={myChairName} />
+              )}
+
 {showSpeakersListView && (
                 <>
                 {/* Three-zone flex column: queue locked top, centre shrinks, buttons locked above bottom bar */}
@@ -4313,10 +4600,21 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
                               </span>
                             ) : t('gsl_start')}
                           </button>
+                          {committee.speakersList.length === 0 && !gslRequireNextSpeaker ? (
+                            /* Nobody behind this speaker: Finish records the speech and
+                               clears the floor (G-1). Next would have nobody to call.
+                               Hidden when gslRequireNextSpeaker is on: that setting means
+                               the GSL may never run dry, so the floor is not emptied. */
+                            <button onClick={handleYieldFloor} title={t('gsl_yield_title')}
+                              className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap gv-lift" style={{ fontSize: '14px' }}>
+                              {t('gsl_yield')}
+                            </button>
+                          ) : (
                           <button onClick={handleNextSpeaker} disabled={committee.speakersList.length === 0}
                             className="flex-1 bg-[#DDD4C0] hover:bg-[#C8BAA8] disabled:opacity-40 text-[#1C1410] py-3 px-4 rounded-xl font-bold transition-colors focus:outline-none whitespace-nowrap gv-lift" style={{ fontSize: '14px' }}>
                             {t('gsl_next')}
                           </button>
+                          )}
                           <button
                             onClick={() => setActivePopover(activePopover === 'extraTime' ? null : 'extraTime')}
                             data-tutorial="add-time-button"
@@ -4445,8 +4743,16 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
           onCommitteeUpdate={(updater) => updateLocal(setCommittee, updater, true)}
           belowQuorum={belowQuorum}
           isViewOnly={isViewOnly}
+          floorClock={() => ({
+            base: speakerAnchorRef.current.base,
+            startedAt: speakerAnchorRef.current.startedAt,
+            extraSecs: extraTimeAddedSecsRef.current,
+          })}
         />
       )}
+      {/* "N other motions fell" + Undo, a failed motion save, a blocked proposer. Lives
+          outside MotionsModal so it survives the modal closing (M-1, M-2). */}
+      {committee && !isViewOnly && <MotionFlightNotice committeeId={committee.id} closed={!!committee.suspendedAt || !!committee.endedAt} />}
       {showDocuments && !isPreSession && !sessionEnded && (
         <DocumentsModal
           committee={committee}
@@ -4519,6 +4825,7 @@ function ChairSessionInner({ params }: { params: Promise<{ code: string }> }) {
       {/* Exactly ONE per surface — this host owns the interval that advances every
           notification's TTL, so a second mount would halve every countdown. */}
       {agenda.picker}
+      {settingsSync.notice}
       <NotificationStack extras={broadcastExtras} />
       {showTutorial && committee && (
         <TutorialOverlay

@@ -694,6 +694,8 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   const { language, setLanguage } = useLanguage();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [tab, setTab] = useState<SettingsTab>('access');
+  // A settings write the database refused (RLS, network). Cleared by the next change.
+  const [writeFailed, setWriteFailed] = useState(false);
   const { getSettings, updateSetting } = useSettingsStore();
   const s = getSettings(committee.code);
   const headChairName = committee.dbHeadChair || committee.chairNames?.[0] || '';
@@ -718,17 +720,17 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
     pendingScoring.current = null;
     const suffix = committee.dbChairJoinSuffix ?? undefined;
     if (settingsPatch) {
-      // `headChair` is not a CommitteeSettings field, but it rides along in the
-      // dbSettings blob the chair/voting loaders hydrate into the store. Writing
-      // it back would silently revert the gavel to whoever held it at page load
-      // (AGENTS.md rule 12), so it never leaves this component. `headChairDevice` is the
-      // gavel's device half (src/lib/gavelDevice.ts) and is excluded for the same reason.
-      const { headChair: _headChair, headChairDevice: _headChairDevice, ...rest } =
-        { ...getSettings(committee.code), ...settingsPatch } as Record<string, unknown>;
-      void _headChair; void _headChairDevice;
-      saveCommitteeSettings(committee.id, rest, committee.code, suffix);
+      // ONLY the keys this chair changed since the last flush. The old write posted the
+      // whole local store, so a device that loaded earlier silently reverted every other
+      // chair's settings (D-1). `saveCommitteeSettings` is a key-level patch RPC and drops
+      // headChair / headChairDevice / chairJoinSuffix / agendaTopicIndex defensively.
+      void saveCommitteeSettings(committee.id, settingsPatch, committee.code, suffix)
+        .then((ok) => { if (!ok) setWriteFailed(true); });
     }
-    if (scoringPatch) updateCommitteeScoringInDB(committee.id, scoringPatch, committee.code, suffix);
+    if (scoringPatch) {
+      void updateCommitteeScoringInDB(committee.id, scoringPatch, committee.code, suffix)
+        .then((ok) => { if (!ok) setWriteFailed(true); });
+    }
   };
   const flushRef = useRef(flushWrites);
   flushRef.current = flushWrites;
@@ -749,6 +751,7 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
   const upd = <K extends keyof CommitteeSettings>(key: K, value: CommitteeSettings[K]) => {
     if (isViewOnly) return;   // UI gate — see the isViewOnly prop note above
     updateSetting(committee.code, key, value);
+    setWriteFailed(false);
     pendingSettings.current = { ...(pendingSettings.current ?? {}), [key]: value };
     scheduleWrite();
   };
@@ -887,6 +890,17 @@ export function SettingsPanel({ committee, onClose, myChairName, isViewOnly = fa
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
+
+          {writeFailed && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 px-3.5 py-2.5 rounded-xl mb-4 text-xs font-semibold"
+              style={{ backgroundColor: 'rgba(139,32,32,0.10)', border: '1px solid rgba(139,32,32,0.28)', color: '#8B2020' }}
+            >
+              <span className="flex-1">{t('settings_write_failed')}</span>
+              <button onClick={() => setWriteFailed(false)} aria-label="Dismiss" className="shrink-0 focus:outline-none">✕</button>
+            </div>
+          )}
 
           {/* Commenter (view-only) notice. Matches the chair page's view-only pill.
               This is a UI gate, not enforcement — see the isViewOnly prop note. */}

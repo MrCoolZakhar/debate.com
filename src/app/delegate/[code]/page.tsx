@@ -26,24 +26,20 @@ import { getCommitteeFlags, sponsorLabel, motionNames } from '@/lib/committeeFla
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { chatUnreadTotal, mergeMessagesById } from '@/lib/chatConversations';
 import { loadChatReadCounts, saveChatReadCounts } from '@/lib/chatReadKey';
-import { catchUpMessages, useChatCatchUp, useReSubscribeCatchUp } from '@/lib/useChatCatchUp';
+import { startSessionSync, rowFields, withCurrentSpeaker, withLists, type ConnectionState } from '@/lib/sessionSync';
+import ConnectionPill from '@/components/ConnectionPill';
 import {
   getCommitteeByCode,
   // Explicitly sanctioned on this surface: a pure reader over the committee row,
   // no store, no localStorage (see its comment banner in committeeService).
   caucusRemainingNow,
   moderatedCaucusRemainingNow,
-  subscribeToCommittee,
-  getCurrentSpeakerRow,
-  getDelegatesList,
-  getSpeakersLists,
-  getDocumentsList,
-  getPendingMotionsList,
   addDocument as addDocumentInDB,
   requestJoinSession,
   requestGslSpot,
   setDelegateStatus as setDelegateStatusInDB,
 } from '@/lib/committeeService';
+import { serverNow } from '@/lib/serverClock';
 import { useAuth } from '@/components/AuthProvider';
 import { claimDelegateSeat, seatKey } from '@/lib/seatClaims';
 import { safeStorageKey } from '@/lib/storageKey';
@@ -414,6 +410,7 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitFailed, setSubmitFailed] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -504,7 +501,10 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
   const handleSubmit = async () => {
     if (!title.trim() || sending || uploading || limitReached) return;
     setSending(true);
-    await addDocumentInDB(committee.id, {
+    // V-6: the insert result is checked. A failure keeps the form filled and says so,
+    // instead of clearing it and showing "submitted". The code sent here is only a
+    // placeholder: the database trigger assigns the real WP-n / DR-n under a lock.
+    const saved = await addDocumentInDB(committee.id, {
       type: docType,
       docCode: autoDocCode(docType, committee.documents ?? []),
       title: title.trim(),
@@ -513,6 +513,12 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
       status: 'submitted',
       ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
     }, committee.code);
+    if (!saved) {
+      setSubmitFailed(true);
+      setSending(false);
+      return;
+    }
+    setSubmitFailed(false);
     setTitle('');
     setCoSponsors([]);
     setLink('');
@@ -532,6 +538,11 @@ function DelegateDocumentsTab({ committee, country }: { committee: Committee; co
       {submitted && (
         <div className="rounded-xl p-3 text-sm font-semibold" style={{ backgroundColor: 'rgba(27,56,40,0.1)', border: '1px solid rgba(27,56,40,0.3)', color: '#1B3828' }}>
           {t('delegate_doc_submitted_success')}
+        </div>
+      )}
+      {submitFailed && (
+        <div role="alert" className="rounded-xl p-3 text-sm font-semibold" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.3)', color: '#8B2020' }}>
+          {t('documents_submit_failed')}
         </div>
       )}
       <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl p-4 space-y-4">
@@ -823,11 +834,10 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
 
   const committeeIdRef = useRef('');
   const wasEverSuspended = useRef(false);
-  // Serialises concurrent refetches fired from the realtime subscription. Two rapid events
-  // produce two in-flight fetches; without a ticket an OLDER snapshot resolving last would
-  // overwrite the newer one with stale rows. Each fetch takes a ticket and only applies if
-  // it is still the newest. Mirrors the chair page.
-  const fetchSeq = useRef(0);
+  // Live / Reconnecting / Offline, fed by the session sync (R-4). Refetch sequencing now
+  // lives in src/lib/sessionSync.ts, one counter PER SLICE (R-2): the old single counter
+  // let a delegates refetch cancel the committees refetch that carried a new caucus.
+  const [connection, setConnection] = useState<ConnectionState>('reconnecting');
   // Statuses this delegate has written but not yet seen confirmed by a refetch. Without the
   // pin, ANY snapshot that predates the write — including one triggered by a completely
   // unrelated event (the chair pressing All Present, a phase change) — repaints the
@@ -892,132 +902,84 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   // motionNames (committeeFlags), getScoringConfig (scoring), docName + docLimit
   // (docNames).
 
-  // Realtime does not replay events missed while the socket was down — the normal case for a
-  // backgrounded phone. Catch chat up on reconnect, tab-visible and back-online.
-  const onRealtimeStatus = useReSubscribeCatchUp(setCommittee);
-  useChatCatchUp(committee?.id, setCommittee);
-
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
     async function load() {
       const found = await getCommitteeByCode(code.toUpperCase());
+      if (cancelled) return;
       setCommittee(found ?? null);
       setLoading(false);
       if (found) {
         if (found.endedAt) setSessionEnded(true);
         else if (found.suspendedAt) { wasEverSuspended.current = true; setSessionSuspended(true); }
         committeeIdRef.current = found.id;
-        const cid = found.id;
-        unsubscribe = subscribeToCommittee(cid, async (table) => {
-          // Patch only the slice that changed instead of re-pulling the whole committee
-          // (7 tables, select('*')) on every event. Session-state transitions (suspend /
-          // end / resume) only ever land on the `committees` table, so that one event type
-          // keeps the full refetch and its setSessionEnded/Suspended logic. All other tables
-          // can never change session state, so a scoped patch is safe.
-          if (table === 'current_speaker') {
-            // Every awaited fetch below takes a ticket off the same counter: whichever fetch
-            // is newest wins, so an older snapshot can never resolve last and land.
-            const seq = ++fetchSeq.current;
-            const cs = await getCurrentSpeakerRow(cid);
-            if (seq !== fetchSeq.current) return;
-            if (!cs) return;
+        // One pipeline for every event (src/lib/sessionSync.ts). Each event refetches ONLY its
+        // own slice, coalesced into one trailing fetch (~200 ms) per slice, with a sequence
+        // counter PER SLICE, so a caucus accept (4-5 writes at once), a GSL Next or an
+        // approve (insert then delete) all land instead of cancelling each other (R-2). The
+        // committees event refetches the committee ROW only (PERF-3), messages land straight
+        // from the realtime payload, and a failed read is never applied (P-4). This page
+        // renders neither chair notes nor organiser broadcasts, so it does not subscribe to
+        // `feedback` / `session_broadcasts` at all (PERF-1). Wake, reconnect and back-online
+        // refetch every slice (R-4).
+        const sync = startSessionSync({
+          committeeId: found.id,
+          tables: ['committees', 'delegates', 'speakers_list', 'current_speaker', 'motions', 'documents', 'messages'],
+          slices: ['row', 'delegates', 'lists', 'currentSpeaker', 'motions', 'documents', 'messages'],
+          onConnection: setConnection,
+          onMessage: (m) => setCommittee((prev) => {
+            if (!prev) return prev;
+            const merged = mergeMessagesById(prev.messages, [m]);
+            return merged === prev.messages ? prev : { ...prev, messages: merged };
+          }),
+          apply: (slice, data) => {
+            if (slice === 'row') {
+              // Session-state transitions (suspend / end / resume) only ever land on this row.
+              const updated = data as Committee;
+              if (updated.endedAt) {
+                setSessionEnded(true);
+                setSessionSuspended(false);
+              } else if (updated.suspendedAt) {
+                wasEverSuspended.current = true;
+                setSessionSuspended(true);
+                setSessionEnded(false);
+              } else if (updated.phase === 'pre-session' && wasEverSuspended.current) {
+                setSessionSuspended(true);
+                setSessionEnded(false);
+              } else {
+                setSessionEnded(false);
+                setSessionSuspended(false);
+              }
+              setCommittee((prev) => prev ? { ...prev, ...rowFields(updated) } : prev);
+              return;
+            }
             setCommittee((prev) => {
               if (!prev) return prev;
-              const patched: Committee = {
-                ...prev,
-                currentSpeaker: cs.currentSpeaker,
-                speakerTimeRemaining: cs.speakerTimeRemaining,
-                speakerStartedAt: cs.speakerStartedAt,
-                // Drop the new speaker from the local GSL to avoid a transient duplicate
-                // before the speakers_list delete event arrives (mirrors getCommitteeByCode).
-                speakersList: cs.currentSpeaker
-                  ? prev.speakersList.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                  : prev.speakersList,
-              };
-              if (prev.caucus && prev.caucus.type === 'moderated') {
-                patched.caucus = { ...prev.caucus, currentSpeaker: cs.currentSpeaker?.country ?? null };
-                patched.caucusQueue = cs.currentSpeaker
-                  ? prev.caucusQueue.filter((s) => s.delegateId !== cs.currentSpeaker!.delegateId)
-                  : prev.caucusQueue;
+              switch (slice) {
+                // Keep this delegation's own just-written status until the DB confirms it.
+                case 'delegates': return { ...prev, delegates: applyPinnedStatuses(data as Committee['delegates']) };
+                case 'lists': return withLists(prev, data as Parameters<typeof withLists>[1]);
+                case 'currentSpeaker': return withCurrentSpeaker(prev, data as Parameters<typeof withCurrentSpeaker>[1], { includeRemaining: true });
+                case 'motions': return { ...prev, pendingMotions: data as Committee['pendingMotions'] };
+                case 'documents': return { ...prev, documents: data as Committee['documents'] };
+                case 'messages': {
+                  // Append-only: merge by id, never replace.
+                  const merged = mergeMessagesById(prev.messages, data as Committee['messages']);
+                  return merged === prev.messages ? prev : { ...prev, messages: merged };
+                }
+                default: return prev;
               }
-              return patched;
             });
-            return;
-          }
-          if (table === 'speakers_list') {
-            const seq = ++fetchSeq.current;
-            const { speakersList, caucusQueue } = await getSpeakersLists(cid);
-            if (seq !== fetchSeq.current) return;
-            setCommittee((prev) => prev ? {
-              ...prev,
-              speakersList: prev.currentSpeaker
-                ? speakersList.filter((s) => s.delegateId !== prev.currentSpeaker!.delegateId)
-                : speakersList,
-              caucusQueue,
-            } : prev);
-            return;
-          }
-          if (table === 'delegates') {
-            const seq = ++fetchSeq.current;
-            const delegates = await getDelegatesList(cid);
-            if (seq !== fetchSeq.current) return;
-            // Keep this delegation's own just-written status until the DB confirms it.
-            setCommittee((prev) => prev ? { ...prev, delegates: applyPinnedStatuses(delegates) } : prev);
-            return;
-          }
-          if (table === 'messages') {
-            await catchUpMessages(cid, setCommittee);
-            return;
-          }
-          if (table === 'documents') {
-            const seq = ++fetchSeq.current;
-            const documents = await getDocumentsList(cid);
-            if (seq !== fetchSeq.current) return;
-            setCommittee((prev) => prev ? { ...prev, documents } : prev);
-            return;
-          }
-          if (table === 'motions') {
-            const seq = ++fetchSeq.current;
-            const pendingMotions = await getPendingMotionsList(cid);
-            if (seq !== fetchSeq.current) return;
-            setCommittee((prev) => prev ? { ...prev, pendingMotions } : prev);
-            return;
-          }
-
-          // table === 'committees' (and any fallback): session state may have changed.
-          const seq = ++fetchSeq.current;
-          const updated = await getCommitteeByCode(code.toUpperCase());
-          if (seq !== fetchSeq.current) return;   // a newer refetch already applied
-          if (updated) {
-            if (updated.endedAt) {
-              setSessionEnded(true);
-              setSessionSuspended(false);
-            } else if (updated.suspendedAt) {
-              wasEverSuspended.current = true;
-              setSessionSuspended(true);
-              setSessionEnded(false);
-            } else if (updated.phase === 'pre-session' && wasEverSuspended.current) {
-              setSessionSuspended(true);
-              setSessionEnded(false);
-            } else {
-              setSessionEnded(false);
-              setSessionSuspended(false);
-            }
-            // Messages are append-only: merge rather than replace so this full refetch can
-            // never drop a message that the scoped messages handler already delivered.
-            // Delegates go through the same pin as the scoped branch above — this fallback
-            // fires on every phase change, so without it any unrelated `committees` event
-            // would repaint this delegation's just-written status from a stale snapshot.
-            setCommittee((prev) => prev
-              ? { ...updated, messages: mergeMessagesById(prev.messages, updated.messages), delegates: applyPinnedStatuses(updated.delegates) }
-              : { ...updated, delegates: applyPinnedStatuses(updated.delegates) });
-          }
-        }, (status) => onRealtimeStatus(cid, status));
+          },
+        });
+        if (cancelled) { sync.stop(); return; }
+        unsubscribe = sync.stop;
       }
     }
     load();
-    return () => unsubscribe?.();
-  }, [code, onRealtimeStatus]);
+    return () => { cancelled = true; unsubscribe?.(); };
+  }, [code]);
 
   // Seat guard. Runs independently of the committee load. claim_delegate_seat is the one
   // authority for who may sit here (src/lib/seatClaims.ts):
@@ -1160,7 +1122,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
   useEffect(() => {
     if (!committee?.expiresAt) { setHoursRemaining(null); return; }
     function calc() {
-      const ms = new Date(committee!.expiresAt!).getTime() - Date.now();
+      const ms = new Date(committee!.expiresAt!).getTime() - serverNow();   // database clock (T-1)
       setHoursRemaining(Math.max(0, Math.floor(ms / (1000 * 60 * 60))));
     }
     calc();
@@ -1893,7 +1855,12 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
      in one slot is what lets the board stay a single screen in every phase. */
   const bottomLeft = (() => {
     if (votingLive) {
-      const activeDoc = (committee.documents ?? []).find((d) => d.status === 'on-floor' || d.status === 'introduced');
+      // /voting/[code] sets phase='voting' when the Moderator opens it (V-3), and only
+      // draft resolutions are put to a roll-call vote there, so an introduced DR is the
+      // paper being voted on. Any other paper on the floor is the fallback.
+      const docs = committee.documents ?? [];
+      const activeDoc = docs.find((d) => d.type === 'draft-resolution' && d.status === 'introduced')
+        ?? docs.find((d) => d.status === 'on-floor' || d.status === 'introduced');
       return (
         <Panel className="dgv-queue dgv-rise" style={{ padding: 14, textAlign: 'center', justifyContent: 'center' }}>
           <p style={{ margin: 0, fontFamily: OUTFIT, fontSize: 'clamp(16px,5vw,24px)', fontWeight: 900, letterSpacing: '-0.02em', color: DG.forest }}>
@@ -2051,6 +2018,7 @@ function DelegateSessionInner({ params }: { params: Promise<{ code: string }> })
       style={{ height: '100dvh', overflow: 'hidden', background: DG.ivory }}
     >
       <DelegateStyles />
+      <ConnectionPill state={connection} />
       {header}
 
       {/* Ended tab bar */}

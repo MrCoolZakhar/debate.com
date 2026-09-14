@@ -15,6 +15,8 @@ export interface LedgerEvent {
   value?: number;
   note?: string;
   timestamp?: string;
+  /** Per-floor-turn idempotency key (src/lib/floorSpeech.ts). Duplicates are dropped on parse. */
+  turnKey?: string;
 }
 
 export interface LedgerRow {
@@ -89,6 +91,32 @@ function parseLogEvents(committee: Committee): LedgerEvent[] {
       catch { return null; }
     })
     .filter(Boolean) as LedgerEvent[];
+  // One speech per floor turn, EXACTLY by key (S7): an event carrying a `turnKey`
+  // (src/lib/floorSpeech.ts) that was already seen is a second trigger or a second device.
+  // Keys are per seating (current_speaker.seated_at), so a second real speech by the same
+  // delegation has a different key and needs no time window.
+  //
+  // The one exception is HISTORY: events logged before seat nonces existed carry a paused
+  // `|p:N` key that legitimately recurs, so exact dedupe would erase real speeches already in
+  // today's logs. Only those legacy keys are compared by timestamp (within 15 s). Nothing
+  // new is written with such a key once a row has a seat nonce.
+  const seenTurns = new Set<string>();
+  const legacyPaused = new Map<string, number[]>();
+  const deduped = events.filter((e) => {
+    if (!e.turnKey) return true;
+    if (e.turnKey.includes('|p:')) {
+      const at = e.timestamp ? new Date(e.timestamp).getTime() : NaN;
+      const prior = legacyPaused.get(e.turnKey) ?? [];
+      if (prior.some((p) => !Number.isFinite(p) || !Number.isFinite(at) || Math.abs(at - p) < 15_000)) return false;
+      legacyPaused.set(e.turnKey, [...prior, at]);
+      return true;
+    }
+    if (seenTurns.has(e.turnKey)) return false;
+    seenTurns.add(e.turnKey);
+    return true;
+  });
+  events.length = 0;
+  events.push(...deduped);
 
   logEventCache.set(msgs, { len: msgs.length, events });
   return events;

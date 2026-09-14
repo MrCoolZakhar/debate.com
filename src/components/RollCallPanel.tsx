@@ -6,7 +6,7 @@ import { getFlagUrl, getCountryDisplayName, UN_COUNTRIES, matchesCountryQuery, s
 import { SeatFlag, useSeatArt } from '@/components/SeatFlag';
 import { getCommitteeDisplayName } from '@/lib/presetNames';
 import {
-  setPhase as setPhaseInDB,
+  beginSessionAfterRollCall,
   setDelegateObserver as setDelegateObserverInDB,
   resolveJoinRequestsOnAdmit,
 } from '@/lib/committeeService';
@@ -285,6 +285,7 @@ function RollCallPanelInner({
   onRemoveFromList,
   onCycleStatus,
   onStatusChange,
+  onBulkStatusChange,
   onPhaseChange,
   onDelegateAdd,
   onReorderList,
@@ -313,6 +314,12 @@ function RollCallPanelInner({
    */
   onCycleStatus?: (delegateId: string) => void;
   onStatusChange?: (delegateId: string, status: DelegateStatus) => void;
+  /**
+   * Bulk roll call (All present / All P+V / Clear) as ONE parent write. When given, the
+   * bulk buttons call this once instead of onStatusChange per delegate (PERF-2: 190 writes
+   * and 190 realtime events for a General Assembly).
+   */
+  onBulkStatusChange?: (status: DelegateStatus, delegateIds: string[]) => void;
   onPhaseChange?: (phase: string) => void;
   onDelegateAdd?: (country: string) => void;
   onReorderList?: (newList: { delegateId: string; country: string }[]) => void;
@@ -508,7 +515,8 @@ function RollCallPanelInner({
     const at = Date.now();
     committee.delegates.forEach((d) => { newStatuses[d.id] = status; pendingStatusRef.current[d.id] = { value: status, at }; });
     setLocalStatuses(newStatuses);
-    committee.delegates.forEach((d) => onStatusChange?.(d.id, status));
+    if (onBulkStatusChange) onBulkStatusChange(status, committee.delegates.map((d) => d.id));
+    else committee.delegates.forEach((d) => onStatusChange?.(d.id, status));
   };
 
   const handleAllPresent = () => setAllStatuses('present');
@@ -516,8 +524,10 @@ function RollCallPanelInner({
   const handleClear = () => setAllStatuses('absent');
 
   const handleBeginSession = () => {
+    // The chair page restores a caucus that a suspension paused (or opens the GSL); the DB
+    // write decides from the stored row and clears any caucus data when there is none (C-1).
     onPhaseChange?.('speakers-list');
-    setPhaseInDB(committee.id, 'speakers-list', committee.code, committee.dbChairJoinSuffix ?? undefined);
+    void beginSessionAfterRollCall(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
   };
 
   const handleAddDelegate = (country: string) => {

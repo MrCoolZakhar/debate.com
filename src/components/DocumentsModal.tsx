@@ -5,28 +5,27 @@ import Portal from '@/components/Portal';
 import { portalFrame } from '@/components/chat/chatTokens';
 import { useT, useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
-import { Committee, CommitteeDocument, DocumentType, DocumentStatus } from '@/lib/types';
+import { Committee, CommitteeDocument, DocIntroState, DocumentType, DocumentStatus } from '@/lib/types';
+import { serverNow, serverNowIso } from '@/lib/serverClock';
+import { introRemainingNow, requireDocApproval as readRequireDocApproval, updateDocumentFlow, deleteDocumentChecked } from '@/lib/documentFlow';
 import { sponsorLabel } from '@/lib/committeeFlags';
 import { docName, docCount, docLimit, docLimitReached } from '@/lib/docNames';
 import { TranslationKey } from '@/lib/translations';
 import { getCountryDisplayName, matchesCountryQuery, startsWithCountryQuery } from '@/lib/countries';
 import { SeatFlag } from '@/components/SeatFlag';
 import { Emoji } from '@/components/Emoji';
-import { useSettingsStore } from '@/lib/settingsStore';
 import { supabase } from '@/lib/supabase';
 import { safeStorageKey } from '@/lib/storageKey';
 import {
   addDocument as addDocumentInDB,
-  updateDocumentStatus as updateDocumentStatusInDB,
-  updateDocumentTimings as updateDocumentTimingsInDB,
-  removeDocument as removeDocumentInDB,
   updateDocumentApproval as updateDocumentApprovalInDB,
-  suspendDebate as suspendDebateInDB,
 } from '@/lib/committeeService';
 
 type DocTab = 'working-paper' | 'draft-resolution';
 // Flow stages for the fullscreen presentation experience
-type PresentationStage = 'setup' | 'reading' | 'presentation' | 'qa' | 'vote' | null;
+type PresentationStage = 'setup' | 'reading' | 'presentation' | 'qa' | null;
+type TimedStage = DocIntroState['stage'];
+const STAGE_ORDER: TimedStage[] = ['reading', 'presentation', 'qa'];
 
 const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
   submitted:   { label: 'Submitted',  color: 'bg-[#1B3828]/20 text-[#1B3828] border-[#1B3828]/30' },
@@ -192,6 +191,8 @@ function SponsorSelect({ candidates, selected, onChange, committee }: {
   );
 }
 
+// PREVIEW only. The saved code is assigned by the documents_assign_doc_code trigger under a
+// per-committee lock (V-6), so two simultaneous submissions can never share a code.
 function autoDocCode(type: DocumentType, existingDocs: CommitteeDocument[]): string {
   const prefix = type === 'working-paper' ? 'WP' : 'DR';
   const sep = type === 'working-paper' ? '.' : '/';
@@ -204,21 +205,31 @@ function formatTime(seconds: number) {
 }
 
 // ── Countdown Timer (reading / presentation / Q&A) ────────────────────────────
+// Anchor-based (V-5): the clock is `clock` = documents.intro_state {base, startedAt}, and the
+// remaining time is DERIVED from it, never decremented. The interval only refreshes `now`
+// for this component; it never writes. Start, pause and reset are the only writes, so a
+// reload or another chair device picks the stage up at the right second.
 function StageTimer({
-  label, color, totalSeconds, doc, committee, showDocument,
+  label, totalSeconds, doc, committee, showDocument, clock, onClockChange,
   onComplete, onToggleDocument, onBack,
 }: {
-  label: React.ReactNode; color: string; totalSeconds: number;
+  label: React.ReactNode; totalSeconds: number;
   doc: CommitteeDocument; committee: Committee; showDocument: boolean;
+  clock: { base: number; startedAt: string | null };
+  onClockChange: (next: { base: number; startedAt: string | null }) => void;
   onComplete: () => void; onToggleDocument: () => void; onBack: () => void;
 }) {
   const t = useT();
-  const [remaining, setRemaining] = useState(totalSeconds);
-  const [running, setRunning] = useState(false);
-  const [started, setStarted] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const remainingRef = useRef(totalSeconds);
-  remainingRef.current = remaining;
+  // Database clock (T-1): the stage anchor is stamped and read on every chair device.
+  const [now, setNow] = useState(() => serverNow());
+  const running = !!clock.startedAt;
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setNow(serverNow()), 500);
+    return () => clearInterval(id);
+  }, [running, clock.startedAt]);
+  const remaining = introRemainingNow(clock, now);
+  const started = running || clock.base < totalSeconds;
   const [splitPct, setSplitPct] = useState(50);
   const isDraggingDivider = useRef(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -240,18 +251,6 @@ function StageTimer({
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
   };
-
-  useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        if (remainingRef.current <= 0) { setRunning(false); return; }
-        setRemaining((r) => Math.max(0, r - 1));
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running]);
 
   const done = remaining === 0;
   const progress = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 100;
@@ -283,7 +282,7 @@ function StageTimer({
               ←
             </button>
             <button
-              onClick={() => { setRemaining(totalSeconds); setRunning(false); setStarted(false); }}
+              onClick={() => onClockChange({ base: totalSeconds, startedAt: null })}
               title="Reset timer"
               className="w-10 h-10 rounded-xl font-bold transition-colors focus:outline-none flex items-center justify-center"
               style={{ backgroundColor: 'transparent', color: '#6A5A4A', border: '1px solid #DDD4C0' }}
@@ -291,7 +290,10 @@ function StageTimer({
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#DDD4C0'; (e.currentTarget as HTMLElement).style.color = '#6A5A4A'; }}>
               ↺
             </button>
-            <button onClick={() => { setRunning((r) => !r); setStarted(true); }}
+            <button onClick={() => {
+                const live = introRemainingNow(clock, serverNow());
+                onClockChange(running ? { base: live, startedAt: null } : { base: live, startedAt: serverNowIso() });
+              }}
               className="px-8 py-3 rounded-xl font-bold transition-colors focus:outline-none"
               style={{ backgroundColor: running ? '#B8844A' : '#2A5A3C', color: 'white', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
               {running ? (
@@ -369,156 +371,6 @@ function StageTimer({
   );
 }
 
-// ── Document Vote Screen (DR only) ────────────────────────────────────────────
-function DocumentVote({ doc, committee, onDone, onStatusChange }: {
-  doc: CommitteeDocument; committee: Committee;
-  onDone: () => void; onStatusChange: (docId: string, status: DocumentStatus) => void;
-}) {
-  const t = useT();
-  const router = useRouter();
-  const present = committee.delegates.filter((d) => d.status !== 'absent').length;
-  const [forVotes, setFor] = useState(0);
-  const [against, setAgainst] = useState(0);
-  const [abstain, setAbstain] = useState(0);
-  const [result, setResult] = useState<'passed' | 'failed' | null>(null);
-  const [showProceedPanel, setShowProceedPanel] = useState(false);
-  const [suspendProposer, setSuspendProposer] = useState('');
-  const [showSuspendVote, setShowSuspendVote] = useState(false);
-  const [showSuspended, setShowSuspended] = useState(false);
-  const needed = Math.floor(present / 2) + 1;
-
-  useEffect(() => {
-    if (!showSuspended) return;
-    const handler = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') router.push('/sessions'); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [showSuspended, router]);
-
-  const finalize = () => {
-    const r = forVotes > against ? 'passed' : 'failed';
-    setResult(r);
-    onStatusChange(doc.id, r);
-  };
-
-  // Suspend vote prompt
-  if (showSuspendVote && !showSuspended) {
-    return (
-      <Portal><div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
-        <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">MOTION TO SUSPEND DEBATE · {suspendProposer}</p>
-        <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>DOES THIS MOTION PASS?</h1>
-        <div className="flex gap-8">
-          <button
-            onClick={async () => {
-              await suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-              setShowSuspended(true);
-            }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
-            YES
-          </button>
-          <button
-            onClick={() => { setShowSuspendVote(false); setShowProceedPanel(false); }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
-            NO
-          </button>
-        </div>
-      </div></Portal>
-    );
-  }
-
-  if (showSuspended) {
-    return (
-      <Portal><div className="fixed inset-0 z-[70] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
-        <h1 className="text-6xl font-black text-[#1C1410] mb-4">Session is now suspended.</h1>
-        <p className="text-4xl font-black text-[#1C1410] mb-16">See you again soon!</p>
-        <p className="text-lg text-[#1C1410]/40">— Press ESC to go back to main menu</p>
-      </div></Portal>
-    );
-  }
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">
-      <p className="text-xs font-mono tracking-widest mb-2 text-[#9A8A78]">{doc.docCode} · {t('documents_vote_label')}</p>
-      <h2 className="text-2xl font-black text-[#1C1410] mb-1">{doc.title}</h2>
-      <p className="text-sm text-[#6A5A4A] mb-8">{t('documents_vote_needs').replace('{needed}', String(needed)).replace('{present}', String(present))}</p>
-      {result ? (
-        <>
-          <div className={`w-full max-w-sm px-8 py-10 rounded-2xl ${result === 'passed' ? 'bg-green-950/40 border border-green-800/40' : 'bg-red-950/40 border border-red-800/40'}`}>
-            <p className={`text-4xl font-black mb-2 ${result === 'passed' ? 'text-green-400' : 'text-red-400'}`}>{result === 'passed' ? t('documents_vote_passed') : t('documents_vote_failed')}</p>
-            <p className="text-sm text-[#6A5A4A]">{forVotes} {t('documents_vote_result_for')} · {against} {t('documents_vote_result_against')} · {abstain} {t('documents_vote_result_abstain')}</p>
-            <button onClick={onDone} className="mt-6 px-8 py-3 rounded-xl font-bold bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] transition-colors gv-lift">{t('documents_back_to_documents')}</button>
-          </div>
-          <button
-            onClick={() => setShowProceedPanel(true)}
-            className="mt-6 text-sm text-[#1C1410]/40 hover:text-[#1C1410]/70 transition-colors">
-            {t('documents_proceed')}
-          </button>
-
-          {/* Proceed with Session panel */}
-          {showProceedPanel && (
-            <Portal><div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-              style={{ background: 'rgba(5, 8, 20, 0.88)', backdropFilter: 'blur(4px)' }}>
-              <div className="bg-[#EDE7D8] border border-[#DDD4C0] rounded-3xl w-full max-w-md shadow-2xl p-8 space-y-6">
-                <h2 className="text-2xl font-black text-[#1C1410]">Proceed with Session</h2>
-
-                <div className="bg-[#FAF8F3] border border-[#DDD4C0] rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">⏸️</span>
-                    <span className="text-base font-bold text-[#1C1410]">Motion to Suspend Debate</span>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-[#6A5A4A] mb-2">Proposed by</label>
-                    <input
-                      type="text"
-                      value={suspendProposer}
-                      onChange={(e) => setSuspendProposer(e.target.value)}
-                      placeholder={t('documents_country_placeholder')}
-                      className="w-full bg-[#F6F1E9] border border-[#DDD4C0] focus:border-[#1B3828] rounded-xl px-4 py-3 text-[#1C1410] placeholder-[#9A8A78] focus:outline-none text-sm transition-colors"
-                    />
-                  </div>
-                  <button
-                    onClick={() => { if (suspendProposer.trim()) setShowSuspendVote(true); }}
-                    disabled={!suspendProposer.trim()}
-                    className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] disabled:bg-[#DDD4C0] disabled:text-[#9A8A78] text-white py-3 rounded-xl font-bold transition-colors gv-lift">
-                    Raise Motion →
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => setShowProceedPanel(false)}
-                  className="w-full py-3 rounded-xl font-bold text-[#6A5A4A] hover:text-[#1C1410] border border-[#DDD4C0] hover:border-[#1B3828] transition-colors">
-                  Go back to Session
-                </button>
-              </div>
-            </div></Portal>
-          )}
-        </>
-      ) : (
-        <div className="w-full max-w-sm space-y-4">
-          {[
-            { label: t('documents_in_favour'), value: forVotes, set: setFor, color: 'text-green-400' },
-            { label: t('documents_against'), value: against, set: setAgainst, color: 'text-red-400' },
-            { label: t('documents_abstain'), value: abstain, set: setAbstain, color: 'text-yellow-400' },
-          ].map(({ label, value, set, color }) => (
-            <div key={label} className="flex items-center justify-between bg-[#EDE7D8] border border-[#DDD4C0] rounded-xl px-4 py-3">
-              <span className={`font-bold text-sm ${color}`}>{label}</span>
-              <div className="flex items-center gap-3">
-                <button onClick={() => set((v) => Math.max(0, v - 1))} className="w-8 h-8 rounded-full bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] font-bold flex items-center justify-center gv-lift">−</button>
-                <span className="text-2xl font-black text-[#1C1410] w-8 text-center">{value}</span>
-                <button onClick={() => set((v) => v + 1)} className="w-8 h-8 rounded-full bg-[#DDD4C0] hover:bg-[#C8BAA8] text-[#1C1410] font-bold flex items-center justify-center gv-lift">+</button>
-              </div>
-            </div>
-          ))}
-          <button onClick={finalize} className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-4 rounded-2xl font-black text-base transition-colors mt-2 gv-lift">Finalize Vote →</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Submit Form ───────────────────────────────────────────────────────────────
 function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   committee: Committee; type: DocumentType; onDone: () => void;
@@ -545,6 +397,7 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docCode = autoDocCode(type, committee.documents ?? []);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitFailed, setSubmitFailed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const isDuplicate = (committee.documents ?? []).some(
@@ -599,7 +452,11 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
         ...(fileUrl && fileName ? { fileUrl, fileName } : {}),
       };
       const saved = await addDocumentInDB(committee.id, newDoc, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      if (saved) onDocumentAdded(saved);
+      // V-6: a failed insert used to close the form as if it had worked. Keep what the chair
+      // typed and say it was not saved.
+      if (!saved) { setSubmitFailed(true); return; }
+      setSubmitFailed(false);
+      onDocumentAdded(saved);
       onDone();
     } finally {
       setIsSubmitting(false);
@@ -680,6 +537,9 @@ function SubmitForm({ committee, type, onDone, onDocumentAdded }: {
           {t('documents_limit_exceeded').replace('{current}', String(existingCount)).replace('{limit}', String(limit)).replace('{type}', docName(committee, type, 'plural', type === 'working-paper' ? t('documents_type_wp') : t('documents_type_dr')))}
         </p>
       )}
+      {submitFailed && (
+        <p role="alert" className="text-xs text-center" style={{ color: '#8B2020' }}>{t('documents_submit_failed')}</p>
+      )}
       {isSubmitting ? (
         <button disabled className="w-full bg-[#9A8A78] text-white py-3.5 rounded-xl font-bold cursor-not-allowed gv-lift">
           Uploading…
@@ -711,9 +571,10 @@ function TimingSetup({ doc, committee, onStart, onSkip }: {
     isWP ? t('documents_working_paper') : t('documents_draft_resolution'));
   const typeNamePlural = docName(committee, doc.type, 'plural',
     isWP ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'));
-  const [readingMins, setReadingMins] = useState(0);
-  const [presentationMins, setPresentationMins] = useState(0);
-  const [qaMins, setQaMins] = useState(0);
+  // Prefilled from the row, so Back to setup (or a re-introduction) keeps the chosen times.
+  const [readingMins, setReadingMins] = useState(doc.readingMinutes ?? 0);
+  const [presentationMins, setPresentationMins] = useState(doc.presentationMinutes ?? 0);
+  const [qaMins, setQaMins] = useState(doc.qaMinutes ?? 0);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
@@ -761,16 +622,21 @@ function TimingSetup({ doc, committee, onStart, onSkip }: {
 }
 
 // ── Doc Card ──────────────────────────────────────────────────────────────────
-function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation, requireApproval, onApprovalChange }: {
+function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation, onResumeIntroduction, requireApproval, onApprovalChange, isViewOnly }: {
   doc: CommitteeDocument; committee: Committee;
   onStatusChange: (docId: string, status: DocumentStatus) => void;
   onRemove: (docId: string) => void;
   onStartPresentation: (doc: CommitteeDocument) => void;
+  onResumeIntroduction: (doc: CommitteeDocument) => void;
   requireApproval: boolean;
   onApprovalChange: (docId: string, approval: 'approved' | 'rejected') => void;
+  /** D-10: a Commenter sees the card but gets no approve / reject / introduce / pass /
+   *  fail / resume / delete. UI gate only (RULE 15), like every other isViewOnly. */
+  isViewOnly: boolean;
 }) {
   const t = useT();
   const { language } = useLanguage();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
   const nextStatus = STATUS_NEXT[doc.status];
@@ -835,10 +701,27 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
                 )}
               </div>
             </div>
-            <button onClick={() => onRemove(doc.id)}
-              className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
-              title="Delete">✕</button>
+            {!isViewOnly && !confirmDelete && (
+              <button onClick={() => setConfirmDelete(true)}
+                className="text-[#9A8A78] hover:text-red-500 transition-colors text-sm shrink-0 focus:outline-none mt-0.5"
+                title={t('documents_delete_yes')}>✕</button>
+            )}
           </div>
+
+          {/* Delete asks first: it was a single click with no way back. */}
+          {!isViewOnly && confirmDelete && (
+            <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: 'rgba(139,32,32,0.08)', border: '1px solid rgba(139,32,32,0.3)' }}>
+              <span className="text-sm font-semibold flex-1 min-w-0" style={{ color: '#8B2020' }}>{t('documents_delete_confirm')}</span>
+              <button onClick={() => { setConfirmDelete(false); onRemove(doc.id); }}
+                className="px-3 py-1 rounded-lg text-xs font-bold focus:outline-none" style={{ backgroundColor: '#8B2020', color: '#FAF8F3' }}>
+                {t('documents_delete_yes')}
+              </button>
+              <button onClick={() => setConfirmDelete(false)}
+                className="px-3 py-1 rounded-lg text-xs font-bold border focus:outline-none" style={{ borderColor: '#DDD4C0', color: '#6A5A4A' }}>
+                {t('documents_delete_no')}
+              </button>
+            </div>
+          )}
 
           {/* Sponsors with flags */}
           {doc.sponsors.length > 0 && (
@@ -893,7 +776,7 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           )}
 
           {/* Chair approval gate, approve/reject before the doc can be introduced */}
-          {canDecide && (
+          {canDecide && !isViewOnly && (
             <div className="flex gap-2">
               <button onClick={() => onApprovalChange(doc.id, 'approved')}
                 className="flex-1 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
@@ -910,11 +793,32 @@ function DocCard({ doc, committee, onStatusChange, onRemove, onStartPresentation
           )}
 
           {/* Introduce / advance button, withheld until approved when approval is required */}
-          {nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && !approvalBlocksIntroduce && (
+          {!isViewOnly && nextStatus && doc.status !== 'passed' && doc.status !== 'failed' && doc.status !== 'introduced' && !approvalBlocksIntroduce && (
             <button onClick={handleAdvance}
               className="w-full bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
               {needsPresentation ? `${t('documents_introduce')} →` : `${t('documents_advance')}${getStatusLabel(nextStatus, t)}`}
             </button>
+          )}
+
+          {/* V-5: an introduced paper is never stuck. The introduction screen can be closed,
+              the page reloaded or the gavel handed over mid-stage; the card always offers
+              Pass, Fail, and Resume (which reopens the persisted stage at the right second). */}
+          {!isViewOnly && doc.status === 'introduced' && (
+            <div className="flex gap-2">
+              <button onClick={() => onResumeIntroduction(doc)}
+                className="flex-1 bg-[#EDE7D8] hover:bg-[#DDD4C0] border border-[#1B3828]/40 text-[#1B3828] py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
+                {t('documents_resume_intro')}
+              </button>
+              <button onClick={() => onStatusChange(doc.id, 'passed')}
+                className="px-4 bg-[#1B3828] hover:bg-[#2A5A3C] text-white py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift">
+                {t('documents_pass')}
+              </button>
+              <button onClick={() => onStatusChange(doc.id, 'failed')}
+                className="px-4 py-2 rounded-lg font-bold text-sm transition-colors focus:outline-none gv-lift"
+                style={{ backgroundColor: '#8B2020', color: '#EDE7D8' }}>
+                {t('documents_fail')}
+              </button>
+            </div>
           )}
 
         </div>
@@ -937,19 +841,41 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
 }) {
   const t = useT();
   const router = useRouter();
-  const { getSettings } = useSettingsStore();
-  const requireDocApproval = getSettings(committee.code).requireDocApproval;
+  // D-10: read from the committee row, so another chair's toggle applies on this device.
+  const requireDocApproval = readRequireDocApproval(committee);
   const [tab, setTab] = useState<DocTab>('working-paper');
-  const hasWPs = (committee.documents ?? []).filter((d) => d.type === 'working-paper').length > 0;
   const [showForm, setShowForm] = useState(false);
 
-  // Fullscreen presentation state
-  const [activeDoc, setActiveDoc] = useState<CommitteeDocument | null>(null);
+  // Fullscreen presentation state. The doc itself is re-read from the committee by id so a
+  // realtime refresh (title, sponsors) is reflected; `activeDocSnap` is the fallback.
+  const [activeDocSnap, setActiveDocSnap] = useState<CommitteeDocument | null>(null);
+  const activeDoc = activeDocSnap
+    ? ((committee.documents ?? []).find((d) => d.id === activeDocSnap.id) ?? activeDocSnap)
+    : null;
   const [stage, setStage] = useState<PresentationStage>(null);
   const [timings, setTimings] = useState({ reading: 0, presentation: 0, qa: 0 });
+  const [clock, setClock] = useState<{ base: number; startedAt: string | null }>({ base: 0, startedAt: null });
   const [showDocContent, setShowDocContent] = useState(false);
+  const [flowError, setFlowError] = useState(false);
+  /** Write order for this modal, and the failures still standing (doc id -> seq of the
+   *  failed write). A success clears ONLY failures of the same document issued before it:
+   *  a later success on another paper (or an older write landing late) used to hide the
+   *  banner while the failed change was still unsaved. */
+  const flowSeqRef = useRef(0);
+  const flowFailuresRef = useRef<Map<string, number>>(new Map());
+  const settleFlow = (docId: string, seq: number, ok: boolean) => {
+    const failures = flowFailuresRef.current;
+    if (ok) {
+      const failedAt = failures.get(docId);
+      if (failedAt !== undefined && failedAt < seq) failures.delete(docId);
+    } else {
+      failures.set(docId, Math.max(failures.get(docId) ?? 0, seq));
+    }
+    setFlowError(failures.size > 0);
+  };
 
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
+  const suffix = committee.dbChairJoinSuffix ?? undefined;
   const docs = (committee.documents ?? []).filter((d) => d.type === tab);
   // Chair-renameable labels for the active tab's document type.
   const tabSingularName = docName(committee, tab, 'singular',
@@ -957,126 +883,168 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
   const tabPluralName = docName(committee, tab, 'plural',
     tab === 'working-paper' ? t('documents_working_papers_tab') : t('documents_draft_resolutions_tab'));
 
+  const patchDocLocal = (docId: string, patch: Partial<CommitteeDocument>) =>
+    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, ...patch } : d) }));
+
+  /** Optimistic first, then one checked write (RULE 5). A failure is shown, not swallowed. */
+  const writeFlow = (docId: string, patch: Parameters<typeof updateDocumentFlow>[1]) => {
+    const local: Partial<CommitteeDocument> = {};
+    if (patch.status !== undefined) local.status = patch.status;
+    if (patch.introState !== undefined) local.introState = patch.introState;
+    if (patch.readingMinutes !== undefined) local.readingMinutes = patch.readingMinutes;
+    if (patch.presentationMinutes !== undefined) local.presentationMinutes = patch.presentationMinutes;
+    if (patch.qaMinutes !== undefined) local.qaMinutes = patch.qaMinutes;
+    patchDocLocal(docId, local);
+    const seq = ++flowSeqRef.current;
+    void updateDocumentFlow(docId, patch, committee.code, suffix).then((ok) => settleFlow(docId, seq, ok));
+  };
+
   const handleDocumentAdded = (doc: CommitteeDocument) => {
     update((c) => ({ ...c, documents: [...(c.documents ?? []), doc] }));
   };
 
   const handleStatusChange = (docId: string, status: DocumentStatus) => {
-    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, status } : d) }));
-    updateDocumentStatusInDB(docId, status, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    // A decided paper has no introduction in progress any more.
+    writeFlow(docId, status === 'passed' || status === 'failed' ? { status, introState: null } : { status });
   };
 
   const handleApprovalChange = (docId: string, approval: 'approved' | 'rejected') => {
-    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === docId ? { ...d, approval } : d) }));
-    updateDocumentApprovalInDB(docId, approval, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    patchDocLocal(docId, { approval });
+    updateDocumentApprovalInDB(docId, approval, committee.code, suffix);
   };
 
   const handleRemove = (docId: string) => {
+    const removed = (committee.documents ?? []).find((d) => d.id === docId);
     update((c) => ({ ...c, documents: (c.documents ?? []).filter((d) => d.id !== docId) }));
-    removeDocumentInDB(docId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    const seq = ++flowSeqRef.current;
+    void deleteDocumentChecked(docId, committee.code, suffix).then((ok) => {
+      if (ok) { settleFlow(docId, seq, true); return; }
+      if (!removed) return;
+      // Put it back rather than pretend it is gone.
+      update((c) => (c.documents ?? []).some((d) => d.id === docId) ? c : { ...c, documents: [...(c.documents ?? []), removed] });
+      settleFlow(docId, seq, false);
+    });
   };
 
+  const closeFlow = () => { setStage(null); setActiveDocSnap(null); };
+
   const handleStartPresentation = (doc: CommitteeDocument) => {
-    setActiveDoc(doc);
+    setActiveDocSnap(doc);
     setStage('setup');
     setShowDocContent(false);
   };
 
-  const handleTimingConfirmed = (readingMins: number, presentationMins: number, qaMins: number) => {
-    if (!activeDoc) return;
-    setTimings({ reading: readingMins, presentation: presentationMins, qa: qaMins });
-    // Save timings to DB and mark as introduced
-    const updatedDoc = { ...activeDoc, readingMinutes: readingMins, presentationMinutes: presentationMins, qaMinutes: qaMins, status: 'introduced' as DocumentStatus };
-    update((c) => ({ ...c, documents: (c.documents ?? []).map((d) => d.id === activeDoc.id ? updatedDoc : d) }));
-    updateDocumentTimingsInDB(activeDoc.id, readingMins, presentationMins, qaMins, 'introduced', committee.code, committee.dbChairJoinSuffix ?? undefined);
-    setActiveDoc(updatedDoc);
-    // Start first non-zero stage
-    if (readingMins > 0) setStage('reading');
-    else if (presentationMins > 0) setStage('presentation');
-    else if (qaMins > 0) setStage('qa');
-    else advanceFromStage('qa');
+  const stageMinutes = (s: TimedStage, tm = timings) => tm[s];
+
+  /** Enter a timed stage with a fresh, paused clock, and persist it. */
+  const enterStage = (doc: CommitteeDocument, s: TimedStage, tm = timings) => {
+    const next: DocIntroState = { stage: s, base: stageMinutes(s, tm) * 60, startedAt: null };
+    setClock({ base: next.base, startedAt: null });
+    setStage(s);
+    writeFlow(doc.id, { introState: next });
   };
 
-  const advanceFromStage = (from: PresentationStage) => {
+  const finishIntroduction = (doc: CommitteeDocument) => {
+    // WP auto-passes. A DR stays introduced; the chair takes it to the voting page.
+    writeFlow(doc.id, doc.type === 'working-paper' ? { status: 'passed', introState: null } : { introState: null });
+    closeFlow();
+  };
+
+  const handleTimingConfirmed = (readingMins: number, presentationMins: number, qaMins: number) => {
     if (!activeDoc) return;
-    if (from === 'reading') {
-      if (timings.presentation > 0) { setStage('presentation'); return; }
-      if (timings.qa > 0) { setStage('qa'); return; }
-    }
-    if (from === 'presentation') {
-      if (timings.qa > 0) { setStage('qa'); return; }
-    }
-    // After Q&A (or if all skipped)
-    if (activeDoc.type === 'working-paper') {
-      // WP auto-passes
-      handleStatusChange(activeDoc.id, 'passed');
-      setStage(null);
-      setActiveDoc(null);
+    const tm = { reading: readingMins, presentation: presentationMins, qa: qaMins };
+    setTimings(tm);
+    const first = STAGE_ORDER.find((s) => tm[s] > 0);
+    // One write: timings, status and the first stage together, so there is never an
+    // "introduced" row with no stage to resume.
+    const introState: DocIntroState | null = first ? { stage: first, base: tm[first] * 60, startedAt: null } : null;
+    writeFlow(activeDoc.id, {
+      readingMinutes: readingMins, presentationMinutes: presentationMins, qaMinutes: qaMins,
+      status: first || activeDoc.type !== 'working-paper' ? 'introduced' : 'passed',
+      introState,
+    });
+    if (first) { setClock({ base: tm[first] * 60, startedAt: null }); setStage(first); }
+    else closeFlow();
+  };
+
+  const advanceFromStage = (from: TimedStage) => {
+    if (!activeDoc) return;
+    const after = STAGE_ORDER.slice(STAGE_ORDER.indexOf(from) + 1).find((s) => timings[s] > 0);
+    if (after) enterStage(activeDoc, after);
+    else finishIntroduction(activeDoc);
+  };
+
+  /** Back skips stages with a 0-minute timer (they used to render a blank screen) and
+   *  lands on setup when there is nothing earlier. */
+  const backFromStage = (from: TimedStage) => {
+    if (!activeDoc) return;
+    const before = STAGE_ORDER.slice(0, STAGE_ORDER.indexOf(from)).reverse().find((s) => timings[s] > 0);
+    if (before) enterStage(activeDoc, before);
+    else setStage('setup');
+  };
+
+  const handleClockChange = (next: { base: number; startedAt: string | null }) => {
+    if (!activeDoc || !stage || stage === 'setup') return;
+    setClock(next);
+    writeFlow(activeDoc.id, { introState: { stage, base: next.base, startedAt: next.startedAt } });
+  };
+
+  /** Resume an introduced paper from the card: the persisted stage and clock when there is
+   *  one, otherwise the setup screen with the saved times. */
+  const handleResumeIntroduction = (doc: CommitteeDocument) => {
+    const tm = { reading: doc.readingMinutes ?? 0, presentation: doc.presentationMinutes ?? 0, qa: doc.qaMinutes ?? 0 };
+    setTimings(tm);
+    setActiveDocSnap(doc);
+    setShowDocContent(false);
+    const st = doc.introState;
+    if (st) {
+      setClock({ base: st.base, startedAt: st.startedAt });
+      setStage(st.stage);
     } else {
-      // DR: presentation complete, stay on documents page, chair navigates to voting manually
-      setStage(null);
-      setActiveDoc(null);
+      setStage('setup');
     }
   };
 
   const handleSkipToVote = () => {
     if (!activeDoc) return;
-    if (activeDoc.type === 'working-paper') {
-      handleStatusChange(activeDoc.id, 'passed');
-      setStage(null);
-      setActiveDoc(null);
-    } else {
-      handleStatusChange(activeDoc.id, 'introduced');
-      setStage(null);
-      setActiveDoc(null);
-    }
+    writeFlow(activeDoc.id, activeDoc.type === 'working-paper'
+      ? { status: 'passed', introState: null }
+      : { status: 'introduced', introState: null });
+    closeFlow();
   };
+
+  const flowErrorBanner = flowError ? (
+    <p role="alert" className="text-xs text-center px-6 py-2" style={{ color: '#8B2020', backgroundColor: 'rgba(139,32,32,0.08)' }}>
+      {t('documents_intro_save_failed')}
+    </p>
+  ) : null;
 
   // Fullscreen stages
   if (activeDoc && stage && stage !== 'setup') {
+    const stageLabel = stage === 'reading' ? t('documents_stage_reading') : stage === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa');
     return (
       <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-[#1C1410]">{activeDoc.docCode}</span>
-            {['reading', 'presentation', 'qa'].map((s) => (
+            {STAGE_ORDER.map((s) => (
               <span key={s} className={`text-xs px-2 py-0.5 rounded-full font-bold`} style={{ backgroundColor: stage === s ? '#1B3828' : '#DDD4C0', color: stage === s ? '#EED98A' : '#9A8A78', fontFamily: "'Outfit', sans-serif" }}>
                 {s === 'reading' ? t('documents_stage_reading_short') : s === 'presentation' ? t('documents_stage_presentation') : t('documents_stage_qa')}
               </span>
             ))}
           </div>
-          <button onClick={() => { setStage(null); setActiveDoc(null); onClose(); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
+          {/* Closing keeps the persisted stage; the card's Resume brings it back. */}
+          <button onClick={() => { closeFlow(); onClose(); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
-
-        {stage === 'reading' && timings.reading > 0 && (
-          <StageTimer label={t('documents_stage_reading')} color="text-[#1B3828]"
-            totalSeconds={timings.reading * 60} doc={activeDoc} committee={committee}
-            showDocument={showDocContent}
-            onComplete={() => advanceFromStage('reading')}
-            onToggleDocument={() => setShowDocContent((v) => !v)}
-            onBack={() => setStage('setup')} />
-        )}
-        {stage === 'presentation' && timings.presentation > 0 && (
-          <StageTimer label={t('documents_stage_presentation')} color="text-[#1B3828]"
-            totalSeconds={timings.presentation * 60} doc={activeDoc} committee={committee}
-            showDocument={showDocContent}
-            onComplete={() => advanceFromStage('presentation')}
-            onToggleDocument={() => setShowDocContent((v) => !v)}
-            onBack={() => setStage('reading')} />
-        )}
-        {stage === 'qa' && timings.qa > 0 && (
-          <StageTimer label={t('documents_stage_qa')} color="text-[#1B3828]"
-            totalSeconds={timings.qa * 60} doc={activeDoc} committee={committee}
-            showDocument={showDocContent}
-            onComplete={() => advanceFromStage('qa')}
-            onToggleDocument={() => setShowDocContent((v) => !v)}
-            onBack={() => setStage('presentation')} />
-        )}
-        {stage === 'vote' && (
-          <DocumentVote doc={activeDoc} committee={committee}
-            onDone={() => { setStage(null); setActiveDoc(null); }}
-            onStatusChange={handleStatusChange} />
-        )}
+        {flowErrorBanner}
+        {/* A stage with a 0-minute timer renders as already complete (Continue), never blank. */}
+        <StageTimer key={`${activeDoc.id}-${stage}`} label={stageLabel}
+          totalSeconds={timings[stage] * 60} doc={activeDoc} committee={committee}
+          showDocument={showDocContent}
+          clock={clock} onClockChange={handleClockChange}
+          onComplete={() => advanceFromStage(stage)}
+          onToggleDocument={() => setShowDocContent((v) => !v)}
+          onBack={() => backFromStage(stage)} />
       </div></Portal>
     );
   }
@@ -1087,8 +1055,9 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
       <Portal><div className="fixed inset-0 z-50 bg-[#F6F1E9] flex flex-col">
         <div className="flex items-center justify-between px-6 pt-4 pb-2 border-b border-[#DDD4C0] shrink-0">
           <span className="text-sm font-black tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('documents_introduce_header')}</span>
-          <button onClick={() => { setStage(null); setActiveDoc(null); }} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
+          <button onClick={closeFlow} className="text-[#9A8A78] hover:text-[#1C1410] transition-colors text-xl">✕</button>
         </div>
+        {flowErrorBanner}
         <TimingSetup doc={activeDoc} committee={committee} onStart={handleTimingConfirmed} onSkip={handleSkipToVote} />
       </div></Portal>
     );
@@ -1126,6 +1095,7 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
             <SubmitForm committee={committee} type={tab} onDone={() => setShowForm(false)} onDocumentAdded={handleDocumentAdded} />
           ) : (
             <div className="px-7 pb-7 space-y-3">
+              {flowErrorBanner}
               {tab === 'draft-resolution' && (committee.documents ?? []).some((d) => d.type === 'draft-resolution' && d.status === 'introduced') && (
                 <button
                   onClick={() => router.push(`/voting/${committee.code}${chairName ? `?chairName=${encodeURIComponent(chairName)}` : ''}`)}
@@ -1146,7 +1116,9 @@ export default function DocumentsModal({ committee, onClose, onCommitteeUpdate, 
                   <DocCard key={doc.id} doc={doc} committee={committee}
                     onStatusChange={handleStatusChange} onRemove={handleRemove}
                     onStartPresentation={handleStartPresentation}
-                    requireApproval={requireDocApproval} onApprovalChange={handleApprovalChange} />
+                    onResumeIntroduction={handleResumeIntroduction}
+                    requireApproval={requireDocApproval} onApprovalChange={handleApprovalChange}
+                    isViewOnly={isViewOnly} />
                 ))
               )}
               {!isViewOnly && (

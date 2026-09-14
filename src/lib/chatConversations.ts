@@ -117,6 +117,14 @@ export function chatConvKeyForMessage(
 // Operates on the FULL row set, including `__system__` / `__log__:` rows. scoring.ts,
 // FeedbackLogPanel and the delegate stats tab all read committee.messages and do their own
 // `__log__:` filtering, so dropping system rows here would silently regress the scoreboard.
+function sameMessage(a: ChatMessage | undefined, b: ChatMessage): boolean {
+  if (!a) return false;
+  if (a === b) return true;
+  return a.id === b.id && a.content === b.content && a.sender === b.sender
+    && (a.recipient ?? null) === (b.recipient ?? null) && !!a.isPrivate === !!b.isPrivate
+    && new Date(a.timestamp).getTime() === new Date(b.timestamp).getTime();
+}
+
 export function mergeMessagesById(prev: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   if (prev.length === 0) return incoming;
   if (incoming.length === 0) return prev;
@@ -129,8 +137,11 @@ export function mergeMessagesById(prev: ChatMessage[], incoming: ChatMessage[]):
   if (byId.size === prev.length) {
     // No new ids. Keep the existing array identity unless a row actually changed, so the
     // merge never triggers a pointless re-render of every chat surface.
+    // Compared by CONTENT, not object identity: a catch-up refetch maps every row to a new
+    // object, and returning a new array for identical rows invalidated the scoring memo
+    // (parseLogEvents is memoised on array identity) and re-parsed the whole log.
     let changed = false;
-    for (const m of prev) { if (byId.get(m.id) !== m) { changed = true; break; } }
+    for (const m of prev) { if (!sameMessage(byId.get(m.id), m)) { changed = true; break; } }
     if (!changed) return prev;
   }
 

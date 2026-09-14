@@ -55,21 +55,37 @@
 ### RULE 4: localUpdateTime debounce clock
 - `localUpdateTime` is a module-level ref: `const localUpdateTime = { current: 0 }`
 - It is set via `updateLocal(setCommittee, updater, structural=true)` when structural=true
-- The subscription callback checks `Date.now() - localUpdateTime.current < 3000`
-- Within debounce: ONLY syncs pendingMotions and session state. Returns early for speakers_list and delegates events.
-- Outside debounce: full setCommittee(updated) from DB
+- **All realtime → state flows through `startSessionSync` (`src/lib/sessionSync.ts`)** on the chair, delegate, advisor AND voting pages (14 Sep 2026, audit R-1..R-4, PERF-1..3, P-4). The voting page binds only `committees`, `delegates` and `documents` (slices `row`, `delegates`, `documents`) and re-reads vote states on a `documents` event and on every catch-up.
+  - Each event marks ONE slice dirty (`committees` → the row only via `getCommitteeRowById`, `delegates`, `speakers_list` → both lists, `current_speaker`, `motions`, `documents`). Dirty slices are fetched once, ~200 ms after the first event (coalesced), so 190 "All present" events are one roster fetch.
+  - **One sequence counter PER SLICE.** A result of slice X is dropped only when a NEWER result of X has already been APPLIED (`appliedSeq`); being overtaken by a fetch that merely started later is not enough, because under a burst every fetch is overtaken and the slice starved until the burst ended (S1). An older result that lands first is simply overwritten. Slice Y is never affected. NEVER go back to one shared `fetchSeq`: that is what threw away the caucus on phones (R-2).
+  - `messages` are never refetched on an event: the realtime INSERT payload is merged by id (`messageFromRow` + `mergeMessagesById`). Only a catch-up refetches them. `mergeMessagesById` compares rows by CONTENT (id, sender, content, recipient, privacy, timestamp) and returns the previous array when nothing changed, so a catch-up of identical rows keeps the array identity the `parseLogEvents` memo is keyed on.
+  - A failed slice read is `null` (P-4), never `[]`, and is never applied; it is retried twice.
+  - Catch-up: on re-SUBSCRIBED, `visibilitychange` to visible, `online`, and a heartbeat gap > 10 s (a sleeping laptop), every slice is refetched through the same sequencing. `ConnectionPill` shows Live / Reconnecting / Offline from the same source; after `online` it shows Reconnecting until the next SUBSCRIBED (or 8 s with the socket still reading SUBSCRIBED and nothing else reported). Catch-ups are throttled to one per second; `catchUp(only, { force: true })` skips the throttle and is for a caller that KNOWS its state went stale (a conditional write that did not land, a resync that predates a local write). Every SUBSCRIBED catch-up is forced (S5), so the throttle can never swallow a reconnect. `onCatchUp` reports `'failed'` instead of `'done'` when every read of the catch-up failed, and `isFresh()` stays false (starting another catch-up) until one succeeds.
+  - Vote saves: every ballot write fires one `documents` event on every surface. It is coalesced like any event (one fetch per 200 ms window) and fetches ONLY the documents slice; no page refetches the whole committee for it.
+  - Delegate and advisor pages do NOT subscribe to `feedback` or `session_broadcasts` (they render neither); `subscribeToCommittee` takes a `tables` list (default all nine).
+- The chair page loader has a `cancelled` guard like the delegate, advisor and voting pages (S6): an unmount or a `code` change while `getCommitteeByCode` is in flight starts no state writes, no sync, no heartbeat, no listeners and no channel.
+- **Chair page apply rules** (the `apply` callback in the chair loader):
+  - `localWriteSeq` (module-level, bumped by EVERY `updateLocal`, structural or not; timer ticks never call updateLocal, so ticks never move it) is stamped on each fetch. **A fetch that returns after a local write it predates is never applied over that write**; the slice is fetched again 250 ms later (R-1: a late refetch used to bring the previous speaker back after Next, and a second Next logged the speech twice).
+  - `debounceLeft()` = what remains of `Date.now() - localUpdateTime.current < 3000` (always 0 for a Commenter).
+  - Row inside the window: merges ONLY the gavel (`dbHeadChair`, `dbHeadChairDevice`), `chairNames`, `resumingChair`, `endedAt`, and a suspend change; phase / caucus / topic / settings are fetched once more when the window closes (R-3). Stale row (local write since the fetch started): only `chairNames` and `endedAt`.
+  - Lists inside the window are not even fetched; the fetch is scheduled for when the window closes (R-3), so nothing another device did is lost.
+  - Delegates are applied inside the window, with `applyPinnedStatuses`. Documents and motions are applied inside the window (not optimistic chair state).
+  - Outside the window with the Moderator's speaker clock running: the row lands but keeps local `phase`, `caucus`, `speakerTimeLimit`.
+  - `current_speaker`: a Commenter patches it on every event; the Moderator ignores its events (RULE 6) and reads the row back only on a catch-up, and never while its clock runs.
+  - **One-off full resyncs use the same guard.** The gavel-handover resync (ROLE TRANSITION effect) and the three resume refetches (`runResumeRollCall`, `handleResumeClick`, `handleTakeOverResume`) go through `fetchCommitteeGuarded(code)` (chair page), which reports `stale` when `localWriteSeq` moved during the fetch. They still read server facts from it (still suspended? who holds the latch?) but a stale snapshot is never merged into state: they call `syncRef.current.catchUp(undefined, { force: true })` instead.
+- **Automatic Moderator writes check freshness first (R-6).** The moderated-caucus expiry effect and the stop-at-zero re-anchor call `syncRef.current.isFresh()`; while a catch-up is outstanding (or the page has just woken) they stand down and run again on `catchUpTick`. The expiry write is `endModeratedCaucusIfAnchorUnchanged` (`committeeService.ts`, re-exported by `src/lib/caucusExpiryWrite.ts`): phase + caucus in one update, applied only while the row is still `moderated-caucus` with the same `caucus.totalStartedAt`. It runs through `runWrite` on the same keys as `setPhaseAndCaucus`: zero rows because the caucus moved on is `'skipped'` (not reported), zero rows while the row STILL matches (an RLS refusal) or a transport error is `'failed'` (retried, then the "Not saved" toast). When it does not land the page drops the window and forces a catch-up. It is the only caucus-ending write the expiry issues (no `setPhaseAndCaucus` fallback: the effect returns early without an anchor), and it is issued from the effect body, never inside a `setCommittee` updater (React may run an updater twice).
 - **TIMER TICKS MUST NEVER SET localUpdateTime** — or delegate views lose visibility
 - **NEVER set structural=true on timer tick operations**
 - **The gavel knock is a read-only side effect of the timers, never a timer operation.** `useGavelCue(remaining, running, cue)` (`src/lib/useGavelCue.ts`) watches values that already exist (`speakerTimeRemaining` + `timerRunning` for the GSL, moderated caucus and Tour de Table; the unmoderated/Consultation `caucusSeconds`; the CoW timer; `rtrTimeRemaining`) with refs only, and calls `playGavelKnock()` (`src/lib/gavelSound.ts`, Web Audio synthesis, no file). It never calls setCommittee/updateLocal, never sets `localUpdateTime` and never writes the DB. A knock needs two consecutive RUNNING samples straddling the mark, so pausing, starting below the mark, or reloading mid-countdown never knocks. Moderator's device only (the role is derived from the row, not only from `isViewOnly`), never when ended or suspended. The moderated caucus TOTAL is deliberately not wired: its speakers already knock.
 - caucus queue mutations DO use structural=true (to prevent realtime flickering)
-- **`feedback` is handled BEFORE the debounce check and returns early**, beside
-  `session_broadcasts` and `messages`. Chair notes and factor ratings are not optimistic
+- **`feedback` is handled BEFORE the debounce check and returns early** (the sync's `onEvent`), beside
+  `session_broadcasts`; `messages` land from the payload. Chair notes and factor ratings are not optimistic
   speaker/timer/caucus state, so RULE 4 does not apply to them — and this device routinely
   receives the echo of its OWN write while a chair is still typing, so swallowing it would
   only make the other chair's note invisible. The handler bumps a `feedbackVersion` counter
   rather than refetching: the two readers (the comment dock and the scoreboard) each own
   their own query and neither is always mounted.
-- `subscribeToCommittee` now subscribes NINE tables: committees, delegates, speakers_list,
+- `subscribeToCommittee` subscribes NINE tables by default (the chair page uses all nine; delegate and advisor pass seven): committees, delegates, speakers_list,
   current_speaker, motions, documents, messages, **feedback**, session_broadcasts. No
   migration was needed for feedback — it was already in the `supabase_realtime` publication
   and its SELECT policy is `true`; writes remain gated on the chair suffix.
@@ -79,11 +95,33 @@
 - DB writes are fire-and-forget — never await them for UI updates
 - The pattern is: updateLocal first → DB write second (fire-and-forget)
 - Exception: when you need the real DB UUID back (e.g. addPendingMotionInDB returns real ID)
+- **Every session write reports whether it LANDED** (audit R-5, 14 Sep 2026). supabase-js resolves on an RLS rejection and returns `error: null` for a zero-row update, so each non-settings write in `committeeService.ts` asks for `.select('id')`, counts rows, and resolves `Promise<boolean>`. A DELETE that removed nothing re-reads the row (SELECT is public): still there = refused, gone = success. A conditional write that matched nothing (`updateCaucusIfUnchanged`, `stopSpeakerAtZeroIfUnchanged`, `clearCurrentSpeakerIfUnchanged`, `pauseSpeakerClockLive`, a stale second End) counts its rows and re-reads the row: no longer matching is `'skipped'` (silent), still matching is a refusal (`'failed'`, reported).
+- All of them run through `runWrite` (`src/lib/writeStatus.ts`). Idempotent writes (phase, caucus, `setPhaseAndCaucus`, the speaker clock, list add / reorder / caucus clear through the RPCs, suspend, end) retry with backoff, 3 attempts max, and a newer write with the same key supersedes an older one still retrying. Non-idempotent ones (motion INSERT, `grantSpeakerTime`, list/motion delete, a delegate status tap) are reported but never auto-retried. Retries of chained writes stay INSIDE their chain, so ordering holds. "Retrying" is tracked per write call, not per key.
+- **Nothing retried lands after a break (S2).** `setPhase`, `setPhaseAndCaucus`, `updateCaucus` and `updateCaucusIfUnchanged` are conditional on `ended_at is null and suspended_at is null` (zero rows on a break is `'skipped'`); no caller writes a live phase or caucus during a break (resume goes through `startResumeRollCall` / `beginSessionAfterRollCall`). `suspendDebate` / `endDebate` call `cancelPendingRetries([phase, caucus, speaker keys])` first, so a retry still backing off from before the break gives up. Writes that belong to the break itself are `survivesLifecycle` and exempt: `clearCurrentSpeakerIfUnchanged` and `pauseSpeakerClockLive`.
+- **Toast Retry never re-runs a write out of context (S3).** `runWrite(..., { rerunnable: false })` failures show "Not saved" with Dismiss only: `suspendDebate`, `endDebate`, `pauseSpeakerClockLive`, `clearCaucusList`. A landed write clears stale failures of the same key; a landed PHASE write clears every stale failure of that committee.
+- A bulk roll call (`set_delegate_statuses`) falls back to per-row writes ONLY on `PGRST202` (the RPC is missing). A refused single or bulk status write unpins the rows and refetches the delegates slice.
+- The chair page mounts ONE `SaveStatusToast` (`src/components/notifications/SaveStatusToast.tsx`, glass): `session_save_retrying` while retries run, then `session_save_failed` with `session_save_retry` / `session_save_dismiss`. Never add a second per-button error toast for these writes.
+- The boolean is handled ASYNCHRONOUSLY and only where a rollback is needed: End Debate and Suspend. Both call sites (`runBroadcastEffect` on the chair page, and MotionsModal's Suspend / End "Yes") remember phase / suspendedAt / endedAt / expiresAt and put them back when `suspendDebate` / `endDebate` resolve false; the failure itself is reported by the toast. The chair page drops its suspended / ended overlay when a stamp goes back to null. The voting page's End Debate reads `ended_at` back instead. (DocumentsModal has no suspend or end call site.)
+- `speakers_list_reorder` returns void and an RLS-refused UPDATE inside it is silent, so `reorderSpeakersList` reads the list order back after the RPC (SELECT is public) and reports a mismatch as `'failed'` (retried, then the toast). Rows that vanished meanwhile are ignored. A concurrent drag on another device can also produce a mismatch; the retry re-applies this device's order, which is the same last-writer outcome as before.
 
 ### RULE 6: current_speaker subscription is SKIPPED
-- The subscription callback immediately returns for `current_speaker` table events: `if (table === 'current_speaker') return;`
-- The chair owns current_speaker entirely — no re-fetch needed
-- Co-chairs get current speaker state via the full committee fetch when other events fire
+- The Moderator's session sync ignores `current_speaker` events (`wants: table !== 'current_speaker' || isViewOnly`)
+- The Moderator owns current_speaker entirely: no re-fetch on its own echoes
+- Commenters (view-only) DO process `current_speaker` events (a one-row fetch through the session sync). The Moderator reads the row back only during a catch-up (wake / reconnect / online), and never while its speaker clock runs
+
+### RULE 6b: Clocks run on the DATABASE clock, and anchors move in single writes (14 Sep 2026)
+- **Never use `Date.now()` / `new Date()` against a session timestamp.** Stamp anchors (`current_speaker.started_at`, `caucus.totalStartedAt`, `suspended_at`, `ended_at`, `expires_at`) with `serverNowIso()` and compare with `serverNow()` from `src/lib/serverClock.ts` (audit T-1: production devices were 11 s, 40 s and ~10 h off). The offset is measured against the `server_now()` RPC (SECURITY INVOKER, anon/authenticated) on load, on `online` and on tab-visible, best of 3 by round trip: `offset = serverTime + rtt/2 - receivedAt`. `caucusRemainingNow`, `speakerRemainingNow`, `moderatedCaucusRemainingNow`, `spokenSecondsFromAnchor` and `anchorCaucusClock` default to it, so the delegate and advisor clocks are corrected without touching their pages. The chair page shows `ClockSkewHint` (`session_clock_skew`) when this device is more than 5 s off. Purely local timers (presence, pins, the gavel pin, rate limits) stay on `Date.now()`.
+- **Pause is ONE write** (audit G-3): `pauseSpeakerTimer(id, liveRemaining, ...)` writes `{ started_at: null, time_remaining }` together. Never `stopSpeakerTimer` + `syncSpeakerTime` again. Restart is one write too: `syncSpeakerTime(id, slot, code, suffix, slot, stop=true)` writes `{ time_remaining, time_granted, started_at: null }` together.
+- **No speaker clock runs outside the GSL and the caucus phases** (audit G-4): `setPhase` / `setPhaseAndCaucus` to `pre-session`, `adjourned` or `voting`, `suspendDebate` and `endDebate` all call `pauseSpeakerClockLive`, a conditional pause at the live value read from the row.
+- **Phase and caucus change in ONE update** (audit R-7): `setPhaseAndCaucus(id, phase, caucus, ...)`. Used by every caucus end on the chair page (End button, unmoderated End, expiry, Next past the total). MotionsModal's five caucus accept paths (unmoderated, consultation, moderated, both Tour de Table orders) use it too.
+- **Speeches are logged from the persisted anchor** (audit T-3): `current_speaker.time_granted` (nullable int) holds the slot plus every +time. `nextSpeaker` sets it to the slot, `syncSpeakerTime(..., timeGranted)` resets it on a restart or new limit, `grantSpeakerTime` adds a grant and re-anchors in one write (not auto-retried: it reads then adds). `readSpokenSeconds` reads `time_granted - live remaining` on the current_speaker chain.
+- **ONE speech logger: `src/lib/floorSpeech.ts`.** `logFloorSpeech(committee, clock)` is the only way a floor speech is written, from every path: Next (GSL), Next (caucus), Finish, a caucus accepted over a speaker, a moderated caucus ended by hand or by expiry, Suspend / End Debate (motion or organiser broadcast). The Consultation of the Whole floor holder (flag tap, caucus end) has no current_speaker anchor and uses `logTimedSpeech` with `cowTurnKey` (floor holder + the database-clock instant they took the floor). `logSpeakingTime` and `logSpeechFromAnchor` are gone; never log a `speech` through `logEvent`.
+  - Seconds: `readSpokenSeconds` first (T-3); the device-local `slot + extraTimeAddedSecsRef - live` is only the fallback for rows written before `time_granted` existed. Call `logFloorSpeech` synchronously AFTER any pause write and BEFORE the Next / clear, so its read is queued between them on the chain. Pass the clock anchor from BEFORE the pause: it names the turn.
+  - Idempotency, EXACT by key (S7): `turnKey` = committee + speaker + `seat:<epoch ms of current_speaker.seated_at>`. `nextSpeaker(..., seatedAt)` stamps `seated_at` every time it seats a delegation (the chair passes the same `serverNowIso()` it puts into local `speakerSeatedAt`), and every clear nulls it, so the key is stable through pauses, restarts and +time and different for every seating. Epoch ms, because the Moderator holds "...Z" and readers get "...+00:00". There is no time window any more, on this device, in the loaded log or in `parseLogEvents`. A row seated before the column existed falls back to the old `s:` / `p:` anchor key; only those legacy `|p:` events in existing logs are still compared within 15 s in `parseLogEvents`, so today's history keeps its real repeat speeches. Event timestamps are on the database clock.
+  - Consultation of the Whole: the floor holder's start is persisted as `caucus.floorSince` with the flag tap, so a reload keeps it (fallback: the last CoW speech logged in this caucus, then mount time). It is the `cowTurnKey` instant.
+  - A path that logs a speech and does not seat a new speaker must CLEAR the floor (conditional clear), or a later Next logs the same turn again long after any duplicate window: Suspend / End Yes in MotionsModal and the organiser broadcast pause / end both do.
+- **A legacy running moderated total with no running speaker clock** (written before the total stopped with its speaker) is paused once on load by the Moderator, at its live value capped to `caucus.totalTime`, through `updateCaucusIfUnchanged` (skipped when out of time: the expiry effect ends it).
+- **Every current_speaker write rides one per-committee chain**, including the conditional clear (`clearCurrentSpeakerIfUnchanged`, which used to have its own in-flight promise) and the anchor read. MUST NEVER HAPPEN #5 still holds by the same two properties: conditional on the speaker's identity, and ordered.
 
 ---
 
@@ -101,6 +139,7 @@
 - If delegate goes absent, remove them from speakersList AND caucusQueue (but NOT during pre-session roll call)
 - GSL is NEVER wiped when entering a caucus
 - **The GSL may elapse by default.** `gslRequireNextSpeaker` defaults to **false**, and with it off a chair can call and time the last delegate on the list and let the GSL run dry. Only when a chair turns the setting ON does `isLastGSLSpeaker` block the Start button and the call-first button require two names, so the queue never empties mid-session. Both buttons read the same setting: the call-first button used to require two delegates unconditionally, which blocked a one-name GSL from ever starting and is what "chairs cannot start the timer" was.
+- **Finish (G-1).** When the GSL behind the current speaker is empty, the Next button is replaced by **Finish** (`gsl_yield`, Moderator only, hidden when ended, and not offered while `gslRequireNextSpeaker` is on: the disabled Next shows instead). `handleYieldFloor` logs the speech through `logFloorSpeech` (`src/lib/floorSpeech.ts`, the one speech logger, see RULE 6b) and clears the floor exactly like Next with nobody queued.
 - Extra time (+⏱) re-anchors the speaker clock and persists it (one `current_speaker` write per press, never per second). **In a moderated caucus / Tour de Table the grant is capped** to the room between the live speaker clock and the live total (`moderatedCaucusRemainingNow`); the total is never extended, and a cut grant flashes `caucus_extra_time_capped` ("Only {n}s left in this caucus.") for 6 s. Before reseating the speaker it re-anchors the TOTAL at that live value (running iff the speaker clock is), so a total left armed past a speaker's zero cannot read uncapped and end the caucus.
 - Right of Reply is a fully INDEPENDENT fixed overlay with its own `rtrTimeRemaining` state (`chair/[code]/page.tsx:1284-1288, 3148-3206`). It NEVER writes `speakersList` — it does not insert the delegate into the GSL, and it does not touch `currentSpeaker`. It logs a `right-of-reply` scoring event (`:3174`) and nothing else. (This line previously claimed RTR inserted at the top of speakersList with a time override; that was verified false against the code.)
 - speakersList display in main view prepends currentSpeaker as position 1 (gslDisplayList)
@@ -111,8 +150,9 @@
 - `removeFromSpeakersList` — deletes from speakers_list where list_type='gsl'
 - `reorderSpeakersList` — ONE `speakers_list_reorder` RPC call: a single in-place UPDATE under the same list lock, listed rows get 1..n and rows the caller did not know about follow in their existing order, so no two rows can share a position. Calls are chained per list on the client, on the SAME chain as `addToSpeakersList` / `addToCaucusList`, so two quick drags reach the server in order and a drag right after an add never runs before the insert. The chain (`chained()` in `committeeService.ts`) catches and logs, so fire-and-forget callers never get an unhandled rejection. (NOT delete + reinsert: a DELETE realtime event flashes an empty list on delegate phones. NOT N parallel single-row updates either: interleaved drags produced duplicate positions and a refetch mid-batch read a half-applied order.)
 - `nextSpeaker` — updates current_speaker row, optionally removes a delegate from speakers_list
-- `startSpeakerTimer` — sets started_at timestamp
-- `stopSpeakerTimer` — clears started_at
+- `startSpeakerTimer` — writes started_at AND time_remaining together (one anchor)
+- `pauseSpeakerTimer` — writes `{ started_at: null, time_remaining: live }` in one update (the pause; see RULE 6b)
+- `stopSpeakerTimer` — clears started_at only; used where the next write seats a fresh clock anyway (ending a caucus with nobody on the floor). Not for a pause, not for a restart
 
 ---
 
@@ -141,9 +181,9 @@
 - When capacity is reached, adding is refused with `caucus_queue_no_time` (sidebar: amber flash for 6 s; add input: replaced by the message). With this rule "full" can only mean no caucus time is left.
 - **The last speaker's clock is capped** to what the caucus has left: `capSpeakerSlot(speakingTime, liveTotal)` on Next / Call first and on Restart, and `handleToggleTimer` caps again on start. The slot a speaker was given is persisted as `caucus.speakerTimeRemaining`, and Next / Restart / caucus end compute speaking time against THAT slot (+ extra time), not the motion's full speaking time.
 - **The TOTAL is speaking time: it stops when the speaker clock reaches zero.** The speaker tick only raises `speakerExpiredRef`; an effect keyed on the `timerRunning` boolean re-anchors the caucus once (`remainingTime` = total read at the speaker's zero, `totalStartedAt` null, non-structural) and parks the speaker row at 0. If the total is itself used up, nothing is written there and the expiry effect ends the caucus. Every reader (chair `caucusSeconds`, the expiry check, delegate and advisor boards) uses `moderatedCaucusRemainingNow(caucus, speaker time_remaining, speaker started_at)`, which reads the total capped at the running speaker clock's zero, so all surfaces stop together even before the re-anchor write lands. The organiser live wall (`manage/[slug]/live`) still reads the uncapped `caucusRemainingNow` and follows once the write lands.
-- **The stop-at-zero writes are conditional and ordered** (`reanchorCaucusAtSpeakerZero`). The tick records the speaker's turn key; the effect skips if the floor changed hands. The caucus write is `updateCaucusIfUnchanged` (applies only while `caucus->>currentSpeaker` and `caucus->>totalStartedAt` still match what was read; Next, pause, restart and end each change one). The speaker write is `stopSpeakerAtZeroIfUnchanged` (one statement, identity predicate like `clearCurrentSpeakerIfUnchanged`). Every `current_speaker` write this device issues (`nextSpeaker`, `startSpeakerTimer`, `stopSpeakerTimer`, `syncSpeakerTime`, the stop-at-zero) rides ONE per-committee chain, so a write issued before a Next can never land after it.
+- **The stop-at-zero writes are conditional and ordered** (`reanchorCaucusAtSpeakerZero`). The tick records the speaker's turn key; the effect skips if the floor changed hands. The caucus write is `updateCaucusIfUnchanged` (applies only while `caucus->>currentSpeaker` and `caucus->>totalStartedAt` still match what was read; Next, pause, restart and end each change one). The speaker write is `stopSpeakerAtZeroIfUnchanged` (one statement, identity predicate like `clearCurrentSpeakerIfUnchanged`). Every `current_speaker` write this device issues (`nextSpeaker`, `startSpeakerTimer`, `pauseSpeakerTimer`, `stopSpeakerTimer`, `syncSpeakerTime`, `grantSpeakerTime`, the conditional clear, the stop-at-zero, the speech-log anchor read) rides ONE per-committee chain, so a write issued before a Next can never land after it.
 - **Nobody watched the zero** (reload, gavel handover): the tick never fired, so the same re-anchor also runs once per load (effect keyed on the committee id, after the load claim) and once in the ROLE TRANSITION effect on gaining the gavel, when the moderated caucus has a running total and a speaker clock already at 0. Moderator device only.
-- Ending a moderated caucus (End button or auto-expiry) logs the floor holder's speech via `logFloorSpeechOnCaucusEnd`; before, only Next logged, so the last speaker of every caucus was missing from stats. Ending a Consultation of the Whole logs the current floor holder the same way `handleCowTap` does.
+- Ending a moderated caucus (End button or auto-expiry) logs the floor holder's speech via `logFloorSpeechOnCaucusEnd` → `logFloorSpeech`; before, only Next logged, so the last speaker of every caucus was missing from stats. Ending a Consultation of the Whole logs the current floor holder through `logTimedSpeech` with the same `cowTurnKey` as `handleCowTap`, so a tap and End racing log once.
 
 ### What happens when caucus ends
 - phase → 'speakers-list'
@@ -180,11 +220,13 @@
 - Yes → calls suspendDebateInDB or endDebateInDB, removes motion from DB FIRST (await), then fires DB state change
 
 ### Rules
-- Motions are stored with temp IDs optimistically (`temp-${Date.now()}`)
-- addPendingMotionInDB returns the real UUID → handleRaised replaces temp ID with real ID
-- pendingIds (Set) tracks which motions still have temp IDs → Reject button disabled while pending
-- handleRemove MUST use the real UUID for removePendingMotionInDB to work
-- The Reject button is disabled while the motion's ID is still a temp ID (pendingIds.has(m.id))
+- Motions are stored with temp IDs optimistically (`temp-...`). Raising, editing and the Undo below all go through `raiseMotionOptimistic` in `src/lib/motionFlight.ts`: it swaps the temp id for the real UUID on success and **drops the temp row with a translated error (`motions_save_failed`) when the insert fails**, so a motion that can never be rejected can no longer exist.
+- **Temp ids live in a module-level store keyed by committee id** (`useTempMotionIds`), not modal state: closing MotionsModal mid-insert no longer forgets them.
+- **EVERY action on a motion is disabled while its id is temporary**: Accept (any type, not only Custom), Reject, both Edit buttons, the list-view ✕, and Suspend/End Yes and No. `handleMotionAccepted` also returns early on a temp id. A delete with a temp id deletes nothing, so the real row came back on the next refresh.
+- `removeMotionEverywhere` removes locally and in the DB; for a temp id it remembers the id and deletes the real row the moment the insert returns.
+- **When a motion passes, the other pending floor motions FALL** (`fellOtherFloorMotions`): caucus accept, Suspend Yes and End Yes delete every other non-Custom, non-request motion and show "N other motions fell" (`motions_fell_one` / `motions_fell_many`). After a caucus accept the notice offers **Undo for 8 s** (`motions_undo`), which raises them again as new rows. After Suspend or End there is NO Undo (V4), and Undo disappears (and a restore in hand does nothing) the moment the committee is suspended or ended: the chair page passes `closed` to `<MotionFlightNotice>`, which feeds `setMotionFlightClosed`. The auto-dismiss timer is per committee. The notice is `<MotionFlightNotice>`, mounted by the chair page (Moderator only) so it survives the modal closing. Accepting a Custom motion makes nothing fall.
+- One floor motion per delegation: raising a second one shows `motions_proposer_has_motion` instead of returning silently.
+- **The floor speaker's speech is logged when a motion passes** (G-1): caucus accept, Suspend Yes and End Yes call `logFloorSpeech` (`src/lib/floorSpeech.ts`) with the chair page's `floorClock` prop BEFORE clearing the floor. Suspend and End also clear `current_speaker` (conditional clear) so a resumed session cannot log the same turn a second time.
 - When motion is rejected from VotingView: removePendingMotionInDB fires, co-chairs see it via realtime
 - suspend-debate and end-debate motions: await removePendingMotionInDB BEFORE calling suspendDebateInDB/endDebateInDB to prevent race conditions
 - On chair page load: stale suspend-debate/end-debate motions are auto-deleted
@@ -194,7 +236,8 @@
 ## FEATURE: SUSPEND DEBATE
 
 ### How it works
-- Motion passes → suspendDebateInDB sets suspended_at + phase='adjourned' in DB
+- Motion passes (or an organiser broadcast pauses the room) → the floor speech is logged (`logFloorSpeech`, `src/lib/floorSpeech.ts`) and the floor is cleared (`clearCurrentSpeakerIfUnchanged`), so the first Next after a resume cannot log that turn again → suspendDebateInDB reads the row fresh and writes ONE update: `suspended_at` (database clock), `phase='adjourned'`, and the caucus with its TOTAL frozen at the live value and NOBODY on its floor (`freezeCaucusForBreak` = `pauseCaucusLive` + `currentSpeaker: null`, `floorSince: null`; the queue rows are kept; a caucus stored outside a caucus phase is cleared to null). The optimistic suspend in MotionsModal and the broadcast pause null `caucus.currentSpeaker` locally too, and `beginSessionAfterRollCall` / `handlePhaseChange` restore through the same helper, so a restored caucus never has a phantom speaker (S4). It is conditional on `ended_at is null`, `suspended_at is null` and the phase it read, then pauses the speaker clock at its live value (`pauseSpeakerClockLive`). Resolves true when the committee IS suspended afterwards, false when it could not be (write failed, or it had ENDED: an ended committee can never be suspended). On false the caller rolls back (audit C-1, V-8, G-4).
+- The chair page stops its own speaker tick whenever `sessionSuspended` or `sessionEnded` turns on (read-only effect, rules 3 and 4 hold).
 - All devices detect via realtime subscription → setSessionSuspended(true)
 - Chairs see: two-tab overlay (⏸ Suspend View + 🪑 Session View)
 - Delegates see: fullscreen waiting screen, cannot interact
@@ -212,13 +255,15 @@
 - Lost the claim → the chair page refetches the real row (`getCommitteeByCode`) rather than leaving the button a silent no-op: if the winner already finished, drop out of suspension; if the latch turns out to be ours (our claim landed, the response was lost), finish the job; otherwise render "{name} is resuming…" off the fresh row.
 - **Take-over affordance**: `foreignResumeLatch` (`:2122`) starts a 12s timer the moment ANOTHER chair is observed holding the latch (`:2126`); after that the co-chair gets a `session_resume_takeover` button (`:2862`) wired to `handleTakeOverResume` (`:2503`).
 - All five resume failure/affordance strings are keyed: `session_resume_failed`, `session_resume_failed_locked`, `session_resume_retry`, `session_resume_takeover`, `session_resume_lost`.
+- **All three latch writes also require the committee to STILL be suspended** (audit S-1): `claimResumeSession` and `takeOverResumeClaim` add `suspended_at is not null` and `ended_at is null`; `startResumeRollCall(committeeId, code, chairSuffix?, chairName?)` adds the same AND, when `chairName` is passed (the chair page always passes it), `resuming_chair = chairName`. Without this a device asleep through another chair's resume pressed Resume, found the latch null again, won it, and threw a running committee back into roll call. These conditions only ADD to the CAS; the `.is('resuming_chair', null)` guard is untouched. On false `runResumeRollCall` refetches first: no longer suspended → adopt the fresh row and drop the overlay (no error); latch now names someone else → `session_resume_lost`; otherwise the old release-and-report path.
 
 ### Rules
 - ONLY clear suspended_at by setting phase back to pre-session via startResumeRollCall
 - Roll call on resume: going absent DOES NOT remove delegates from GSL (phase='pre-session' guard in handleStatusChange and RollCallPanel.cycleStatus)
 - When "Begin Session" is clicked after resume roll call (pre-session → speakers-list): absent delegates are removed from GSL at that moment only
+- **Begin Session restores a paused caucus** (audit C-1): `RollCallPanel` calls `beginSessionAfterRollCall`, which reads the row and, in ONE update conditional on `phase='pre-session'`, opens the caucus's own phase (still paused, the dais presses play) when a caucus with time left is stored, or `speakers-list` with `caucus` written null explicitly and the caucus queue rows cleared. A running anchor left by pre-fix code is paused at its live value; a caucus with no time left is dropped. The chair page's `handlePhaseChange` mirrors the same decision optimistically. Caucus data must never survive into `speakers-list`.
 - speakersList is PRESERVED through suspend/resume cycle
-- caucusQueue is NOT preserved (it's cleared with phase change)
+- caucusQueue is PRESERVED while a paused caucus is restored, and cleared when Begin Session opens the GSL instead
 - Chat, documents, messages — ALL preserved through suspend/resume
 
 ---
@@ -226,7 +271,7 @@
 ## FEATURE: END DEBATE
 
 ### How it works
-- Motion passes → endDebateInDB sets ended_at + expires_at (**now + 1 hour**) + phase='adjourned' (`committeeService.ts:1096`). MotionsModal's optimistic mirror uses the same 1 hour (`MotionsModal.tsx:1376`) — if one is ever changed, change both.
+- Motion passes → endDebateInDB sets ended_at + expires_at (**now + 1 hour**, database clock) + phase='adjourned', freezes the caucus total and pauses the speaker clock like a suspension. **Idempotent** (audit V-8): conditional on `ended_at is null`, so a second device never rewrites `ended_at` or restarts the deletion countdown; resolves true when the committee has ended (now or earlier), false only when the write failed, and the caller rolls back. MotionsModal's optimistic mirror and the chair page's organiser-broadcast path use the same 1 hour — if one is ever changed, change all three.
 - All devices detect via realtime → setSessionEnded(true)
 - Both chairs and delegates see: two-tab overlay (🏁 End View + 👁 Session View)
 - End View shows: "This committee has ended" + a countdown computed from `expires_at`, not a fixed promise — `Math.max(1, ceil(ms/1h))` (`chair/[code]/page.tsx:2092`, `delegate/[code]/page.tsx:894`) rendered through `session_hours_until_delete`. With the 1-hour window it reads "1 hour until committee is deleted"
@@ -254,7 +299,7 @@
 ### Initial Roll Call (phase='pre-session')
 - RollCallPanel with isRollCallPhase=true
 - Shows: Clear All, All Present, All P+V buttons (ONLY during pre-session)
-- These buttons update localStatuses immediately (optimistic) AND call setDelegateStatusInDB
+- These buttons update localStatuses immediately (optimistic) AND call the parent's `onBulkStatusChange` once → `handleBulkStatusChange` → `setDelegateStatusesBulk` → RPC `set_delegate_statuses(p_committee, p_status, p_ids)` (migration `session_bulk_delegate_status`): ONE UPDATE, SECURITY INVOKER so the delegates RLS applies, additionally requires `is_session_chair`, skips rows already at the status (no event for them). If the RPC fails the handler falls back to per-row `setDelegateStatusInDB`. Without `onBulkStatusChange` the panel still calls `onStatusChange` per delegate.
 - Absent during roll call does NOT remove from GSL (isRollCallPhase guard)
 - Begin Session → phase='speakers-list' → absent delegates removed from GSL at that moment
 
@@ -318,10 +363,24 @@
 ### Chair view (DocumentsModal)
 - Two tabs: Working Papers | Draft Resolutions
 - Each doc has status: submitted → on-floor → introduced → passed/failed
-- "Introduce" button starts a presentation flow: setup timers → reading → presentation → Q&A → vote/auto-pass
-- WP auto-passes after Q&A. DR goes to /voting/[code] page
+- "Introduce" button starts a presentation flow: setup timers → reading → presentation → Q&A → auto-pass (WP) / back to the list (DR)
+- WP auto-passes after Q&A. DR goes to /voting/[code] page. The old in-modal `DocumentVote` screen and stage `'vote'` were dead code and are gone.
 - Reading time: timer on left, PDF on right (screen share mode)
 - PDF inline viewer in doc cards (toggle show/hide)
+
+### The introduction is persisted and resumable (V-5)
+- `documents.intro_state` (jsonb, nullable) = `{stage: 'reading'|'presentation'|'qa', base, startedAt}`. Contract and writer: `src/lib/documentFlow.ts` (`parseIntroState`, `introRemainingNow`, `updateDocumentFlow`).
+- The stage clock is **anchor-based**, like every session clock: remaining = `base - (serverNow() - startedAt)`, stamped with `serverNowIso()` (RULE 6b), `startedAt` null = paused. `StageTimer` only refreshes a local `now`; it writes only on start, pause, reset, stage change and finish. Never per second.
+- Confirming the timings writes timings + `status: 'introduced'` + the first stage in ONE update, so there is never an introduced row with no stage.
+- **An introduced paper always shows Resume / Pass / Fail on its card** (Moderator only). Resume reopens the persisted stage at the right second (or the setup screen with the saved times when there is no stage). Pass/Fail clears `intro_state`. Closing the introduction screen keeps the stage.
+- Back skips 0-minute stages and lands on setup; a stage with a 0-minute timer renders as complete (Continue), never a blank screen.
+- Every flow write is optimistic first and then checked; a failure shows `documents_intro_save_failed`. Delete is checked too and puts the card back on failure.
+
+### Commenters, delete, codes, failed submissions (D-10, V-6)
+- `DocCard` receives `isViewOnly`: a Commenter gets no approve / reject / introduce / resume / pass / fail / delete (UI gate only, RULE 15).
+- Delete asks first (inline "Delete this paper?" Delete / Keep).
+- **Document codes are assigned by the database.** BEFORE INSERT trigger `documents_assign_doc_code` computes `WP 1.n` / `DR 1/n` per committee under a per-(committee, type) advisory lock (n = max(count, highest trailing number) + 1). The client `docCode` is a preview and is ignored; two simultaneous submissions can no longer collide.
+- Both submit paths (chair `SubmitForm`, delegate submit tab) check the `addDocument` result: on failure the form stays filled and `documents_submit_failed` is shown.
 
 ### Delegate view
 - "View Documents" tab: shows ALL docs (WPs + DRs) with status badges
@@ -335,7 +394,8 @@
 - Renaming is presentation only — `DocumentType`, the `documents.type` column and the `'working-paper'` / `'draft-resolution'` discriminators never change.
 
 ### Document approval gate (Settings → Motions → Documents)
-- `requireDocApproval` (default false). Read in `DocumentsModal.tsx:856`; when on, each doc card gets an approve/reject control and `CommitteeDocument.approval` gates introduction.
+- `requireDocApproval` (default false). Read from the committee ROW via `requireDocApproval(committee)` in `src/lib/documentFlow.ts` (never the local store, so another chair's toggle applies); when on, each doc card gets an approve/reject control and `CommitteeDocument.approval` gates introduction.
+- **`documents.approval` did not exist until 14 Sep 2026** (migration `documents_intro_state_and_approval`). Every approve/reject before that was rejected by PostgREST and only logged, so with the gate on no paper could ever be introduced.
 
 ### Document limits — LEGACY, NO UI
 - `wpSubmissionLimit` / `drSubmissionLimit` still exist on `CommitteeSettings` and are still ENFORCED on submit (`DocumentsModal.tsx:469`), but **nothing writes them** — the Settings UI and the `onResetDocuments` Reset button no longer exist anywhere in `src/`.
@@ -345,22 +405,24 @@
 
 ## FEATURE: SETTINGS
 
-### Stored where? — DB IS THE SOURCE OF TRUTH ON WRITE, localStorage IS A STALE MIRROR
-- The `upd` helper in `SettingsPanel.tsx:390-394` does BOTH on every single change:
-  1. `updateSetting(code, key, value)` → Zustand `persist` store (`localStorage: gavelling-settings`), keyed by committee code
-  2. `saveCommitteeSettings(committee.id, { ...getSettings(code), [key]: value }, ...)` → writes the **complete settings object** into the `committees.settings` JSONB (`committeeService.ts:227-236`, read-merge-write so `chairJoinSuffix` / `headChair` survive)
-- Scoring is written separately by `updScoring` → `updateCommitteeScoringInDB` (`committeeService.ts:991`), into `settings.scoring`.
-- `rowToCommittee` (`committeeService.ts:76-83`) surfaces the blob as `committee.dbSettings` plus the convenience fields `dbChairJoinSuffix`, `dbHeadChair`, `dbSeparateChairCode`, `dbScoring`.
-- The voting page writes the same way (`voting/[code]/page.tsx:503-508`).
+### WRITE side — KEY-LEVEL PATCHES ONLY (migration `session_settings_patch_and_persisted_votes`, 14 Sep 2026)
+- Every write to `committees.settings` sends ONLY the changed keys through a SECURITY INVOKER RPC that merges in one statement (`settings = coalesce(settings,'{}') || patch`). There is no read first, so there is no read-modify-write race between chairs (D-1) and no failed read that can wipe the blob (D-2). RLS still applies: `sess_chair_update` checks the `x-chair-suffix` header sent by `sessionClient(code, suffix)`.
+- `patchCommitteeSettings(committeeId, patch, code, suffix)` → `patch_committee_settings`. Returns `true` only when a row was updated (an RLS refusal is a zero-row result, not an error). It **raises** on `chairJoinSuffix`. `saveCommitteeSettings` is now a thin wrapper that drops `chairJoinSuffix`, `separateChairCode`, `headChair`, `headChairDevice`, `agendaTopicIndex` and `votingReturnPhase` from the patch and returns the same boolean.
+- `SettingsPanel`'s `upd` updates the store instantly and debounces (400 ms) a patch of the keys changed since the last flush. It **never** posts `getSettings(code)`. A refused write shows `settings_write_failed`. `updScoring` → `updateCommitteeScoringInDB` patches `{ scoring }` (the scoring object is still one value, so two chairs editing different score sources in the same second resolve last-write-wins).
+- The voting page's `applyRule` patches `{ [key]: value }` and is a no-op for a Commenter.
+- Keys with their own writer: `chairJoinSuffix` → `updateCommitteeChairSuffixInDB` → `set_committee_chair_suffix` (four digits; RLS means the caller must hold the CURRENT code, so a committee with no code in the DB still cannot be given one from the client, exactly as before). `headChair` + `headChairDevice` → `updateCommitteeHeadChairInDB` (one patch, then appends the holder to `chair_names`). `agendaTopicIndex` + `committees.topic` → `updateCommitteeAgendaInDB` → `set_committee_agenda` (one statement). `votingReturnPhase` → `set_committee_voting_phase` only.
+- `addChairName` → `add_committee_chair_name`: atomic `array_append` guarded by "not already present" in the same statement, so two chairs joining at once both land. The name is trimmed first (and `updateCommitteeHeadChairInDB` trims the gavel name), so " Alice" and "Alice" are one chair.
+- `rowToCommittee` surfaces the blob as `committee.dbSettings` plus the convenience fields `dbChairJoinSuffix`, `dbHeadChair`, `dbHeadChairDevice`, `dbSeparateChairCode`, `dbScoring`.
 
-### The READ side is the gap — this is where the real bugs come from
+### READ side — hydrate once, then re-hydrate changed keys
 | Surface | Hydrates the store from `dbSettings`? |
 |---------|----------------------------------------|
-| `/chair/[code]` | **Once**, in the initial loader (`page.tsx:1291-1295`). Never again — no re-hydrate in the realtime subscription, so a co-chair's setting change never reaches this device's store |
-| `/voting/[code]` | **Once**, in the loader (`page.tsx:335-338`) |
+| `/chair/[code]` | In the initial loader, then on every change through `useSettingsSync(committee)` |
+| `/voting/[code]` | In the loader, then through `useSettingsSync(committee)` |
 | `/delegate/[code]` | **NEVER** |
 | `/advisor/[code]` | **NEVER** (does not import `useSettingsStore` at all) |
-- Both hydrate paths destructure away `chairJoinSuffix` and `separateChairCode` and merge everything else — including `headChair` — into the store.
+- `NON_HYDRATED_SETTING_KEYS` / `stripNonHydratedSettings` in `src/lib/settingsStore.ts` is the ONE list of keys that never enter the store: `chairJoinSuffix`, `separateChairCode`, `headChair`, `headChairDevice`, `agendaTopicIndex`, `votingReturnPhase`. Both the chair and voting loaders hydrate through it (V5); never strip an inline copy again.
+- `useSettingsSync` (`src/lib/useSettingsSync.tsx`) keys an effect on a stable serialisation of the stripped blob (never on object identity, which changes on every refetch), diffs it against the previous one and hydrates ONLY the changed keys, so a key this chair edited and has not flushed yet is never flashed back by an unrelated refetch. A changed value that matches one THIS device flushed in the last 15 s (`src/lib/settingsEcho.ts`, recorded by `patchCommitteeSettings`) is this device's own echo and is skipped: no flicker back to an older value, no notice (V3). Any other changed value that differs from this device's store came from another chair and a 4.5 s `settings_updated_by_other_chair` notice is shown. It never writes the DB and is not inside the realtime callback. It only sees what `committee.dbSettings` already carries, so a change that arrives inside the chair page's 3 s debounce lands when the session sync fetches the row again as the window closes (R-3).
 - **ALWAYS** read a setting on a non-chair surface with the pure-function-of-the-committee-row pattern: `getCommitteeFlags(committee)` / `sponsorLabel(committee, fallback)` in `src/lib/committeeFlags.ts`, `getScoringConfig(committee)` in `src/lib/scoring.ts:31`, `docName(committee, ...)` in `src/lib/docNames.ts`. These read `committee.dbSettings` / `committee.dbScoring` and never touch localStorage.
 - **NEVER** call `getSettings(code)` on the delegate or advisor pages — the store is empty there and you silently get `DEFAULT_SETTINGS`.
 - Residual instance, **dead code, not a live bug**: `delegate/[code]/page.tsx:930` calls `getSettings(committee.code)` and `:939` builds `enabledMotionTypes` from it — but `enabledMotionTypes` is referenced nowhere (verified: the identifier appears only at its own declaration). Left over from the removed delegate Motions tab. Delete both; that removes the delegate page's last `useSettingsStore` dependency, which is the correct end state. Do **not** "fix" it by rewiring it to `dbSettings` — there is no consumer to fix.
@@ -399,7 +461,7 @@ There is **no** custom-session-ID control, **no** multi-chair toggle and **no** 
 | `requireDocApproval` | chair must approve a WP/DR before it can be introduced | `DocumentsModal.tsx:856` |
 | `documentNames` | renameable WP/DR labels (singular + plural) | via `docName()` — see FEATURE: DOCUMENTS |
 | `wpSubmissionLimit` / `drSubmissionLimit` | legacy, no UI writes them | `DocumentsModal.tsx:469` |
-| `gslRequireNextSpeaker` | **default false** (the GSL may elapse). When ON: the Start button is disabled while the current speaker is the last on the list, and the call-first button needs two delegates, so the queue never empties mid-session | `chair/[code]/page.tsx` (Start button + call-first button, both gated on the setting) |
+| `gslRequireNextSpeaker` | **default false** (the GSL may elapse). When ON: the Start button is disabled while the current speaker is the last on the list, and the call-first button needs two delegates, and the Finish button (which empties the floor) is not offered, so the queue never empties mid-session | `chair/[code]/page.tsx` (Start button + call-first button, both gated on the setting) |
 | `gavelSoundEnabled` | **default true**. A double gavel knock when a running chair countdown reaches the mark. Moderator's device only, never on a Commenter, delegate or advisor device, never when ended or suspended. Settings → Access → Timer sound, with a Test button | `useGavelCue` (`src/lib/useGavelCue.ts`), called from `chair/[code]/page.tsx` (speaker clock, unmoderated total, RTR) and `UnmoderatedCaucusView` (CoW timer) |
 | `gavelSoundAtSeconds` | **default 15**, clamped 1..600 (`clampGavelSeconds`). The second mark the knock fires at: once per crossing from above to at-or-below, again only if extra time lifts it back above | same as above |
 | `chairJoinSuffix` | 4-digit chair code AND the RLS write credential | join page + `sessionClient` |
@@ -460,7 +522,7 @@ Persisted into `settings.scoring`; read everywhere via `getScoringConfig(committ
 
 ### The gavel (head chair)
 - Stored as `headChair` **inside the `committees.settings` JSONB**. It is NOT a column — the `committees` table has `resuming_chair` but no `head_chair`.
-- Written by `updateCommitteeHeadChairInDB` (`committeeService.ts:975-987`), which read-merges the existing settings blob so it does not clobber `chairJoinSuffix`.
+- Written by `updateCommitteeHeadChairInDB`, a key-level `patch_committee_settings` of `{ headChair, headChairDevice }` (no read, so it cannot clobber `chairJoinSuffix`), which then appends the holder's name to `chair_names`. Returns `Promise<boolean>`.
 - Read back as `committee.dbHeadChair` (`committeeService.ts:80`).
 - Claim-at-will — any chair may take it, from two places:
   - the join page, by picking the "head chair" role (`chairRole` defaults to `'co'`) → `join/page.tsx:256` (conference session) and `join/page.tsx:290` (anonymous session)
@@ -524,10 +586,10 @@ isModerator = nameHolds && !heldElsewhere;   // setIsViewOnly(!isModerator)
 - A row written while the delegate still holds the floor has `speech_seconds` NULL and is matched to the live/next card until the reconcile effect back-patches it. Without that, every reload mid-speech creates ANOTHER row — production still carries duplicates from before this existed.
 - `persist` refuses to INSERT when there is no text and no rating > 0, so blurring an untouched note box no longer creates an empty row.
 - Realtime behaviour differs and must stay that way:
-  - a view-only co-chair DOES process `current_speaker` events (patched via `getCurrentSpeakerRow`), the head chair returns early — it owns that row (`:1318-1320`)
-  - a view-only co-chair NEVER debounces (`withinDebounce = !isViewOnlyRef.current && …`, `:1360`) — it writes nothing, so debouncing would make it miss the head chair's phase/caucus changes
-  - a view-only co-chair always takes the fresh row rather than pinning live timer state (`:1407`)
-  - a view-only co-chair does not run the caucus clock (`:1492`) — it would refresh the debounce every second and write a phase it does not own
+  - a view-only co-chair DOES process `current_speaker` events (the sync's `wants` lets them through and the `currentSpeaker` slice is patched with `withCurrentSpeaker`); the Moderator ignores them, it owns that row (RULE 6)
+  - a view-only co-chair NEVER debounces (`debounceLeft()` returns 0 when `isViewOnlyRef.current`) — it writes nothing, so debouncing would make it miss the head chair's phase/caucus changes
+  - a view-only co-chair always takes the fresh row rather than pinning live timer state (the `row` apply pins phase/caucus only for a Moderator with a running clock)
+  - a view-only co-chair does not run the caucus expiry (the effect derives the role from the row and returns for a Commenter) — it would write a phase it does not own
 
 ---
 
@@ -537,7 +599,7 @@ isModerator = nameHolds && !heldElsewhere;   // setIsViewOnly(!isModerator)
 - Everything lives in `src/components/AgendaPicker.tsx`: `useSessionAgendaTopics` (one anon read of `conference_committees.topics` by `session_id`; the policy "Anyone can read committees by link" makes it readable for published AND unpublished conferences, so there is no RPC), `useAgendaPicker` (when to show it, the optimistic pick) and the full-screen `AgendaPicker`. The chair page only calls the hook and mounts `{agenda.picker}`.
 - **Shown automatically** only when ALL hold: `sessionOrigin === 'conference'`, the query has RETURNED 2+ topics, `phase === 'pre-session'`, not suspended, not ended, `!isViewOnly`, and `settings.agendaTopicIndex` is absent. It overlays roll call; it never delays it. Standalone sessions never run the query; 0 or 1 topics render exactly as before. Commenters are never blocked.
 - **Switching later**: the Moderator clicks the topic, in the header during pre-session, or in the sidebar masthead (`CommitteeIdentityBadge` `onTopicClick`) during debate (the header shows tabs, not the topic, once debate starts). Offered only when there are 2+ topics and the session has not ended.
-- **Contract**: `committees.settings.agendaTopicIndex` is the 0-based index (absent = never chosen). `updateCommitteeAgendaInDB` (`committeeService.ts`) writes it AND `committees.topic` in ONE update via `sessionClient(code, suffix)`, read-merging the blob; it refuses to write if the blob could not be read (a bare `{agendaTopicIndex}` would wipe `chairJoinSuffix`), and returns false on a zero-row result. `CommitteeEditorModal`'s organiser re-sync reads the key so editing the conference committee keeps the dais's choice.
+- **Contract**: `committees.settings.agendaTopicIndex` is the 0-based index (absent = never chosen). `updateCommitteeAgendaInDB` (`committeeService.ts`) writes it AND `committees.topic` in ONE statement through the `set_committee_agenda` RPC via `sessionClient(code, suffix)` (key-level merge, no read first), and returns false when RLS refused it. `CommitteeEditorModal`'s organiser re-sync reads the key so editing the conference committee keeps the dais's choice.
 - Optimistic first (`updateLocal`, non-structural), then the result is checked: on failure the topic and index roll back, the picker reopens and shows `agenda_failed`. A `localPick` guard stops a realtime snapshot that predates the write from flashing the picker back open.
 - Both loaders strip `agendaTopicIndex` on hydrate (rule 12), so SettingsPanel and the voting page's `applyRule` can never post a stale copy back.
 
@@ -675,7 +737,7 @@ and the database. Read it before touching anything awards-related.
 
 ### Chair name persistence
 - When chair joins with a new name, addChairName() appends it to committee.chair_names[] in DB
-- addChairName is idempotent — checks for duplicates before inserting
+- addChairName is idempotent and atomic: `add_committee_chair_name` appends with `array_append` only when the exact name is absent, in one statement
 
 ### Head chair vs co-chair at join
 - The chair tab has a head/co role picker; `chairRole` defaults to `'co'` (`join/page.tsx:56`).
@@ -698,15 +760,30 @@ and the database. Read it before touching anything awards-related.
 
 ## FEATURE: VOTING PAGE (/voting/[code])
 
-- Separate page from main session
-- Accessed when DR is introduced and presentation flow completes
-- Shows delegates one by one: In Favour / In Favour with Rights / Abstain / Against with Rights / Against
+- Separate page from main session, opened from Documents → Go to voting (carries `?chairName=`)
+- Shows delegates one by one: In Favour / In Favour with Rights / Abstain / Pass / Against with Rights / Against; a pass round follows
 - Rights speakers handled in sequence after all votes
 - P5 veto mode: one P5 Against = failed
 - Unanimous mode: all P+V must vote For
-- Result shown with pass/fail, vote counts
-- "Vote Again" button resets for another round
-- "Back to Session" panel: option to raise Motion to Suspend Debate
+- Result shown with pass/fail, vote counts; "Vote Again" re-freezes the room and starts a new ballot
+
+### The vote is persisted (`documents.vote_state`, `src/lib/voteState.ts`)
+- One jsonb object per draft resolution: `status` (voting | rights-speakers | result), the frozen `order` (ballot order, also the P/PV numerator) and `votable` (quorum/veto denominator) as `{id, country}`, `votes`, `currentVoterIndex`, `passedIds`, `rightsOrder`, `rightsIndex`, `rightsTimerLimit`, `result`, `seq`. A column rather than a table: one live vote per document, and `documents` already has the right RLS (`sess_upd`), realtime publication and subscriptions. Cost: every ballot write fires a `documents` event. Every surface's session sync coalesces those (200 ms) and fetches only the documents slice; the voting page adds one light `loadVoteStates` read. `updatedAt` / `startedAt` are stamped with `serverNowIso()` because follower devices sort open votes by them.
+- Written ONLY by `saveVoteState` → `save_document_vote_state(p_document, p_state)` (SECURITY INVOKER). `seq` must strictly grow (compared as numeric, so no cast can throw), so a stale device cannot overwrite a newer state; it returns `'ok' | 'stale' | 'denied'`, and an invalid state (not an object, a fractional or out-of-range seq) is `'denied'`, never an exception. The page writes optimistically (a ref plus state), then serialises the saves; a refused save keeps the ballot on screen with a Retry. A `stale` save re-reads: the SAME ballot (same `startedAt`) is re-applied under a seq above the stored one; a different ballot means the DB wins and the stored state is loaded.
+- **The verdict write is checked (V2).** `persistResult` → `updateDocumentStatus` (now `Promise<boolean>`, row-counted); a refused write shows `voting_save_failed` with Retry. The document list treats `stored?.status === 'result'` as voted even when `documents.status` was lost (and re-records it on open), so "start a vote" is never offered over a stored result. The Moderator can reopen a voted paper that has a stored state to correct a placard after a reload. `correctVote` and `finishWithResult` refuse on a view-only device.
+- **One device drives**: the Moderator's, by the same `deriveGavelRole(committee, chairName, getGavelDeviceId(code))` as the chair page. Every other chair device is view-only (UI gate, rule 15): no vote buttons, no roll call modal, no rules changes (`VotingRulesPanel readOnly`), no End Debate, no rights clock; it follows the open vote live (`followLive`) and can look at any stored vote.
+- A reload never loses a ballot: the document list offers **Resume vote** for an unfinished one and the roll call modal stays closed while a vote is open.
+- **Correcting one placard**: "Correct a vote" lists the recorded ballots with a choice per row. On the result screen the verdict is re-evaluated and the document status follows it.
+- The rights countdown is local to the driving device (never written per second).
+
+### The room's phase (`set_committee_voting_phase`)
+- Opening the page as the Moderator calls `setVotingPhase(id, true)`: in ONE statement it stores the current phase in `settings.votingReturnPhase` and sets `phase = 'voting'`, so delegate phones show "Vote in progress" and Request to Speak closes. In the same transaction it **pauses every clock** (V1): a running caucus total is frozen at its live value (the `pauseCaucusLive` math: a moderated total read at min(now, the speaker clock's zero)) and a running `current_speaker` clock is paused in one update at its live remaining, so a vote never drains a speaker or a caucus. The dais presses play after returning. Already voting = no-op (a reload never overwrites the remembered phase). A suspended or ended room is refused (`voting_phase_closed`); the entry effect is keyed on whether the room is closed, so it is attempted again the moment the room resumes.
+- "Back to Session" (Moderator) calls `setVotingPhase(id, false)`: restores exactly the remembered phase; a remembered caucus phase whose `caucus` is gone falls back to the GSL; nothing remembered falls back to the caucus on the row, else the GSL; not voting = no-op. It never forces `speakers-list`. A refused write keeps the chair on the page (`voting_phase_leave_failed`). A Commenter only navigates.
+- While `phase === 'voting'` the chair page renders `VotingInProgressCard` (open the voting screen; Moderator: Return to debate through the same RPC), because it has no other main view for that phase. No clock runs during a vote: entering voting paused them (above).
+- The organiser live wall (`manage/[slug]/live/PhaseVariants.tsx`, `cardModel.ts`) still says ballots are not stored; it has not been updated to read `vote_state`.
+
+### End Debate
+- Calls the same `endDebate` as the chair page (`ended_at`, `expires_at`, phase), then reads `ended_at` back, because a refused update resolves with no error. Success lands on `/chair/[code]` (End View). Failure keeps the confirmation open with `voting_end_debate_failed`. The confirmation renders on every screen of the page.
 
 ---
 
@@ -768,7 +845,7 @@ and the database. Read it before touching anything awards-related.
 9. **Never await DB writes for UI updates** — always fire-and-forget, optimistic first
 10. **Never call removePendingMotionInDB with a temp ID** — wait for real UUID via pendingIds tracking
 11. **Never use a native `<input type="date">` (or any other old/native date picker)** — see UI RULES
-12. **Never let `headChair` (or `agendaTopicIndex`) ride along when the settings store is written back to the DB** — the chair and voting loaders hydrate the whole `dbSettings` blob (minus `chairJoinSuffix`/`separateChairCode`/`headChair`/`agendaTopicIndex`) into Zustand, and `SettingsPanel`'s `upd` / the voting page's `applyRule` then POST `{ ...getSettings(code), [key]: value }` back. A `headChair` hydrated at page load is stale the moment another chair takes the gavel, and writing it back silently reverts the gavel to the earlier holder. Strip it on hydrate or exclude it from the write — never both-ways it.
+12. **Never write the settings store back to the DB as a whole blob** — send only the changed keys through `patchCommitteeSettings` / `saveCommitteeSettings` (see FEATURE: SETTINGS, WRITE side). Posting `{ ...getSettings(code), [key]: value }` is what used to revert another chair's settings and, with a hydrated `headChair`, the gavel itself. `NON_HYDRATED_SETTING_KEYS` (`chairJoinSuffix`, `separateChairCode`, `headChair`, `headChairDevice`, `agendaTopicIndex`, `votingReturnPhase`) never enter the store and each has its own writer.
 13. **Never regenerate `chairJoinSuffix` when the DB already has one** — it is the ONLY write credential (`x-chair-suffix` → `is_session_chair`) and the code every chair typed on the join page. Overwriting it locks every chair out of a live committee. `SettingsPanel.tsx:415-425` generates one only when the store copy is `''`; keep that guard.
 14. **Never read a setting via `getSettings(code)` on the delegate or advisor pages** — neither page ever hydrates the store, so it silently returns `DEFAULT_SETTINGS`. Use `getCommitteeFlags` / `sponsorLabel` / `getScoringConfig` / `docName`, which are pure functions of the committee row.
 15. **Never treat `isViewOnly` as a permission** — it is a UI gate only. RLS grants full write access to anyone holding the chair suffix.

@@ -11,11 +11,14 @@ import { SeatFlag } from '@/components/SeatFlag';
 const SQUARE_FLAGS = new Set(['CH', 'NP']);
 import { Emoji } from '@/components/Emoji';
 import { useSettingsStore, DEFAULT_MOTION_NAMES, MotionNames } from '@/lib/settingsStore';
+import { logFloorSpeech, type FloorClock } from '@/lib/floorSpeech';
 import {
-  addPendingMotion as addPendingMotionInDB,
+  useTempMotionIds, isTempMotionId, raiseMotionOptimistic, removeMotionEverywhere,
+  fellOtherFloorMotions, showMotionNotice,
+} from '@/lib/motionFlight';
+import {
   removePendingMotion as removePendingMotionInDB,
-  setPhase as setPhaseInDB,
-  updateCaucus as updateCaucusInDB,
+  setPhaseAndCaucus as setPhaseAndCaucusInDB,
   addToCaucusList as addToCaucusListInDB,
   batchAddToCaucusList as batchAddToCaucusListInDB,
   clearCaucusList as clearCaucusListInDB,
@@ -25,6 +28,7 @@ import {
   logEvent,
   caucusQueueCapacity,
 } from '@/lib/committeeService';
+import { serverNow, serverNowIso } from '@/lib/serverClock';
 
 type ModalView = 'list' | 'raise' | 'vote';
 type TypeMeta = Record<PendingMotionType, { icon: string; label: string; sub: string }>;
@@ -736,7 +740,7 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
   onRemove: (motionId: string) => void;
   onBack: () => void;
   onEdit: (motionId: string) => void;
-  pendingIds: Set<string>;
+  pendingIds: ReadonlySet<string>;
   isViewOnly?: boolean;
   /** B7 — recompute disruptiveness from the CURRENT motionOrder instead of trusting the
    *  value baked into the row at insert time. See rankMotion in MotionsModal. */
@@ -810,9 +814,10 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
     const isCustom = m.type === 'custom';
     // A Custom motion titles itself with its own free-text name.
     const cardLabel = motionDisplayLabel(m, typeMeta, language);
-    // Its ID must be real before Accept can delete the row (never call the DB
-    // with a temp ID — the row would survive and realtime would resurrect it).
-    const acceptBlocked = isCustom && pendingIds.has(m.id);
+    // M-2: while the INSERT is still in flight the id is `temp-...`. EVERY action is held
+    // back until the real UUID lands: a delete issued with a temp id deletes nothing, so an
+    // accept, reject, edit or suspend "No" in that window left the real row to come back.
+    const acceptBlocked = pendingIds.has(m.id) || isTempMotionId(m.id);
 
     return (
       <div
@@ -849,9 +854,10 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
             <span className="min-w-0 break-words">{cardLabel}</span>
             {!isPrimary && !isViewOnly && (
               <button
-                onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
-                title="Edit motion"
-                className="opacity-40 hover:opacity-80 transition-opacity focus:outline-none shrink-0"
+                onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
+                disabled={acceptBlocked}
+                title={acceptBlocked ? t('motions_saving') : 'Edit motion'}
+                className={`opacity-40 hover:opacity-80 transition-opacity focus:outline-none shrink-0 ${acceptBlocked ? 'cursor-not-allowed' : ''}`}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -955,18 +961,19 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
           <div className="flex gap-2 mt-auto">
             <button onClick={() => { if (!acceptBlocked) onAccepted(m); }}
               disabled={acceptBlocked}
-              title={acceptBlocked ? 'Saving…' : undefined}
+              title={acceptBlocked ? t('motions_saving') : undefined}
               className={`gv-lift flex-1 bg-[#2A5A3C] hover:bg-[#3D7A52] text-white py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
               {isCustom ? clearFromFloorLabel(language) : t('motions_accept_btn')}
             </button>
-            <button onClick={() => onRemove(m.id)}
-              disabled={pendingIds.has(m.id)}
-              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${pendingIds.has(m.id) ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
+            <button onClick={() => { if (!acceptBlocked) onRemove(m.id); }}
+              disabled={acceptBlocked}
+              className={`gv-lift flex-1 bg-[#DDD4C0] hover:bg-red-950/40 hover:text-[#8B2020] text-[#6A5A4A] border border-[#DDD4C0] hover:border-[#8B2020]/40 py-2.5 rounded-xl font-bold text-sm transition-colors focus:outline-none ${acceptBlocked ? 'opacity-40 cursor-not-allowed' : ''}`} style={{ fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}>
               {t('motions_reject_btn')}
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onEdit(m.id); }}
-              title="Edit motion"
-              className="bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "'DM Mono', monospace" }}>
+            <button onClick={(e) => { e.stopPropagation(); if (!acceptBlocked) onEdit(m.id); }}
+              disabled={acceptBlocked}
+              title={acceptBlocked ? t('motions_saving') : 'Edit motion'}
+              className="disabled:opacity-40 disabled:cursor-not-allowed bg-[#B6871F]/20 hover:bg-[#B6871F]/40 border border-[#B6871F]/50 hover:border-[#B6871F] text-[#B6871F] py-2.5 px-4 rounded-xl font-bold text-sm transition-colors shrink-0 focus:outline-none gv-lift" style={{ fontFamily: "'DM Mono', monospace" }}>
               {t('motions_edit_label')}
             </button>
           </div>
@@ -1041,12 +1048,16 @@ function VotingView({ committee, typeMeta, onAccepted, onAllDone, onRemove, onBa
 }
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
-export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false }: {
+export default function MotionsModal({ committee, onClose, onCommitteeUpdate, belowQuorum = false, isViewOnly = false, floorClock }: {
   committee: Committee;
   onClose: () => void;
   onCommitteeUpdate?: (updater: (c: Committee) => Committee) => void;
   belowQuorum?: boolean;
   isViewOnly?: boolean;
+  /** The chair page's live speaker clock (anchor + extra time), so a speech interrupted by
+   *  a caucus, Suspend or End is logged from the real anchor (G-1). Without it the helper
+   *  falls back to the committee row's own anchor and no extra time. */
+  floorClock?: () => FloorClock;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -1111,7 +1122,9 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   const pending = [...(committee.pendingMotions ?? [])].filter((m) => m.type !== ('join-request' as string) && (m.type as string) !== 'gsl-request').sort((a, b) => rankMotion(b) - rankMotion(a));
   const [view, setView] = useState<ModalView>(pending.length === 0 && !isViewOnly ? 'raise' : 'vote');
   const [specialVoteMotion, setSpecialVoteMotion] = useState<PendingMotion | null>(null);
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // M-2: temp ids live in a module-level store keyed by committee, not modal state, so
+  // closing the modal mid-insert no longer forgets which motions are still saving.
+  const pendingIds = useTempMotionIds(committee.id);
   const [editingMotionId, setEditingMotionId] = useState<string | null>(null);
   const update = (updater: (c: Committee) => Committee) => onCommitteeUpdate?.(updater);
 
@@ -1123,35 +1136,24 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       // is rejected — that also keeps every queued Custom motion distinguishable.
       if (existing.some((m) => m.type === 'custom' && m.proposedBy === motion.proposedBy && (m.topic ?? '') === motion.topic)) return;
     } else if (existing.some((m) => isFloorMotion(m) && m.proposedBy === motion.proposedBy)) {
+      // One floor motion per delegation. This used to return silently, so the chair's
+      // click simply did nothing. Say why.
+      showMotionNotice(committee.id, { kind: 'blocked', country: motion.proposedBy === CHAIR_KEY ? chairDisplayName(language) : motion.proposedBy });
       return;
     }
 
-    const tempId = `temp-${Date.now()}`;
-    const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
-
-    setPendingIds((prev) => new Set([...prev, tempId]));
-    update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
-
-    addPendingMotionInDB(committee.id, motion, committee.code, committee.dbChairJoinSuffix ?? undefined, motionOrder).then((realId) => {
-      if (!realId) return;
-      update((c) => ({
-        ...c,
-        pendingMotions: (c.pendingMotions ?? []).map((m) =>
-          m.id === tempId ? { ...m, id: realId } : m
-        ),
-      }));
-      setPendingIds((prev) => { const next = new Set(prev); next.delete(tempId); return next; });
+    raiseMotionOptimistic({
+      committee, motion, update, motionOrder,
+      disruptiveness: localCalcDisruptiveness(motion.type, motion.totalTime),
     });
 
     setView('vote');
   };
 
   const handleRemove = (motionId: string) => {
-    update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
-    // Only call DB if this is a real UUID (not a temp optimistic ID)
-    if (!motionId.startsWith('temp-')) {
-      removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
-    }
+    // Every remove affordance is disabled while the id is temporary (M-2); if one still
+    // slips through, the store deletes the real row as soon as the insert returns.
+    removeMotionEverywhere(committee, motionId, update);
   };
 
   const handleEdited = (motion: Omit<PendingMotion, 'id' | 'disruptiveness'>) => {
@@ -1160,23 +1162,12 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
 
     // Remove old motion from local state immediately (same as handleRemove but inline
     // so committee.pendingMotions is clean before the re-add, avoiding the duplicate check)
-    update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== oldId) }));
-    if (!oldId.startsWith('temp-')) removePendingMotionInDB(oldId, committee.code, committee.dbChairJoinSuffix ?? undefined);
+    removeMotionEverywhere(committee, oldId, update);
 
     // Add replacement, same logic as handleRaised but NO duplicate check
-    const tempId = `temp-${Date.now()}`;
-    const disruptiveness = localCalcDisruptiveness(motion.type, motion.totalTime);
-
-    setPendingIds((prev) => new Set([...prev, tempId]));
-    update((c) => ({ ...c, pendingMotions: [...(c.pendingMotions ?? []), { ...motion, id: tempId, disruptiveness }] }));
-
-    addPendingMotionInDB(committee.id, motion, committee.code, committee.dbChairJoinSuffix ?? undefined, motionOrder).then((realId) => {
-      if (!realId) return;
-      update((c) => ({
-        ...c,
-        pendingMotions: (c.pendingMotions ?? []).map((m) => m.id === tempId ? { ...m, id: realId } : m),
-      }));
-      setPendingIds((prev) => { const next = new Set(prev); next.delete(tempId); return next; });
+    raiseMotionOptimistic({
+      committee, motion, update, motionOrder,
+      disruptiveness: localCalcDisruptiveness(motion.type, motion.totalTime),
     });
 
     setEditingMotionId(null);
@@ -1184,8 +1175,11 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   };
 
   const handleMotionAccepted = async (motion: PendingMotion) => {
-    // Clear ALL other pending motions, only the accepted one proceeds
-    // GSL (speakersList) is NEVER modified here
+    // When a caucus, Suspend or End passes, every OTHER pending floor motion FALLS: it is
+    // deleted and a one-line notice offers Undo for ~8 s (fellOtherFloorMotions, M-1).
+    // Custom motions never make anything fall. GSL (speakersList) is NEVER modified here.
+    // Never act on a temp id (M-2): the buttons are disabled, this is the backstop.
+    if (isTempMotionId(motion.id)) return;
 
     // ── CUSTOM MOTION: DELIBERATE NO-OP ───────────────────────────────────────
     // This branch is FIRST and returns unconditionally so a Custom motion can
@@ -1199,9 +1193,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motion.id) }));
       // Never call the DB with a temp ID (the Accept button is disabled until
       // the real UUID lands, this is the belt-and-braces guard).
-      if (!motion.id.startsWith('temp-')) {
-        removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      }
+      removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       // Close only when the floor is now empty; otherwise stay so the chair can
       // work through the remaining motions.
       const othersLeft = (committee.pendingMotions ?? []).some((m) => m.id !== motion.id && isFloorMotion(m));
@@ -1228,8 +1220,13 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
     // started_at, so no separate stopSpeakerTimer write is needed — one conditional write,
     // nothing to race with. See the docstring in committeeService.ts.
     const floorSpeaker = committee.currentSpeaker;
+    // G-1: the interrupted speaker's speech is logged BEFORE the floor is cleared, from the
+    // anchor (idempotent per turn, Room Order placeholders skipped). The other floor motions
+    // fall at the same moment.
     const clearFloorForCaucus = () => {
+      fellOtherFloorMotions({ committee, passedId: motion.id, update, motionOrder, rank: rankMotion });
       if (!floorSpeaker) return;
+      void logFloorSpeech(committee, floorClock?.());
       clearCurrentSpeakerIfUnchanged(
         committee.id, floorSpeaker.delegateId, floorSpeaker.country,
         committee.code, committee.dbChairJoinSuffix ?? undefined,
@@ -1257,8 +1254,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'unmoderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'unmoderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       return;
     }
     if (motion.type === 'consultation') {
@@ -1276,8 +1272,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'unmoderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'unmoderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       return;
 
     } else if (motion.type === 'moderated') {
@@ -1294,8 +1289,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'moderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       return;
 
     } else if (motion.type === 'tour') {
@@ -1327,8 +1321,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         onClose();
         clearFloorForCaucus();
         removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-        updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-        setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+        setPhaseAndCaucusInDB(committee.id, 'moderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
         clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(() =>
           batchAddToCaucusListInDB(committee.id, caucusQueue, committee.code, committee.dbChairJoinSuffix ?? undefined)
         );
@@ -1361,8 +1354,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
       onClose();
       clearFloorForCaucus();
       removePendingMotionInDB(motion.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      updateCaucusInDB(committee.id, caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);
-      setPhaseInDB(committee.id, 'moderated-caucus', committee.code, committee.dbChairJoinSuffix ?? undefined);
+      setPhaseAndCaucusInDB(committee.id, 'moderated-caucus', caucus, committee.code, committee.dbChairJoinSuffix ?? undefined);   // one update (R-7)
       // Await clear before insert to prevent race condition (DELETE winning after INSERT)
       clearCaucusListInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(() =>
         batchAddToCaucusListInDB(
@@ -1379,6 +1371,7 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
   // ── Special vote: "Does this motion pass?" ──────────────────────────────────
   if (specialVoteMotion) {
     const isSuspend = specialVoteMotion.type === 'suspend-debate';
+    const specialBlocked = isTempMotionId(specialVoteMotion.id) || pendingIds.has(specialVoteMotion.id);
     return (
       <Portal><div className="fixed inset-0 z-[60] bg-[#F6F1E9] flex flex-col items-center justify-center text-center px-8">
         <p className="text-xs font-mono tracking-widest text-[#9A8A78] mb-6">
@@ -1387,38 +1380,64 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
         <h1 className="text-4xl font-black mb-14 tracking-wide" style={{ color: '#1B3828', fontFamily: "'Outfit', sans-serif" }}>{t('motions_does_pass')}</h1>
         <div className="flex gap-8">
           <button
+            disabled={specialBlocked}
             onClick={async () => {
               const motionId = specialVoteMotion!.id;
-              if (!motionId.startsWith('temp-')) {
-                await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
-              }
+              if (isTempMotionId(motionId)) return;
+              await removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
               update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
+              // M-1: the other floor motions fall. G-1: whoever held the floor has their speech
+              // logged, then leaves it, so a resumed session cannot log the same turn again.
+              fellOtherFloorMotions({ committee, passedId: motionId, passedType: specialVoteMotion!.type, update, motionOrder, rank: rankMotion });
+              const floor = committee.currentSpeaker;
+              if (floor) {
+                void logFloorSpeech(committee, floorClock?.());
+                update((c) => ({ ...c, currentSpeaker: null }));
+                clearCurrentSpeakerIfUnchanged(committee.id, floor.delegateId, floor.country, committee.code, committee.dbChairJoinSuffix ?? undefined);
+              }
+              // R-5: optimistic first (RULE 5), but remembered. Both writes are retried inside
+              // runWrite and a real failure raises the chair page's "Not saved" toast; when they
+              // resolve false the lifecycle fields are put back, so this laptop does not sit on
+              // a suspended / ended screen while the room carries on. The chair page drops its
+              // overlay when suspendedAt / endedAt return to null. Timestamps are on the
+              // database clock (T-1).
+              const before = {
+                phase: committee.phase, suspendedAt: committee.suspendedAt ?? null,
+                endedAt: committee.endedAt ?? null, expiresAt: committee.expiresAt ?? null,
+              };
+              const rollback = (ok: boolean) => { if (!ok) onCommitteeUpdate?.((c) => ({ ...c, ...before })); };
               if (isSuspend) {
-                onCommitteeUpdate?.((c) => ({ ...c, suspendedAt: new Date().toISOString(), phase: 'adjourned' as const }));
-                suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+                // S4: a caucus kept through the break keeps its queue, never its floor holder.
+                onCommitteeUpdate?.((c) => ({
+                  ...c, suspendedAt: serverNowIso(), phase: 'adjourned' as const,
+                  caucus: c.caucus?.currentSpeaker ? { ...c.caucus, currentSpeaker: null } : c.caucus,
+                }));
+                void suspendDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(rollback);
               } else {
-                const now = new Date();
-                const expires = new Date(now.getTime() + 1 * 60 * 60 * 1000);
-                onCommitteeUpdate?.((c) => ({ ...c, endedAt: now.toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
-                endDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined);
+                const nowMs = serverNow();
+                // Mirrors endDebate()'s own +1h. If one is ever changed, change all three.
+                const expires = new Date(nowMs + 1 * 60 * 60 * 1000);
+                onCommitteeUpdate?.((c) => ({ ...c, endedAt: new Date(nowMs).toISOString(), expiresAt: expires.toISOString(), phase: 'adjourned' as const }));
+                void endDebateInDB(committee.id, committee.code, committee.dbChairJoinSuffix ?? undefined).then(rollback);
               }
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#1B3828', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#2A5A3C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#1B3828'; }}>
             {t('motions_yes')}
           </button>
           <button
+            disabled={specialBlocked}
             onClick={() => {
               const motionId = specialVoteMotion.id;
-              removePendingMotionInDB(motionId, committee.code, committee.dbChairJoinSuffix ?? undefined);
-              update((c) => ({ ...c, pendingMotions: (c.pendingMotions ?? []).filter((m) => m.id !== motionId) }));
+              if (isTempMotionId(motionId)) return;
+              removeMotionEverywhere(committee, motionId, update);
               setSpecialVoteMotion(null);
               onClose();
             }}
-            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
+            className="px-16 py-8 rounded-3xl text-white text-2xl font-black transition-colors focus:outline-none gv-lift disabled:opacity-40 disabled:cursor-not-allowed" style={{ backgroundColor: '#8B2020', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.05em' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#7A1C1C'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = '#8B2020'; }}>
             {t('motions_no')}
@@ -1528,7 +1547,10 @@ export default function MotionsModal({ committee, onClose, onCommitteeUpdate, be
                               )}
                             </div>
                           </div>
-                          <button onClick={() => handleRemove(m.id)} className="text-[#9A8A78] hover:text-[#8B2020] text-sm transition-colors mt-0.5">✕</button>
+                          <button onClick={() => { if (!isTempMotionId(m.id)) handleRemove(m.id); }}
+                            disabled={isTempMotionId(m.id)}
+                            title={isTempMotionId(m.id) ? t('motions_saving') : undefined}
+                            className="text-[#9A8A78] hover:text-[#8B2020] disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-colors mt-0.5">✕</button>
                         </div>
                       </div>
                     );

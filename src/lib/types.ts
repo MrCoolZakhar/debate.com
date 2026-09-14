@@ -99,6 +99,16 @@ export interface CommitteeDocument {
   qaMinutes?: number;
   signatories?: string[];
   approval?: 'approved' | 'rejected'; // chair approval gate (undefined = undecided)
+  /** documents.intro_state — the introduction in progress (V-5). null/undefined = none. */
+  introState?: DocIntroState | null;
+}
+
+/** Persisted introduction stage. The clock is anchor-based: live remaining is
+ *  `base - (now - startedAt)`; `startedAt` null means paused at `base`. */
+export interface DocIntroState {
+  stage: 'reading' | 'presentation' | 'qa';
+  base: number;
+  startedAt: string | null;
 }
 
 export interface CaucusState {
@@ -115,6 +125,9 @@ export interface CaucusState {
   proposerPosition: 'first' | 'last' | null;
   spokenCountries: string[];
   isConsultation?: boolean;  // true when this caucus is a Consultation of the Whole
+  /** Consultation of the Whole: when the current floor holder took the floor (database-clock
+   *  ISO). Written with the flag tap, so a reload keeps the holder's real start. */
+  floorSince?: string | null;
 
   // ── Wall-clock ANCHOR for the TOTAL caucus countdown ────────────────────────
   // ISO timestamp of the instant the total clock last (re)started, or null when it is
@@ -172,6 +185,10 @@ export interface Committee {
   speakerTimeLimit: number;
   speakerTimeRemaining: number;
   speakerStartedAt: string | null;
+  /** current_speaker.seated_at: when this delegation was seated (the floor turn's identity,
+   *  src/lib/floorSpeech.ts). Null or absent on an empty floor or a row seated before the
+   *  column existed. */
+  speakerSeatedAt?: string | null;
   motions: Motion[];
   pendingMotions: PendingMotion[];
   resolutions: Resolution[];

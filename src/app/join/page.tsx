@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useCommitteeStore } from '@/lib/store';
-import { getCommitteeByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
+import { getCommitteeRosterByCode, addChairName, updateCommitteeHeadChairInDB } from '@/lib/committeeService';
 import { getGavelDeviceId } from '@/lib/gavelDevice';
 import { chairActiveElsewhere } from '@/lib/chairDeviceClaims';
 import { Committee } from '@/lib/types';
@@ -41,7 +40,6 @@ function JoinPageInner() {
   const { language } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { committees } = useCommitteeStore();
   const { getSettings } = useSettingsStore();
   const { user, session, profile, loading: authLoading } = useAuth();
   const initialMode = (searchParams.get('mode') as JoinMode) ?? 'delegate';
@@ -243,17 +241,11 @@ function JoinPageInner() {
       setCheckingConference(false);
     }
 
-    // 1. Check local store first (instant)
-    const local = Object.values(committees).find((c) => c.code === upper);
-    if (local) {
-      setFoundCommittee(local);
-      checkConferenceSession(local);
-      setLookingUp(false);
-      return;
-    }
-
-    // 2. Fall back to DB
-    getCommitteeByCode(upper).then(async (remote) => {
+    // J-1: a light lookup (the committee row plus the roster, one round trip), not the full
+    // committee with every list, document and message. The legacy `mun-committees`
+    // localStorage store is no longer consulted: nothing live writes it any more, so a hit
+    // there could only ever be an old roster or an old chair code.
+    getCommitteeRosterByCode(upper).then(async (remote) => {
       if (remote) {
         setFoundCommittee(remote);
         await checkConferenceSession(remote);
@@ -261,7 +253,8 @@ function JoinPageInner() {
         setFoundCommittee(null);
         setConferenceCommittee(null);
         setIsConferenceSession(false);
-        setError(t('join_not_found'));
+        // undefined = the read failed (network), null = no such committee.
+        setError(remote === undefined ? t('join_lookup_failed') : t('join_not_found'));
       }
       setLookingUp(false);
     });

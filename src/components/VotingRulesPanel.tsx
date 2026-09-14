@@ -495,6 +495,8 @@ export interface VotingRulesPanelProps {
   vetoEntries?: string[];
   /** Every non-observer delegation name on the roster. */
   delegationNames?: string[];
+  /** Commenter view: the rules are shown but cannot be changed (UI gate, like the chair page). */
+  readOnly?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -503,7 +505,7 @@ export function VotingRulesPanel({
   rules, onChange, vetoMode, onVetoModeChange,
   tally, outcome, votesCast, eligible, presentCount, totalCount,
   resultShown, vetoBlocked, unanimousFail,
-  vetoEntries = [], delegationNames = [], className = '', style,
+  vetoEntries = [], delegationNames = [], readOnly = false, className = '', style,
 }: VotingRulesPanelProps) {
   const t = useT();
   const consensus = rules.substantiveThreshold === 'consensus';
@@ -585,6 +587,15 @@ export function VotingRulesPanel({
 
       {/* Controls */}
       <div className="px-4 py-3 flex-1 overflow-y-auto">
+        {readOnly && (
+          <p className="text-[10.5px] mb-2.5 font-semibold leading-snug" style={{ color: '#EED98A' }}>
+            {t('voting_rules_read_only')}
+          </p>
+        )}
+        <div
+          aria-disabled={readOnly || undefined}
+          style={readOnly ? { pointerEvents: 'none', opacity: 0.55 } : undefined}
+        >
         <RuleLabel info={{
           title: t('voting_rules_threshold_info_title'),
           body: t('voting_rules_threshold_info_body'),
@@ -712,6 +723,7 @@ export function VotingRulesPanel({
                 )
               : t('voting_rules_quorum_line_none', { present: presentCount, total: totalCount })}
           </p>
+        </div>
         </div>
       </div>
 

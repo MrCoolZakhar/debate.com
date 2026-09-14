@@ -1,6 +1,8 @@
 # GAVELLING — TRANSLATIONS AGENT BRIEFING
 ## Up-to-date guide for adding a new language to Gavelling
 
+**Last counted 14 Sep 2026, after all four session-fix streams landed (integration pass):** **1114 keys per locale**, identical key sets in all four (0 missing / 0 extra, 0 duplicate keys), up from 1056: +6 session sync, +5 save toast / clock skew, +31 votes / settings, +16 motions / documents / Finish. Placeholders match across locales for every new key; no em dashes in any new string.  
+**Added 14 Sep 2026 (session sync / connection pill):** 6 keys × 4 locales: `conn_live`, `conn_reconnecting`, `conn_offline`, `conn_offline_hint`, `conn_reconnecting_hint` (the Live / Reconnecting / Offline pill, `src/components/ConnectionPill.tsx`, on the chair, delegate and advisor pages; placed after `gavel_chair_offline`) and `join_lookup_failed` (join page, when the code lookup fails on the network rather than finding nothing; placed after `join_not_found`). Counted while other sessions work was also adding keys: **1114 keys per locale**, identical in all four.  
 **Last counted 14 Sep 2026, after one device per chair account:** **1056 keys per locale**, identical in all four.  
 **Removed 14 Sep 2026 (side panel):** 3 keys × 4 locales, `rollcall_az`, `rollcall_queue` (the A-Z / QUEUE toggle is gone; the panel is always the queue, plain A-Z only during roll call) and `rollcall_seat_claimed_title` (the claimed-seat phone icon is gone). The tutorial step `sidebar-view-toggle` and its four hand-written locale bubbles in `TutorialOverlay.tsx` went with the toggle. Counted after this removal and a concurrent seat change that added 3 `delegate_seat_*` keys: **1041 keys per locale**, identical in all four.  
 **Last updated after:** seat gating review fixes — 2026-09-11 (EN/ES/FR/AR; ar = RTL; **1041 keys per locale**). Added 1 key, `delegate_seat_switch_account`, the reserved-seat screen's button when the wrong account is signed in. See "Recent changes" at the bottom.  
@@ -405,6 +407,28 @@ for f in "src/app/chair/[code]/page.tsx" "src/app/delegate/[code]/page.tsx" \
 ---
 
 ## RECENT CHANGES
+
+### 2026-09-14 — motions in flight, documents flow, Finish (`feature/conferences-auth`) — +16 keys
+
+**Added, 16 keys × 4 locales.** Count the file before quoting a total: other changes landed the same day (1114 after all four streams).
+- `src/lib/motionFlight.ts` / `MotionFlightNotice` / `MotionsModal`: `motions_fell_one`, `motions_fell_many` (takes `{count}`), `motions_undo`, `motions_saving`, `motions_save_failed`, `motions_proposer_has_motion` (takes `{country}`).
+- `DocumentsModal` and the delegate submit tab: `documents_delete_confirm`, `documents_delete_yes`, `documents_delete_no`, `documents_pass`, `documents_fail`, `documents_resume_intro`, `documents_intro_save_failed`, `documents_submit_failed`.
+- Chair page GSL: `gsl_yield` (the FINISH button, upper case like NEXT) and `gsl_yield_title`.
+
+### 2026-09-14 — "Not saved" toast and clock skew hint (`feature/conferences-auth`) — +5 keys
+
+**Added, 5 keys × 4 locales**, directly after `session_resume_lost` in every locale. Count the file before quoting a total: other changes landed the same day.
+- `src/components/notifications/SaveStatusToast.tsx` (chair page): `session_save_retrying` ("Not saved. Retrying…"), `session_save_failed` ("Not saved. Check your connection."), `session_save_retry`, `session_save_dismiss` (also the close label of the skew hint).
+- `src/components/ClockSkewHint.tsx` (chair page): `session_clock_skew`, takes `{n}` (whole seconds). ES *desfase*, FR *décalée*, AR *منحرفة*; "Timers are corrected" is a statement, not an instruction.
+
+### 2026-09-14 — persisted votes, voting mode, live settings sync (`feature/conferences-auth`) — +31 keys
+
+**Added, 31 keys × 4 locales.** 29 `voting_*` keys directly after `voting_confirm_end`, plus `settings_write_failed` and `settings_updated_by_other_chair` in the same run. Count the file before quoting a total: other changes landed the same day.
+- `/voting/[code]` (`src/app/voting/[code]/page.tsx`): `voting_view_only_badge`, `voting_view_only_note`, `voting_follower_waiting` (Commenter view of a vote the Moderator drives); `voting_phase_closed`, `voting_phase_enter_failed`, `voting_phase_leave_failed` (the room's voting mode); `voting_save_failed`, `voting_save_stale`, `voting_save_retry` (a refused ballot write); `voting_resume_vote` and `voting_vote_live_badge` take `{cast}` / `{total}`; `voting_voted_of` takes `{cast}` / `{total}` (replaces the hardcoded "N/M voted"); `voting_follow_live`; `voting_correct_open` takes `{n}`; `voting_correct_heading`, `voting_correct_none`, and the five short choice labels `voting_correct_for`, `_for_rights`, `_abstain`, `_against_rights`, `_against` (one line each in a chip, keep them short); `voting_end_debate_failed`, `voting_end_debate_working`.
+- `VotingRulesPanel`: `voting_rules_read_only`.
+- `src/components/VotingInProgressCard.tsx` (chair page while `phase === 'voting'`): `voting_in_progress_chair_title`, `voting_in_progress_chair_body`, `voting_in_progress_chair_body_commenter`, `voting_open_screen`, `voting_return_to_debate`.
+- `SettingsPanel`: `settings_write_failed`. `src/lib/useSettingsSync.tsx` (chair + voting pages): `settings_updated_by_other_chair`.
+- Terminology held: Moderator = ES *Moderador*, FR *Modérateur*, AR *المشرف*, as in `join_chair_role_head`. Rights = ES *derechos*, FR *droits*, AR *حق التعليل*. `voting_view_only_note` and `voting_follower_waiting` receive a `{name}` param that the strings deliberately do not use (the holder's name can be empty).
 
 ### 2026-09-14 — one device per signed-in chair account (`feature/conferences-auth`) — 1050 → 1056 keys
 
